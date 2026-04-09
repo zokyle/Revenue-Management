@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Demand Forecast{% endblock %}
+{% block page_title %}Demand Forecast{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Controls Bar -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Occupancy Forecast</h2>
+                <p class="text-sm text-gray-500 mt-1">Actual vs predicted occupancy with confidence intervals.</p>
+            </div>
+            <div class="flex items-end gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
+                    <input type="date" id="forecast-start" name="start_date"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">End Date</label>
+                    <input type="date" id="forecast-end" name="end_date"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Room Type</label>
+                    <select name="room_type_id" id="forecast-room-type"
+                            class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Room Types</option>
+                        <option value="1">Standard King</option>
+                        <option value="2">Standard Double</option>
+                        <option value="3">Deluxe King</option>
+                        <option value="4">Junior Suite</option>
+                        <option value="5">Executive Suite</option>
+                    </select>
+                </div>
+                <button class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                        hx-post="/api/properties/1/forecasts/generate"
+                        hx-include="[name='start_date'], [name='end_date'], [name='room_type_id']"
+                        hx-target="#forecast-status"
+                        hx-swap="innerHTML"
+                        hx-indicator="#forecast-spinner">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    Generate Forecast
+                </button>
+            </div>
+        </div>
+        <!-- Forecast status indicator -->
+        <div id="forecast-status" class="mt-3">
+            <span id="forecast-spinner" class="htmx-indicator inline-flex items-center text-sm text-blue-600">
+                <svg class="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                Generating forecast...
+            </span>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Forecast Chart -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-semibold text-gray-900">Actual vs Forecast Occupancy</h3>
+                <div class="flex items-center space-x-3">
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                        <span class="w-3 h-0.5 bg-emerald-500 rounded mr-1.5"></span>Actual
+                    </span>
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                        <span class="w-3 h-0.5 bg-blue-500 rounded mr-1.5"></span>Forecast
+                    </span>
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                        <span class="w-3 h-3 bg-blue-100 rounded mr-1.5 opacity-50"></span>Confidence
+                    </span>
+                </div>
+            </div>
+            <div class="chart-container" style="height: 320px;">
+                <canvas id="forecast-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Pickup Pace Chart -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-semibold text-gray-900">Pickup Pace: OTB vs Historical</h3>
+                <div class="flex items-center space-x-3">
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                        <span class="w-3 h-0.5 bg-indigo-500 rounded mr-1.5"></span>Current OTB
+                    </span>
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                        <span class="w-3 h-0.5 bg-gray-400 rounded mr-1.5"></span>LY at Same Lead
+                    </span>
+                </div>
+            </div>
+            <div class="chart-container" style="height: 320px;">
+                <canvas id="pickup-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Forecast Details Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-base font-semibold text-gray-900">Daily Forecast Details</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-200">
+                        <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Day</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Predicted Demand</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Occupancy %</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">ADR Est.</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">RevPAR Est.</th>
+                        <th class="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Confidence</th>
+                        <th class="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Signal</th>
+                    </tr>
+                </thead>
+                <tbody id="forecast-table-body" class="divide-y divide-gray-100"
+                       hx-get="/api/properties/1/forecasts?start_date=2026-04-09&end_date=2026-04-23"
+                       hx-trigger="load"
+                       hx-target="#forecast-table-body"
+                       hx-swap="innerHTML">
+                    <!-- Placeholder rows -->
+                    {% set f_dates = ['Apr 10', 'Apr 11', 'Apr 12', 'Apr 13', 'Apr 14', 'Apr 15', 'Apr 16', 'Apr 17', 'Apr 18', 'Apr 19', 'Apr 20', 'Apr 21', 'Apr 22', 'Apr 23'] %}
+                    {% set f_days = ['Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed'] %}
+                    {% set f_demand = [165, 188, 195, 132, 128, 155, 162, 192, 218, 222, 138, 125, 158, 160] %}
+                    {% set f_occ = [73.3, 83.6, 86.7, 58.7, 56.9, 68.9, 72.0, 85.3, 96.9, 98.7, 61.3, 55.6, 70.2, 71.1] %}
+                    {% set f_adr = [179, 215, 225, 149, 148, 169, 174, 221, 285, 291, 155, 147, 171, 174] %}
+                    {% set f_confidence = ['high', 'high', 'high', 'medium', 'medium', 'medium', 'medium', 'high', 'high', 'high', 'medium', 'low', 'low', 'low'] %}
+
+                    {% for i in range(f_dates|length) %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="py-3 px-4 font-medium text-gray-900">{{ f_dates[i] }}</td>
+                        <td class="py-3 px-4 text-center text-gray-500">{{ f_days[i] }}</td>
+                        <td class="py-3 px-4 text-right text-gray-700">{{ f_demand[i] }} rooms</td>
+                        <td class="py-3 px-4 text-right">
+                            <span class="font-semibold {% if f_occ[i] >= 85 %}text-red-600{% elif f_occ[i] >= 65 %}text-amber-600{% else %}text-green-600{% endif %}">
+                                {{ f_occ[i] }}%
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-right text-gray-700">${{ f_adr[i] }}</td>
+                        <td class="py-3 px-4 text-right text-gray-700">${{ "%.0f"|format(f_adr[i] * f_occ[i] / 100) }}</td>
+                        <td class="py-3 px-4 text-center">
+                            {% if f_confidence[i] == 'high' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">High</span>
+                            {% elif f_confidence[i] == 'medium' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Medium</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Low</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            {% if f_occ[i] >= 90 %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                                Raise Rate
+                            </span>
+                            {% elif f_occ[i] >= 70 %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Hold</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                                Stimulate
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default dates
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 14);
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 30);
+
+    document.getElementById('forecast-start').value = startDate.toISOString().split('T')[0];
+    document.getElementById('forecast-end').value = endDate.toISOString().split('T')[0];
+
+    // Generate forecast chart data
+    const labels = [];
+    const actual = [];
+    const forecast = [];
+    const lower = [];
+    const upper = [];
+
+    for (let i = -14; i <= 30; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+
+        const dayOfWeek = d.getDay();
+        const isWeekend = (dayOfWeek === 5 || dayOfWeek === 6);
+        const base = isWeekend ? 82 : 65;
+
+        if (i <= 0) {
+            const val = base + (Math.random() - 0.3) * 12;
+            actual.push(Math.round(val * 10) / 10);
+            forecast.push(null);
+            lower.push(null);
+            upper.push(null);
+        } else {
+            actual.push(null);
+            const val = base + (Math.random() - 0.4) * 10;
+            const spread = 3 + i * 0.4;
+            forecast.push(Math.round(val * 10) / 10);
+            lower.push(Math.round((val - spread) * 10) / 10);
+            upper.push(Math.round((val + spread) * 10) / 10);
+        }
+    }
+
+    initForecastChart('forecast-chart', labels, actual, forecast, lower, upper);
+
+    // Pickup pace chart
+    const pickupLabels = [];
+    const otbData = [];
+    const lyData = [];
+    for (let lead = 30; lead >= 0; lead--) {
+        pickupLabels.push(lead + 'd');
+        const lyBase = 20 + (30 - lead) * 2.5 + Math.random() * 5;
+        const otbBase = 18 + (30 - lead) * 2.8 + Math.random() * 5;
+        lyData.push(Math.round(Math.min(lyBase, 95) * 10) / 10);
+        otbData.push(Math.round(Math.min(otbBase, 98) * 10) / 10);
+    }
+
+    const pickupCtx = document.getElementById('pickup-chart').getContext('2d');
+    new Chart(pickupCtx, {
+        type: 'line',
+        data: {
+            labels: pickupLabels,
+            datasets: [
+                {
+                    label: 'Current OTB',
+                    data: otbData,
+                    borderColor: 'rgb(99, 102, 241)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                },
+                {
+                    label: 'LY at Same Lead Time',
+                    data: lyData,
+                    borderColor: 'rgb(156, 163, 175)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(ctx) {
+                            return ctx.dataset.label + ': ' + ctx.parsed.y + '% occ';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Lead Time (days out)', font: { size: 11 } },
+                    grid: { display: false },
+                    ticks: { font: { size: 10 }, maxTicksLimit: 10 }
+                },
+                y: {
+                    title: { display: true, text: 'Occupancy %', font: { size: 11 } },
+                    min: 0,
+                    max: 100,
+                    grid: { color: 'rgba(0,0,0,0.04)' },
+                    ticks: { font: { size: 10 }, callback: v => v + '%' }
+                }
+            },
+            interaction: { mode: 'nearest', axis: 'x', intersect: false }
+        }
+    });
+});
+</script>
+{% endblock %}

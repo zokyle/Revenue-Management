@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-4xl">
+
+    <!-- Hotel Information -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h3 class="text-base font-semibold text-gray-900">Hotel Information</h3>
+            <p class="text-sm text-gray-500 mt-0.5">Basic property details used across the system.</p>
+        </div>
+        <form hx-put="/api/properties/1" hx-swap="none" hx-indicator="#hotel-save-spinner" class="p-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Hotel Name</label>
+                    <input type="text" name="name" value="Grand Metropolitan Hotel"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Total Rooms</label>
+                    <input type="number" name="total_rooms" value="165"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Address</label>
+                    <input type="text" name="address" value="123 Hospitality Blvd"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">City</label>
+                    <input type="text" name="city" value="New York"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Country</label>
+                    <input type="text" name="country" value="United States"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Star Rating</label>
+                    <select name="star_rating" class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="3">3 Star</option>
+                        <option value="3.5">3.5 Star</option>
+                        <option value="4" selected>4 Star</option>
+                        <option value="4.5">4.5 Star</option>
+                        <option value="5">5 Star</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Currency</label>
+                    <select name="currency" class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="USD" selected>USD - US Dollar</option>
+                        <option value="EUR">EUR - Euro</option>
+                        <option value="GBP">GBP - British Pound</option>
+                        <option value="AED">AED - UAE Dirham</option>
+                        <option value="SGD">SGD - Singapore Dollar</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Timezone</label>
+                    <select name="timezone" class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="US/Eastern" selected>US/Eastern</option>
+                        <option value="US/Central">US/Central</option>
+                        <option value="US/Pacific">US/Pacific</option>
+                        <option value="Europe/London">Europe/London</option>
+                        <option value="Europe/Paris">Europe/Paris</option>
+                        <option value="Asia/Dubai">Asia/Dubai</option>
+                        <option value="Asia/Singapore">Asia/Singapore</option>
+                        <option value="UTC">UTC</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-5 flex items-center gap-3">
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Save Hotel Info
+                </button>
+                <span id="hotel-save-spinner" class="htmx-indicator text-sm text-blue-600">Saving...</span>
+            </div>
+        </form>
+    </div>
+
+    <!-- Pricing Configuration -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h3 class="text-base font-semibold text-gray-900">Pricing Configuration</h3>
+            <p class="text-sm text-gray-500 mt-0.5">Control how aggressively the engine adjusts rates.</p>
+        </div>
+        <form hx-put="/api/properties/1" hx-swap="none" hx-indicator="#pricing-save-spinner" class="p-6">
+            <div class="space-y-6">
+                <!-- Aggressiveness -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-sm font-medium text-gray-700">Pricing Aggressiveness</label>
+                        <span class="text-sm font-bold text-blue-600" id="aggressiveness-val">0.50</span>
+                    </div>
+                    <input type="range" name="pricing_aggressiveness" min="0" max="1" step="0.05" value="0.5"
+                           class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                           oninput="document.getElementById('aggressiveness-val').textContent = parseFloat(this.value).toFixed(2)">
+                    <div class="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>Conservative</span>
+                        <span>Balanced</span>
+                        <span>Aggressive</span>
+                    </div>
+                </div>
+
+                <!-- Rate Protection -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-sm font-medium text-gray-700">Rate Protection Level</label>
+                        <span class="text-sm font-bold text-blue-600" id="protection-val">0.70</span>
+                    </div>
+                    <input type="range" name="rate_protection" min="0" max="1" step="0.05" value="0.7"
+                           class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                           oninput="document.getElementById('protection-val').textContent = parseFloat(this.value).toFixed(2)">
+                    <div class="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>Minimal (wider swings)</span>
+                        <span>Strong (stable rates)</span>
+                    </div>
+                </div>
+
+                <!-- Demand Thresholds -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">High Demand Threshold</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="high_demand_threshold" value="85" min="50" max="100" step="1"
+                                   class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <span class="text-sm text-gray-500">% occ</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Above this, rates increase more aggressively.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Low Demand Threshold</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="low_demand_threshold" value="40" min="10" max="70" step="1"
+                                   class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <span class="text-sm text-gray-500">% occ</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Below this, stimulative pricing kicks in.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-5 flex items-center gap-3">
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Save Pricing Config
+                </button>
+                <span id="pricing-save-spinner" class="htmx-indicator text-sm text-blue-600">Saving...</span>
+            </div>
+        </form>
+    </div>
+
+    <!-- Cost Profile -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h3 class="text-base font-semibold text-gray-900">Cost Profile</h3>
+            <p class="text-sm text-gray-500 mt-0.5">Define costs used by the EBITDA optimization engine.</p>
+        </div>
+        <form hx-put="/api/properties/1/costs/1" hx-swap="none" hx-indicator="#cost-save-spinner" class="p-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Total CPOR (Cost Per Occupied Room)</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
+                        <input type="number" name="cpor" value="42.50" step="0.50"
+                               class="block w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Fixed Daily Cost</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
+                        <input type="number" name="fixed_daily_cost" value="3200.00" step="100"
+                               class="block w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Variable Cost %</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" name="variable_cost_pct" value="8.5" step="0.5" min="0" max="100"
+                               class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <span class="text-sm text-gray-500">% of revenue</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Individual Cost Items -->
+            <div class="mt-6">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">Cost Breakdown</h4>
+                <div class="space-y-2">
+                    {% set cost_items = [
+                        {'category': 'Housekeeping', 'amount': 15.00, 'variable': true},
+                        {'category': 'Amenities', 'amount': 5.50, 'variable': true},
+                        {'category': 'Laundry', 'amount': 8.00, 'variable': true},
+                        {'category': 'Utilities (per room)', 'amount': 6.50, 'variable': true},
+                        {'category': 'Maintenance Reserve', 'amount': 4.00, 'variable': false},
+                        {'category': 'OTA Commission Avg', 'amount': 3.50, 'variable': true}
+                    ] %}
+                    {% for item in cost_items %}
+                    <div class="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
+                        <span class="text-sm text-gray-700 flex-1">{{ item.category }}</span>
+                        <div class="relative w-28">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-2 text-gray-400 text-xs">$</span>
+                            <input type="number" value="{{ item.amount }}" step="0.50"
+                                   class="block w-full rounded border border-gray-300 pl-5 pr-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <span class="text-xs px-2 py-0.5 rounded-full {{ 'bg-blue-100 text-blue-700' if item.variable else 'bg-gray-200 text-gray-600' }}">
+                            {{ 'Variable' if item.variable else 'Fixed' }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="mt-5 flex items-center gap-3">
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Save Cost Profile
+                </button>
+                <span id="cost-save-spinner" class="htmx-indicator text-sm text-blue-600">Saving...</span>
+            </div>
+        </form>
+    </div>
+
+    <!-- PMS Connection -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h3 class="text-base font-semibold text-gray-900">PMS Connection</h3>
+            <p class="text-sm text-gray-500 mt-0.5">Connect to your Property Management System for automatic data sync.</p>
+        </div>
+        <form hx-post="/api/properties/1/pms/connect" hx-swap="none" hx-indicator="#pms-spinner" class="p-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">PMS Provider</label>
+                    <select name="provider" class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select a provider...</option>
+                        <option value="opera">Oracle OPERA PMS</option>
+                        <option value="cloudbeds">Cloudbeds</option>
+                        <option value="mews">Mews</option>
+                        <option value="protel">protel PMS</option>
+                        <option value="roomkey">RoomKeyPMS</option>
+                        <option value="stayntouch">StayNTouch</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Base URL</label>
+                    <input type="url" name="base_url" placeholder="https://api.yourpms.com/v1"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">API Key</label>
+                    <input type="password" name="api_key" placeholder="Enter your PMS API key"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+
+            <!-- Connection Status -->
+            <div class="mt-5 p-4 bg-gray-50 rounded-lg border border-gray-200" id="pms-status">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 bg-gray-400 rounded-full animate-pulse" id="pms-status-dot"></div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-700">Status: <span id="pms-status-text">Not Connected</span></p>
+                            <p class="text-xs text-gray-500" id="pms-last-sync">Last sync: Never</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-5 flex items-center gap-3">
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101"/></svg>
+                    Connect
+                </button>
+                <button type="button"
+                        class="inline-flex items-center px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                        hx-post="/api/properties/1/pms/sync"
+                        hx-target="#pms-status"
+                        hx-swap="innerHTML">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Sync Now
+                </button>
+                <span id="pms-spinner" class="htmx-indicator text-sm text-blue-600">Connecting...</span>
+            </div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Revenue Optimization{% endblock %}
+{% block page_title %}Revenue Optimization{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Controls -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">EBITDA Optimization Engine</h2>
+                <p class="text-sm text-gray-500 mt-1">Run the optimization to find the rate and occupancy mix that maximizes EBITDA contribution.</p>
+            </div>
+            <div class="flex items-end gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
+                    <input type="date" id="opt-start" name="start_date"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">End Date</label>
+                    <input type="date" id="opt-end" name="end_date"
+                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <button id="run-optimization-btn"
+                        class="inline-flex items-center px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                        hx-post="/api/properties/1/optimization/run"
+                        hx-include="[name='start_date'], [name='end_date']"
+                        hx-target="#optimization-results"
+                        hx-swap="innerHTML"
+                        hx-indicator="#opt-spinner">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    Run Optimization
+                </button>
+                <span id="opt-spinner" class="htmx-indicator">
+                    <svg class="animate-spin w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Metrics Summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Contribution Margin</p>
+            <p class="mt-2 text-2xl font-bold text-gray-900">$147.25</p>
+            <p class="text-xs text-gray-400 mt-1">Per occupied room night</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">CPOR</p>
+            <p class="mt-2 text-2xl font-bold text-gray-900">$42.50</p>
+            <p class="text-xs text-gray-400 mt-1">Cost per occupied room</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Expected EBITDA Improvement</p>
+            <p class="mt-2 text-2xl font-bold text-green-600">+$12,840</p>
+            <p class="text-xs text-gray-400 mt-1">Over 14-day period</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Improvement %</p>
+            <p class="mt-2 text-2xl font-bold text-green-600">+8.7%</p>
+            <p class="text-xs text-gray-400 mt-1">vs current pricing strategy</p>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- EBITDA Contribution Bar Chart -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-semibold text-gray-900">Daily EBITDA Contribution</h3>
+                <div class="flex items-center space-x-3">
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                        <span class="w-3 h-3 bg-blue-400 rounded mr-1.5"></span>Current
+                    </span>
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                        <span class="w-3 h-3 bg-emerald-400 rounded mr-1.5"></span>Optimal
+                    </span>
+                </div>
+            </div>
+            <div class="chart-container" style="height: 300px;">
+                <canvas id="ebitda-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Rate vs Occupancy Scatter -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-semibold text-gray-900">Rate vs Occupancy Tradeoff</h3>
+                <div class="flex items-center space-x-3">
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                        <span class="w-3 h-3 bg-blue-400 rounded-full mr-1.5"></span>Current
+                    </span>
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                        <span class="w-3 h-3 bg-emerald-400 rounded-full mr-1.5"></span>Optimal
+                    </span>
+                </div>
+            </div>
+            <div class="chart-container" style="height: 300px;">
+                <canvas id="scatter-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scenario Comparison Table -->
+    <div id="optimization-results" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="text-base font-semibold text-gray-900">Scenario Comparison: Current vs Optimal</h3>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">14-Day Window</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-200">
+                        <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Room Type</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Current Rate</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Optimal Rate</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cur. Occ%</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Opt. Occ%</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cur. EBITDA</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Opt. EBITDA</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Delta</th>
+                        <th class="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% set opt_data = [
+                        {'date': 'Apr 10', 'room': 'Standard King', 'cur_rate': 179, 'opt_rate': 185, 'cur_occ': 73, 'opt_occ': 71, 'cur_ebitda': 6842, 'opt_ebitda': 7210},
+                        {'date': 'Apr 10', 'room': 'Deluxe King', 'cur_rate': 229, 'opt_rate': 239, 'cur_occ': 68, 'opt_occ': 65, 'cur_ebitda': 3820, 'opt_ebitda': 4095},
+                        {'date': 'Apr 11', 'room': 'Standard King', 'cur_rate': 219, 'opt_rate': 229, 'cur_occ': 84, 'opt_occ': 81, 'cur_ebitda': 8920, 'opt_ebitda': 9380},
+                        {'date': 'Apr 11', 'room': 'Deluxe King', 'cur_rate': 269, 'opt_rate': 279, 'cur_occ': 79, 'opt_occ': 76, 'cur_ebitda': 5140, 'opt_ebitda': 5520},
+                        {'date': 'Apr 12', 'room': 'Standard King', 'cur_rate': 229, 'opt_rate': 245, 'cur_occ': 87, 'opt_occ': 83, 'cur_ebitda': 9680, 'opt_ebitda': 10250},
+                        {'date': 'Apr 12', 'room': 'Deluxe King', 'cur_rate': 279, 'opt_rate': 295, 'cur_occ': 82, 'opt_occ': 78, 'cur_ebitda': 5580, 'opt_ebitda': 5980},
+                        {'date': 'Apr 13', 'room': 'Standard King', 'cur_rate': 149, 'opt_rate': 142, 'cur_occ': 55, 'opt_occ': 62, 'cur_ebitda': 3520, 'opt_ebitda': 3710},
+                        {'date': 'Apr 13', 'room': 'Deluxe King', 'cur_rate': 199, 'opt_rate': 189, 'cur_occ': 48, 'opt_occ': 55, 'cur_ebitda': 2240, 'opt_ebitda': 2480},
+                        {'date': 'Apr 18', 'room': 'Standard King', 'cur_rate': 289, 'opt_rate': 315, 'cur_occ': 95, 'opt_occ': 92, 'cur_ebitda': 14200, 'opt_ebitda': 15480},
+                        {'date': 'Apr 18', 'room': 'Deluxe King', 'cur_rate': 349, 'opt_rate': 379, 'cur_occ': 92, 'opt_occ': 88, 'cur_ebitda': 7920, 'opt_ebitda': 8640}
+                    ] %}
+
+                    {% for row in opt_data %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="py-3 px-4 font-medium text-gray-900">{{ row.date }}</td>
+                        <td class="py-3 px-4 text-gray-700">{{ row.room }}</td>
+                        <td class="py-3 px-4 text-right text-gray-700">${{ row.cur_rate }}</td>
+                        <td class="py-3 px-4 text-right font-semibold {% if row.opt_rate > row.cur_rate %}text-blue-700{% else %}text-amber-700{% endif %}">
+                            ${{ row.opt_rate }}
+                            {% if row.opt_rate > row.cur_rate %}
+                            <svg class="inline w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                            {% else %}
+                            <svg class="inline w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-right text-gray-600">{{ row.cur_occ }}%</td>
+                        <td class="py-3 px-4 text-right text-gray-600">{{ row.opt_occ }}%</td>
+                        <td class="py-3 px-4 text-right text-gray-600">${{ "{:,}".format(row.cur_ebitda) }}</td>
+                        <td class="py-3 px-4 text-right font-semibold text-gray-900">${{ "{:,}".format(row.opt_ebitda) }}</td>
+                        <td class="py-3 px-4 text-right">
+                            <span class="font-semibold text-green-600">+${{ "{:,}".format(row.opt_ebitda - row.cur_ebitda) }}</span>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <button class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                                    hx-put="/api/properties/1/optimization/apply"
+                                    hx-vals='{"date": "{{ row.date }}", "room_type": "{{ row.room }}", "rate": {{ row.opt_rate }}}'
+                                    hx-swap="none">
+                                Apply
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-gray-50 border-t border-gray-200">
+                    <tr>
+                        <td colspan="6" class="py-3 px-4 text-sm font-semibold text-gray-700">Total Period</td>
+                        <td class="py-3 px-4 text-right text-sm font-semibold text-gray-700">$67,862</td>
+                        <td class="py-3 px-4 text-right text-sm font-bold text-gray-900">$72,745</td>
+                        <td class="py-3 px-4 text-right text-sm font-bold text-green-600">+$4,883</td>
+                        <td class="py-3 px-4 text-center">
+                            <button class="inline-flex items-center px-3 py-1 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                    hx-put="/api/properties/1/optimization/apply-all"
+                                    hx-confirm="Apply all optimal rates for this period?"
+                                    hx-swap="none">
+                                Apply All
+                            </button>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default dates
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 14);
+    document.getElementById('opt-start').value = today.toISOString().split('T')[0];
+    document.getElementById('opt-end').value = endDate.toISOString().split('T')[0];
+
+    // EBITDA Bar Chart data
+    const ebitdaLabels = [];
+    const currentEbitda = [];
+    const optimalEbitda = [];
+    for (let i = 0; i < 14; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        ebitdaLabels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+        const dayOfWeek = d.getDay();
+        const isWeekend = (dayOfWeek === 5 || dayOfWeek === 6);
+        const base = isWeekend ? 12000 : 7500;
+        const cur = base + (Math.random() - 0.3) * 2000;
+        currentEbitda.push(Math.round(cur));
+        optimalEbitda.push(Math.round(cur * (1 + 0.05 + Math.random() * 0.08)));
+    }
+
+    initEbitdaChart('ebitda-chart', ebitdaLabels, currentEbitda, optimalEbitda);
+
+    // Scatter Chart data
+    const scatterData = [];
+    for (let i = 0; i < 14; i++) {
+        const curOcc = 50 + Math.random() * 45;
+        const curRate = 140 + Math.random() * 120;
+        const optOcc = curOcc + (Math.random() - 0.6) * 8;
+        const optRate = curRate + (Math.random() - 0.3) * 25;
+        scatterData.push({
+            current: { x: curRate, y: curOcc },
+            optimal: { x: optRate, y: optOcc }
+        });
+    }
+
+    initScatterChart('scatter-chart', scatterData);
+});
+</script>
+{% endblock %}
