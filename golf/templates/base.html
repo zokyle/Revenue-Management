@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{% block title %}Dashboard{% endblock %} | Caddie</title>
+
+    <!-- Tailwind CSS via CDN Play -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50:  '#ecfdf5',
+                            100: '#d1fae5',
+                            200: '#a7f3d0',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            800: '#065f46',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Chart.js v4 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/custom.css">
+
+    {% block head_extra %}{% endblock %}
+</head>
+<body class="h-full">
+    {% set path = request.url.path %}
+    {% set nav = [
+        ('/', 'Dashboard', 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z'),
+        ('/rounds', 'Rounds', 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'),
+        ('/courses', 'Courses', 'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7'),
+        ('/strategy', 'Strategy', 'M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9'),
+        ('/caddie', 'Caddie', 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'),
+        ('/bag', 'My Bag', 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z'),
+    ] %}
+    <div class="flex h-full">
+
+        <!-- Sidebar -->
+        <aside class="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-slate-800 shadow-xl z-30">
+            <div class="flex items-center h-16 px-6 border-b border-slate-700">
+                <a href="/" class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 21V4m0 0l10 4-10 4m3 9a3 1 0 106 0 3 1 0 10-6 0"/>
+                        </svg>
+                    </div>
+                    <span class="text-white font-bold text-lg tracking-tight">Caddie</span>
+                </a>
+            </div>
+
+            <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+                {% for href, label, icon in nav %}
+                {% set active = (path == href) if href == '/' else path.startswith(href) %}
+                <a href="{{ href }}"
+                   class="sidebar-link group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150
+                          {% if active %}bg-slate-700 text-white{% else %}text-slate-300 hover:bg-slate-700/50 hover:text-white{% endif %}">
+                    <svg class="mr-3 h-5 w-5 flex-shrink-0 {% if active %}text-brand-200{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon }}"/>
+                    </svg>
+                    {{ label }}
+                </a>
+                {% endfor %}
+            </nav>
+
+            <div class="flex-shrink-0 p-4 border-t border-slate-700">
+                <label class="block text-xs font-medium text-slate-400 mb-1">Player</label>
+                <select id="player-switcher" class="w-full bg-slate-700 text-slate-100 text-sm rounded-lg px-2 py-1.5 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
+                <p class="text-xs text-slate-500 mt-2">Caddie v0.1</p>
+            </div>
+        </aside>
+
+        <!-- Main -->
+        <div class="lg:pl-64 flex flex-col flex-1 min-h-screen">
+            <header class="sticky top-0 z-20 bg-white border-b border-gray-200 shadow-sm">
+                <div class="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 lg:px-8">
+                    <div class="flex items-center space-x-3">
+                        <button type="button" onclick="document.getElementById('mobile-sidebar').classList.toggle('hidden')"
+                                class="lg:hidden -ml-1 p-2 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100" aria-label="Open menu">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                            </svg>
+                        </button>
+                        <h1 class="text-base sm:text-lg font-semibold text-gray-900 truncate">
+                            {% block page_title %}Dashboard{% endblock %}
+                        </h1>
+                    </div>
+                    <div class="flex items-center space-x-3 text-sm text-gray-500 min-w-0">
+                        <span id="header-player" class="font-medium text-gray-700 truncate">&nbsp;</span>
+                        <span class="hidden sm:inline h-6 w-px bg-gray-200"></span>
+                        <span class="hidden sm:inline" id="current-date"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Mobile sidebar -->
+            <div id="mobile-sidebar" class="hidden lg:hidden fixed inset-0 z-40">
+                <div class="fixed inset-0 bg-gray-600 bg-opacity-75" onclick="document.getElementById('mobile-sidebar').classList.add('hidden')"></div>
+                <div class="relative flex w-64 flex-col bg-slate-800 h-full">
+                    <div class="flex items-center h-14 px-6 border-b border-slate-700 text-white font-bold">Caddie</div>
+                    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+                        {% for href, label, icon in nav %}
+                        <a href="{{ href }}" class="flex items-center px-3 py-2.5 text-sm font-medium text-slate-300 rounded-lg hover:bg-slate-700 hover:text-white">{{ label }}</a>
+                        {% endfor %}
+                    </nav>
+                    <div class="p-4 border-t border-slate-700 text-xs text-slate-400">Switch player from the desktop sidebar or the dashboard.</div>
+                </div>
+            </div>
+
+            <main class="flex-1 p-4 sm:p-6 lg:p-8">
+                <!-- First-run gate: shown by app.js when no player exists -->
+                <div id="player-gate" class="hidden max-w-md mx-auto mt-4 sm:mt-10">
+                    <div class="card p-6">
+                        <div class="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6 text-brand-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 21V4m0 0l10 4-10 4m3 9a3 1 0 106 0 3 1 0 10-6 0"/></svg>
+                        </div>
+                        <h2 class="text-lg font-semibold text-gray-900">Create your player</h2>
+                        <p class="text-sm text-gray-500 mt-1 mb-4">Caddie learns your game from the rounds you log and builds a course strategy to hit your target score. Start with a name and a handicap; a standard 14-club bag is created for you.</p>
+                        <form id="player-gate-form" class="space-y-3">
+                            <div>
+                                <label class="label" for="gate-name">Name</label>
+                                <input id="gate-name" name="name" class="input" required maxlength="120" placeholder="Your name" autocomplete="name">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="label" for="gate-hcp">Handicap index</label>
+                                    <input id="gate-hcp" name="handicap_index" type="number" step="0.1" min="-10" max="54" value="15" class="input" required>
+                                </div>
+                                <div>
+                                    <label class="label" for="gate-target">Target score</label>
+                                    <input id="gate-target" name="target_score" type="number" min="55" max="150" value="79" class="input" required>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 pt-1">
+                                <button type="submit" class="btn btn-primary">Create player &amp; default bag</button>
+                                <button type="button" id="player-gate-cancel" class="btn btn-secondary hidden">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="page-content">
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+
+            <footer class="border-t border-gray-200 bg-white px-6 py-3 no-print">
+                <p class="text-xs text-gray-400 text-center">Caddie &mdash; personal golf course strategy. Log rounds, learn your game, play the percentages.</p>
+            </footer>
+        </div>
+    </div>
+
+    <div id="toast-root"></div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        document.getElementById('current-date').textContent = new Date().toLocaleDateString(undefined, {
+            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+        });
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Strategy{% endblock %}
+{% block page_title %}Strategy{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+    <!-- Controls -->
+    <div class="card p-4 sm:p-5 no-print">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+            <div class="lg:col-span-2">
+                <label class="label" for="s-course">Course</label>
+                <select id="s-course" class="select"><option value="">Select a course…</option></select>
+            </div>
+            <div>
+                <label class="label" for="s-objective">Objective</label>
+                <select id="s-objective" class="select">
+                    <option value="break_80">Break 80 (safe)</option>
+                    <option value="min_expected">Lowest expected score</option>
+                    <option value="aggressive">Aggressive</option>
+                </select>
+            </div>
+            <div>
+                <label class="label" for="s-carry">Carry factor <span id="s-carry-val" class="text-brand-700">1.00</span></label>
+                <input id="s-carry" type="range" min="0.9" max="1.1" step="0.01" value="1" class="w-full">
+                <p class="text-[11px] text-gray-400">0.9 cold / into wind · 1.1 warm / downwind</p>
+            </div>
+            <div class="flex gap-2">
+                <button id="btn-generate" class="btn btn-primary flex-1">Generate plan</button>
+            </div>
+        </div>
+        <div id="s-status" class="hidden mt-3 text-sm text-gray-600 flex items-center gap-2"><span class="spinner spinner-dark"></span> <span>Simulating every tee shot option… this takes 5-10 seconds.</span></div>
+    </div>
+
+    <div id="s-empty" class="card p-8 text-center">
+        <p class="text-gray-700 font-medium" id="s-empty-title">Pick a course to see its plan</p>
+        <p class="text-sm text-gray-500 mt-1" id="s-empty-text">The caddie simulates thousands of tee shots per hole with your dispersion pattern and picks the club and aim line that best protect your target score.</p>
+        <a href="/courses" id="s-empty-link" class="btn btn-secondary mt-4 hidden">Import a course</a>
+    </div>
+
+    <div id="plan" class="hidden space-y-4">
+        <!-- Course headline -->
+        <div class="card p-4 sm:p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 id="p-course" class="text-lg font-semibold text-gray-900"></h2>
+                    <p id="p-headline" class="text-sm text-gray-600 mt-0.5"></p>
+                    <p id="p-meta" class="text-xs text-gray-400 mt-1"></p>
+                </div>
+                <div class="flex items-center gap-2 no-print">
+                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" id="toggle-book" class="h-4 w-4"> Yardage book</label>
+                    <button id="btn-print" class="btn btn-secondary btn-sm">Print</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4" id="p-kpis"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+                <div class="lg:col-span-1">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Game plan</p>
+                    <ul id="p-gameplan" class="list-disc pl-5 text-sm text-gray-700 space-y-1"></ul>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Hardest holes</p>
+                    <div id="p-hardest" class="flex flex-wrap gap-1.5"></div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 mt-3">Blow-up risk</p>
+                    <div id="p-blowup" class="flex flex-wrap gap-1.5"></div>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Leave the driver in the bag</p>
+                    <p id="p-nondriver" class="text-sm text-gray-700"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yardage book -->
+        <div id="book" class="hidden card overflow-hidden yardage-book">
+            <div class="p-4 pb-2"><h3 class="font-semibold text-gray-900">Yardage book</h3><p id="book-sub" class="text-xs text-gray-500"></p></div>
+            <div class="overflow-x-auto">
+                <table class="table table-compact" id="book-table">
+                    <thead><tr><th>Hole</th><th>Par</th><th>Yds</th><th>Tee shot</th><th>Approach</th><th>Key thought</th><th class="text-right">Exp.</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Hole cards -->
+        <div id="holes" class="space-y-4"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/holemap.js"></script>
+<script>
+(function () {
+    'use strict';
+    const { api, esc, fmtPct, fmtNum, signed, toast, num } = Caddie;
+    const CTX_COURSE = {{ course_id if course_id is defined and course_id is not none else 'null' }};
+    const $ = (id) => document.getElementById(id);
+    const MIX_ORDER = ['fairway', 'green', 'fringe', 'rough', 'sand', 'recovery', 'penalty', 'ob', 'tee'];
+    let pid, courses = [], courseId = null, plan = null;
+
+    Caddie.ready(async (id) => {
+        pid = id;
+        try { courses = await Caddie.courses(); } catch (e) { toast('Courses could not be loaded: ' + e.message); courses = []; }
+        const sel = $('s-course');
+        courses.forEach((c) => {
+            const o = document.createElement('option');
+            o.value = c.id;
+            o.textContent = c.name + (c.par ? ' · par ' + c.par : '') + (c.hole_count ? ' · ' + c.hole_count + ' holes' : ' · no holes');
+            sel.appendChild(o);
+        });
+        if (!courses.length) {
+            $('s-empty-title').textContent = 'No courses yet';
+            $('s-empty-text').textContent = 'Import a course first - the strategy engine needs par, yardage and (ideally) hazards for every hole.';
+            $('s-empty-link').classList.remove('hidden');
+        }
+        wire();
+        const initial = CTX_COURSE || (courses.length === 1 ? courses[0].id : null);
+        if (initial) { sel.value = String(initial); await onCourseChange(); }
+    });
+
+    function wire() {
+        $('s-course').addEventListener('change', onCourseChange);
+        $('s-carry').addEventListener('input', () => { $('s-carry-val').textContent = Number($('s-carry').value).toFixed(2); });
+        $('btn-generate').addEventListener('click', generate);
+        $('toggle-book').addEventListener('change', () => {
+            const book = $('toggle-book').checked;
+            $('book').classList.toggle('hidden', !book);
+            $('holes').classList.toggle('hidden', book);
+        });
+        $('btn-print').addEventListener('click', () => window.print());
+    }
+
+    async function onCourseChange() {
+        courseId = $('s-course').value ? Number($('s-course').value) : null;
+        plan = null;
+        if (!courseId) { showEmpty('Pick a course to see its plan'); return; }
+        if (window.history && history.replaceState) history.replaceState(null, '', '/strategy/' + courseId);
+        try {
+            plan = await api('/api/players/' + pid + '/strategy/' + courseId);
+            renderPlan();
+        } catch (e) {
+            if (e.status === 404) showEmpty('No plan yet for this course', 'Choose an objective and generate one - the caddie simulates each hole with your current profile.');
+            else { toast(e.message); showEmpty('Could not load the latest plan', e.message); }
+        }
+    }
+    function showEmpty(title, text) {
+        $('plan').classList.add('hidden');
+        $('s-empty').classList.remove('hidden');
+        $('s-empty-title').textContent = title;
+        if (text) $('s-empty-text').textContent = text;
+    }
+
+    async function generate() {
+        if (!courseId) { toast('Select a course first'); return; }
+        const btn = $('btn-generate');
+        btn.disabled = true;
+        $('s-status').classList.remove('hidden');
+        try {
+            plan = await api('/api/players/' + pid + '/strategy/' + courseId, {
+                method: 'POST',
+                body: { objective: $('s-objective').value, carry_scale: Math.max(0.8, Math.min(1.2, num($('s-carry').value, 1))) },
+            });
+            toast('Plan generated: expected ' + fmtNum(plan.expected_score, 1), 'success');
+            renderPlan();
+        } catch (e) { toast(e.message); }
+        finally { btn.disabled = false; $('s-status').classList.add('hidden'); }
+    }
+
+    // ------------------------------------------------------------------ rendering helpers
+    const OBJECTIVES = { break_80: 'Break 80 (safe)', min_expected: 'Lowest expected score', aggressive: 'Aggressive' };
+    function confBadge(c) {
+        c = Number(c) || 0;
+        if (c >= 0.7) return '<span class="badge badge-green">High confidence ' + Math.round(c * 100) + '%</span>';
+        if (c >= 0.4) return '<span class="badge badge-amber">Medium confidence ' + Math.round(c * 100) + '%</span>';
+        return '<span class="badge badge-gray">Low confidence ' + Math.round(c * 100) + '% - defaults</span>';
+    }
+    function aimShort(off) {
+        off = Number(off) || 0;
+        return Math.abs(off) < 3 ? 'center' : Math.abs(off).toFixed(0) + ' yd ' + (off > 0 ? 'R' : 'L');
+    }
+    function stackBar(segments) {
+        const total = segments.reduce((s, x) => s + (x.value || 0), 0) || 1;
+        const bar = '<div class="stack-bar">' + segments.filter((x) => x.value > 0).map((x) =>
+            '<span style="width:' + (x.value / total * 100).toFixed(1) + '%; background:' + x.color + '" title="' + esc(x.label) + ' ' + fmtPct(x.value) + '"></span>').join('') + '</div>';
+        const legend = '<div class="stack-legend">' + segments.filter((x) => x.value > 0.005).map((x) =>
+            '<span><i style="background:' + x.color + '"></i>' + esc(x.label) + ' ' + fmtPct(x.value) + '</span>').join('') + '</div>';
+        return bar + legend;
+    }
+    function mixBar(mix) {
+        mix = mix || {};
+        const keys = MIX_ORDER.filter((k) => mix[k] != null).concat(Object.keys(mix).filter((k) => !MIX_ORDER.includes(k)));
+        return stackBar(keys.map((k) => ({ label: HoleMap.LIE_LABELS[k] || k, value: Number(mix[k]) || 0, color: HoleMap.lieColor(k) })));
+    }
+    function distBar(d) {
+        d = d || {};
+        return stackBar([
+            { label: 'Birdie or better', value: (d.eagle || 0) + (d.birdie || 0), color: '#e11d48' },
+            { label: 'Par', value: d.par || 0, color: '#10b981' },
+            { label: 'Bogey', value: d.bogey || 0, color: '#0ea5e9' },
+            { label: 'Double+', value: (d.double || 0) + (d.triple_plus || 0), color: '#334155' },
+        ]);
+    }
+    function holeChip(h, text) {
+        return '<a href="#hole-' + h + '" class="chip">' + h + ' <span class="text-gray-400 ml-1">' + esc(text) + '</span></a>';
+    }
+
+    function renderPlan() {
+        const d = plan.data || {};
+        const course = d.course || courses.find((c) => c.id === courseId) || {};
+        const summary = d.summary || {};
+        $('s-empty').classList.add('hidden');
+        $('plan').classList.remove('hidden');
+        $('p-course').textContent = (course.name || 'Course') + ' - ' + (OBJECTIVES[plan.objective] || plan.objective);
+        $('p-headline').textContent = summary.headline || '';
+        $('p-meta').textContent = 'Generated ' + new Date(plan.created_at).toLocaleString() + ' · carry factor ' + fmtNum(d.carry_scale, 2) + ' · profile readiness ' + fmtPct(d.readiness) + ' · par ' + (course.par != null ? course.par : d.par);
+        const pct = d.score_percentiles || {};
+        const kpis = [
+            ['Expected score', fmtNum(d.expected_score, 1), signed(d.expected_vs_par, 1) + ' vs par'],
+            ['P(break ' + (d.target_score || 79) + ')', fmtPct(d.p_break_target), 'target ' + (d.target_score || 79)],
+            ['Likely range', (pct.p10 != null ? pct.p10 : '–') + ' - ' + (pct.p90 != null ? pct.p90 : '–'), 'p10 - p90, median ' + (pct.p50 != null ? pct.p50 : '–')],
+            ['Expected penalties', fmtNum(d.expected_penalties, 1), 'off the tee, per round'],
+            ['Holes', (d.holes || []).length, 'non-driver: ' + ((summary.non_driver_holes || []).length)],
+        ];
+        $('p-kpis').innerHTML = kpis.map((k) => '<div class="rounded-lg bg-gray-50 p-3"><p class="text-xs text-gray-500">' + esc(k[0]) + '</p><p class="text-xl font-bold text-gray-900">' + esc(k[1]) + '</p><p class="text-[11px] text-gray-400">' + esc(k[2]) + '</p></div>').join('');
+        $('p-gameplan').innerHTML = (summary.game_plan || []).map((g) => '<li>' + esc(g) + '</li>').join('');
+        $('p-hardest').innerHTML = (summary.hardest_holes || []).map((h) => holeChip(h.hole, signed(h.expected_vs_par, 2))).join('') || '<span class="text-sm text-gray-400">–</span>';
+        $('p-blowup').innerHTML = (summary.blowup_holes || []).map((h) => holeChip(h.hole, fmtPct(h.p_double_plus))).join('') || '<span class="text-sm text-gray-400">–</span>';
+        const nd = summary.non_driver_holes || [];
+        $('p-nondriver').textContent = nd.length ? 'Holes ' + nd.join(', ') : 'Driver is the play on every par 4 and 5.';
+
+        renderBook(d, course);
+        const box = $('holes');
+        box.innerHTML = '';
+        (d.holes || []).forEach((h) => box.appendChild(holeCard(h)));
+    }
+
+    function renderBook(d, course) {
+        $('book-sub').textContent = (course.name || '') + ' · expected ' + fmtNum(d.expected_score, 1) + ' · P(break ' + (d.target_score || 79) + ') ' + fmtPct(d.p_break_target);
+        $('book-table').querySelector('tbody').innerHTML = (d.holes || []).map((h) => {
+            const tee = h.tee || {};
+            const ap = h.approach;
+            const lay = h.layup;
+            return '<tr><td class="font-semibold">' + h.hole + '</td><td>' + h.par + '</td><td>' + h.yards + '</td>' +
+                '<td>' + esc(tee.club_name || tee.club || '–') + (tee.shot && tee.shot !== 'full' ? ' (' + esc(tee.shot) + ')' : '') + ' · ' + esc(aimShort(tee.aim_offset_yards)) + ' · ' + esc(tee.carry_yards) + ' yds</td>' +
+                '<td>' + (lay ? esc(lay.club) + ' layup to ' + esc(lay.leaves_yards) + ' yds' : (ap ? esc(ap.club) + ' from ~' + esc(ap.from_yards) + ' yds, ' + esc(aimShort(ap.aim_offset_yards)) : (h.par === 3 ? 'middle of the green' : '–'))) + '</td>' +
+                '<td class="text-gray-700">' + esc(h.key_thought || '') + '</td>' +
+                '<td class="text-right">' + fmtNum(h.expected_strokes, 2) + '</td></tr>';
+        }).join('');
+    }
+
+    function holeCard(h) {
+        const tee = h.tee || {};
+        const card = document.createElement('div');
+        card.className = 'card p-4 sm:p-5';
+        card.id = 'hole-' + h.hole;
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4';
+        const left = document.createElement('div');
+        left.className = 'hole-map flex justify-center md:justify-start';
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        left.appendChild(svg);
+        try { HoleMap.drawHoleMap(svg, h.map, tee); } catch (e) { console.error('hole map', h.hole, e); left.innerHTML = '<p class="text-xs text-red-700">Map unavailable</p>'; }
+
+        const right = document.createElement('div');
+        right.className = 'space-y-3 text-sm min-w-0';
+        const avoid = tee.avoid ? '<span class="text-red-700 font-medium">Avoid: ' + esc(tee.avoid.feature) + ' (' + fmtPct(tee.avoid.probability) + ')</span>' : '';
+        const approach = h.approach
+            ? '<p><span class="font-semibold">Approach:</span> ~' + esc(h.approach.from_yards) + ' yds with ' + esc(h.approach.club) + ' - aim at the ' + esc(h.approach.aim) + ' <span class="text-gray-500">(GIR ' + fmtPct(h.approach.gir_probability) + ')</span></p>'
+            : (h.par === 3 ? '' : '<p class="text-gray-500">Approach: play to the middle of the green.</p>');
+        const layup = h.layup
+            ? '<p><span class="font-semibold">' + (h.layup.kind === 'layup' ? 'Layup' : 'Second shot') + ':</span> ' + esc(h.layup.club) + ' to ' + esc(h.layup.carry_yards) + ' yds, leaving about ' + esc(h.layup.leaves_yards) + ' yds</p>'
+            : '';
+        const contingency = h.contingency
+            ? '<p class="text-gray-600"><span class="font-semibold">If out of range</span> (' + fmtPct(h.contingency.share) + ' of the time): ' + esc(h.contingency.kind) + ' with ' + esc(h.contingency.club) + ' (' + esc(h.contingency.carry_yards) + ' yds).</p>'
+            : '';
+        const alts = (h.alternatives || []);
+        const altTable = alts.length ? '<details class="mt-1"><summary class="cursor-pointer text-xs text-gray-500 hover:text-gray-700">Alternatives (' + alts.length + ')</summary>' +
+            '<div class="overflow-x-auto mt-1"><table class="table table-compact"><thead><tr><th>Club</th><th>Aim</th><th class="text-right">Expected</th><th class="text-right">Double+</th><th class="text-right">Delta</th></tr></thead><tbody>' +
+            alts.map((a) => '<tr><td>' + esc(a.club) + (a.label && a.label !== 'full' ? ' <span class="text-xs text-gray-400">' + esc(a.label) + '</span>' : '') + '</td><td>' + esc(aimShort(a.aim_offset_yards)) + '</td>' +
+                '<td class="text-right">' + fmtNum(a.expected_strokes, 2) + '</td><td class="text-right">' + fmtPct(a.p_double_plus) + '</td><td class="text-right">' + signed(a.objective_delta, 2) + '</td></tr>').join('') +
+            '</tbody></table></div></details>' : '';
+
+        right.innerHTML =
+            '<div class="flex flex-wrap items-center gap-2">' +
+                '<h3 class="text-base font-semibold text-gray-900">Hole ' + h.hole + ' · Par ' + h.par + ' · ' + esc(h.yards) + ' yds</h3>' +
+                confBadge(tee.confidence) +
+                '<span class="ml-auto text-gray-700">Expected <b>' + fmtNum(h.expected_strokes, 2) + '</b> (' + signed(h.expected_vs_par, 2) + ')</span>' +
+            '</div>' +
+            '<p class="text-base"><span class="font-semibold">Tee:</span> ' + esc(tee.club_name || tee.club) + ' - ' + esc(tee.aim || '') + '</p>' +
+            '<p class="text-gray-600">Carry ' + esc(tee.carry_yards) + ' yds' + (tee.shot && tee.shot !== 'full' ? ' (' + esc(tee.shot) + ' swing)' : '') + ' · target ' + esc(tee.target_yards) + ' yds, ' + esc(aimShort(tee.aim_offset_yards)) + '</p>' +
+            '<div><p class="text-xs text-gray-500 mb-1">Where the tee shot lands</p>' + mixBar(tee.landing_mix) + '</div>' +
+            '<p>Trouble ' + fmtPct(tee.trouble_probability) + (avoid ? ' · ' + avoid : '') + '</p>' +
+            layup + approach + contingency +
+            '<div><p class="text-xs text-gray-500 mb-1">Score distribution · double-bogey or worse ' + fmtPct(h.p_double_plus) + '</p>' + distBar(h.score_distribution) + '</div>' +
+            '<p class="font-bold text-gray-900">' + esc(h.key_thought || '') + '</p>' +
+            '<p class="text-gray-600">' + esc(h.rationale || '') + '</p>' +
+            altTable;
+        grid.appendChild(left);
+        grid.appendChild(right);
+        card.appendChild(grid);
+        return card;
+    }
+})();
+</script>
+{% endblock %}

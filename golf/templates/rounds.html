@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Rounds{% endblock %}
+{% block page_title %}Rounds{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+    <div class="flex items-center justify-between">
+        <p class="text-sm text-gray-500">Log every round - quick scores on a busy day, every shot when you can.</p>
+        <button id="btn-new" class="btn btn-primary">New round</button>
+    </div>
+
+    <div id="new-round" class="card p-5 hidden">
+        <h3 class="font-semibold text-gray-900 mb-3">New round</h3>
+        <form id="new-round-form" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="sm:col-span-2 lg:col-span-1">
+                <label class="label" for="nr-course">Course</label>
+                <select id="nr-course" class="select"><option value="">No course (scores only)</option></select>
+                <p class="text-xs text-gray-400 mt-1">No course? <a href="/courses" class="text-brand-700 underline">Import one</a> to enable strategy.</p>
+            </div>
+            <div>
+                <label class="label" for="nr-date">Date</label>
+                <input id="nr-date" type="date" class="input" required>
+            </div>
+            <div>
+                <label class="label" for="nr-tee">Tee</label>
+                <input id="nr-tee" class="input" placeholder="White" maxlength="40">
+            </div>
+            <div>
+                <label class="label" for="nr-mode">Logging mode</label>
+                <select id="nr-mode" class="select">
+                    <option value="quick">Quick - score, putts, FIR, GIR</option>
+                    <option value="full">Full - every shot</option>
+                    <option value="narrative">Narrative - describe holes in words</option>
+                </select>
+            </div>
+            <div class="sm:col-span-2 lg:col-span-4 flex items-center gap-2">
+                <button type="submit" class="btn btn-primary">Start round</button>
+                <button type="button" id="btn-cancel" class="btn btn-secondary">Cancel</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <div id="rounds-loading" class="p-5 text-sm text-gray-500 flex items-center gap-2"><span class="spinner spinner-dark"></span> Loading rounds…</div>
+        <div id="rounds-empty" class="hidden p-8 text-center">
+            <p class="text-gray-700 font-medium">No rounds yet</p>
+            <p class="text-sm text-gray-500 mt-1">Start your first round above. The dashboard and strategy engine learn from every hole you log.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="table hidden" id="rounds-table">
+                <thead><tr><th>Date</th><th>Course</th><th class="text-right">Score</th><th class="text-right">Holes</th><th>Mode</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    'use strict';
+    const { api, esc, fmtDate, today, toast } = Caddie;
+    const $ = (id) => document.getElementById(id);
+    let pid, courses = [];
+
+    Caddie.ready(async (id) => {
+        pid = id;
+        $('nr-date').value = today();
+        const results = await Promise.all([
+            Caddie.courses().catch((e) => { toast('Courses could not be loaded: ' + e.message); return []; }),
+            api('/api/players/' + pid + '/rounds'),
+        ]);
+        courses = results[0] || [];
+        fillCourses();
+        renderRounds(results[1] || []);
+    });
+
+    function fillCourses() {
+        const sel = $('nr-course');
+        courses.forEach((c) => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name + (c.city ? ' · ' + c.city : '') + (c.par ? ' (par ' + c.par + ')' : '');
+            opt.dataset.tee = c.tee_name || '';
+            sel.appendChild(opt);
+        });
+        sel.addEventListener('change', () => {
+            const opt = sel.options[sel.selectedIndex];
+            if (opt && opt.dataset.tee && !$('nr-tee').value) $('nr-tee').value = opt.dataset.tee;
+        });
+    }
+
+    function renderRounds(rounds) {
+        $('rounds-loading').classList.add('hidden');
+        const table = $('rounds-table');
+        const body = table.querySelector('tbody');
+        if (!rounds.length) { $('rounds-empty').classList.remove('hidden'); table.classList.add('hidden'); return; }
+        $('rounds-empty').classList.add('hidden');
+        table.classList.remove('hidden');
+        body.innerHTML = rounds.map((r) =>
+            '<tr class="row-link" data-id="' + r.id + '">' +
+            '<td class="whitespace-nowrap">' + esc(fmtDate(r.played_on)) + '</td>' +
+            '<td>' + esc(r.course_name || 'No course') + (r.tee_name ? ' <span class="text-xs text-gray-400">' + esc(r.tee_name) + '</span>' : '') + '</td>' +
+            '<td class="text-right font-semibold">' + (r.total_score != null ? esc(r.total_score) : '–') + '</td>' +
+            '<td class="text-right">' + esc(r.holes_logged) + '</td>' +
+            '<td><span class="badge badge-gray">' + esc(r.logging_mode) + '</span></td>' +
+            '<td>' + (r.completed ? '<span class="badge badge-green">Complete</span>' : '<span class="badge badge-amber">In progress</span>') + '</td>' +
+            '<td class="text-right whitespace-nowrap"><a class="text-brand-700 hover:underline mr-3" href="/rounds/' + r.id + '">Open</a>' +
+            '<button type="button" class="text-red-600 hover:underline text-xs" data-delete="' + r.id + '">Delete</button></td></tr>').join('');
+        body.querySelectorAll('tr').forEach((tr) => tr.addEventListener('click', (ev) => {
+            if (ev.target.closest('a, button')) return;
+            location.href = '/rounds/' + tr.dataset.id;
+        }));
+        body.querySelectorAll('[data-delete]').forEach((b) => b.addEventListener('click', async () => {
+            if (!confirm('Delete this round and all its holes?')) return;
+            try {
+                await api('/api/players/' + pid + '/rounds/' + b.dataset.delete, { method: 'DELETE' });
+                toast('Round deleted', 'success');
+                renderRounds(await api('/api/players/' + pid + '/rounds'));
+            } catch (e) { toast(e.message); }
+        }));
+    }
+
+    $('btn-new').addEventListener('click', () => { $('new-round').classList.remove('hidden'); $('nr-course').focus(); });
+    $('btn-cancel').addEventListener('click', () => $('new-round').classList.add('hidden'));
+
+    $('new-round-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const date = $('nr-date').value;
+        if (!date) { toast('Pick a date'); return; }
+        const body = {
+            course_id: $('nr-course').value ? Number($('nr-course').value) : null,
+            played_on: date,
+            tee_name: $('nr-tee').value.trim() || null,
+            logging_mode: $('nr-mode').value,
+        };
+        const btn = ev.target.querySelector('button[type=submit]');
+        btn.disabled = true;
+        try {
+            const r = await api('/api/players/' + pid + '/rounds', { method: 'POST', body });
+            location.href = '/rounds/' + r.id;
+        } catch (e) {
+            toast(e.message);
+            btn.disabled = false;
+        }
+    });
+})();
+</script>
+{% endblock %}

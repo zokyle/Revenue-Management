@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div id="dash-loading" class="flex items-center gap-2 text-sm text-gray-500"><span class="spinner spinner-dark"></span> Loading your profile…</div>
+
+<div id="dash" class="hidden space-y-5">
+    <div id="dash-empty" class="hidden card p-6 border-brand-200 bg-brand-50">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div class="flex-1">
+                <h2 class="text-lg font-semibold text-gray-900">No rounds logged yet</h2>
+                <p class="text-sm text-gray-600 mt-1">The caddie starts from handicap-based defaults. Log a round - even just scores and putts - and the charts below come alive. Ten full rounds are enough for the strategy engine to trust your own numbers over the defaults.</p>
+            </div>
+            <a href="/rounds" class="btn btn-primary btn-lg">Log a round</a>
+        </div>
+    </div>
+
+    <!-- Readiness + KPIs -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="card p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold text-gray-900">Readiness</h3>
+                <span id="rd-level" class="badge badge-gray">–</span>
+            </div>
+            <div class="meter"><div id="rd-bar" style="width:0%; background:#9ca3af"></div></div>
+            <div class="flex justify-between text-xs text-gray-500 mt-1"><span id="rd-score"></span><span id="rd-rounds"></span></div>
+            <p id="rd-message" class="text-sm text-gray-700 mt-3"></p>
+            <div id="rd-clubs-wrap" class="mt-3 hidden">
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Clubs needing data</p>
+                <ul id="rd-clubs" class="mt-1 space-y-1 text-sm"></ul>
+            </div>
+        </div>
+        <div class="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3" id="kpis"></div>
+    </div>
+
+    <!-- Trend + tee miss -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="card p-5 lg:col-span-2">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="font-semibold text-gray-900">Score trend</h3>
+                <span id="trend-target" class="text-xs text-gray-500"></span>
+            </div>
+            <div class="h-64 relative"><canvas id="trend-chart"></canvas><p id="trend-empty" class="hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400">No completed rounds yet</p></div>
+        </div>
+        <div class="card p-5">
+            <h3 class="font-semibold text-gray-900 mb-2">Tee miss direction</h3>
+            <div class="h-64 relative"><canvas id="miss-chart"></canvas><p id="miss-empty" class="hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400 text-center px-4">No tee misses logged yet</p></div>
+        </div>
+    </div>
+
+    <!-- Clubs + habits -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="card p-5 lg:col-span-2">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="font-semibold text-gray-900">Club distances</h3>
+                <a href="/bag" class="text-xs text-brand-700 hover:underline">Edit bag</a>
+            </div>
+            <p class="text-xs text-gray-500 mb-2">Learned carry in yards (bars) with ±1σ whiskers. Label shows club · confidence that the number is yours rather than a handicap default.</p>
+            <div id="club-chart-wrap" class="relative" style="height: 420px"><canvas id="club-chart"></canvas></div>
+        </div>
+        <div class="card p-5">
+            <h3 class="font-semibold text-gray-900 mb-2">Costliest habits</h3>
+            <ul id="errors" class="divide-y divide-gray-100"></ul>
+        </div>
+    </div>
+
+    <!-- Recent rounds -->
+    <div class="card">
+        <div class="flex items-center justify-between p-5 pb-3">
+            <h3 class="font-semibold text-gray-900">Recent rounds</h3>
+            <a href="/rounds" class="btn btn-primary btn-sm">Log a round</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="table" id="recent-table">
+                <thead><tr><th>Date</th><th>Course</th><th class="text-right">Score</th><th class="text-right">Holes</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    'use strict';
+    const { api, esc, fmtPct, fmtNum, fmtDate, signed, chart, colors } = Caddie;
+    const LEVELS = {
+        cold: { badge: 'badge-gray', color: '#9ca3af', label: 'Cold' },
+        warming: { badge: 'badge-amber', color: '#f59e0b', label: 'Warming up' },
+        ready: { badge: 'badge-green', color: '#10b981', label: 'Ready' },
+        dialed: { badge: 'badge-blue', color: '#2563eb', label: 'Dialed in' },
+    };
+    const $ = (id) => document.getElementById(id);
+
+    Caddie.ready(async (pid) => {
+        let data;
+        try {
+            data = await api('/api/players/' + pid + '/dashboard');
+        } catch (e) {
+            $('dash-loading').innerHTML = '<span class="text-red-700">Could not load the dashboard: ' + esc(e.message) + '</span>';
+            throw e;
+        }
+        $('dash-loading').classList.add('hidden');
+        $('dash').classList.remove('hidden');
+        render(data);
+    });
+
+    function render(d) {
+        const recent = d.recent_rounds || [];
+        $('dash-empty').classList.toggle('hidden', recent.length > 0);
+        renderReadiness(d.readiness || {});
+        renderKpis(d.score_stats || {}, d.tendencies || {});
+        renderTrend(d.score_stats || {});
+        renderMiss(d.tendencies || {});
+        renderClubs(d.clubs || {});
+        renderErrors(d.errors || []);
+        renderRecent(recent);
+    }
+
+    function renderReadiness(rd) {
+        const lvl = LEVELS[rd.level] || LEVELS.cold;
+        const score = Number(rd.score || 0);
+        const badge = $('rd-level');
+        badge.className = 'badge ' + lvl.badge;
+        badge.textContent = lvl.label;
+        const bar = $('rd-bar');
+        bar.style.width = Math.round(score * 100) + '%';
+        bar.style.background = lvl.color;
+        $('rd-score').textContent = 'Readiness ' + Math.round(score * 100) + '%';
+        $('rd-rounds').textContent = 'Rounds ' + (rd.rounds_logged || 0) + ' of ' + (rd.rounds_needed || 10);
+        $('rd-message').textContent = rd.message || '';
+        const needing = rd.clubs_needing_data || [];
+        $('rd-clubs-wrap').classList.toggle('hidden', needing.length === 0);
+        $('rd-clubs').innerHTML = needing.map((c) =>
+            '<li class="flex justify-between"><span class="font-medium">' + esc(c.code) + '</span>' +
+            '<span class="text-gray-500">' + esc(c.shots) + ' of ' + esc(c.needed) + ' shots</span></li>').join('');
+    }
+
+    function renderKpis(ss, t) {
+        const items = [
+            ['Avg score', fmtNum(ss.avg, 1), ss.last5_avg != null ? 'last 5: ' + fmtNum(ss.last5_avg, 1) : ''],
+            ['Best', ss.best != null ? ss.best : '–', ss.rounds_under_target != null ? ss.rounds_under_target + ' at/under ' + (ss.target || 79) : ''],
+            ['Fairways hit', fmtPct(t.fir_pct), 'FIR'],
+            ['Greens in reg', fmtPct(t.gir_pct), 'GIR'],
+            ['Putts / round', fmtNum(t.putts_per_round, 1), t.three_putt_pct != null ? '3-putts ' + fmtPct(t.three_putt_pct) : ''],
+            ['Penalties / round', fmtNum(t.penalties_per_round, 2), ''],
+            ['Doubles+ / round', fmtNum(t.doubles_or_worse_per_round, 2), ''],
+            ['Approach prox.', t.approach_proximity_ft != null ? fmtNum(t.approach_proximity_ft, 0) + ' ft' : '–', 'avg. from full shots'],
+        ];
+        $('kpis').innerHTML = items.map((k) =>
+            '<div class="card p-4"><p class="text-xs text-gray-500">' + esc(k[0]) + '</p>' +
+            '<p class="text-2xl font-bold text-gray-900 mt-1">' + esc(k[1]) + '</p>' +
+            '<p class="text-xs text-gray-400 mt-0.5 min-h-[1rem]">' + esc(k[2]) + '</p></div>').join('');
+    }
+
+    function renderTrend(ss) {
+        const trend = (ss.trend || []).filter((p) => p.score != null);
+        const target = ss.target || 79;
+        $('trend-target').textContent = 'Target ' + target + ' (dashed)';
+        if (!trend.length) { $('trend-empty').classList.remove('hidden'); return; }
+        const scores = trend.map((p) => p.score);
+        chart('trend-chart', {
+            type: 'line',
+            data: {
+                labels: trend.map((p) => fmtDate(p.date)),
+                datasets: [
+                    { label: 'Score', data: scores, borderColor: colors.emerald, backgroundColor: colors.emeraldFaded, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: colors.emerald, borderWidth: 2.5 },
+                    { label: 'Target ' + target, data: scores.map(() => target), borderColor: colors.red, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, fill: false },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { display: true, position: 'bottom' } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 10 } } },
+                    y: { suggestedMin: Math.min(target, ...scores) - 3, suggestedMax: Math.max(target, ...scores) + 3, grid: { color: 'rgba(0,0,0,0.05)' } },
+                },
+            },
+        });
+    }
+
+    function renderMiss(t) {
+        const dir = t.tee_miss_direction || {};
+        const keys = Object.keys(dir).filter((k) => dir[k] > 0);
+        if (!keys.length) { $('miss-empty').classList.remove('hidden'); return; }
+        const palette = { left: colors.amber, right: colors.sky, short: colors.gray, long: colors.purple };
+        chart('miss-chart', {
+            type: 'doughnut',
+            data: { labels: keys.map((k) => k[0].toUpperCase() + k.slice(1)), datasets: [{ data: keys.map((k) => dir[k]), backgroundColor: keys.map((k) => palette[k] || colors.slate), borderWidth: 2 }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { display: true, position: 'bottom' } } },
+        });
+    }
+
+    // Draws ±sigma whiskers on the horizontal club-distance bars.
+    const errorBars = {
+        id: 'errorBars',
+        afterDatasetsDraw(c, args, opts) {
+            const meta = c.getDatasetMeta(0);
+            const sig = (opts && opts.sigmas) || [];
+            const ctx = c.ctx;
+            ctx.save();
+            ctx.strokeStyle = '#1f2937';
+            ctx.lineWidth = 1.5;
+            meta.data.forEach((bar, i) => {
+                const s = sig[i];
+                if (!s) return;
+                const v = c.data.datasets[0].data[i];
+                const x1 = c.scales.x.getPixelForValue(v - s), x2 = c.scales.x.getPixelForValue(v + s);
+                const y = bar.y;
+                ctx.beginPath();
+                ctx.moveTo(x1, y); ctx.lineTo(x2, y);
+                ctx.moveTo(x1, y - 4); ctx.lineTo(x1, y + 4);
+                ctx.moveTo(x2, y - 4); ctx.lineTo(x2, y + 4);
+                ctx.stroke();
+            });
+            ctx.restore();
+        },
+    };
+
+    function renderClubs(clubs) {
+        const rows = Object.keys(clubs).map((code) => Object.assign({ code }, clubs[code]))
+            .filter((c) => c.category !== 'putter' && Number(c.carry_mean) > 0)
+            .sort((a, b) => b.carry_mean - a.carry_mean);
+        const wrap = $('club-chart-wrap');
+        if (!rows.length) { wrap.innerHTML = '<p class="text-sm text-gray-400">No clubs in the bag yet. <a class="text-brand-700 underline" href="/bag">Add clubs</a>.</p>'; return; }
+        wrap.style.height = Math.max(220, rows.length * 26 + 50) + 'px';
+        const confColor = (c) => c >= 0.7 ? 'rgba(16,185,129,0.85)' : (c >= 0.4 ? 'rgba(245,158,11,0.85)' : 'rgba(156,163,175,0.7)');
+        chart('club-chart', {
+            type: 'bar',
+            data: {
+                labels: rows.map((c) => c.code + ' · ' + Math.round((c.confidence || 0) * 100) + '%'),
+                datasets: [{ label: 'Carry', data: rows.map((c) => Math.round(c.carry_mean)), backgroundColor: rows.map((c) => confColor(c.confidence || 0)), borderRadius: 4, barThickness: 14 }],
+            },
+            options: {
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    errorBars: { sigmas: rows.map((c) => Number(c.carry_sigma) || 0) },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => { const c = rows[items[0].dataIndex]; return c.name || c.code; },
+                            label: (item) => {
+                                const c = rows[item.dataIndex];
+                                return [
+                                    'Carry ' + Math.round(c.carry_mean) + ' ± ' + fmtNum(c.carry_sigma, 0) + ' yds',
+                                    'Lateral σ ' + fmtNum(c.lateral_sigma, 0) + ' yds, bias ' + signed(c.lateral_bias, 0) + ' yds',
+                                    (c.n_samples || 0) + ' shots · confidence ' + fmtPct(c.confidence),
+                                ];
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    x: { beginAtZero: true, title: { display: true, text: 'yards' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                },
+            },
+            plugins: [errorBars],
+        });
+    }
+
+    function renderErrors(errors) {
+        if (!errors.length) { $('errors').innerHTML = '<li class="py-2 text-sm text-gray-400">Nothing to report yet - log shots and the caddie will rank what costs you strokes.</li>'; return; }
+        $('errors').innerHTML = errors.slice(0, 6).map((e) =>
+            '<li class="py-3 first:pt-0"><div class="flex items-start justify-between gap-2">' +
+            '<p class="text-sm font-medium text-gray-900">' + esc(e.label) + '</p>' +
+            '<span class="badge badge-red flex-shrink-0">' + fmtNum(e.strokes_per_round, 1) + ' / rd</span></div>' +
+            '<p class="text-xs text-gray-500 mt-1">' + esc(e.advice || '') + '</p></li>').join('');
+    }
+
+    function renderRecent(rounds) {
+        const body = $('recent-table').querySelector('tbody');
+        if (!rounds.length) { body.innerHTML = '<tr><td colspan="5" class="text-sm text-gray-400 py-4">No rounds yet.</td></tr>'; return; }
+        body.innerHTML = rounds.map((r) =>
+            '<tr class="row-link" onclick="location.href=\'/rounds/' + r.id + '\'">' +
+            '<td>' + esc(fmtDate(r.date)) + '</td><td>' + esc(r.course || 'No course') + '</td>' +
+            '<td class="text-right font-semibold">' + (r.score != null ? esc(r.score) : '–') + '</td>' +
+            '<td class="text-right">' + esc(r.holes) + '</td>' +
+            '<td class="text-right"><a class="text-brand-700 hover:underline" href="/rounds/' + r.id + '">Open</a></td></tr>').join('');
+    }
+})();
+</script>
+{% endblock %}

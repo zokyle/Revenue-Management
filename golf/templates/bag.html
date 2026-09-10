@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}My Bag{% endblock %}
+{% block page_title %}My Bag{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+    <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        <div class="card xl:col-span-3">
+            <div class="flex flex-wrap items-center justify-between gap-2 p-4 pb-2">
+                <div>
+                    <h3 class="font-semibold text-gray-900">Clubs</h3>
+                    <p class="text-xs text-gray-500">Stock carry is your own estimate; learned carry comes from logged shots (blended with a handicap prior until you have enough data).</p>
+                </div>
+                <button id="btn-add" class="btn btn-primary btn-sm">+ Add club</button>
+            </div>
+            <form id="add-form" class="hidden grid grid-cols-2 sm:grid-cols-6 gap-2 px-4 pb-3 items-end">
+                <div><label class="label">Code</label><input id="a-code" class="input input-sm" required maxlength="10" placeholder="5w"></div>
+                <div class="sm:col-span-2"><label class="label">Name</label><input id="a-name" class="input input-sm" required maxlength="60" placeholder="5 Wood"></div>
+                <div><label class="label">Category</label><select id="a-cat" class="select select-sm"><option value="driver">driver</option><option value="wood">wood</option><option value="hybrid">hybrid</option><option value="iron" selected>iron</option><option value="wedge">wedge</option><option value="putter">putter</option></select></div>
+                <div><label class="label">Stock carry</label><input id="a-carry" type="number" min="0" max="400" class="input input-sm" placeholder="yds"></div>
+                <div class="flex gap-1"><button type="submit" class="btn btn-primary btn-sm">Add</button><button type="button" id="btn-add-cancel" class="btn btn-secondary btn-sm">Cancel</button></div>
+            </form>
+            <div id="clubs-loading" class="px-4 pb-4 text-sm text-gray-500 flex items-center gap-2"><span class="spinner spinner-dark"></span> Loading bag…</div>
+            <div class="overflow-x-auto">
+                <table class="table hidden" id="clubs-table">
+                    <thead><tr><th>Code</th><th>Name</th><th>Category</th><th class="text-right">Stock carry</th><th class="text-right">Learned</th><th class="text-right">Shots</th><th>Active</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card p-4 xl:col-span-2">
+            <h3 class="font-semibold text-gray-900">Learned vs stock carry</h3>
+            <p class="text-xs text-gray-500 mb-2">Green = learned from your shots (with confidence in the label), grey = your stock number.</p>
+            <div id="chart-wrap" class="relative" style="height: 420px"><canvas id="carry-chart"></canvas></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    'use strict';
+    const { api, esc, toast, num, fmtNum, chart, colors } = Caddie;
+    const $ = (id) => document.getElementById(id);
+    const ORDER = { driver: 0, wood: 1, hybrid: 2, iron: 3, wedge: 4, putter: 5 };
+    let pid, clubs = [], learned = {};
+
+    Caddie.ready(async (id) => {
+        pid = id;
+        const results = await Promise.all([
+            Caddie.clubs(true),
+            api('/api/players/' + pid + '/profile').catch((e) => { toast('Profile unavailable: ' + e.message, 'info'); return null; }),
+        ]);
+        clubs = results[0] || [];
+        learned = (results[1] && results[1].data && results[1].data.clubs) || {};
+        wire();
+        render();
+    });
+
+    function sorted() {
+        return clubs.slice().sort((a, b) => (ORDER[a.category] - ORDER[b.category]) || (a.sort_order - b.sort_order) || a.code.localeCompare(b.code));
+    }
+
+    function render() {
+        $('clubs-loading').classList.add('hidden');
+        const table = $('clubs-table');
+        table.classList.remove('hidden');
+        table.querySelector('tbody').innerHTML = sorted().map((c) => {
+            const l = learned[c.code] || {};
+            return '<tr data-id="' + c.id + '" class="' + (c.active ? '' : 'opacity-50') + '">' +
+                '<td class="font-semibold">' + esc(c.code) + '</td>' +
+                '<td>' + esc(c.name) + (c.loft ? ' <span class="text-xs text-gray-400">' + esc(c.loft) + '°</span>' : '') + '</td>' +
+                '<td><span class="badge badge-gray">' + esc(c.category) + '</span></td>' +
+                '<td class="text-right"><input type="number" min="0" max="400" class="input input-sm w-20 text-right inline-block" data-carry="' + c.id + '" value="' + (c.stock_carry == null ? '' : esc(c.stock_carry)) + '" placeholder="–"></td>' +
+                '<td class="text-right whitespace-nowrap">' + (l.carry_mean ? Math.round(l.carry_mean) + ' <span class="text-xs text-gray-400">±' + fmtNum(l.carry_sigma, 0) + '</span>' : '–') + '</td>' +
+                '<td class="text-right">' + (l.n_samples || 0) + '</td>' +
+                '<td><input type="checkbox" class="h-4 w-4" data-active="' + c.id + '"' + (c.active ? ' checked' : '') + '></td>' +
+                '<td class="text-right"><button type="button" class="text-red-600 hover:underline text-xs" data-delete="' + c.id + '">Delete</button></td></tr>';
+        }).join('') || '<tr><td colspan="8" class="text-sm text-gray-400 py-4">The bag is empty - add your clubs above.</td></tr>';
+        renderChart();
+    }
+
+    function renderChart() {
+        const rows = sorted().filter((c) => c.category !== 'putter').map((c) => ({ c, l: learned[c.code] || {} }))
+            .filter((r) => r.l.carry_mean || r.c.stock_carry)
+            .sort((a, b) => (Number(b.l.carry_mean) || Number(b.c.stock_carry) || 0) - (Number(a.l.carry_mean) || Number(a.c.stock_carry) || 0));
+        const wrap = $('chart-wrap');
+        if (!rows.length) { wrap.innerHTML = '<p class="text-sm text-gray-400">Add stock carries or log shots to see the comparison.</p>'; return; }
+        wrap.style.height = Math.max(220, rows.length * 30 + 50) + 'px';
+        chart('carry-chart', {
+            type: 'bar',
+            data: {
+                labels: rows.map((r) => r.c.code + (r.l.confidence != null ? ' · ' + Math.round(r.l.confidence * 100) + '%' : '')),
+                datasets: [
+                    { label: 'Learned carry', data: rows.map((r) => r.l.carry_mean ? Math.round(r.l.carry_mean) : null), backgroundColor: 'rgba(16,185,129,0.85)', borderRadius: 3 },
+                    { label: 'Stock carry', data: rows.map((r) => r.c.stock_carry == null ? null : Number(r.c.stock_carry)), backgroundColor: 'rgba(156,163,175,0.7)', borderRadius: 3 },
+                ],
+            },
+            options: {
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: true, position: 'bottom' }, tooltip: { callbacks: { label: (i) => i.dataset.label + ': ' + (i.parsed.x == null ? '–' : i.parsed.x + ' yds') } } },
+                scales: { x: { beginAtZero: true, title: { display: true, text: 'yards' }, grid: { color: 'rgba(0,0,0,0.05)' } }, y: { grid: { display: false } } },
+            },
+        });
+    }
+
+    async function updateClub(id, body) {
+        try {
+            const updated = await api('/api/players/' + pid + '/clubs/' + id, { method: 'PUT', body });
+            const i = clubs.findIndex((c) => c.id === id);
+            if (i >= 0) clubs[i] = updated;
+            toast(updated.code + ' updated', 'success', 1500);
+            renderChart();
+        } catch (e) { toast(e.message); render(); }
+    }
+
+    function wire() {
+        const body = $('clubs-table').querySelector('tbody');
+        body.addEventListener('change', (ev) => {
+            const t = ev.target;
+            if (t.dataset.carry) {
+                const v = t.value === '' ? null : num(t.value, null);
+                if (v != null && (v < 0 || v > 400)) { toast('Carry must be between 0 and 400 yards'); return; }
+                updateClub(Number(t.dataset.carry), { stock_carry: v });
+            } else if (t.dataset.active) {
+                updateClub(Number(t.dataset.active), { active: t.checked }).then(render);
+            }
+        });
+        body.addEventListener('click', async (ev) => {
+            const b = ev.target.closest('[data-delete]');
+            if (!b) return;
+            const club = clubs.find((c) => c.id === Number(b.dataset.delete));
+            if (!confirm('Remove ' + (club ? club.name : 'this club') + ' from the bag?')) return;
+            try {
+                await api('/api/players/' + pid + '/clubs/' + b.dataset.delete, { method: 'DELETE' });
+                clubs = clubs.filter((c) => c.id !== Number(b.dataset.delete));
+                toast('Club removed', 'success');
+                render();
+            } catch (e) { toast(e.message); }
+        });
+        $('btn-add').addEventListener('click', () => { $('add-form').classList.remove('hidden'); $('a-code').focus(); });
+        $('btn-add-cancel').addEventListener('click', () => $('add-form').classList.add('hidden'));
+        $('add-form').addEventListener('submit', async (ev) => {
+            ev.preventDefault();
+            const code = $('a-code').value.trim(), name = $('a-name').value.trim();
+            if (!code || !name) { toast('Code and name are required'); return; }
+            const carry = $('a-carry').value === '' ? null : num($('a-carry').value, null);
+            if (carry != null && (carry < 0 || carry > 400)) { toast('Carry must be between 0 and 400 yards'); return; }
+            try {
+                const c = await api('/api/players/' + pid + '/clubs', { method: 'POST', body: { code, name, category: $('a-cat').value, stock_carry: carry, sort_order: clubs.length, active: true } });
+                clubs.push(c);
+                toast(c.name + ' added', 'success');
+                $('add-form').reset();
+                $('add-form').classList.add('hidden');
+                render();
+            } catch (e) { toast(e.message); }
+        });
+    }
+})();
+</script>
+{% endblock %}

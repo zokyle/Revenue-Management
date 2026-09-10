@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}Course {{ course_id }}{% endblock %}
+{% block page_title %}<span id="page-heading">Course</span>{% endblock %}
+
+{% block content %}
+<div id="cd-loading" class="flex items-center gap-2 text-sm text-gray-500"><span class="spinner spinner-dark"></span> Loading course…</div>
+
+<div id="cd" class="hidden space-y-4">
+    <div class="card p-4 sm:p-5 flex flex-wrap items-center gap-3">
+        <div class="flex-1 min-w-[12rem]">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h2 id="c-name" class="text-lg font-semibold text-gray-900"></h2>
+                <span id="c-source" class="badge badge-gray"></span>
+            </div>
+            <p id="c-meta" class="text-sm text-gray-500 mt-0.5"></p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="btn-add-hole" class="btn btn-secondary btn-sm">+ Add hole</button>
+            <a id="btn-strategy" href="#" class="btn btn-primary">Build strategy</a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        <div class="card xl:col-span-2 self-start">
+            <div class="p-4 pb-2 flex items-center justify-between">
+                <h3 class="font-semibold text-gray-900">Holes</h3>
+                <span class="text-xs text-gray-500">Tap a hole to edit it</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-compact" id="holes-table">
+                    <thead><tr><th>#</th><th>Par</th><th>Yds</th><th>Shape</th><th>FW width</th><th>Features</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p id="holes-empty" class="hidden p-4 text-sm text-gray-500">This course has no holes yet. Use "Add hole" to create them one by one.</p>
+        </div>
+
+        <div id="editor" class="hidden card xl:col-span-3 p-4 sm:p-5">
+            <div class="grid grid-cols-1 md:grid-cols-[1fr_300px] gap-4">
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 id="e-title" class="font-semibold text-gray-900">Hole</h3>
+                        <span id="e-dirty" class="badge badge-gray hidden">Unsaved</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div><label class="label">Par</label><input data-f="par" type="number" min="3" max="6" class="input input-sm"></div>
+                        <div><label class="label">Yards</label><input data-f="yards" type="number" min="50" max="800" class="input input-sm"></div>
+                        <div><label class="label">Stroke idx</label><input data-f="handicap_index" type="number" min="1" max="18" class="input input-sm"></div>
+                        <div><label class="label">Elev. (ft)</label><input data-f="elevation_change_ft" type="number" step="1" class="input input-sm" title="Positive = uphill"></div>
+                        <div><label class="label">Shape</label><select data-f="shape" class="select select-sm"><option value="straight">Straight</option><option value="dogleg_left">Dogleg left</option><option value="dogleg_right">Dogleg right</option></select></div>
+                        <div><label class="label">Dogleg at (yds)</label><input data-f="dogleg_at_yards" type="number" min="50" max="600" class="input input-sm"></div>
+                        <div><label class="label">Dogleg angle (°)</label><input data-f="dogleg_angle_deg" type="number" min="5" max="90" class="input input-sm"></div>
+                        <div><label class="label">FW start (yds)</label><input data-f="fairway_start_yards" type="number" min="0" max="300" class="input input-sm"></div>
+                        <div><label class="label">FW width</label><input data-f="fairway_width_yards" type="number" min="10" max="90" class="input input-sm"></div>
+                        <div><label class="label">Rough width</label><input data-f="rough_width_yards" type="number" min="0" max="60" class="input input-sm"></div>
+                        <div><label class="label">Green width</label><input data-f="green_width_yards" type="number" min="10" max="70" class="input input-sm"></div>
+                        <div><label class="label">Green depth</label><input data-f="green_depth_yards" type="number" min="10" max="70" class="input input-sm"></div>
+                    </div>
+                    <div><label class="label">Notes</label><input data-f="notes" class="input input-sm" maxlength="300" placeholder="Local knowledge: wind, slopes, where not to miss"></div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <p class="text-sm font-medium text-gray-800">Features (hazards)</p>
+                            <button id="btn-add-feature" class="btn btn-secondary btn-sm">+ Add feature</button>
+                        </div>
+                        <p class="text-xs text-gray-500 mb-2">Distances are from the tee along the centerline. Offset = yards from the centerline to the near edge; width 999 = all the way to the edge.</p>
+                        <div class="overflow-x-auto">
+                            <table class="table table-compact" style="min-width: 640px">
+                                <thead><tr><th>Kind</th><th>Side</th><th>Start</th><th>End</th><th>Offset</th><th>Width</th><th>Label</th><th></th></tr></thead>
+                                <tbody id="features-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <button id="btn-save-hole" class="btn btn-primary">Save hole</button>
+                        <button id="btn-revert" class="btn btn-secondary">Revert</button>
+                    </div>
+                </div>
+                <div class="hole-map flex justify-center md:justify-end">
+                    <svg id="preview"></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/holemap.js"></script>
+<script>
+(function () {
+    'use strict';
+    const { api, esc, toast, num } = Caddie;
+    const COURSE_ID = {{ course_id }};
+    const KINDS = ['water', 'ob', 'bunker', 'trees', 'deep_rough', 'native', 'creek', 'penalty'];
+    const SIDES = ['left', 'right', 'both', 'center', 'short', 'long'];
+    const GEOMETRY_FIELDS = ['par', 'yards', 'handicap_index', 'shape', 'dogleg_at_yards', 'dogleg_angle_deg', 'fairway_width_yards',
+        'fairway_start_yards', 'rough_width_yards', 'green_width_yards', 'green_depth_yards', 'elevation_change_ft', 'notes'];
+    const $ = (id) => document.getElementById(id);
+
+    let course, selected = null, editing = null, dirty = false;
+
+    Caddie.ready(async () => {
+        try { course = await api('/api/courses/' + COURSE_ID); }
+        catch (e) { $('cd-loading').innerHTML = '<span class="text-red-700">' + esc(e.message) + '</span> <a class="underline" href="/courses">Back to courses</a>'; throw e; }
+        $('cd-loading').classList.add('hidden');
+        $('cd').classList.remove('hidden');
+        wire();
+        renderCourse();
+        if (course.holes.length) selectHole(course.holes[0].number);
+    });
+
+    function renderCourse() {
+        $('c-name').textContent = course.name;
+        $('page-heading').textContent = course.name;
+        $('c-source').textContent = course.source;
+        $('c-meta').textContent = [
+            [course.city, course.country].filter(Boolean).join(', ') || null,
+            course.tee_name ? course.tee_name + ' tees' : null,
+            course.par != null ? 'Par ' + course.par : null,
+            course.yardage != null ? course.yardage + ' yds' : null,
+            course.holes.length + ' holes',
+        ].filter(Boolean).join(' · ');
+        $('btn-strategy').href = '/strategy/' + course.id;
+        const body = $('holes-table').querySelector('tbody');
+        const holes = course.holes.slice().sort((a, b) => a.number - b.number);
+        $('holes-empty').classList.toggle('hidden', holes.length > 0);
+        body.innerHTML = holes.map((h) =>
+            '<tr class="row-link' + (h.number === selected ? ' bg-brand-50' : '') + '" data-n="' + h.number + '">' +
+            '<td class="font-medium">' + h.number + '</td><td>' + h.par + '</td><td>' + h.yards + '</td>' +
+            '<td>' + esc((h.shape || 'straight').replace('_', ' ')) + (h.dogleg_at_yards && h.shape !== 'straight' ? ' <span class="text-xs text-gray-400">@' + Math.round(h.dogleg_at_yards) + '</span>' : '') + '</td>' +
+            '<td>' + esc(h.fairway_width_yards) + '</td><td>' + (h.features || []).length + '</td></tr>').join('');
+        body.querySelectorAll('tr').forEach((tr) => tr.addEventListener('click', () => selectHole(Number(tr.dataset.n))));
+    }
+
+    function holeByNumber(n) { return course.holes.find((h) => h.number === n); }
+
+    async function selectHole(n) {
+        if (dirty && n !== selected && !confirm('Discard unsaved changes on hole ' + selected + '?')) return;
+        const h = holeByNumber(n);
+        if (!h) return;
+        selected = n;
+        editing = JSON.parse(JSON.stringify(h));
+        editing.features = (editing.features || []).map((f) => ({
+            kind: f.kind, side: f.side, start_yards: f.start_yards, end_yards: f.end_yards, offset_yards: f.offset_yards,
+            width_yards: f.width_yards, penalty_strokes: f.penalty_strokes == null ? null : f.penalty_strokes, label: f.label || '',
+        }));
+        dirty = false;
+        $('editor').classList.remove('hidden');
+        renderCourse();
+        renderEditor();
+        // Canonical geometry from the server; edits redraw locally.
+        try {
+            const spec = await api('/api/courses/' + COURSE_ID + '/holes/' + n + '/geometry');
+            if (selected === n && !dirty) HoleMap.drawHoleMap($('preview'), spec);
+        } catch (e) { toast('Geometry preview unavailable: ' + e.message, 'info'); }
+    }
+
+    function renderEditor() {
+        $('e-title').textContent = 'Hole ' + editing.number + ' · Par ' + editing.par + ' · ' + editing.yards + ' yds';
+        $('e-dirty').classList.toggle('hidden', !dirty);
+        GEOMETRY_FIELDS.forEach((f) => {
+            const input = document.querySelector('#editor [data-f="' + f + '"]');
+            if (input) input.value = editing[f] == null ? '' : editing[f];
+        });
+        renderFeatures();
+        drawPreview();
+    }
+    function renderFeatures() {
+        const body = $('features-body');
+        if (!editing.features.length) { body.innerHTML = '<tr><td colspan="8" class="text-sm text-gray-400 py-2">No hazards - the hole is fairway, rough and green.</td></tr>'; return; }
+        const opts = (list, v) => list.map((x) => '<option value="' + x + '"' + (x === v ? ' selected' : '') + '>' + x.replace('_', ' ') + '</option>').join('');
+        body.innerHTML = editing.features.map((f, i) =>
+            '<tr data-i="' + i + '">' +
+            '<td><select data-ff="kind" class="select select-sm">' + opts(KINDS, f.kind) + '</select></td>' +
+            '<td><select data-ff="side" class="select select-sm">' + opts(SIDES, f.side) + '</select></td>' +
+            '<td><input data-ff="start_yards" type="number" min="0" max="800" class="input input-sm w-20" value="' + esc(f.start_yards) + '"></td>' +
+            '<td><input data-ff="end_yards" type="number" min="0" max="800" class="input input-sm w-20" value="' + esc(f.end_yards) + '"></td>' +
+            '<td><input data-ff="offset_yards" type="number" min="-60" max="120" class="input input-sm w-20" value="' + esc(f.offset_yards) + '"></td>' +
+            '<td><input data-ff="width_yards" type="number" min="1" max="999" class="input input-sm w-20" value="' + esc(f.width_yards) + '"></td>' +
+            '<td><input data-ff="label" class="input input-sm w-28" maxlength="60" value="' + esc(f.label || '') + '"></td>' +
+            '<td><button type="button" data-remove="' + i + '" class="btn btn-ghost btn-sm text-red-600" title="Remove">&#10005;</button></td></tr>').join('');
+    }
+    function drawPreview() {
+        HoleMap.drawHoleMap($('preview'), HoleMap.specFromHole(editing));
+    }
+    function setDirty() { dirty = true; $('e-dirty').classList.remove('hidden'); }
+
+    function readGeometryField(input) {
+        const f = input.dataset.f;
+        if (f === 'shape' || f === 'notes') editing[f] = input.value || (f === 'shape' ? 'straight' : null);
+        else editing[f] = input.value === '' ? null : num(input.value, null);
+    }
+    function validate() {
+        if (!(editing.par >= 3 && editing.par <= 6)) return 'Par must be 3-6';
+        if (!(editing.yards >= 50 && editing.yards <= 800)) return 'Yards must be 50-800';
+        if (editing.shape !== 'straight' && (!editing.dogleg_at_yards || !editing.dogleg_angle_deg)) return 'A dogleg needs both "dogleg at" and an angle';
+        for (let i = 0; i < editing.features.length; i++) {
+            const f = editing.features[i];
+            if (!(f.end_yards > f.start_yards)) return 'Feature ' + (i + 1) + ': end must be after start';
+            if (f.width_yards <= 0) return 'Feature ' + (i + 1) + ': width must be positive';
+        }
+        return null;
+    }
+    async function saveHole() {
+        const err = validate();
+        if (err) { toast(err); return; }
+        const body = {};
+        GEOMETRY_FIELDS.forEach((f) => { body[f] = editing[f]; });
+        ['fairway_width_yards', 'fairway_start_yards', 'rough_width_yards', 'green_width_yards', 'green_depth_yards', 'elevation_change_ft'].forEach((f) => {
+            if (body[f] == null) delete body[f];
+        });
+        if (editing.shape === 'straight') { body.dogleg_at_yards = null; body.dogleg_angle_deg = null; }
+        body.features = editing.features.map((f) => ({
+            kind: f.kind, side: f.side, start_yards: Number(f.start_yards), end_yards: Number(f.end_yards),
+            offset_yards: Number(f.offset_yards), width_yards: Number(f.width_yards),
+            penalty_strokes: f.penalty_strokes == null ? null : Number(f.penalty_strokes), label: f.label || null,
+        }));
+        const btn = $('btn-save-hole');
+        btn.disabled = true;
+        try {
+            const saved = await api('/api/courses/' + COURSE_ID + '/holes/' + selected, { method: 'PUT', body });
+            const idx = course.holes.findIndex((h) => h.number === selected);
+            course.holes[idx] = saved;
+            course = await api('/api/courses/' + COURSE_ID);
+            dirty = false;
+            toast('Hole ' + selected + ' saved', 'success');
+            renderCourse();
+            await selectHole(selected);
+        } catch (e) { toast(e.message); }
+        finally { btn.disabled = false; }
+    }
+    async function addHole() {
+        const next = course.holes.length ? Math.max(...course.holes.map((h) => h.number)) + 1 : 1;
+        if (next > 36) { toast('A course can have at most 36 holes'); return; }
+        try {
+            await api('/api/courses/' + COURSE_ID + '/holes', { method: 'POST', body: { number: next, par: 4, yards: 400 } });
+            course = await api('/api/courses/' + COURSE_ID);
+            toast('Hole ' + next + ' added', 'success');
+            renderCourse();
+            await selectHole(next);
+        } catch (e) { toast(e.message); }
+    }
+
+    function wire() {
+        document.querySelectorAll('#editor [data-f]').forEach((input) => {
+            input.addEventListener('input', () => { readGeometryField(input); setDirty(); drawPreview(); $('e-title').textContent = 'Hole ' + editing.number + ' · Par ' + editing.par + ' · ' + editing.yards + ' yds'; });
+        });
+        $('features-body').addEventListener('input', (ev) => {
+            const tr = ev.target.closest('tr[data-i]');
+            const ff = ev.target.dataset.ff;
+            if (!tr || !ff) return;
+            const f = editing.features[Number(tr.dataset.i)];
+            f[ff] = (ff === 'kind' || ff === 'side' || ff === 'label') ? ev.target.value : num(ev.target.value, 0);
+            setDirty();
+            drawPreview();
+        });
+        $('features-body').addEventListener('click', (ev) => {
+            const btn = ev.target.closest('[data-remove]');
+            if (!btn) return;
+            editing.features.splice(Number(btn.dataset.remove), 1);
+            setDirty();
+            renderFeatures();
+            drawPreview();
+        });
+        $('btn-add-feature').addEventListener('click', () => {
+            const y = Number(editing.yards) || 400;
+            editing.features.push({ kind: 'bunker', side: 'right', start_yards: Math.max(50, Math.round(y * 0.55)), end_yards: Math.max(70, Math.round(y * 0.65)), offset_yards: 18, width_yards: 12, penalty_strokes: null, label: '' });
+            setDirty();
+            renderFeatures();
+            drawPreview();
+        });
+        $('btn-save-hole').addEventListener('click', saveHole);
+        $('btn-revert').addEventListener('click', () => { dirty = false; selectHole(selected); });
+        $('btn-add-hole').addEventListener('click', addHole);
+    }
+})();
+</script>
+{% endblock %}

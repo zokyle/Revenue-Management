@@ -1,0 +1,577 @@
+{% extends "base.html" %}
+{% block title %}Round {{ round_id }}{% endblock %}
+{% block page_title %}<span id="page-heading">Round</span>{% endblock %}
+
+{% block content %}
+<div id="rd-loading" class="flex items-center gap-2 text-sm text-gray-500"><span class="spinner spinner-dark"></span> Loading round…</div>
+
+<div id="rd" class="hidden space-y-4">
+    <!-- Round header -->
+    <div class="card p-4 flex flex-wrap items-center gap-3">
+        <div class="flex-1 min-w-[12rem]">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h2 id="hd-course" class="text-lg font-semibold text-gray-900"></h2>
+                <span id="hd-status" class="badge badge-amber">In progress</span>
+            </div>
+            <p id="hd-meta" class="text-sm text-gray-500 mt-0.5"></p>
+        </div>
+        <div class="text-right">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Running total</p>
+            <p id="hd-total" class="text-2xl font-bold text-gray-900 leading-tight">–</p>
+            <p id="hd-thru" class="text-xs text-gray-500"></p>
+        </div>
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+            <select id="mode-select" class="select select-sm flex-1 sm:w-40" title="Logging mode for this screen">
+                <option value="quick">Quick mode</option>
+                <option value="full">Full shots</option>
+                <option value="narrative">Narrative</option>
+            </select>
+            <button id="btn-finish" class="btn btn-primary btn-sm">Finish round</button>
+        </div>
+    </div>
+
+    <!-- Hole pills -->
+    <div id="pills" class="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1"></div>
+
+    <!-- Hole editor -->
+    <div class="card p-4 sm:p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-3 flex-wrap">
+                <h3 id="h-title" class="text-lg font-semibold text-gray-900">Hole 1</h3>
+                <label class="text-xs text-gray-500 flex items-center gap-1">Par <input id="h-par" type="number" min="3" max="6" class="input input-sm w-14"></label>
+                <label class="text-xs text-gray-500 flex items-center gap-1">Yds <input id="h-yards" type="number" min="50" max="800" class="input input-sm w-20"></label>
+                <span id="h-saved" class="badge badge-gray">Not logged</span>
+            </div>
+            <div class="flex gap-2">
+                <button id="btn-prev" class="btn btn-secondary btn-sm">&larr; Prev</button>
+                <button id="btn-next" class="btn btn-secondary btn-sm">Next &rarr;</button>
+            </div>
+        </div>
+
+        <!-- Narrative -->
+        <div id="sec-narrative" class="hidden space-y-2 border border-brand-200 bg-brand-50 rounded-lg p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm font-medium text-gray-800">Describe the hole in words</p>
+                <span id="narr-parser" class="badge badge-gray hidden"></span>
+            </div>
+            <textarea id="narr-text" rows="3" class="textarea" placeholder="Driver down the left rough, 7 iron to 25 feet, two putts. Or several holes: 'Hole 4: ...  Hole 5: ...'"></textarea>
+            <div class="flex flex-wrap items-center gap-2">
+                <label class="text-xs text-gray-500 flex items-center gap-1">Hole <input id="narr-hole" type="number" min="1" max="36" class="input input-sm w-16"></label>
+                <button id="btn-parse" class="btn btn-secondary btn-sm">Parse (preview)</button>
+                <button id="btn-narr-save" class="btn btn-primary btn-sm">Save narrative</button>
+                <span class="text-xs text-gray-500">Parse fills the shot table below so you can check it before saving.</span>
+            </div>
+            <ul id="narr-warnings" class="text-xs text-amber-800 list-disc pl-5"></ul>
+        </div>
+
+        <!-- Quick fields -->
+        <div id="sec-quick" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div>
+                <label class="label">Score</label>
+                <div class="flex items-stretch">
+                    <button type="button" class="btn btn-secondary px-3 rounded-r-none" data-step="-1" data-for="q-score">&minus;</button>
+                    <input id="q-score" type="number" min="1" max="20" class="input rounded-none text-center font-bold text-lg" placeholder="–">
+                    <button type="button" class="btn btn-secondary px-3 rounded-l-none" data-step="1" data-for="q-score">+</button>
+                </div>
+            </div>
+            <div>
+                <label class="label">Putts</label>
+                <div class="flex items-stretch">
+                    <button type="button" class="btn btn-secondary px-3 rounded-r-none" data-step="-1" data-for="q-putts">&minus;</button>
+                    <input id="q-putts" type="number" min="0" max="10" class="input rounded-none text-center" placeholder="–">
+                    <button type="button" class="btn btn-secondary px-3 rounded-l-none" data-step="1" data-for="q-putts">+</button>
+                </div>
+            </div>
+            <div id="q-fir-wrap">
+                <label class="label">Fairway</label>
+                <button type="button" id="q-fir" class="toggle w-full" aria-pressed="false">Fairway hit</button>
+            </div>
+            <div>
+                <label class="label">Green</label>
+                <button type="button" id="q-gir" class="toggle w-full" aria-pressed="false">Green in reg.</button>
+            </div>
+            <div>
+                <label class="label">Penalties</label>
+                <input id="q-pen" type="number" min="0" max="6" class="input" value="0">
+            </div>
+            <div>
+                <label class="label">Tee miss</label>
+                <select id="q-miss" class="select">
+                    <option value="none">None / on target</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                    <option value="short">Short</option>
+                    <option value="long">Long</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Shot table -->
+        <div id="sec-full" class="hidden space-y-2">
+            <div class="flex items-center justify-between">
+                <p class="text-sm font-medium text-gray-800">Shots <span id="shots-derived" class="text-xs font-normal text-gray-500"></span></p>
+                <button id="btn-add-shot" class="btn btn-secondary btn-sm">+ Add shot</button>
+            </div>
+            <div class="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                <table class="table table-compact shot-table" style="min-width: 900px">
+                    <thead>
+                        <tr>
+                            <th>#</th><th>Club</th><th>Type</th><th>Lie start</th><th>Start dist</th><th>Lie end</th><th>End dist</th>
+                            <th title="Lateral miss in yards, + = right">Lateral (+R)</th><th>Outcome</th><th>Pen.</th><th>Holed</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="shots-body"></tbody>
+                </table>
+            </div>
+            <p class="text-xs text-gray-400">Distances in yards; putts are entered in feet. Start distance chains from the previous shot's end.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 pt-1">
+            <input id="q-notes" class="input flex-1 min-w-[10rem]" placeholder="Notes (optional)" maxlength="500">
+            <button id="btn-save" class="btn btn-secondary">Save hole</button>
+            <button id="btn-save-next" class="btn btn-primary">Save &amp; next &rarr;</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    'use strict';
+    const { api, esc, fmtDate, toast, scoreClass, num, signed } = Caddie;
+    const ROUND_ID = {{ round_id }};
+    const LIES = ['tee', 'fairway', 'rough', 'sand', 'recovery', 'fringe', 'green', 'penalty', 'ob'];
+    const SHOT_TYPES = ['tee', 'full', 'punch', 'recovery', 'pitch', 'chip', 'bunker', 'putt'];
+    const OUTCOMES = ['', 'good', 'short', 'long', 'left', 'right', 'hook', 'slice', 'pull', 'push', 'thin', 'fat', 'top', 'shank', 'penalty', 'ob', 'three_putt', 'lip_out'];
+    const $ = (id) => document.getElementById(id);
+
+    let pid, round, course = null, clubs = [], holes = {}, current = 1, mode = 'quick', holeCount = 18;
+
+    Caddie.ready(async (id) => {
+        pid = id;
+        try {
+            round = await api('/api/players/' + pid + '/rounds/' + ROUND_ID);
+        } catch (e) {
+            $('rd-loading').innerHTML = '<span class="text-red-700">Could not load this round: ' + esc(e.message) + '</span> <a href="/rounds" class="underline">Back to rounds</a>';
+            throw e;
+        }
+        const jobs = [Caddie.clubs().catch((e) => { toast('Bag could not be loaded: ' + e.message); return []; })];
+        if (round.course_id) jobs.push(api('/api/courses/' + round.course_id).catch((e) => { toast('Course could not be loaded: ' + e.message); return null; }));
+        const res = await Promise.all(jobs);
+        clubs = res[0] || [];
+        course = res[1] || null;
+        if (course && course.holes && course.holes.length) holeCount = Math.max(18, ...course.holes.map((h) => h.number));
+        mode = ['quick', 'full', 'narrative'].includes(round.logging_mode) ? round.logging_mode : 'quick';
+        $('mode-select').value = mode;
+        initState();
+        current = firstUnlogged();
+        wire();
+        $('rd-loading').classList.add('hidden');
+        $('rd').classList.remove('hidden');
+        renderAll();
+    });
+
+    // ------------------------------------------------------------------ state
+    function courseHole(n) { return course && course.holes ? course.holes.find((h) => h.number === n) : null; }
+    function blank(n) {
+        const ch = courseHole(n);
+        return {
+            hole_number: n, hole_id: ch ? ch.id : null, par: ch ? ch.par : 4, yards: ch ? ch.yards : null,
+            score: null, putts: null, fairway_hit: null, gir: null, penalties: 0, tee_miss: 'none', notes: '',
+            shots: [], saved: false, dirty: false,
+        };
+    }
+    function normalizeShot(s) {
+        return {
+            club_code: s.club_code || '', shot_type: s.shot_type || 'full', lie_start: s.lie_start || 'fairway',
+            start_distance_yards: s.start_distance_yards == null ? 0 : Number(s.start_distance_yards),
+            lie_end: s.lie_end || 'fairway', end_distance_yards: s.end_distance_yards == null ? 0 : Number(s.end_distance_yards),
+            lateral_miss_yards: s.lateral_miss_yards == null ? null : Number(s.lateral_miss_yards),
+            outcome_tag: s.outcome_tag || '', penalty_strokes: Number(s.penalty_strokes) || 0, holed: !!s.holed,
+        };
+    }
+    function fromLogged(h) {
+        const b = blank(h.hole_number);
+        return Object.assign(b, {
+            hole_id: h.hole_id || b.hole_id, par: h.par, yards: h.yards || b.yards, score: h.score, putts: h.putts,
+            fairway_hit: h.fairway_hit, gir: h.gir, penalties: h.penalties || 0, tee_miss: h.tee_miss || 'none', notes: h.notes || '',
+            shots: (h.shots || []).slice().sort((a, b2) => a.sequence - b2.sequence).map(normalizeShot), saved: true, dirty: false,
+        });
+    }
+    function initState() {
+        holes = {};
+        for (let n = 1; n <= holeCount; n++) {
+            const logged = (round.holes || []).find((h) => h.hole_number === n);
+            holes[n] = logged ? fromLogged(logged) : blank(n);
+        }
+    }
+    function firstUnlogged() {
+        for (let n = 1; n <= holeCount; n++) if (!holes[n].saved) return n;
+        return 1;
+    }
+    function cur() { return holes[current]; }
+    function markDirty() { cur().dirty = true; renderSavedBadge(); }
+
+    // ------------------------------------------------------------------ rendering
+    function renderAll() { renderHeader(); renderPills(); renderHole(); }
+
+    function renderHeader() {
+        const name = (course && course.name) || 'Round (no course)';
+        $('hd-course').textContent = name;
+        $('page-heading').textContent = name;
+        $('hd-meta').textContent = [fmtDate(round.played_on), round.tee_name ? round.tee_name + ' tees' : null, 'logged as ' + round.logging_mode].filter(Boolean).join(' · ');
+        const status = $('hd-status');
+        status.className = 'badge ' + (round.completed ? 'badge-green' : 'badge-amber');
+        status.textContent = round.completed ? 'Complete' : 'In progress';
+        $('btn-finish').textContent = round.completed ? 'Reopen round' : 'Finish round';
+        const logged = (round.holes || []).filter((h) => h.score != null);
+        const total = logged.reduce((s, h) => s + h.score, 0);
+        const par = logged.reduce((s, h) => s + h.par, 0);
+        $('hd-total').textContent = logged.length ? String(total) : '–';
+        $('hd-thru').textContent = logged.length ? signed(total - par, 0) + ' thru ' + logged.length : 'No holes logged';
+    }
+
+    function renderPills() {
+        const box = $('pills');
+        box.innerHTML = '';
+        for (let n = 1; n <= holeCount; n++) {
+            const h = holes[n];
+            const pill = document.createElement('button');
+            pill.type = 'button';
+            pill.className = 'hole-pill' + (n === current ? ' active' : '');
+            const score = h.saved ? h.score : null;
+            pill.innerHTML = '<span class="text-gray-500">' + n + '</span><span class="score ' + scoreClass(score, h.par) + '">' + (score == null ? (h.dirty ? '·' : '–') : score) + '</span>';
+            pill.addEventListener('click', () => goTo(n));
+            box.appendChild(pill);
+        }
+        const active = box.querySelector('.active');
+        if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+
+    function renderSavedBadge() {
+        const h = cur();
+        const b = $('h-saved');
+        if (h.dirty) { b.className = 'badge badge-amber'; b.textContent = h.preview ? 'Parsed - not saved' : 'Unsaved changes'; }
+        else if (h.saved) { b.className = 'badge badge-green'; b.textContent = 'Saved'; }
+        else { b.className = 'badge badge-gray'; b.textContent = 'Not logged'; }
+    }
+
+    function renderHole() {
+        const h = cur();
+        const ch = courseHole(current);
+        $('h-title').textContent = 'Hole ' + current;
+        $('h-par').value = h.par;
+        $('h-yards').value = h.yards == null ? '' : h.yards;
+        $('h-par').readOnly = !!ch;
+        $('h-yards').readOnly = !!ch;
+        renderSavedBadge();
+        $('sec-narrative').classList.toggle('hidden', mode !== 'narrative');
+        $('sec-full').classList.toggle('hidden', mode === 'quick');
+        $('narr-hole').value = current;
+        renderQuick();
+        renderShots();
+        $('btn-prev').disabled = current <= 1;
+        $('btn-next').disabled = current >= holeCount;
+    }
+
+    function renderQuick() {
+        const h = cur();
+        $('q-score').value = h.score == null ? '' : h.score;
+        $('q-putts').value = h.putts == null ? '' : h.putts;
+        $('q-pen').value = h.penalties || 0;
+        $('q-miss').value = h.tee_miss || 'none';
+        $('q-notes').value = h.notes || '';
+        $('q-fir').setAttribute('aria-pressed', h.fairway_hit ? 'true' : 'false');
+        $('q-gir').setAttribute('aria-pressed', h.gir ? 'true' : 'false');
+        $('q-fir-wrap').classList.toggle('hidden', Number(h.par) === 3);
+        const derived = mode !== 'quick' && h.shots.length;
+        $('q-score').readOnly = !!derived;
+        $('q-score').classList.toggle('bg-gray-50', !!derived);
+    }
+
+    function options(list, value, labels) {
+        return list.map((v) => '<option value="' + esc(v) + '"' + (v === (value || '') ? ' selected' : '') + '>' + esc((labels && labels[v] != null) ? labels[v] : (v || '–').replace('_', ' ')) + '</option>').join('');
+    }
+    function clubOptions(code) {
+        const codes = clubs.filter((c) => c.active !== false).map((c) => c.code);
+        const list = codes.includes(code) || !code ? codes : [code].concat(codes);
+        return '<option value=""' + (!code ? ' selected' : '') + '>–</option>' + list.map((c) => '<option value="' + esc(c) + '"' + (c === code ? ' selected' : '') + '>' + esc(c) + '</option>').join('');
+    }
+    function distDisplay(v, putt) {
+        if (v == null) return '';
+        return putt ? Math.round(v * 3) : Math.round(v * 10) / 10;
+    }
+
+    function renderShots() {
+        const h = cur();
+        const body = $('shots-body');
+        if (!h.shots.length) {
+            body.innerHTML = '<tr><td colspan="12" class="text-sm text-gray-400 py-3">No shots yet - add the tee shot to start.</td></tr>';
+        } else {
+            body.innerHTML = h.shots.map((s, i) => {
+                const putt = s.shot_type === 'putt';
+                const unit = putt ? 'ft' : 'yd';
+                const last = i === h.shots.length - 1;
+                return '<tr data-idx="' + i + '">' +
+                    '<td class="text-center text-gray-500">' + (i + 1) + '</td>' +
+                    '<td><select data-field="club_code" class="select select-sm">' + clubOptions(s.club_code) + '</select></td>' +
+                    '<td><select data-field="shot_type" class="select select-sm">' + options(SHOT_TYPES, s.shot_type) + '</select></td>' +
+                    '<td><select data-field="lie_start" class="select select-sm">' + options(LIES, s.lie_start) + '</select></td>' +
+                    '<td><div class="flex items-center gap-1"><input data-field="start_distance_yards" data-unit="' + unit + '" type="number" min="0" step="1" class="input input-sm w-20" value="' + distDisplay(s.start_distance_yards, putt) + '"><span class="text-xs text-gray-400">' + unit + '</span></div></td>' +
+                    '<td><select data-field="lie_end" class="select select-sm">' + options(LIES, s.lie_end) + '</select></td>' +
+                    '<td><div class="flex items-center gap-1"><input data-field="end_distance_yards" data-unit="' + unit + '" type="number" min="0" step="1" class="input input-sm w-20" value="' + distDisplay(s.end_distance_yards, putt) + '"><span class="text-xs text-gray-400">' + unit + '</span></div></td>' +
+                    '<td><input data-field="lateral_miss_yards" type="number" step="1" class="input input-sm w-20" placeholder="+R / −L" value="' + (s.lateral_miss_yards == null ? '' : s.lateral_miss_yards) + '"></td>' +
+                    '<td><select data-field="outcome_tag" class="select select-sm">' + options(OUTCOMES, s.outcome_tag) + '</select></td>' +
+                    '<td><input data-field="penalty_strokes" type="number" min="0" max="4" class="input input-sm w-16" value="' + (s.penalty_strokes || 0) + '"></td>' +
+                    '<td class="text-center"><input data-field="holed" type="checkbox" class="h-4 w-4"' + (s.holed ? ' checked' : '') + (last ? '' : ' disabled') + '></td>' +
+                    '<td><button type="button" data-action="remove" class="btn btn-ghost btn-sm text-red-600" title="Remove shot">&#10005;</button></td>' +
+                    '</tr>';
+            }).join('');
+        }
+        const pen = h.shots.reduce((s, x) => s + (Number(x.penalty_strokes) || 0), 0);
+        $('shots-derived').textContent = h.shots.length ? '· ' + h.shots.length + ' shots + ' + pen + ' penalty = ' + (h.shots.length + pen) : '';
+    }
+
+    // ------------------------------------------------------------------ shot helpers
+    function putterCode() { const p = clubs.find((c) => c.category === 'putter'); return p ? p.code : 'P'; }
+    function addShot() {
+        const h = cur();
+        const prev = h.shots[h.shots.length - 1];
+        const s = normalizeShot({});
+        if (!prev) {
+            s.shot_type = 'tee'; s.lie_start = 'tee'; s.start_distance_yards = h.yards || 0;
+            s.lie_end = Number(h.par) === 3 ? 'green' : 'fairway';
+            s.club_code = Number(h.par) === 3 ? '' : (clubs.find((c) => c.code === 'D') ? 'D' : '');
+        } else {
+            prev.holed = false;
+            s.lie_start = prev.lie_end; s.start_distance_yards = prev.end_distance_yards;
+            if (prev.lie_end === 'green' || prev.lie_end === 'fringe') { s.shot_type = 'putt'; s.club_code = putterCode(); s.lie_end = 'green'; }
+            else if (prev.lie_end === 'sand') { s.shot_type = 'bunker'; s.lie_end = 'green'; }
+            else if (prev.end_distance_yards <= 40) { s.shot_type = 'pitch'; s.lie_end = 'green'; }
+            else { s.shot_type = 'full'; s.lie_end = 'green'; }
+        }
+        s.end_distance_yards = 0;
+        s.holed = false;
+        h.shots.push(s);
+        rechain();
+        deriveFromShots();
+        markDirty();
+        renderQuick();
+        renderShots();
+    }
+    function rechain() {
+        const h = cur();
+        h.shots.forEach((s, i) => {
+            if (i > 0) s.start_distance_yards = h.shots[i - 1].end_distance_yards;
+            if (i < h.shots.length - 1) s.holed = false;
+        });
+    }
+    function deriveFromShots() {
+        const h = cur();
+        if (mode === 'quick' || !h.shots.length) return;
+        const pen = h.shots.reduce((s, x) => s + (Number(x.penalty_strokes) || 0), 0);
+        h.score = h.shots.length + pen;
+        h.penalties = pen;
+        h.putts = h.shots.filter((s) => s.shot_type === 'putt').length;
+        const first = h.shots[0];
+        if (Number(h.par) > 3) h.fairway_hit = first.lie_end === 'fairway';
+        const onGreenAt = h.shots.findIndex((s) => s.lie_end === 'green' || s.holed);
+        h.gir = onGreenAt >= 0 && (onGreenAt + 1) <= Number(h.par) - 2;
+        if (first.lateral_miss_yards != null && Math.abs(first.lateral_miss_yards) > 15) h.tee_miss = first.lateral_miss_yards > 0 ? 'right' : 'left';
+        else if (['left', 'right', 'short', 'long'].includes(first.outcome_tag)) h.tee_miss = first.outcome_tag;
+        else if (['hook', 'pull'].includes(first.outcome_tag)) h.tee_miss = 'left';
+        else if (['slice', 'push'].includes(first.outcome_tag)) h.tee_miss = 'right';
+    }
+    function handleShotChange(ev) {
+        const target = ev.target;
+        const tr = target.closest('tr[data-idx]');
+        if (!tr) return;
+        const idx = Number(tr.dataset.idx);
+        const h = cur();
+        const s = h.shots[idx];
+        if (!s) return;
+        if (target.dataset.action === 'remove') {
+            h.shots.splice(idx, 1);
+            rechain(); deriveFromShots(); markDirty(); renderQuick(); renderShots();
+            return;
+        }
+        const field = target.dataset.field;
+        if (!field) return;
+        if (field === 'holed') {
+            s.holed = target.checked;
+            if (s.holed) { s.end_distance_yards = 0; if (s.shot_type === 'putt') s.lie_end = 'green'; }
+        } else if (field === 'start_distance_yards' || field === 'end_distance_yards') {
+            let v = num(target.value, 0);
+            if (v < 0) v = 0;
+            s[field] = target.dataset.unit === 'ft' ? Math.round(v / 3 * 100) / 100 : v;
+            if (field === 'end_distance_yards' && v === 0 && idx === h.shots.length - 1) s.holed = true;
+        } else if (field === 'lateral_miss_yards') {
+            s.lateral_miss_yards = target.value === '' ? null : num(target.value, 0);
+        } else if (field === 'penalty_strokes') {
+            s.penalty_strokes = Math.max(0, Math.min(4, num(target.value, 0)));
+        } else if (field === 'shot_type') {
+            s.shot_type = target.value;
+            if (s.shot_type === 'putt') { s.club_code = s.club_code || putterCode(); s.lie_end = 'green'; }
+        } else if (field === 'lie_end') {
+            s.lie_end = target.value;
+            if (h.shots[idx + 1]) h.shots[idx + 1].lie_start = s.lie_end;
+        } else {
+            s[field] = target.value;
+        }
+        rechain(); deriveFromShots(); markDirty(); renderQuick(); renderShots();
+    }
+
+    // ------------------------------------------------------------------ save / navigation
+    function payloadFor(h) {
+        const shots = h.shots.map((s, i) => {
+            const club = clubs.find((c) => c.code === s.club_code);
+            return {
+                sequence: i + 1, club_code: s.club_code || null, club_id: club ? club.id : null,
+                shot_type: s.shot_type, lie_start: s.lie_start, start_distance_yards: Number(s.start_distance_yards) || 0,
+                lie_end: s.lie_end, end_distance_yards: Number(s.end_distance_yards) || 0,
+                lateral_miss_yards: s.lateral_miss_yards == null ? null : Number(s.lateral_miss_yards),
+                outcome_tag: s.outcome_tag || null, penalty_strokes: Number(s.penalty_strokes) || 0, holed: !!s.holed,
+            };
+        });
+        const teeClub = shots.length ? shots[0].club_id : null;
+        return {
+            hole_number: h.hole_number, hole_id: h.hole_id, par: Number(h.par), yards: h.yards == null ? null : Number(h.yards),
+            score: Number(h.score), putts: h.putts == null ? null : Number(h.putts),
+            fairway_hit: Number(h.par) === 3 ? null : h.fairway_hit, gir: h.gir, penalties: Number(h.penalties) || 0,
+            tee_club_id: teeClub, tee_miss: h.tee_miss || 'none', notes: h.notes || null, shots,
+        };
+    }
+    function validate(h) {
+        const par = Number(h.par), yards = h.yards == null || h.yards === '' ? null : Number(h.yards);
+        if (!(par >= 3 && par <= 6)) return 'Par must be between 3 and 6';
+        if (yards != null && !(yards >= 50 && yards <= 800)) return 'Yards must be between 50 and 800';
+        if (mode !== 'quick' && h.shots.length) deriveFromShots();
+        if (h.score == null || !(Number(h.score) >= 1 && Number(h.score) <= 20)) return mode === 'quick' ? 'Enter a score between 1 and 20' : 'Add at least one shot (or switch to quick mode and type the score)';
+        if (h.putts != null && !(Number(h.putts) >= 0 && Number(h.putts) <= 10)) return 'Putts must be between 0 and 10';
+        if (h.putts != null && Number(h.putts) >= Number(h.score)) return 'Putts cannot be equal to or more than the score';
+        for (let i = 0; i < h.shots.length; i++) {
+            const s = h.shots[i];
+            if (Number(s.start_distance_yards) < 0 || Number(s.end_distance_yards) < 0) return 'Shot ' + (i + 1) + ': distances cannot be negative';
+        }
+        return null;
+    }
+    async function saveHole() {
+        const h = cur();
+        const err = validate(h);
+        if (err) { toast(err); return false; }
+        const n = current;
+        try {
+            const saved = await api('/api/players/' + pid + '/rounds/' + ROUND_ID + '/holes/' + n, { method: 'PUT', body: payloadFor(h) });
+            const idx = (round.holes || []).findIndex((x) => x.hole_number === n);
+            if (idx >= 0) round.holes[idx] = saved; else (round.holes = round.holes || []).push(saved);
+            holes[n] = fromLogged(saved);
+            toast('Hole ' + n + ' saved', 'success', 1500);
+            renderAll();
+            return true;
+        } catch (e) { toast(e.message); return false; }
+    }
+    function goTo(n) {
+        if (n < 1 || n > holeCount) return;
+        const h = cur();
+        if (h.dirty && n !== current && !confirm('Discard unsaved changes on hole ' + current + '?')) return;
+        if (h.dirty) { const logged = (round.holes || []).find((x) => x.hole_number === current); holes[current] = logged ? fromLogged(logged) : blank(current); }
+        current = n;
+        renderPills();
+        renderHole();
+    }
+
+    async function parseNarrative(commit) {
+        const text = $('narr-text').value.trim();
+        if (text.length < 5) { toast('Describe the hole in a few words first'); return; }
+        const hole = num($('narr-hole').value, null);
+        const btn = commit ? $('btn-narr-save') : $('btn-parse');
+        btn.disabled = true;
+        try {
+            const res = await api('/api/players/' + pid + '/rounds/' + ROUND_ID + '/narrative', { method: 'POST', body: { text, hole_number: hole, commit } });
+            const badge = $('narr-parser');
+            badge.classList.remove('hidden');
+            badge.className = 'badge ' + (res.parser === 'claude' ? 'badge-green' : 'badge-gray');
+            badge.textContent = res.parser === 'claude' ? 'Parsed by Claude' : 'Parsed offline (heuristic)';
+            $('narr-warnings').innerHTML = (res.warnings || []).map((w) => '<li>' + esc(w) + '</li>').join('');
+            if (!res.holes || !res.holes.length) { toast('The caddie could not find any holes in that text', 'info'); return; }
+            if (commit) {
+                round = await api('/api/players/' + pid + '/rounds/' + ROUND_ID);
+                initState();
+                current = res.holes[0].hole_number;
+                toast('Saved ' + res.holes.length + ' hole' + (res.holes.length > 1 ? 's' : '') + ' from your notes', 'success');
+                renderAll();
+                $('narr-text').value = '';
+            } else {
+                res.holes.forEach((ph) => {
+                    const n = ph.hole_number;
+                    if (!holes[n]) holes[n] = blank(n);
+                    const h = holes[n];
+                    if (ph.par) h.par = ph.par;
+                    h.score = ph.score; h.putts = ph.putts; h.fairway_hit = ph.fairway_hit; h.gir = ph.gir; h.penalties = ph.penalties || 0;
+                    h.shots = (ph.shots || []).map(normalizeShot);
+                    h.dirty = true; h.preview = true;
+                });
+                current = res.holes[0].hole_number;
+                if (current > holeCount) holeCount = current;
+                toast('Preview ready - check the shots, then save', 'info');
+                renderPills();
+                renderHole();
+            }
+        } catch (e) { toast(e.message); }
+        finally { btn.disabled = false; }
+    }
+
+    async function finishRound() {
+        const anyDirty = Object.values(holes).some((h) => h.dirty);
+        if (anyDirty && !confirm('Some holes have unsaved changes. Continue anyway?')) return;
+        const completed = !round.completed;
+        try {
+            round = await api('/api/players/' + pid + '/rounds/' + ROUND_ID, { method: 'PUT', body: { completed } });
+            toast(completed ? 'Round finished - total ' + (round.total_score != null ? round.total_score : '–') : 'Round reopened', 'success');
+            renderHeader();
+        } catch (e) { toast(e.message); }
+    }
+
+    // ------------------------------------------------------------------ wiring
+    function wire() {
+        $('mode-select').addEventListener('change', (ev) => { mode = ev.target.value; deriveFromShots(); renderHole(); });
+        $('btn-prev').addEventListener('click', () => goTo(current - 1));
+        $('btn-next').addEventListener('click', () => goTo(current + 1));
+        $('btn-save').addEventListener('click', saveHole);
+        $('btn-save-next').addEventListener('click', async () => { if (await saveHole() && current < holeCount) goTo(current + 1); });
+        $('btn-finish').addEventListener('click', finishRound);
+        $('btn-add-shot').addEventListener('click', addShot);
+        $('btn-parse').addEventListener('click', () => parseNarrative(false));
+        $('btn-narr-save').addEventListener('click', () => parseNarrative(true));
+        $('shots-body').addEventListener('change', handleShotChange);
+        $('shots-body').addEventListener('click', (ev) => { if (ev.target.closest('[data-action=remove]')) handleShotChange({ target: ev.target.closest('[data-action=remove]') }); });
+
+        $('h-par').addEventListener('change', () => { cur().par = Math.max(3, Math.min(6, num($('h-par').value, 4))); markDirty(); renderQuick(); });
+        $('h-yards').addEventListener('change', () => { cur().yards = $('h-yards').value === '' ? null : num($('h-yards').value, null); markDirty(); });
+        $('q-score').addEventListener('input', () => { cur().score = $('q-score').value === '' ? null : num($('q-score').value, null); markDirty(); });
+        $('q-putts').addEventListener('input', () => { cur().putts = $('q-putts').value === '' ? null : num($('q-putts').value, null); markDirty(); });
+        $('q-pen').addEventListener('input', () => { cur().penalties = Math.max(0, num($('q-pen').value, 0)); markDirty(); });
+        $('q-miss').addEventListener('change', () => { cur().tee_miss = $('q-miss').value; markDirty(); });
+        $('q-notes').addEventListener('input', () => { cur().notes = $('q-notes').value; markDirty(); });
+        $('q-fir').addEventListener('click', () => { const h = cur(); h.fairway_hit = !h.fairway_hit; $('q-fir').setAttribute('aria-pressed', h.fairway_hit ? 'true' : 'false'); markDirty(); });
+        $('q-gir').addEventListener('click', () => { const h = cur(); h.gir = !h.gir; $('q-gir').setAttribute('aria-pressed', h.gir ? 'true' : 'false'); markDirty(); });
+        $('sec-quick').addEventListener('click', (ev) => {
+            const btn = ev.target.closest('[data-step]');
+            if (!btn) return;
+            const input = $(btn.dataset.for);
+            if (input.readOnly) return;
+            const min = num(input.min, 0), max = num(input.max, 99);
+            const base = input.value === '' ? (btn.dataset.for === 'q-score' ? Number(cur().par) : 2) - Number(btn.dataset.step) : num(input.value, 0);
+            input.value = Math.max(min, Math.min(max, base + Number(btn.dataset.step)));
+            input.dispatchEvent(new Event('input'));
+        });
+        document.addEventListener('keydown', (ev) => {
+            if (ev.target.matches('input, select, textarea')) return;
+            if (ev.key === 'ArrowLeft') goTo(current - 1);
+            if (ev.key === 'ArrowRight') goTo(current + 1);
+        });
+    }
+})();
+</script>
+{% endblock %}

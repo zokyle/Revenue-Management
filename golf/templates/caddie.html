@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Caddie{% endblock %}
+{% block page_title %}Caddie{% endblock %}
+
+{% block content %}
+<div class="card flex flex-col" style="height: calc(100vh - 11rem); min-height: 28rem">
+    <div class="flex flex-wrap items-center gap-2 p-3 sm:p-4 border-b border-gray-100">
+        <div class="flex items-center gap-2 flex-1 min-w-0">
+            <div class="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-brand-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 21V4m0 0l10 4-10 4m3 9a3 1 0 106 0 3 1 0 10-6 0"/></svg>
+            </div>
+            <div class="min-w-0">
+                <p class="text-sm font-semibold text-gray-900">Your caddie</p>
+                <p class="text-xs text-gray-500 truncate">Ask about strategy, your numbers, or log a hole in plain English.</p>
+            </div>
+        </div>
+        <span id="provider-badge" class="badge badge-gray">Checking…</span>
+    </div>
+
+    <div id="messages" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+        <p id="messages-loading" class="text-sm text-gray-400 flex items-center gap-2"><span class="spinner spinner-dark"></span> Loading conversation…</p>
+    </div>
+
+    <div class="border-t border-gray-100 p-3 sm:p-4 space-y-2">
+        <div id="suggestions" class="flex gap-1.5 overflow-x-auto pb-1"></div>
+        <form id="chat-form" class="flex flex-col sm:flex-row gap-2">
+            <div class="flex gap-2 sm:w-64">
+                <select id="chat-course" class="select select-sm flex-1"><option value="">Any course</option></select>
+                <input id="chat-hole" type="number" min="1" max="36" class="input input-sm w-16" placeholder="Hole" title="Hole number (optional)">
+            </div>
+            <textarea id="chat-input" rows="1" class="textarea flex-1 resize-none" placeholder="Ask your caddie… (Enter to send, Shift+Enter for a new line)"></textarea>
+            <button type="submit" id="chat-send" class="btn btn-primary">Send</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    'use strict';
+    const { api, esc, toast } = Caddie;
+    const $ = (id) => document.getElementById(id);
+    let pid, courses = [], sending = false;
+
+    Caddie.ready(async (id) => {
+        pid = id;
+        const results = await Promise.all([
+            Caddie.courses().catch(() => []),
+            api('/api/health').catch(() => null),
+        ]);
+        courses = results[0] || [];
+        const sel = $('chat-course');
+        courses.forEach((c) => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); });
+        if (courses.length === 1) sel.value = String(courses[0].id);
+        setProvider(results[1] ? (results[1].llm ? 'claude' : 'heuristic') : null);
+        renderSuggestions();
+        sel.addEventListener('change', renderSuggestions);
+        wire();
+        await loadHistory();
+    });
+
+    function setProvider(p) {
+        const b = $('provider-badge');
+        if (p === 'claude') { b.className = 'badge badge-green'; b.textContent = 'Claude'; }
+        else if (p === 'heuristic') { b.className = 'badge badge-amber'; b.textContent = 'Offline heuristic'; }
+        else { b.className = 'badge badge-gray'; b.textContent = 'Provider unknown'; }
+    }
+
+    function currentCourseName() {
+        const id = $('chat-course').value;
+        const c = courses.find((x) => String(x.id) === id);
+        return c ? c.name : 'this course';
+    }
+    function renderSuggestions() {
+        const items = [
+            'How should I play ' + currentCourseName() + '?',
+            'What are my club distances?',
+            "What's costing me the most strokes?",
+            'Log: driver fairway, 8 iron to 20 feet, two putts (hole 4)',
+        ];
+        $('suggestions').innerHTML = items.map((t) => '<button type="button" class="chip flex-shrink-0" data-prompt="' + esc(t) + '">' + esc(t) + '</button>').join('');
+        $('suggestions').querySelectorAll('[data-prompt]').forEach((b) => b.addEventListener('click', () => { $('chat-input').value = b.dataset.prompt; $('chat-input').focus(); }));
+    }
+
+    // Minimal markdown-ish rendering: escape, then **bold**, `code`, and line breaks (pre-wrap keeps newlines).
+    function renderText(text) {
+        return esc(text || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code class="text-xs bg-white/60 px-1 rounded">$1</code>');
+    }
+    function messageNode(role, text, meta) {
+        const wrap = document.createElement('div');
+        wrap.className = 'flex flex-col ' + (role === 'user' ? 'items-end' : 'items-start');
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble ' + (role === 'user' ? 'chat-user' : 'chat-assistant');
+        bubble.innerHTML = renderText(text);
+        wrap.appendChild(bubble);
+        if (meta && meta.actions && meta.actions.length) {
+            const chips = document.createElement('div');
+            chips.className = 'flex flex-wrap gap-1 mt-1 max-w-[85%]';
+            chips.innerHTML = meta.actions.map((a) => {
+                const href = a && typeof a === 'object' && a.course_id && /strategy/.test(String(a.type || a.kind || '')) ? '/strategy/' + a.course_id
+                    : (a && typeof a === 'object' && a.round_id ? '/rounds/' + a.round_id : null);
+                const inner = esc(actionLabel(a));
+                return href ? '<a class="chip chip-action hover:underline" href="' + href + '" title="' + esc(JSON.stringify(a)) + '">' + inner + ' &rarr;</a>'
+                    : '<span class="chip chip-action" title="' + esc(JSON.stringify(a)) + '">' + inner + '</span>';
+            }).join('');
+            wrap.appendChild(chips);
+        }
+        if (meta && (meta.provider || meta.time)) {
+            const small = document.createElement('p');
+            small.className = 'text-[10px] text-gray-400 mt-0.5';
+            small.textContent = [meta.time ? new Date(meta.time).toLocaleString() : null, meta.provider ? 'via ' + meta.provider : null].filter(Boolean).join(' · ');
+            wrap.appendChild(small);
+        }
+        return wrap;
+    }
+    function actionLabel(a) {
+        if (!a || typeof a !== 'object') return String(a);
+        const kind = String(a.type || a.kind || a.action || a.name || 'action').replace(/_/g, ' ');
+        const detail = a.label || a.summary || a.description || (a.hole_number ? 'hole ' + a.hole_number : '')
+            || (a.course_id ? 'course #' + a.course_id : '') || (a.round_id ? 'round #' + a.round_id : '') || (a.url ? a.url : '');
+        return detail ? kind + ': ' + detail : kind;
+    }
+    function append(node) {
+        const box = $('messages');
+        box.appendChild(node);
+        box.scrollTop = box.scrollHeight;
+        return node;
+    }
+
+    async function loadHistory() {
+        const loading = $('messages-loading');
+        try {
+            const h = await api('/api/players/' + pid + '/caddie/history?limit=40');
+            loading.remove();
+            const items = Array.isArray(h) ? h : ((h && (h.messages || h.history || h.items)) || []);
+            if (!items.length) {
+                append(messageNode('assistant', "Hi! I'm your caddie. Ask me how to play a course, what your real club distances are, or tell me what happened on a hole and I'll log it."));
+                return;
+            }
+            items.forEach((m) => {
+                const role = m.role || (m.user ? 'user' : 'assistant');
+                const text = m.content != null ? m.content : (m.message != null ? m.message : (m.text != null ? m.text : m.reply));
+                if (role === 'user' || role === 'assistant') append(messageNode(role, text, { actions: m.actions, time: m.created_at || m.timestamp, provider: m.provider }));
+                else if (m.message && m.reply) { append(messageNode('user', m.message, { time: m.created_at })); append(messageNode('assistant', m.reply, { actions: m.actions, provider: m.provider })); }
+                if (m.provider) setProvider(m.provider);
+            });
+        } catch (e) {
+            loading.innerHTML = '<span class="text-red-700">Conversation history unavailable: ' + esc(e.message) + '</span>';
+            toast('Caddie history could not be loaded: ' + e.message);
+        }
+    }
+
+    async function send() {
+        const input = $('chat-input');
+        const text = input.value.trim();
+        if (!text || sending) return;
+        sending = true;
+        $('chat-send').disabled = true;
+        append(messageNode('user', text));
+        input.value = '';
+        const thinking = append(messageNode('assistant', 'Thinking…'));
+        thinking.querySelector('.chat-bubble').classList.add('text-gray-400', 'italic');
+        const body = { message: text };
+        if ($('chat-course').value) body.course_id = Number($('chat-course').value);
+        if ($('chat-hole').value) body.hole_number = Number($('chat-hole').value);
+        try {
+            const res = await api('/api/players/' + pid + '/caddie/chat', { method: 'POST', body });
+            thinking.remove();
+            append(messageNode('assistant', res.reply, { actions: res.actions, provider: res.provider }));
+            setProvider(res.provider);
+        } catch (e) {
+            thinking.remove();
+            append(messageNode('assistant', 'Sorry - the caddie could not answer: ' + e.message));
+            toast(e.message);
+        } finally {
+            sending = false;
+            $('chat-send').disabled = false;
+            input.focus();
+        }
+    }
+
+    function wire() {
+        $('chat-form').addEventListener('submit', (ev) => { ev.preventDefault(); send(); });
+        $('chat-input').addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); send(); }
+        });
+        $('chat-input').addEventListener('input', (ev) => {
+            ev.target.style.height = 'auto';
+            ev.target.style.height = Math.min(120, ev.target.scrollHeight) + 'px';
+        });
+    }
+})();
+</script>
+{% endblock %}

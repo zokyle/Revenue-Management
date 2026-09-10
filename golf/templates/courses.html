@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Courses{% endblock %}
+{% block page_title %}Courses{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+    <div class="card">
+        <div class="flex items-center justify-between p-5 pb-3">
+            <h3 class="font-semibold text-gray-900">Your courses</h3>
+            <span id="courses-count" class="text-xs text-gray-500"></span>
+        </div>
+        <div id="courses-loading" class="px-5 pb-5 text-sm text-gray-500 flex items-center gap-2"><span class="spinner spinner-dark"></span> Loading courses…</div>
+        <div id="courses-empty" class="hidden px-5 pb-6 text-sm text-gray-500">No courses yet. Build one below from the scorecard (30 seconds), pull it from OpenStreetMap, or paste JSON.</div>
+        <div class="overflow-x-auto">
+            <table class="table hidden" id="courses-table">
+                <thead><tr><th>Name</th><th>City</th><th class="text-right">Par</th><th class="text-right">Yards</th><th class="text-right">Holes</th><th>Source</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <!-- (a) Scorecard quick-build -->
+        <div class="card p-5">
+            <h3 class="font-semibold text-gray-900">Scorecard quick-build</h3>
+            <p class="text-xs text-gray-500 mt-1 mb-3">Par and yardage per hole. Hazards can be added later in the course editor.</p>
+            <form id="sc-form" class="space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="col-span-2"><label class="label">Course name</label><input id="sc-name" class="input" required maxlength="200" placeholder="Pebble Creek GC"></div>
+                    <div><label class="label">City</label><input id="sc-city" class="input" maxlength="100"></div>
+                    <div><label class="label">Tee</label><input id="sc-tee" class="input" value="White" maxlength="40"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-x-3 gap-y-1" id="sc-grid"></div>
+                <div class="flex items-center justify-between text-xs text-gray-500">
+                    <span id="sc-totals"></span>
+                    <button type="button" id="sc-reset" class="text-brand-700 hover:underline">Reset to par 4 / 400</button>
+                </div>
+                <button type="submit" class="btn btn-primary w-full">Create course</button>
+            </form>
+        </div>
+
+        <!-- (b) OpenStreetMap -->
+        <div class="card p-5">
+            <h3 class="font-semibold text-gray-900">Import from OpenStreetMap</h3>
+            <p class="text-xs text-gray-500 mt-1 mb-3">Fetches hole lines, greens, bunkers and water from OSM (needs network access; coverage varies by course). Search by name or by coordinates.</p>
+            <form id="osm-form" class="space-y-3">
+                <div><label class="label">Course name</label><input id="osm-name" class="input" placeholder="St Andrews Old Course"></div>
+                <div class="text-center text-xs text-gray-400">- or -</div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div><label class="label">Latitude</label><input id="osm-lat" type="number" step="any" min="-90" max="90" class="input" placeholder="56.34"></div>
+                    <div><label class="label">Longitude</label><input id="osm-lon" type="number" step="any" min="-180" max="180" class="input" placeholder="-2.80"></div>
+                    <div><label class="label">Radius (m)</label><input id="osm-radius" type="number" min="200" max="10000" step="100" value="2500" class="input"></div>
+                </div>
+                <div><label class="label">Tee</label><input id="osm-tee" class="input" value="White" maxlength="40"></div>
+                <button type="submit" id="osm-submit" class="btn btn-primary w-full">Import from OSM</button>
+                <p id="osm-error" class="hidden text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2"></p>
+            </form>
+        </div>
+
+        <!-- (c) JSON paste -->
+        <div class="card p-5">
+            <h3 class="font-semibold text-gray-900">Paste JSON</h3>
+            <p class="text-xs text-gray-500 mt-1 mb-3">Full course definition including hole geometry and features (the format returned by <code>GET /api/courses/{id}</code>).</p>
+            <form id="json-form" class="space-y-3">
+                <textarea id="json-text" rows="14" class="textarea font-mono text-xs" placeholder='{
+  "name": "Example GC", "city": "Springfield", "tee_name": "White",
+  "holes": [
+    {"number": 1, "par": 4, "yards": 380, "shape": "straight",
+     "fairway_width_yards": 35, "features": [
+       {"kind": "water", "side": "right", "start_yards": 220, "end_yards": 300, "offset_yards": 18, "label": "Pond"}
+     ]}
+  ]
+}'></textarea>
+                <button type="submit" class="btn btn-primary w-full">Create from JSON</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    'use strict';
+    const { api, esc, toast, num } = Caddie;
+    const $ = (id) => document.getElementById(id);
+
+    Caddie.ready(async () => {
+        buildScorecardGrid();
+        await loadCourses();
+    });
+
+    async function loadCourses() {
+        let courses = [];
+        try { courses = await Caddie.courses(true); }
+        catch (e) { $('courses-loading').innerHTML = '<span class="text-red-700">' + esc(e.message) + '</span>'; throw e; }
+        $('courses-loading').classList.add('hidden');
+        const table = $('courses-table');
+        $('courses-count').textContent = courses.length ? courses.length + ' course' + (courses.length > 1 ? 's' : '') : '';
+        if (!courses.length) { $('courses-empty').classList.remove('hidden'); table.classList.add('hidden'); return; }
+        $('courses-empty').classList.add('hidden');
+        table.classList.remove('hidden');
+        table.querySelector('tbody').innerHTML = courses.map((c) =>
+            '<tr>' +
+            '<td><a class="font-medium text-gray-900 hover:text-brand-700" href="/courses/' + c.id + '">' + esc(c.name) + '</a>' + (c.tee_name ? ' <span class="text-xs text-gray-400">' + esc(c.tee_name) + '</span>' : '') + '</td>' +
+            '<td>' + esc([c.city, c.country].filter(Boolean).join(', ') || '–') + '</td>' +
+            '<td class="text-right">' + (c.par != null ? esc(c.par) : '–') + '</td>' +
+            '<td class="text-right">' + (c.yardage != null ? esc(c.yardage) : '–') + '</td>' +
+            '<td class="text-right">' + esc(c.hole_count) + '</td>' +
+            '<td><span class="badge badge-gray">' + esc(c.source) + '</span></td>' +
+            '<td class="text-right whitespace-nowrap"><a class="text-brand-700 hover:underline mr-3" href="/courses/' + c.id + '">Edit</a>' +
+            '<a class="text-brand-700 hover:underline mr-3" href="/strategy/' + c.id + '">Strategy</a>' +
+            '<button type="button" class="text-red-600 hover:underline text-xs" data-delete="' + c.id + '">Delete</button></td></tr>').join('');
+        table.querySelectorAll('[data-delete]').forEach((b) => b.addEventListener('click', async () => {
+            if (!confirm('Delete this course? Rounds keep their scores but lose the course link.')) return;
+            try { await api('/api/courses/' + b.dataset.delete, { method: 'DELETE' }); toast('Course deleted', 'success'); await loadCourses(); }
+            catch (e) { toast(e.message); }
+        }));
+    }
+
+    // ---- (a) scorecard
+    function buildScorecardGrid() {
+        const grid = $('sc-grid');
+        let html = '';
+        for (let n = 1; n <= 18; n++) {
+            html += '<div class="flex items-center gap-1 text-xs">' +
+                '<span class="w-5 text-right text-gray-500 font-medium">' + n + '</span>' +
+                '<select class="select select-sm w-14" data-par="' + n + '"><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option></select>' +
+                '<input type="number" min="50" max="800" value="400" class="input input-sm w-20" data-yards="' + n + '" title="Yards">' +
+                '<input type="number" min="1" max="18" class="input input-sm w-12" data-hcp="' + n + '" placeholder="HCP" title="Stroke index (optional)">' +
+                '</div>';
+        }
+        grid.innerHTML = html;
+        grid.addEventListener('input', updateTotals);
+        $('sc-reset').addEventListener('click', () => {
+            grid.querySelectorAll('[data-par]').forEach((s) => { s.value = '4'; });
+            grid.querySelectorAll('[data-yards]').forEach((i) => { i.value = 400; });
+            grid.querySelectorAll('[data-hcp]').forEach((i) => { i.value = ''; });
+            updateTotals();
+        });
+        updateTotals();
+    }
+    function scorecardHoles() {
+        const holes = [];
+        for (let n = 1; n <= 18; n++) {
+            holes.push({
+                number: n, par: num(document.querySelector('[data-par="' + n + '"]').value, 4),
+                yards: num(document.querySelector('[data-yards="' + n + '"]').value, 400),
+                handicap_index: num(document.querySelector('[data-hcp="' + n + '"]').value, null),
+            });
+        }
+        return holes;
+    }
+    function updateTotals() {
+        const holes = scorecardHoles();
+        $('sc-totals').textContent = 'Par ' + holes.reduce((s, h) => s + h.par, 0) + ' · ' + holes.reduce((s, h) => s + (h.yards || 0), 0) + ' yds';
+    }
+    $('sc-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const name = $('sc-name').value.trim();
+        if (!name) { toast('Give the course a name'); return; }
+        const holes = scorecardHoles();
+        const bad = holes.find((h) => !(h.yards >= 50 && h.yards <= 800));
+        if (bad) { toast('Hole ' + bad.number + ': yards must be between 50 and 800'); return; }
+        const btn = ev.target.querySelector('button[type=submit]');
+        btn.disabled = true;
+        try {
+            const c = await api('/api/courses/import/scorecard', { method: 'POST', body: { name, city: $('sc-city').value.trim() || null, tee_name: $('sc-tee').value.trim() || 'White', holes } });
+            toast('Created ' + c.name + ' (par ' + c.par + ')', 'success');
+            await loadCourses();
+            setTimeout(() => { location.href = '/courses/' + c.id; }, 600);
+        } catch (e) { toast(e.message); }
+        finally { btn.disabled = false; }
+    });
+
+    // ---- (b) OSM
+    $('osm-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const name = $('osm-name').value.trim();
+        const lat = num($('osm-lat').value, null), lon = num($('osm-lon').value, null);
+        const errBox = $('osm-error');
+        errBox.classList.add('hidden');
+        if (!name && (lat == null || lon == null)) { toast('Enter a course name or both latitude and longitude'); return; }
+        const radius = Math.max(200, Math.min(10000, num($('osm-radius').value, 2500)));
+        const btn = $('osm-submit');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Querying OpenStreetMap…';
+        try {
+            const c = await api('/api/courses/import/osm', { method: 'POST', body: { name: name || null, latitude: lat, longitude: lon, radius_m: radius, tee_name: $('osm-tee').value.trim() || 'White' } });
+            toast('Imported ' + c.name + ' with ' + (c.holes || []).length + ' holes', 'success');
+            await loadCourses();
+            setTimeout(() => { location.href = '/courses/' + c.id; }, 600);
+        } catch (e) {
+            errBox.textContent = 'Import failed: ' + e.message + (e.status === 502 ? ' - the server could not reach OpenStreetMap (network access required).' : '');
+            errBox.classList.remove('hidden');
+            toast(e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Import from OSM';
+        }
+    });
+
+    // ---- (c) JSON
+    $('json-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        let body;
+        try { body = JSON.parse($('json-text').value); }
+        catch (e) { toast('Invalid JSON: ' + e.message); return; }
+        if (!body || typeof body !== 'object' || !body.name) { toast('The JSON needs at least a "name"'); return; }
+        const btn = ev.target.querySelector('button[type=submit]');
+        btn.disabled = true;
+        try {
+            const c = await api('/api/courses', { method: 'POST', body });
+            toast('Created ' + c.name, 'success');
+            $('json-text').value = '';
+            await loadCourses();
+        } catch (e) { toast(e.message); }
+        finally { btn.disabled = false; }
+    });
+})();
+</script>
+{% endblock %}
