@@ -37,8 +37,13 @@ GREEN_AIM_FRACTIONS = [-0.3, 0.0, 0.3]      # fraction of green half-width
 LIE_CARRY_FACTOR = {"tee": 1.0, "fairway": 1.0, "fringe": 1.0, "rough": 0.93, "sand": 0.85, "recovery": 0.5, "green": 1.0}
 SEARCH_SAMPLES = 300
 FINAL_SAMPLES = 1500
-RESIDUAL_NOISE = {"green": 0.42, "fringe": 0.45}
-DEFAULT_RESIDUAL_NOISE = 0.55
+# Strokes-to-hole-out is right-skewed with variance growing with its mean:
+# var ~ a + b * (mean - 1).  Calibrated so a 15-handicap from 150 yds in the
+# fairway (mean 3.4) holes out in 2 about 14%, in 5+ about 12%, and a 20-ft
+# putt (mean 1.85) is a one-putt ~24% / three-putt ~10% of the time.
+RESIDUAL_VAR = {"green": (0.12, 0.15), "fringe": (0.14, 0.15)}
+DEFAULT_RESIDUAL_VAR = (0.25, 0.18)
+DISASTER_TAIL = 0.03   # chance of an extra stroke (chunk, lost ball, four-putt) on non-green residuals
 MAX_SIM_STAGES = 3
 AIM_REGULARISATION = 0.002    # strokes per yard of aim offset: break ties toward the centre
 CONTINGENCY_SHARE = 0.10
@@ -123,6 +128,7 @@ class StrategyEngine:
                 "p90": int(np.percentile(total, 90)) if holes else None,
             },
             "expected_penalties": round(sum(p["tee"]["landing_mix"].get("penalty", 0) + p["tee"]["landing_mix"].get("ob", 0) for p in plans), 2),
+            "p_break_target_note": "Holes are simulated independently; on a real day form carries between holes, so a hot round is a little more likely than this number says.",
             "risk_lambda": self.lam,
             "readiness": self.readiness,
             "holes": plans,
@@ -452,8 +458,12 @@ class StrategyEngine:
         mu = self._expected_residual(lie, dist)
         if extra is not None:
             mu = mu + extra
-        noise = RESIDUAL_NOISE.get(lie, DEFAULT_RESIDUAL_NOISE)
-        return np.maximum(np.rint(mu + rng.normal(0.0, noise, len(mu))), 1.0)
+        a, b = RESIDUAL_VAR.get(lie, DEFAULT_RESIDUAL_VAR)
+        sd = np.sqrt(np.maximum(a + b * (mu - 1.0), 0.05))
+        draw = mu + rng.normal(0.0, 1.0, len(mu)) * sd
+        if lie not in ("green", "fringe"):
+            draw = draw + (rng.random(len(mu)) < DISASTER_TAIL)
+        return np.maximum(np.rint(draw), 1.0)
 
     def _residual_mixed(self, lies: np.ndarray, dist: np.ndarray, rng: np.random.Generator, extra: np.ndarray | None = None) -> np.ndarray:
         out = np.zeros(len(lies))

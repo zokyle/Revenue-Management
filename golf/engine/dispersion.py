@@ -116,9 +116,16 @@ def landing_points(
     return wx, wy
 
 
-def dispersion_ellipse(dist: ClubDistribution, k: float = 1.65) -> dict:
-    """Axes of the ellipse holding ~90 % of normal-swing shots (for drawing)."""
+ELLIPSE_90 = 2.146  # sqrt(-2 ln 0.10): a bivariate normal puts 90% of shots inside k*sigma
+
+
+def dispersion_ellipse(dist: ClubDistribution, k: float = ELLIPSE_90) -> dict:
+    """Axes of the ellipse holding ~90 % of normal-swing shots (for drawing).
+
+    Note the 2-D coverage: 1.65 sigma would only enclose ~74 % of shots.
+    """
     return {
+        "coverage": round(1.0 - float(np.exp(-0.5 * k * k)), 2),
         "carry_mean": round(dist.carry_mean + dist.long_bias, 1),
         "lateral_center": round(dist.lateral_bias, 1),
         "half_depth": round(k * max(dist.carry_sigma, MIN_CARRY_SIGMA), 1),

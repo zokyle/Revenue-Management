@@ -426,7 +426,9 @@ class ProfileBuilder:
         full_swings = [s for s in shots if s.shot_type in FULL_SWING_TYPES]
         core = [c for c in clubs.values() if c.category in ("driver", "wood", "hybrid", "iron", "wedge")]
         club_cov = float(np.mean([min(c.n_samples / SHOTS_PER_CLUB_FOR_READY, 1.0) for c in core])) if core else 0.0
-        round_cov = min(n_rounds / ROUNDS_FOR_READY, 1.0)
+        # A round logged shot-by-shot teaches twice what a quick scorecard does.
+        credited = sum(1.0 if any((h.shots or []) for h in (r.holes or [])) else 0.5 for r in self.rounds)
+        round_cov = min(credited / ROUNDS_FOR_READY, 1.0)
         shot_cov = min(len(full_swings) / (ROUNDS_FOR_READY * 30), 1.0)
         score = round(0.4 * round_cov + 0.35 * club_cov + 0.25 * shot_cov, 3)
         # "Enough rounds" is a hard gate: you cannot be READY on two great rounds.
@@ -441,6 +443,7 @@ class ProfileBuilder:
             "level": level,
             "message": READINESS_MESSAGES[level],
             "rounds_logged": n_rounds,
+            "rounds_credited": round(credited, 1),
             "rounds_needed": ROUNDS_FOR_READY,
             "full_swings_logged": len(full_swings),
             "club_coverage": round(club_cov, 2),
