@@ -152,7 +152,12 @@ class ProfileBuilder:
                     continue  # mishits are modelled as a separate mixture component
                 carry = s.carry_yards
                 full_swing = True
-                if carry is None:
+                if carry is not None:
+                    intended = s.intended_carry_yards
+                    if intended is not None and intended < 0.97 * prior_mean:
+                        full_swing = False
+                    carry = float(carry) / LIE_CARRY_FACTOR.get(s.lie_start, 1.0)
+                if s.carry_yards is None:
                     # Only a shot where the golfer had at least a full club in
                     # hand teaches us the full carry; a 60-yard lob wedge is a
                     # partial swing, not a data point for LW distance.

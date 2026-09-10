@@ -103,9 +103,32 @@ def test_round_logging_profile_and_strategy(golf_client, golf_player, golf_cours
 def test_strategy_requires_holes(golf_client, golf_player):
     r = golf_client.post("/api/courses", json={"name": "Empty"})
     cid = r.json()["id"]
-    assert golf_client.post(f"/api/players/{golf_player.id}/strategy/{cid}", json={}).status_code == 404
+    assert golf_client.post(f"/api/players/{golf_player.id}/strategy/{cid}", json={}).status_code == 422
 
 
 def test_missing_player_404(golf_client):
     assert golf_client.get("/api/players/999").status_code == 404
     assert golf_client.get("/api/players/999/profile").status_code == 404
+
+
+def test_review_regressions(golf_client, golf_player, golf_course):
+    pid, cid = golf_player.id, golf_course.id
+    # Explicit null on a NOT NULL column is ignored instead of crashing.
+    r = golf_client.put(f"/api/players/{pid}", json={"name": None, "handicap_index": 9.5})
+    assert r.status_code == 200 and r.json()["name"] == "Test Golfer" and r.json()["handicap_index"] == 9.5
+    # Negative seed is a validation error, not a 404.
+    assert golf_client.post(f"/api/players/{pid}/strategy/{cid}", json={"seed": -3}).status_code == 422
+    # An empty round must not make the profile recompute on every read.
+    golf_client.post(f"/api/players/{pid}/rounds", json={"course_id": cid})
+    first = golf_client.get(f"/api/players/{pid}/profile").json()["id"]
+    second = golf_client.get(f"/api/players/{pid}/profile").json()["id"]
+    assert first == second
+    # Duplicate shot sequences are renumbered rather than raising an integrity error.
+    rid = golf_client.post(f"/api/players/{pid}/rounds", json={"course_id": cid}).json()["id"]
+    shots = [
+        {"sequence": 1, "club_code": "D", "shot_type": "tee", "lie_start": "tee", "start_distance_yards": 420, "lie_end": "rough", "end_distance_yards": 190},
+        {"sequence": 1, "club_code": "7i", "shot_type": "full", "lie_start": "rough", "start_distance_yards": 190, "lie_end": "green", "end_distance_yards": 8},
+        {"sequence": 1, "club_code": "P", "shot_type": "putt", "lie_start": "green", "start_distance_yards": 8, "lie_end": "green", "end_distance_yards": 0, "holed": True},
+    ]
+    r = golf_client.put(f"/api/players/{pid}/rounds/{rid}/holes/1", json={"hole_number": 1, "par": 4, "score": 3, "shots": shots})
+    assert r.status_code == 200 and [s["sequence"] for s in r.json()["shots"]] == [1, 2, 3]

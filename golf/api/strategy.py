@@ -40,7 +40,7 @@ def generate_strategy(player_id: int, course_id: int, data: StrategyRequest | No
             samples=data.samples, seed=data.seed,
         )
     except ValueError as e:
-        raise HTTPException(404, str(e))
+        raise HTTPException(404 if "not found" in str(e).lower() else 422, str(e))
 
 
 @router.get("/{player_id}/strategy/{course_id}", response_model=StrategyResponse)

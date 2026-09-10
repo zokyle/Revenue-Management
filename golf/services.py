@@ -24,6 +24,15 @@ from golf.models import (
 OBJECTIVE_RISK = {"break_80": None, "min_expected": 1.0, "aggressive": 0.85}
 
 
+def apply_updates(obj: Any, data: dict[str, Any]) -> None:
+    """Set fields from a PUT payload, ignoring explicit nulls on NOT NULL columns."""
+    columns = obj.__table__.columns
+    for k, v in data.items():
+        if v is None and k in columns and not columns[k].nullable:
+            continue
+        setattr(obj, k, v)
+
+
 # ---------------------------------------------------------------------------
 # Players & bag
 # ---------------------------------------------------------------------------
@@ -128,7 +137,10 @@ def upsert_hole_result(db: Session, rnd: Round, data: dict[str, Any]) -> HoleRes
         if hole:
             existing.hole_id = hole.id
             existing.yards = existing.yards or hole.yards
-    for s in shots:
+    # Renumber 1..n in the order given so duplicate sequences cannot violate the unique constraint.
+    shots = sorted(shots, key=lambda x: x.get("sequence", 0))
+    for i, s in enumerate(shots, 1):
+        s["sequence"] = i
         club = resolve_club(db, rnd.player_id, s.get("club_code"), s.get("club_id"))
         if club:
             s["club_id"] = club.id
@@ -177,7 +189,11 @@ def latest_profile(db: Session, player_id: int, max_age_rounds: bool = True) -> 
         .order_by(ProfileSnapshot.computed_at.desc(), ProfileSnapshot.id.desc())
         .first()
     )
-    n_rounds = db.query(Round).filter(Round.player_id == player_id).count()
+    # Compare like with like: the profile only counts rounds that have holes.
+    n_rounds = (
+        db.query(Round.id).join(HoleResult, HoleResult.round_id == Round.id)
+        .filter(Round.player_id == player_id).distinct().count()
+    )
     n_shots = (
         db.query(Shot).join(HoleResult).join(Round).filter(Round.player_id == player_id).count()
     )

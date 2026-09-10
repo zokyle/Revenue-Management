@@ -41,8 +41,7 @@ def update_player(player_id: int, data: PlayerUpdate, db: Session = Depends(get_
     player = services.get_player(db, player_id)
     if not player:
         raise HTTPException(404, "Player not found")
-    for k, v in data.model_dump(exclude_unset=True).items():
-        setattr(player, k, v)
+    services.apply_updates(player, data.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(player)
     return player
@@ -71,8 +70,7 @@ def update_club(player_id: int, club_id: int, data: ClubUpdate, db: Session = De
     club = db.query(Club).filter(Club.id == club_id, Club.player_id == player_id).first()
     if not club:
         raise HTTPException(404, "Club not found")
-    for k, v in data.model_dump(exclude_unset=True).items():
-        setattr(club, k, v)
+    services.apply_updates(club, data.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(club)
     return club

@@ -319,3 +319,37 @@ def test_wide_miss_on_par3_still_learns_full_carry():
     assert d["n_samples"] == 18
     assert d["carry_mean"] > 205          # ~210 observed, blended with a ~215 prior
     assert d["lateral_bias"] > 15
+
+
+def test_tiny_hole_still_gets_a_plan(engine):
+    """No club passes the normal filters on a 120-yard par 4; the fallback must still plan it."""
+    tiny = HoleGeometry(number=7, par=4, yards=120, fairway_start_yards=40)
+    plan = engine.plan_hole(tiny)
+    assert plan["tee"]["club"] in engine.clubs
+    assert sum(plan["score_distribution"].values()) == pytest.approx(1.0, abs=0.002)
+
+
+def test_drivable_par4_credits_gir_off_the_tee(engine):
+    short = HoleGeometry(number=8, par=4, yards=250, fairway_width_yards=45, rough_width_yards=30, green_width_yards=35, green_depth_yards=35)
+    plan = engine.plan_hole(short)
+    # With driver carrying ~242 the tee shot reaches the green often; GIR must count those.
+    assert plan["tee"]["landing_mix"].get("green", 0) > 0.1
+    assert plan["approach"] is None or plan["approach"]["gir_probability"] > 0.1
+
+
+def test_uphill_hole_plays_longer(engine):
+    flat = HoleGeometry(number=9, par=4, yards=400, fairway_width_yards=45, rough_width_yards=30)
+    uphill = HoleGeometry(number=9, par=4, yards=400, fairway_width_yards=45, rough_width_yards=30, elevation_change_ft=60)
+    assert engine.plan_hole(uphill)["expected_strokes"] > engine.plan_hole(flat)["expected_strokes"]
+
+
+def test_course_expected_score_matches_hole_sum(engine, par4):
+    p3 = HoleGeometry(number=2, par=3, yards=165, fairway_start_yards=165)
+    course = engine.plan_course([par4, p3])
+    assert course["expected_score"] == pytest.approx(sum(h["expected_strokes"] for h in course["holes"]), abs=0.05)
+
+
+def test_fractional_penalty_does_not_break_buckets(engine):
+    g = HoleGeometry(number=3, par=4, yards=400, features=[FeatureBox("water", "left", 200, 300, offset_yards=10, penalty_strokes=1.0, label="pond")])
+    plan = engine.plan_hole(g)
+    assert sum(plan["score_distribution"].values()) == pytest.approx(1.0, abs=0.002)

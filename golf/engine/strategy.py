@@ -71,7 +71,7 @@ class StrategyEngine:
     ):
         self.profile = profile
         self.n = int(n_samples)
-        self.seed = int(seed)
+        self.seed = abs(int(seed))
         self.handicap = float(profile.get("handicap", 15.0) or 15.0)
         rt = 0.35 if risk_tolerance is None else float(risk_tolerance)
         self.risk_tolerance = min(max(rt, 0.0), 1.0)
@@ -83,6 +83,8 @@ class StrategyEngine:
         self.clubs: dict[str, ClubDistribution] = {
             c: d for c, d in clubs.items() if d.category != "putter" and d.carry_mean > 0
         }
+        if not self.clubs:
+            self.clubs = self._default_bag()
         self.club_order = sorted(self.clubs, key=lambda c: -self.clubs[c].carry_mean)
         self.max_carry = self.clubs[self.club_order[0]].carry_mean if self.club_order else 200.0
         self.min_full_carry = self.clubs[self.club_order[-1]].carry_mean if self.club_order else 70.0
@@ -110,12 +112,15 @@ class StrategyEngine:
         total = np.zeros(n)
         for p in plans:
             dist = p["score_distribution"]
-            outcomes = np.array([-2, -1, 0, 1, 2, 3])
+            outcomes = np.array([-2, -1, 0, 1, 2, p.get("triple_plus_mean", 3.0)])
             probs = np.array([dist["eagle"], dist["birdie"], dist["par"], dist["bogey"], dist["double"], dist["triple_plus"]])
             probs = probs / probs.sum()
             total += p["par"] + rng.choice(outcomes, size=n, p=probs)
         par = sum(h.par for h in holes)
-        exp = float(np.mean(total)) if holes else 0.0
+        exp = float(sum(p["expected_strokes"] for p in plans)) if holes else 0.0
+        # Align the resampled total with the per-hole expectations it came from.
+        if holes:
+            total += exp - float(np.mean(total))
         return {
             "par": par,
             "expected_score": round(exp, 1),
@@ -123,9 +128,9 @@ class StrategyEngine:
             "p_break_target": round(float(np.mean(total <= self.target_score)), 3) if holes else None,
             "target_score": self.target_score,
             "score_percentiles": {
-                "p10": int(np.percentile(total, 10)) if holes else None,
-                "p50": int(np.percentile(total, 50)) if holes else None,
-                "p90": int(np.percentile(total, 90)) if holes else None,
+                "p10": int(round(np.percentile(total, 10))) if holes else None,
+                "p50": int(round(np.percentile(total, 50))) if holes else None,
+                "p90": int(round(np.percentile(total, 90))) if holes else None,
             },
             "expected_penalties": round(sum(p["tee"]["landing_mix"].get("penalty", 0) + p["tee"]["landing_mix"].get("ob", 0) for p in plans), 2),
             "p_break_target_note": "Holes are simulated independently; on a real day form carries between holes, so a hot round is a little more likely than this number says.",
@@ -137,8 +142,13 @@ class StrategyEngine:
 
     def plan_hole(self, geom: HoleGeometry, conditions: dict[str, Any] | None = None) -> dict[str, Any]:
         conditions = conditions or {}
-        carry_scale = float(conditions.get("carry_scale", 1.0))
+        # Uphill holes play longer: shrink every carry on this hole by the ratio
+        # of map yards to playing yards (and stretch them on downhill holes).
+        elev_scale = geom.yards / max(geom.playing_yards, 1.0)
+        carry_scale = float(conditions.get("carry_scale", 1.0)) * float(np.clip(elev_scale, 0.8, 1.2))
         candidates = self._tee_candidates(geom)
+        if not candidates:
+            raise ValueError(f"No playable tee shot could be generated for hole {geom.number}")
         results = []
         for c in candidates:
             # Common random numbers: every candidate sees the same draws, so
@@ -193,6 +203,15 @@ class StrategyEngine:
                 layup_xs.append(f.start_yards - 12)
         if geom.has_dogleg:
             layup_xs.append(geom.dogleg_at_yards - 8)
+        if not cands:
+            # Nothing passed the filters (very short hole or a short-hitting bag):
+            # fall back to the clubs whose carry is nearest the hole length.
+            nearest = sorted(self.club_order, key=lambda c: abs(self.clubs[c].carry_mean - yards))[:2]
+            for code in nearest:
+                d = self.clubs[code]
+                carry = min(d.carry_mean, geom.yards)
+                for off in AIM_OFFSETS:
+                    cands.append(Candidate(code, carry, off, "full" if carry >= d.carry_mean else "partial", carry))
         for lx in layup_xs:
             if lx < 120 or lx > self.max_carry:
                 continue
@@ -267,6 +286,9 @@ class StrategyEngine:
                 # Anything nasty again (e.g. still in trees) -> value with the table.
                 bad = rec[(lie[rec] == "recovery") | (lie[rec] == "ob") | (lie[rec] == "penalty")]
                 if bad.size:
+                    # The table value for penalty/ob lies already carries the +1, so
+                    # take back the penalty added above before valuing.
+                    strokes[bad] -= rr["penalty"][np.isin(rec, bad)]
                     strokes[bad] += self._residual_mixed(lie[bad], dist[bad], rng, extra[bad])
                     resolved[bad] = True
             idx = np.nonzero(~resolved)[0]
@@ -275,6 +297,7 @@ class StrategyEngine:
             # On/around the green -> resolve with the table (putting / chipping).
             near = idx[np.isin(lie[idx], ["green", "fringe"]) | (dist[idx] <= 30)]
             if near.size:
+                gir[near] |= (lie[near] == "green") & (strokes[near] <= geom.par - 2)
                 strokes[near] += self._residual_mixed(lie[near], dist[near], rng, extra[near])
                 resolved[near] = True
             idx = np.nonzero(~resolved)[0]
@@ -346,7 +369,8 @@ class StrategyEngine:
                     nwx, nwy = self._land((wx[l_idx], wy[l_idx]), dirs, c, l)
                     rr = geom.classify_world(nwx, nwy)
                     # Expected value of the position after this shot (no further sampling).
-                    val = 1.0 + rr["penalty"] + self._expected_value_mixed(rr["lie"], rr["dist"], rr["extra"])
+                    # Table values for 'penalty'/'ob' lies already include the penalty stroke.
+                    val = 1.0 + self._expected_value_mixed(rr["lie"], rr["dist"], rr["extra"])
                     ob_m = rr["lie"] == "ob"
                     if ob_m.any():
                         val[ob_m] = 2.0 + self._expected_value_mixed(np.full(int(ob_m.sum()), "fairway", dtype=object), l_dist[ob_m], np.zeros(int(ob_m.sum())))
@@ -470,14 +494,14 @@ class StrategyEngine:
 
     def _residual_mixed(self, lies: np.ndarray, dist: np.ndarray, rng: np.random.Generator, extra: np.ndarray | None = None) -> np.ndarray:
         out = np.zeros(len(lies))
-        for lie in set(lies.tolist()):
+        for lie in sorted(set(lies.tolist())):  # sorted: stable draw order across processes
             m = lies == lie
             out[m] = self._residual(str(lie), dist[m], rng, None if extra is None else extra[m])
         return out
 
     def _expected_value_mixed(self, lies: np.ndarray, dist: np.ndarray, extra: np.ndarray) -> np.ndarray:
         out = np.zeros(len(lies))
-        for lie in set(lies.tolist()):
+        for lie in sorted(set(lies.tolist())):
             m = lies == lie
             out[m] = self._expected_residual(str(lie), dist[m]) + extra[m]
         return out
@@ -565,7 +589,7 @@ class StrategyEngine:
 
     @staticmethod
     def _distribution(strokes: np.ndarray, par: int) -> dict[str, float]:
-        d = strokes - par
+        d = np.rint(strokes) - par
         return {
             "eagle": round(float(np.mean(d <= -2)), 3),
             "birdie": round(float(np.mean(d == -1)), 3),
@@ -630,6 +654,8 @@ class StrategyEngine:
                for x, y, l in zip(sim["tee_x"][:k], sim["tee_y"][:k], sim["tee_lie"][:k])]
         confidence = round(0.5 * club.confidence + 0.5 * self.readiness, 2)
         dist = self._distribution(s, par)
+        over = np.rint(s) - par
+        triple_mean = float(np.mean(over[over >= 3])) if (over >= 3).any() else 3.0
         plan = {
             "hole": geom.number,
             "par": par,
@@ -639,6 +665,7 @@ class StrategyEngine:
             "expected_vs_par": round(float(np.mean(s)) - par, 2),
             "p_double_plus": dist["double"] + dist["triple_plus"],
             "score_distribution": dist,
+            "triple_plus_mean": round(triple_mean, 2),
             "tee": {
                 "club": best.club,
                 "club_name": club.name or best.club,

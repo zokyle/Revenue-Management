@@ -505,7 +505,7 @@ def _draft_hole(shape: _Shape, fallback_number: int) -> _HoleDraft | None:
     length = polyline_length(line)
     tags = shape.tags
     yards = parse_distance_yards(tags.get("dist"), reference_yards=length) or length
-    yards_int = max(int(round(yards)), 1)
+    yards_int = max(int(round(yards)), 50)  # schema minimum; shorter "holes" are tagging errors
     par = _parse_int(tags.get("par"))
     if par is None or not 3 <= par <= 6:
         par = 3 if yards < 250 else 4 if yards < 480 else 5
@@ -513,8 +513,14 @@ def _draft_hole(shape: _Shape, fallback_number: int) -> _HoleDraft | None:
     if number is None:
         number = fallback_number
     shape_name, dogleg_at, dogleg_angle = turn_info(line)
+    if dogleg_angle is not None and dogleg_angle > 90:
+        # A hairpin centerline is almost always a mapping artefact; keep the bend but cap it.
+        dogleg_angle = 90.0
+    handicap = _parse_int(tags.get("handicap"))
+    if handicap is not None and not 1 <= handicap <= 36:
+        handicap = None
     hole = Hole(
-        number=number, par=par, yards=yards_int, handicap_index=_parse_int(tags.get("handicap")),
+        number=number, par=par, yards=yards_int, handicap_index=handicap,
         shape=shape_name, dogleg_at_yards=dogleg_at, dogleg_angle_deg=dogleg_angle,
         notes=tags.get("name"),
     )

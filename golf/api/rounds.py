@@ -57,8 +57,7 @@ def update_round(player_id: int, round_id: int, data: RoundUpdate, db: Session =
     if not rnd or rnd.player_id != player_id:
         raise HTTPException(404, "Round not found")
     payload = data.model_dump(exclude_unset=True)
-    for k, v in payload.items():
-        setattr(rnd, k, v)
+    services.apply_updates(rnd, payload)
     db.commit()
     if "total_score" not in payload:
         services.recompute_round_total(db, rnd)

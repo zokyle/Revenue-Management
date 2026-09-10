@@ -73,8 +73,7 @@ def update_course(course_id: int, data: CourseUpdate, db: Session = Depends(get_
     course = services.get_course(db, course_id)
     if not course:
         raise HTTPException(404, "Course not found")
-    for k, v in data.model_dump(exclude_unset=True).items():
-        setattr(course, k, v)
+    services.apply_updates(course, data.model_dump(exclude_unset=True))
     db.commit()
     return services.get_course(db, course_id)
 
@@ -116,8 +115,7 @@ def update_hole(course_id: int, number: int, data: HoleUpdate, db: Session = Dep
         raise HTTPException(404, "Hole not found")
     payload = data.model_dump(exclude_unset=True)
     feats = payload.pop("features", None)
-    for k, v in payload.items():
-        setattr(hole, k, v)
+    services.apply_updates(hole, payload)
     db.commit()
     if feats is not None:
         services.replace_hole_features(db, hole, feats)

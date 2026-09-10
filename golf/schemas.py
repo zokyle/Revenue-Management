@@ -84,7 +84,7 @@ class HoleFeatureBase(BaseModel):
     end_yards: float = Field(..., ge=0, le=1000)
     offset_yards: float = Field(20.0, ge=0, le=300)
     width_yards: float = Field(999.0, gt=0, le=999)
-    penalty_strokes: float | None = Field(None, ge=0, le=3)
+    penalty_strokes: int | None = Field(None, ge=0, le=3)
     label: str | None = Field(None, max_length=120)
 
     @field_validator("kind", "side", mode="before")
@@ -119,9 +119,19 @@ class HoleFeatureCreate(HoleFeatureBase):
     pass
 
 
-class HoleFeatureResponse(HoleFeatureBase):
+class HoleFeatureResponse(BaseModel):
+    """Read model: no input constraints, so imported data always serialises."""
+
     id: int
     hole_id: int
+    kind: str
+    side: str
+    start_yards: float
+    end_yards: float
+    offset_yards: float
+    width_yards: float
+    penalty_strokes: float | None = None
+    label: str | None = None
     model_config = {"from_attributes": True}
 
 
@@ -181,9 +191,23 @@ class HoleUpdate(BaseModel):
         return v
 
 
-class HoleResponse(HoleBase):
+class HoleResponse(BaseModel):
     id: int
     course_id: int
+    number: int
+    par: int
+    yards: int
+    handicap_index: int | None = None
+    shape: str = "straight"
+    dogleg_at_yards: float | None = None
+    dogleg_angle_deg: float | None = None
+    fairway_width_yards: float = 35.0
+    fairway_start_yards: float = 100.0
+    rough_width_yards: float = 15.0
+    green_width_yards: float = 30.0
+    green_depth_yards: float = 30.0
+    elevation_change_ft: float = 0.0
+    notes: str | None = None
     features: list[HoleFeatureResponse] = []
     model_config = {"from_attributes": True}
 
@@ -415,7 +439,7 @@ class StrategyRequest(BaseModel):
     objective: str = Field("break_80", pattern="^(break_80|min_expected|aggressive)$")
     carry_scale: float = Field(1.0, ge=0.8, le=1.2, description="Wind/temperature/altitude carry multiplier")
     samples: int | None = Field(None, ge=100, le=2000)
-    seed: int | None = None
+    seed: int | None = Field(None, ge=0)
 
 
 class StrategyResponse(BaseModel):
