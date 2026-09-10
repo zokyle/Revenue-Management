@@ -160,3 +160,21 @@ python -m pytest tests/test_golf -q
 ```
 
 The tests never touch the network: OpenStreetMap and Claude are mocked.
+
+## Roadmap (from the design review)
+
+The design panel that reviewed this build agreed with the architecture and
+left a short list of upgrades that would sharpen the numbers further:
+
+* **Per-cell score distributions** - learn a full strokes-to-hole-out
+  histogram for each lie/distance cell (today the engine models the spread
+  around the personal expectation parametrically).
+* **Memoised two-shot lookahead** - value par-5 tee shots and layups on a
+  10-yard grid of next-shot values solved once per hole.
+* **Strike tags** - a second tag column (fat/thin/top/shank/hook/slice/...)
+  next to the outcome tag, so the error ranking can separate contact faults
+  from direction faults.
+* **Pin positions and yellow penalty areas** - v1 aims at the centre of the
+  green and treats all water as red (lateral relief).
+* **Strokes lost versus an 80-shooter** - measure every habit against the
+  player who shoots 79, not the tour, so the dashboard numbers sum to the gap.
