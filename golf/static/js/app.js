@@ -218,8 +218,7 @@
     }
 
     function renderSwitcher() {
-        const sel = document.getElementById('player-switcher');
-        if (sel) {
+        document.querySelectorAll('select.player-switcher').forEach((sel) => {
             sel.innerHTML = '';
             state.players.forEach((p) => {
                 sel.appendChild(el('option', { value: p.id, text: p.name + ' (' + fmtNum(p.handicap_index, 1) + ')' }));
@@ -231,7 +230,7 @@
                 setPlayerId(sel.value);
                 window.location.reload();
             };
-        }
+        });
         const header = document.getElementById('header-player');
         if (header) {
             header.textContent = state.player

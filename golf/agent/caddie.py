@@ -495,10 +495,11 @@ class HeuristicNarrativeParser:
                 yards = DEFAULT_YARDS_BY_PAR.get(par, 400)
                 warnings.append(f"Hole {num}: length not known - assumed {yards} yards for a par {par}.")
         cleaned = _PAR_STATEMENT_RE.sub(" ", segment)
+        stated = self._stated_result(cleaned)
         events = self._events(cleaned)
         if not events:
             return None
-        shots = self._build_shots(num, par, float(yards), events, warnings)
+        shots = self._build_shots(num, par, float(yards), events, warnings, stated_result=stated)
         if not shots:
             return None
         penalties = sum(s.penalty_strokes for s in shots)
@@ -673,8 +674,10 @@ class HeuristicNarrativeParser:
         start, end, end_feet = self._distances(frag, is_putt=False)
         if ev.end_yards is None and end is not None:
             ev.end_yards, ev.end_feet = end, end_feet
-        if ev.start_yards is None and start is not None:
-            ev.start_yards = start
+        if ev.end_yards is None and start is not None:
+            # "…, had 130 in": a remaining distance stated after a shot is where
+            # that shot finished (and where the next one starts), not its start.
+            ev.end_yards = start
         if _NEAR_GREEN_RE.search(frag):
             ev.near_green = True
         if re.search(r"\bpenalt(?:y|ies)\b(?!\s+area)|\bunplayable\b", frag, re.I):
@@ -704,6 +707,19 @@ class HeuristicNarrativeParser:
         return "full"
 
     @staticmethod
+    def _stated_result(text: str) -> int | None:
+        """Score relative to par when the golfer states the result ('made par', 'bogey')."""
+        m = re.search(r"\b(eagle|birdie|par|bogey|double(?:\s*bogey)?|triple(?:\s*bogey)?)\b(?!\s*[3-6])", text, re.I)
+        if not m:
+            return None
+        word = m.group(1).lower()
+        if word.startswith("double"):
+            return 2
+        if word.startswith("triple"):
+            return 3
+        return {"eagle": -2, "birdie": -1, "par": 0, "bogey": 1}[word]
+
+    @staticmethod
     def _putt_chain(start: float, n: int) -> list[float]:
         """Distances left after each putt (yards); last is always 0."""
         if n <= 1:
@@ -715,7 +731,7 @@ class HeuristicNarrativeParser:
         mids = [min(m, start * 0.5) for m in mids]
         return mids + [0.0]
 
-    def _build_shots(self, num: int, par: int, yards: float, events: list[_Event], warnings: list[str]) -> list[ShotCreate]:
+    def _build_shots(self, num: int, par: int, yards: float, events: list[_Event], warnings: list[str], stated_result: int | None = None) -> list[ShotCreate]:
         shots: list[ShotCreate] = []
         remaining = yards
         lie = "tee"
@@ -826,6 +842,10 @@ class HeuristicNarrativeParser:
         if shots and not shots[-1].holed:
             if lie in ("green", "fringe"):
                 n = 1 if remaining <= 1.0 else 2
+                if stated_result is not None:
+                    # "…, birdie": size the putt chain so the score matches the stated result.
+                    so_far = len(shots) + sum(sh.penalty_strokes for sh in shots)
+                    n = max(1, min(par + stated_result - so_far, 4))
                 chain = self._putt_chain(remaining, n)
                 d = remaining
                 for nxt_d in chain:

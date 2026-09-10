@@ -2,6 +2,8 @@
 
 from datetime import date
 
+import pytest
+
 
 def test_health(golf_client):
     r = golf_client.get("/api/health")
@@ -132,3 +134,74 @@ def test_review_regressions(golf_client, golf_player, golf_course):
     ]
     r = golf_client.put(f"/api/players/{pid}/rounds/{rid}/holes/1", json={"hole_number": 1, "par": 4, "score": 3, "shots": shots})
     assert r.status_code == 200 and [s["sequence"] for s in r.json()["shots"]] == [1, 2, 3]
+
+
+def test_objective_and_seed_reach_the_engine(golf_client, golf_player, golf_course):
+    pid, cid = golf_player.id, golf_course.id
+    a = golf_client.post(f"/api/players/{pid}/strategy/{cid}", json={"objective": "min_expected", "samples": 120, "seed": 5}).json()
+    assert a["data"]["risk_lambda"] == 0.0 and a["data"]["objective"] == "min_expected"
+    b = golf_client.post(f"/api/players/{pid}/strategy/{cid}", json={"objective": "break_80", "samples": 120, "seed": 5}).json()
+    assert b["data"]["risk_lambda"] == round(0.8 * (1 - 0.35), 3)
+    c = golf_client.post(f"/api/players/{pid}/strategy/{cid}", json={"objective": "break_80", "samples": 120, "seed": 5}).json()
+    assert [h["expected_strokes"] for h in b["data"]["holes"]] == [h["expected_strokes"] for h in c["data"]["holes"]]
+
+
+def test_hole_feature_replacement(golf_client, golf_db, golf_course):
+    from golf.models import HoleFeature
+
+    cid = golf_course.id
+    two = [{"kind": "bunker", "side": "left", "start_yards": 200, "end_yards": 220, "offset_yards": 15, "width_yards": 10},
+           {"kind": "water", "side": "right", "start_yards": 250, "end_yards": 300, "offset_yards": 20}]
+    r = golf_client.put(f"/api/courses/{cid}/holes/1", json={"features": two})
+    assert r.status_code == 200 and len(r.json()["features"]) == 2
+    r = golf_client.put(f"/api/courses/{cid}/holes/1", json={"features": two[:1]})
+    assert len(r.json()["features"]) == 1
+    hole_id = r.json()["id"]
+    assert golf_db.query(HoleFeature).filter(HoleFeature.hole_id == hole_id).count() == 1
+    r = golf_client.put(f"/api/courses/{cid}/holes/1", json={"fairway_width_yards": 40})
+    assert len(r.json()["features"]) == 1 and r.json()["fairway_width_yards"] == 40
+    r = golf_client.put(f"/api/courses/{cid}/holes/1", json={"features": []})
+    assert r.json()["features"] == []
+
+
+def test_narrative_endpoint_preview_and_commit(golf_client, golf_player, golf_course):
+    pid, cid = golf_player.id, golf_course.id
+    rid = golf_client.post(f"/api/players/{pid}/rounds", json={"course_id": cid, "logging_mode": "narrative"}).json()["id"]
+    text = "Hole 1: driver in the fairway, 5 iron to 20 feet, two putts"
+    preview = golf_client.post(f"/api/players/{pid}/rounds/{rid}/narrative", json={"text": text, "commit": False})
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["parser"] in ("heuristic", "claude") and body["holes"][0]["score"] == 4
+    assert golf_client.get(f"/api/players/{pid}/rounds/{rid}").json()["holes"] == []
+    saved = golf_client.post(f"/api/players/{pid}/rounds/{rid}/narrative", json={"text": text, "commit": True})
+    assert saved.status_code == 200
+    rnd = golf_client.get(f"/api/players/{pid}/rounds/{rid}").json()
+    assert rnd["total_score"] == 4 and len(rnd["holes"][0]["shots"]) == 4
+    assert rnd["holes"][0]["shots"][1]["start_distance_yards"] == pytest.approx(rnd["holes"][0]["shots"][0]["end_distance_yards"])
+
+
+def test_profile_refreshes_after_quick_mode_edits(golf_client, golf_player, golf_course):
+    pid, cid = golf_player.id, golf_course.id
+    rid = golf_client.post(f"/api/players/{pid}/rounds", json={"course_id": cid, "logging_mode": "quick"}).json()["id"]
+    golf_client.put(f"/api/players/{pid}/rounds/{rid}/holes/1", json={"hole_number": 1, "par": 4, "score": 6, "putts": 2, "penalties": 2})
+    p1 = golf_client.get(f"/api/players/{pid}/profile").json()
+    assert p1["data"]["tendencies"]["penalties_per_round"] == 2.0
+    golf_client.put(f"/api/players/{pid}/rounds/{rid}/holes/2", json={"hole_number": 2, "par": 3, "score": 5, "putts": 3, "penalties": 1})
+    p2 = golf_client.get(f"/api/players/{pid}/profile").json()
+    assert p2["id"] != p1["id"] and p2["data"]["tendencies"]["penalties_per_round"] == 3.0
+    # Editing a score without changing counts also refreshes.
+    golf_client.put(f"/api/players/{pid}/rounds/{rid}/holes/2", json={"hole_number": 2, "par": 3, "score": 4, "putts": 2, "penalties": 1})
+    p3 = golf_client.get(f"/api/players/{pid}/profile").json()
+    assert p3["id"] != p2["id"]
+    # And an unchanged database reuses the snapshot.
+    assert golf_client.get(f"/api/players/{pid}/profile").json()["id"] == p3["id"]
+
+
+def test_delete_course_keeps_rounds_and_drops_plans(golf_client, golf_player, golf_course):
+    pid, cid = golf_player.id, golf_course.id
+    rid = golf_client.post(f"/api/players/{pid}/rounds", json={"course_id": cid}).json()["id"]
+    golf_client.post(f"/api/players/{pid}/strategy/{cid}", json={"samples": 120})
+    assert golf_client.delete(f"/api/courses/{cid}").status_code == 204
+    rnd = golf_client.get(f"/api/players/{pid}/rounds/{rid}").json()
+    assert rnd["course_id"] is None
+    assert golf_client.get(f"/api/players/{pid}/strategies").json() == []

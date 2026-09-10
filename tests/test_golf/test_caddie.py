@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 from datetime import date
 from types import SimpleNamespace
 
@@ -51,26 +50,12 @@ def player(db):
 
 
 def _build_course(db) -> Course:
-    """Use the course importer when it exists; otherwise build the rows directly."""
-    if importlib.util.find_spec("golf.engine.course_import") is not None:
-        try:
-            from golf.engine import course_import
-            from golf.schemas import ScorecardHole, ScorecardImport
+    """Build the test course through the scorecard importer (a failure there must fail these tests too)."""
+    from golf.engine import course_import
+    from golf.schemas import ScorecardHole, ScorecardImport
 
-            data = ScorecardImport(name=COURSE_NAME, holes=[ScorecardHole(number=n, par=p, yards=y) for n, p, y in HOLES])
-            course = course_import.build_course_from_scorecard(db, data)
-            if course is not None and getattr(course, "id", None):
-                return services.get_course(db, course.id)
-        except Exception:
-            db.rollback()
-    course = Course(name=COURSE_NAME, source="scorecard")
-    db.add(course)
-    db.commit()
-    db.refresh(course)
-    for n, p, y in HOLES:
-        db.add(Hole(course_id=course.id, number=n, par=p, yards=y))
-    db.commit()
-    services.refresh_course_totals(db, services.get_course(db, course.id))
+    data = ScorecardImport(name=COURSE_NAME, holes=[ScorecardHole(number=n, par=p, yards=y) for n, p, y in HOLES])
+    course = course_import.build_course_from_scorecard(db, data)
     return services.get_course(db, course.id)
 
 
@@ -388,3 +373,20 @@ def test_claude_parse_falls_back_to_heuristic_on_api_error(db, player, open_roun
     assert result.parser == "heuristic"
     assert result.warnings[0].startswith("Claude unavailable: connection error")
     assert result.holes[0].score == 4
+
+
+def test_heuristic_parser_remaining_distance_sets_next_shot_start(db, player, course, open_round):
+    caddie = HeuristicCaddie(db, player.id)
+    parsed = caddie.parse_narrative("Hole 1: driver down the middle, had 130 in, 9 iron to 12 feet, two putts", round_=open_round)
+    shots = parsed.holes[0].shots
+    assert shots[0].start_distance_yards == course.holes[0].yards
+    assert shots[0].end_distance_yards == pytest.approx(130)
+    assert shots[1].start_distance_yards == pytest.approx(130)
+
+
+def test_heuristic_parser_uses_stated_result_for_putts(db, player, course, open_round):
+    caddie = HeuristicCaddie(db, player.id)
+    birdie = caddie.parse_narrative("Hole 2: 7 iron to 8 feet, birdie", round_=open_round).holes[0]
+    assert birdie.putts == 1 and birdie.score == course.holes[1].par - 1
+    bogey = caddie.parse_narrative("Hole 1: driver in the rough, 6 iron to 40 feet, bogey", round_=open_round).holes[0]
+    assert bogey.putts == 3 and bogey.score == course.holes[0].par + 1

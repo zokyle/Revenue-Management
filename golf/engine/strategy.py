@@ -35,6 +35,8 @@ from golf.engine.learning import club_distributions_from_profile, personal_expec
 AIM_OFFSETS = [-20.0, -15.0, -10.0, -5.0, 0.0, 5.0, 10.0, 15.0, 20.0]
 GREEN_AIM_FRACTIONS = [-0.3, 0.0, 0.3]      # fraction of green half-width
 LIE_CARRY_FACTOR = {"tee": 1.0, "fairway": 1.0, "fringe": 1.0, "rough": 0.93, "sand": 0.85, "recovery": 0.5, "green": 1.0}
+LIE_LATERAL_EXTRA = {"rough": 4.0, "sand": 6.0, "recovery": 12.0}   # extra lateral sigma (yards) from a bad lie
+LIE_MISHIT_MULT = {"rough": 1.5, "sand": 1.5, "recovery": 2.0}
 SEARCH_SAMPLES = 300
 FINAL_SAMPLES = 1500
 # Strokes-to-hole-out is right-skewed with variance growing with its mean:
@@ -316,6 +318,9 @@ class StrategyEngine:
                 a_idx = idx[reach]
                 a_dist = dist[a_idx] / lie_factor[reach]
                 club_idx, carry_mean, carry_sig, lat_sig, lat_bias, p_mis = self._club_for_distance(a_dist)
+                a_lies = lie[a_idx]
+                lat_sig = lat_sig + np.array([LIE_LATERAL_EXTRA.get(l, 0.0) for l in a_lies])
+                p_mis = np.minimum(p_mis * np.array([LIE_MISHIT_MULT.get(l, 1.0) for l in a_lies]), 0.6)
                 aim_y = self._green_aim(geom)
                 tx, ty = geom.local_to_world(geom.yards, aim_y)
                 dx, dy = tx - wx[a_idx], ty - wy[a_idx]

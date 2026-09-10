@@ -160,12 +160,35 @@ def recompute_round_total(db: Session, rnd: Round) -> None:
 # ---------------------------------------------------------------------------
 # Profile & strategy
 # ---------------------------------------------------------------------------
+def _profile_signature(db: Session, player_id: int) -> dict[str, Any]:
+    """Cheap fingerprint of everything the profile depends on (rounds, holes, shots, settings)."""
+    from sqlalchemy import func
+
+    holes = (
+        db.query(func.count(HoleResult.id), func.coalesce(func.sum(HoleResult.score), 0),
+                 func.coalesce(func.sum(HoleResult.putts), 0), func.coalesce(func.sum(HoleResult.penalties), 0))
+        .join(Round, HoleResult.round_id == Round.id).filter(Round.player_id == player_id).one()
+    )
+    shots = (
+        db.query(func.count(Shot.id), func.coalesce(func.sum(Shot.start_distance_yards), 0.0))
+        .join(HoleResult).join(Round).filter(Round.player_id == player_id).one()
+    )
+    player = db.query(Player).filter(Player.id == player_id).first()
+    clubs = db.query(Club).filter(Club.player_id == player_id).count()
+    return {
+        "holes": int(holes[0]), "score_sum": int(holes[1]), "putt_sum": int(holes[2]), "penalty_sum": int(holes[3]),
+        "shots": int(shots[0]), "dist_sum": round(float(shots[1]), 1),
+        "handicap": float(player.handicap_index) if player else None, "clubs": clubs,
+    }
+
+
 def compute_profile(db: Session, player_id: int, save: bool = True) -> ProfileSnapshot:
     player = get_player(db, player_id)
     if player is None:
         raise ValueError("Player not found")
     rounds = [r for r in player_rounds(db, player_id) if r.holes]
     profile = ProfileBuilder(player, player.clubs, rounds).build()
+    profile["_signature"] = _profile_signature(db, player_id)
     snap = ProfileSnapshot(
         player_id=player_id,
         rounds_count=profile["rounds"],
@@ -197,7 +220,13 @@ def latest_profile(db: Session, player_id: int, max_age_rounds: bool = True) -> 
     n_shots = (
         db.query(Shot).join(HoleResult).join(Round).filter(Round.player_id == player_id).count()
     )
-    if snap is None or snap.rounds_count != n_rounds or snap.shots_count != n_shots:
+    stale = (
+        snap is None
+        or snap.rounds_count != n_rounds
+        or snap.shots_count != n_shots
+        or (snap.data or {}).get("_signature") != _profile_signature(db, player_id)
+    )
+    if stale:
         snap = compute_profile(db, player_id, save=True)
     return snap
 

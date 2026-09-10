@@ -262,8 +262,7 @@ def simulate_hole(game: TrueGame, geom: HoleGeometry, rng: np.random.Generator) 
                           outcome_tag=tag, penalty_strokes=0, holed=False))
         if lie == "tee" and geom.par > 3:
             fairway_hit = new_lie == "fairway"
-            if not fairway_hit:
-                tee_miss = "right" if lateral > 10 else ("left" if lateral < -10 else "short")
+            tee_miss = None if fairway_hit else ("right" if lateral > 10 else ("left" if lateral < -10 else "short"))
         pos, lie, dist = (wx, wy), new_lie, end_dist
     # Short game if needed.
     if lie not in ("green", "fringe"):
@@ -276,12 +275,15 @@ def simulate_hole(game: TrueGame, geom: HoleGeometry, rng: np.random.Generator) 
         lie, dist = "green", feet / 3
     if strokes <= geom.par - 2 and lie == "green":
         gir = True
-    feet = dist * 3.0 * (1.1 if lie == "fringe" else 1.0)
-    for start_ft, end_ft, holed in putt_sequence(rng, feet):
+    feet = dist * 3.0
+    first_lie = lie  # a fringe finish putts from the fringe; the learner applies its own fringe factor
+    for start_ft, end_ft, holed in putt_sequence(rng, feet * (1.1 if lie == "fringe" else 1.0)):
         seq += 1
         strokes += 1
         putts += 1
-        shots.append(dict(sequence=seq, club_code="P", shot_type="putt", lie_start="green", start_distance_yards=round(start_ft / 3, 2),
+        lie_start_putt = first_lie if putts == 1 else "green"
+        start_yds = dist if putts == 1 else start_ft / 3
+        shots.append(dict(sequence=seq, club_code="P", shot_type="putt", lie_start=lie_start_putt, start_distance_yards=round(start_yds, 2),
                           lie_end="green", end_distance_yards=round(end_ft / 3, 2), lateral_miss_yards=None,
                           outcome_tag=("three_putt" if putts >= 3 else "good"), penalty_strokes=0, holed=holed))
     return dict(score=strokes, putts=putts, fairway_hit=fairway_hit, gir=gir, penalties=penalties, tee_miss=tee_miss, shots=shots)

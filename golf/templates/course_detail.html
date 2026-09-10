@@ -177,7 +177,7 @@
             '<td><select data-ff="side" class="select select-sm">' + opts(SIDES, f.side) + '</select></td>' +
             '<td><input data-ff="start_yards" type="number" min="0" max="800" class="input input-sm w-20" value="' + esc(f.start_yards) + '"></td>' +
             '<td><input data-ff="end_yards" type="number" min="0" max="800" class="input input-sm w-20" value="' + esc(f.end_yards) + '"></td>' +
-            '<td><input data-ff="offset_yards" type="number" min="-60" max="120" class="input input-sm w-20" value="' + esc(f.offset_yards) + '"></td>' +
+            '<td><input data-ff="offset_yards" type="number" min="0" max="300" max="120" class="input input-sm w-20" value="' + esc(f.offset_yards) + '"></td>' +
             '<td><input data-ff="width_yards" type="number" min="1" max="999" class="input input-sm w-20" value="' + esc(f.width_yards) + '"></td>' +
             '<td><input data-ff="label" class="input input-sm w-28" maxlength="60" value="' + esc(f.label || '') + '"></td>' +
             '<td><button type="button" data-remove="' + i + '" class="btn btn-ghost btn-sm text-red-600" title="Remove">&#10005;</button></td></tr>').join('');

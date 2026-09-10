@@ -255,11 +255,17 @@ def test_plan_is_deterministic_and_well_formed(engine, par4):
 
 
 def test_water_and_ob_push_driver_out_of_the_plan(engine, par4):
+    from golf.engine.strategy import Candidate
+
     plan = engine.plan_hole(par4)
     assert plan["tee"]["club"] != "D"
-    d_alt = next((a for a in plan["alternatives"] if a["club"] == "D"), None)
-    if d_alt:
-        assert d_alt["landing_mix"].get("penalty", 0) + d_alt["landing_mix"].get("ob", 0) > plan["tee"]["trouble_probability"]
+    # Simulate the driver straight at it and confirm it really is the riskier play.
+    drv = engine.clubs["D"]
+    sim = engine._simulate(par4, Candidate("D", min(drv.carry_mean, par4.yards), 0.0, "full", drv.carry_mean), 600, np.random.default_rng(0), 1.0)
+    lies, counts = np.unique(sim["tee_lie"], return_counts=True)
+    mix = {str(l): c / 600 for l, c in zip(lies, counts)}
+    assert mix.get("penalty", 0) + mix.get("ob", 0) > plan["tee"]["trouble_probability"]
+    assert float(np.mean(sim["strokes"] >= par4.par + 2)) > plan["p_double_plus"] - 0.02
 
 
 def test_open_hole_prefers_driver(engine):

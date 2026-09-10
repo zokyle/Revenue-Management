@@ -5,7 +5,7 @@ from golf import services
 from golf.database import get_db
 from golf.engine import course_import
 from golf.engine.hole_model import HoleGeometry
-from golf.models import Course, Hole, HoleFeature
+from golf.models import Course, Hole, HoleFeature, Round, StrategyPlan
 from golf.schemas import (
     CourseCreate, CourseListResponse, CourseResponse, CourseUpdate, HoleCreate, HoleResponse, HoleUpdate,
     OSMImportRequest, ScorecardImport,
@@ -83,6 +83,9 @@ def delete_course(course_id: int, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(404, "Course not found")
+    # Rounds keep their history (course link cleared); plans for the course go with it.
+    db.query(Round).filter(Round.course_id == course_id).update({"course_id": None})
+    db.query(StrategyPlan).filter(StrategyPlan.course_id == course_id).delete()
     db.delete(course)
     db.commit()
     return None
