@@ -241,6 +241,7 @@ class StrategyEngine:
 
         approach_dist_samples = []
         approach_lies = []
+        approached = np.zeros(n, dtype=bool)  # samples that have taken a shot at the green
         gir = np.zeros(n, dtype=bool)
         stage_records: list[dict[str, Any]] = []
         for stage in range(MAX_SIM_STAGES):
@@ -283,8 +284,10 @@ class StrategyEngine:
             lie_factor = np.array([LIE_CARRY_FACTOR.get(l, 0.9) for l in lie[idx]])
             reach = dist[idx] <= self.max_carry * lie_factor + 12
             if reach.any():
-                approach_dist_samples.extend(dist[idx][reach].tolist())
-                approach_lies.extend(lie[idx][reach].tolist())
+                first = reach & ~approached[idx]
+                approach_dist_samples.extend(dist[idx][first].tolist())
+                approach_lies.extend(lie[idx][first].tolist())
+                approached[idx[reach]] = True
             # --- Approach: pick a club per sample, aim at the safe part of the green.
             if reach.any():
                 a_idx = idx[reach]

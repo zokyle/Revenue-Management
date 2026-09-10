@@ -31,13 +31,13 @@ DEMO_NAME = "Demo Golfer"
 # The golfer's real game (what the engine should rediscover).
 TRUE_CLUBS = {
     #  code: (carry, carry_sigma, lateral_sigma, lateral_bias, p_mishit)
-    "D": (238, 13, 26, 7, 0.09),
+    "D": (238, 13, 27, 7, 0.10),
     "3w": (215, 11, 21, 5, 0.09),
-    "3h": (196, 10, 17, 3, 0.07),
+    "3h": (196, 10, 18, 3, 0.09),
     "4i": (183, 9, 16, 2, 0.08),
-    "5i": (172, 9, 15, 2, 0.07),
-    "6i": (162, 8, 14, 1, 0.06),
-    "7i": (152, 8, 13, 1, 0.06),
+    "5i": (172, 9, 16, 2, 0.09),
+    "6i": (162, 8, 15, 1, 0.08),
+    "7i": (152, 8, 14, 1, 0.08),
     "8i": (141, 7, 12, 0, 0.06),
     "9i": (130, 7, 11, 0, 0.06),
     "PW": (118, 6, 10, 0, 0.05),
@@ -155,21 +155,21 @@ def putt_sequence(rng: np.random.Generator, feet: float) -> list[tuple[float, fl
     d = feet
     for _ in range(5):
         if d <= 2.5:
-            p_make = 0.97
+            p_make = 0.98
         elif d <= 5:
-            p_make = 0.68
+            p_make = 0.75
         elif d <= 10:
-            p_make = 0.33
+            p_make = 0.38
         elif d <= 20:
-            p_make = 0.12
+            p_make = 0.14
         else:
-            p_make = 0.04
+            p_make = 0.05
         if rng.random() < p_make:
             seq.append((d, 0.0, True))
             return seq
-        # Lag: leave roughly 8-12% of the distance, occasionally much more (a three-putt).
-        leave = abs(rng.normal(0.11 * d + 1.2, 0.07 * d + 1.0))
-        leave = max(leave, 0.8)
+        # Lag: leave roughly 7-10% of the distance, occasionally much more (a three-putt).
+        leave = abs(rng.normal(0.08 * d + 0.8, 0.05 * d + 0.8))
+        leave = max(leave, 0.6)
         seq.append((d, leave, False))
         d = leave
     seq.append((d, 0.0, True))
@@ -213,7 +213,7 @@ def simulate_hole(game: TrueGame, geom: HoleGeometry, rng: np.random.Generator) 
             continue
         elif lie == "sand" and dist <= 40:
             strokes += 1
-            feet = abs(rng.normal(18, 12)) + 3
+            feet = abs(rng.normal(14, 9)) + 3
             shots.append(dict(sequence=seq, club_code="SW", shot_type="bunker", lie_start="sand", start_distance_yards=round(dist, 1),
                               lie_end="green", end_distance_yards=round(feet / 3, 2), lateral_miss_yards=None, outcome_tag="good",
                               penalty_strokes=0, holed=False))
@@ -269,7 +269,7 @@ def simulate_hole(game: TrueGame, geom: HoleGeometry, rng: np.random.Generator) 
     if lie not in ("green", "fringe"):
         seq += 1
         strokes += 1
-        feet = abs(rng.normal(15 if lie == "fairway" else 20, 10)) + 2
+        feet = abs(rng.normal(11 if lie == "fairway" else 16, 8)) + 2
         shots.append(dict(sequence=seq, club_code="SW" if dist > 15 else "PW", shot_type="pitch" if dist > 15 else "chip",
                           lie_start=lie, start_distance_yards=round(dist, 1), lie_end="green", end_distance_yards=round(feet / 3, 2),
                           lateral_miss_yards=None, outcome_tag="good", penalty_strokes=0, holed=False))
