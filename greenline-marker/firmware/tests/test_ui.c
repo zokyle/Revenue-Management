@@ -63,7 +63,7 @@ GL_TEST(test_table_is_well_formed)
         GL_CHECK(t[i].state < GL_UI_STATE_COUNT || t[i].state == GL_UI_ANY);
         GL_CHECK(t[i].event > GL_EV_NONE && t[i].event < GL_EV_COUNT);
         GL_CHECK(t[i].next < GL_UI_STATE_COUNT);
-        GL_CHECK(t[i].guard <= GL_G_ITEM_FLIP_CAL_YES);
+        GL_CHECK(t[i].guard <= GL_G_ITEM_ZERO_YES);
         /* no two rows with the same (state, event, guard): the table is
          * deterministic by construction, not by row order alone */
         for (size_t j = i + 1; j < n; j++) {
@@ -429,7 +429,7 @@ GL_TEST(test_settings_dial)
     /* double tap steps through the items, wrapping round */
     {
         const uint8_t order[] = { GL_ITEM_UNITS, GL_ITEM_PACE, GL_ITEM_GRASS, GL_ITEM_GRAIN,
-                                  GL_ITEM_DISTANCE, GL_ITEM_RAWLOG, GL_UI_ITEM_FLIP_CAL,
+                                  GL_ITEM_DISTANCE, GL_ITEM_RAWLOG, GL_UI_ITEM_ZERO,
                                   GL_ITEM_STIMP, GL_ITEM_UNITS, GL_ITEM_PACE, GL_ITEM_GRASS };
         for (size_t i = 0; i < sizeof(order); i++) {
             a = ev(GL_EV_DOUBLE_TAP, 0);
@@ -470,18 +470,20 @@ GL_TEST(test_settings_dial)
         ev(GL_EV_DIAL_STEP, 18 + i);
     }
     STATE_IS(GL_UI_SETTINGS_DIAL);
-    /* flip calibration from the menu */
+    /* zeroing from the menu */
     for (int i = 0; i < 7; i++) {
         ev(GL_EV_DOUBLE_TAP, 0);
     }
-    GL_CHECK_EQ(ui.item, GL_UI_ITEM_FLIP_CAL);
+    GL_CHECK_EQ(ui.item, GL_UI_ITEM_ZERO);
     GL_CHECK_EQ(ui.dial_value, 0);
     ev(GL_EV_DIAL_STEP, 1);
     a = ev(GL_EV_FLAT, 0);
-    GL_CHECK(a & GL_ACT_CAL_FLIP_START);
-    STATE_IS(GL_UI_CAL_FLIP);
-    /* not in the cradle: when done, back to normal use */
+    GL_CHECK(a & GL_ACT_CAL_ZERO_START);
+    GL_CHECK(a & GL_ACT_SAVE_SETTINGS);
+    STATE_IS(GL_UI_CAL_ZERO);
+    /* when done, back to normal use */
     a = ev(GL_EV_CAL_DONE, 0);
+    GL_CHECK(a & GL_ACT_WATCH_STILL);
     STATE_IS(GL_UI_WAIT_STILL);
     /* with "NO" selected, laying flat just leaves the menu */
     ev(GL_EV_UPRIGHT, 0);
@@ -489,11 +491,25 @@ GL_TEST(test_settings_dial)
         ev(GL_EV_DOUBLE_TAP, 0);
     }
     a = ev(GL_EV_FLAT, 0);
-    GL_CHECK(!(a & GL_ACT_CAL_FLIP_START));
+    GL_CHECK(!(a & GL_ACT_CAL_ZERO_START));
     STATE_IS(GL_UI_WAIT_STILL);
 }
 
-GL_TEST(test_usb_and_flip_cal_in_cradle)
+/* SLEEP -> ... -> CAL_ZERO through the only way in: the dial item "ZERO". */
+static void enter_zeroing(void)
+{
+    wake_up();
+    ev(GL_EV_UPRIGHT, 0);
+    for (int i = 0; i < 7; i++) {
+        ev(GL_EV_DOUBLE_TAP, 0);
+    }
+    GL_CHECK_EQ(ui.item, GL_UI_ITEM_ZERO);
+    ev(GL_EV_DIAL_STEP, 1);
+    GL_CHECK(ev(GL_EV_FLAT, 0) & GL_ACT_CAL_ZERO_START);
+    STATE_IS(GL_UI_CAL_ZERO);
+}
+
+GL_TEST(test_usb_cradle)
 {
     uint32_t a;
     /* attach while asleep */
@@ -505,39 +521,11 @@ GL_TEST(test_usb_and_flip_cal_in_cradle)
     GL_CHECK_EQ(ev(GL_EV_MOTION, 0), 0);
     GL_CHECK_EQ(ev(GL_EV_BATT_LOW, 0), 0);
     GL_CHECK_EQ(ev(GL_EV_DOUBLE_TAP, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_UPRIGHT, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_FLAT, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_CAL_DONE, 0), 0);
     GL_CHECK_EQ(gl_ui_tick(&ui, now + 10000000u), 0);
     STATE_IS(GL_UI_CRADLE_USB);
-    /* flip calibration started over USB */
-    a = ev(GL_EV_CAL_START, 0);
-    GL_CHECK(a & GL_ACT_CAL_FLIP_START);
-    STATE_IS(GL_UI_CAL_FLIP);
-    /* turned 180 degrees: the pads lose contact -> VBUS gone, calibration goes on */
-    a = ev(GL_EV_USB_DETACH, 0);
-    GL_CHECK(a & GL_ACT_USB_STOP);
-    STATE_IS(GL_UI_CAL_FLIP);
-    /* done while off the pins: normal use */
-    ev(GL_EV_CAL_DONE, 0);
-    STATE_IS(GL_UI_WAIT_STILL);
-
-    /* done after being put back on the pins: the USB screen */
-    fresh();
-    ev(GL_EV_USB_ATTACH, 0);
-    ev(GL_EV_CAL_START, 0);
-    ev(GL_EV_USB_DETACH, 0);
-    a = ev(GL_EV_USB_ATTACH, 0);
-    GL_CHECK(a & GL_ACT_USB_START);
-    STATE_IS(GL_UI_CAL_FLIP);
-    ev(GL_EV_CAL_DONE, 0);
-    STATE_IS(GL_UI_CRADLE_USB);
-    /* failed calibration */
-    ev(GL_EV_CAL_START, 0);
-    a = ev(GL_EV_CAL_FAIL, GL_ERR_MOTION);
-    GL_CHECK(a & GL_ACT_CAL_ABORT);
-    STATE_IS(GL_UI_ERROR);
-    GL_CHECK_EQ(ui.error_code, GL_ERR_MOTION);
-    now += 5100;
-    gl_ui_tick(&ui, now);
-    STATE_IS(GL_UI_CRADLE_USB); /* still on USB: not to sleep */
     /* lifted out of the cradle */
     a = ev(GL_EV_USB_DETACH, 0);
     GL_CHECK((a & GL_ACT_USB_STOP) && (a & GL_ACT_ENTER_SLEEP));
@@ -552,16 +540,99 @@ GL_TEST(test_usb_and_flip_cal_in_cradle)
     a = ev(GL_EV_USB_ATTACH, 0);
     GL_CHECK((a & GL_ACT_ABORT_READ) && (a & GL_ACT_USB_START));
     STATE_IS(GL_UI_CRADLE_USB);
-    /* calibration abandoned */
-    ev(GL_EV_CAL_START, 0);
-    a = ev(GL_EV_DOUBLE_TAP, 0);
-    GL_CHECK(a & GL_ACT_CAL_ABORT);
+}
+
+/* Rev C: zeroing is done on any hard flat surface, NEVER in the cradle (the
+ * cradle takes the marker one way round only and holds it down). */
+GL_TEST(test_zeroing_is_never_done_in_the_cradle)
+{
+    size_t n = 0;
+    const gl_ui_transition_t *t = gl_ui_table(&n);
+    uint32_t a;
+    unsigned ways_in = 0;
+
+    /* structure: the only row that starts the zeroing leaves the settings
+     * dial; no row leads from the cradle state to it; no row lets it finish
+     * into the cradle state */
+    for (size_t i = 0; i < n; i++) {
+        if (t[i].actions & GL_ACT_CAL_ZERO_START) {
+            ways_in++;
+            GL_CHECK_EQ(t[i].state, GL_UI_SETTINGS_DIAL);
+            GL_CHECK_EQ(t[i].event, GL_EV_FLAT);
+            GL_CHECK_EQ(t[i].guard, GL_G_ITEM_ZERO_YES);
+            GL_CHECK_EQ(t[i].next, GL_UI_CAL_ZERO);
+        }
+        if (t[i].next == GL_UI_CAL_ZERO && t[i].state != GL_UI_CAL_ZERO) {
+            GL_CHECK(t[i].actions & GL_ACT_CAL_ZERO_START);
+        }
+        if (t[i].state == GL_UI_CRADLE_USB) {
+            GL_CHECK(t[i].next != GL_UI_CAL_ZERO);
+            GL_CHECK(!(t[i].actions & GL_ACT_CAL_ZERO_START));
+        }
+        if (t[i].state == GL_UI_CAL_ZERO && t[i].next == GL_UI_CRADLE_USB) {
+            GL_CHECK_EQ(t[i].event, GL_EV_USB_ATTACH);
+            GL_CHECK(t[i].actions & GL_ACT_CAL_ABORT);
+        }
+        /* no guard on USB inside the zeroing state: it cannot be on USB */
+        if (t[i].state == GL_UI_CAL_ZERO) {
+            GL_CHECK(t[i].guard != GL_G_USB);
+        }
+    }
+    GL_CHECK_EQ(ways_in, 1);
+
+    /* the settings dial cannot be opened in the cradle, so the zeroing
+     * cannot be started there */
+    fresh();
+    ev(GL_EV_USB_ATTACH, 0);
+    ev(GL_EV_UPRIGHT, 0);
     STATE_IS(GL_UI_CRADLE_USB);
-    ev(GL_EV_CAL_START, 0);
+
+    /* normal course: the turn is expected motion and is ignored */
+    fresh();
+    enter_zeroing();
+    GL_CHECK(!ui.usb);
+    GL_CHECK_EQ(ev(GL_EV_MOTION, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_STILL, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_UPRIGHT, 0), 0);
+    STATE_IS(GL_UI_CAL_ZERO);
+    a = ev(GL_EV_CAL_DONE, 0);
+    GL_CHECK((a & GL_ACT_WATCH_STILL) && (a & GL_ACT_NEW_READ));
+    STATE_IS(GL_UI_WAIT_STILL);
+
+    /* put into the cradle half way: abandoned, USB screen */
+    fresh();
+    enter_zeroing();
+    a = ev(GL_EV_USB_ATTACH, 0);
+    GL_CHECK((a & GL_ACT_CAL_ABORT) && (a & GL_ACT_USB_START));
+    STATE_IS(GL_UI_CRADLE_USB);
+    /* a late completion report changes nothing */
+    GL_CHECK_EQ(ev(GL_EV_CAL_DONE, 0), 0);
+    STATE_IS(GL_UI_CRADLE_USB);
+
+    /* failed (moved during a read, turn not near 180 degrees) */
+    fresh();
+    enter_zeroing();
+    a = ev(GL_EV_CAL_FAIL, GL_ERR_MOTION);
+    GL_CHECK(a & GL_ACT_CAL_ABORT);
+    STATE_IS(GL_UI_ERROR);
+    GL_CHECK_EQ(ui.error_code, GL_ERR_MOTION);
+    now += 5100;
+    GL_CHECK(gl_ui_tick(&ui, now) & GL_ACT_ENTER_SLEEP);
+    STATE_IS(GL_UI_SLEEP);
+
+    /* abandoned by a double tap, and by the 2-minute limit */
+    fresh();
+    enter_zeroing();
+    a = ev(GL_EV_DOUBLE_TAP, 0);
+    GL_CHECK((a & GL_ACT_CAL_ABORT) && (a & GL_ACT_WATCH_STILL));
+    STATE_IS(GL_UI_WAIT_STILL);
+    fresh();
+    enter_zeroing();
     now += 120100;
     a = gl_ui_tick(&ui, now);
     GL_CHECK(a & GL_ACT_CAL_ABORT);
     STATE_IS(GL_UI_ERROR);
+    GL_CHECK_EQ(ui.error_code, GL_ERR_TIMEOUT);
 }
 
 GL_TEST(test_low_battery_and_faults_from_every_state)
@@ -586,7 +657,7 @@ GL_TEST(test_low_battery_and_faults_from_every_state)
                                  GL_EV_DOUBLE_TAP },
         /* SETTINGS_DIAL */ { GL_EV_MOTION, GL_EV_UPRIGHT, GL_EV_NONE },
         /* CRADLE_USB */ { GL_EV_USB_ATTACH, GL_EV_NONE },
-        /* CAL_FLIP */ { GL_EV_USB_ATTACH, GL_EV_CAL_START, GL_EV_USB_DETACH, GL_EV_NONE },
+        /* CAL_ZERO */ { GL_EV_NONE }, /* reached through enter_zeroing() */
         /* ERROR */ { GL_EV_MOTION, GL_EV_FAULT, GL_EV_NONE },
         /* LOW_BATT */ { GL_EV_MOTION, GL_EV_BATT_LOW, GL_EV_NONE },
     };
@@ -594,6 +665,9 @@ GL_TEST(test_low_battery_and_faults_from_every_state)
         for (int hit = 0; hit < 3; hit++) {
             uint32_t a;
             fresh();
+            if (s == GL_UI_CAL_ZERO) {
+                enter_zeroing();
+            }
             for (int i = 0; i < 8 && paths[s][i] != GL_EV_NONE; i++) {
                 if (paths[s][i] == GL_EV_TIMEOUT) {
                     now += 900;
@@ -605,7 +679,7 @@ GL_TEST(test_low_battery_and_faults_from_every_state)
             STATE_IS(s);
             if (hit == 0) {
                 a = ev(GL_EV_BATT_LOW, 0);
-                if (s == GL_UI_SLEEP || s == GL_UI_CRADLE_USB || s == GL_UI_CAL_FLIP) {
+                if (s == GL_UI_SLEEP || s == GL_UI_CRADLE_USB || s == GL_UI_CAL_ZERO) {
                     STATE_IS(s); /* asleep, or powered / calibrating: no warning */
                 } else {
                     STATE_IS(GL_UI_LOW_BATT);
@@ -626,10 +700,10 @@ GL_TEST(test_low_battery_and_faults_from_every_state)
                 }
             } else {
                 a = ev(GL_EV_USB_ATTACH, 0);
-                if (s == GL_UI_CAL_FLIP) {
-                    STATE_IS(GL_UI_CAL_FLIP);
-                } else {
-                    STATE_IS(GL_UI_CRADLE_USB);
+                /* from every state, also from the zeroing (which is abandoned) */
+                STATE_IS(GL_UI_CRADLE_USB);
+                if (s == GL_UI_CAL_ZERO) {
+                    GL_CHECK(a & GL_ACT_CAL_ABORT);
                 }
                 if (s != GL_UI_CRADLE_USB) {
                     GL_CHECK(a & GL_ACT_USB_START);
@@ -637,6 +711,28 @@ GL_TEST(test_low_battery_and_faults_from_every_state)
             }
         }
     }
+}
+
+GL_TEST(test_keepalive_extends_only_the_current_state)
+{
+    fresh();
+    wake_up();
+    ev(GL_EV_STILL, 0);
+    ev(GL_EV_TILT_DONE, 0);
+    STATE_IS(GL_UI_CAPTURE);
+    /* 7 s into an 8 s limit: progress reported -> 8 s more, no transition */
+    now += 7000;
+    GL_CHECK_EQ(gl_ui_tick(&ui, now), 0);
+    gl_ui_keepalive(&ui, now);
+    STATE_IS(GL_UI_CAPTURE);
+    GL_CHECK_EQ(gl_ui_time_left_ms(&ui, now), 8000u);
+    now += 7900;
+    GL_CHECK_EQ(gl_ui_tick(&ui, now), 0);
+    STATE_IS(GL_UI_CAPTURE);
+    /* without further reports the limit applies again */
+    now += 200;
+    GL_CHECK(gl_ui_tick(&ui, now) & GL_ACT_ABORT_READ);
+    STATE_IS(GL_UI_ERROR);
 }
 
 GL_TEST(test_timeouts_and_tick_wraparound)
@@ -701,6 +797,16 @@ GL_TEST(test_random_event_fuzz)
                 }
             }
         }
+        if (ui.state == GL_UI_SETTINGS_DIAL && ((seed >> 20) & 3u) != 0u) {
+            /* the zeroing state lies behind seven double taps, a dial step
+             * and laying the marker flat: steer toward it some of the time,
+             * or a random walk hardly ever gets there */
+            if (ui.item != GL_UI_ITEM_ZERO) {
+                e = GL_EV_DOUBLE_TAP;
+            } else {
+                e = (ui.dial_value != 0) ? GL_EV_FLAT : GL_EV_DIAL_STEP;
+            }
+        }
         seed = seed * 1664525u + 1013904223u;
         now += (seed >> 20) % 700;
         a = gl_ui_dispatch(&ui, e, (int32_t)((seed >> 4) % 40), now);
@@ -732,6 +838,8 @@ GL_TEST(test_random_event_fuzz)
     for (int s = 0; s < GL_UI_STATE_COUNT; s++) {
         GL_CHECK(visits[s] > 100); /* the fuzz reached every state */
     }
+    printf("    fuzz: 300000 events; visits to CAL_ZERO %u, CRADLE_USB %u, SHOW_RESULT %u\n",
+           visits[GL_UI_CAL_ZERO], visits[GL_UI_CRADLE_USB], visits[GL_UI_SHOW_RESULT]);
     /* from wherever it ended: with no more input it sleeps (unless on USB) */
     ev(GL_EV_USB_DETACH, 0);
     for (int i = 0; i < 20; i++) {
@@ -837,12 +945,12 @@ GL_TEST(test_every_screen_stays_in_the_aperture)
     for (uint8_t item = 0; item < GL_UI_ITEM_COUNT; item++) {
         int lo = 0, hi = 1;
         ui.item = item;
-        if (item < GL_UI_ITEM_FLIP_CAL) {
+        if (item < GL_UI_ITEM_ZERO) {
             gl_settings_item_range((gl_item_t)item, &lo, &hi);
         }
         for (int val = lo; val <= hi; val++) {
             unsigned ink;
-            if (item < GL_UI_ITEM_FLIP_CAL) {
+            if (item < GL_UI_ITEM_ZERO) {
                 gl_settings_item_set(&ui.edit, (gl_item_t)item, val);
             }
             ui.dial_value = val;
@@ -940,8 +1048,10 @@ int main(void)
     GL_RUN(test_survey);
     GL_RUN(test_flag_out_fallback);
     GL_RUN(test_settings_dial);
-    GL_RUN(test_usb_and_flip_cal_in_cradle);
+    GL_RUN(test_usb_cradle);
+    GL_RUN(test_zeroing_is_never_done_in_the_cradle);
     GL_RUN(test_low_battery_and_faults_from_every_state);
+    GL_RUN(test_keepalive_extends_only_the_current_state);
     GL_RUN(test_timeouts_and_tick_wraparound);
     GL_RUN(test_random_event_fuzz);
     GL_RUN(test_every_screen_stays_in_the_aperture);

@@ -1,5 +1,6 @@
 /*
- * gl_proto.h - framed binary protocol over the USB CDC-ACM port (cradle).
+ * gl_proto.h - framed binary protocol over the USB CDC-ACM port (USB exists
+ * only while the marker sits in the charging / data cradle).
  *
  * FRAME (little-endian), 8 bytes of overhead:
  *
@@ -68,7 +69,11 @@ typedef enum {
 
 /** Calibration procedures for GL_CMD_START_CAL. */
 typedef enum {
-    GL_CALPROC_FLIP = 1,        /**< user flip calibration in the cradle */
+    GL_CALPROC_ZERO = 1,        /**< user zeroing (read, turn 180 degrees, read) on a hard flat
+                                     surface.  It CANNOT run in the cradle, and USB exists only
+                                     in the cradle, so the application answers GL_ERR_STATE;
+                                     the routine is started from the settings dial.  The id is
+                                     kept so that a host gets a defined answer. */
     GL_CALPROC_SIX_FACE = 2,    /**< arg = face 0..5 (+x,-x,+y,-y,+z,-z up); arg 6 = compute and store */
     GL_CALPROC_GRAIN_WHITE = 3, /**< white-tile gain calibration */
     GL_CALPROC_GRAIN_FLOOR = 4, /**< arg = number of no-grain readings to collect (gate 0) */

@@ -1,7 +1,7 @@
 /*
  * ov7692.h - the two OmniVision OVM7692 VGA camera cubes.
  *
- * BOARD (DESIGN_SPEC rev B, section 4)
+ * BOARD (DESIGN_SPEC rev C, section 4)
  *   - both cubes share the 8 data lines, PIXCLK, HREF and VSYNC into the
  *     MCU's DCMI; only one may drive them at a time
  *   - each has its own SCCB clock and its own PWDN; SCCB data is shared;
@@ -41,7 +41,9 @@
  * window of the sensor: a horizon band (640 x 96) or a flagstick strip
  * (96 x 480).  The window is applied on the sensor (default) or by the DCMI
  * crop (GL_PROV_OV7692_SENSOR_WINDOWING; see core/gl_provisional.h for how
- * uncertain the sensor-side register meanings are).  Window origin and size
+ * uncertain the sensor-side register meanings are).  In the DCMI-crop mode
+ * the driver programs the full 640 x 480 input and output size at power-up
+ * and touches no start / size register.  Window origin and size
  * are rounded to the sensor's window granularity (4 columns, 2 rows); the
  * strip descriptor returned by a capture carries the ACTUAL origin.
  *

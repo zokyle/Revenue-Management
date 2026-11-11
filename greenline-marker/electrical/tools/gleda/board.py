@@ -34,14 +34,20 @@ Coordinates are converted with :mod:`gleda.coords` only.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from shapely.geometry import Polygon as SPolygon
+
 from . import coords, footprints, geometry
 from .model import (Design, Part, Plane, Keepout, Track, Via, Rules, Stackup,
                     BOTTOM, TOP, VIA_TENTING)
+
+#: courtyard margin of the NPTH hole footprint (see footprints.npth_hole)
+HOLE_COURTYARD_MARGIN = 0.1
 
 EDGE_WIDTH_MM = 0.05
 
@@ -608,8 +614,45 @@ def _add_keepout(board, design: Design, ko: Keepout, index: int) -> None:
     zone.SetDoNotAllowPads(bool(ko.pads))
     zone.SetDoNotAllowFootprints(bool(ko.footprints))
     poly = geometry.shape_polygon(ko.shape, design.rules.max_arc_error, "circumscribed")
-    _set_zone_outline(zone, list(poly.exterior.coords)[:-1])
+    ring = list(poly.exterior.coords)[:-1]
+    if ko.footprints:
+        # An NPTH hole is a (board-only) footprint to KiCad.  A no-parts area
+        # around a locating hole - the land of the post that sits on it - must
+        # not report the hole itself: cut the hole's courtyard (a square) out
+        # of the area.  The cut-out is joined to the outer ring by a slit, the
+        # form KiCad itself gives a zone outline with a hole.
+        for hole in design.outline.holes:
+            half = hole.drill / 2.0 + HOLE_COURTYARD_MARGIN + 0.02
+            square = [(hole.x - half, hole.y - half), (hole.x - half, hole.y + half),
+                      (hole.x + half, hole.y + half), (hole.x + half, hole.y - half)]
+            if not poly.buffer(-0.01).contains(SPolygon(square)):
+                continue                  # (an area smaller than the hole's courtyard stays as it is)
+            ring = _keyhole(ring, square)
+    _set_zone_outline(zone, ring)
     board.Add(zone)
+
+
+def _signed_area(ring: Sequence[Tuple[float, float]]) -> float:
+    return 0.5 * sum(ring[i][0] * ring[(i + 1) % len(ring)][1]
+                     - ring[(i + 1) % len(ring)][0] * ring[i][1] for i in range(len(ring)))
+
+
+def _keyhole(outer: Sequence[Tuple[float, float]], hole: Sequence[Tuple[float, float]]
+             ) -> List[Tuple[float, float]]:
+    """One closed ring for ``outer`` with ``hole`` cut out of it: the two are
+    joined by a zero-width slit between their closest corners."""
+    outer = list(outer)
+    hole = list(hole)
+    if (_signed_area(outer) > 0) == (_signed_area(hole) > 0):
+        hole.reverse()                                   # the hole runs the other way round
+    best = None
+    for i, a in enumerate(outer):
+        for j, b in enumerate(hole):
+            dist = math.hypot(a[0] - b[0], a[1] - b[1])
+            if best is None or dist < best[0] - 1e-12:
+                best = (dist, i, j)
+    _dist, i, j = best
+    return outer[:i + 1] + hole[j:] + hole[:j + 1] + outer[i:]
 
 
 def _place_footprint(board, fp, x: float, y: float, rotation: float, side: str) -> None:

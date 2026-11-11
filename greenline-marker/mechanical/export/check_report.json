@@ -1,12 +1,12 @@
 {
- "rev": "B-EVT1",
+ "rev": "C-EVT1",
  "all_passed": true,
  "results": [
   {
    "id": 1,
    "name": "interference",
    "passed": true,
-   "summary": "no unintended interference in 121 tested pairs (666 total); 41 intended zero-volume contacts, 1 allow-listed modelling overlap",
+   "summary": "no unintended interference in 148 tested pairs (741 total); 46 intended zero-volume contacts, 0 modelling overlaps",
    "tables": [
     {
      "title": "Contacts and overlaps (every pair not listed is clear)",
@@ -17,7 +17,7 @@
        "common_volume_mm3": 0,
        "min_distance_mm": 0.0,
        "status": "intended contact",
-       "reason": "support posts land on the PCB top face"
+       "reason": "support posts land on the PCB top face (posts E round their spigots)"
       },
       {
        "a": "tub",
@@ -69,19 +69,11 @@
       },
       {
        "a": "base_plate",
-       "b": "main_pcb",
-       "common_volume_mm3": 0,
-       "min_distance_mm": 0.0,
-       "status": "intended contact",
-       "reason": "PCB bottom on the base top (YAML zero-thickness PSA convention)"
-      },
-      {
-       "a": "base_plate",
        "b": "pcb_adhesive",
        "common_volume_mm3": 0,
        "min_distance_mm": 0.0,
        "status": "intended contact",
-       "reason": "PSA on the base top"
+       "reason": "adhesive sheet on the base top"
       },
       {
        "a": "base_plate",
@@ -92,12 +84,36 @@
        "reason": "bead on the seal land"
       },
       {
+       "a": "base_plate",
+       "b": "ball_epoxy_1",
+       "common_volume_mm3": 0,
+       "min_distance_mm": 0.0,
+       "status": "intended contact",
+       "reason": "epoxy fills the through hole and sits on the plate top"
+      },
+      {
+       "a": "base_plate",
+       "b": "ball_epoxy_2",
+       "common_volume_mm3": 0,
+       "min_distance_mm": 0.0,
+       "status": "intended contact",
+       "reason": "epoxy fills the through hole and sits on the plate top"
+      },
+      {
+       "a": "base_plate",
+       "b": "ball_epoxy_3",
+       "common_volume_mm3": 0,
+       "min_distance_mm": 0.0,
+       "status": "intended contact",
+       "reason": "epoxy fills the through hole and sits on the plate top"
+      },
+      {
        "a": "main_pcb",
        "b": "pcb_adhesive",
-       "common_volume_mm3": 156.04762,
+       "common_volume_mm3": 0,
        "min_distance_mm": 0.0,
-       "status": "allowed modelling overlap",
-       "reason": "The YAML (rev B) carries the PCB-to-base PSA at zero thickness (pcb.z_bottom = base top). The sheet is modelled at its true 0.13 mm, so it overlaps the nominal PCB by exactly its own volume. In the real stack the base plate sits 0.13 mm lower relative to the tub (see README)."
+       "status": "intended contact",
+       "reason": "adhesive sheet on the PCB underside"
       },
       {
        "a": "main_pcb",
@@ -213,35 +229,51 @@
       },
       {
        "a": "ball_1",
-       "b": "cradle_plate",
+       "b": "ball_epoxy_1",
        "common_volume_mm3": 0,
        "min_distance_mm": 0.0,
        "status": "intended contact",
-       "reason": "ball foot rests on the reference plate"
+       "reason": "ball potted in epoxy"
+      },
+      {
+       "a": "ball_1",
+       "b": "cradle",
+       "common_volume_mm3": 0,
+       "min_distance_mm": 0.0,
+       "status": "intended contact",
+       "reason": "ball foot rests on the printed nest floor"
       },
       {
        "a": "ball_2",
-       "b": "cradle_plate",
+       "b": "ball_epoxy_2",
        "common_volume_mm3": 0,
        "min_distance_mm": 0.0,
        "status": "intended contact",
-       "reason": "ball foot rests on the reference plate"
+       "reason": "ball potted in epoxy"
+      },
+      {
+       "a": "ball_2",
+       "b": "cradle",
+       "common_volume_mm3": 0,
+       "min_distance_mm": 0.0,
+       "status": "intended contact",
+       "reason": "ball foot rests on the printed nest floor"
       },
       {
        "a": "ball_3",
-       "b": "cradle_plate",
+       "b": "ball_epoxy_3",
        "common_volume_mm3": 0,
        "min_distance_mm": 0.0,
        "status": "intended contact",
-       "reason": "ball foot rests on the reference plate"
+       "reason": "ball potted in epoxy"
       },
       {
-       "a": "cradle",
-       "b": "cradle_plate",
+       "a": "ball_3",
+       "b": "cradle",
        "common_volume_mm3": 0,
        "min_distance_mm": 0.0,
        "status": "intended contact",
-       "reason": "plate seated in the nest"
+       "reason": "ball foot rests on the printed nest floor"
       },
       {
        "a": "cradle",
@@ -351,8 +383,8 @@
     }
    ],
    "notes": [
-    "666 pairs; 121 with overlapping bounding boxes tested by boolean common and minimum distance; limit 0.01 mm3",
-    "allow-list of intended contacts and the one modelling overlap: cad/assembly.py (INTENDED_CONTACTS, MODELLING_OVERLAPS)"
+    "741 pairs; 148 with overlapping bounding boxes tested by boolean common and minimum distance; limit 0.01 mm3",
+    "allow-list of intended contacts: cad/assembly.py (INTENDED_CONTACTS); rev C has no modelling overlap - the adhesive sheet occupies its own 0.13 mm between base plate and PCB"
    ],
    "warnings": []
   },
@@ -360,7 +392,7 @@
    "id": 2,
    "name": "clearances",
    "passed": true,
-   "summary": "45 key gaps and 12 PCB parts evaluated; 3 below the 0.25 mm rule are recorded deviations; smallest margin -0.2 mm (Visor window L to recess sides)",
+   "summary": "57 key gaps and 12 PCB parts evaluated; 2 below the 0.25 mm rule are recorded deviations; smallest margin -0.175 mm (PCB locating spigot in the round hole, radial)",
    "tables": [
     {
      "title": "Key clearances",
@@ -467,15 +499,42 @@
       {
        "item": "PCB edge to seating ledge, radial",
        "method": "section z = 1.50",
-       "actual_mm": 0.15,
+       "actual_mm": 0.25,
        "required_min_mm": 0.25,
-       "margin_mm": -0.1,
-       "status": "below the 0.25 rule - recorded deviation D12",
-       "note": ""
+       "margin_mm": -0.0,
+       "status": "ok",
+       "note": "rev C: PCB radius 21.1"
+      },
+      {
+       "item": "PCB locating spigot in the round hole, radial",
+       "method": "section z = 1.50",
+       "actual_mm": 0.075,
+       "required_min_mm": 0.25,
+       "margin_mm": -0.175,
+       "status": "below the 0.25 rule - recorded deviation D19",
+       "note": "locating fit specified in the YAML, not a drop-in fit"
+      },
+      {
+       "item": "PCB locating spigot in the slot, across the slot (y)",
+       "method": "section z = 1.50",
+       "actual_mm": 0.075,
+       "required_min_mm": 0.25,
+       "margin_mm": -0.175,
+       "status": "below the 0.25 rule - recorded deviation D19",
+       "note": "along the slot (x): 0.325 mm each way"
+      },
+      {
+       "item": "Spigot tip to the adhesive sheet",
+       "method": "bounding boxes",
+       "actual_mm": 0.2,
+       "required_min_mm": 0.1,
+       "margin_mm": 0.1,
+       "status": "ok",
+       "note": "the spigot ends inside the PCB hole"
       },
       {
        "item": "PCB flat edge to visor wall",
-       "method": "section z = 1.50, |x| < 8",
+       "method": "section z = 1.50, |x| < 3",
        "actual_mm": 0.3,
        "required_min_mm": 0.25,
        "margin_mm": 0.05,
@@ -484,7 +543,7 @@
       },
       {
        "item": "Base plate to tub side wall and key lugs, radial",
-       "method": "section z = 0.50",
+       "method": "section z = 0.43",
        "actual_mm": 0.25,
        "required_min_mm": 0.25,
        "margin_mm": -0.0,
@@ -493,12 +552,39 @@
       },
       {
        "item": "Base plate top to tub seal face (adhesive bead)",
-       "method": "3D minimum distance",
-       "actual_mm": 0.2,
-       "required_min_mm": 0.2,
+       "method": "ray +z from the seal land",
+       "actual_mm": 0.33,
+       "required_min_mm": 0.33,
        "margin_mm": 0.0,
        "status": "ok",
-       "note": "nominal bead; 0.33 in the real stack with the 0.13 mm PSA (D10)"
+       "note": "rev C: 0.87 mm plate, bead 0.33 mm"
+      },
+      {
+       "item": "Ball foot top to the PCB underside",
+       "method": "3D minimum distance",
+       "actual_mm": 0.1,
+       "required_min_mm": 0.05,
+       "margin_mm": 0.05,
+       "status": "ok",
+       "note": "the ball stands 0.03 above the plate inside the 2.0 mm hole of the adhesive sheet"
+      },
+      {
+       "item": "Potting epoxy dome to the PCB underside",
+       "method": "3D minimum distance",
+       "actual_mm": 0.05,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.05,
+       "status": "ok",
+       "note": "dome height is a process limit: it must stay below the sheet thickness"
+      },
+      {
+       "item": "Potting epoxy dome to the adhesive-sheet hole, radial",
+       "method": "3D minimum distance",
+       "actual_mm": 0.2,
+       "required_min_mm": 0.1,
+       "margin_mm": 0.1,
+       "status": "ok",
+       "note": ""
       },
       {
        "item": "Cover glass to recess wall, radial",
@@ -561,24 +647,24 @@
        "required_min_mm": 0.25,
        "margin_mm": 0.011,
        "status": "ok",
-       "note": "rear wall edge chamfered; 0.177 before the fix"
+       "note": "rear wall edge chamfered"
       },
       {
        "item": "Prism L to hood walls in the horizontal plane",
        "method": "section z = 5.61",
-       "actual_mm": 0.938,
+       "actual_mm": 1.0,
        "required_min_mm": 0.25,
-       "margin_mm": 0.688,
+       "margin_mm": 0.75,
        "status": "ok",
        "note": ""
       },
       {
        "item": "Visor window L to recess sides",
        "method": "section through the window, above the shelf",
-       "actual_mm": 0.05,
+       "actual_mm": 0.25,
        "required_min_mm": 0.25,
-       "margin_mm": -0.2,
-       "status": "below the 0.25 rule - recorded deviation D12",
+       "margin_mm": 0.0,
+       "status": "ok",
        "note": ""
       },
       {
@@ -624,24 +710,24 @@
        "required_min_mm": 0.25,
        "margin_mm": 0.011,
        "status": "ok",
-       "note": "rear wall edge chamfered; 0.177 before the fix"
+       "note": "rear wall edge chamfered"
       },
       {
        "item": "Prism R to hood walls in the horizontal plane",
        "method": "section z = 5.61",
-       "actual_mm": 0.938,
+       "actual_mm": 1.0,
        "required_min_mm": 0.25,
-       "margin_mm": 0.688,
+       "margin_mm": 0.75,
        "status": "ok",
        "note": ""
       },
       {
        "item": "Visor window R to recess sides",
        "method": "section through the window, above the shelf",
-       "actual_mm": 0.05,
+       "actual_mm": 0.25,
        "required_min_mm": 0.25,
-       "margin_mm": -0.2,
-       "status": "below the 0.25 rule - recorded deviation D12",
+       "margin_mm": 0.0,
+       "status": "ok",
        "note": ""
       },
       {
@@ -683,11 +769,11 @@
       {
        "item": "Photodiode body to baffle ring",
        "method": "3D minimum distance",
-       "actual_mm": 0.25,
+       "actual_mm": 0.249,
        "required_min_mm": 0.25,
-       "margin_mm": 0.0,
+       "margin_mm": -0.001,
        "status": "ok",
-       "note": ""
+       "note": "the YAML rounds the ring to 5.91 (0.249)"
       },
       {
        "item": "Grain LEDs to opening wall / baffle / spokes",
@@ -699,7 +785,7 @@
        "note": ""
       },
       {
-       "item": "Puck to nest wall, radial",
+       "item": "Marker to nest wall, radial",
        "method": "section z = 1.5",
        "actual_mm": 0.25,
        "required_min_mm": 0.25,
@@ -708,53 +794,107 @@
        "note": ""
       },
       {
-       "item": "Tub rim above the reference plate (ball protrusion)",
+       "item": "Tub rim above the nest floor (ball protrusion)",
        "method": "3D minimum distance",
        "actual_mm": 0.1,
        "required_min_mm": 0.1,
        "margin_mm": 0.0,
        "status": "ok",
-       "note": ""
+       "note": "the three balls carry the marker; the rim is 0.10 mm clear of the printed floor"
       },
       {
-       "item": "Reference plate to nest seat, radial",
-       "method": "section z = -0.85",
+       "item": "Lip underside to the tub top",
+       "method": "3D minimum distance",
        "actual_mm": 0.25,
        "required_min_mm": 0.25,
-       "margin_mm": -0.0,
+       "margin_mm": 0.0,
        "status": "ok",
        "note": ""
       },
       {
-       "item": "Spring-pin plunger to plate hole, radial",
-       "method": "section z = -0.85",
-       "actual_mm": 0.465,
+       "item": "Latch (retaining face and beam) to the tub",
+       "method": "3D minimum distance",
+       "actual_mm": 0.25,
        "required_min_mm": 0.25,
-       "margin_mm": 0.215,
+       "margin_mm": 0.0,
        "status": "ok",
-       "note": "pin diameters PROVISIONAL"
+       "note": ""
+      },
+      {
+       "item": "Lip to visor window L",
+       "method": "3D minimum distance",
+       "actual_mm": 1.521,
+       "required_min_mm": 0.25,
+       "margin_mm": 1.271,
+       "status": "ok",
+       "note": "the lip must not touch the windows"
+      },
+      {
+       "item": "Lip to visor window R",
+       "method": "3D minimum distance",
+       "actual_mm": 1.521,
+       "required_min_mm": 0.25,
+       "margin_mm": 1.271,
+       "status": "ok",
+       "note": "the lip must not touch the windows"
+      },
+      {
+       "item": "Lip to cover glass",
+       "method": "3D minimum distance",
+       "actual_mm": 3.214,
+       "required_min_mm": 0.25,
+       "margin_mm": 2.964,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "Latch hook to cover glass",
+       "method": "3D minimum distance",
+       "actual_mm": 7.506,
+       "required_min_mm": 0.25,
+       "margin_mm": 7.256,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "Lip and latch to the vent hole",
+       "method": "3D minimum distance",
+       "actual_mm": 19.972,
+       "required_min_mm": 0.25,
+       "margin_mm": 19.722,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "Latch to the walls of its well (side gaps, stop ribs)",
+       "method": "section z = 1.00",
+       "actual_mm": 1.2,
+       "required_min_mm": 0.5,
+       "margin_mm": 0.7,
+       "status": "ok",
+       "note": "minimum printable gap taken as 0.5 mm; the stop ribs are 1.57 mm behind the beam"
       },
       {
        "item": "Spring-pin plunger to base-plate slot, radial",
-       "method": "section z = 0.50",
+       "method": "section z = 0.435",
        "actual_mm": 0.565,
        "required_min_mm": 0.25,
        "margin_mm": 0.315,
        "status": "ok",
-       "note": ""
+       "note": "pin diameters PROVISIONAL"
       },
       {
-       "item": "Spring-pin body to printed pin slot, radial",
-       "method": "section z = -3.30",
+       "item": "Spring-pin barrel to printed pin slot, radial",
+       "method": "section z = -2.59",
        "actual_mm": 0.25,
        "required_min_mm": 0.25,
        "margin_mm": -0.0,
        "status": "ok",
-       "note": "2.0 mm slot gave 0.085; widened"
+       "note": ""
       },
       {
        "item": "Cradle PCB to pocket walls",
-       "method": "section z = -5.49",
+       "method": "section z = -5.62",
        "actual_mm": 0.25,
        "required_min_mm": 0.25,
        "margin_mm": 0.0,
@@ -869,7 +1009,7 @@
        "ref": "U10",
        "part": "USBLC6-2SC6 ESD SOT-23-6",
        "top_z": 3.25,
-       "to_tub_mm": 0.416,
+       "to_tub_mm": 0.568,
        "to_lcd_glass_or_foam_mm": 1.14,
        "to_battery_mm": 0.3,
        "status": "ok"
@@ -889,19 +1029,19 @@
    "notes": [
     "required minimum = 0.25 mm drop-in rule unless the row is a specified stack value (adhesive lines, prism-to-roof 0.19)",
     "passives are not in master_params.yaml, so only the 13 listed top-side parts are checked",
-    "sections are true boolean sections of the solids; curved edges are sampled to 0.0002 mm"
+    "sections are true boolean sections of the solids; curved edges are sampled to 0.0002 mm",
+    "comparisons carry a numerical tolerance of 0.002 mm"
    ],
    "warnings": [
-    "PCB edge to seating ledge, radial: 0.150 mm < 0.25 mm (D12)",
-    "Visor window L to recess sides: 0.050 mm < 0.25 mm (D12)",
-    "Visor window R to recess sides: 0.050 mm < 0.25 mm (D12)"
+    "PCB locating spigot in the round hole, radial: 0.075 mm < 0.25 mm (D19)",
+    "PCB locating spigot in the slot, across the slot (y): 0.075 mm < 0.25 mm (D19)"
    ]
   },
   {
    "id": 3,
    "name": "field of view",
    "passed": true,
-   "summary": "field frusta (chief rays and full pupil beam, both cameras) have zero intersection with tub, base, seal bead and the other camera's parts; chief rays are clear to left 29.5, right 29.5, up 21.9, down 18.7 deg",
+   "summary": "field frusta (chief rays and full pupil beam, both cameras) have zero intersection with tub, base, seal bead and the other camera's parts; chief rays are clear to left 31.2, right 31.2, up 21.9, down 18.7 deg",
    "tables": [
     {
      "title": "Frustum intersections (exit face to 200 mm)",
@@ -931,7 +1071,7 @@
        "camera": "L",
        "frustum": "chief rays",
        "against": "visor_window_L",
-       "common_volume_mm3": 3.04338,
+       "common_volume_mm3": 2.383799,
        "status": "passes through its own window (transparent)"
       },
       {
@@ -980,7 +1120,7 @@
        "camera": "L",
        "frustum": "full pupil beam",
        "against": "visor_window_L",
-       "common_volume_mm3": 4.075774,
+       "common_volume_mm3": 3.337372,
        "status": "passes through its own window (transparent)"
       },
       {
@@ -1050,7 +1190,7 @@
        "camera": "R",
        "frustum": "chief rays",
        "against": "visor_window_R",
-       "common_volume_mm3": 3.04338,
+       "common_volume_mm3": 2.383799,
        "status": "passes through its own window (transparent)"
       },
       {
@@ -1099,7 +1239,7 @@
        "camera": "R",
        "frustum": "full pupil beam",
        "against": "visor_window_R",
-       "common_volume_mm3": 4.075774,
+       "common_volume_mm3": 3.337372,
        "status": "passes through its own window (transparent)"
       }
      ]
@@ -1111,22 +1251,22 @@
        "camera": "L",
        "direction": "left",
        "specified_deg": 26.0,
-       "chief_ray_clear_to_deg": 29.52,
-       "chief_limited_by": "tub (visor opening)",
+       "chief_ray_clear_to_deg": 31.22,
+       "chief_limited_by": "prism exit face",
        "full_pupil_clear_to_deg": 25.65,
        "full_pupil_limited_by": "prism exit face",
-       "chief_margin_deg": 3.52,
+       "chief_margin_deg": 5.22,
        "full_pupil_margin_deg": -0.35
       },
       {
        "camera": "L",
        "direction": "right",
        "specified_deg": 26.0,
-       "chief_ray_clear_to_deg": 29.52,
-       "chief_limited_by": "tub (visor opening)",
+       "chief_ray_clear_to_deg": 31.22,
+       "chief_limited_by": "prism exit face",
        "full_pupil_clear_to_deg": 25.65,
        "full_pupil_limited_by": "prism exit face",
-       "chief_margin_deg": 3.52,
+       "chief_margin_deg": 5.22,
        "full_pupil_margin_deg": -0.35
       },
       {
@@ -1143,34 +1283,34 @@
       {
        "camera": "L",
        "direction": "down",
-       "specified_deg": 15.0,
+       "specified_deg": 8.0,
        "chief_ray_clear_to_deg": 18.74,
        "chief_limited_by": "tub (visor opening)",
        "full_pupil_clear_to_deg": 15.35,
        "full_pupil_limited_by": "tub (visor opening)",
-       "chief_margin_deg": 3.74,
-       "full_pupil_margin_deg": 0.35
+       "chief_margin_deg": 10.74,
+       "full_pupil_margin_deg": 7.35
       },
       {
        "camera": "R",
        "direction": "left",
        "specified_deg": 26.0,
-       "chief_ray_clear_to_deg": 29.52,
-       "chief_limited_by": "tub (visor opening)",
+       "chief_ray_clear_to_deg": 31.22,
+       "chief_limited_by": "prism exit face",
        "full_pupil_clear_to_deg": 25.65,
        "full_pupil_limited_by": "prism exit face",
-       "chief_margin_deg": 3.52,
+       "chief_margin_deg": 5.22,
        "full_pupil_margin_deg": -0.35
       },
       {
        "camera": "R",
        "direction": "right",
        "specified_deg": 26.0,
-       "chief_ray_clear_to_deg": 29.52,
-       "chief_limited_by": "tub (visor opening)",
+       "chief_ray_clear_to_deg": 31.22,
+       "chief_limited_by": "prism exit face",
        "full_pupil_clear_to_deg": 25.65,
        "full_pupil_limited_by": "prism exit face",
-       "chief_margin_deg": 3.52,
+       "chief_margin_deg": 5.22,
        "full_pupil_margin_deg": -0.35
       },
       {
@@ -1187,23 +1327,24 @@
       {
        "camera": "R",
        "direction": "down",
-       "specified_deg": 15.0,
+       "specified_deg": 8.0,
        "chief_ray_clear_to_deg": 18.74,
        "chief_limited_by": "tub (visor opening)",
        "full_pupil_clear_to_deg": 15.35,
        "full_pupil_limited_by": "tub (visor opening)",
-       "chief_margin_deg": 3.74,
-       "full_pupil_margin_deg": 0.35
+       "chief_margin_deg": 10.74,
+       "full_pupil_margin_deg": 7.35
       }
      ]
     }
    ],
    "notes": [
-    "frustum: ruled solid between the bounding rectangle of the traced rays on the exit-face plane (y = 16.6) and on the plane 200 mm in front of it; chief-ray rectangle at the exit face x = cam x -0.823..+0.823, z = 5.143..6.160",
+    "frustum: ruled solid between the bounding rectangle of the traced rays on the exit-face plane (y = 16.6) and on the plane 200 mm in front of it; chief-ray rectangle at the exit face x = cam x -0.823..+0.823, z = 5.362..6.160",
     "rays are traced exactly through the prism (optics.py); the entrance-pupil position and diameter are ASSUMED",
     "'left/right' = toward -x/+x, 'up/down' = toward +z/-z in object space",
-    "the lower field edge (15.0 deg) meets the base plane about 20.9 mm in front of the virtual pupil - turf, not a part",
-    "the visor windows are treated as transparent plates (the 0.5 mm plate shifts a 26 deg ray by about 0.09 mm; not modelled)"
+    "the lower field edge (8.0 deg) meets the base plane about 39.9 mm in front of the virtual pupil - turf, not a part",
+    "the visor windows are treated as transparent plates (the 0.5 mm plate shifts a 26 deg ray by about 0.09 mm; not modelled)",
+    "rev C: the lower field is required only to -8.0 deg (flagstick base near the horizon); the sill stays at z 4.6 and the full pupil is in fact clear to -15.3 deg (the sensor could use -15.0 deg)"
    ],
    "warnings": [
     "camera L left: the full 0.38 mm pupil is clear only to 25.65 deg (field edge 26.0 deg): partial vignetting by the prism exit face, quantified in check 4",
@@ -1216,7 +1357,7 @@
    "id": 4,
    "name": "fold geometry",
    "passed": true,
-   "summary": "chief rays of all nine field points pass the prism and the visor opening on both cameras; pupil transmission at the worst nominal field point 97.7 % (prism exit face); smallest bundle margin to the visor opening 0.019 mm",
+   "summary": "chief rays of all nine field points pass the prism and the visor opening on both cameras; pupil transmission at the worst nominal field point 97.7 % (prism exit face); bundle margin to the opening: sides 0.378, sill 0.397, top 0.054 mm",
    "tables": [
     {
      "title": "Chief rays and pupil-bundle margins (nominal geometry)",
@@ -1258,7 +1399,7 @@
        "margin_entrance_face_mm": 0.591,
        "margin_hypotenuse_mm": 0.28,
        "margin_exit_face_mm": -0.013,
-       "margin_visor_opening_mm": 0.028,
+       "margin_visor_opening_mm": 0.378,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 97.7,
        "pupil_through_visor_pct": 97.7
@@ -1279,7 +1420,7 @@
        "margin_entrance_face_mm": 0.591,
        "margin_hypotenuse_mm": 0.28,
        "margin_exit_face_mm": -0.013,
-       "margin_visor_opening_mm": 0.028,
+       "margin_visor_opening_mm": 0.378,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 97.7,
        "pupil_through_visor_pct": 97.7
@@ -1309,19 +1450,19 @@
        "camera": "L",
        "field_point": "bottom edge",
        "h_deg": 0.0,
-       "v_deg": -15.0,
+       "v_deg": -8.0,
        "chief_at_exit_face_xz": [
         0.0,
-        -0.467
+        -0.248
        ],
        "chief_at_opening_xz": [
         0.0,
-        -0.802
+        -0.423
        ],
-       "margin_entrance_face_mm": 0.689,
-       "margin_hypotenuse_mm": 0.588,
-       "margin_exit_face_mm": 0.343,
-       "margin_visor_opening_mm": 0.019,
+       "margin_entrance_face_mm": 0.747,
+       "margin_hypotenuse_mm": 0.684,
+       "margin_exit_face_mm": 0.562,
+       "margin_visor_opening_mm": 0.397,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 100.0,
        "pupil_through_visor_pct": 100.0
@@ -1342,7 +1483,7 @@
        "margin_entrance_face_mm": 0.591,
        "margin_hypotenuse_mm": 0.162,
        "margin_exit_face_mm": 0.001,
-       "margin_visor_opening_mm": 0.042,
+       "margin_visor_opening_mm": 0.078,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 100.0,
        "pupil_through_visor_pct": 100.0
@@ -1363,7 +1504,7 @@
        "margin_entrance_face_mm": 0.591,
        "margin_hypotenuse_mm": 0.162,
        "margin_exit_face_mm": 0.001,
-       "margin_visor_opening_mm": 0.042,
+       "margin_visor_opening_mm": 0.078,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 100.0,
        "pupil_through_visor_pct": 100.0
@@ -1372,43 +1513,43 @@
        "camera": "L",
        "field_point": "bottom-left corner",
        "h_deg": -26.0,
-       "v_deg": -15.0,
+       "v_deg": -8.0,
        "chief_at_exit_face_xz": [
-        -0.813,
-        -0.446
+        -0.82,
+        -0.236
        ],
        "chief_at_opening_xz": [
-        -1.422,
-        -0.781
+        -1.43,
+        -0.412
        ],
        "margin_entrance_face_mm": 0.591,
-       "margin_hypotenuse_mm": 0.36,
-       "margin_exit_face_mm": -0.003,
-       "margin_visor_opening_mm": 0.038,
+       "margin_hypotenuse_mm": 0.324,
+       "margin_exit_face_mm": -0.01,
+       "margin_visor_opening_mm": 0.381,
        "chief_ray": "clear",
-       "pupil_through_prism_pct": 98.6,
-       "pupil_through_visor_pct": 98.6
+       "pupil_through_prism_pct": 97.7,
+       "pupil_through_visor_pct": 97.7
       },
       {
        "camera": "L",
        "field_point": "bottom-right corner",
        "h_deg": 26.0,
-       "v_deg": -15.0,
+       "v_deg": -8.0,
        "chief_at_exit_face_xz": [
-        0.813,
-        -0.446
+        0.82,
+        -0.236
        ],
        "chief_at_opening_xz": [
-        1.422,
-        -0.781
+        1.43,
+        -0.412
        ],
        "margin_entrance_face_mm": 0.591,
-       "margin_hypotenuse_mm": 0.36,
-       "margin_exit_face_mm": -0.003,
-       "margin_visor_opening_mm": 0.038,
+       "margin_hypotenuse_mm": 0.324,
+       "margin_exit_face_mm": -0.01,
+       "margin_visor_opening_mm": 0.381,
        "chief_ray": "clear",
-       "pupil_through_prism_pct": 98.6,
-       "pupil_through_visor_pct": 98.6
+       "pupil_through_prism_pct": 97.7,
+       "pupil_through_visor_pct": 97.7
       },
       {
        "camera": "R",
@@ -1447,7 +1588,7 @@
        "margin_entrance_face_mm": 0.591,
        "margin_hypotenuse_mm": 0.28,
        "margin_exit_face_mm": -0.013,
-       "margin_visor_opening_mm": 0.028,
+       "margin_visor_opening_mm": 0.378,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 97.7,
        "pupil_through_visor_pct": 97.7
@@ -1468,7 +1609,7 @@
        "margin_entrance_face_mm": 0.591,
        "margin_hypotenuse_mm": 0.28,
        "margin_exit_face_mm": -0.013,
-       "margin_visor_opening_mm": 0.028,
+       "margin_visor_opening_mm": 0.378,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 97.7,
        "pupil_through_visor_pct": 97.7
@@ -1498,19 +1639,19 @@
        "camera": "R",
        "field_point": "bottom edge",
        "h_deg": 0.0,
-       "v_deg": -15.0,
+       "v_deg": -8.0,
        "chief_at_exit_face_xz": [
         0.0,
-        -0.467
+        -0.248
        ],
        "chief_at_opening_xz": [
         0.0,
-        -0.802
+        -0.423
        ],
-       "margin_entrance_face_mm": 0.689,
-       "margin_hypotenuse_mm": 0.588,
-       "margin_exit_face_mm": 0.343,
-       "margin_visor_opening_mm": 0.019,
+       "margin_entrance_face_mm": 0.747,
+       "margin_hypotenuse_mm": 0.684,
+       "margin_exit_face_mm": 0.562,
+       "margin_visor_opening_mm": 0.397,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 100.0,
        "pupil_through_visor_pct": 100.0
@@ -1531,7 +1672,7 @@
        "margin_entrance_face_mm": 0.591,
        "margin_hypotenuse_mm": 0.162,
        "margin_exit_face_mm": 0.001,
-       "margin_visor_opening_mm": 0.042,
+       "margin_visor_opening_mm": 0.078,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 100.0,
        "pupil_through_visor_pct": 100.0
@@ -1552,7 +1693,7 @@
        "margin_entrance_face_mm": 0.591,
        "margin_hypotenuse_mm": 0.162,
        "margin_exit_face_mm": 0.001,
-       "margin_visor_opening_mm": 0.042,
+       "margin_visor_opening_mm": 0.078,
        "chief_ray": "clear",
        "pupil_through_prism_pct": 100.0,
        "pupil_through_visor_pct": 100.0
@@ -1561,43 +1702,43 @@
        "camera": "R",
        "field_point": "bottom-left corner",
        "h_deg": -26.0,
-       "v_deg": -15.0,
+       "v_deg": -8.0,
        "chief_at_exit_face_xz": [
-        -0.813,
-        -0.446
+        -0.82,
+        -0.236
        ],
        "chief_at_opening_xz": [
-        -1.422,
-        -0.781
+        -1.43,
+        -0.412
        ],
        "margin_entrance_face_mm": 0.591,
-       "margin_hypotenuse_mm": 0.36,
-       "margin_exit_face_mm": -0.003,
-       "margin_visor_opening_mm": 0.038,
+       "margin_hypotenuse_mm": 0.324,
+       "margin_exit_face_mm": -0.01,
+       "margin_visor_opening_mm": 0.381,
        "chief_ray": "clear",
-       "pupil_through_prism_pct": 98.6,
-       "pupil_through_visor_pct": 98.6
+       "pupil_through_prism_pct": 97.7,
+       "pupil_through_visor_pct": 97.7
       },
       {
        "camera": "R",
        "field_point": "bottom-right corner",
        "h_deg": 26.0,
-       "v_deg": -15.0,
+       "v_deg": -8.0,
        "chief_at_exit_face_xz": [
-        0.813,
-        -0.446
+        0.82,
+        -0.236
        ],
        "chief_at_opening_xz": [
-        1.422,
-        -0.781
+        1.43,
+        -0.412
        ],
        "margin_entrance_face_mm": 0.591,
-       "margin_hypotenuse_mm": 0.36,
-       "margin_exit_face_mm": -0.003,
-       "margin_visor_opening_mm": 0.038,
+       "margin_hypotenuse_mm": 0.324,
+       "margin_exit_face_mm": -0.01,
+       "margin_visor_opening_mm": 0.381,
        "chief_ray": "clear",
-       "pupil_through_prism_pct": 98.6,
-       "pupil_through_visor_pct": 98.6
+       "pupil_through_prism_pct": 97.7,
+       "pupil_through_visor_pct": 97.7
       }
      ]
     },
@@ -1618,57 +1759,99 @@
         15.4
        ],
        "chief_clear_deg_left_right_up_down": [
-        29.5,
-        29.5,
+        31.2,
+        31.2,
         21.9,
         18.7
        ],
        "worst_field_point_transmission_pct": 97.4
       },
       {
-       "case": "PCB shifted +x by the PCB-to-ledge gap (0.15)",
+       "case": "PCB at the end of its spigot play: optics 0.094 sideways",
        "shift_xyz": [
-        0.15,
+        0.094,
         0,
         0
        ],
        "full_pupil_clear_deg_left_right_up_down": [
         25.6,
-        24.0,
+        25.6,
         18.6,
         15.4
        ],
        "chief_clear_deg_left_right_up_down": [
         31.2,
-        27.1,
+        31.2,
         21.9,
         18.7
        ],
-       "worst_field_point_transmission_pct": 70.2
+       "worst_field_point_transmission_pct": 97.4
       },
       {
-       "case": "+x 0.15 plus 0.2 print tolerance",
+       "case": "spigot play plus 0.2 print tolerance: 0.294 sideways",
        "shift_xyz": [
-        0.35,
+        0.294,
         0,
         0
        ],
        "full_pupil_clear_deg_left_right_up_down": [
         25.6,
-        20.5,
+        25.6,
         18.6,
         15.4
        ],
        "chief_clear_deg_left_right_up_down": [
         31.2,
-        23.8,
+        30.4,
         21.9,
         18.7
        ],
-       "worst_field_point_transmission_pct": 12.3
+       "worst_field_point_transmission_pct": 97.4
       },
       {
-       "case": "optics 0.2 low (print tolerance on the sill / PSA stack)",
+       "case": "spigot yaw play (1.02 deg): optics 0.179 toward the visor",
+       "shift_xyz": [
+        0,
+        0.179,
+        0
+       ],
+       "full_pupil_clear_deg_left_right_up_down": [
+        25.6,
+        25.6,
+        19.7,
+        16.3
+       ],
+       "chief_clear_deg_left_right_up_down": [
+        31.2,
+        31.2,
+        23.2,
+        19.9
+       ],
+       "worst_field_point_transmission_pct": 97.4
+      },
+      {
+       "case": "spigot yaw play: optics 0.179 away from the visor",
+       "shift_xyz": [
+        0,
+        -0.179,
+        0
+       ],
+       "full_pupil_clear_deg_left_right_up_down": [
+        25.6,
+        25.6,
+        17.6,
+        14.5
+       ],
+       "chief_clear_deg_left_right_up_down": [
+        31.2,
+        31.2,
+        20.7,
+        17.7
+       ],
+       "worst_field_point_transmission_pct": 97.4
+      },
+      {
+       "case": "optics 0.2 low (print tolerance on the sill)",
        "shift_xyz": [
         0,
         0,
@@ -1681,15 +1864,15 @@
         11.7
        ],
        "chief_clear_deg_left_right_up_down": [
-        29.5,
-        29.5,
+        31.2,
+        31.2,
         25.3,
         15.1
        ],
-       "worst_field_point_transmission_pct": 52.6
+       "worst_field_point_transmission_pct": 97.4
       },
       {
-       "case": "optics 0.2 high",
+       "case": "optics 0.2 high (print tolerance on the roof)",
        "shift_xyz": [
         0,
         0,
@@ -1702,12 +1885,54 @@
         18.9
        ],
        "chief_clear_deg_left_right_up_down": [
-        29.5,
-        29.5,
+        31.2,
+        31.2,
         18.4,
         22.2
        ],
        "worst_field_point_transmission_pct": 64.0
+      },
+      {
+       "case": "proposal B: dia 1.25 PCB hole (0.125 fit) plus 0.2 print: 0.356 sideways",
+       "shift_xyz": [
+        0.356,
+        0,
+        0
+       ],
+       "full_pupil_clear_deg_left_right_up_down": [
+        25.6,
+        25.6,
+        18.6,
+        15.4
+       ],
+       "chief_clear_deg_left_right_up_down": [
+        31.2,
+        29.4,
+        21.9,
+        18.7
+       ],
+       "worst_field_point_transmission_pct": 97.4
+      },
+      {
+       "case": "proposal B: dia 1.25 PCB hole, yaw play (1.71 deg): optics 0.298 away from the visor",
+       "shift_xyz": [
+        0,
+        -0.298,
+        0
+       ],
+       "full_pupil_clear_deg_left_right_up_down": [
+        25.6,
+        25.6,
+        17.0,
+        14.0
+       ],
+       "chief_clear_deg_left_right_up_down": [
+        31.2,
+        31.2,
+        20.0,
+        17.1
+       ],
+       "worst_field_point_transmission_pct": 91.2
       }
      ]
     }
@@ -1717,66 +1942,49 @@
     "margins are the smallest distance of any ray of the pupil bundle to the edge of that aperture (negative = clipped); the visor margin is taken on the aperture plane (window-recess floor)",
     "field points are rectilinear: direction (tan h, 1, tan v)",
     "paraxial check: virtual pupil 1.768 mm behind the exit face (y = 14.832), z = 5.609999999999999",
-    "sensitivity cases move the camera and prism together relative to the printed tub (camera R; L is the mirror image)"
+    "sensitivity cases move the camera and prism together relative to the printed tub (camera R; L is the mirror image)",
+    "PCB location (rev C): spigots dia 1.0 in a dia 1.15 hole and a 1.15 x 1.65 slot, 8.4 mm apart: +-0.075 mm at each spigot gives +-0.094 mm sideways and +-0.179 mm fore-aft at a camera and +-1.02 deg of yaw (a stereo-calibration item, not a vignetting item)",
+    "smallest margin of the full pupil bundle to the opening over the required field: sides 0.378, sill 0.397, top 0.054 mm",
+    "required field: +-26.0 deg horizontal, +17.6 / -8.0 deg vertical (rev C: lower field to about -8 deg)"
    ],
    "warnings": [
     "camera L left edge: 2.3 % of the pupil is vignetted (prism exit face)",
     "camera L right edge: 2.3 % of the pupil is vignetted (prism exit face)",
-    "camera L bottom-left corner: 1.4 % of the pupil is vignetted (prism exit face)",
-    "camera L bottom-right corner: 1.4 % of the pupil is vignetted (prism exit face)",
+    "camera L bottom-left corner: 2.3 % of the pupil is vignetted (prism exit face)",
+    "camera L bottom-right corner: 2.3 % of the pupil is vignetted (prism exit face)",
     "camera R left edge: 2.3 % of the pupil is vignetted (prism exit face)",
     "camera R right edge: 2.3 % of the pupil is vignetted (prism exit face)",
-    "camera R bottom-left corner: 1.4 % of the pupil is vignetted (prism exit face)",
-    "camera R bottom-right corner: 1.4 % of the pupil is vignetted (prism exit face)",
-    "smallest margin of the pupil bundle to the visor opening is 0.019 mm - far below the print tolerance (+-0.2) and the PCB location play; see the sensitivity table and PROPOSED_PARAM_CHANGES.md"
+    "camera R bottom-left corner: 2.3 % of the pupil is vignetted (prism exit face)",
+    "camera R bottom-right corner: 2.3 % of the pupil is vignetted (prism exit face)",
+    "the upper field edge (+17.6 deg) clears the top of the opening (the roof underside, z 6.8) by only 0.054 mm: optics 0.2 mm high clip the upper field (sensitivity table). The roof cannot move without a thicker puck (open issue)"
    ]
   },
   {
    "id": 5,
    "name": "wall thickness",
    "passed": true,
-   "summary": "3 regions thinner than 0.5 mm, all recorded (the three conical ball seats, D02); 10 recorded regions below 0.8 mm in total; no unrecorded thin region; tub minimum 0.501 mm, base_plate minimum 0.002 mm, cradle minimum 0.950 mm",
+   "summary": "1 regions thinner than 0.5 mm; 7 recorded regions below 0.8 mm in total; no unrecorded thin region; tub minimum 0.525 mm, base_plate minimum 0.800 mm, cradle minimum 0.401 mm",
    "tables": [
     {
      "title": "Regions thinner than the 0.8 mm rule",
      "rows": [
       {
        "part": "tub",
-       "feature": "camera L: wall behind the window recess in front of the camera cube",
+       "feature": "camera L: wall behind the window recess in front of the camera cube (accepted)",
        "deviation": "D04",
        "min_mm": 0.525,
        "median_mm": 0.525,
-       "area_below_0p8_mm2": 3.45,
+       "area_below_0p8_mm2": 3.29,
        "area_below_0p5_mm2": 0.0,
        "bbox_min": [
-        -12.18,
+        -11.99,
         17.33,
         4.2
        ],
        "bbox_max": [
-        -8.22,
+        -8.04,
         17.85,
-        4.82
-       ],
-       "status": "documented"
-      },
-      {
-       "part": "tub",
-       "feature": "camera L: bevelled rim of the opening (specified bevel; 0.5 mm land)",
-       "deviation": "D05",
-       "min_mm": 0.504,
-       "median_mm": 0.645,
-       "area_below_0p8_mm2": 0.65,
-       "area_below_0p5_mm2": 0.0,
-       "bbox_min": [
-        -12.02,
-        17.85,
-        4.96
-       ],
-       "bbox_max": [
-        -8.38,
-        17.85,
-        6.8
+        4.6
        ],
        "status": "documented"
       },
@@ -1784,17 +1992,17 @@
        "part": "tub",
        "feature": "camera L: foot of the hood rear wall (0.12 mm edge chamfer facing the prism)",
        "deviation": "",
-       "min_mm": 0.683,
-       "median_mm": 0.757,
-       "area_below_0p8_mm2": 0.51,
+       "min_mm": 0.684,
+       "median_mm": 0.739,
+       "area_below_0p8_mm2": 0.52,
        "area_below_0p5_mm2": 0.0,
        "bbox_min": [
-        -12.16,
+        -12.0,
         13.75,
         4.81
        ],
        "bbox_max": [
-        -8.37,
+        -8.16,
         13.75,
         4.93
        ],
@@ -1802,41 +2010,41 @@
       },
       {
        "part": "tub",
-       "feature": "camera R: wall behind the window recess in front of the camera cube",
-       "deviation": "D04",
-       "min_mm": 0.524,
-       "median_mm": 0.525,
-       "area_below_0p8_mm2": 3.55,
+       "feature": "camera L: land between the window recess and the D corner (1.05 mm wide; its top outer edge carries the R0.6 of the arc)",
+       "deviation": "",
+       "min_mm": 0.695,
+       "median_mm": 0.695,
+       "area_below_0p8_mm2": 0.01,
        "area_below_0p5_mm2": 0.0,
        "bbox_min": [
-        8.22,
-        17.33,
-        4.2
+        -12.75,
+        18.38,
+        7.47
        ],
        "bbox_max": [
-        12.16,
-        17.85,
-        4.82
+        -12.75,
+        18.38,
+        7.47
        ],
        "status": "documented"
       },
       {
        "part": "tub",
-       "feature": "camera R: bevelled rim of the opening (specified bevel; 0.5 mm land)",
-       "deviation": "D05",
-       "min_mm": 0.501,
-       "median_mm": 0.642,
-       "area_below_0p8_mm2": 0.7,
+       "feature": "camera R: wall behind the window recess in front of the camera cube (accepted)",
+       "deviation": "D04",
+       "min_mm": 0.525,
+       "median_mm": 0.525,
+       "area_below_0p8_mm2": 3.31,
        "area_below_0p5_mm2": 0.0,
        "bbox_min": [
-        8.39,
-        17.85,
-        4.96
+        8.0,
+        17.33,
+        4.2
        ],
        "bbox_max": [
-        12.02,
+        11.97,
         17.85,
-        6.8
+        4.6
        ],
        "status": "documented"
       },
@@ -1844,19 +2052,19 @@
        "part": "tub",
        "feature": "camera R: foot of the hood rear wall (0.12 mm edge chamfer facing the prism)",
        "deviation": "",
-       "min_mm": 0.683,
-       "median_mm": 0.739,
-       "area_below_0p8_mm2": 0.49,
+       "min_mm": 0.682,
+       "median_mm": 0.746,
+       "area_below_0p8_mm2": 0.41,
        "area_below_0p5_mm2": 0.0,
        "bbox_min": [
-        8.23,
+        8.02,
         13.75,
         4.81
        ],
        "bbox_max": [
-        12.17,
+        11.8,
         13.75,
-        4.93
+        4.92
        ],
        "status": "documented"
       },
@@ -1864,9 +2072,9 @@
        "part": "tub",
        "feature": "foot of the side wall at the specified 0.3 mm bottom chamfer (all round the arc)",
        "deviation": "",
-       "min_mm": 0.701,
-       "median_mm": 0.751,
-       "area_below_0p8_mm2": 10.73,
+       "min_mm": 0.7,
+       "median_mm": 0.752,
+       "area_below_0p8_mm2": 11.12,
        "area_below_0p5_mm2": 0.0,
        "bbox_min": [
         -21.99,
@@ -1875,68 +2083,28 @@
        ],
        "bbox_max": [
         21.99,
-        17.59,
+        17.58,
         0.1
        ],
        "status": "documented"
       },
       {
-       "part": "base_plate",
-       "feature": "ball seat 1: skin over the conical seat (apex breaks through as a pin-hole)",
-       "deviation": "D02",
-       "min_mm": 0.002,
-       "median_mm": 0.488,
-       "area_below_0p8_mm2": 4.7,
-       "area_below_0p5_mm2": 2.25,
+       "part": "cradle",
+       "feature": "latch hook nose: solid 60 deg wedge ending in a 0.4 mm flat (an edge, not a wall)",
+       "deviation": "",
+       "min_mm": 0.401,
+       "median_mm": 0.52,
+       "area_below_0p8_mm2": 3.09,
+       "area_below_0p5_mm2": 1.23,
        "bbox_min": [
-        -0.88,
-        14.09,
-        0.44
+        -6.83,
+        -21.7,
+        7.85
        ],
        "bbox_max": [
-        0.9,
-        15.82,
-        1.0
-       ],
-       "status": "documented"
-      },
-      {
-       "part": "base_plate",
-       "feature": "ball seat 2: skin over the conical seat (apex breaks through as a pin-hole)",
-       "deviation": "D02",
-       "min_mm": 0.002,
-       "median_mm": 0.498,
-       "area_below_0p8_mm2": 4.55,
-       "area_below_0p5_mm2": 2.07,
-       "bbox_min": [
-        -17.39,
-        -10.38,
-        0.44
-       ],
-       "bbox_max": [
-        -15.61,
-        -8.59,
-        1.0
-       ],
-       "status": "documented"
-      },
-      {
-       "part": "base_plate",
-       "feature": "ball seat 3: skin over the conical seat (apex breaks through as a pin-hole)",
-       "deviation": "D02",
-       "min_mm": 0.004,
-       "median_mm": 0.501,
-       "area_below_0p8_mm2": 4.37,
-       "area_below_0p5_mm2": 1.97,
-       "bbox_min": [
-        15.59,
-        -10.42,
-        0.44
-       ],
-       "bbox_max": [
-        17.4,
-        -8.59,
-        1.0
+        6.85,
+        -20.39,
+        8.26
        ],
        "status": "documented"
       }
@@ -1946,62 +2114,22 @@
      "title": "Regions thinner than 0.5 mm",
      "rows": [
       {
-       "part": "base_plate",
-       "feature": "ball seat 1: skin over the conical seat (apex breaks through as a pin-hole)",
-       "deviation": "D02",
-       "min_mm": 0.002,
-       "median_mm": 0.488,
-       "area_below_0p8_mm2": 4.7,
-       "area_below_0p5_mm2": 2.25,
+       "part": "cradle",
+       "feature": "latch hook nose: solid 60 deg wedge ending in a 0.4 mm flat (an edge, not a wall)",
+       "deviation": "",
+       "min_mm": 0.401,
+       "median_mm": 0.52,
+       "area_below_0p8_mm2": 3.09,
+       "area_below_0p5_mm2": 1.23,
        "bbox_min": [
-        -0.88,
-        14.09,
-        0.44
+        -6.83,
+        -21.7,
+        7.85
        ],
        "bbox_max": [
-        0.9,
-        15.82,
-        1.0
-       ],
-       "status": "documented"
-      },
-      {
-       "part": "base_plate",
-       "feature": "ball seat 2: skin over the conical seat (apex breaks through as a pin-hole)",
-       "deviation": "D02",
-       "min_mm": 0.002,
-       "median_mm": 0.498,
-       "area_below_0p8_mm2": 4.55,
-       "area_below_0p5_mm2": 2.07,
-       "bbox_min": [
-        -17.39,
-        -10.38,
-        0.44
-       ],
-       "bbox_max": [
-        -15.61,
-        -8.59,
-        1.0
-       ],
-       "status": "documented"
-      },
-      {
-       "part": "base_plate",
-       "feature": "ball seat 3: skin over the conical seat (apex breaks through as a pin-hole)",
-       "deviation": "D02",
-       "min_mm": 0.004,
-       "median_mm": 0.501,
-       "area_below_0p8_mm2": 4.37,
-       "area_below_0p5_mm2": 1.97,
-       "bbox_min": [
-        15.59,
-        -10.42,
-        0.44
-       ],
-       "bbox_max": [
-        17.4,
-        -8.59,
-        1.0
+        6.85,
+        -20.39,
+        8.26
        ],
        "status": "documented"
       }
@@ -2009,18 +2137,16 @@
     }
    ],
    "notes": [
-    "tub: 4828 triangles (export/stl/parts/tub.stl), 504727 surface samples at 0.1 mm spacing, 4893 candidates re-measured exactly on the B-rep, 2021 of them below 0.8 mm; thinnest reading 0.501 mm; 57 samples leave through an oblique face within 0.5 mm (grazing exits at wall ends and sharp edges - not wall thickness, not counted)",
-    "base_plate: 2620 triangles (export/stl/parts/base_plate.stl), 444147 surface samples at 0.08 mm spacing, 8873 candidates re-measured exactly on the B-rep, 2560 of them below 0.8 mm; thinnest reading 0.002 mm; 0 samples leave through an oblique face within 0.5 mm (grazing exits at wall ends and sharp edges - not wall thickness, not counted)",
-    "cradle: 3820 triangles (export/stl/parts/cradle.stl), 340345 surface samples at 0.2 mm spacing, 0 candidates re-measured exactly on the B-rep, 0 of them below 0.8 mm; thinnest reading 0.950 mm; 6 samples leave through an oblique face within 0.5 mm (grazing exits at wall ends and sharp edges - not wall thickness, not counted)",
+    "tub: 5268 triangles (export/stl/parts/tub.stl), 505798 surface samples at 0.1 mm spacing, 4687 candidates re-measured exactly on the B-rep, 1871 of them below 0.8 mm; thinnest reading 0.525 mm; 39 samples leave through an oblique face within 0.5 mm (grazing exits at wall ends and sharp edges - not wall thickness, not counted)",
+    "base_plate: 2044 triangles (export/stl/parts/base_plate.stl), 437712 surface samples at 0.08 mm spacing, 5270 candidates re-measured exactly on the B-rep, 0 of them below 0.8 mm; thinnest reading 0.800 mm; 0 samples leave through an oblique face within 0.5 mm (grazing exits at wall ends and sharp edges - not wall thickness, not counted)",
+    "cradle: 4060 triangles (export/stl/parts/cradle.stl), 373906 surface samples at 0.2 mm spacing, 83 candidates re-measured exactly on the B-rep, 78 of them below 0.8 mm; thinnest reading 0.401 mm; 37 samples leave through an oblique face within 0.5 mm (grazing exits at wall ends and sharp edges - not wall thickness, not counted)",
     "method: from every surface sample a ray is cast along the inward normal and the distance to the first face it meets is the local thickness (mesh first, then the same ray on the exact solid for every candidate). A reading counts when the face the ray leaves through is within 66 deg of parallel to the start face (wedges up to 66 deg are walls; grazing exits are not)",
     "a region is listed when it is thinner than the 0.8 mm rule; regions with any area below 0.5 mm are repeated in the second table",
     "edge chamfers and bevels read thin at their feet by this method; they are listed, not hidden",
-    "the 0.7 mm wide bottom land of the side wall and the 0.5 mm aperture land are edge features of walls that are 1.0 / 0.8 mm thick above them"
+    "the 0.7 mm wide bottom land of the side wall is an edge feature of a wall that is 1.0 mm thick above it; the latch beam (1.15 mm, root 1.15 mm >= 1.0) and every wall of the cradle are above the rule"
    ],
    "warnings": [
-    "base_plate: ball seat 1: skin over the conical seat (apex breaks through as a pin-hole) - min 0.002 mm, 2.25 mm2 below 0.5 mm (D02)",
-    "base_plate: ball seat 2: skin over the conical seat (apex breaks through as a pin-hole) - min 0.002 mm, 2.07 mm2 below 0.5 mm (D02)",
-    "base_plate: ball seat 3: skin over the conical seat (apex breaks through as a pin-hole) - min 0.004 mm, 1.97 mm2 below 0.5 mm (D02)"
+    "cradle: latch hook nose: solid 60 deg wedge ending in a 0.4 mm flat (an edge, not a wall) - min 0.401 mm, 1.23 mm2 below 0.5 mm (documented)"
    ]
   },
   {
@@ -2040,8 +2166,8 @@
         446,
         108
        ],
-       "voxel_volume_mm3": 2506.5,
-       "mesh_volume_mm3": 2490.6,
+       "voxel_volume_mm3": 2492.0,
+       "mesh_volume_mm3": 2476.3,
        "brep_shells": 1,
        "closed_voids": 0,
        "cavities_without_2mm_exit": 0,
@@ -2050,14 +2176,14 @@
       },
       {
        "part": "base_plate",
-       "voxel_mm": 0.1,
+       "voxel_mm": 0.087,
        "grid": [
-        467,
-        432,
-        42
+        535,
+        495,
+        45
        ],
-       "voxel_volume_mm3": 1274.2,
-       "mesh_volume_mm3": 1274.1,
+       "voxel_volume_mm3": 1108.6,
+       "mesh_volume_mm3": 1109.6,
        "brep_shells": 1,
        "closed_voids": 0,
        "cavities_without_2mm_exit": 0,
@@ -2070,10 +2196,10 @@
        "grid": [
         322,
         322,
-        92
+        134
        ],
-       "voxel_volume_mm3": 28776.8,
-       "mesh_volume_mm3": 28669.6,
+       "voxel_volume_mm3": 29867.9,
+       "mesh_volume_mm3": 29912.6,
        "brep_shells": 1,
        "closed_voids": 0,
        "cavities_without_2mm_exit": 0,
@@ -2124,40 +2250,6 @@
        "feature": "gap between support post C- and the side wall",
        "depth_beyond_2mm_ball_mm": 0.99,
        "local_width_mm": 0.6,
-       "volume_beyond_0p8_mm3": 0.04,
-       "bbox_min": [
-        -7.3,
-        -20.8,
-        2.3
-       ],
-       "bbox_max": [
-        -6.8,
-        -20.4,
-        2.9
-       ]
-      },
-      {
-       "part": "tub",
-       "feature": "gap between support post C+ and the side wall",
-       "depth_beyond_2mm_ball_mm": 0.99,
-       "local_width_mm": 0.57,
-       "volume_beyond_0p8_mm3": 0.04,
-       "bbox_min": [
-        6.9,
-        -20.8,
-        2.3
-       ],
-       "bbox_max": [
-        7.4,
-        -20.4,
-        2.9
-       ]
-      },
-      {
-       "part": "tub",
-       "feature": "gap between support post C- and the side wall",
-       "depth_beyond_2mm_ball_mm": 0.99,
-       "local_width_mm": 0.6,
        "volume_beyond_0p8_mm3": 0.06,
        "bbox_min": [
         -7.3,
@@ -2168,6 +2260,23 @@
         -6.8,
         -20.2,
         5.5
+       ]
+      },
+      {
+       "part": "tub",
+       "feature": "gap between support post C- and the side wall",
+       "depth_beyond_2mm_ball_mm": 0.99,
+       "local_width_mm": 0.6,
+       "volume_beyond_0p8_mm3": 0.04,
+       "bbox_min": [
+        -7.3,
+        -20.8,
+        2.3
+       ],
+       "bbox_max": [
+        -6.8,
+        -20.4,
+        2.9
        ]
       },
       {
@@ -2186,6 +2295,23 @@
         -20.2,
         5.5
        ]
+      },
+      {
+       "part": "tub",
+       "feature": "gap between support post C+ and the side wall",
+       "depth_beyond_2mm_ball_mm": 0.99,
+       "local_width_mm": 0.57,
+       "volume_beyond_0p8_mm3": 0.04,
+       "bbox_min": [
+        6.9,
+        -20.8,
+        2.3
+       ],
+       "bbox_max": [
+        7.4,
+        -20.4,
+        2.9
+       ]
       }
      ]
     }
@@ -2202,242 +2328,727 @@
   },
   {
    "id": 7,
-   "name": "cradle pins",
+   "name": "cradle: pins, key, hold-down, insertion",
    "passed": true,
-   "summary": "0 deg: all seven pins on their pad centres at the recommended working height, 0.565 mm clear in the base slot; 180 deg: every pin lands on solid base plate at puck y = 12.4, at least 1.44 mm from any opening; nest accepts 0 and 180 deg only",
+   "summary": "seven pin positions on their pad centres, 0.565 mm clear in the slots; nest accepts 0 deg only; hold-down retention 5.9 x the seven-pin force without friction (4.0 x with the marker fully forward; required 3.0 x); latch strain 1.72 % at insertion (1.36 mm), 2.41 % at the stop (limit 2.5 %); insertion about 10 N, release about 9 N; 19 posed tilts from 17 deg to 0 without interference with lip, nest or pins",
    "tables": [
     {
-     "title": "Pins at 0 deg and at 180 deg",
+     "title": "Pins at the seated position",
      "rows": [
       {
        "pin": 1,
        "x": -7.62,
-       "at0_axis_to_pad_centre_mm": 0.0,
-       "at0_tip_to_pad_plane_mm": 0.0,
-       "at0_clearance_in_base_slot_mm": 0.565,
-       "at180_lands_on_puck_xy": [
-        7.62,
-        12.4
-       ],
-       "at180_backed_by_solid_base_pct": 100.0,
-       "at180_rim_to_nearest_opening_mm": 4.476,
-       "at180_to_nearest_pad_mm": 27.965,
+       "fitted": "consumer + factory",
+       "axis_to_pad_centre_mm": 0.0,
+       "tip_to_pad_face_mm": 0.0,
+       "clearance_in_base_and_adhesive_slot_mm": 0.565,
+       "height_above_cradle_pcb_mm": 5.785,
        "ok": true
       },
       {
        "pin": 2,
        "x": -5.08,
-       "at0_axis_to_pad_centre_mm": 0.0,
-       "at0_tip_to_pad_plane_mm": 0.0,
-       "at0_clearance_in_base_slot_mm": 0.565,
-       "at180_lands_on_puck_xy": [
-        5.08,
-        12.4
-       ],
-       "at180_backed_by_solid_base_pct": 100.0,
-       "at180_rim_to_nearest_opening_mm": 4.55,
-       "at180_to_nearest_pad_mm": 27.965,
+       "fitted": "consumer + factory",
+       "axis_to_pad_centre_mm": 0.0,
+       "tip_to_pad_face_mm": 0.0,
+       "clearance_in_base_and_adhesive_slot_mm": 0.565,
+       "height_above_cradle_pcb_mm": 5.785,
        "ok": true
       },
       {
        "pin": 3,
        "x": -2.54,
-       "at0_axis_to_pad_centre_mm": 0.0,
-       "at0_tip_to_pad_plane_mm": 0.0,
-       "at0_clearance_in_base_slot_mm": 0.565,
-       "at180_lands_on_puck_xy": [
-        2.54,
-        12.4
-       ],
-       "at180_backed_by_solid_base_pct": 100.0,
-       "at180_rim_to_nearest_opening_mm": 2.479,
-       "at180_to_nearest_pad_mm": 27.965,
+       "fitted": "consumer + factory",
+       "axis_to_pad_centre_mm": 0.0,
+       "tip_to_pad_face_mm": 0.0,
+       "clearance_in_base_and_adhesive_slot_mm": 0.565,
+       "height_above_cradle_pcb_mm": 5.785,
        "ok": true
       },
       {
        "pin": 4,
        "x": 0.0,
-       "at0_axis_to_pad_centre_mm": 0.0,
-       "at0_tip_to_pad_plane_mm": 0.0,
-       "at0_clearance_in_base_slot_mm": 0.565,
-       "at180_lands_on_puck_xy": [
-        -0.0,
-        12.4
-       ],
-       "at180_backed_by_solid_base_pct": 100.0,
-       "at180_rim_to_nearest_opening_mm": 1.444,
-       "at180_to_nearest_pad_mm": 27.965,
+       "fitted": "consumer + factory",
+       "axis_to_pad_centre_mm": 0.0,
+       "tip_to_pad_face_mm": 0.0,
+       "clearance_in_base_and_adhesive_slot_mm": 0.565,
+       "height_above_cradle_pcb_mm": 5.785,
        "ok": true
       },
       {
        "pin": 5,
        "x": 2.54,
-       "at0_axis_to_pad_centre_mm": 0.0,
-       "at0_tip_to_pad_plane_mm": 0.0,
-       "at0_clearance_in_base_slot_mm": 0.565,
-       "at180_lands_on_puck_xy": [
-        -2.54,
-        12.4
-       ],
-       "at180_backed_by_solid_base_pct": 100.0,
-       "at180_rim_to_nearest_opening_mm": 2.479,
-       "at180_to_nearest_pad_mm": 27.965,
+       "fitted": "factory fixture only",
+       "axis_to_pad_centre_mm": 0.0,
+       "tip_to_pad_face_mm": 0.0,
+       "clearance_in_base_and_adhesive_slot_mm": 0.565,
+       "height_above_cradle_pcb_mm": 5.785,
        "ok": true
       },
       {
        "pin": 6,
        "x": 5.08,
-       "at0_axis_to_pad_centre_mm": 0.0,
-       "at0_tip_to_pad_plane_mm": 0.0,
-       "at0_clearance_in_base_slot_mm": 0.565,
-       "at180_lands_on_puck_xy": [
-        -5.08,
-        12.4
-       ],
-       "at180_backed_by_solid_base_pct": 100.0,
-       "at180_rim_to_nearest_opening_mm": 4.55,
-       "at180_to_nearest_pad_mm": 27.965,
+       "fitted": "factory fixture only",
+       "axis_to_pad_centre_mm": 0.0,
+       "tip_to_pad_face_mm": 0.0,
+       "clearance_in_base_and_adhesive_slot_mm": 0.565,
+       "height_above_cradle_pcb_mm": 5.785,
        "ok": true
       },
       {
        "pin": 7,
        "x": 7.62,
-       "at0_axis_to_pad_centre_mm": 0.0,
-       "at0_tip_to_pad_plane_mm": 0.0,
-       "at0_clearance_in_base_slot_mm": 0.565,
-       "at180_lands_on_puck_xy": [
-        -7.62,
-        12.4
-       ],
-       "at180_backed_by_solid_base_pct": 100.0,
-       "at180_rim_to_nearest_opening_mm": 4.476,
-       "at180_to_nearest_pad_mm": 27.965,
+       "fitted": "factory fixture only",
+       "axis_to_pad_centre_mm": 0.0,
+       "tip_to_pad_face_mm": 0.0,
+       "clearance_in_base_and_adhesive_slot_mm": 0.565,
+       "height_above_cradle_pcb_mm": 5.785,
        "ok": true
       }
      ]
     },
     {
-     "title": "Nest orientations",
+     "title": "Orientation key",
      "rows": [
       {
-       "puck_angle_deg": 0,
-       "common_volume_with_cradle_and_plate_mm3": 0,
-       "expected": "fits",
+       "marker_angle_deg": 0,
+       "common_volume_with_cradle_mm3": 0,
+       "expected": "seats",
        "status": "ok"
       },
       {
-       "puck_angle_deg": 90,
-       "common_volume_with_cradle_and_plate_mm3": 130.125,
+       "marker_angle_deg": 90,
+       "common_volume_with_cradle_mm3": 210.775,
        "expected": "blocked",
        "status": "ok"
       },
       {
-       "puck_angle_deg": 180,
-       "common_volume_with_cradle_and_plate_mm3": 0,
-       "expected": "fits",
+       "marker_angle_deg": 180,
+       "common_volume_with_cradle_mm3": 243.591,
+       "expected": "blocked",
        "status": "ok"
       },
       {
-       "puck_angle_deg": 270,
-       "common_volume_with_cradle_and_plate_mm3": 130.125,
+       "marker_angle_deg": 270,
+       "common_volume_with_cradle_mm3": 209.599,
        "expected": "blocked",
        "status": "ok"
       }
      ]
     },
     {
-     "title": "Pin travel and force balance (PROVISIONAL pin data)",
+     "title": "Hold-down geometry measured on the solids",
      "rows": [
       {
-       "quantity": "pad height above the cradle PCB at 0 deg (pin working height)",
-       "value": 5.82,
-       "unit": "mm",
-       "note": "recommended 5.82; cradle PCB top at z = -4.69"
+       "quantity": "latch beam width b (section z = 2.0)",
+       "measured_mm": 14.0,
+       "parameter_mm": 14.0,
+       "status": "ok",
+       "note": ""
       },
       {
-       "quantity": "plunger travel used at 0 deg",
-       "value": 1.14,
-       "unit": "mm",
-       "note": "mid stroke 1.14, full stroke 2.29"
+       "quantity": "latch beam thickness h (section z = 2.0)",
+       "measured_mm": 1.15,
+       "parameter_mm": 1.15,
+       "status": "ok",
+       "note": "uniform; root >= 1.0 mm required"
       },
       {
-       "quantity": "plunger travel used at 180 deg (pins bear on the base plate)",
-       "value": 2.27,
-       "unit": "mm",
-       "note": "0.02 mm short of full stroke"
+       "quantity": "latch root (well floor) z",
+       "measured_mm": -3.8,
+       "parameter_mm": -3.8,
+       "status": "ok",
+       "note": ""
       },
       {
-       "quantity": "total pin force at working height",
-       "value": 4.13,
-       "unit": "N",
-       "note": "7 x 0.59 N (60 gf each, PROVISIONAL)"
+       "quantity": "retaining face z",
+       "measured_mm": 7.85,
+       "parameter_mm": 7.85,
+       "status": "ok",
+       "note": ""
       },
       {
-       "quantity": "puck weight",
-       "value": 0.112,
-       "unit": "N",
-       "note": "11.4 g (check 8)"
+       "quantity": "latch free length L (root to retaining face)",
+       "measured_mm": 11.65,
+       "parameter_mm": 11.65,
+       "status": "ok",
+       "note": ""
       },
       {
-       "quantity": "ball reactions without hold-down: front / rear pair",
+       "quantity": "retaining face above the tub top",
+       "measured_mm": 0.25,
+       "parameter_mm": 0.25,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "quantity": "hook nose radius",
+       "measured_mm": 21.5,
+       "parameter_mm": 21.5,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "quantity": "flat top of the tub ends at radius",
+       "measured_mm": 22.401,
+       "parameter_mm": 22.4,
+       "status": "ok",
+       "note": "top edge radius 0.6 outside it"
+      },
+      {
+       "quantity": "hook overlap u on the flat tub top",
+       "measured_mm": 0.901,
+       "parameter_mm": 0.9,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "quantity": "beam back face to the over-travel stop ribs",
+       "measured_mm": 1.571,
+       "parameter_mm": 1.571,
+       "status": "ok",
+       "note": "contact when the hook has travelled 1.9 mm"
+      },
+      {
+       "quantity": "lip overlap on the tub top",
+       "measured_mm": 1.2,
+       "parameter_mm": 1.2,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "quantity": "lip underside above the tub top",
+       "measured_mm": 0.25,
+       "parameter_mm": 0.25,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "quantity": "lip width",
+       "measured_mm": 12.0,
+       "parameter_mm": 12.0,
+       "status": "ok",
+       "note": "window recesses start at |x| = 7.25"
+      },
+      {
+       "quantity": "lip plate thickness",
+       "measured_mm": 1.6,
+       "parameter_mm": 1.6,
+       "status": "ok",
+       "note": ""
+      }
+     ]
+    },
+    {
+     "title": "Hold-down forces, retention and latch strain",
+     "rows": [
+      {
+       "quantity": "pin force, seven pins (factory fixture) / four pins (consumer)",
        "value": [
-        1.3,
-        -5.32
+        4.13,
+        2.36
        ],
        "unit": "N",
-       "note": "negative = that foot lifts: the puck does not stay on the reference plate"
+       "basis": "0.59 N per pin at the working height (PROVISIONAL)"
       },
       {
-       "quantity": "hold-down force needed at the puck centre to keep all three balls seated at 0 deg",
-       "value": 8.7,
+       "quantity": "marker weight",
+       "value": 0.11,
        "unit": "N",
-       "note": "not provided by the cradle as modelled"
+       "basis": "11.2 g (check 8)"
+      },
+      {
+       "quantity": "hold-down reactions with seven pins: hook / lip",
+       "value": [
+        3.56,
+        0.46
+       ],
+       "unit": "N",
+       "basis": "moments about the lip (y 17.80) and the hook (y -21.95); the hook carries 87.5 % of a pin-row force"
+      },
+      {
+       "quantity": "hold-down reactions with four pins: hook / lip",
+       "value": [
+        2.01,
+        0.24
+       ],
+       "unit": "N",
+       "basis": "same"
+      },
+      {
+       "quantity": "latch beam: b x h x L, E, E I",
+       "value": [
+        14.0,
+        1.15,
+        11.65,
+        1700.0,
+        3016.4
+       ],
+       "unit": "mm, mm, mm, MPa, N mm2",
+       "basis": "uniform rectangular cantilever, I = b h^3 / 12; E = HP PA 12 MJF data sheet (XY), dry, 23 C"
+      },
+      {
+       "quantity": "retention at the hook, no friction, nominal overlap",
+       "value": 21.34,
+       "unit": "N",
+       "basis": "F = 2 E I u / (e L^2), u = 0.90, e = 1.875 (hook contact to the beam's neutral axis)"
+      },
+      {
+       "quantity": "= pin-row force that opens the latch / multiple of the seven-pin force",
+       "value": [
+        24.37,
+        5.9
+       ],
+       "unit": "N / x",
+       "basis": "hook force / 0.875; required >= 3.0 x"
+      },
+      {
+       "quantity": "same with the marker pushed fully forward in the nest",
+       "value": [
+        14.45,
+        16.5,
+        4.0
+       ],
+       "unit": "N / N / x",
+       "basis": "u = 0.65, e = 2.000; required >= 3.0 x"
+      },
+      {
+       "quantity": "friction above which the hook is self-locking",
+       "value": 0.241,
+       "unit": "-",
+       "basis": "mu >= 1.5 e / L; PA12 on PA12 is usually 0.2 to 0.4 (assumed, not measured)"
+      },
+      {
+       "quantity": "retention at the hook with friction 0.2",
+       "value": 124.37,
+       "unit": "N",
+       "basis": "F = u E I / (e L^2 / 2 - mu L^3 / 3)"
+      },
+      {
+       "quantity": "root stress at 3.0 x the seven-pin force / safety factor to yield",
+       "value": [
+        7.26,
+        6.61
+       ],
+       "unit": "MPa / -",
+       "basis": "hook load 10.8 N: 6 F e / (b h^2) + F / (b h); yield 48.0 MPa (data sheet)"
+      },
+      {
+       "quantity": "hook travel: insertion (posed solids) / release nominal / release worst / over-travel stop",
+       "value": [
+        1.36,
+        1.5,
+        1.75,
+        1.9
+       ],
+       "unit": "mm",
+       "basis": "release = hook nose back to the marker radius (nominal: 0.25 gap; worst: marker against the beam)"
+      },
+      {
+       "quantity": "root strain at those travels",
+       "value": [
+        1.72,
+        1.91,
+        2.22,
+        2.41
+       ],
+       "unit": "%",
+       "basis": "eps = 3 h d / (2 L^2) (tip force); limit 2.5 %; at the stop under a pure tab moment: 1.61 %"
+      },
+      {
+       "quantity": "latch stiffness at the hook / lateral force at the insertion travel",
+       "value": [
+        5.72,
+        7.76
+       ],
+       "unit": "N/mm / N",
+       "basis": "k = 3 E I / L^3"
+      },
+      {
+       "quantity": "insertion force at the thumb for friction 0.2 / 0.3 / 0.4",
+       "value": [
+        8.46,
+        10.21,
+        12.23
+       ],
+       "unit": "N",
+       "basis": "W = P (mu + tan a) / (1 - mu tan a), a = 30 deg lead-in; thumb 8 mm in from the rear edge (lever 1.24)"
+      },
+      {
+       "quantity": "force to finish seating (last degree, seven pins)",
+       "value": 7.57,
+       "unit": "N",
+       "basis": "friction on the hook nose plus the pins coming under load"
+      },
+      {
+       "quantity": "release: thumb force on the tab, nominal / worst",
+       "value": [
+        8.69,
+        10.14
+       ],
+       "unit": "N",
+       "basis": "M = 2 E I d / L^2, pressed 7.68 mm behind the beam axis; the tab end drops about 2.0 mm"
+      },
+      {
+       "quantity": "hook creep-out under the continuous seven-pin load (elastic / with a creep factor of 3)",
+       "value": [
+        0.15,
+        0.451
+       ],
+       "unit": "mm",
+       "basis": "d = F e L^2 / (2 E I) with F = 3.56 N; overlap 0.90 mm (creep modulus of MJF PA12 not verified)"
+      },
+      {
+       "quantity": "lip plate: stress with the whole required force on it / safety factor",
+       "value": [
+        4.48,
+        10.72
+       ],
+       "unit": "MPa / -",
+       "basis": "6 F a / (w t^2), F = 3.0 x 4.13 N, a = 1.85, 12 x 1.6 plate"
+      },
+      {
+       "quantity": "marker floats against lip and hook when pins are fitted: lift / pin height / stroke used",
+       "value": [
+        0.25,
+        6.07,
+        0.89
+       ],
+       "unit": "mm",
+       "basis": "recommended height 5.82, full stroke 2.29 (D21)"
+      },
+      {
+       "quantity": "rear of the marker pops up on release by about",
+       "value": 1.33,
+       "unit": "mm",
+       "basis": "pins return to their free length; then lift at the finger scallops"
+      }
+     ]
+    },
+    {
+     "title": "Insertion path (marker solids posed against the cradle solids)",
+     "rows": [
+      {
+       "tilt_deg": 17.0,
+       "set_back_mm": 1.526,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 12.05,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.05,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 0.0,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 15.0,
+       "set_back_mm": 1.274,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 10.67,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.05,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 0.0,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 14.0,
+       "set_back_mm": 1.137,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 9.97,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.05,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 0.357,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 13.0,
+       "set_back_mm": 0.989,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 9.26,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.05,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 0.873,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 12.0,
+       "set_back_mm": 0.828,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 8.56,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.05,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.356,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 11.0,
+       "set_back_mm": 0.65,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 7.85,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.05,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.31,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 10.0,
+       "set_back_mm": 0.451,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 7.14,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.05,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.146,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 9.0,
+       "set_back_mm": 0.283,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 6.43,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.059,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.017,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 8.0,
+       "set_back_mm": 0.229,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 5.71,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.088,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.005,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 7.0,
+       "set_back_mm": 0.174,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 5.0,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.116,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.005,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 6.0,
+       "set_back_mm": 0.121,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 4.28,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.144,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.017,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 5.0,
+       "set_back_mm": 0.067,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 3.56,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.171,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.04,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 4.0,
+       "set_back_mm": 0.013,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 2.84,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.198,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": "pins not yet in the slot",
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.072,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 3.0,
+       "set_back_mm": 0.0,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 2.12,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.226,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": 0.071,
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.157,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 2.0,
+       "set_back_mm": 0.0,
+       "lift_mm": -0.05,
+       "rear_edge_height_mm": 1.39,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.253,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": 0.037,
+       "pin_compression_mm": 0.0,
+       "latch_travel_needed_mm": 1.263,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 1.5,
+       "set_back_mm": 0.0,
+       "lift_mm": -0.039,
+       "rear_edge_height_mm": 1.04,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.255,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": 0.024,
+       "pin_compression_mm": 0.288,
+       "latch_travel_needed_mm": 1.271,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 1.0,
+       "set_back_mm": 0.0,
+       "lift_mm": -0.009,
+       "rear_edge_height_mm": 0.71,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.237,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": 0.013,
+       "pin_compression_mm": 0.567,
+       "latch_travel_needed_mm": 1.178,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 0.5,
+       "set_back_mm": 0.0,
+       "lift_mm": 0.02,
+       "rear_edge_height_mm": 0.38,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.219,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": 0.005,
+       "pin_compression_mm": 0.846,
+       "latch_travel_needed_mm": 0.557,
+       "status": "ok"
+      },
+      {
+       "tilt_deg": 0.0,
+       "set_back_mm": 0.0,
+       "lift_mm": 0.0,
+       "rear_edge_height_mm": 0.0,
+       "interference_with_nest_lip_floor_mm3": 0,
+       "clearance_to_lip_mm": 0.25,
+       "plungers_into_base_or_adhesive_mm3": 0,
+       "slot_centre_offset_from_pin_axis_mm": 0.0,
+       "pin_compression_mm": 1.175,
+       "latch_travel_needed_mm": 0.0,
+       "status": "ok"
+      }
+     ]
+    },
+    {
+     "title": "Finger access",
+     "rows": [
+      {
+       "side": "+x",
+       "scallop_from_deg": -42.0,
+       "to_deg": 0.0,
+       "opening_along_the_marker_mm": 16.5,
+       "marker_side_exposed_from_z": 0.0,
+       "to_z": 7.6,
+       "rays_reaching_the_marker": "42 of 42",
+       "status": "ok"
+      },
+      {
+       "side": "-x",
+       "scallop_from_deg": -42.0,
+       "to_deg": 0.0,
+       "opening_along_the_marker_mm": 16.5,
+       "marker_side_exposed_from_z": 0.0,
+       "to_z": 7.6,
+       "rays_reaching_the_marker": "42 of 42",
+       "status": "ok"
       }
      ]
     }
    ],
    "notes": [
-    "180 deg position = puck turned about the nest centre (0, -2.3); its own centre moves 4.6 mm toward -y (D15)",
-    "pin travel and force are from docs/research/bom-verification-opto.md (Mill-Max 0914); plunger and body diameters are PROVISIONAL",
-    "the model keeps the YAML PCB height, so the modelled plunger is 0.165 mm shorter than real; the cradle PCB is placed for the real pad height 1.13 mm"
+    "hold-down = fixed lip over the top front edge between the camera windows + rear cantilever latch with a 90 deg retaining face; formulas in cad/holddown.py",
+    "retention requirement is evaluated WITHOUT friction (lower bound): an upward force on the hook bends the beam back through its eccentricity e until the hook has moved by the overlap u",
+    "insertion path: the marker is tilted nose-down about its front bottom edge, rests 0.05 mm above the nest floor and is as far forward as the front nest wall, the nose pocket and the lip tip allow (0.05 mm clear); at each tilt the solids of tub + base plate + balls are intersected with the cradle (latch removed), the free-length plungers with base plate and adhesive sheet, and the latch is rotated back until it no longer intersects the tub (that travel is the insertion deflection)",
+    "latch deflection is modelled as a rigid rotation about the point 2L/3 below the retaining face (exact tip travel and tip slope of a tip-loaded cantilever)",
+    "free plunger tip at z = 2.14; the pads meet the plungers at about 1.9 deg of tilt; the copper pad face is modelled 0.03500000000000003 mm below the YAML pad plane, so the modelled pin stands 5.785 mm high",
+    "printability of the latch is covered by check 5 (walls; beam 1.15 mm, hook nose recorded) and check 6 (the latch well is open at the top; its gaps are listed there)"
    ],
    "warnings": [
-    "OPEN (D17): seven pins push up with about 4.1 N against a puck weight of 0.11 N - without a hold-down the puck is lifted off the reference plate at 0 deg and at 180 deg; about 9 N at the puck centre would be needed. No hold-down is modelled",
-    "at 180 deg every pin bears on the solid base plate (no pin is over a pad, the pad slot, the grain opening or a ball seat), but it is compressed 2.27 mm of 2.29 mm full stroke (0.02 mm margin): the DESIGN_SPEC sentence 'a puck placed 180 degrees round touches no pins' is NOT met - the pins touch the base, they touch no pad"
+    "with pins fitted the marker floats up to 0.25 mm against lip and hook (D21); the pins then work at 6.07 mm",
+    "insertion 10 N and release 9 N are estimates (friction 0.3 assumed, modulus from the data sheet, dry PA12); pin force and stroke are PROVISIONAL",
+    "the latch beam stands in the build z direction if the cradle is printed as modelled: ask the bureau to lay the beam in the build plane, and test ten latch cycles on the first article (strain at the stop 2.41 %)"
    ]
   },
   {
    "id": 8,
    "name": "mass and centre of gravity",
    "passed": true,
-   "summary": "marker 11.43 g, CoG (0.05, -1.36, 3.71) mm; cradle assembly 52.73 g; CoG 8.1 mm inside the ball-foot triangle",
+   "summary": "marker 11.24 g, CoG (0.05, -1.4, 3.75) mm; cradle assembly 34.03 g; CoG 8.1 mm inside the ball-foot triangle",
    "tables": [
     {
      "title": "Totals",
      "rows": [
       {
        "assembly": "marker (all puck parts)",
-       "parts": 22,
-       "mass_g": 11.43,
+       "parts": 25,
+       "mass_g": 11.24,
        "cog_x": 0.05,
-       "cog_y": -1.36,
-       "cog_z": 3.71
+       "cog_y": -1.4,
+       "cog_z": 3.75
       },
       {
        "assembly": "cradle assembly",
-       "parts": 15,
-       "mass_g": 52.73,
+       "parts": 14,
+       "mass_g": 34.03,
        "cog_x": 0.0,
-       "cog_y": -2.22,
-       "cog_z": -2.85
+       "cog_y": -7.16,
+       "cog_z": -3.46
       },
       {
        "assembly": "marker in cradle",
-       "parts": 37,
-       "mass_g": 64.16,
+       "parts": 39,
+       "mass_g": 45.27,
        "cog_x": 0.01,
-       "cog_y": -2.07,
-       "cog_z": -1.68
+       "cog_y": -5.73,
+       "cog_z": -1.67
       }
      ]
     },
@@ -2448,31 +3059,31 @@
        "part": "tub",
        "group": "puck",
        "material": "MJF PA12, dyed black, vapor smoothed",
-       "volume_mm3": 2494.82,
+       "volume_mm3": 2480.75,
        "density_g_cm3": 1.01,
-       "mass_g": 2.5198,
+       "mass_g": 2.5056,
        "cog_x": 0.04,
-       "cog_y": -2.53,
+       "cog_y": -2.64,
        "cog_z": 5.27
       },
       {
        "part": "base_plate",
        "group": "puck",
        "material": "MJF PA12, dyed black, vapor smoothed",
-       "volume_mm3": 1275.92,
+       "volume_mm3": 1111.18,
        "density_g_cm3": 1.01,
-       "mass_g": 1.2887,
-       "cog_x": -0.0,
+       "mass_g": 1.1223,
+       "cog_x": 0.0,
        "cog_y": -0.07,
-       "cog_z": 0.5
+       "cog_z": 0.43
       },
       {
        "part": "main_pcb",
        "group": "puck",
        "material": "FR-4 + parts (envelope)",
-       "volume_mm3": 1523.11,
+       "volume_mm3": 1512.43,
        "density_g_cm3": "1.85 board / 1.5 part boxes",
-       "mass_g": 2.6618,
+       "mass_g": 2.6421,
        "cog_x": 0.13,
        "cog_y": -0.58,
        "cog_z": 1.69
@@ -2480,24 +3091,24 @@
       {
        "part": "pcb_adhesive",
        "group": "puck",
-       "material": "PSA sheet 0.13 (e.g. 3M 468MP) PROVISIONAL",
-       "volume_mm3": 156.05,
+       "material": "3M 9472LE (300LSE) transfer tape 0.13, die cut (PROVISIONAL)",
+       "volume_mm3": 153.43,
        "density_g_cm3": 1.0,
-       "mass_g": 0.156,
+       "mass_g": 0.1534,
        "cog_x": -0.0,
-       "cog_y": -0.13,
-       "cog_z": 1.07
+       "cog_y": -0.08,
+       "cog_z": 0.94
       },
       {
        "part": "seal_bead",
        "group": "puck",
-       "material": "dispensed adhesive bead 0.2",
-       "volume_mm3": 11.47,
+       "material": "dispensed adhesive bead 0.33",
+       "volume_mm3": 18.93,
        "density_g_cm3": 1.1,
-       "mass_g": 0.0126,
+       "mass_g": 0.0208,
        "cog_x": 0.0,
        "cog_y": 0.57,
-       "cog_z": 1.1
+       "cog_z": 1.04
       },
       {
        "part": "camera_L",
@@ -2506,7 +3117,7 @@
        "volume_mm3": 28.25,
        "density_g_cm3": 2.5,
        "mass_g": 0.0706,
-       "cog_x": -10.2,
+       "cog_x": -10.0,
        "cog_y": 15.6,
        "cog_z": 3.18
       },
@@ -2517,7 +3128,7 @@
        "volume_mm3": 4.0,
        "density_g_cm3": 2.51,
        "mass_g": 0.01,
-       "cog_x": -10.2,
+       "cog_x": -10.0,
        "cog_y": 15.93,
        "cog_z": 5.28
       },
@@ -2525,10 +3136,10 @@
        "part": "visor_window_L",
        "group": "puck",
        "material": "EVT: cast acrylic 0.5",
-       "volume_mm3": 7.31,
+       "volume_mm3": 8.5,
        "density_g_cm3": 1.19,
-       "mass_g": 0.0087,
-       "cog_x": -10.2,
+       "mass_g": 0.0101,
+       "cog_x": -10.0,
        "cog_y": 18.15,
        "cog_z": 5.9
       },
@@ -2539,7 +3150,7 @@
        "volume_mm3": 28.25,
        "density_g_cm3": 2.5,
        "mass_g": 0.0706,
-       "cog_x": 10.2,
+       "cog_x": 10.0,
        "cog_y": 15.6,
        "cog_z": 3.18
       },
@@ -2550,7 +3161,7 @@
        "volume_mm3": 4.0,
        "density_g_cm3": 2.51,
        "mass_g": 0.01,
-       "cog_x": 10.2,
+       "cog_x": 10.0,
        "cog_y": 15.93,
        "cog_z": 5.28
       },
@@ -2558,10 +3169,10 @@
        "part": "visor_window_R",
        "group": "puck",
        "material": "EVT: cast acrylic 0.5",
-       "volume_mm3": 7.31,
+       "volume_mm3": 8.5,
        "density_g_cm3": 1.19,
-       "mass_g": 0.0087,
-       "cog_x": 10.2,
+       "mass_g": 0.0101,
+       "cog_x": 10.0,
        "cog_y": 18.15,
        "cog_z": 5.9
       },
@@ -2654,6 +3265,17 @@
        "cog_z": 0.4
       },
       {
+       "part": "ball_epoxy_1",
+       "group": "puck",
+       "material": "UV-cure epoxy potting (PROVISIONAL)",
+       "volume_mm3": 0.56,
+       "density_g_cm3": 1.15,
+       "mass_g": 0.0006,
+       "cog_x": -0.0,
+       "cog_y": 15.0,
+       "cog_z": 0.59
+      },
+      {
        "part": "ball_2",
        "group": "puck",
        "material": "stainless ball 1.0 mm",
@@ -2665,6 +3287,17 @@
        "cog_z": 0.4
       },
       {
+       "part": "ball_epoxy_2",
+       "group": "puck",
+       "material": "UV-cure epoxy potting (PROVISIONAL)",
+       "volume_mm3": 0.56,
+       "density_g_cm3": 1.15,
+       "mass_g": 0.0006,
+       "cog_x": -16.5,
+       "cog_y": -9.5,
+       "cog_z": 0.59
+      },
+      {
        "part": "ball_3",
        "group": "puck",
        "material": "stainless ball 1.0 mm",
@@ -2674,6 +3307,17 @@
        "cog_x": 16.5,
        "cog_y": -9.5,
        "cog_z": 0.4
+      },
+      {
+       "part": "ball_epoxy_3",
+       "group": "puck",
+       "material": "UV-cure epoxy potting (PROVISIONAL)",
+       "volume_mm3": 0.56,
+       "density_g_cm3": 1.15,
+       "mass_g": 0.0006,
+       "cog_x": 16.5,
+       "cog_y": -9.5,
+       "cog_z": 0.59
       },
       {
        "part": "vent",
@@ -2689,24 +3333,13 @@
       {
        "part": "cradle",
        "group": "cradle",
-       "material": "MJF PA12 or SLA",
-       "volume_mm3": 28664.37,
+       "material": "MJF PA12 (the latch is sized for PA12)",
+       "volume_mm3": 29908.79,
        "density_g_cm3": 1.01,
-       "mass_g": 28.951,
+       "mass_g": 30.2079,
        "cog_x": -0.0,
-       "cog_y": -0.71,
-       "cog_z": -3.87
-      },
-      {
-       "part": "cradle_plate",
-       "group": "cradle",
-       "material": "304 stainless 1.5 mm, laser cut",
-       "volume_mm3": 2517.26,
-       "density_g_cm3": 8.0,
-       "mass_g": 20.1381,
-       "cog_x": -0.0,
-       "cog_y": -2.11,
-       "cog_z": -0.85
+       "cog_y": -5.56,
+       "cog_z": -3.18
       },
       {
        "part": "cradle_pcb",
@@ -2716,8 +3349,8 @@
        "density_g_cm3": 1.85,
        "mass_g": 1.8954,
        "cog_x": -0.0,
-       "cog_y": -15.49,
-       "cog_z": -5.49
+       "cog_y": -23.25,
+       "cog_z": -5.62
       },
       {
        "part": "usb_receptacle",
@@ -2727,85 +3360,85 @@
        "density_g_cm3": 2.0,
        "mass_g": 0.4284,
        "cog_x": -0.0,
-       "cog_y": -28.12,
-       "cog_z": -3.06
+       "cog_y": -31.83,
+       "cog_z": -3.19
       },
       {
        "part": "spring_pin_1",
        "group": "cradle",
        "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
-       "volume_mm3": 10.96,
+       "volume_mm3": 13.98,
        "density_g_cm3": 8.5,
-       "mass_g": 0.0931,
+       "mass_g": 0.1189,
        "cog_x": -7.62,
        "cog_y": -17.0,
-       "cog_z": -2.87
+       "cog_z": -2.59
       },
       {
        "part": "spring_pin_2",
        "group": "cradle",
        "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
-       "volume_mm3": 10.96,
+       "volume_mm3": 13.98,
        "density_g_cm3": 8.5,
-       "mass_g": 0.0931,
+       "mass_g": 0.1189,
        "cog_x": -5.08,
        "cog_y": -17.0,
-       "cog_z": -2.87
+       "cog_z": -2.59
       },
       {
        "part": "spring_pin_3",
        "group": "cradle",
        "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
-       "volume_mm3": 10.96,
+       "volume_mm3": 13.98,
        "density_g_cm3": 8.5,
-       "mass_g": 0.0931,
+       "mass_g": 0.1189,
        "cog_x": -2.54,
        "cog_y": -17.0,
-       "cog_z": -2.87
+       "cog_z": -2.59
       },
       {
        "part": "spring_pin_4",
        "group": "cradle",
        "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
-       "volume_mm3": 10.96,
+       "volume_mm3": 13.98,
        "density_g_cm3": 8.5,
-       "mass_g": 0.0931,
+       "mass_g": 0.1189,
        "cog_x": -0.0,
        "cog_y": -17.0,
-       "cog_z": -2.87
+       "cog_z": -2.59
       },
       {
        "part": "spring_pin_5",
        "group": "cradle",
        "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
-       "volume_mm3": 10.96,
+       "volume_mm3": 13.98,
        "density_g_cm3": 8.5,
-       "mass_g": 0.0931,
+       "mass_g": 0.1189,
        "cog_x": 2.54,
        "cog_y": -17.0,
-       "cog_z": -2.87
+       "cog_z": -2.59
       },
       {
        "part": "spring_pin_6",
        "group": "cradle",
        "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
-       "volume_mm3": 10.96,
+       "volume_mm3": 13.98,
        "density_g_cm3": 8.5,
-       "mass_g": 0.0931,
+       "mass_g": 0.1189,
        "cog_x": 5.08,
        "cog_y": -17.0,
-       "cog_z": -2.87
+       "cog_z": -2.59
       },
       {
        "part": "spring_pin_7",
        "group": "cradle",
        "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
-       "volume_mm3": 10.96,
+       "volume_mm3": 13.98,
        "density_g_cm3": 8.5,
-       "mass_g": 0.0931,
+       "mass_g": 0.1189,
        "cog_x": 7.62,
        "cog_y": -17.0,
-       "cog_z": -2.87
+       "cog_z": -2.59
       },
       {
        "part": "cradle_foot_1",
@@ -2815,7 +3448,7 @@
        "density_g_cm3": 1.1,
        "mass_g": 0.1659,
        "cog_x": 23.5,
-       "cog_y": 21.2,
+       "cog_y": 17.5,
        "cog_z": -11.5
       },
       {
@@ -2826,7 +3459,7 @@
        "density_g_cm3": 1.1,
        "mass_g": 0.1659,
        "cog_x": 23.5,
-       "cog_y": -25.8,
+       "cog_y": -29.5,
        "cog_z": -11.5
       },
       {
@@ -2837,7 +3470,7 @@
        "density_g_cm3": 1.1,
        "mass_g": 0.1659,
        "cog_x": -23.5,
-       "cog_y": 21.2,
+       "cog_y": 17.5,
        "cog_z": -11.5
       },
       {
@@ -2848,14 +3481,14 @@
        "density_g_cm3": 1.1,
        "mass_g": 0.1659,
        "cog_x": -23.5,
-       "cog_y": -25.8,
+       "cog_y": -29.5,
        "cog_z": -11.5
       }
      ]
     }
    ],
    "notes": [
-    "densities are typical handbook values, not measured (PROVISIONAL): PA12 MJF 1.01, glass 2.5, N-BK7 2.51, FR-4 1.85, stainless 7.9-8.0, LiPo cell 2.1, camera module 2.5, PSA 1.0, VHB foam 0.72, PU foam 0.32; purchased parts are envelope solids, so their mass is an estimate",
+    "densities are typical handbook values, not measured (PROVISIONAL): PA12 MJF 1.01, glass 2.5, N-BK7 2.51, FR-4 1.85, stainless 7.9, epoxy 1.15, LiPo cell 2.1, camera module 2.5, PSA 1.0, VHB foam 0.72, PU foam 0.32; purchased parts are envelope solids, so their mass is an estimate",
     "solder, passives, conformal coat and cured adhesive fillets are not included (expect about +0.5 to 1 g on the marker)",
     "marker centre of gravity is 8.1 mm inside the triangle of the three ball feet (static tip-over angle about 65 deg)"
    ],
@@ -2865,7 +3498,7 @@
    "id": 9,
    "name": "printed parts for quoting / export integrity",
    "passed": true,
-   "summary": "tub 46.0 x 41.4 x 7.6 mm, 2.495 cm3; base_plate 43.5 x 40.0 x 1.0 mm, 1.276 cm3; cradle 60.0 x 60.0 x 14.0 mm, 28.664 cm3; all 37 STEP and STL files re-read and match the checked solids",
+   "summary": "tub 46.0 x 41.4 x 7.6 mm, 2.481 cm3; base_plate 43.5 x 40.0 x 0.87 mm, 1.111 cm3; cradle 60.0 x 60.0 x 22.281 mm, 29.909 cm3; all 39 STEP and STL files re-read and match the checked solids",
    "tables": [
     {
      "title": "Printed parts (print orientation)",
@@ -2877,11 +3510,11 @@
        "box_x_mm": 46.0,
        "box_y_mm": 41.4,
        "box_z_build_mm": 7.6,
-       "volume_cm3": 2.495,
-       "stl_volume_cm3": 2.491,
-       "surface_area_cm2": 50.28,
-       "mass_g": 2.52,
-       "stl_triangles": 4828,
+       "volume_cm3": 2.481,
+       "stl_volume_cm3": 2.476,
+       "surface_area_cm2": 50.36,
+       "mass_g": 2.51,
+       "stl_triangles": 5268,
        "stl_watertight": true,
        "box_volume_cm3": 14.47
       },
@@ -2891,29 +3524,29 @@
        "print_file": "export/stl/print/base_plate_print.stl",
        "box_x_mm": 43.5,
        "box_y_mm": 40.0,
-       "box_z_build_mm": 1.0,
-       "volume_cm3": 1.276,
-       "stl_volume_cm3": 1.274,
-       "surface_area_cm2": 28.36,
-       "mass_g": 1.29,
-       "stl_triangles": 2620,
+       "box_z_build_mm": 0.87,
+       "volume_cm3": 1.111,
+       "stl_volume_cm3": 1.11,
+       "surface_area_cm2": 28.0,
+       "mass_g": 1.12,
+       "stl_triangles": 2044,
        "stl_watertight": true,
-       "box_volume_cm3": 1.74
+       "box_volume_cm3": 1.51
       },
       {
        "part": "cradle",
-       "process": "MJF PA12 or SLA",
+       "process": "MJF PA12 (the latch is sized for PA12)",
        "print_file": "export/stl/print/cradle_print.stl",
        "box_x_mm": 60.0,
        "box_y_mm": 60.0,
-       "box_z_build_mm": 14.0,
-       "volume_cm3": 28.664,
-       "stl_volume_cm3": 28.67,
-       "surface_area_cm2": 135.36,
-       "mass_g": 28.95,
-       "stl_triangles": 3820,
+       "box_z_build_mm": 22.281,
+       "volume_cm3": 29.909,
+       "stl_volume_cm3": 29.913,
+       "surface_area_cm2": 148.76,
+       "mass_g": 30.21,
+       "stl_triangles": 4060,
        "stl_watertight": true,
-       "box_volume_cm3": 50.4
+       "box_volume_cm3": 80.21
       }
      ]
     },
@@ -2922,41 +3555,41 @@
      "rows": [
       {
        "part": "tub",
-       "solid_volume_mm3": 2494.819,
-       "step_reimport_volume_mm3": 2494.819,
-       "stl_volume_mm3": 2490.57,
+       "solid_volume_mm3": 2480.754,
+       "step_reimport_volume_mm3": 2480.754,
+       "stl_volume_mm3": 2476.3,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "base_plate",
-       "solid_volume_mm3": 1275.916,
-       "step_reimport_volume_mm3": 1275.916,
-       "stl_volume_mm3": 1274.15,
+       "solid_volume_mm3": 1111.181,
+       "step_reimport_volume_mm3": 1111.181,
+       "stl_volume_mm3": 1109.632,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "main_pcb",
-       "solid_volume_mm3": 1523.11,
-       "step_reimport_volume_mm3": 1523.11,
-       "stl_volume_mm3": 1521.626,
+       "solid_volume_mm3": 1512.431,
+       "step_reimport_volume_mm3": 1512.431,
+       "stl_volume_mm3": 1510.952,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "pcb_adhesive",
-       "solid_volume_mm3": 156.048,
-       "step_reimport_volume_mm3": 156.048,
-       "stl_volume_mm3": 155.831,
+       "solid_volume_mm3": 153.432,
+       "step_reimport_volume_mm3": 153.432,
+       "stl_volume_mm3": 153.217,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "seal_bead",
-       "solid_volume_mm3": 11.471,
-       "step_reimport_volume_mm3": 11.471,
-       "stl_volume_mm3": 11.46,
+       "solid_volume_mm3": 18.927,
+       "step_reimport_volume_mm3": 18.927,
+       "stl_volume_mm3": 18.909,
        "stl_watertight": true,
        "status": "ok"
       },
@@ -2978,9 +3611,9 @@
       },
       {
        "part": "visor_window_L",
-       "solid_volume_mm3": 7.31,
-       "step_reimport_volume_mm3": 7.31,
-       "stl_volume_mm3": 7.31,
+       "solid_volume_mm3": 8.5,
+       "step_reimport_volume_mm3": 8.5,
+       "stl_volume_mm3": 8.5,
        "stl_watertight": true,
        "status": "ok"
       },
@@ -3002,9 +3635,9 @@
       },
       {
        "part": "visor_window_R",
-       "solid_volume_mm3": 7.31,
-       "step_reimport_volume_mm3": 7.31,
-       "stl_volume_mm3": 7.31,
+       "solid_volume_mm3": 8.5,
+       "step_reimport_volume_mm3": 8.5,
+       "stl_volume_mm3": 8.5,
        "stl_watertight": true,
        "status": "ok"
       },
@@ -3073,6 +3706,14 @@
        "status": "ok"
       },
       {
+       "part": "ball_epoxy_1",
+       "solid_volume_mm3": 0.556,
+       "step_reimport_volume_mm3": 0.556,
+       "stl_volume_mm3": 0.557,
+       "stl_watertight": true,
+       "status": "ok"
+      },
+      {
        "part": "ball_2",
        "solid_volume_mm3": 0.524,
        "step_reimport_volume_mm3": 0.524,
@@ -3081,10 +3722,26 @@
        "status": "ok"
       },
       {
+       "part": "ball_epoxy_2",
+       "solid_volume_mm3": 0.556,
+       "step_reimport_volume_mm3": 0.556,
+       "stl_volume_mm3": 0.557,
+       "stl_watertight": true,
+       "status": "ok"
+      },
+      {
        "part": "ball_3",
        "solid_volume_mm3": 0.524,
        "step_reimport_volume_mm3": 0.524,
        "stl_volume_mm3": 0.52,
+       "stl_watertight": true,
+       "status": "ok"
+      },
+      {
+       "part": "ball_epoxy_3",
+       "solid_volume_mm3": 0.556,
+       "step_reimport_volume_mm3": 0.556,
+       "stl_volume_mm3": 0.557,
        "stl_watertight": true,
        "status": "ok"
       },
@@ -3098,17 +3755,9 @@
       },
       {
        "part": "cradle",
-       "solid_volume_mm3": 28664.371,
-       "step_reimport_volume_mm3": 28664.371,
-       "stl_volume_mm3": 28669.594,
-       "stl_watertight": true,
-       "status": "ok"
-      },
-      {
-       "part": "cradle_plate",
-       "solid_volume_mm3": 2517.261,
-       "step_reimport_volume_mm3": 2517.261,
-       "stl_volume_mm3": 2514.946,
+       "solid_volume_mm3": 29908.789,
+       "step_reimport_volume_mm3": 29908.789,
+       "stl_volume_mm3": 29912.627,
        "stl_watertight": true,
        "status": "ok"
       },
@@ -3130,57 +3779,57 @@
       },
       {
        "part": "spring_pin_1",
-       "solid_volume_mm3": 10.958,
-       "step_reimport_volume_mm3": 10.958,
-       "stl_volume_mm3": 10.94,
+       "solid_volume_mm3": 13.983,
+       "step_reimport_volume_mm3": 13.983,
+       "stl_volume_mm3": 13.96,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "spring_pin_2",
-       "solid_volume_mm3": 10.958,
-       "step_reimport_volume_mm3": 10.958,
-       "stl_volume_mm3": 10.94,
+       "solid_volume_mm3": 13.983,
+       "step_reimport_volume_mm3": 13.983,
+       "stl_volume_mm3": 13.96,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "spring_pin_3",
-       "solid_volume_mm3": 10.958,
-       "step_reimport_volume_mm3": 10.958,
-       "stl_volume_mm3": 10.94,
+       "solid_volume_mm3": 13.983,
+       "step_reimport_volume_mm3": 13.983,
+       "stl_volume_mm3": 13.96,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "spring_pin_4",
-       "solid_volume_mm3": 10.958,
-       "step_reimport_volume_mm3": 10.958,
-       "stl_volume_mm3": 10.94,
+       "solid_volume_mm3": 13.983,
+       "step_reimport_volume_mm3": 13.983,
+       "stl_volume_mm3": 13.96,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "spring_pin_5",
-       "solid_volume_mm3": 10.958,
-       "step_reimport_volume_mm3": 10.958,
-       "stl_volume_mm3": 10.94,
+       "solid_volume_mm3": 13.983,
+       "step_reimport_volume_mm3": 13.983,
+       "stl_volume_mm3": 13.96,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "spring_pin_6",
-       "solid_volume_mm3": 10.958,
-       "step_reimport_volume_mm3": 10.958,
-       "stl_volume_mm3": 10.94,
+       "solid_volume_mm3": 13.983,
+       "step_reimport_volume_mm3": 13.983,
+       "stl_volume_mm3": 13.96,
        "stl_watertight": true,
        "status": "ok"
       },
       {
        "part": "spring_pin_7",
-       "solid_volume_mm3": 10.958,
-       "step_reimport_volume_mm3": 10.958,
-       "stl_volume_mm3": 10.94,
+       "solid_volume_mm3": 13.983,
+       "step_reimport_volume_mm3": 13.983,
+       "stl_volume_mm3": 13.96,
        "stl_watertight": true,
        "status": "ok"
       },
@@ -3220,7 +3869,7 @@
     }
    ],
    "notes": [
-    "GL1_assembly.step: 2.52 MB, 37 named parts",
+    "GL1_assembly.step: 2.60 MB, 39 named parts",
     "STL tolerance 0.02 mm linear, 0.2 rad angular; print orientation: tub roof-down, base plate and cradle as modelled (z = build direction)",
     "box = exact axis-aligned bounding box of the solid in print orientation; orientation is a recommendation, the bureau may nest differently"
    ],
@@ -3230,48 +3879,39 @@
    "id": 10,
    "name": "support posts",
    "passed": true,
-   "summary": "8 posts, all on the PCB, solid from PCB to roof, clear of listed parts and of the LCD glass",
+   "summary": "8 posts on their keep-out squares, solid from PCB to roof, clear of listed parts and of the LCD glass; two spigots under posts E; seat area 17.9 mm2",
    "tables": [
     {
      "title": "Support posts",
      "rows": [
-      {
-       "post": "A+",
-       "x0": 14.6,
-       "x1": 16.2,
-       "y0": 1.0,
-       "y1": 2.6,
-       "to_pcb_edge_mm": 4.793,
-       "nearest_part": "U6",
-       "gap_to_nearest_part_mm": 1.1,
-       "gap_to_lcd_glass_mm": 1.3,
-       "solid_from_pcb_to_roof_pct": 100.0,
-       "ok": true
-      },
       {
        "post": "A-",
        "x0": -16.2,
        "x1": -14.6,
        "y0": 1.0,
        "y1": 2.6,
-       "to_pcb_edge_mm": 4.793,
+       "to_pcb_edge_mm": 4.693,
        "nearest_part": "BT1",
        "gap_to_nearest_part_mm": 1.2,
        "gap_to_lcd_glass_mm": 1.3,
        "solid_from_pcb_to_roof_pct": 100.0,
+       "seat_area_on_pcb_mm2": 2.56,
+       "locating_spigot": "-",
        "ok": true
       },
       {
-       "post": "B+",
-       "x0": 13.55,
-       "x1": 15.15,
-       "y0": 10.0,
-       "y1": 11.6,
-       "to_pcb_edge_mm": 2.119,
+       "post": "A+",
+       "x0": 14.6,
+       "x1": 16.2,
+       "y0": 1.0,
+       "y1": 2.6,
+       "to_pcb_edge_mm": 4.693,
        "nearest_part": "U6",
-       "gap_to_nearest_part_mm": 0.9,
-       "gap_to_lcd_glass_mm": 0.25,
+       "gap_to_nearest_part_mm": 1.1,
+       "gap_to_lcd_glass_mm": 1.3,
        "solid_from_pcb_to_roof_pct": 100.0,
+       "seat_area_on_pcb_mm2": 2.56,
+       "locating_spigot": "-",
        "ok": true
       },
       {
@@ -3280,24 +3920,28 @@
        "x1": -13.55,
        "y0": 10.0,
        "y1": 11.6,
-       "to_pcb_edge_mm": 2.119,
+       "to_pcb_edge_mm": 2.019,
        "nearest_part": "U4",
        "gap_to_nearest_part_mm": 2.944,
        "gap_to_lcd_glass_mm": 0.25,
        "solid_from_pcb_to_roof_pct": 100.0,
+       "seat_area_on_pcb_mm2": 2.56,
+       "locating_spigot": "-",
        "ok": true
       },
       {
-       "post": "C+",
-       "x0": 5.7,
-       "x1": 7.3,
-       "y0": -19.4,
-       "y1": -17.8,
-       "to_pcb_edge_mm": 0.472,
-       "nearest_part": "J1",
-       "gap_to_nearest_part_mm": 1.803,
-       "gap_to_lcd_glass_mm": 1.0,
+       "post": "B+",
+       "x0": 13.55,
+       "x1": 15.15,
+       "y0": 10.0,
+       "y1": 11.6,
+       "to_pcb_edge_mm": 2.019,
+       "nearest_part": "U6",
+       "gap_to_nearest_part_mm": 0.9,
+       "gap_to_lcd_glass_mm": 0.25,
        "solid_from_pcb_to_roof_pct": 100.0,
+       "seat_area_on_pcb_mm2": 2.56,
+       "locating_spigot": "-",
        "ok": true
       },
       {
@@ -3306,24 +3950,28 @@
        "x1": -5.7,
        "y0": -19.4,
        "y1": -17.8,
-       "to_pcb_edge_mm": 0.472,
+       "to_pcb_edge_mm": 0.372,
        "nearest_part": "J1",
        "gap_to_nearest_part_mm": 1.803,
        "gap_to_lcd_glass_mm": 1.0,
        "solid_from_pcb_to_roof_pct": 100.0,
+       "seat_area_on_pcb_mm2": 2.56,
+       "locating_spigot": "-",
        "ok": true
       },
       {
-       "post": "E+",
-       "x0": 3.4,
-       "x1": 5.0,
-       "y0": 13.75,
-       "y1": 15.35,
-       "to_pcb_edge_mm": 1.95,
-       "nearest_part": "U1",
-       "gap_to_nearest_part_mm": 0.45,
-       "gap_to_lcd_glass_mm": 0.25,
+       "post": "C+",
+       "x0": 5.7,
+       "x1": 7.3,
+       "y0": -19.4,
+       "y1": -17.8,
+       "to_pcb_edge_mm": 0.372,
+       "nearest_part": "J1",
+       "gap_to_nearest_part_mm": 1.803,
+       "gap_to_lcd_glass_mm": 1.0,
        "solid_from_pcb_to_roof_pct": 100.0,
+       "seat_area_on_pcb_mm2": 2.56,
+       "locating_spigot": "-",
        "ok": true
       },
       {
@@ -3337,14 +3985,32 @@
        "gap_to_nearest_part_mm": 0.45,
        "gap_to_lcd_glass_mm": 0.25,
        "solid_from_pcb_to_roof_pct": 100.0,
+       "seat_area_on_pcb_mm2": 1.53,
+       "locating_spigot": "dia 1.0 x 0.6",
+       "ok": true
+      },
+      {
+       "post": "E+",
+       "x0": 3.4,
+       "x1": 5.0,
+       "y0": 13.75,
+       "y1": 15.35,
+       "to_pcb_edge_mm": 1.95,
+       "nearest_part": "U1",
+       "gap_to_nearest_part_mm": 0.45,
+       "gap_to_lcd_glass_mm": 0.25,
+       "solid_from_pcb_to_roof_pct": 100.0,
+       "seat_area_on_pcb_mm2": 0.96,
+       "locating_spigot": "dia 1.0 x 0.6",
        "ok": true
       }
      ]
     }
    ],
    "notes": [
-    "only parts listed in master_params.yaml are checked; passives are not in the YAML - the post feet are PCB keep-outs (PROPOSED_PARAM_CHANGES.md)",
-    "load path roof -> posts -> PCB -> PSA -> base plate, none through LCD or battery. Total post foot area 20.5 mm2: an 800 N footstep carried by the posts alone would be 39 MPa (PA12 yields near 48 MPa). That is an upper bound - the side wall runs to the base plane and takes most of the load - but the footstep case is NOT analysed or tested (open issue)"
+    "post feet are the YAML tub_keepouts.post_feet (the contract with the PCB layout, proven in check 12); passives are not in the YAML",
+    "posts E seat on the PCB round their spigots: full annulus at the round hole, two strips beside the 1.65 mm slot (the slot is wider than the 1.6 mm foot)",
+    "load path roof -> posts -> PCB -> adhesive sheet -> base plate, none through LCD or battery. Total seat area 17.9 mm2: an 800 N footstep carried by the posts alone would be 45 MPa (PA12 yields near 48 MPa). That is an upper bound - the side wall runs to the base plane and takes most of the load - but the footstep case is NOT analysed or tested (open issue)"
    ],
    "warnings": []
   },
@@ -3367,7 +4033,16 @@
        "line": "NOTE  prism top z = 6.61; optical axis z = 5.61"
       },
       {
-       "line": "NOTE  PCB area 1347 mm^2; top-side parts 651 mm^2 (48 %)"
+       "line": "NOTE  PCB area 1336 mm^2; top-side parts 651 mm^2 (49 %)"
+      },
+      {
+       "line": "NOTE  PCB edge to tub ledge: 0.25 mm"
+      },
+      {
+       "line": "NOTE  pad slot to base edge: 1.66 mm; slot covers pads to x = +-8.52 of +-8.72"
+      },
+      {
+       "line": "NOTE  visor face outboard of each window recess: 1.05 mm (flat half-chord 13.80)"
       },
       {
        "line": "OK: no layout errors"
@@ -3379,76 +4054,311 @@
     "exit code 0"
    ],
    "warnings": []
+  },
+  {
+   "id": 12,
+   "name": "tub keep-out contract (YAML tub_keepouts)",
+   "passed": true,
+   "summary": "no tub material in the layout space below z 4.35 (0.000000 mm3 common); eight post feet inside their 1.6 mm squares; hood skirts 1.20 mm above the PCB inside the +-2.85 zones (parts to 0.95); lowest tub feature elsewhere 2.95 mm above the PCB",
+   "tables": [
+    {
+     "title": "Boolean proof",
+     "rows": [
+      {
+       "test": "tub solid INTERSECT (PCB outline x z 1.80..4.35 minus post-foot squares minus hood zones above z 2.75)",
+       "layout_space_volume_mm3": 3290.3,
+       "common_volume_mm3": 0,
+       "limit_mm3": 0.0001,
+       "status": "ok"
+      }
+     ]
+    },
+    {
+     "title": "Keep-outs of the YAML against the tub solid",
+     "rows": [
+      {
+       "keep_out": "post foot A-",
+       "yaml_centre": [
+        -15.4,
+        1.8
+       ],
+       "yaml_size_mm": "1.6 x 1.6",
+       "tub_area_inside_mm2": 2.56,
+       "tub_area_outside_mm2": 0.0,
+       "lowest_tub_above_pcb_mm": 0.0,
+       "allowed": ">= 0 (contact)",
+       "status": "ok"
+      },
+      {
+       "keep_out": "post foot A+",
+       "yaml_centre": [
+        15.4,
+        1.8
+       ],
+       "yaml_size_mm": "1.6 x 1.6",
+       "tub_area_inside_mm2": 2.56,
+       "tub_area_outside_mm2": 0.0,
+       "lowest_tub_above_pcb_mm": 0.0,
+       "allowed": ">= 0 (contact)",
+       "status": "ok"
+      },
+      {
+       "keep_out": "post foot B-",
+       "yaml_centre": [
+        -14.35,
+        10.8
+       ],
+       "yaml_size_mm": "1.6 x 1.6",
+       "tub_area_inside_mm2": 2.56,
+       "tub_area_outside_mm2": 0.0,
+       "lowest_tub_above_pcb_mm": 0.0,
+       "allowed": ">= 0 (contact)",
+       "status": "ok"
+      },
+      {
+       "keep_out": "post foot B+",
+       "yaml_centre": [
+        14.35,
+        10.8
+       ],
+       "yaml_size_mm": "1.6 x 1.6",
+       "tub_area_inside_mm2": 2.56,
+       "tub_area_outside_mm2": 0.0,
+       "lowest_tub_above_pcb_mm": 0.0,
+       "allowed": ">= 0 (contact)",
+       "status": "ok"
+      },
+      {
+       "keep_out": "post foot C-",
+       "yaml_centre": [
+        -6.5,
+        -18.6
+       ],
+       "yaml_size_mm": "1.6 x 1.6",
+       "tub_area_inside_mm2": 2.56,
+       "tub_area_outside_mm2": 0.0,
+       "lowest_tub_above_pcb_mm": 0.0,
+       "allowed": ">= 0 (contact)",
+       "status": "ok"
+      },
+      {
+       "keep_out": "post foot C+",
+       "yaml_centre": [
+        6.5,
+        -18.6
+       ],
+       "yaml_size_mm": "1.6 x 1.6",
+       "tub_area_inside_mm2": 2.56,
+       "tub_area_outside_mm2": 0.0,
+       "lowest_tub_above_pcb_mm": 0.0,
+       "allowed": ">= 0 (contact)",
+       "status": "ok"
+      },
+      {
+       "keep_out": "post foot E-",
+       "yaml_centre": [
+        -4.2,
+        14.55
+       ],
+       "yaml_size_mm": "1.6 x 1.6",
+       "tub_area_inside_mm2": 2.56,
+       "tub_area_outside_mm2": 0.0,
+       "lowest_tub_above_pcb_mm": 0.0,
+       "allowed": ">= 0 (contact)",
+       "status": "ok"
+      },
+      {
+       "keep_out": "post foot E+",
+       "yaml_centre": [
+        4.2,
+        14.55
+       ],
+       "yaml_size_mm": "1.6 x 1.6",
+       "tub_area_inside_mm2": 2.56,
+       "tub_area_outside_mm2": 0.0,
+       "lowest_tub_above_pcb_mm": 0.0,
+       "allowed": ">= 0 (contact)",
+       "status": "ok"
+      },
+      {
+       "keep_out": "camera hood L",
+       "yaml_centre": [
+        -10.0,
+        15.5
+       ],
+       "yaml_size_mm": "5.7 x 3.6",
+       "tub_area_inside_mm2": 5.49,
+       "tub_area_outside_mm2": "hood spans x -2.800..+2.800 of +-2.85, from y 13.750 (zone from 13.7)",
+       "lowest_tub_above_pcb_mm": 1.2,
+       "allowed": ">= 0.95 (part height)",
+       "status": "ok"
+      },
+      {
+       "keep_out": "camera hood R",
+       "yaml_centre": [
+        10.0,
+        15.5
+       ],
+       "yaml_size_mm": "5.7 x 3.6",
+       "tub_area_inside_mm2": 5.49,
+       "tub_area_outside_mm2": "hood spans x -2.800..+2.800 of +-2.85, from y 13.750 (zone from 13.7)",
+       "lowest_tub_above_pcb_mm": 1.2,
+       "allowed": ">= 0.95 (part height)",
+       "status": "ok"
+      }
+     ]
+    },
+    {
+     "title": "Height of the tub above the PCB top by region (ray-cast height map)",
+     "rows": [
+      {
+       "region": "post feet",
+       "grid_points": 115,
+       "lowest_tub_above_pcb_mm": 0.0,
+       "at_xy": [
+        -16.1,
+        1.1
+       ],
+       "contract_minimum_mm": 0.0,
+       "share_below_free_height_pct": 100.0,
+       "share_between_free_height_and_roof_pct": 0.0,
+       "share_at_roof_height_pct": 0.0,
+       "status": "ok"
+      },
+      {
+       "region": "camera-hood zones",
+       "grid_points": 250,
+       "lowest_tub_above_pcb_mm": 1.2,
+       "at_xy": [
+        -12.5,
+        13.9
+       ],
+       "contract_minimum_mm": 0.95,
+       "share_below_free_height_pct": 28.0,
+       "share_between_free_height_and_roof_pct": 16.0,
+       "share_at_roof_height_pct": 56.0,
+       "status": "ok"
+      },
+      {
+       "region": "under the LCD glass",
+       "grid_points": 5016,
+       "lowest_tub_above_pcb_mm": 3.75,
+       "at_xy": [
+        -12.9,
+        -16.5
+       ],
+       "contract_minimum_mm": 2.55,
+       "share_below_free_height_pct": 0.0,
+       "share_between_free_height_and_roof_pct": 52.7,
+       "share_at_roof_height_pct": 47.3,
+       "status": "ok"
+      },
+      {
+       "region": "elsewhere on the PCB",
+       "grid_points": 2951,
+       "lowest_tub_above_pcb_mm": 2.95,
+       "at_xy": [
+        -14.1,
+        -10.9
+       ],
+       "contract_minimum_mm": 2.55,
+       "share_below_free_height_pct": 0.0,
+       "share_between_free_height_and_roof_pct": 37.9,
+       "share_at_roof_height_pct": 62.1,
+       "status": "ok"
+      }
+     ]
+    }
+   ],
+   "notes": [
+    "free height = pcb.max_top_height_under_lcd = 2.55 mm above the PCB top (z 4.35): the height the layout may use everywhere on the board outside the keep-outs. 'Overhangs the PCB top side' is evaluated below this height; the YAML does not state one for the area outside the LCD (D22)",
+    "keep-out prisms are enlarged by 0.0002 mm so that a face lying exactly on the contract boundary does not count as an intrusion",
+    "hood zones: tub material is allowed from 0.95 mm above the PCB top upward; the camera cube is exempt (it is a part, not tub)",
+    "height map: 8332 rays on a 0.4 mm grid over the board top (locating holes excluded); the corner fill between hood and side wall starts at y = 16.79, where the PCB outline has left the hood zone",
+    "the seating ledge (r >= 21.35) lies outside the PCB (r 21.1) and is checked as a clearance in check 2"
+   ],
+   "warnings": [
+    "D22: above the free height (z 4.35) the tub still hangs over the PCB outside the keep-outs: lowest feature 2.95 mm above the PCB top (z 4.75, glass locating rib), thick roof at z 5.55; design/check_layout.py allows parts to z 6.7 there. The contract needs a free height (PROPOSED_PARAM_CHANGES.md, part B)"
+   ]
   }
  ],
  "deviations": [
   {
    "id": "D01",
    "part": "base_plate / pcb_adhesive",
-   "yaml_change": true,
-   "requirement": "seven dia 2.2 pad holes at 2.54 pitch",
-   "implemented": "one slot 17.44 x 2.2 mm through all seven pad positions",
-   "reason": "the web between adjacent holes would be 0.34 mm (< 0.8 mm minimum wall)"
+   "status": "closed (rev C)",
+   "yaml_change": false,
+   "requirement": "seven dia 2.2 pad holes at 2.54 pitch (rev B)",
+   "implemented": "one slot 17.44 x 2.2 mm",
+   "reason": "rev C YAML specifies the slot (base_plate.pad_holes.form: slot)"
   },
   {
    "id": "D02",
    "part": "base_plate",
-   "yaml_change": true,
-   "requirement": "blind seats for 1.0 mm balls protruding 0.10 mm, wall >= 0.8",
-   "implemented": "90 deg conical seat from below; apex at z = 1.121 breaks through the top face as a dia 0.24 pin-hole (closed by the PCB adhesive sheet); 0.01 mm modelling gap ball-to-cone",
-   "reason": "the ball top is at z = 0.90 in a 1.00 mm plate, so any blind seat leaves <= 0.10 mm of skin. As-printed MJF tolerance (+-0.2) also exceeds the 0.10 mm protrusion: seats must be finish-machined (90 deg spot drill to depth) or the balls set on a jig and potted"
+   "status": "closed (rev C)",
+   "yaml_change": false,
+   "requirement": "blind seats for the 1.0 mm balls (rev B)",
+   "implemented": "three dia 1.15 through holes; balls set 0.1 proud on a gauge plate and potted with UV epoxy",
+   "reason": "rev C YAML specifies through holes and the gauge-plate process; the conical seats are removed"
   },
   {
    "id": "D03",
    "part": "base_plate",
+   "status": "closed (rev C)",
    "yaml_change": false,
-   "requirement": "baffle ring inner dia about 5.4, wall 0.6",
-   "implemented": "inner dia 5.91, wall 0.8, outer dia 7.51; spokes at [90.0, 225.0, 315.0] deg",
-   "reason": "the photodiode body (4.8 x 2.5) has a 5.41 mm diagonal and would clash with a 5.4 ring; 0.25 clearance added; wall raised to the 0.8 print minimum. Spokes are unequally spaced because three equal spokes cannot all avoid LED positions on a 45 deg grid"
+   "requirement": "baffle ring about dia 5.4, wall 0.6 (rev B task text)",
+   "implemented": "inner dia 5.91, wall 0.8, spokes at [90, 225, 315] deg",
+   "reason": "rev C YAML carries these numbers (base_plate.baffle)"
   },
   {
    "id": "D04",
    "part": "tub",
-   "yaml_change": true,
+   "status": "accepted",
+   "yaml_change": false,
    "requirement": "every printed wall >= 0.8 mm",
-   "implemented": "wall behind each window recess in front of the camera cube is 0.525 mm: z 4.2..4.6 across the 4.3999999999999995 mm recess and z 4.6..4.81 beside the opening (3.5 mm2 per camera); everywhere else behind the recess the visor wall is thickened inward to 0.8",
-   "reason": "visor face 18.4 to cube front 17.075 leaves 1.325 mm for recess 0.55 + wall 0.8 + clearance 0.25 = 1.60 mm"
+   "implemented": "the wall behind each window recess in front of the camera cube is 0.525 mm: z 4.2..4.6 across the 4.0 mm bay (1.6 mm2 per camera); the bonded window backs it",
+   "reason": "visor face 18.4 to cube front 17.075 leaves 1.325 mm for recess 0.55 + wall 0.8 + clearance 0.25. Accepted in rev C (visor_window.min_wall_behind_recess = 0.525)"
   },
   {
    "id": "D05",
    "part": "tub",
+   "status": "recorded",
    "yaml_change": false,
    "requirement": "camera opening bevelled wider toward the inside",
-   "implemented": "side walls only: 0.5 mm straight land at the aperture, then 30.0 deg bevel to +-1.823 at the inner face; top is the roof underside, bottom is a flat sill at z 4.6",
-   "reason": "a knife edge cannot be printed in MJF (the land was 0.3 in the first model; the wall audit put its rim below 0.5 mm, so it is now 0.5); the camera cube is directly below the sill and the roof directly above"
+   "implemented": "no bevel: the opening is straight, +-2.0 wide and z 4.6..6.8, through the full 0.8 mm of wall, flush with the bay walls (bay half-width 2.0)",
+   "reason": "the light bundle diverges outward: it is +-1.62 mm wide at the aperture and only about +-1.23 at the inner face, so a bevel toward the inside clears nothing. A wider bay would push the hood to more than the 2.85 mm half-width of the keep-out contract (hood outside is +-2.8). The straight opening also removes the thin bevelled rim of rev B"
   },
   {
    "id": "D06",
    "part": "tub",
+   "status": "recorded",
    "yaml_change": false,
    "requirement": "shallow glue channel if possible without going below the wall minimum",
    "implemented": "no glue channel and no glue chamfer anywhere",
-   "reason": "the arc ledge is 0.65 mm wide and the seal land 0.4 mm: any groove leaves a seal lip below 0.5 mm, and a chamfer on the 0.8 mm visor wall leaves less than 0.8 at its foot (the wall audit flagged a 0.2 mm chamfer at 0.61 mm, so it was removed). The 0.25 x 1.0 mm radial gap between base edge and side wall is the adhesive reservoir on the arc; on the visor the adhesive fillets against the 0.15 mm step between the base edge and the visor face"
+   "reason": "the arc ledge is 0.65 mm wide and the seal land 0.4 mm: any groove leaves a seal lip below 0.5 mm, and a chamfer on the 0.8 mm visor wall leaves less than 0.8 at its foot. The 0.25 x 1.2 mm radial gap between base edge and side wall is the adhesive reservoir on the arc; the bead itself is 0.33 mm thick in rev C"
   },
   {
    "id": "D07",
    "part": "tub / base_plate",
+   "status": "recorded",
    "yaml_change": false,
    "requirement": "two or three 1.2 mm locating pins/keys between base and tub",
    "implemented": "two tub lugs 1.2 x 0.8 x 1.2 mm under the visor wall at x = +-9.25, in base notches 1.7 wide",
-   "reason": "no room for round pins inside the seal line (PCB edge to land 0.15 mm; front strip 0.95 mm). The lugs interrupt the front seal land twice and must be flooded with adhesive (leak-test item)"
+   "reason": "no room for round pins inside the seal line (front strip 0.95 mm). The lugs interrupt the front seal land twice and must be flooded with adhesive (leak-test item)"
   },
   {
    "id": "D08",
    "part": "tub / vent",
-   "yaml_change": true,
-   "requirement": "vent pad near (17, -3)",
-   "implemented": "vent at (17.9, -3.0), pad 6.199999999999999 x 5.6 raised 0.2 mm, hole dia 1.0",
-   "reason": "a 5 mm disc at (17, -3) would overlap the thick roof ring (r 15.05) that carries the cover-glass recess"
+   "status": "closed (rev C)",
+   "yaml_change": false,
+   "requirement": "vent pad near (17, -3) (rev B)",
+   "implemented": "vent at (17.9, -3.0)",
+   "reason": "rev C YAML gives this position"
   },
   {
    "id": "D09",
    "part": "tub",
+   "status": "recorded",
    "yaml_change": false,
    "requirement": "nose groove from the aperture edge to the visor",
    "implemented": "groove 1.0 x 0.3 from the cover-glass recess edge (r 14.25) to the visor; roof thickened 0.3 mm underneath",
@@ -3457,38 +4367,43 @@
   {
    "id": "D10",
    "part": "pcb_adhesive / stack",
-   "yaml_change": true,
-   "requirement": "PCB adhesive sheet 0.13 mm; YAML has PCB bottom = base top",
-   "implemented": "sheet modelled at true 0.13 mm (z 1.0..1.13), overlapping the nominal PCB by its own volume (allow-listed modelling overlap)",
-   "reason": "the YAML carries the PSA at zero thickness. In the real stack the posts datum the PCB top at tub z = 1.80, so the base plate sits 0.13 mm lower relative to the tub: seal bead 0.33 instead of 0.20, tub rim 0.13 above the base plane, overall height 7.73, contact pads 1.13 and optical axis 5.74 above the base plane; all tub-internal clearances are unchanged"
+   "status": "closed (rev C)",
+   "yaml_change": false,
+   "requirement": "adhesive sheet at zero thickness in the YAML (rev B)",
+   "implemented": "base plate 0.87 + sheet 0.13 (z 0.87..1.0); PCB at z 1.0..1.8; no modelling overlap",
+   "reason": "rev C YAML: base_plate.thickness 0.87 and base_plate.psa.thickness 0.13"
   },
   {
    "id": "D11",
    "part": "tub / lcd_glass",
-   "yaml_change": true,
+   "status": "accepted",
+   "yaml_change": false,
    "requirement": "LCD glass assembled from below",
-   "implemented": "glass must be inserted biased 0.25 mm forward (against the front locators) and then slid back",
-   "reason": "rear glass corners are at r = 21.427 > ledge inner radius 21.35; biased forward they pass at r = 21.232 (0.118 mm nominal clearance, less than the print tolerance)"
+   "implemented": "glass is inserted biased 0.25 mm forward (against posts E and the hood rear walls) and then slid back: an assembly step",
+   "reason": "rear glass corners are at r = 21.427 > ledge inner radius 21.35; biased forward they pass at r = 21.232 (0.118 mm nominal clearance, less than the print tolerance). Accepted in rev C"
   },
   {
    "id": "D12",
-   "part": "tub / main_pcb",
-   "yaml_change": true,
+   "part": "tub / main_pcb / windows",
+   "status": "closed (rev C)",
+   "yaml_change": false,
    "requirement": "0.25 mm clearance on every drop-in fit",
-   "implemented": "PCB edge to seating ledge 0.15 mm; visor window in its recess 0.05 mm per side",
-   "reason": "these are YAML / task numbers; kept as specified and flagged"
+   "implemented": "PCB edge to seating ledge 0.25 mm; visor window in its recess 0.25 mm per side",
+   "reason": "rev C YAML: pcb.radius 21.1 and visor_window.recess_w 5.5"
   },
   {
    "id": "D13",
    "part": "tub",
+   "status": "accepted",
    "yaml_change": false,
-   "requirement": "light baffle from the visor wall back to each prism",
-   "implemented": "hood: side skirts and a front pad down to z 3.0, rear wall down to z 4.81 (over the cube), corner fill to the side wall; bottom front edge of the rear wall chamfered 0.12 mm so that it stays 0.26 mm off the prism hypotenuse (0.18 without it)",
-   "reason": "the rear wall cannot pass the cube (LCD glass 0.63 mm behind it): a 0.25 mm slit remains above the cube top at the rear, facing the aluminised hypotenuse. PCB keep-out: parts under the skirts must be below 0.95 mm"
+   "requirement": "light baffle from the visor wall back to each prism (light-tight)",
+   "implemented": "hood: side skirts and a front pad down to z 3.0, rear wall down to z 4.81 (over the cube); bottom front edge of the rear wall chamfered 0.12 mm (0.26 mm to the prism hypotenuse). A slit of 0.25 to 0.37 mm remains above the cube at the rear",
+   "reason": "the rear wall cannot pass the cube (LCD glass 0.63 mm behind it). Rev C: the slit is closed with a dab of black adhesive at assembly (README assembly step); the light-leak coupon test stays on the test list"
   },
   {
    "id": "D14",
    "part": "tub",
+   "status": "recorded",
    "yaml_change": false,
    "requirement": "top edge radius 0.6, bottom chamfer 0.3; cavity below z 1.2 = R 22 circle clipped at the visor face",
    "implemented": "radius and chamfer on the arc only (visor edges sharp); below z = 1.2 the side wall ends on the radial plane through the outer D corner (+-13.8, 18.4), which leaves an open notch about 2.0 mm wide under each end of the visor wall that the seal adhesive must fill",
@@ -3497,34 +4412,74 @@
   {
    "id": "D15",
    "part": "cradle",
+   "status": "closed (rev C)",
    "yaml_change": false,
-   "requirement": "nest accepts the puck at 0 and 180 deg about z",
-   "implemented": "nest = union of the puck outline at 0 deg and turned 180 deg about the nest centre (0, -2.3000000000000007); the puck centre moves 4.6 mm between the two positions; at 180 deg the pins bear on the base plate at puck y = 12.4",
-   "reason": "a D with one flat cannot be located at both 0 and 180 deg about its own centre by fixed features (any stop on the flat lies inside the turned outline)"
+   "requirement": "nest accepts the puck at 0 and 180 deg (rev B)",
+   "implemented": "one orientation only; the D flat is the key",
+   "reason": "rev C: the cradle is a charging and data dock; calibration does not use it"
   },
   {
    "id": "D16",
    "part": "cradle",
+   "status": "closed (rev C)",
    "yaml_change": false,
-   "requirement": "seven 2.0 mm clearance holes for the spring pins",
-   "implemented": "printed body: one slot 2.33 mm wide (pin body dia 1.83 + 2 x 0.25); steel plate: seven dia 2.0 holes; pin bodies stop 0.3 mm below the plate so only the dia 1.07 plunger passes the steel",
-   "reason": "0.54 mm webs are below the print minimum, and a 2.0 mm printed slot would leave only 0.085 mm round the pin body; 0.54 mm webs in 1.5 mm steel are marginal for laser cutting (OPEN); a dia 1.83 pin body in a dia 2.0 steel hole would risk shorting VBUS to GND through the plate"
+   "requirement": "seven 2.0 mm pin holes and a stainless reference plate (rev B)",
+   "implemented": "one printed slot 2.33 mm wide through the nest floor; no plate",
+   "reason": "rev C: 'spring pins come up through one slot'; the reference plate is deleted"
   },
   {
    "id": "D17",
    "part": "cradle",
+   "status": "closed (rev C)",
    "yaml_change": false,
-   "requirement": "spring pins compressed to the working height against the pads; DESIGN_SPEC: a puck placed 180 deg round touches no pins",
-   "implemented": "cradle PCB top at z = -4.69 (pad plane 1.13 - working height 5.82); pins are drawn 0.165 mm shorter than real because the model keeps the YAML PCB height. At 180 deg the pins bear on the solid base plate (they touch no pad and no opening)",
-   "reason": "OPEN: no hold-down is modelled. Seven pins at 0.59 N each (PROVISIONAL) give about 4.1 N against a marker weight of about 0.11 N, so the marker is lifted off the reference plate; about 9 N applied at the marker centre would be needed to keep all three ball feet seated. At 180 deg the pins are compressed 2.27 of 2.29 mm full stroke. A hold-down (lid or latch), magnetic retention, or pins that retract for the flip calibration are required before the cradle can charge reliably or serve as the calibration seat"
+   "requirement": "hold the marker down against the spring pins (open in rev B)",
+   "implemented": "fixed lip (|x| <= 6.0, 1.2 mm over the tub top) and a rear cantilever latch (14.0 x 1.15 x 11.65 mm, hook 0.90 mm on the tub top) with a thumb tab",
+   "reason": "designed and proven in check 7 (retention, strain, forces, posed insertion path)"
   },
   {
    "id": "D18",
    "part": "cradle",
+   "status": "recorded",
    "yaml_change": false,
    "requirement": "four 3 mm feet pockets; PCB pocket underneath",
    "implemented": "four pockets dia 8.4 x 1.0 for dia 8.0 x 3.0 mm adhesive bumpers; PCB held against the pocket ceiling by four M2 thread-forming screws (not modelled; printed as dia 1.7 x 0.5 spot marks, drilled dia 1.6 x 3 after printing because a blind 1.7 mm hole would trap powder); three lightening pockets underneath",
    "reason": "'3 mm feet' read as 3 mm high bumpers (ambiguous); the pin force pushes the PCB out of its pocket so it needs positive retention"
+  },
+  {
+   "id": "D19",
+   "part": "tub / main_pcb",
+   "status": "open",
+   "yaml_change": true,
+   "requirement": "PCB located to the tub by two printed spigots in non-plated holes (rev C YAML)",
+   "implemented": "spigots dia 1.0 x 0.6 under posts E in a dia 1.15 hole and a 1.15 x 1.65 slot: 0.075 mm radial clearance, as specified",
+   "reason": "0.075 mm is a locating fit, far below the 0.25 mm drop-in rule and below the +-0.2 mm print tolerance: a spigot that prints 0.15 mm oversize does not enter. The spigots are therefore a gauged feature (go / no-go at first article, dress with a hollow punch or fine file). Part B of PROPOSED_PARAM_CHANGES.md offers a looser hole with the optical margin it costs"
+  },
+  {
+   "id": "D20",
+   "part": "cradle",
+   "status": "recorded",
+   "yaml_change": true,
+   "requirement": "cradle body 60 x 60 x 14 mm",
+   "implemented": "body 60 x 60 x 14 (z -11.0 to 3.0); the lip stands to z 9.45 and the latch to z 11.28, so the printed part is 22.3 mm tall; the body is not centred on the marker (y -36.0 to 24.0)",
+   "reason": "a hook over the marker top (z 7.6) with a 11.65 mm cantilever and a 30 deg lead-in cannot stay inside a 14 mm block; the rear needs the room for the latch well, the guard wall and the USB-C receptacle behind it"
+  },
+  {
+   "id": "D21",
+   "part": "cradle / marker",
+   "status": "recorded",
+   "yaml_change": true,
+   "requirement": "the marker rests on its three ball feet on the nest floor, pins at the working height",
+   "implemented": "lip and hook have the 0.25 mm drop-in clearance above the tub top. With pins fitted the marker is pushed up against them: it floats up to 0.25 mm above its feet and the pins then work at 6.07 instead of 5.82 mm (0.89 of 2.29 mm stroke used)",
+   "reason": "a 90 deg retaining face cannot preload a part whose height varies by the print tolerance; the float is inside the pin stroke. A dock does not need a seating datum (calibration is done elsewhere)"
+  },
+  {
+   "id": "D22",
+   "part": "tub / PCB layout",
+   "status": "open",
+   "yaml_change": true,
+   "requirement": "tub_keepouts is the complete contract: every tub feature that touches or hangs over the PCB top lies inside it",
+   "implemented": "true for everything below z = 4.35 (2.55 mm above the PCB top), which check 12 proves on the solids. Above that height the tub still has features over the PCB outside the keep-outs: glass locating ribs down to z 4.75, the thick roof at z 5.550000000000001 (also behind and beside the LCD glass), the nose pad at z 6.5 and the vent pad at z 6.6",
+   "reason": "design/check_layout.py lets a part outside the LCD footprint reach z = roof - 0.1 = 6.7. No listed part is taller than 2.0 mm there, so nothing clashes today, but the rule and the tub disagree: a free height must be added to the contract"
   }
  ]
 }

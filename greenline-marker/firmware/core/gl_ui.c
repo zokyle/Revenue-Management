@@ -108,35 +108,35 @@ static const gl_ui_transition_t table_[] = {
     T(GL_UI_SETTINGS_DIAL, GL_EV_DIAL_STEP, GL_G_ALWAYS, GL_UI_SETTINGS_DIAL, GL_ACT_REDRAW),
     T(GL_UI_SETTINGS_DIAL, GL_EV_DOUBLE_TAP, GL_G_ALWAYS, GL_UI_SETTINGS_DIAL,
       GL_ACT_DIAL_BEGIN | GL_ACT_REDRAW),
-    T(GL_UI_SETTINGS_DIAL, GL_EV_FLAT, GL_G_ITEM_FLIP_CAL_YES, GL_UI_CAL_FLIP,
-      GL_ACT_SAVE_SETTINGS | GL_ACT_CAL_FLIP_START | GL_ACT_REDRAW),
+    T(GL_UI_SETTINGS_DIAL, GL_EV_FLAT, GL_G_ITEM_ZERO_YES, GL_UI_CAL_ZERO,
+      GL_ACT_SAVE_SETTINGS | GL_ACT_CAL_ZERO_START | GL_ACT_REDRAW),
     T(GL_UI_SETTINGS_DIAL, GL_EV_FLAT, GL_G_ALWAYS, GL_UI_WAIT_STILL,
       GL_ACT_SAVE_SETTINGS | GL_ACT_WATCH_STILL | GL_ACT_NEW_READ | GL_ACT_REDRAW),
     T(GL_UI_SETTINGS_DIAL, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_SLEEP,
       GL_ACT_ENTER_SLEEP | GL_ACT_SURVEY_RESET),
 
-    /* ---- CRADLE_USB ---- */
+    /* ---- CRADLE_USB: charging and data.  The cradle accepts the marker one
+     *      way round only and holds it down: nothing is calibrated here ---- */
     T(GL_UI_CRADLE_USB, GL_EV_USB_DETACH, GL_G_ALWAYS, GL_UI_SLEEP,
       GL_ACT_USB_STOP | GL_ACT_ENTER_SLEEP),
-    T(GL_UI_CRADLE_USB, GL_EV_CAL_START, GL_G_ALWAYS, GL_UI_CAL_FLIP,
-      GL_ACT_CAL_FLIP_START | GL_ACT_REDRAW),
     T(GL_UI_CRADLE_USB, GL_EV_USB_ATTACH, GL_G_ALWAYS, GL_UI_CRADLE_USB, 0),
     T(GL_UI_CRADLE_USB, GL_EV_BATT_LOW, GL_G_ALWAYS, GL_UI_CRADLE_USB, 0),
 
-    /* ---- CAL_FLIP: the marker turned 180 degrees in the cradle touches no
-     *      pins, so losing VBUS here is normal ---- */
-    T(GL_UI_CAL_FLIP, GL_EV_CAL_DONE, GL_G_USB, GL_UI_CRADLE_USB, GL_ACT_REDRAW),
-    T(GL_UI_CAL_FLIP, GL_EV_CAL_DONE, GL_G_ALWAYS, GL_UI_WAIT_STILL,
+    /* ---- CAL_ZERO: zeroing on any hard flat surface (read, turn the marker
+     *      180 degrees in place, read again).  Entered only from the dial;
+     *      the turn is expected motion, so MOTION is ignored here.  Being put
+     *      in the cradle abandons the procedure ---- */
+    T(GL_UI_CAL_ZERO, GL_EV_CAL_DONE, GL_G_ALWAYS, GL_UI_WAIT_STILL,
       GL_ACT_WATCH_STILL | GL_ACT_NEW_READ | GL_ACT_REDRAW),
-    T(GL_UI_CAL_FLIP, GL_EV_CAL_FAIL, GL_G_ALWAYS, GL_UI_ERROR, GL_ACT_CAL_ABORT | GL_ACT_REDRAW),
-    T(GL_UI_CAL_FLIP, GL_EV_USB_DETACH, GL_G_ALWAYS, GL_UI_CAL_FLIP, GL_ACT_USB_STOP),
-    T(GL_UI_CAL_FLIP, GL_EV_USB_ATTACH, GL_G_ALWAYS, GL_UI_CAL_FLIP, GL_ACT_USB_START),
-    T(GL_UI_CAL_FLIP, GL_EV_DOUBLE_TAP, GL_G_USB, GL_UI_CRADLE_USB,
-      GL_ACT_CAL_ABORT | GL_ACT_REDRAW),
-    T(GL_UI_CAL_FLIP, GL_EV_DOUBLE_TAP, GL_G_ALWAYS, GL_UI_WAIT_STILL,
+    T(GL_UI_CAL_ZERO, GL_EV_CAL_FAIL, GL_G_ALWAYS, GL_UI_ERROR, GL_ACT_CAL_ABORT | GL_ACT_REDRAW),
+    T(GL_UI_CAL_ZERO, GL_EV_USB_ATTACH, GL_G_ALWAYS, GL_UI_CRADLE_USB,
+      GL_ACT_CAL_ABORT | GL_ACT_USB_START | GL_ACT_DISPLAY_ON | GL_ACT_REDRAW),
+    T(GL_UI_CAL_ZERO, GL_EV_DOUBLE_TAP, GL_G_ALWAYS, GL_UI_WAIT_STILL,
       GL_ACT_CAL_ABORT | GL_ACT_WATCH_STILL | GL_ACT_NEW_READ | GL_ACT_REDRAW),
-    T(GL_UI_CAL_FLIP, GL_EV_BATT_LOW, GL_G_ALWAYS, GL_UI_CAL_FLIP, 0),
-    T(GL_UI_CAL_FLIP, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_ERROR, GL_ACT_CAL_ABORT | GL_ACT_REDRAW),
+    T(GL_UI_CAL_ZERO, GL_EV_BATT_LOW, GL_G_ALWAYS, GL_UI_CAL_ZERO, 0),
+    T(GL_UI_CAL_ZERO, GL_EV_FAULT, GL_G_ALWAYS, GL_UI_ERROR,
+      GL_ACT_CAL_ABORT | GL_ACT_ABORT_READ | GL_ACT_REDRAW),
+    T(GL_UI_CAL_ZERO, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_ERROR, GL_ACT_CAL_ABORT | GL_ACT_REDRAW),
 
     /* ---- ERROR ---- */
     T(GL_UI_ERROR, GL_EV_DOUBLE_TAP, GL_G_ALWAYS, GL_UI_WAIT_STILL,
@@ -174,7 +174,7 @@ static const uint32_t timeout_ms_[GL_UI_STATE_COUNT] = {
     60000,  /* SURVEY_NEXT_DROP */
     30000,  /* SETTINGS_DIAL */
     0,      /* CRADLE_USB */
-    120000, /* CAL_FLIP */
+    120000, /* CAL_ZERO */
     5000,   /* ERROR */
     4000,   /* LOW_BATT */
 };
@@ -196,7 +196,7 @@ const char *gl_ui_state_name(gl_ui_state_t state)
 {
     static const char *const names[GL_UI_STATE_COUNT] = {
         "SLEEP", "WAKE", "WAIT_STILL", "READ_TILT", "CAPTURE", "SOLVE", "SHOW_RESULT",
-        "PRECISION_WAIT_SPIN", "SURVEY_NEXT_DROP", "SETTINGS_DIAL", "CRADLE_USB", "CAL_FLIP",
+        "PRECISION_WAIT_SPIN", "SURVEY_NEXT_DROP", "SETTINGS_DIAL", "CRADLE_USB", "CAL_ZERO",
         "ERROR", "LOW_BATT"
     };
     return ((unsigned)state < (unsigned)GL_UI_STATE_COUNT) ? names[state] : "?";
@@ -207,7 +207,7 @@ const char *gl_ui_event_name(gl_ui_event_t ev)
     static const char *const names[GL_EV_COUNT] = {
         "NONE", "MOTION", "STILL", "TILT_DONE", "TILT_FAIL", "CAPTURE_DONE", "CAPTURE_NO_STICK",
         "CAPTURE_FAIL", "SOLVE_DONE", "SOLVE_FAIL", "DOUBLE_TAP", "SPIN_DONE", "UPRIGHT", "FLAT",
-        "DIAL_STEP", "USB_ATTACH", "USB_DETACH", "BATT_LOW", "CAL_START", "CAL_DONE", "CAL_FAIL",
+        "DIAL_STEP", "USB_ATTACH", "USB_DETACH", "BATT_LOW", "CAL_DONE", "CAL_FAIL",
         "FAULT", "TIMEOUT"
     };
     return ((unsigned)ev < (unsigned)GL_EV_COUNT) ? names[ev] : "?";
@@ -217,8 +217,8 @@ const char *gl_ui_event_name(gl_ui_event_t ev)
 
 static int item_value_(const gl_ui_t *ui)
 {
-    if (ui->item >= GL_UI_ITEM_FLIP_CAL) {
-        return 0; /* "FLIP CAL" always starts at NO */
+    if (ui->item >= GL_UI_ITEM_ZERO) {
+        return 0; /* "ZERO" always starts at NO */
     }
     return gl_settings_item_get(&ui->edit, (gl_item_t)ui->item);
 }
@@ -234,8 +234,8 @@ static bool guard_(const gl_ui_t *ui, uint8_t guard)
     case GL_G_HAS_MANUAL_DIST: return ui->edit.manual_distance_cm != 0u;
     case GL_G_MOVED: return ui->moved;
     case GL_G_USB: return ui->usb;
-    case GL_G_ITEM_FLIP_CAL_YES:
-        return ui->item == GL_UI_ITEM_FLIP_CAL && ui->dial_value != 0;
+    case GL_G_ITEM_ZERO_YES:
+        return ui->item == GL_UI_ITEM_ZERO && ui->dial_value != 0;
     default: return false;
     }
 }
@@ -315,7 +315,7 @@ uint32_t gl_ui_dispatch(gl_ui_t *ui, gl_ui_event_t ev, int32_t arg, uint32_t now
             ui->item = (uint8_t)((ui->item + 1u) % GL_UI_ITEM_COUNT);
             ui->dial_value = item_value_(ui);
         } else if (ev == GL_EV_DIAL_STEP) {
-            if (ui->item < GL_UI_ITEM_FLIP_CAL) {
+            if (ui->item < GL_UI_ITEM_ZERO) {
                 gl_settings_item_set(&ui->edit, (gl_item_t)ui->item, (int)arg);
                 ui->dial_value = item_value_(ui);
             } else {
@@ -363,6 +363,11 @@ uint32_t gl_ui_tick(gl_ui_t *ui, uint32_t now_ms)
     return 0;
 }
 
+void gl_ui_keepalive(gl_ui_t *ui, uint32_t now_ms)
+{
+    ui->state_since_ms = now_ms;
+}
+
 uint32_t gl_ui_time_left_ms(const gl_ui_t *ui, uint32_t now_ms)
 {
     uint32_t limit = gl_ui_timeout_ms((gl_ui_state_t)ui->state);
@@ -408,7 +413,7 @@ static void screen_result_(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g
         return;
     }
     /* 1. the aim line: the backward extension of the start line through the ball */
-    gl_gfx_aim_line(g, v->aim_rad, 3.0f, &info);
+    gl_gfx_aim_line_at(g, v->aim_rad, v->ball_az_rad, 3.0f, &info);
     if (!info.on_screen) {
         /* the true line passes outside the aperture: the dashed line shows
          * its direction, the arrow the side it lies on */
@@ -492,8 +497,8 @@ static void screen_result_(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g
 static void screen_settings_(const gl_ui_t *ui, gl_gfx_t *g)
 {
     char buf[16];
-    if (ui->item >= GL_UI_ITEM_FLIP_CAL) {
-        text_(g, 24, "FLIP CAL", 1);
+    if (ui->item >= GL_UI_ITEM_ZERO) {
+        text_(g, 24, "ZERO", 1);
         text_(g, 50, (ui->dial_value != 0) ? "YES" : "NO", 2);
     } else {
         text_(g, 24, gl_settings_item_name((gl_item_t)ui->item), 1);
@@ -588,19 +593,23 @@ void gl_ui_render(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g)
         text_(g, 82, buf, 1);
         text_(g, 96, v->usb_connected ? "LINKED" : "CHARGER", 1);
         break;
-    case GL_UI_CAL_FLIP:
-        text_(g, 24, "FLIP CAL", 1);
+    case GL_UI_CAL_ZERO:
+        /* zeroing: on a hard flat surface, never in the cradle */
+        text_(g, 22, "ZEROING", 1);
         if (v->cal_step == 1u) {
-            text_(g, 44, "TURN", 2);
-            text_(g, 64, "180", 2);
+            text_(g, 38, "TURN", 2);
+            text_(g, 58, "180", 2);
         } else if (v->cal_step >= 3u) {
-            gl_gfx_icon(g, CX - 4, 44, GL_ICON_CHECK, GL_INK_BLACK);
-            text_(g, 60, "SAVED", 2);
+            gl_gfx_icon(g, CX - 4, 38, GL_ICON_CHECK, GL_INK_BLACK);
+            text_(g, 54, "SAVED", 2);
         } else {
-            text_(g, 44, "HOLD", 2);
-            text_(g, 64, "STILL", 2);
+            text_(g, 38, "HOLD", 2);
+            text_(g, 58, "STILL", 2);
         }
-        text_(g, 92, "TAP-TAP: QUIT", 1);
+        if (v->cal_step < 3u) {
+            text_(g, 80, "HARD FLAT SURFACE", 1);
+            text_(g, 94, "TAP-TAP: QUIT", 1);
+        }
         break;
     case GL_UI_ERROR:
         gl_gfx_icon(g, CX - 5, 26, GL_ICON_WARN, GL_INK_BLACK);

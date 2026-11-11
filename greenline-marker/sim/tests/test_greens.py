@@ -482,3 +482,48 @@ def test_mounded_surrounds_leave_the_green_and_collar_untouched():
     assert not twin.without_fringe().has_fringe
     with pytest.raises(ValueError):
         green.with_mounded_surrounds(1, height_rms=-0.1)
+
+
+def test_relief_twin_adds_metre_scale_slope_and_keeps_everything_else():
+    g = gr.make_green("gentle", 3)
+    twin = g.with_relief(1e-3, seed=5)
+    rng = np.random.default_rng(0)
+    r = np.sqrt(rng.uniform(0.0, 81.0, 4000))
+    th = rng.uniform(0.0, 2.0 * np.pi, 4000)
+    x, y = r * np.cos(th), r * np.sin(th)
+    dz = twin.z(x, y) - g.z(x, y)
+    assert float(np.std(dz)) == pytest.approx(1e-3, rel=0.15)  # 1 mm RMS of height
+    dgx = np.asarray(twin.grad(x, y)[0]) - np.asarray(g.grad(x, y)[0])
+    dgy = np.asarray(twin.grad(x, y)[1]) - np.asarray(g.grad(x, y)[1])
+    # wavelengths 1-3 m: about 2.6 mrad RMS of extra slope per axis and per mm of height
+    assert 2.0e-3 < float(np.std(dgx)) < 3.3e-3 and 2.0e-3 < float(np.std(dgy)) < 3.3e-3
+    # the generated green itself is smooth at this scale: slope at a point vs 0.5 m away
+    gx0 = np.asarray(g.grad(x, y)[0])
+    gx1 = np.asarray(g.grad(x + 0.5, y)[0])
+    tx0 = np.asarray(twin.grad(x, y)[0])
+    tx1 = np.asarray(twin.grad(x + 0.5, y)[0])
+    assert float(np.std(gx1 - gx0)) < 0.25 * float(np.std(tx1 - tx0))
+    # nothing else changes, and zero relief is the same surface
+    assert twin.edge_r0 == g.edge_r0 and twin.stimp_ft == g.stimp_ft and twin.grain == g.grain
+    assert twin.model_radius == g.model_radius
+    same = g.with_relief(0.0, seed=5)
+    assert np.allclose(same.z(x, y), g.z(x, y), atol=1e-12)
+    assert np.allclose(np.asarray(same.grad(x, y)), np.asarray(g.grad(x, y)), atol=1e-12)
+    # reproducible from the seed; a different seed is a different field
+    assert np.array_equal(g.with_relief(1e-3, seed=5).z(x, y), twin.z(x, y))
+    assert not np.allclose(g.with_relief(1e-3, seed=6).z(x, y), twin.z(x, y))
+    with pytest.raises(ValueError):
+        g.with_relief(1e-3, seed=1, spacing=0.5)  # cannot carry 1 m waves
+
+
+def test_wider_terrain_model_keeps_the_putting_surface():
+    """The half-width of the height grid only extends the modelled terrain."""
+    narrow = gr.make_green("undulating", 4)
+    wide = gr.make_green("undulating", 4, dataclasses.replace(gr.CLASS_PARAMS["undulating"], half_width=40.0))
+    assert wide.model_radius == 40.0 and narrow.model_radius == 24.0
+    rng = np.random.default_rng(1)
+    r = np.sqrt(rng.uniform(0.0, 100.0, 2000))
+    th = rng.uniform(0.0, 2.0 * np.pi, 2000)
+    x, y = r * np.cos(th), r * np.sin(th)
+    assert np.allclose(wide.z(x, y), narrow.z(x, y), atol=1e-7)
+    assert wide.edge_r0 == narrow.edge_r0 and wide.stimp_ft == narrow.stimp_ft and wide.surround_slope == narrow.surround_slope

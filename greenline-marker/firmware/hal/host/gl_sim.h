@@ -244,6 +244,12 @@ typedef void (*gl_sim_scene_fn_t)(void *ctx, gl_cam_id_t cam, uint16_t x0, uint1
 void gl_sim_cam_set_scene(gl_sim_scene_fn_t fn, void *ctx);
 /** Make a camera absent (SCCB is not acknowledged). */
 void gl_sim_cam_set_present(gl_cam_id_t cam, bool present);
+/** Product id the camera reports in registers 0x0A / 0x0B (default 0x7692;
+ *  survives gl_hal-level power cycles, reset by gl_sim_reset). */
+void gl_sim_cam_set_pid(gl_cam_id_t cam, uint16_t pid);
+/** Make the camera's software reset never complete (register 0x12 bit 7
+ *  stays set): a part that hangs in reset. */
+void gl_sim_cam_set_reset_stuck(gl_cam_id_t cam, bool stuck);
 /** Extra delay of camera `cam`'s frame timing, 0..frame period: the two
  *  free-running sensors are not synchronised on the real board. */
 void gl_sim_cam_set_phase_us(gl_cam_id_t cam, uint32_t phase_us);

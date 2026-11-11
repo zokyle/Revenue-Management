@@ -196,6 +196,25 @@ static gl_status_t cam_bring_up_(gl_ov7692_t *d, gl_cam_id_t cam)
     if (st == GL_OK) {
         st = wr_(cam, REG_12, R12_YUV422);
     }
+    if (st == GL_OK && !d->cfg.sensor_windowing) {
+        /* MCU-side windowing crops a full VGA frame: program the full input
+         * and output size explicitly instead of trusting the reset values
+         * (the comments of the public driver give 0x180 = 384 lines as the
+         * reset value of the vertical output size) */
+        static const uint8_t vga[][2] = {
+            { REG_IN_W_HI, (uint8_t)(GL_OV7692_SENSOR_W >> 8) },
+            { REG_IN_W_LO, (uint8_t)(GL_OV7692_SENSOR_W & 0xFFu) },
+            { REG_IN_H_HI, (uint8_t)(GL_OV7692_SENSOR_H >> 8) },
+            { REG_IN_H_LO, (uint8_t)(GL_OV7692_SENSOR_H & 0xFFu) },
+            { REG_OUT_W_HI, (uint8_t)(GL_OV7692_SENSOR_W >> 8) },
+            { REG_OUT_W_LO, (uint8_t)(GL_OV7692_SENSOR_W & 0xFFu) },
+            { REG_OUT_H_HI, (uint8_t)(GL_OV7692_SENSOR_H >> 8) },
+            { REG_OUT_H_LO, (uint8_t)(GL_OV7692_SENSOR_H & 0xFFu) },
+        };
+        for (size_t i = 0; i < GL_ARRAY_LEN(vga) && st == GL_OK; i++) {
+            st = wr_(cam, vga[i][0], vga[i][1]);
+        }
+    }
     if (st == GL_OK) {
         st = wr_(cam, REG_0E, R0E_SLEEP);
     }

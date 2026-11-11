@@ -29,8 +29,8 @@ says otherwise (`stimp_ft`).
 
 ```
 cd sim
-python -m pytest -q                 # tests (about 25 s with numba)
-python -m greenline_sim.montecarlo  # full evaluation: results/REPORT.md, summary.json, plots, reference vectors (about 6 min on 4 cores)
+python -m pytest -q                 # tests (about 1 min with numba)
+python -m greenline_sim.montecarlo  # full evaluation: results/REPORT.md, summary.json, plots, reference vectors (about 8 min of CPU time on 4 cores)
 python -m greenline_sim.report      # rebuild REPORT.md and the plots from an existing summary.json
 python -m greenline_sim.refvectors  # regenerate the reference vectors only
 python -m greenline_sim.bench       # solver timing + closed-form table
@@ -49,28 +49,37 @@ the tests that run the whole Monte-Carlo pipeline are skipped without numba.
 
 ## What the device measures, and what it does not
 
-From about 5 mm above the turf the device has: the puck's tilt (the local
-slope, corrupted by how the puck seats on the grass); the flagstick's bearing,
-stereo range, the elevation of its lowest visible point and, beyond about
-6.7 m, of its top; the turf horizon (the silhouette of the grass at each
-azimuth); a coarse grain reading; and the green speed the golfer enters. It
-cannot see the surface between ball and hole in a range-resolved way: at lens
-height `h` the ground at distance `d` spans only `h / d^2` rad per metre.
-Nothing in `sensors.py` or `estimator.py` pretends otherwise.
+Hardware revision C (preset `GL1`): f = 657 px, stereo baseline 20.0 mm, lens
+5.6 mm above the base plane. From there the device has: the puck's tilt (the
+local slope, corrupted by how the puck seats on the grass); the flagstick's
+bearing, stereo range, the elevation of its lowest visible point and, beyond
+about 6.7 m, of its top; the turf horizon (the silhouette of the grass at each
+azimuth); a coarse grain reading (the sensor ships disabled, so the estimator
+ignores it by default); and the green speed the golfer enters. It cannot see
+the surface between ball and hole in a range-resolved way: at lens height `h`
+the ground at distance `d` spans only `h / d^2` rad per metre. Nothing in
+`sensors.py` or `estimator.py` pretends otherwise.
 
 ## The estimator in one paragraph
 
 In the putt frame (origin at the marker, +x toward the hole along the measured
 flag bearing) the green is modelled as the quadratic patch
-`z = a x + b y + 0.5 (c x^2 + 2 d x y + e y^2)`. Its coefficients are the MAP
-estimate (Levenberg-Marquardt, Huber loss) from the tilt, the hole height
-seen at the base of the flagstick (a one-sided bound when a crest hides the
-base), optionally the turf horizon through the exact forward model of a
-quadratic seen from lens height, and Gaussian priors on the curvatures. The
-putt is then solved on the patch with the entered Stimp and the measured
-grain. Methods: `STRAIGHT`, `B0` (tilt-only plane), `B1` (Quick Read, the
-default), `B2` (B1 + horizon); a spin-and-reread measurement makes B1 the
-Precision Read, and `estimate_survey` fits several drops along the line.
+`z = a x + b y + 0.5 (c x^2 + 2 d x y + e y^2)`. The Quick Read (`B1`, the
+firmware default) fits it by Levenberg-Marquardt with a Huber loss to the tilt
+and to the hole height seen at the base of the flagstick (a one-sided bound
+when a crest hides the base), with Gaussian priors on the curvatures. That
+problem is convex: the minimum is the MAP estimate whatever the start. `B2`
+adds the turf horizon through the exact forward model of a quadratic seen from
+lens height, in an ANCHORED form: `a`, `b` and `c` stay at the Quick-Read
+solution and only the twist `d`, the cross curvature `e`, a free silhouette
+offset and the roll offset are fitted to the horizon. (The joint fit of
+everything at once has many local minima and lets the silhouette overrule the
+puck's own tilt; it is kept as `EstimatorConfig(horizon_joint=True)` for the
+comparison in the report.) The putt is then solved on the patch with the
+entered Stimp. The slope and fall line shown at the ball are always the tilt
+reading itself. Methods: `STRAIGHT`, `B0` (tilt-only plane), `B1`, `B2`; a
+spin-and-reread measurement makes B1 the Precision Read, and `estimate_survey`
+fits several drops along the line.
 
 ```python
 from greenline_sim import greens as gr, sensors as se, estimator as es
@@ -81,8 +90,19 @@ est = es.estimate(meas)              # takes the Measurements only; `truth` is f
 print(est.aim_azimuth_device, est.v0, est.plays_like, est.break_cups, est.slope_pct, est.confidence)
 ```
 
-The headline results, the test of the turf-horizon hypothesis, the
-seating-noise sensitivity and a list of what did not work as hoped are in
+## What the Monte Carlo assumes (the "shipping configuration")
+
+* The grain reading is not used (`EstimatorConfig.use_grain = False`), and the
+  human baselines solve without grain as well.
+* The golfer follows the aim LINE on the puck. Its direction is quantised by
+  the 1-bit 128 x 128 display (0.94 deg steps of a 122 px line) and transferred
+  to the ball with a further 0.5 deg (1 sigma; `MCConfig.sigma_transfer`, an
+  estimate). Both apply to device modes only.
+* Human execution noise 1 deg / 6 % (the specified default; an elite level).
+
+The headline results, the test of the turf-horizon hypothesis, the sweeps of
+the unmeasured inputs (seating noise, aim transfer, metre-scale relief of the
+green, grain, execution level) and a list of what did not work as hoped are in
 `results/REPORT.md`.
 
 ## Physics in one paragraph
@@ -93,8 +113,13 @@ A ball rolling on a gently sloped surface `z(x, y)` obeys
 a constant push of strength `kappa` along `g_hat`. The ball rests where its
 speed reaches zero and the slope-plus-grain drive does not exceed `a_r`;
 otherwise it keeps rolling and the roll ends with status `MAX_TIME` or
-`OUT_OF_BOUNDS`. Integration is RK4 (default `dt` = 0.02 s) with a
-jitter-free stop; rest positions are converged to about 1e-8 m.
+`OUT_OF_BOUNDS`. Integration is RK4 (default `dt` = 0.02 s). Near the stop
+the step is shortened to half the predicted time-to-stop and to
+`0.5 * speed / a_r` (the friction term is stiff as the speed goes to zero;
+without the second limit a ball stopping with a slope above about 0.85 of
+critical crept instead of resting). Rest positions are converged to about
+1e-8 m on ordinary slopes and to 2e-7 m up to 0.99 of the critical slope
+(tests). A roll takes at most `4 * t_max / dt` steps.
 
 Conventions: angles CCW from +x; the aim angle `phi` is measured from the
 straight ball->hole line, positive = aim left; "left/right of the hole" are
@@ -130,7 +155,12 @@ print(g.canopy_z(0.0, 20.0), g.without_fringe().canopy_z(0.0, 20.0))
   the dying ball would have to curl back to the hole). The other statuses
   mean no usable line was found; the best iterate is still returned, with
   its residual `miss`. Failures occur where the slope-plus-grain drive near
-  the path approaches or exceeds `a_r`.
+  the path approaches or exceeds `a_r`. Most are physical (no putt with the
+  asked pace exists); the solver is a nested bracketing search, though, and
+  can fail to find a solution that exists. A trial ball that crosses the
+  infinite hole line more than `1 m + 0.5 D` to the side counts as not
+  having reached the hole (without this rule regular solutions on long,
+  strongly twisted patches were missed).
 * The capture rule (Holmes 1991 / Penner 2002: holed if the impact parameter
   is below the hole radius and the speed there is below
   `1.63 * sqrt(1 - (delta/R)^2)` m/s) is an assumption and can be swapped:
@@ -147,15 +177,24 @@ print(g.canopy_z(0.0, 20.0), g.without_fringe().canopy_z(0.0, 20.0))
 * The surround terrain (mean radial slope -8 % ... +2 % with azimuthal
   variation) is an assumption with named parameters in `GreenParams`, not
   survey data.
+* The generated greens are smooth below about 15 m wavelength.
+  `Green.with_relief(height_rms, seed)` returns a twin with 1-3 m relief
+  added to the rolling surface; the Monte Carlo sweeps it.
+* `SensorParams` holds every noise term, including the ones that are off by
+  default and only swept: `disparity_bias`, `grain_noise_floor`,
+  `p_grain_flip`, `p_seat_outlier`, `level_shares_tilt_bias`.
+* The Monte Carlo records the end status of every roll; a roll that is
+  neither holed nor at rest is counted (`not_at_rest`), never dropped.
 
-## Measured (4 cores, numba 0.68)
+## Measured (4 cores, numba 0.68; `python -m greenline_sim.bench`)
 
 * `solve_aim`, one call at a time, random quadratic patches (slope <= 3 %,
-  curvature sigma 0.002 1/m, 1-12 m, Stimp 8-13, grain <= 0.15): mean 0.4 ms,
-  median 0.25 ms, 99th percentile 1.5 ms; 99.6 % solve. The rare failing
-  solve uses its whole budget of 200 trial rolls (about 25 ms).
-* `solve_aim_quadratic_batch`: about 0.05 ms per solve wall clock.
-* `roll_batch`: about 10 microseconds per putt wall clock.
+  curvature sigma 0.002 1/m, 1-12 m, Stimp 8-13, grain <= 0.15): mean 0.36 ms,
+  median 0.25 ms, 99th percentile 1.4 ms; 99.65 % solve. A failing solve takes
+  15 ms on average (35 ms at most in this set).
+* `solve_aim_quadratic_batch`: about 0.12 ms per solve wall clock.
+* `roll_batch`: about 22 microseconds per putt wall clock.
+* Patch fit: about 0.04 ms for `B1`, 0.25 ms for the anchored `B2` (5 starts).
 * Dying putt on a pure cross slope: solved `phi` over `(5/14) G s / a_r` is
   1.0008 (0.5 %, Stimp 8) to 1.031 (2 %, Stimp 12.5), the same at 2, 4 and
   8 m to 3e-5; the excess is the neglected second-order term.

@@ -367,7 +367,7 @@ float gl_rot_int_yaw(const gl_rot_int_t *r, gl_vec3_t up_start)
     return atan2f(gl_vec3_dot(c, u), gl_vec3_dot(f0, f1));
 }
 
-/* ---- flip calibration and Precision Read ---------------------------------- */
+/* ---- zeroing (180-degree reversal) and Precision Read ---------------------- */
 
 gl_status_t gl_tilt_flip_solve(gl_vec2_t m1, gl_vec2_t m2, float yaw_rad, gl_vec2_t *bias,
                                gl_vec2_t *surface_slope)

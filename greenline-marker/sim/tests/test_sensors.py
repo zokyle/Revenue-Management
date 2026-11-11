@@ -50,7 +50,7 @@ def _quad_green(coeffs, **kwargs):
 def test_default_camera_is_the_fixed_gl1_hardware():
     cam = se.SensorParams().camera
     assert cam is se.GL1 and cam.name == "GL1"
-    assert cam.f_px == 657.0 and cam.baseline == 0.0204 and cam.h_cam == 0.0056
+    assert cam.f_px == 657.0 and cam.baseline == 0.0200 and cam.h_cam == 0.0056
     assert math.degrees(cam.half_fov_h) == pytest.approx(26.0)
     assert math.degrees(cam.up_fov) == pytest.approx(17.6)
     for name, f_px in (("QVGA", 330.0), ("VGA", 500.0), ("2MP", 1200.0)):
@@ -66,6 +66,10 @@ def test_default_noise_parameters_match_the_specification():
     assert p.sigma_mirage == 5e-5 and p.sink_max == 1.5e-3
     assert p.sigma_grain_azimuth == pytest.approx(math.radians(20.0)) and p.sigma_grain_strength == 0.30
     assert p.sigma_stimp == 0.07 and p.stick_height_rel_error == 0.02 and p.stick_height_default_rel_error == 0.07
+    # the systematic and defect terms are off by default (the Monte Carlo sweeps them)
+    assert p.disparity_bias == 0.0 and p.grain_noise_floor == 0.0 and p.p_grain_flip == 0.0
+    assert p.p_seat_outlier == 0.0 and p.level_shares_tilt_bias is False
+    assert p.sigma_survey_lateral == 0.15
 
 
 # --------------------------------------------------------------------------
@@ -372,6 +376,90 @@ def test_grain_and_stimp_noise():
     assert float(np.std(az)) == pytest.approx(math.radians(20.0), rel=0.1)
 
 
+def test_grain_sensor_defects():
+    """Additive floor: grain is reported where there is none.  180-degree
+    ambiguity: the axis is right, the sense wrong, with the stated probability."""
+    bare = _quad_green((0.0, 0.0, 0.0, 0.0, 0.0), grain=ph.Grain(0.0, 0.0))
+    floor = dataclasses.replace(QUIET, grain_noise_floor=0.02)
+    kx, ky = [], []
+    for s in range(1500):
+        meas, truth = se.measure(bare, np.zeros(2), np.array([3.0, 0.0]), floor, s, with_horizon=False)
+        az = meas.grain_azimuth + truth.heading
+        kx.append(meas.grain_kappa * math.cos(az))
+        ky.append(meas.grain_kappa * math.sin(az))
+    assert float(np.std(kx)) == pytest.approx(0.02, rel=0.1) and float(np.std(ky)) == pytest.approx(0.02, rel=0.1)
+    assert se.measure(bare, np.zeros(2), np.array([3.0, 0.0]), QUIET, 0, with_horizon=False)[0].grain_kappa == 0.0
+    grained = _quad_green((0.0, 0.0, 0.0, 0.0, 0.0), grain=ph.Grain(0.1, 0.4))
+    flip = dataclasses.replace(QUIET, p_grain_flip=0.25)
+    flipped = 0
+    for s in range(1500):
+        meas, truth = se.measure(grained, np.zeros(2), np.array([3.0, 0.0]), flip, s, with_horizon=False)
+        err = math.remainder(meas.grain_azimuth + truth.heading - 0.4, 2.0 * math.pi)
+        assert abs(err) < 1e-9 or abs(abs(err) - math.pi) < 1e-9
+        flipped += abs(err) > 1.0
+        assert meas.grain_kappa == pytest.approx(0.1)
+    assert flipped / 1500 == pytest.approx(0.25, abs=0.035)
+
+
+def test_disparity_bias_shifts_the_stereo_range():
+    green = _quad_green((0.0, 0.0, 0.0, 0.0, 0.0))
+    fb = 657.0 * 0.0200
+    for bias in (0.1, -0.2):
+        meas, _ = se.measure(green, np.zeros(2), np.array([9.0, 0.0]), dataclasses.replace(QUIET, disparity_bias=bias), 1,
+                             with_horizon=False)
+        assert meas.flag_disparity == pytest.approx(fb / 9.0 + bias, abs=1e-12)
+        # +0.1 px at 9 m reads 6 % short; -0.2 px reads 16 % long
+        assert fb / meas.flag_disparity == pytest.approx(9.0 / (1.0 + bias * 9.0 / fb), rel=1e-12)
+
+
+def test_seating_outlier_mixture():
+    green = _quad_green((0.0, 0.0, 0.0, 0.0, 0.0))
+    params = dataclasses.replace(QUIET, sigma_seat=2.5e-3, p_seat_outlier=0.25, seat_outlier_sigma=11e-3)
+    plain = dataclasses.replace(params, p_seat_outlier=0.0)
+    err = np.array([se.measure(green, np.zeros(2), np.array([3.0, 0.0]), params, s, with_horizon=False)[1].seat_error_world
+                    for s in range(3000)])
+    base = np.array([se.measure(green, np.zeros(2), np.array([3.0, 0.0]), plain, s, with_horizon=False)[1].seat_error_world
+                     for s in range(3000)])
+    changed = np.any(err != base, axis=1)
+    assert changed.mean() == pytest.approx(0.25, abs=0.03)  # the same draws, a quarter of them with the extra term
+    assert float(np.std(base)) == pytest.approx(2.5e-3, rel=0.05)
+    assert float(np.std(err[changed])) == pytest.approx(math.hypot(2.5e-3, 11e-3), rel=0.08)
+    assert np.array_equal(err[~changed], base[~changed])
+
+
+def test_level_reference_can_share_the_tilt_bias():
+    """With the option on, a tilt bias (apparent slope) raises the measured
+    elevations by the same angle: the hole height seen at the flag base then
+    carries the bias, exactly as the tilt does."""
+    green = _quad_green((0.0, 0.0, 0.0, 0.0, 0.0))
+    bias = np.array([1.5e-3, -0.8e-3])
+    own = se.measure(green, np.zeros(2), np.array([6.0, 0.0]), QUIET, 4, tilt_bias=bias)
+    shared = se.measure(green, np.zeros(2), np.array([6.0, 0.0]), dataclasses.replace(QUIET, level_shares_tilt_bias=True), 4,
+                        tilt_bias=bias)
+    assert np.allclose(own[1].level_error, 0.0) and np.allclose(shared[1].level_error, bias)
+    beta = own[0].flag_bearing
+    assert shared[0].flag_low_elev == pytest.approx(own[0].flag_low_elev + bias[0] + bias[1] * math.sin(beta), abs=1e-12)
+    az = shared[0].horizon_az
+    assert np.allclose(shared[0].horizon_elev, own[0].horizon_elev + bias[0] + bias[1] * np.sin(az), atol=1e-12)
+    # the tilt says "rises 1.5 mrad more along the visor axis than it does", and so does the flag base
+    rise_tilt = 6.0 * (shared[0].tilt[0] - own[0].tilt[0] + bias[0])
+    rise_flag = 6.0 * (math.tan(shared[0].flag_low_elev) - math.tan(own[0].flag_low_elev))
+    assert rise_flag == pytest.approx(rise_tilt, rel=0.1)
+    assert np.array_equal(shared[0].tilt, own[0].tilt)
+
+
+def test_horizon_truth_marks_samples_formed_at_the_edge_of_the_model():
+    """Where the terrain keeps rising to the edge of the modelled world the
+    silhouette is set by where the model ends, and is flagged as such."""
+    rising = gr.green_from_surface(ph.PlaneSurface(0.02, 0.0), collar_step=0.0, rough_step=0.0)
+    az = np.radians([-20.0, 0.0, 20.0])
+    up = se.horizon_profile(rising, np.zeros(2), 0.005, az)
+    assert np.all(up.at_boundary) and np.allclose(up.distance, rising.model_radius)
+    crowned = _quad_green((0.0, 0.0, -0.004, 0.0, -0.004))
+    crest = se.horizon_profile(crowned, np.zeros(2), 0.005, az)
+    assert not np.any(crest.at_boundary) and np.allclose(crest.distance, math.sqrt(2 * 0.005 / 0.004), atol=0.02)
+
+
 def test_stick_height_knowledge_learned_or_default():
     green = _quad_green((0.0, 0.0, 0.0, 0.0, 0.0), flagstick_height=2.25)
     args = (green, np.zeros(2), np.array([9.0, 0.0]))
@@ -469,7 +557,7 @@ def test_survey_drops_share_the_device_and_lie_along_the_line():
     for k, (meas, truth) in enumerate(drops[1:], start=1):
         offset = truth.marker_xy - sc.ball_xy
         assert abs(offset @ unit - stations[k]) < 1.0  # sigma_survey_along = 0.2 m
-        assert abs(offset @ left) < 0.3  # sigma_survey_lateral = 0.05 m
+        assert abs(offset @ left) < 0.6  # sigma_survey_lateral = 0.15 m
         assert np.array_equal(truth.tilt_bias, first_truth.tilt_bias)  # one device
         assert meas.stimp_ft == first_meas.stimp_ft and meas.stick_height_est == first_meas.stick_height_est
         assert meas.flag_found and meas.horizon_az.size == 0

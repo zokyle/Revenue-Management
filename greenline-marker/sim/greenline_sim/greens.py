@@ -515,6 +515,56 @@ class Green:
             surround_mounds=None,
         )
 
+    def with_relief(
+        self,
+        height_rms: float,
+        seed: int,
+        wavelength_range: Tuple[float, float] = (1.0, 3.0),
+        spacing: float = 0.125,
+        n_modes: int = 48,
+    ) -> "Green":
+        """Twin of this green with metre-scale relief added to the surface
+        the ball rolls on (and the puck sits on).
+
+        The generated greens are smooth below about 15 m wavelength: the
+        slope at a point and the mean slope half a metre around it differ by
+        less than 0.3 mrad.  Real turf is not that smooth.  This adds a
+        band-limited random field - ``n_modes`` plane waves with wavelengths
+        uniform in ``wavelength_range`` [m], random directions and phases,
+        RMS height ``height_rms`` [m] - to the surface, resampled on a grid
+        of ``spacing`` [m] (the default grid of 0.5 m cannot carry 1 m
+        waves).  With wavelengths of 1-3 m, 1 mm RMS of height is about
+        2.6 mrad RMS of extra slope per axis.
+
+        Boundary, canopy, surrounds, speed, grain and flagstick are
+        unchanged, so a hole and a ball placed on the original are at the
+        same positions on the twin.  The amplitude is an ASSUMPTION for a
+        sensitivity sweep, not survey data.  Reproducible from ``seed``.
+        """
+        if not (height_rms >= 0.0 and n_modes >= 1 and wavelength_range[1] >= wavelength_range[0] > 0.0 and spacing > 0.0):
+            raise ValueError("need height_rms >= 0, n_modes >= 1, a positive wavelength range and spacing > 0")
+        if spacing > wavelength_range[0] / 6.0:
+            raise ValueError("spacing too coarse for the shortest wavelength (need at least 6 nodes per wave)")
+        xmin, xmax, ymin, ymax = self.surface.bounds
+        if not all(math.isfinite(v) for v in (xmin, xmax, ymin, ymax)):
+            raise ValueError("with_relief needs a bounded (grid) surface")
+        x = np.linspace(xmin, xmax, int(round((xmax - xmin) / spacing)) + 1)
+        y = np.linspace(ymin, ymax, int(round((ymax - ymin) / spacing)) + 1)
+        xx, yy = np.meshgrid(x, y, indexing="ij")
+        zz = np.asarray(self.surface.z(xx, yy), dtype=float)
+        rng = np.random.default_rng(np.random.SeedSequence([int(seed), 104729]))
+        wavelength = rng.uniform(wavelength_range[0], wavelength_range[1], size=n_modes)
+        azimuth = rng.uniform(0.0, 2.0 * math.pi, size=n_modes)
+        phase = rng.uniform(0.0, 2.0 * math.pi, size=n_modes)
+        k = 2.0 * math.pi / wavelength
+        ax = (k * np.cos(azimuth))[:, None] * x[None, :] + phase[:, None]  # (modes, nx)
+        by = (k * np.sin(azimuth))[:, None] * y[None, :]  # (modes, ny)
+        # einsum rather than a BLAS matmul: the same bits on every machine (see make_green)
+        relief = height_rms * math.sqrt(2.0 / n_modes) * (
+            np.einsum("mi,mj->ij", np.cos(ax), np.cos(by)) - np.einsum("mi,mj->ij", np.sin(ax), np.sin(by))
+        )
+        return replace(self, surface=GridSurface(x, y, zz + relief))
+
     def with_mounded_surrounds(
         self,
         seed: int,
@@ -678,9 +728,16 @@ def make_green(green_class: str, seed: SeedLike, params: Optional[GreenParams] =
         cax, sax = np.cos(ax), np.sin(ax)
         cby, sby = np.cos(by), np.sin(by)
         amp = math.sqrt(2.0 / n_modes)
-        und = amp * (cax.T @ cby - sax.T @ sby)
-        gux = -amp * ((kx[:, None] * sax).T @ cby + (kx[:, None] * cax).T @ sby)
-        guy = -amp * (sax.T @ (ky[:, None] * cby) + cax.T @ (ky[:, None] * sby))
+
+        def outer(left, right):
+            # sum over modes of left[m, i] * right[m, j].  einsum, not a BLAS
+            # matmul: the same bits on every machine, and no thread start-up
+            # (a threaded BLAS takes tens of milliseconds for these sizes).
+            return np.einsum("mi,mj->ij", left, right)
+
+        und = amp * (outer(cax, cby) - outer(sax, sby))
+        gux = -amp * (outer(kx[:, None] * sax, cby) + outer(kx[:, None] * cax, sby))
+        guy = -amp * (outer(sax, ky[:, None] * cby) + outer(cax, ky[:, None] * sby))
         # remove the best-fit plane over the putting surface
         design = np.column_stack([np.ones(inside.sum()), xx[inside], yy[inside]])
         coef, *_ = np.linalg.lstsq(design, und[inside], rcond=None)

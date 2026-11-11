@@ -128,8 +128,8 @@ gl_ball_target_t gl_range_from_ball(float range_cam_m, float bearing_cam_rad);
 
 /**
  * The same for a bearing measured from a point (view_x_m, view_y_m) of the
- * marker frame, e.g. the left camera at (-10.2 mm, 15.6 mm): at 3 m the
- * 10.2 mm offset is 3.4 mrad of bearing, more than the camera's own error.
+ * marker frame, e.g. the left camera at (-10.0 mm, 15.6 mm): at 3 m the
+ * 10.0 mm offset is 3.35 mrad of bearing, more than the camera's own error.
  */
 gl_ball_target_t gl_range_from_ball_at(float range_m, float bearing_rad, float view_x_m,
                                        float view_y_m);

@@ -13,7 +13,7 @@ kicad_cli   thin kicad-cli wrappers (SVG export, SVG reader for orientation chec
 """
 from .model import (  # noqa: F401
     Design, Part, Pin, Net, NetClass, Rules, US_4L_STD, US_4L_FINE, Outline, Circle,
-    RoundedPolygon, Slot, PathShape, Hole, Keepout, Plane, Stackup, Track, Via,
+    RoundedPolygon, Slot, PathShape, Hole, Keepout, HeightLimit, Plane, Stackup, Track, Via,
     two_pin, n_pin, TOP, BOTTOM, ALL_LAYERS, VIA_TENTING,
 )
 

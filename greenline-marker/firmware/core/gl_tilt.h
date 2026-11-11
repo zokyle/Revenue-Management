@@ -5,7 +5,7 @@
  *   raw samples -> gl_tilt_avg_* (exact integer block averaging, stillness
  *   gating) -> mean acceleration in g -> gl_tilt_apply_cal() (temperature
  *   polynomial, offset, 3x3 scale / cross-axis matrix) -> gl_tilt_slope()
- *   (unit "up" vector -> surface gradient) -> minus the flip-calibration
+ *   (unit "up" vector -> surface gradient) -> minus the zeroing (reversal)
  *   bias.
  *
  * At rest the accelerometer measures +1 g along the UP direction, so the
@@ -14,7 +14,7 @@
  * in marker axes is (u.x / u.z, u.y / u.z).
  *
  * Also here: six-face calibration solve, quadratic temperature fit, a
- * gyro rotation integrator (flip yaw, 180-degree spin), the flip /
+ * gyro rotation integrator (zeroing turn, 180-degree spin), the reversal /
  * Precision-Read algebra, and the Survey sample store.
  *
  * RAM: gl_tilt_avg_t 184 bytes, gl_rot_int_t 28 bytes, gl_survey_t 116
@@ -168,9 +168,18 @@ float gl_rot_int_angle(const gl_rot_int_t *r);
  */
 float gl_rot_int_yaw(const gl_rot_int_t *r, gl_vec3_t up_start);
 
-/* ---- flip calibration and Precision Read ---------------------------------- */
+/* ---- zeroing (180-degree reversal, "flip") and Precision Read -------------- */
 
-/** Largest deviation of the flip yaw from 180 degrees that is accepted. */
+/*
+ * The USER ZEROING routine: the marker lies on any hard flat surface (not in
+ * the cradle, which takes it one way round only), is read, turned about 180
+ * degrees in place and read again.  The surface's own tilt reverses sign in
+ * the marker frame, the device bias does not, so the two reads separate
+ * them; the surface need not be level.  The turn angle is measured by the
+ * gyro, so it need not be exactly 180 degrees.
+ */
+
+/** Largest deviation of the turn from 180 degrees that is accepted. */
 #define GL_TILT_FLIP_YAW_TOL_RAD (30.0f * GL_DEG2RAD_F)
 
 /**

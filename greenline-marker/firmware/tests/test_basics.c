@@ -286,7 +286,7 @@ GL_TEST(test_calibration_records)
         gl_cal_cam_t c, d;
         uint8_t blob[GL_CAL_CAM_BLOB_LEN];
         gl_cal_cam_defaults(&c, 1);
-        GL_CHECK_NEAR(c.pos_mm[0], 10.2, 1e-5);
+        GL_CHECK_NEAR(c.pos_mm[0], 10.0, 1e-5);
         c.k1 = -0.07f;
         c.roll_rad = 0.004f;
         c.flags = GL_CAL_CAM_FLAG_INTRINSICS;
@@ -328,10 +328,10 @@ GL_TEST(test_calibration_records)
 
 GL_TEST(test_generated_config)
 {
-    /* values that must agree with design/master_params.yaml rev B */
-    GL_CHECK(strcmp(GL_CFG_PARAMS_REV, "B-EVT1") == 0);
+    /* values that must agree with design/master_params.yaml rev C */
+    GL_CHECK(strcmp(GL_CFG_PARAMS_REV, "C-EVT1") == 0);
     GL_CHECK_NEAR(GL_CFG_CAM_F_PX, 657.0, 1e-6);
-    GL_CHECK_NEAR(GL_CFG_CAM_BASELINE_MM, 20.4, 1e-5);
+    GL_CHECK_NEAR(GL_CFG_CAM_BASELINE_MM, 20.0, 1e-5);
     GL_CHECK_NEAR(GL_CFG_CAM_AXIS_HEIGHT_MM, 5.61, 1e-5);
     GL_CHECK_NEAR(GL_CFG_CAM_RIGHT_X_MM - GL_CFG_CAM_LEFT_X_MM, GL_CFG_CAM_BASELINE_MM, 1e-5);
     /* f = efl / pixel: 1.15 mm / 1.75 um = 657 px */
@@ -344,8 +344,14 @@ GL_TEST(test_generated_config)
     /* ball centre 23.0 + 21.3 mm ahead of the marker centre */
     GL_CHECK_NEAR(GL_CFG_BALL_CENTRE_Y_MM, 23.0 + 21.335, 1e-4);
     GL_CHECK_NEAR(GL_CFG_BALL_CENTRE_Y_PX, 44.335 / 0.18, 0.01);
-    GL_CHECK_NEAR(GL_CFG_STEREO_F_TIMES_B_PX_M, 657.0 * 0.0204, 1e-4);
+    GL_CHECK_NEAR(GL_CFG_STEREO_F_TIMES_B_PX_M, 657.0 * 0.0200, 1e-4);
     GL_CHECK_EQ(GL_CFG_GRAIN_LED_PAIRS, 8);
+    /* rev C additions: camera positions, grain LED azimuths, cradle */
+    GL_CHECK_NEAR(GL_CFG_CAM_LEFT_X_MM, -10.0, 1e-6);
+    GL_CHECK_NEAR(GL_CFG_CAM_RIGHT_X_MM, 10.0, 1e-6);
+    GL_CHECK_NEAR(GL_CFG_GRAIN_LED0_AZIMUTH_DEG, 22.5, 1e-6);
+    GL_CHECK_NEAR(GL_CFG_GRAIN_LED_STEP_DEG, 45.0, 1e-6);
+    GL_CHECK_EQ(GL_CFG_CRADLE_ORIENTATIONS, 1); /* one way round: no zeroing in the cradle */
     /* provisional constants exist with the documented meanings */
     GL_CHECK_EQ(GL_PROV_OV7692_REG0C_BIT_SET_MEANS_DRIVEN, 1);
     GL_CHECK_EQ(GL_PROV_LCD_FPC_PIN_SCLK, 1);
@@ -370,7 +376,7 @@ GL_TEST(test_solver_is_a_stub)
     GL_CHECK_EQ(opt.max_rolls, 200);
     gl_solver_measurements_init(&m);
     GL_CHECK_NEAR(m.f_px, 657.0, 1e-6);
-    GL_CHECK_NEAR(m.baseline_m, 0.0204, 1e-7);
+    GL_CHECK_NEAR(m.baseline_m, 0.0200, 1e-7);
     GL_CHECK_NEAR(m.h_cam_m, 0.00561, 1e-7);
     GL_CHECK(!m.flag_found);
     GL_CHECK(isnan(m.user_distance_m) && isnan(m.flag_disparity_px));

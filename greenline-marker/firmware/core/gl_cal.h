@@ -5,8 +5,9 @@
  * the flash store (gl_store) and readable over USB (gl_proto GET_CAL):
  *
  *   GL_CAL_ID_TILT    accelerometer offset, temperature polynomial, 3x3
- *                     scale / cross-axis matrix (factory 6-face), user flip
- *                     bias (cradle)
+ *                     scale / cross-axis matrix (factory 6-face), user
+ *                     zeroing bias (180-degree reversal on any hard flat
+ *                     surface; never done in the cradle)
  *   GL_CAL_ID_CAM_L/R per-camera intrinsics (fx, fy, cx, cy, k1) and
  *                     extrinsics to the marker (= IMU) frame
  *   GL_CAL_ID_GRAIN   per-LED white-reference gains and the modulation
@@ -33,7 +34,7 @@ typedef enum {
 /* ---- tilt --------------------------------------------------------------- */
 
 #define GL_CAL_TILT_FLAG_FACTORY (1u << 0) /**< 6-face + temperature cal present */
-#define GL_CAL_TILT_FLAG_FLIP    (1u << 1) /**< user flip calibration present */
+#define GL_CAL_TILT_FLAG_FLIP    (1u << 1) /**< user zeroing (180-degree reversal) present */
 
 typedef struct {
     float offset_g[3];          /**< accel zero offset b0 at t0_c, in g, marker axes */
@@ -41,10 +42,10 @@ typedef struct {
     float tempco2_g_per_k2[3];  /**< b2: offset drift, g / K^2 */
     float t0_c;                 /**< reference temperature of the polynomial, deg C */
     gl_mat3_t m;                /**< a_cal = M (a_raw - b(T)); identity when uncalibrated */
-    float flip_bias_x;          /**< residual slope bias (rise/run, marker x) from the flip cal */
+    float flip_bias_x;          /**< residual slope bias (rise/run, marker x) from the user zeroing */
     float flip_bias_y;          /**< same, marker y; both are SUBTRACTED from a slope reading */
-    float flip_temp_c;          /**< IMU temperature at the flip calibration */
-    uint32_t flip_time_s;       /**< RTC seconds at the flip calibration (0 = unknown) */
+    float flip_temp_c;          /**< IMU temperature at the zeroing */
+    uint32_t flip_time_s;       /**< RTC seconds at the zeroing (0 = unknown) */
     uint8_t flags;              /**< GL_CAL_TILT_FLAG_* */
 } gl_cal_tilt_t;
 

@@ -26,7 +26,16 @@
  *                              distance stays in the settings until changed
  *                              ("--" = none); the application uses it ONLY
  *                              when no flagstick is found.
- *   in the cradle           -> USB screen; flip calibration from there
+ *   in the cradle           -> USB screen (charging, data).  The cradle
+ *                              takes the marker one way round only and
+ *                              holds it down; nothing is calibrated there.
+ *   zeroing                 -> dial item "ZERO" = YES, then lay the marker
+ *                              on any HARD FLAT surface (a table, not turf):
+ *                              it reads, asks for a 180-degree turn in
+ *                              place, reads again and stores the device
+ *                              bias; the reversal cancels the surface's own
+ *                              tilt, so the surface need not be level.
+ *                              Putting the marker in the cradle abandons it.
  *
  * RAM: gl_ui_t 40 bytes.  Stack: gl_ui_render() about 250 bytes.
  */
@@ -49,7 +58,8 @@ typedef enum {
     GL_UI_SURVEY_NEXT_DROP,
     GL_UI_SETTINGS_DIAL,
     GL_UI_CRADLE_USB,
-    GL_UI_CAL_FLIP,
+    GL_UI_CAL_ZERO,          /**< user zeroing on a hard flat surface (rev B called this CAL_FLIP
+                                  and ran it in the cradle; rev C: never in the cradle) */
     GL_UI_ERROR,
     GL_UI_LOW_BATT,
     GL_UI_STATE_COUNT
@@ -79,9 +89,8 @@ typedef enum {
     GL_EV_USB_ATTACH,        /**< VBUS present */
     GL_EV_USB_DETACH,
     GL_EV_BATT_LOW,
-    GL_EV_CAL_START,         /**< flip calibration requested (USB command) */
-    GL_EV_CAL_DONE,
-    GL_EV_CAL_FAIL,
+    GL_EV_CAL_DONE,          /**< zeroing finished and stored */
+    GL_EV_CAL_FAIL,          /**< arg = gl_status_t (moved, turn not near 180 degrees, ...) */
     GL_EV_FAULT,             /**< arg = gl_status_t */
     GL_EV_TIMEOUT,           /**< produced by gl_ui_tick() */
     GL_EV_COUNT
@@ -103,7 +112,7 @@ typedef enum {
 #define GL_ACT_SAVE_SETTINGS    (1u << 12) /**< adopt and store ui->edit */
 #define GL_ACT_USB_START        (1u << 13)
 #define GL_ACT_USB_STOP         (1u << 14)
-#define GL_ACT_CAL_FLIP_START   (1u << 15)
+#define GL_ACT_CAL_ZERO_START   (1u << 15) /**< begin the zeroing procedure (read, turn 180, read) */
 #define GL_ACT_CAL_ABORT        (1u << 16)
 #define GL_ACT_REDRAW           (1u << 17) /**< the screen content changed */
 #define GL_ACT_NEW_READ         (1u << 18) /**< forget the previous result (new placement) */
@@ -118,7 +127,7 @@ typedef enum {
     GL_G_HAS_MANUAL_DIST,    /**< settings hold a manual distance */
     GL_G_MOVED,              /**< motion was seen since the state was entered */
     GL_G_USB,                /**< VBUS present */
-    GL_G_ITEM_FLIP_CAL_YES   /**< dial is on the "FLIP CAL" item with value YES */
+    GL_G_ITEM_ZERO_YES       /**< dial is on the "ZERO" item with value YES */
 } gl_ui_guard_t;
 
 typedef struct {
@@ -129,8 +138,9 @@ typedef struct {
     uint32_t actions; /**< GL_ACT_* */
 } gl_ui_transition_t;
 
-/** The dial item after the settings items: "FLIP CAL" (NO / YES). */
-#define GL_UI_ITEM_FLIP_CAL ((uint8_t)GL_ITEM_COUNT)
+/** The dial item after the settings items: "ZERO" (NO / YES), which starts
+ *  the zeroing routine when the marker is then laid flat. */
+#define GL_UI_ITEM_ZERO ((uint8_t)GL_ITEM_COUNT)
 #define GL_UI_ITEM_COUNT ((uint8_t)GL_ITEM_COUNT + 1u)
 
 typedef enum {
@@ -143,7 +153,7 @@ typedef struct {
     uint8_t state;           /**< gl_ui_state_t */
     uint8_t read_kind;       /**< gl_ui_read_kind_t of the read in progress / shown */
     uint8_t survey_count;    /**< drops stored so far (0 = no survey) */
-    uint8_t item;            /**< dial item: gl_item_t or GL_UI_ITEM_FLIP_CAL */
+    uint8_t item;            /**< dial item: gl_item_t or GL_UI_ITEM_ZERO */
     bool moved;
     bool usb;
     bool dist_prompt;        /**< the dial was opened to ask for the distance */
@@ -170,6 +180,16 @@ uint32_t gl_ui_dispatch(gl_ui_t *ui, gl_ui_event_t ev, int32_t arg, uint32_t now
  *  current state has been held longer than its limit.  Wrap-safe. */
 uint32_t gl_ui_tick(gl_ui_t *ui, uint32_t now_ms);
 
+/**
+ * Progress report from the application: the activity of the current state
+ * is alive and legitimately takes longer than the state's time limit (used
+ * while raw strips are written to the log during a capture: field data
+ * collection).  Restarts the time limit of the current state; no transition,
+ * no actions.  Each strip capture keeps its own time-out in the driver, so
+ * a hung camera is still caught.
+ */
+void gl_ui_keepalive(gl_ui_t *ui, uint32_t now_ms);
+
 /** Time limit of a state in ms; 0 = none. */
 uint32_t gl_ui_timeout_ms(gl_ui_state_t state);
 
@@ -194,7 +214,10 @@ typedef struct {
     bool solved;             /**< false: no putt solution (phase-1 stub, or flag-out): tilt-only */
     bool flag_found;
     bool precision;          /**< result of a spin-and-reread */
-    float aim_rad;           /**< aim line direction in the marker frame, CCW from forward */
+    float aim_rad;           /**< aim line direction in the marker's CURRENT frame, CCW from forward */
+    float ball_az_rad;       /**< direction from the marker centre to the ball centre, CCW from
+                                  forward: 0 normally; near pi after the 180-degree spin of a
+                                  Precision Read (the marker then faces away from the hole) */
     float distance_m;        /**< to the hole; <= 0 = unknown */
     float slope_pct;         /**< slope magnitude at the ball */
     float fall_line_rad;     /**< downhill direction, marker frame, CCW from forward */
@@ -205,7 +228,8 @@ typedef struct {
     uint8_t battery_pct;
     bool charging;
     bool usb_connected;      /**< host has opened the port */
-    uint8_t cal_step;        /**< flip calibration: 0 hold still, 1 turn 180, 2 hold still, 3 saved */
+    uint8_t cal_step;        /**< zeroing: 0 hold still (first read), 1 turn 180 degrees in
+                                  place, 2 hold still (second read), 3 saved */
 } gl_ui_view_t;
 
 /**

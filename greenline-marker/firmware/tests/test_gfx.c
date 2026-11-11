@@ -333,6 +333,65 @@ GL_TEST(test_aim_line_geometry_and_accuracy)
     GL_CHECK(gl_gfx_get(&g, 60, 64) && gl_gfx_get(&g, 67, 64));
 }
 
+/* After the 180-degree spin of a Precision Read the marker faces away from
+ * the hole: the ball position lies BEHIND it (not exactly, the spin is
+ * rarely exactly 180 degrees) and the line must still pass through it. */
+GL_TEST(test_aim_line_with_the_ball_behind)
+{
+    double sum2 = 0, sum2_ball = 0, worst = 0;
+    unsigned n = 0, npx;
+    double mx, my;
+    gl_gfx_aim_info_t info;
+
+    for (int spin = -8; spin <= 8; spin += 4) {
+        /* the marker was turned by 180 + spin degrees: the ball is at this
+         * azimuth in its current frame */
+        const double az = (180.0 - (double)spin) * 3.141592653589793 / 180.0;
+        const double ball_x = 63.5 - (double)GL_CFG_BALL_CENTRE_Y_PX * sin(az);
+        const double ball_y = 63.5 - (double)GL_CFG_BALL_CENTRE_Y_PX * cos(az);
+        for (int i = -100; i <= 100; i++) {
+            /* putt direction: up to +-10 degrees off the line marker -> ball */
+            const double a = az + 0.1 * (double)i * 3.141592653589793 / 180.0;
+            gl_gfx_init(&g);
+            gl_gfx_aim_line_at(&g, (float)a, (float)az, 3.0f, &info);
+            GL_CHECK(info.on_screen);
+            double fit = fit_angle(&g, &mx, &my, &npx);
+            double e = ang_diff_mod_pi(fit, a) * 180.0 / 3.141592653589793;
+            double dx = -sin(fit), dy = -cos(fit);
+            double perp = (ball_x - mx) * dy - (ball_y - my) * dx;
+            sum2 += e * e;
+            sum2_ball += perp * perp;
+            if (fabs(e) > worst) {
+                worst = fabs(e);
+            }
+            n++;
+        }
+    }
+    printf("    aim line with the ball behind (spin 172..188 deg), 1005 lines: RMS %.4f deg, "
+           "worst %.4f deg; misses the ball centre by RMS %.3f px\n", sqrt(sum2 / n), worst,
+           sqrt(sum2_ball / n));
+    GL_CHECK(sqrt(sum2 / n) < 0.15);
+    GL_CHECK(sqrt(sum2_ball / n) < 1.0);
+    /* ball exactly behind, putt exactly along the axis: the same vertical
+     * centre line as the normal case */
+    {
+        static gl_gfx_t ref;
+        gl_gfx_init(&ref);
+        gl_gfx_aim_line(&ref, 0.0f, 3.0f, NULL);
+        gl_gfx_init(&g);
+        gl_gfx_aim_line_at(&g, 3.14159265f, 3.14159265f, 3.0f, &info);
+        GL_CHECK(info.on_screen);
+        GL_CHECK(!gl_gfx_get(&g, 63, 64) && !gl_gfx_get(&g, 64, 64));
+        GL_CHECK(gl_gfx_get(&g, 60, 64) && gl_gfx_get(&g, 67, 64));
+        GL_CHECK(abs((int)gl_gfx_count_black(&g) - (int)gl_gfx_count_black(&ref)) < 40);
+    }
+    /* a "putt" that would start back across the marker is never drawn as
+     * the true line */
+    gl_gfx_init(&g);
+    gl_gfx_aim_line_at(&g, 0.0f, 3.14159265f, 3.0f, &info);
+    GL_CHECK(!info.on_screen);
+}
+
 GL_TEST(test_aim_line_off_screen_fallback)
 {
     gl_gfx_aim_info_t info;
@@ -580,6 +639,7 @@ int main(void)
     GL_RUN(test_no_primitive_escapes_clip);
     GL_RUN(test_line_angle_accuracy);
     GL_RUN(test_aim_line_geometry_and_accuracy);
+    GL_RUN(test_aim_line_with_the_ball_behind);
     GL_RUN(test_aim_line_off_screen_fallback);
     GL_RUN(test_text_and_fonts);
     GL_RUN(test_big_digits_and_icons);

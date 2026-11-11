@@ -37,7 +37,7 @@ C0402 = "Capacitor_SMD:C_0402_1005Metric"
 LED0402 = "LED_SMD:LED_0402_1005Metric"
 LQFP64 = "Package_QFP:LQFP-64_10x10mm_P0.5mm"
 LGA14 = "Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y"
-WSON8 = "Package_SON:WSON-8-1EP_3x3mm_P0.5mm_EP1.2x2mm"
+WSON8 = "Package_SON:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4.3mm"
 SOT23 = "Package_TO_SOT_SMD:SOT-23"
 SOT235 = "Package_TO_SOT_SMD:SOT-23-5"
 SOT236 = "Package_TO_SOT_SMD:SOT-23-6"
@@ -45,8 +45,21 @@ SOD323 = "Diode_SMD:D_SOD-323"
 FPC10 = "Connector_FFC-FPC:Hirose_FH12-10S-0.5SH_1x10-1MP_P0.50mm_Horizontal"
 XTAL = "Crystal:Crystal_SMD_3215-2Pin_3.2x1.5mm"
 
-BOARD_RADIUS = 21.2
+BOARD_RADIUS = 21.1                  # rev C of design/master_params.yaml
 FLAT_Y = 17.3
+CAMERA_X = 10.0                      # cameras at (-10, 15.6) and (+10, 15.6)
+CAMERA_Y = 15.6
+#: non-plated locating features for the tub spigots: a round hole and a slot
+LOCATING_HOLE = (-4.2, 14.55, 1.15)              # x, y, diameter
+LOCATING_SLOT = (4.2, 14.55, 1.15, 1.65)         # x, y, width, overall length along x
+#: 1.6 mm square feet of the tub posts that land on the top side: no parts there
+POST_FEET = [(-15.4, 1.8), (15.4, 1.8), (-14.35, 10.8), (14.35, 10.8), (-6.5, -18.6),
+             (6.5, -18.6), (-4.2, 14.55), (4.2, 14.55)]
+POST_FOOT_SIZE = 1.6
+#: camera hoods of the tub: nothing taller than 0.95 mm under them but the camera
+HOOD_HALF_W = 2.85
+HOOD_Y0 = 13.7
+HOOD_MAX_HEIGHT = 0.95
 LED_RING = (0.0, -4.0, 5.2)          # centre x, centre y, radius
 PAD_ROW_Y = -17.0
 BATTERY_BODY = (0.0, -5.2, 34.0, 10.0)   # centre x, centre y, dx, dy
@@ -92,23 +105,36 @@ MCU_PADS = {
     64: ("VDD3", "power_in"),
 }
 
-#: signal -> MCU port pin (camera port and USB as in the design spec, the
-#: rest are plausible stand-ins)
+#: signal -> MCU port pin.  Camera port (DCMI), MCO, USB, SWD, crystal, BOOT0,
+#: SPI1 MISO and the LCD EXTCOMIN timer pin are the pins the design spec fixes.
+#: The others are stand-ins chosen the way a layout engineer would choose
+#: them: each signal on the side of the package that faces its destination
+#: (with U1 at 270 deg pads 1-16 are on the top edge, 17-32 left, 33-48
+#: bottom, 49-64 right) - SPI1 on PB3/PB4/PB5 next to the flash, the IMU on the
+#: left and bottom-left pins, the camera control lines on the top edge.
 MCU_SIGNALS = {
+    # camera port: fixed by the DCMI alternate functions
     "CAM_D0": "PC6", "CAM_D1": "PC7", "CAM_D2": "PC8", "CAM_D3": "PC9", "CAM_D4": "PC11",
     "CAM_D5": "PB6", "CAM_D6": "PB8", "CAM_D7": "PB9", "CAM_PCLK": "PA6", "CAM_HREF": "PA4",
-    "CAM_VSYNC": "PB7", "MCO": "PA8", "CAM_SCL_L": "PA9", "CAM_SCL_R": "PA10",
-    "CAM_SDA": "PH1", "CAM_PWDN_L": "PB15", "CAM_PWDN_R": "PA15", "CAM_EN": "PB14",
+    "CAM_VSYNC": "PB7", "MCO": "PA8",
+    # camera control: top edge, towards the cameras and their LDO
+    "CAM_SCL_L": "PC3", "CAM_PWDN_L": "PC2", "CAM_EN": "PC1", "CAM_SDA": "PH1",
+    "CAM_SCL_R": "PH0", "CAM_PWDN_R": "PC13",
+    # fixed service pins
     "USB_DM": "PA11", "USB_DP": "PA12", "SWDIO": "PA13", "SWCLK": "PA14", "NRST": "NRST",
     "OSC32_IN": "PC14", "OSC32_OUT": "PC15", "BOOT0": "PH3",
-    "SPI1_SCK": "PA5", "SPI1_MOSI": "PA7", "SPI1_MISO": "PB4", "FLASH_CS": "PB0",
-    "LCD_SCS": "PC4", "LCD_DISP": "PC5", "LCD_EXTCOMIN": "PB2",
-    "SPI2_SCK": "PB10", "SPI2_MISO": "PC2", "SPI2_MOSI": "PC3", "IMU_CS": "PB12",
-    "INC_CS": "PB13", "IMU_INT1": "PC13", "IMU_INT2": "PH0",
-    "VBAT_SENSE": "PC0", "VBUS_SENSE": "PC1", "CHG_STAT": "PA2", "CHG_PROG_SW": "PB1",
+    # flash and LCD on SPI1 (right edge, next to the flash)
+    "SPI1_SCK": "PB3", "SPI1_MISO": "PB4", "SPI1_MOSI": "PB5", "FLASH_CS": "PA10",
+    "LCD_SCS": "PB12", "LCD_DISP": "PB13", "LCD_EXTCOMIN": "PB2",
+    # IMU and inclinometer on SPI2 (left and bottom-left pins)
+    "SPI2_SCK": "PB10", "SPI2_MISO": "PB14", "SPI2_MOSI": "PB15", "IMU_CS": "PB0",
+    "INC_CS": "PB1", "IMU_INT1": "PC5", "IMU_INT2": "PC4",
+    # analogue and housekeeping
+    "VBAT_SENSE": "PC0", "VBUS_SENSE": "PA5", "CHG_STAT": "PA2", "CHG_PROG_SW": "PA7",
     "VBIAS": "PA0", "PD_K": "PA1", "OPAMP_OUT": "PA3",
-    "CP1_MCU": "PC10", "CP2_MCU": "PC12", "CP3_MCU": "PD2", "CP4_MCU": "PB3",
-    "CP5_MCU": "PB5",
+    # grain LED drive lines (to the series resistors on the right)
+    "CP1_MCU": "PA15", "CP2_MCU": "PC10", "CP3_MCU": "PC12", "CP4_MCU": "PD2",
+    "CP5_MCU": "PA9",
 }
 
 #: charlieplex wiring of the LED pairs: (line of anode, line of cathode) of
@@ -117,48 +143,50 @@ CHARLIE_PAIRS = [(1, 2), (2, 3), (3, 4), (4, 5), (5, 1), (1, 3), (2, 4), (3, 5)]
 
 
 #: 0402 passives: (ref, value, schematic group, x, y, rotation).  Placement
-#: rule of thumb used here: a 0402 with a plane connection needs about
-#: 1.4 x 2.0 mm so that its via fits next to it, and the sides of the camera
-#: BGAs that face the board centre are kept clear for the bus escape.
+#: rules of thumb used here: a 0402 with a plane connection needs about
+#: 1.4 x 2.0 mm so that its via fits next to it; the sides of the camera
+#: BGAs that face the board centre are kept clear for the bus escape; and no
+#: part sits in the pocket between a locating hole / slot and its neighbour
+#: (copper keeps 0.3 mm from those, a pad there can hardly be reached).
 PASSIVES = [
     # MCU supply and housekeeping
     ("C1", "100n", "mcu", -7.25, 9.4, 90.0),       # VDD pad 19
     ("C2", "100n", "mcu", -7.25, 1.9, 90.0),       # VDD pad 32
     ("C3", "4u7", "mcu", -7.25, 4.4, 90.0),        # VCAP pad 30
     ("C4", "100n", "mcu", 7.25, 8.9, 90.0),        # VDD pad 64
-    ("C5", "100n", "mcu", 3.2, 14.2, 0.0),         # VBAT pad 1
+    ("C5", "100n", "mcu", 2.75, 14.7, 90.0),       # VBAT pad 1
     ("C6", "4u7", "mcu", 7.25, 4.4, 90.0),         # bulk
     ("C7", "100n", "mcu", 7.25, 1.9, 90.0),        # VDDUSB pad 48
     ("C28", "1u", "mcu", 8.3, 1.9, 90.0),          # VDDUSB
-    ("C8", "1u", "mcu", -3.2, 14.2, 0.0),          # VDDA pad 13
-    ("C9", "10n", "mcu", -5.3, 14.2, 0.0),
-    ("R6", "10R", "mcu", -7.25, 11.9, 90.0),       # V2V8 -> VDDA
+    ("C8", "1u", "mcu", -2.75, 14.7, 90.0),        # VDDA pad 13
+    ("C9", "10n", "mcu", -6.25, 12.9, 0.0),         # VDDA, in the corner notch of U1
+    ("R6", "10R", "mcu", -7.25, 11.4, 90.0),       # V2V8 -> VDDA
     ("C10", "100n", "mcu", 9.3, -16.2, 0.0),       # NRST
     ("R7", "10k", "mcu", 7.25, 6.9, 90.0),         # BOOT0 pull-down
     ("C11", "6p8", "mcu", 11.5, 11.4, 90.0),       # crystal load
-    ("C12", "6p8", "mcu", 10.4, 9.5, 0.0),
+    ("C12", "6p8", "mcu", 12.55, 11.4, 90.0),
+    ("C25", "100n", "mcu", 12.5, 9.7, 0.0),        # flash VCC
     # cameras
-    ("C13", "100n", "camera", -7.7, 13.45, 0.0),   # U2 AVDD
-    ("C14", "100n", "camera", -14.4, 12.9, 0.0),  # U2 DOVDD
-    ("C15", "1u", "camera", -12.3, 12.9, 0.0),     # U2 DVDD
-    ("C17", "100n", "camera", 14.4, 12.9, 0.0),   # U3 AVDD
-    ("C18", "100n", "camera", 5.9, 15.6, 90.0),    # U3 DOVDD
-    ("C19", "1u", "camera", 12.3, 12.9, 0.0),      # U3 DVDD
-    ("R8", "2k2", "camera", -14.2, 10.0, 0.0),     # SCL_L pull-up
-    ("R9", "2k2", "camera", 3.2, 15.25, 0.0),       # SCL_R pull-up
-    ("R12", "2k2", "camera", -14.2, 11.4, 0.0),    # SDA pull-up
-    ("R10", "33R", "camera", -16.4, 10.0, 0.0),    # PCLK_L series
-    ("R11", "33R", "camera", 5.3, 14.2, 0.0),      # PCLK_R series
-    ("R13", "33R", "camera", 8.3, 4.4, 90.0),      # MCO series
+    ("C13", "100n", "camera", -6.9, 14.7, 90.0),   # U2 AVDD
+    ("C14", "100n", "camera", -14.2, 12.9, 0.0),   # U2 DOVDD
+    ("C15", "1u", "camera", -12.1, 12.9, 0.0),     # U2 DVDD
+    ("C17", "100n", "camera", 14.2, 12.9, 0.0),    # U3 AVDD
+    ("C18", "100n", "camera", 6.9, 14.7, 90.0),    # U3 DOVDD
+    ("C19", "1u", "camera", 12.1, 12.9, 0.0),      # U3 DVDD
+    ("R8", "2k2", "camera", -10.1, 10.8, 0.0),     # SCL_L pull-up
+    ("R9", "2k2", "camera", 5.3, 16.3, 0.0),       # SCL_R pull-up
+    ("R12", "2k2", "camera", -10.1, 9.65, 0.0),    # SDA pull-up
+    ("R10", "33R", "camera", -12.2, 10.8, 0.0),    # PCLK_L series
+    ("R11", "33R", "camera", 6.25, 12.9, 0.0),     # PCLK_R series, corner notch of U1
+    ("R13", "33R", "camera", 9.4, 1.9, 90.0),      # MCO series
     ("C16", "1u", "power", -3.2, 16.3, 0.0),       # U8 VIN
     ("C20", "1u", "power", 3.2, 16.3, 0.0),        # U8 VOUT
     ("R14", "100k", "power", -5.3, 16.3, 0.0),     # CAM_EN pull-down
-    # sensors, flash
+    # sensors
     ("C21", "100n", "sensor", -8.3, 4.4, 90.0),    # IMU VDD
     ("C22", "100n", "sensor", -11.5, 3.6, 0.0),    # IMU VDDIO
-    ("C23", "100n", "sensor", 8.3, 6.9, 90.0),     # inclinometer VDD
-    ("C24", "100n", "sensor", 12.0, 2.3, 0.0),     # inclinometer VDDIO
-    ("C25", "100n", "mcu", -15.5, 4.4, 0.0),       # flash VCC
+    ("C23", "100n", "sensor", -17.6, 1.9, 180.0),  # inclinometer VDD
+    ("C24", "100n", "sensor", -12.2, 2.4, 0.0),    # inclinometer VDDIO
     # grain sensor: charlieplex series resistors and photodiode amplifier
     ("R1", "68R", "grain", 16.3, 10.4, 0.0),
     ("R2", "68R", "grain", 16.3, 9.2, 0.0),
@@ -167,9 +195,9 @@ PASSIVES = [
     ("R5", "68R", "grain", 16.3, 5.6, 0.0),
     ("R16", "470k", "grain", -7.25, 6.9, 90.0),    # feedback
     ("C26", "10p", "grain", -8.3, 6.9, 90.0),
-    ("R17", "100k", "grain", -14.2, 8.6, 0.0),     # bias divider
-    ("R18", "100k", "grain", -14.2, 7.2, 0.0),
-    ("C27", "100n", "grain", -14.2, 5.8, 0.0),
+    ("R17", "100k", "grain", -12.2, 9.65, 0.0),    # bias divider
+    ("R18", "100k", "grain", -12.2, 8.5, 0.0),
+    ("C27", "100n", "grain", -10.1, 8.5, 0.0),
     # power
     ("C29", "4u7", "power", -6.75, -14.6, 90.0),   # charger VDD
     ("C30", "4u7", "power", -12.3, -15.9, 0.0),    # charger VBAT
@@ -177,13 +205,13 @@ PASSIVES = [
     ("C31", "1u", "power", 11.6, -15.8, 0.0),      # U7 VIN
     ("C32", "1u", "power", 7.0, -14.6, 90.0),      # U7 VOUT
     ("C33", "1u", "power", 13.6, -14.6, 0.0),      # U11 VIN
-    ("C34", "1u", "power", 11.3, -10.9, 0.0),      # U11 VOUT
+    ("C34", "1u", "power", 11.1, -10.9, 0.0),      # U11 VOUT
     ("R21", "100k", "power", -8.0, -10.9, 0.0),    # VBUS sense divider
     ("R22", "100k", "power", -10.1, -10.9, 0.0),
-    ("R23", "1M", "power", 16.3, 4.2, 0.0),        # VBAT sense divider
-    ("R24", "1M", "power", 16.3, 2.8, 0.0),
-    ("C35", "100n", "power", 18.4, 3.5, 0.0),
-    ("R25", "100k", "power", -16.4, 8.6, 0.0),     # CHG_STAT pull-up
+    ("R23", "1M", "power", 16.3, 4.3, 0.0),        # VBAT sense divider
+    ("R24", "1M", "power", 17.4, 3.1, 0.0),
+    ("C35", "100n", "power", 18.5, 4.3, 0.0),
+    ("R25", "100k", "power", -14.3, 9.0, 0.0),     # CHG_STAT pull-up
     # display
     ("C36", "1u", "display", 6.05, -12.5, 90.0),   # LCD VDD
     ("R19", "100k", "display", 7.0, -12.5, 90.0),  # LCD DISP pull-down
@@ -253,7 +281,10 @@ def _res(ref, value, x, y, rot=0.0, group="main"):
 
 
 def demo_design(name="greenline_demo"):
-    d = Design(name, Outline(PathShape.d_shape(BOARD_RADIUS, FLAT_Y)), layers=4,
+    outline = Outline(PathShape.d_shape(BOARD_RADIUS, FLAT_Y))
+    outline.add_hole(*LOCATING_HOLE, name="H1")
+    outline.add_npth_slot(*LOCATING_SLOT)
+    d = Design(name, outline, layers=4,
                rules=US_4L_FINE, board_thickness=0.8,
                title="GreenLine GL-1 DEMO (toolchain proof, not the product circuit)",
                revision="demo-1", company="GreenLine")
@@ -275,10 +306,10 @@ def demo_design(name="greenline_demo"):
                rotation=270.0, height_mm=1.6, group="mcu", description="MCU, LQFP-64"))
     cam = camera_footprint()
     cam_pins = {pin: (ball, etype) for ball, (pin, etype) in CAM_BALLS.items()}
-    for ref, x in (("U2", -10.2), ("U3", 10.2)):
+    for ref, x in (("U2", -CAMERA_X), ("U3", CAMERA_X)):
         d.add(Part(ref, "OVM7692", cam, pins=cam_pins, mpn="OVM7692-RYAA",
                    manufacturer="OmniVision", distributor="Digi-Key",
-                   distributor_pn="884-1027-1-ND", unit_price=6.0, x=x, y=15.6,
+                   distributor_pn="884-1027-1-ND", unit_price=6.0, x=x, y=CAMERA_Y,
                    height_mm=2.76, group="camera",
                    description="camera cube (stand-in ball map)"))
     # SDO / MISO are tri-state outputs sharing one line: modelled as "bidir"
@@ -298,21 +329,21 @@ def demo_design(name="greenline_demo"):
         inc_pins["NC%d" % n] = (str(n), "nc")
     d.add(Part("U5", "Inclinometer", inclinometer_footprint(), pins=inc_pins,
                mpn="IIS2ICLXTR", manufacturer="STMicroelectronics", distributor="Digi-Key",
-               distributor_pn="497-IIS2ICLXTRCT-ND", unit_price=18.0, x=12.0, y=6.0,
-               height_mm=1.7, group="sensor",
+               distributor_pn="497-IIS2ICLXTRCT-ND", unit_price=18.0, x=-15.9, y=5.5,
+               rotation=90.0, height_mm=1.7, group="sensor",
                description="inclinometer, LGA-16 (stand-in pin map)"))
     flash_pins = {"CS": ("1", "input"), "DO": ("2", "bidir"), "WP": ("3", "input"),
                   "GND": (("4", "9"), "power_in"), "DI": ("5", "input"), "CLK": ("6", "input"),
                   "HOLD": ("7", "input"), "VCC": ("8", "power_in")}
-    d.add(Part("U6", "SPI flash", WSON8, pins=flash_pins, mpn="W25Q16JVUXIQ",
-               manufacturer="Winbond", distributor="Digi-Key",
-               distributor_pn="W25Q16JVUXIQCT-ND", unit_price=0.6, x=-15.5, y=1.95,
-               height_mm=0.8, group="mcu", description="SPI NOR flash, WSON-8 (stand-in)"))
+    d.add(Part("U6", "SPI flash", WSON8, pins=flash_pins, mpn="MX25R6435FZNIL0",
+               manufacturer="Macronix", distributor="Digi-Key",
+               distributor_pn="1092-1187-1-ND", unit_price=1.6, x=11.5, y=6.4,
+               height_mm=0.8, group="mcu", description="SPI NOR flash 64 Mbit, WSON-8 6x5"))
     d.add(Part("U7", "MCP1700-2.8", SOT23,
                pins={"GND": ("1", "power_in"), "VOUT": ("2", "power_out"),
                      "VIN": ("3", "power_in")},
                mpn="MCP1700T-2802E/TT", manufacturer="Microchip", distributor="Digi-Key",
-               distributor_pn="MCP1700T2802ETTCT-ND", unit_price=0.45, x=10.3, y=-13.5,
+               distributor_pn="MCP1700T2802ETTCT-ND", unit_price=0.45, x=10.1, y=-13.6,
                height_mm=1.2, group="power", description="LDO 2.8 V, always on"))
     d.add(Part("U8", "LP5907-2.8", SOT235,
                pins={"VIN": ("1", "power_in"), "GND": ("2", "power_in"), "EN": ("3", "input"),
@@ -326,20 +357,20 @@ def demo_design(name="greenline_demo"):
                      "VBAT": ("3", "power_out"), "VDD": ("4", "power_in"),
                      "PROG": ("5", "passive")},
                mpn="MCP73831T-2ACI/OT", manufacturer="Microchip", distributor="Digi-Key",
-               distributor_pn="MCP73831T-2ACI/OTCT-ND", unit_price=0.7, x=-10.0, y=-13.5,
+               distributor_pn="MCP73831T-2ACI/OTCT-ND", unit_price=0.7, x=-9.85, y=-13.6,
                height_mm=1.45, group="power", description="Li-Po charger"))
     d.add(Part("U10", "USBLC6-2SC6", SOT236,
                pins={"IO1A": ("1", "passive"), "GND": ("2", "power_in"),
                      "IO2A": ("3", "passive"), "IO2B": ("4", "passive"),
                      "VBUS": ("5", "power_in"), "IO1B": ("6", "passive")},
                mpn="USBLC6-2SC6", manufacturer="STMicroelectronics", distributor="Digi-Key",
-               distributor_pn="497-5235-1-ND", unit_price=0.4, x=-14.15, y=-11.95,
+               distributor_pn="497-5235-1-ND", unit_price=0.4, x=-14.0, y=-11.9,
                height_mm=1.45, group="power", description="USB ESD protection", is_ic=False))
     d.add(Part("U11", "MCP1700-3.3", SOT23,
                pins={"GND": ("1", "power_in"), "VOUT": ("2", "power_out"),
                      "VIN": ("3", "power_in")},
                mpn="MCP1700T-3302E/TT", manufacturer="Microchip", distributor="Digi-Key",
-               distributor_pn="MCP1700T3302ETTCT-ND", unit_price=0.45, x=14.2, y=-11.95,
+               distributor_pn="MCP1700T3302ETTCT-ND", unit_price=0.45, x=14.0, y=-11.9,
                height_mm=1.2, group="power", description="LDO 3.3 V for VDDUSB"))
     d.add(Part("D17", "Schottky", SOD323, pins={"K": ("1", "passive"), "A": ("2", "passive")},
                mpn="BAT60JFILM", manufacturer="STMicroelectronics", distributor="Digi-Key",
@@ -354,9 +385,9 @@ def demo_design(name="greenline_demo"):
                unit_price=0.6, x=8.9, y=11.2, height_mm=0.9, group="mcu",
                description="32.768 kHz crystal 3215"))
     bt = F.battery_tab(1.2, 2.0)
-    d.add(Part("BT1", "BAT+", bt, pins={"1": "1"}, x=-18.7, y=-3.6, in_bom=False,
+    d.add(Part("BT1", "BAT+", bt, pins={"1": "1"}, x=-18.5, y=-3.6, in_bom=False,
                height_mm=0.0, group="power", description="battery + solder pad"))
-    d.add(Part("BT2", "BAT-", bt, pins={"1": "1"}, x=-18.7, y=-6.8, in_bom=False,
+    d.add(Part("BT2", "BAT-", bt, pins={"1": "1"}, x=-18.5, y=-6.8, in_bom=False,
                height_mm=0.0, group="power", description="battery - solder pad"))
 
     # ---- passives, top side -------------------------------------------------
@@ -466,15 +497,26 @@ def demo_design(name="greenline_demo"):
         d.net("CP%d" % c, "%s.K" % first, "%s.A" % second)
 
     # ---- planes and keep-outs ---------------------------------------------
-    # GND is a solid plane on In1.Cu.  In2.Cu is a third routing layer: the board
-    # does not route on two layers, so the supplies are tracks, not a plane.
+    # GND is a solid plane on In1.Cu.  In2.Cu is the V2V8 plane AND a third
+    # routing layer ("routable" plane): every V2V8 pad drops into it through a
+    # via, signals that do not fit on the outer layers run across it and the
+    # fill flows around them.  The other supplies are tracks.
     d.add_plane("GND", "In1.Cu")
+    d.add_plane("V2V8", "In2.Cu", routable=True)
     d.add_body_keepout("U4")                 # no copper on F.Cu under the IMU body
     d.add_body_keepout("U5")                 # ... and under the inclinometer body
     bx, by, bw, bh = BATTERY_BODY
     d.add_keepout(RoundedPolygon.rect(bx, by, bw, bh), layers=("F.Cu",),
                   name="battery_body", tracks=False, vias=False, copper=False,
                   footprints=True)           # placement only: no top-side parts
+    for i, (x, y) in enumerate(POST_FEET, start=1):
+        d.add_placement_keepout(RoundedPolygon.rect(x, y, POST_FOOT_SIZE, POST_FOOT_SIZE),
+                                side="top", name="post_foot_%d" % i)
+    for ref, x in (("U2", -CAMERA_X), ("U3", CAMERA_X)):
+        d.add_height_limit(RoundedPolygon.rect(x, (HOOD_Y0 + FLAT_Y) / 2.0, 2.0 * HOOD_HALF_W,
+                                               FLAT_Y - HOOD_Y0),
+                           HOOD_MAX_HEIGHT, side="top", exempt=(ref,),
+                           name="camera_hood_%s" % ref)
     return d
 
 

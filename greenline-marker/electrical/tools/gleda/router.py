@@ -1,6 +1,6 @@
-"""gleda autorouter: grid-based A* with rip-up-and-reroute, for the kind of
-board gleda targets (small, 4 layers, two routing layers plus planes,
-fine-pitch parts, a few hundred connections).
+"""gleda autorouter: grid-based A* with negotiated rip-up-and-reroute, for the
+kind of board gleda targets (small, 4 layers, two or three routing layers plus
+planes, fine-pitch parts, a few hundred connections).
 
 Typical use::
 
@@ -16,8 +16,8 @@ How it works
 ------------
 *Grid.*  Tracks run between the nodes of a uniform grid (default 0.05 mm) in
 8 directions, vias sit on nodes (:mod:`gleda.raster`).  Routing layers are
-``Design.signal_layers()`` - copper layers that are not given to a whole-board
-plane.
+``Design.signal_layers()``: the outer layers and every inner layer that is not
+given to a whole-board plane, or whose plane is ``routable``.
 
 *Obstacle maps.*  For every "route class" - (track half-width, class
 clearance) and (via radius, drill, class clearance) of the nets to route -
@@ -29,43 +29,76 @@ keep-outs, board edge and cutouts, drilled holes (hole-to-copper and
 hole-to-hole).  A net's own copper is subtracted while that net is routed.
 Distances are exact; see :mod:`gleda.raster` for the clearance maths.
 
+*Units.*  The work is cut into small units that are routed, ripped up and
+rerouted independently:
+
+* a **connection** - one edge of a net's minimum spanning tree.  It joins
+  the copper that hangs on one pad with the copper that hangs on the other,
+  wherever the two are closest (pad, track or via), so a multi-pin net grows
+  as a tree with T junctions, not as a chain of pad-to-pad wires;
+* a **fan-out** - stub and through via that drop one pad of a plane net into
+  its plane (never a via in the pad; a pad may share the via of a neighbour
+  of its net);
+* an **escape** - the way out of a fine-pitch array for one of its pads.
+
+*Stage A: array escape.*  Before anything else is on the board, the pads of
+each fine-pitch array (BGA / CSP) and the other pads in a window around it
+are routed among themselves: every signal pad gets a track to the rim of the
+window - on any layer, pulled toward where its net has to go - or straight to
+a pad of its net inside the window, every plane pad its stub and via.  This
+small puzzle is negotiated to zero conflicts and then frozen: the fan-out a
+designer would draw first.  Connections of an escaped pad start from its
+escape track; what remains unused of it is pruned at the end.
+
 *Search.*  A* over (layer, y, x) with integer costs (:mod:`gleda._astar`),
-no corner cutting, optional preferred direction per layer, a cost per via and
-an optional limit of vias per net.  Multi-pin nets grow as a tree: pins are
-added in minimum-spanning-tree order and each new pin is connected to the
-nearest copper of the tree (pad, track or via), not just to another pin.
+no corner cutting, optional preferred direction per layer, a cost per via, an
+optional limit of vias per net and a higher price for tracks on a plane layer
+that signals share.
 
-*Planes.*  A net with a whole-board plane on an inner layer is not routed
-pin to pin: every SMD pad gets a short stub and a through via that drops into
-the plane (never a via in the pad; a pad may share the via of a neighbouring
-pad of the same net).
+*Negotiation.*  All units are routed with other nets' copper allowed at a
+price; the units that conflict are routed again and again while the price of
+sharing and the history cost of contested cells go up (PathFinder style).
+What still conflicts when that stalls is ripped up, worst offender first.
 
-*Rip-up and reroute.*  Units (a tree net, or one plane fan-out) are routed in
-order - fine-pitch classes first, then fan-outs, then the rest shortest first.
-When a unit finds no legal path it is routed again with other nets' tracks
-allowed at a price; the units it runs over are ripped up and queued again,
-and the contested cells get a history cost so that later attempts avoid them.
-A unit that has been ripped up often becomes more expensive to rip.
+*End game.*  From here only conflict-free copper is accepted.  An open unit is
+placed strictly if it can be; otherwise it is laid over other units, those are
+ripped and placed again the same way (a bounded cascade), and the board goes
+back to how it was if that does not work out.  Units still open start another
+negotiation wave from the board as it is.  Nets of a class with
+``min_track_width`` may neck down as the last resort.
 
-*Cleanup.*  Every net's tracks are dissolved into unit grid edges and rebuilt:
-duplicates vanish, dangling stubs are pruned, loops are opened, collinear
-pieces are merged and segments are split at junctions so that every
-connection is end-to-end.
+*Planes.*  Tracks on a shared plane layer and rows of via clearances can cut
+a plane's fill into pieces.  :func:`plane_regions` predicts the fill the way
+KiCad makes it; a pad whose via ends up in a cut-off piece gets a real track
+to the main part.
+
+*Improvement and cleanup.*  With the history forgotten every unit is ripped
+once and routed again along the plain shortest path (kept if better).  Then
+every net's tracks are dissolved into unit grid edges and rebuilt: duplicates
+vanish, dangling stubs are pruned, loops are opened, collinear pieces are
+merged and segments are split at junctions so that every connection is
+end-to-end.
 
 *Audit.*  :func:`audit` re-checks the final geometry with exact shapely
-distances (clearance, edge, holes, keep-outs) and computes the connectivity
-from the copper alone.  ``RouteResult.unrouted`` comes from this audit, not
-from the router's book-keeping.  KiCad's DRC remains the judge.
+distances (clearance, edge, holes, keep-outs, widths) and computes the
+connectivity from the copper alone, planes by their predicted fill.
+``RouteResult.unrouted`` comes from this audit, not from the router's
+book-keeping.  KiCad's DRC remains the judge.
 
 Per-net options (set on :class:`gleda.model.Net`): ``width``, ``max_vias``,
-``layers``, ``no_route``, ``priority``; clearance and default width come from
-the net class.
+``layers``, ``no_route``, ``priority``; clearance, default width and the
+neck-down width come from the net class.
 
-Limits: see the README ("Router limitations").
+Everything is deterministic: the same design and options give the same
+copper (:func:`fingerprint`, :func:`save_routing`, :func:`load_routing`).
+
+Limits: see the README ("Router: limits").
 """
 from __future__ import annotations
 
+import json
 import math
+import random
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -118,13 +151,32 @@ class RouterOptions:
                          unless a clean path is then found)
     ``ripup_depth``      end game: a net that is still unrouted may push other
                          nets out of its way if those find a clean path again;
-                         this is how many levels deep that may cascade
+                         this is how many levels deep that may cascade ...
+    ``ripup_budget``     ... and how many units one such push may reroute in all
     ``patience``         stop negotiating when the number of conflicts has not
                          improved for this many rounds; the best state seen is
                          the one that is kept
-    ``neckdown``         if a connection cannot be made at the net's width,
-                         try again at ``Design.min_track_width(net)`` (only
-                         narrower when the net class has ``min_track_width``)
+    ``waves``            negotiation + end game are repeated up to this many
+                         times while units are still open: each later wave
+                         starts from the board as it is, with the history
+                         forgotten ...
+    ``reheat_price``     ... and the price of sharing set back to this value
+                         (track length per cell), so that the open units push
+                         their way in and their neighbours make room
+    ``region_margins``   last resort for a unit that is still open: everything
+                         routed within this distance of it is ripped up and
+                         negotiated again as one small puzzle while the rest of
+                         the board is frozen; one try per margin ...
+    ``region_tries``     ... for at most this many open units ...
+    ``region_iterations`` / ``region_patience``  ... with these limits
+    ``neckdown``         nets of a class with ``min_track_width`` may be routed
+                         at that width where the full width does not fit: the
+                         stub of a pad narrower than the track, a connection
+                         that has no way at full width at all, and - as the
+                         last resort of the end game - a connection that could
+                         not be placed at full width even by pushing other
+                         nets aside.  A net with its own ``width`` never necks
+                         down.
     ``smooth``           straighten every path (fewer bends, same cost)
     ``time_limit``       seconds after which no more rip-up is started;
                          whatever is unrouted then is reported as unrouted
@@ -139,12 +191,38 @@ class RouterOptions:
                          blocks several of them.  0 switches it off.
     ``array_pitch``      a part counts as fine-pitch array when it has nine or
                          more round pads at this pitch or less
-    ``array_escape``     give every pad on the outer ring of such an array a
-                         short fixed straight escape stub before anything else
-                         is routed, so that its net claims its own lane and
-                         the lanes between stay open for the inner pads
-    ``array_escape_length``  length of those stubs from the pad centre
-                         (default: one array pitch)
+    ``array_escape``     stage A: before anything else is routed, fan every
+                         connected pad of such an array out to its own via
+                         outside the array (negotiated among the pads of the
+                         array only) and freeze that copper.  Nets with
+                         ``max_vias`` are left out.
+    ``escape_iterations``  negotiation rounds of stage A per array ...
+    ``escape_patience``  ... and the patience there (rounds are cheap)
+    ``escape_attempts``  stage A is tried in up to this many unit orders while
+                         pads are left without an escape; the best try is kept
+    ``escape_reach``     size of the escape window around the pad field of an
+                         array: an escape is a route from the pad to the rim
+                         of that window on any layer
+    ``escape_pad_gap``   an escape does not end closer than this to a pad on
+                         the rim (pads there must stay reachable from outside)
+    ``escape_grow``      a side of the escape window that would cut through a
+                         part's pads moves outward past them by at most this
+    ``escape_direction``  how strongly an escape is pulled toward the rest of
+                         its net (0 = leave wherever it is shortest)
+    ``escape_improve``   reroute-each-once passes that straighten the fan-out
+                         after its negotiation
+    ``escape_freeze``    the fan-out found in stage A is final: its copper is a
+                         hard obstacle for every other net from then on (the
+                         lanes between the balls are too scarce to be traded
+                         in the main negotiation).  Off: the escapes stay
+                         negotiable, only more expensive to run over ...
+    ``escape_weight``    ... by this factor
+    ``escape_neighbours``  the other pads inside an array's escape window (its
+                         decoupling capacitors, pull-ups ...) get their plane
+                         via or their way out in stage A as well, so that the
+                         whole neighbourhood is fanned out as one puzzle
+    ``endgame_rounds``   passes over the open units in the end game ...
+    ``endgame_tries``    ... and tries per unit and pass
     ``array_zone``       width of the fan-out zone around such an array, beyond
                          the via-free zone.  Nets that do not belong to the
                          array pay ``array_zone_cost`` (fraction of the normal
@@ -162,6 +240,11 @@ class RouterOptions:
                          this is what breaks "you move - no, you move" ties
     ``plane_share_radius``  a plane fan-out may use an existing via of its
                          net within this distance instead of a new one
+    ``plane_layer_cost`` a track on a plane layer that signals may share
+                         (``Plane.routable``) costs this many times its length:
+                         the layer is kept for what does not fit elsewhere
+    ``plane_repair_rounds``  how often the router looks for pads cut off from
+                         their plane by other copper and joins them with a track
     ``center_stubs``     end tracks on the pad centre with a short stub when
                          the pad centre is not a grid node
     ``heuristic_weight`` > 1 trades path quality for speed
@@ -178,9 +261,16 @@ class RouterOptions:
     present_growth: float = 1.4
     present_max: float = 2.0
     history_cost: float = 0.02
-    max_iterations: int = 60
-    patience: int = 12
-    ripup_depth: int = 3
+    max_iterations: int = 150
+    patience: int = 20
+    waves: int = 2
+    reheat_price: float = 0.15
+    region_margins: Tuple[float, ...] = (2.0, 4.0)
+    region_tries: int = 6
+    region_iterations: int = 80
+    region_patience: int = 25
+    ripup_depth: int = 8
+    ripup_budget: int = 60
     neckdown: bool = True
     smooth: bool = True
     time_limit: Optional[float] = None
@@ -191,13 +281,27 @@ class RouterOptions:
     array_via_keepout: float = 0.75
     array_pitch: float = 0.65
     array_escape: bool = True
-    array_escape_length: Optional[float] = None
+    escape_iterations: int = 200
+    escape_patience: int = 40
+    escape_attempts: int = 6
+    escape_reach: float = 3.0
+    escape_pad_gap: float = 0.6
+    escape_grow: float = 1.0
+    escape_direction: float = 1.0
+    escape_improve: int = 4
+    escape_freeze: bool = True
+    escape_weight: int = 20
+    escape_neighbours: bool = True
+    endgame_rounds: int = 4
+    endgame_tries: int = 4
     array_zone: float = 1.5
     array_zone_cost: float = 1.0
     history_gain: float = 0.25
     via_spacing: float = 0.9
     via_spacing_cost: float = 1.5
     plane_share_radius: float = 1.2
+    plane_layer_cost: float = 4.0
+    plane_repair_rounds: int = 3
     center_stubs: bool = True
     heuristic_weight: float = 1.2
     progress: Optional[Callable[[str], None]] = None
@@ -226,6 +330,8 @@ class AuditResult:
     violations: List[Dict[str, Any]] = field(default_factory=list)
     unrouted: List[Unrouted] = field(default_factory=list)
     connections_total: int = 0
+    #: "net/layer" -> number of separate pieces of that plane's fill
+    plane_pieces: Dict[str, int] = field(default_factory=dict)
 
     @property
     def missing(self) -> int:
@@ -239,7 +345,8 @@ class AuditResult:
         return {"violations": self.violations,
                 "unrouted": [u.to_dict() for u in self.unrouted],
                 "connections_total": self.connections_total,
-                "connections_missing": self.missing}
+                "connections_missing": self.missing,
+                "plane_pieces": dict(self.plane_pieces)}
 
 
 @dataclass
@@ -306,7 +413,7 @@ class _Pad:
     """A placed pad as terminal and as obstacle."""
     __slots__ = ("idx", "key", "net", "x", "y", "cu", "lay", "circle", "R", "poly", "geom",
                  "georad", "local_clr", "cls_clr", "drill", "smd", "exact", "nodes",
-                 "nodeset", "center", "bbox")
+                 "nodeset", "nodelist", "center", "bbox")
 
 
 class _Seg:
@@ -348,19 +455,31 @@ class _RC:
         self.static = np.zeros((n,) + shape, dtype=bool)
         self.pad = np.zeros((n,) + shape, dtype=np.uint8)
         self.soft = np.zeros((n,) + shape, dtype=np.uint16)
-        #: via classes only: hole-to-hole reach of the routed vias (all nets)
+        #: via classes only: hole-to-hole reach of the routed vias (all nets) ...
         self.vhole = np.zeros(shape, dtype=np.uint16) if is_via else None
+        #: ... and of the frozen vias (a hard obstacle, the via's own net included)
+        self.vhard = np.zeros(shape, dtype=np.uint8) if is_via else None
 
 
 class _NetCtx:
     __slots__ = ("name", "cls_clr", "width", "hw", "via_d", "via_drill", "rct", "rcv",
-                 "rct_alt", "pads", "allowed", "max_vias", "plane", "priority")
+                 "rct_alt", "pads", "allowed", "max_vias", "plane", "priority", "th_nodes")
 
 
 class _Unit:
-    __slots__ = ("uid", "kind", "ctx", "pads", "phase", "hpwl", "items", "rips", "weight",
+    """One routing job.
+
+    ``conn``    join the copper that hangs on pad ``pads[0]`` with the copper
+                that hangs on ``pads[1]`` (one edge of the net's spanning tree)
+    ``fanout``  stub + via that drops pad ``pads[0]`` of a plane net into its
+                plane
+    ``escape``  way out of a fine-pitch array for pad ``pads[0]`` of a signal
+                net (optional helper: the pad's connections start from it)
+    """
+    __slots__ = ("uid", "kind", "ctx", "pads", "phase", "length", "items", "rips", "weight",
                  "failed", "reason", "routed", "deps", "dependents", "attempts", "order",
-                 "paths", "root", "missing")
+                 "touch", "cells", "hw", "trivial", "win", "rim", "targets", "array",
+                 "narrow", "frozen", "at_rim", "rimset")
 
     def __init__(self, uid, kind, ctx, pads):
         self.uid = uid
@@ -368,33 +487,37 @@ class _Unit:
         self.ctx = ctx
         self.pads = pads
         self.phase = 2
-        self.hpwl = 0.0
+        self.length = 0.0
         self.items: List[Any] = []
         self.rips = 0
         self.weight = 1
         self.failed = False
         self.reason = ""
         self.routed = False
-        self.deps: Set[int] = set()
+        self.deps: Set[int] = set()                        # units whose copper it touches
         self.dependents: Set[int] = set()
         self.attempts = 0
         self.order = 0
-        self.paths: List[Any] = []                         # tree units: one per connection
-        self.root: Optional[int] = None                    # tree units: pad the tree grew from
-        self.missing: List[str] = []                       # pads a partial route left out
+        self.touch: Set[int] = set()                       # pads its copper touches
+        self.cells: List[Tuple[int, int, int]] = []        # its cell path (l, ix, iy)
+        self.hw = 0.0                                      # track half-width used
+        self.trivial = False                               # conn: joined by other copper
+        self.win = None                                    # escape: search window ...
+        self.rim = None                                    # ... the cells on its border ...
+        self.targets = None                                # ... (destination cells, extra cost)
+        self.array = False                                 # pad of a fine-pitch array
+        self.narrow = False                                # end game: may neck down
+        self.frozen = False                                # its copper is there to stay
+        self.at_rim = False                                # escape: ends on the window rim
+        self.rimset = None                                 # escape: the rim cells as a set
 
     @property
     def name(self) -> str:
-        if self.kind == "tree":
-            return self.ctx.name
+        if self.kind == "conn":
+            return "%s:%s-%s" % (self.ctx.name, self.pads[0].key, self.pads[1].key)
+        if self.kind == "escape":
+            return "%s@%s(escape)" % (self.ctx.name, self.pads[0].key)
         return "%s@%s" % (self.ctx.name, self.pads[0].key)
-
-
-class _Path:
-    """One connection of a tree net: the copper that attached pad ``pad`` to
-    the tree, the pads it met on the way, and the connection it hangs on
-    (``parent``: index into the unit's path list, -1 = the root pad)."""
-    __slots__ = ("pad", "met", "items", "cells", "vias", "parent")
 
 
 class _Attempt:
@@ -405,14 +528,25 @@ class _Attempt:
         self.victims: Set[int] = set()
         self.hist: List[Tuple[int, int, int]] = []
         self.deps: Set[int] = set()
-        self.cells: List[Tuple[int, int, int]] = []        # tree cells (l, ix, iy)
-        self.free: Set[Tuple[int, int]] = set()            # nodes with a free layer change
+        self.touch: Set[int] = set()
+        self.cells: List[Tuple[int, int, int]] = []
         self.vias: List[_ViaItem] = []
         self.stubbed: Set[Tuple[int, Tuple[int, int]]] = set()
-        self.connected: Set[int] = set()                   # pad indices in the tree
-        self.paths: List[_Path] = []
-        self.root: Optional[int] = None
-        self.missing: List[str] = []
+        self.hw = 0.0
+        self.trivial = False
+        self.at_rim = False
+
+
+class _NetState:
+    """Connectivity of one net's routed copper (see Router._net_state)."""
+    __slots__ = ("parent", "find", "units", "escaped", "owner")
+
+    def __init__(self):
+        self.parent: Dict[Any, Any] = {}
+        self.find: Any = None
+        self.units: List[_Unit] = []
+        self.escaped: Set[int] = set()
+        self.owner: Dict[Tuple[int, int, int], Tuple[str, int]] = {}
 
 
 class _Index:
@@ -522,21 +656,21 @@ class Router:
         self.vpref = np.zeros(self.shape, dtype=np.uint16)
         self.index = _Index()
         self.net_items: Dict[str, List[Any]] = {}
+        self.net_units: Dict[str, List[_Unit]] = {}
         self.pad_masks: Dict[Tuple[int, Any], Any] = {}
-        #: fixed copper (escape stubs): per net, and per pad it is attached to
-        self.fixed: Dict[str, List[Any]] = {}
-        self.pad_fixed: Dict[int, List[Any]] = {}
-        self.conf: Dict[int, Set[int]] = {}
         self._forced_cells: List[Tuple[int, int, int]] = []
+        self._force_left = 0
         self._inner: Dict[float, Any] = {}
         self.stats: Dict[str, Any] = {"searches": 0, "expansions": 0, "ripups": 0,
                                       "reroutes": 0}
+        self.units: List[_Unit] = []
+        self.order: List[_Unit] = []
+        self.conf: Dict[int, Set[int]] = {}
+        self.failed: Dict[str, str] = {}
         self._setup_costs()
         self._setup_pads()
         self._setup_nets()
         self._setup_maps()
-        self._escape_arrays()
-        self._setup_units()
 
     # -- logging -----------------------------------------------------------
     def log(self, msg: str) -> None:
@@ -566,7 +700,9 @@ class Router:
             against = int(round(STEP * (1.0 + bias)))
             sh.append(against if pref == "v" else STEP)
             sv.append(against if pref == "h" else STEP)
-            sd.append(DIAG if pref == "any" else int(round(DIAG * (1.0 + bias / 2.0))))
+            # a diagonal step is one step with and one against the preference; it
+            # must not be cheaper than taking the two on their own layers
+            sd.append(DIAG if pref == "any" else int(round(DIAG * (1.0 + bias))))
         self.step_h = np.array(sh, dtype=np.int32)
         self.step_v = np.array(sv, dtype=np.int32)
         self.step_d = np.array(sd, dtype=np.int32)
@@ -615,7 +751,11 @@ class Router:
                     p.nodes = np.stack([ix + ix0, iy + iy0], axis=1).astype(np.int64)
             else:
                 p.nodes = g.nodes_in(pp.polygon, inset)
-            p.nodeset = {(int(n[0]), int(n[1])) for n in p.nodes}
+            if len(p.nodes) == 0:
+                # smaller than the grid: entered at the nodes around its centre
+                p.nodes = self._near_nodes(p)
+            p.nodelist = [(int(n[0]), int(n[1])) for n in p.nodes]
+            p.nodeset = set(p.nodelist)
             p.center = None
             if g.is_node(pp.x, pp.y):
                 c = g.nearest(pp.x, pp.y)
@@ -653,6 +793,17 @@ class Router:
         for layer, net in planes.items():
             if layer not in self.lidx:
                 plane_of.setdefault(net, layer)
+        #: planes on routing layers that signals may share (layer -> net)
+        self.mixed: Dict[str, str] = {}
+        for layer, net in d.routable_plane_layers().items():
+            if layer in self.lidx:
+                self.mixed[layer] = net
+                plane_of.setdefault(net, layer)
+                k = max(1.0, self.opt.plane_layer_cost)
+                l = self.lidx[layer]
+                self.step_h[l] = int(round(self.step_h[l] * k))
+                self.step_v[l] = int(round(self.step_v[l] * k))
+                self.step_d[l] = int(round(self.step_d[l] * k))
         self.plane_of = plane_of
         self.ctx: Dict[str, _NetCtx] = {}
         by_net: Dict[str, List[_Pad]] = {}
@@ -677,6 +828,10 @@ class Router:
             else:
                 c.allowed = tuple(range(self.L))
             c.rct = c.rcv = c.rct_alt = None
+            c.th_nodes = set()
+            for p in pads:
+                if len(p.lay) > 1:                      # plated through: free layer change
+                    c.th_nodes.update(p.nodelist)
             self.ctx[name] = c
         self.routable: List[_NetCtx] = []
         for name, net in d.nets.items():
@@ -689,7 +844,8 @@ class Router:
             c.rcv = self._rc(("v", round(c.via_d / 2.0, 6), round(c.via_drill / 2.0, 6),
                               round(c.cls_clr, 6)), c.via_d / 2.0, c.via_drill / 2.0,
                              c.cls_clr, True)
-            if self.opt.neckdown:
+            if self.opt.neckdown and d.netclass_of(name).min_track_width is not None \
+                    and net.width is None:
                 wmin = d.min_track_width(name)
                 if wmin < c.width - 1e-9:
                     c.rct_alt = self._rc(("t", round(wmin / 2.0, 6), round(c.cls_clr, 6)),
@@ -791,90 +947,254 @@ class Router:
                         win, mask = m
                         rc.static[0, win[0]:win[1], win[2]:win[3]] |= mask
 
-    # -- fixed copper: escape stubs of fine-pitch arrays -----------------------
-    def _add_fixed(self, ctx: _NetCtx, seg: _Seg, pad: _Pad) -> None:
-        """Register a fixed track piece that hangs on ``pad``: a hard obstacle
-        for every other net, part of the pad for its own net."""
-        seg.unit = -2
-        seg.masks = self._item_masks(seg)
-        for rc in self.rcs.values():
-            layer = 0 if rc.is_via else seg.layer
-            for win, mask in seg.masks[rc.key]:
-                rc.pad[layer, win[0]:win[1], win[2]:win[3]] += mask
-        self.fixed.setdefault(ctx.name, []).append(seg)
-        self.pad_fixed.setdefault(pad.idx, []).append(seg)
+    # -- units -------------------------------------------------------------------
+    def _new_unit(self, kind: str, ctx: _NetCtx, pads: List[_Pad]) -> _Unit:
+        u = _Unit(len(self.units), kind, ctx, pads)
+        self.units.append(u)
+        self.conf[u.uid] = set()
+        self.net_units.setdefault(ctx.name, []).append(u)
+        return u
 
-    def _legal_run(self, ctx: _NetCtx, rc: _RC, p: _Pad, layer: int, d: Tuple[int, int],
-                   steps: int) -> int:
-        """Number of grid moves (at most ``steps``) a track of class ``rc`` can
-        make from the centre of pad ``p`` in direction ``d`` without coming too
-        close to fixed copper, pads or the board edge."""
-        g = self.grid
-        cx, cy = p.center
-        m = steps + 2
-        win = (max(0, cy - m), min(g.ny, cy + m + 1), max(0, cx - m), min(g.nx, cx + m + 1))
-        cost = self._local(ctx, rc, win, False, _Attempt(), None)[0]
-        iy0, iy1, ix0, ix1 = win
-        x, y = cx - ix0, cy - iy0
-        if cost[layer, y, x] == 0:
-            return 0
-        n = 0
-        for _k in range(steps):
-            nx, ny = x + d[0], y + d[1]
-            if not (0 <= nx < ix1 - ix0 and 0 <= ny < iy1 - iy0) or cost[layer, ny, nx] == 0:
+    @staticmethod
+    def _mst(pads: List[_Pad]) -> List[Tuple[_Pad, _Pad, float]]:
+        """Minimum spanning tree over pad centres (Prim, started at the closest
+        pair): the connections a net is made of."""
+        n = len(pads)
+        if n < 2:
+            return []
+
+        def dist(i, j):
+            return math.hypot(pads[i].x - pads[j].x, pads[i].y - pads[j].y)
+
+        best = None
+        for i in range(n):
+            for j in range(i + 1, n):
+                dij = dist(i, j)
+                if best is None or dij < best[0] - 1e-12:
+                    best = (dij, i, j)
+        start = best[1]
+        in_tree = [False] * n
+        in_tree[start] = True
+        near = [dist(start, j) for j in range(n)]
+        link = [start] * n
+        edges: List[Tuple[_Pad, _Pad, float]] = []
+        for _k in range(n - 1):
+            j = min((k for k in range(n) if not in_tree[k]),
+                    key=lambda k: (round(near[k], 9), pads[k].idx))
+            edges.append((pads[link[j]], pads[j], near[j]))
+            in_tree[j] = True
+            for k in range(n):
+                if not in_tree[k]:
+                    dk = dist(j, k)
+                    if dk < near[k] - 1e-12:
+                        near[k] = dk
+                        link[k] = j
+        return edges
+
+    def _escape_window(self, bbox) -> Tuple[float, float, float, float]:
+        """The escape window of an array: its pad field grown by
+        ``escape_reach``; a side that would cut through a part's pads is moved
+        outward past them (by at most ``escape_grow``), so that the part is
+        fanned out with the array instead of sitting on the rim."""
+        o = self.opt
+        e = max(o.escape_reach, o.array_via_keepout + 1.0)
+        gap = o.escape_pad_gap
+        x0, y0, x1, y1 = bbox[0] - e, bbox[1] - e, bbox[2] + e, bbox[3] + e
+        lim = (x0 - o.escape_grow, y0 - o.escape_grow, x1 + o.escape_grow, y1 + o.escape_grow)
+        step = self.grid.pitch
+        for _round in range(8):
+            changed = False
+            for p in self.pads:
+                bx0, by0, bx1, by1 = p.bbox
+                if bx1 < x0 - gap or bx0 > x1 + gap or by1 < y0 - gap or by0 > y1 + gap:
+                    continue
+                if bx0 - gap < x0 < bx1 + gap and by1 > y0 and by0 < y1:
+                    new = max(lim[0], bx0 - gap - step)
+                    if new < x0 - 1e-9:
+                        x0, changed = new, True
+                if bx0 - gap < x1 < bx1 + gap and by1 > y0 and by0 < y1:
+                    new = min(lim[2], bx1 + gap + step)
+                    if new > x1 + 1e-9:
+                        x1, changed = new, True
+                if by0 - gap < y0 < by1 + gap and bx1 > x0 and bx0 < x1:
+                    new = max(lim[1], by0 - gap - step)
+                    if new < y0 - 1e-9:
+                        y0, changed = new, True
+                if by0 - gap < y1 < by1 + gap and bx1 > x0 and bx0 < x1:
+                    new = min(lim[3], by1 + gap + step)
+                    if new > y1 + 1e-9:
+                        y1, changed = new, True
+            if not changed:
                 break
-            if d[0] and d[1] and (cost[layer, y, nx] == 0 or cost[layer, ny, x] == 0):
-                break
-            x, y = nx, ny
-            n += 1
-        return n
+        return x0, y0, x1, y1
 
     def _escape_arrays(self) -> None:
-        """Fixed straight escape stubs for the outer ring of every fine-pitch
-        array (see ``RouterOptions.array_escape``).  Side pads leave along the
-        outward normal, corner pads along the longest legal of diagonal /
-        the two normals.  A stub runs to the first place where a via is
-        allowed (or as far as it legally can)."""
-        o, g = self.opt, self.grid
-        count = 0
-        if not o.array_escape:
-            self.stats["escape_stubs"] = 0
+        """Stage A: route every connected pad of a fine-pitch array (BGA /
+        CSP) out of the array before anything else is on the board.
+
+        The pads of one array are negotiated among themselves (a small problem
+        that converges quickly): a pad of a signal net gets a track to the rim
+        of the array's escape window - on any layer, pulled toward where its
+        net has to go - or straight to a pad of its net inside the window; a
+        pad of a plane net gets its stub and via.  What comes out is the fan-out
+        a designer would draw first.  The escapes then take part in the main
+        negotiation like any other copper, only they are more expensive to
+        run over (``escape_weight``); the connections of an escaped pad start
+        from its escape track."""
+        o = self.opt
+        self.stats["escapes"] = 0
+        self.stats["escape_failed"] = 0
+        if not o.array_escape or not self.arrays:
             return
         for arr in self.arrays:
+            units: List[_Unit] = []
             pads = arr["pads"]
-            x0, x1 = min(p.x for p in pads), max(p.x for p in pads)
-            y0, y1 = min(p.y for p in pads), max(p.y for p in pads)
-            for p in pads:
+            cx = sum(p.x for p in pads) / len(pads)
+            cy = sum(p.y for p in pads) / len(pads)
+            win = self.grid.window(*self._escape_window(arr["bbox"]))
+            iy0, iy1, ix0, ix1 = win
+            border = [(ix, iy) for ix in range(ix0, ix1) for iy in (iy0, iy1 - 1)]
+            border += [(ix, iy) for iy in range(iy0 + 1, iy1 - 1) for ix in (ix0, ix1 - 1)]
+            # an escape must not end right next to a pad: that pad (and the
+            # pads beyond it) still have to be reached from outside the window
+            pts = shapely.points([self.grid.x_of(ix) for ix, _iy in border],
+                                 [self.grid.y_of(iy) for _ix, iy in border])
+            near = self.pad_tree.query(pts, predicate="dwithin", distance=o.escape_pad_gap)
+            crowded = set(int(i) for i in near[0])
+            border = [b for i, b in enumerate(border) if i not in crowded]
+            rim = np.array([(l, ix, iy) for l in range(self.L) for ix, iy in border],
+                           dtype=np.int64).reshape(-1, 3)
+            rimset = set((int(a), int(b), int(c)) for a, b, c in rim)
+            # inner pads first: they have the fewest ways out
+            for p in sorted(pads, key=lambda q: (max(abs(q.x - cx), abs(q.y - cy)), q.idx)):
                 ctx = self.ctx.get(p.net) if p.net else None
-                if ctx is None or ctx.rct is None or p.center is None or not p.lay:
+                if ctx is None or ctx.rct is None or not p.lay:
                     continue
-                dx = -1 if abs(p.x - x0) < 1e-6 else (1 if abs(p.x - x1) < 1e-6 else 0)
-                dy = -1 if abs(p.y - y0) < 1e-6 else (1 if abs(p.y - y1) < 1e-6 else 0)
-                if dx == 0 and dy == 0:
-                    continue                                  # inner pad: negotiated
-                dirs = [(dx, dy)] if (dx == 0 or dy == 0) else [(dx, dy), (dx, 0), (0, dy)]
-                rc = ctx.rct
-                if ctx.rct_alt is not None and 2.0 * p.R < ctx.width - 1e-9:
-                    rc = ctx.rct_alt                          # neck down at the ball
-                want = o.array_escape_length or arr["pitch"]
-                best = None
-                for d in dirs:
-                    step = g.pitch * (math.sqrt(2.0) if d[0] and d[1] else 1.0)
-                    steps = int(round(want / g.pitch))        # diagonal: same count of moves
-                    n = self._legal_run(ctx, rc, p, p.lay[0], d, steps)
-                    if best is None or n * step > best[0] + 1e-9:
-                        best = (n * step, n, d)
-                if best is None or best[1] < 3:
-                    continue
-                _length, n, d = best
-                end = (p.center[0] + d[0] * n, p.center[1] + d[1] * n)
-                seg = self._make_seg(ctx, p.lay[0], p.center, end, rc.hw)
-                self._add_fixed(ctx, seg, p)
-                count += 1
-        self.stats["escape_stubs"] = count
-        if count:
-            self.log("escape: %d fixed stub(s) on %d fine-pitch array(s)" % (
-                count, len(self.arrays)))
+                if ctx.plane:
+                    if ctx.plane in p.cu:
+                        continue
+                    u = self._new_unit("fanout", ctx, [p])
+                else:
+                    u = self._new_unit("escape", ctx, [p])
+                    u.win, u.rim, u.rimset = win, rim, rimset
+                u.array = True
+                u.phase = -1
+                u.order = u.uid
+                units.append(u)
+            if not units:
+                continue
+            mine_idx = {p.idx for p in pads}
+            if o.escape_neighbours:
+                # the other pads inside the window are part of the same puzzle:
+                # their plane vias and ways out are negotiated with the fan-out
+                wx0, wx1 = self.grid.x_of(ix0), self.grid.x_of(ix1 - 1)
+                wy0, wy1 = self.grid.y_of(iy0), self.grid.y_of(iy1 - 1)
+                mine = {p.idx for p in pads}
+                taken = {u.pads[0].idx for u in self.units if u.array}
+                for p in self.pads:
+                    if p.idx in mine or p.idx in taken or not p.net or not p.lay:
+                        continue
+                    if not (wx0 < p.x < wx1 and wy0 < p.y < wy1):
+                        continue
+                    ctx = self.ctx.get(p.net)
+                    if ctx is None or ctx.rct is None:
+                        continue
+                    if ctx.plane:
+                        if ctx.plane in p.cu:
+                            continue
+                        u = self._new_unit("fanout", ctx, [p])
+                    else:
+                        u = self._new_unit("escape", ctx, [p])
+                        u.win, u.rim, u.rimset = win, rim, rimset
+                    u.array = True
+                    u.phase = -1
+                    u.order = u.uid
+                    units.append(u)
+            # The puzzle is small, so it is tried in several orders and the best
+            # result is kept: first the array from the inside out, then the
+            # reverse, then the neighbours' pads first.
+            base = list(units)
+            orders = [base, base[::-1],
+                      sorted(base, key=lambda u: (u.pads[0].idx in mine_idx, u.uid))]
+            for seed in range(max(0, o.escape_attempts - 3)):
+                mixed = list(base)
+                random.Random(seed + 1).shuffle(mixed)        # fixed seeds: reproducible
+                orders.append(mixed)
+            best = None                                       # (open, attempt, snapshot)
+            iterations = 0
+            for attempt in range(max(1, o.escape_attempts)):
+                if attempt:
+                    for u in units:
+                        if u.routed:
+                            self._rip(u)
+                        u.failed = False
+                        self.conf[u.uid] = set()
+                seq = orders[attempt % len(orders)]
+                for i, u in enumerate(seq):
+                    u.order = units[0].uid + i
+                self.hist[:] = 0
+                failed, its = self._negotiate(seq, o.escape_iterations, o.escape_patience,
+                                              "escape %s" % arr["ref"], optional_escapes=False)
+                iterations += its
+                self._rip_conflicts(seq, failed)
+                self.hist[:] = 0                              # its job is done
+                for _round in range(2):                       # second chance, pushing allowed
+                    self._escape_sweep(seq)
+                    for u in seq:
+                        if not u.routed and not self._time_up():
+                            self._place(u)
+                self.hist[:] = 0
+                still = sum(1 for u in units if not u.routed)
+                if best is None or still < best[0]:
+                    best = (still, attempt, self._snapshot())
+                if still == 0 or self._time_up():
+                    break
+            if best is not None and best[0] < sum(1 for u in units if not u.routed):
+                self._restore(best[2])
+            for _pass in range(max(0, o.escape_improve)):     # pull the fan-out tight
+                gain = self._improve(units)
+                if gain[0] < 0.05 and gain[1] == 0:
+                    break
+            done = sum(1 for u in units if u.routed)
+            self.stats["escapes"] += done
+            self.stats["escape_failed"] += len(units) - done
+            self.log("escape %s: %d of %d pad(s) fanned out in %d iteration(s)" % (
+                arr["ref"], done, len(units), iterations))
+            # a complete fan-out is frozen; an incomplete one stays negotiable
+            # (only expensive to run over), or the pads left out could be
+            # walled in for good
+            freeze = o.escape_freeze and done == len(units)
+            if o.escape_freeze and not freeze:
+                self.log("escape %s: incomplete, left negotiable" % arr["ref"])
+            for u in units:
+                self.conf[u.uid] = set()
+                u.failed = False
+                if freeze:
+                    self._freeze(u)
+
+    def _setup_units(self) -> None:
+        """The units of the main stage: one connection per edge of every
+        net's spanning tree, one fan-out per pad of a plane net; the escapes
+        of stage A stay in the game."""
+        default_clr = max(self.design.netclasses["Default"].clearance, self.floor)
+        for c in self.routable:
+            if c.plane:
+                have = {u.pads[0].idx for u in self.net_units.get(c.name, ())
+                        if u.kind == "fanout"}
+                for p in c.pads:
+                    if c.plane in p.cu or p.idx in have:
+                        continue                       # on the plane / handled in stage A
+                    u = self._new_unit("fanout", c, [p])
+                    u.phase = 1
+            else:
+                for a, b, dist in self._mst(c.pads):
+                    u = self._new_unit("conn", c, [a, b])
+                    u.length = dist
+                    u.phase = 0 if c.cls_clr < default_clr - 1e-9 else 2
+        order = sorted(self.units, key=lambda u: (-u.ctx.priority, u.phase, u.length, u.uid))
+        for i, u in enumerate(order):
+            u.order = i
+        self.order = order
 
     @staticmethod
     def _seg_nodes(seg: _Seg) -> List[Tuple[int, int]]:
@@ -885,31 +1205,6 @@ class Router:
             return [a]
         sx, sy = (b[0] - a[0]) // n, (b[1] - a[1]) // n
         return [(a[0] + sx * i, a[1] + sy * i) for i in range(n + 1)]
-
-    def _setup_units(self) -> None:
-        self.units: List[_Unit] = []
-        default_clr = max(self.design.netclasses["Default"].clearance, self.floor)
-        for c in self.routable:
-            if c.plane:
-                plane_layer = c.plane
-                for p in c.pads:
-                    if plane_layer in p.cu:
-                        continue                       # plated through: already on the plane
-                    u = _Unit(len(self.units), "fanout", c, [p])
-                    u.phase = 1
-                    u.hpwl = 0.0
-                    self.units.append(u)
-            else:
-                u = _Unit(len(self.units), "tree", c, list(c.pads))
-                xs = [p.x for p in c.pads]
-                ys = [p.y for p in c.pads]
-                u.hpwl = (max(xs) - min(xs)) + (max(ys) - min(ys))
-                u.phase = 0 if c.cls_clr < default_clr - 1e-9 else 2
-                self.units.append(u)
-        order = sorted(self.units, key=lambda u: (-u.ctx.priority, u.phase, u.hpwl, u.uid))
-        for i, u in enumerate(order):
-            u.order = i
-        self.order = order
 
     # -- item maps -----------------------------------------------------------
     def _item_masks(self, it) -> Dict[Any, List[Tuple[Any, np.ndarray]]]:
@@ -982,12 +1277,74 @@ class Router:
                 else:
                     view[mask] -= 1
 
+    def _freeze(self, unit: _Unit) -> None:
+        """Make a routed unit's copper a hard obstacle: it moves from the maps
+        of negotiable copper to the maps of hard obstacles (like pads), so
+        nothing is routed over it and it is not ripped up - for good (the
+        fan-out of stage A) or until :meth:`_unfreeze`."""
+        if unit.frozen or not unit.routed:
+            return
+        for it in unit.items:
+            self._apply(it, unit.weight, -1)
+            self._apply_hard(it, +1)
+        unit.frozen = True
+        self.conf[unit.uid] = set()
+
+    def _unfreeze(self, unit: _Unit) -> None:
+        """Undo :meth:`_freeze`."""
+        if not unit.frozen:
+            return
+        for it in unit.items:
+            self._apply_hard(it, -1)
+            self._apply(it, unit.weight, +1)
+        unit.frozen = False
+
+    def _apply_hard(self, it, sign: int) -> None:
+        """Add / remove an item to / from the hard obstacle maps."""
+        g, r = self.grid, self.rules
+        for rc in self.rcs.values():
+            if rc.is_via:
+                layers: Sequence[int] = (0,)
+            elif it.is_via:
+                layers = range(self.L)
+            else:
+                layers = (it.layer,)
+            for win, mask in it.masks[rc.key]:
+                for l in layers:
+                    view = rc.pad[l, win[0]:win[1], win[2]:win[3]]
+                    if sign > 0:
+                        view[mask] += 1
+                    else:
+                        view[mask] -= 1
+            if rc.is_via and it.is_via:
+                # hole to hole: for every net, the via's own included
+                m = g.disc_mask(it.x, it.y, it.drill / 2.0 + r.hole_to_hole + rc.hole_r)
+                if m:
+                    win, mask = m
+                    view = rc.vhard[win[0]:win[1], win[2]:win[3]]
+                    if sign > 0:
+                        view[mask] += 1
+                    else:
+                        view[mask] -= 1
+        if it.is_via and self.opt.via_spacing > 0:
+            m = g.disc_mask(it.x, it.y, self.opt.via_spacing)
+            if m:
+                win, mask = m
+                view = self.vpref[win[0]:win[1], win[2]:win[3]]
+                if sign > 0:
+                    view[mask] += 1
+                else:
+                    view[mask] -= 1
+
     def _commit(self, unit: _Unit, att: _Attempt) -> None:
         unit.items = list(att.items)
-        unit.paths = list(att.paths)
-        unit.root = att.root
-        unit.missing = list(att.missing)
-        unit.weight = 1
+        unit.cells = list(att.cells)
+        unit.hw = att.hw
+        unit.touch = set(att.touch)
+        unit.trivial = att.trivial
+        unit.at_rim = att.at_rim
+        unit.weight = max(1, int(self.opt.escape_weight)) \
+            if unit.array and unit.kind != "conn" else 1
         unit.deps = set(att.deps)
         for dep in unit.deps:
             self.units[dep].dependents.add(unit.uid)
@@ -1003,12 +1360,12 @@ class Router:
 
     def _rip(self, unit: _Unit) -> List[_Unit]:
         """Remove a unit's copper; returns all units ripped (it and the units
-        that hang on its copper)."""
+        whose copper hangs on its copper)."""
         out = []
         stack = [unit]
         while stack:
             u = stack.pop()
-            if not u.routed:
+            if not u.routed or u.frozen:
                 continue
             lst = self.net_items.get(u.ctx.name, [])
             for it in u.items:
@@ -1016,6 +1373,10 @@ class Router:
                 self.index.remove(it)
                 lst.remove(it)
             u.items = []
+            u.cells = []
+            u.touch = set()
+            u.trivial = False
+            u.at_rim = False
             u.routed = False
             for other in self.conf.get(u.uid, ()):
                 self.conf[other].discard(u.uid)
@@ -1085,12 +1446,6 @@ class Router:
                 max(seg.cls_clr, p.cls_clr, self.floor)
             if line.distance(p.geom) - p.georad - seg.hw < clr - EPS:
                 return False
-        for name, fixed in self.fixed.items():
-            if name == own_net:
-                continue
-            for fx in fixed:
-                if fx.layer == seg.layer and self._conflict(seg, fx):
-                    return False
         edge = round(self.rules.copper_to_edge + seg.hw + self.opt.edge_slack, 6)
         inner = self._inner.get(edge)
         if inner is None:
@@ -1121,7 +1476,7 @@ class Router:
                vias_left: Optional[int], ban: Sequence[Any] = ()):
         """Cost array and via map of ``win`` for one search of net ``ctx`` with
         track class ``rc``.  With ``soft`` other nets' routed copper may be
-        crossed at a price (unless it is frozen)."""
+        crossed at a price."""
         g, r = self.grid, self.rules
         iy0, iy1, ix0, ix1 = win
         rcv = ctx.rcv
@@ -1149,28 +1504,31 @@ class Router:
                 m = self.pad_masks[key]
                 if m:
                     _blit(ownblock, win, m[0], m[1], 1)
-        for fx in self.fixed.get(ctx.name, ()):
-            for mwin, mask in fx.masks[rc.key]:
-                _blit(padl[fx.layer], win, mwin, mask, -1)
-            for mwin, mask in fx.masks[rcv.key]:
-                _blit(padv, win, mwin, mask, -1)
+        free_nodes: List[Tuple[int, int]] = []
         softl = rc.soft[:, iy0:iy1, ix0:ix1].astype(np.int32)
         softv = rcv.soft[0, iy0:iy1, ix0:ix1].astype(np.int32)
         softv += rcv.vhole[iy0:iy1, ix0:ix1]
         wx0, wy0 = g.x_of(ix0) - 1.0, g.y_of(iy0) - 1.0
         wx1, wy1 = g.x_of(ix1 - 1) + 1.0, g.y_of(iy1 - 1) + 1.0
-        free_nodes: List[Tuple[int, int]] = []
         for it in self.net_items.get(ctx.name, ()):
             bb = it.bbox()
             if bb[2] < wx0 or bb[0] > wx1 or bb[3] < wy0 or bb[1] > wy1:
                 continue
-            w = self.units[it.unit].weight
+            owner = self.units[it.unit]
             layers = range(self.L) if it.is_via else (it.layer,)
-            for mwin, mask in it.masks[rc.key]:
-                for l in layers:
-                    _blit(softl[l], win, mwin, mask, -w)
-            for mwin, mask in it.masks[rcv.key]:
-                _blit(softv, win, mwin, mask, -w)
+            if owner.frozen:                             # hard for the others, not for its net
+                for mwin, mask in it.masks[rc.key]:
+                    for l in layers:
+                        _blit(padl[l], win, mwin, mask, -1)
+                for mwin, mask in it.masks[rcv.key]:
+                    _blit(padv, win, mwin, mask, -1)
+            else:
+                w = owner.weight
+                for mwin, mask in it.masks[rc.key]:
+                    for l in layers:
+                        _blit(softl[l], win, mwin, mask, -w)
+                for mwin, mask in it.masks[rcv.key]:
+                    _blit(softv, win, mwin, mask, -w)
             if it.is_via:
                 free_nodes.append(it.a)
         blocked = rc.static[:, iy0:iy1, ix0:ix1] | (padl > 0)
@@ -1197,7 +1555,8 @@ class Router:
         np.minimum(cost, _COST_CAP, out=cost)
         cost = np.ascontiguousarray(cost.astype(np.int32))
 
-        vblocked = rcv.static[0, iy0:iy1, ix0:ix1] | (padv > 0) | (ownblock > 0)
+        vblocked = rcv.static[0, iy0:iy1, ix0:ix1] | (padv > 0) | (ownblock > 0) \
+            | (rcv.vhard[iy0:iy1, ix0:ix1] > 0)
         hreach = r.hole_to_hole + rcv.hole_r
         tmp = np.zeros(padv.shape, dtype=np.int16)
         for v in att.vias:                                   # this attempt's own new vias
@@ -1227,7 +1586,7 @@ class Router:
             vmap[:] = 0
         np.minimum(vmap, _COST_CAP, out=vmap)
         vmap = np.ascontiguousarray(vmap.astype(np.int32))
-        for node in list(att.free) + free_nodes:
+        for node in list(ctx.th_nodes) + free_nodes:
             x, y = node[0] - ix0, node[1] - iy0
             if 0 <= x < ix1 - ix0 and 0 <= y < iy1 - iy0:
                 vmap[y, x] = FREE_VIA
@@ -1249,22 +1608,13 @@ class Router:
         """Access cells (l, ix, iy) of a pad.
 
         Normally the centre node when the pad is on the grid, otherwise (or
-        with ``wide``) every node inside it.  A pad with a fixed escape stub
-        is entered at the far end of the stub (``wide``: anywhere on it)."""
-        fixed = self.pad_fixed.get(p.idx)
-        if fixed and not wide:
-            return np.array([(s.layer, s.b[0], s.b[1]) for s in fixed], dtype=np.int64)
+        with ``wide``) every node inside it."""
         if p.center is not None and not wide:
             nodes = np.array([p.center], dtype=np.int64)
         else:
             nodes = p.nodes
-            if len(nodes) == 0:
-                nodes = self._near_nodes(p)
         out = [np.concatenate([np.full((len(nodes), 1), l, dtype=np.int64), nodes], axis=1)
                for l in p.lay]
-        for s in fixed or ():
-            out.append(np.array([(s.layer, n[0], n[1]) for n in self._seg_nodes(s)],
-                                dtype=np.int64))
         if not out:
             return np.zeros((0, 3), dtype=np.int64)
         return np.concatenate(out, axis=0)
@@ -1338,7 +1688,7 @@ class Router:
         v.unit, v.masks, v.alive = -1, None, False
         return v
 
-    def _path_items(self, ctx: _NetCtx, cells: List[Tuple[int, int, int]], att: _Attempt,
+    def _path_items(self, ctx: _NetCtx, cells: List[Tuple[int, int, int]],
                     free: Set[Tuple[int, int]], hw: float):
         """Turn a cell path into segments and new vias."""
         segs: List[_Seg] = []
@@ -1350,7 +1700,7 @@ class Router:
                 for a, b in _collinear_runs(run):
                     segs.append(self._make_seg(ctx, layer, a, b, hw))
                 node = (cur[1], cur[2])
-                if node not in free and node not in att.free:
+                if node not in free:
                     vias.append(self._make_via(ctx, node))
                 layer = cur[0]
                 run = [node]
@@ -1383,238 +1733,235 @@ class Router:
         att.stubbed.add(key)
         return stub
 
-    # -- routing one connection ------------------------------------------------
-    def _connect(self, ctx: _NetCtx, att: _Attempt, src_cells: np.ndarray,
-                 target: Optional[_Pad], soft: bool, share: Optional[np.ndarray] = None,
-                 tlayers: int = 0, margin: Optional[float] = None, rc: Optional[_RC] = None):
-        """Search from ``src_cells`` to pad ``target`` (or, for fan-outs, to a
-        via: ``tlayers`` / ``share``) with track class ``rc``.  Returns
-        (cells, segs, vias) or None."""
-        rc = rc or ctx.rct
-        vias_left = None
-        if ctx.max_vias is not None:
-            vias_left = ctx.max_vias - len(att.vias)
-        margin = self.opt.search_margin if margin is None else margin
-        tries = [(False, False), (True, True)] if target is not None else [(False, False)]
-        for full, wide in tries:
-            if target is not None:
-                dst_cells = self._pad_cells(target, wide)
-            else:
-                dst_cells = share if share is not None else np.zeros((0, 3), dtype=np.int64)
-            src = src_cells
-            if wide:
-                extra = [self._pad_cells(p, True) for p in ctx.pads if p.idx in att.connected]
-                if extra:
-                    src = np.concatenate([src_cells] + extra, axis=0)
-            elif target is not None and len(src) > 400 and len(dst_cells):
-                # big tree: search from the part of it that is near the target
-                tx, ty = float(dst_cells[:, 1].mean()), float(dst_cells[:, 2].mean())
-                d2 = (src[:, 1] - tx) ** 2 + (src[:, 2] - ty) ** 2
-                lim = (math.sqrt(float(d2.min())) + 2.0 * margin / self.grid.pitch) ** 2
-                src = src[d2 <= lim]
-            pts = [(int(c[1]), int(c[2])) for c in dst_cells]
-            win = self._window(src, pts, margin if not full else 0.0, full)
-            lsrc = self._to_local(src, win)
-            ldst = self._to_local(dst_cells, win)
-            if target is not None and len(ldst) == 0:
-                continue
-            hbox = None
-            if target is not None and not tlayers:
-                iy0, _iy1, ix0, _ix1 = win
-                xs = dst_cells[:, 1] - ix0
-                ys = dst_cells[:, 2] - iy0
-                hbox = (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max()))
-            nv = 1
-            if vias_left is not None and vias_left > 0:
-                nv = vias_left + 1
-            via_cost = self.via_cost if target is not None else self.plane_via_cost
-            ban: List[Any] = []
-            for _round in range(6):
-                cost, vmap, softl, softv = self._local(ctx, rc, win, soft, att, vias_left,
-                                                         ban)
-                path = self._run_search(cost, vmap, lsrc, ldst, tlayers, hbox, nv, via_cost)
-                if len(path) == 0:
-                    break
-                if self.opt.smooth and len(path) > 2:
-                    path = _astar.smooth(path, cost, self.step_h, self.step_v, self.step_d, 400)
-                cells = self._decode(path, win)
-                marks = np.argwhere(vmap == FREE_VIA)
-                free = {(int(x) + win[2], int(y) + win[0]) for y, x in marks}
-                segs, vias = self._path_items(ctx, cells, att, free, rc.hw)
-                clash = None
-                for i, a in enumerate(vias):
-                    for b in vias[i + 1:]:
-                        if self._conflict(a, b):
-                            clash = a
-                            break
-                    if clash is not None:
+    # -- one search -----------------------------------------------------------------
+    def _search_path(self, ctx: _NetCtx, att: _Attempt, src: np.ndarray, dst: np.ndarray,
+                     soft: bool, rc: _RC, win, *, tlayers: int = 0,
+                     via_cost: Optional[int] = None, dst_bias: Optional[np.ndarray] = None,
+                     heuristic: bool = True, vias_left: Optional[int] = None):
+        """Cheapest path inside window ``win`` from the cells ``src`` to the
+        cells ``dst`` (or to any cell of the layers ``tlayers``) for a track
+        of class ``rc``.  ``dst_bias`` is an extra cost per destination cell.
+        Returns (cells, segments, new vias) or None."""
+        lsrc = self._to_local(src, win)
+        ldst = self._to_local(dst, win)
+        if len(lsrc) == 0 or (len(ldst) == 0 and not tlayers):
+            return None
+        hbox = None
+        if heuristic and not tlayers and len(dst):
+            iy0, iy1, ix0, ix1 = win
+            xs = dst[:, 1] - ix0
+            ys = dst[:, 2] - iy0
+            ok = (xs >= 0) & (xs < ix1 - ix0) & (ys >= 0) & (ys < iy1 - iy0)
+            hbox = (int(xs[ok].min()), int(ys[ok].min()), int(xs[ok].max()), int(ys[ok].max()))
+        nv = 1
+        if vias_left is not None and vias_left > 0:
+            nv = vias_left + 1
+        if via_cost is None:
+            via_cost = self.via_cost
+        ban: List[Any] = []
+        for _round in range(6):
+            cost, vmap, softl, softv = self._local(ctx, rc, win, soft, att, vias_left, ban)
+            if dst_bias is not None:
+                # entering a destination cell costs extra (escape: distance from
+                # that rim cell to where the net has to go)
+                ly = dst[:, 2] - win[0]
+                lx = dst[:, 1] - win[2]
+                ok = (ly >= 0) & (ly < cost.shape[1]) & (lx >= 0) & (lx < cost.shape[2])
+                ll, ly, lx = dst[ok, 0], ly[ok], lx[ok]
+                cur = cost[ll, ly, lx]
+                cost[ll, ly, lx] = np.where(
+                    cur > 0, np.minimum(cur + dst_bias[ok], _COST_CAP), 0)
+            path = self._run_search(cost, vmap, lsrc, ldst, tlayers, hbox, nv, via_cost)
+            if len(path) == 0:
+                return None
+            if self.opt.smooth and len(path) > 2:
+                path = _astar.smooth(path, cost, self.step_h, self.step_v, self.step_d, 400)
+            cells = self._decode(path, win)
+            marks = np.argwhere(vmap == FREE_VIA)
+            free = {(int(x) + win[2], int(y) + win[0]) for y, x in marks}
+            segs, vias = self._path_items(ctx, cells, free, rc.hw)
+            clash = None
+            for i, a in enumerate(vias):
+                for b in vias[i + 1:]:
+                    if self._conflict(a, b):
+                        clash = a
                         break
                 if clash is not None:
-                    ban.append(clash)                # search again with room around it
-                    continue
-                if soft:                             # cells that ran over other nets' copper
-                    iy0, _iy1, ix0, _ix1 = win
-                    for (l, ix, iy) in cells:
-                        if softl[l, iy - iy0, ix - ix0] > 0:
-                            att.hist.append((l, ix, iy))
-                    for v in vias:                       # vias dropped onto others' copper
-                        if softv[v.a[1] - iy0, v.a[0] - ix0] > 0:
-                            for l in range(self.L):
-                                att.hist.append((l, v.a[0], v.a[1]))
-                return cells, segs, vias
+                    break
+            if clash is not None:
+                ban.append(clash)                    # search again with room around it
+                continue
+            if soft:                                 # cells that ran over other nets' copper
+                iy0, _iy1, ix0, _ix1 = win
+                for (l, ix, iy) in cells:
+                    if softl[l, iy - iy0, ix - ix0] > 0:
+                        att.hist.append((l, ix, iy))
+                for v in vias:                       # vias dropped onto others' copper
+                    if softv[v.a[1] - iy0, v.a[0] - ix0] > 0:
+                        for l in range(self.L):
+                            att.hist.append((l, v.a[0], v.a[1]))
+            return cells, segs, vias
         return None
 
+    def _vias_left(self, ctx: _NetCtx) -> Optional[int]:
+        if ctx.max_vias is None:
+            return None
+        used = sum(1 for it in self.net_items.get(ctx.name, ()) if it.is_via)
+        return ctx.max_vias - used
 
+    # -- what is connected to what inside one net ------------------------------------
+    def _net_state(self, ctx: _NetCtx, skip_uid: int = -1, cells: bool = True) -> _NetState:
+        """Connectivity of the routed copper of one net (leaving out unit
+        ``skip_uid``): pads and units are joined where a unit's copper touches
+        them.  With ``cells`` also the owner of every cell of that copper."""
+        st = _NetState()
+        parent = st.parent
 
-    # -- routing a tree net ----------------------------------------------------
-    def _route_tree(self, unit: _Unit, soft: bool, keep: Optional[List[_Path]] = None,
-                    partial: bool = False) -> Optional[_Attempt]:
-        """Route a tree net pad by pad.
+        def find(x):
+            root = x
+            while parent.setdefault(root, root) != root:
+                root = parent[root]
+            while parent[x] != root:
+                parent[x], x = root, parent[x]
+            return root
 
-        ``keep``     connections of the previous route to start from (only the
-                     pads they do not reach are routed again)
-        ``partial``  leave out pads that cannot be reached instead of giving up
-                     (they are listed in ``attempt.missing``)"""
-        ctx = unit.ctx
-        pads = unit.pads
-        by_idx = {p.idx: p for p in pads}
-        att = _Attempt()
-        # plated-through pads allow a free layer change
-        for p in pads:
-            if len(p.lay) > 1:
-                for n in p.nodes:
-                    att.free.add((int(n[0]), int(n[1])))
-        node_pad: Dict[Tuple[int, int, int], int] = {}
-        for p in pads:
-            for n in p.nodes:
-                for l in p.lay:
-                    node_pad[(l, int(n[0]), int(n[1]))] = p.idx
-            for fx in self.pad_fixed.get(p.idx, ()):
-                for n in self._seg_nodes(fx):
-                    node_pad[(fx.layer, n[0], n[1])] = p.idx
-        if keep and unit.root in by_idx:
-            start = by_idx[unit.root]
-        else:
-            keep = None
-            best = None                    # Prim order starts from the closest pair
-            for i, a in enumerate(pads):
-                for b in pads[i + 1:]:
-                    dist = math.hypot(a.x - b.x, a.y - b.y)
-                    if best is None or dist < best[0] - 1e-12:
-                        best = (dist, a, b)
-            start = best[1]
-        att.root = start.idx
-        connected = [start]
-        att.connected.add(start.idx)
-        tree = [self._pad_cells(start, False)]
-        cell_owner: Dict[Tuple[int, int, int], int] = {}    # track / via cell -> path index
-        pad_owner: Dict[int, int] = {start.idx: -1}
+        st.find = find
+        st.units = [u for u in self.net_units.get(ctx.name, ())
+                    if u.routed and u.uid != skip_uid]
+        for u in st.units:
+            ku = find(("u", u.uid))
+            for pid in u.touch:
+                parent[find(("p", pid))] = ku
+                ku = find(ku)
+            for dep in u.deps:
+                parent[find(("u", dep))] = ku
+                ku = find(ku)
+            if u.kind == "escape" and u.cells:
+                st.escaped.add(u.pads[0].idx)
+        if cells:
+            owner = st.owner
+            for p in ctx.pads:
+                kp = ("p", p.idx)
+                for n in p.nodelist:
+                    for l in p.lay:
+                        owner[(l, n[0], n[1])] = kp
+            for u in st.units:
+                ku = ("u", u.uid)
+                for c in u.cells:
+                    owner.setdefault(c, ku)
+                for it in u.items:
+                    if it.is_via:
+                        for l in range(self.L):
+                            owner.setdefault((l, it.a[0], it.a[1]), ku)
+        return st
 
-        def adopt(path: _Path) -> None:
-            idx = len(att.paths)
-            att.paths.append(path)
-            att.items.extend(path.items)
-            tree.append(path.cells)
-            for c in path.cells:
-                cell_owner.setdefault((int(c[0]), int(c[1]), int(c[2])), idx)
-            for v in path.vias:
-                att.vias.append(v)
-                att.free.add(v.a)
-                tree.append(np.array([(l, v.a[0], v.a[1]) for l in range(self.L)],
-                                     dtype=np.int64))
-                for l in range(self.L):
-                    cell_owner.setdefault((l, v.a[0], v.a[1]), idx)
-            for pid in [path.pad] + sorted(path.met):
-                if pid in att.connected or pid not in by_idx:
-                    continue
-                pad_owner[pid] = idx
-                connected.append(by_idx[pid])
-                att.connected.add(pid)
-                tree.append(self._pad_cells(by_idx[pid], False))
-
-        for path in keep or ():
-            adopt(path)
-        remaining = [p for p in pads if p.idx not in att.connected]
-        while remaining:
-            nxt = min(remaining, key=lambda p: (min(math.hypot(p.x - q.x, p.y - q.y)
-                                                    for q in connected), p.idx))
-            src = np.concatenate(tree, axis=0)
-            rc = ctx.rct
-            res = self._connect(ctx, att, src, nxt, soft, rc=rc)
-            if res is None and ctx.rct_alt is not None:
-                rc = ctx.rct_alt                             # neck down
-                res = self._connect(ctx, att, src, nxt, soft, rc=rc)
-            if res is None:
-                unit.reason = "no path to pad %s" % nxt.key
-                if not partial:
-                    return None
-                att.missing.append(nxt.key)
-                remaining.remove(nxt)
+    def _comp_cells(self, ctx: _NetCtx, st: _NetState, root, wide: bool) -> np.ndarray:
+        """Cells (l, ix, iy) at which the component ``root`` can be entered:
+        its pads (a pad with an escape only through that escape), the tracks
+        of its units and their vias on every layer."""
+        out: List[np.ndarray] = []
+        for p in ctx.pads:
+            if p.idx in st.escaped or st.find(("p", p.idx)) != root:
                 continue
-            cells, segs, vias = res
-            items: List[Any] = list(segs) + list(vias)
-            # stubs to off-grid pad centres at both ends
-            first, last = cells[0], cells[-1]
-            sp = node_pad.get(first)
-            if sp is not None:
-                stub = self._stub_for(ctx, self.pads[sp], first, att, rc.hw)
+            out.append(self._pad_cells(p, wide))
+        extra: List[Tuple[int, int, int]] = []
+        for u in st.units:
+            if st.find(("u", u.uid)) != root:
+                continue
+            extra.extend(u.cells)
+            for it in u.items:
+                if it.is_via:
+                    extra.extend((l, it.a[0], it.a[1]) for l in range(self.L))
+        if extra:
+            out.append(np.array(extra, dtype=np.int64))
+        if not out:
+            return np.zeros((0, 3), dtype=np.int64)
+        return np.concatenate(out, axis=0)
+
+    def _touched(self, st: _NetState, cells, vias) -> Tuple[Set[int], Set[int]]:
+        """(pads, units) of the net whose copper a new path touches."""
+        owner = st.owner
+        keys = set()
+        for c in cells:
+            k = owner.get(c)
+            if k is not None:
+                keys.add(k)
+        for v in vias:
+            for l in range(self.L):
+                k = owner.get((l, v.a[0], v.a[1]))
+                if k is not None:
+                    keys.add(k)
+        return ({k[1] for k in keys if k[0] == "p"}, {k[1] for k in keys if k[0] == "u"})
+
+    def _end_stubs(self, ctx: _NetCtx, st: _NetState, cells, att: _Attempt, hw: float
+                   ) -> List[_Seg]:
+        """Stubs to off-grid pad centres at both ends of a path."""
+        out = []
+        for cell in (cells[0], cells[-1]):
+            k = st.owner.get(cell)
+            if k is not None and k[0] == "p":
+                stub = self._stub_for(ctx, self.pads[k[1]], cell, att, hw)
                 if stub is not None:
-                    items.append(stub)
-            stub = self._stub_for(ctx, nxt, last, att, rc.hw)
-            if stub is not None:
-                items.append(stub)
-            path = _Path()
-            path.pad = nxt.idx
-            path.items = items
-            path.cells = np.array(cells, dtype=np.int64)
-            path.vias = list(vias)
-            path.met = {node_pad[c] for c in cells if c in node_pad} - {nxt.idx}
-            if first in cell_owner:
-                path.parent = cell_owner[first]
+                    out.append(stub)
+        return out
+
+    # -- routing a connection ----------------------------------------------------------
+    def _route_conn(self, unit: _Unit, soft: bool) -> Optional[_Attempt]:
+        """Join the copper of pad a with the copper of pad b, wherever the
+        two are closest - not necessarily at the pads themselves."""
+        ctx = unit.ctx
+        a, b = unit.pads
+        att = _Attempt()
+        st = self._net_state(ctx, unit.uid)
+        ra, rb = st.find(("p", a.idx)), st.find(("p", b.idx))
+        if ra == rb:
+            att.trivial = True                       # other copper of the net does the job
+            return att                               # (it claims nothing: see _unsatisfied)
+        g = self.grid
+        # full width first; the narrow width only where it is the last resort:
+        # with other copper as a soft obstacle "no path" means no way at full
+        # width at all, in a strict search only once the end game has given up
+        # on the full width (unit.narrow)
+        rcs = [ctx.rct]
+        if ctx.rct_alt is not None and (soft or unit.narrow):
+            rcs.append(ctx.rct_alt)
+        m = int(math.ceil(self.opt.search_margin / g.pitch))
+        na, nb = g.nearest(a.x, a.y), g.nearest(b.x, b.y)
+        vias_left = self._vias_left(ctx)
+        res = None
+        rc = rcs[0]
+        tries = []
+        for full in (False, True):
+            src = self._comp_cells(ctx, st, ra, full)
+            dst = self._comp_cells(ctx, st, rb, full)
+            if len(src) == 0 or len(dst) == 0:
+                continue
+            if full:
+                win = (0, g.ny, 0, g.nx)
             else:
-                path.parent = pad_owner.get(node_pad.get(first, start.idx), -1)
-            adopt(path)
-            remaining = [p for p in remaining if p.idx not in att.connected]
+                win = (max(0, min(na[1], nb[1]) - m), min(g.ny, max(na[1], nb[1]) + m + 1),
+                       max(0, min(na[0], nb[0]) - m), min(g.nx, max(na[0], nb[0]) + m + 1))
+            tries.append((src, dst, win))
+        for rc in rcs:
+            for src, dst, win in tries:
+                res = self._search_path(ctx, att, src, dst, soft, rc, win,
+                                        vias_left=vias_left)
+                if res is not None:
+                    break
+            if res is not None:
+                break
+        if res is None:
+            unit.reason = "no path from %s to %s" % (a.key, b.key)
+            return None
+        cells, segs, vias = res
+        att.touch, att.deps = self._touched(st, cells, vias)
+        att.items = list(segs) + list(vias) + self._end_stubs(ctx, st, cells, att, rc.hw)
+        att.vias = list(vias)
+        att.cells = list(cells)
+        att.hw = rc.hw
         return att
 
-    def _kept_paths(self, unit: _Unit) -> Optional[List[_Path]]:
-        """Connections of a routed tree unit that are free of conflicts and do
-        not hang on a conflicting one - they survive a reroute.  None when
-        there is nothing worth keeping (the unit is then routed from scratch)."""
-        paths = unit.paths
-        if unit.kind != "tree" or len(paths) < 2:
-            return None
-        bad: Set[int] = set()
-        for j, path in enumerate(paths):
-            victims = self._victims(path.items)
-            victims.discard(unit.uid)
-            if victims:
-                bad.add(j)
-        if not bad:
-            return None
-        changed = True
-        while changed:
-            changed = False
-            for j, path in enumerate(paths):
-                if j not in bad and path.parent in bad:
-                    bad.add(j)
-                    changed = True
-        if len(bad) == len(paths):
-            return None
-        remap: Dict[int, int] = {-1: -1}
-        kept: List[_Path] = []
-        for j, path in enumerate(paths):
-            if j in bad:
-                continue
-            copy = _Path()
-            copy.pad, copy.met, copy.items = path.pad, set(path.met), path.items
-            copy.cells, copy.vias = path.cells, path.vias
-            copy.parent = remap[path.parent]
-            remap[j] = len(kept)
-            kept.append(copy)
-        return kept
-
-    # -- routing a plane fan-out ---------------------------------------------
+    # -- routing a plane fan-out ---------------------------------------------------------
     def _route_fanout(self, unit: _Unit, soft: bool) -> Optional[_Attempt]:
         ctx = unit.ctx
         p = unit.pads[0]
@@ -1630,14 +1977,14 @@ class Router:
         share = []
         via_units: Dict[Tuple[int, int], int] = {}
         for it in self.net_items.get(ctx.name, ()):
-            if not it.is_via:
+            if not it.is_via or it.unit == unit.uid:
                 continue
             via_units[it.a] = it.unit
             if math.hypot(it.x - p.x, it.y - p.y) <= self.opt.plane_share_radius:
                 for l in p.lay:
                     share.append((l, it.a[0], it.a[1]))
-        share_arr = np.array(share, dtype=np.int64) if share else None
-        if tl == 0 and share_arr is None:
+        share_arr = np.array(share, dtype=np.int64) if share else np.zeros((0, 3), dtype=np.int64)
+        if tl == 0 and not share:
             unit.reason = "no layer to drop a via from pad %s" % p.key
             return None
         # stub width: the net's width, or the neck-down width for narrow pads
@@ -1647,10 +1994,14 @@ class Router:
             rcs = [ctx.rct_alt] if dim < ctx.width - 1e-9 else [ctx.rct, ctx.rct_alt]
         res = None
         rc = rcs[0]
+        pts = [(int(c[1]), int(c[2])) for c in share_arr]
         for margin, wide in ((2.0, False), (5.0, True), (15.0, True)):
+            src = self._pad_cells(p, wide)
+            win = self._window(src, pts, margin, False)
             for rc in rcs:
-                res = self._connect(ctx, att, self._pad_cells(p, wide), None, soft,
-                                    share=share_arr, tlayers=tl, margin=margin, rc=rc)
+                res = self._search_path(ctx, att, src, share_arr, soft, rc, win, tlayers=tl,
+                                        via_cost=self.plane_via_cost, heuristic=False,
+                                        vias_left=self._vias_left(ctx))
                 if res is not None:
                     break
             if res is not None:
@@ -1662,11 +2013,14 @@ class Router:
         items: List[Any] = list(segs) + list(vias)
         if not vias:
             # the path ended on (or changed layer through) an existing via
+            found = False
             for c in cells:
                 uid = via_units.get((c[1], c[2]))
                 if uid is not None:
-                    att.deps.add(uid)
-            if not att.deps:
+                    found = True
+                    if uid >= 0:
+                        att.deps.add(uid)
+            if not found:
                 unit.reason = "fan-out of %s found no via" % p.key
                 return None
         stub = self._stub_for(ctx, p, cells[0], att, rc.hw)
@@ -1674,18 +2028,166 @@ class Router:
             items.append(stub)
         att.items = items
         att.vias = list(vias)
+        att.cells = list(cells)
+        att.touch = {p.idx}
+        att.hw = rc.hw
         return att
 
-    # -- unit driver -----------------------------------------------------------
-    def _route_unit(self, unit: _Unit, soft: bool, keep: Optional[List[_Path]] = None,
-                    partial: bool = False) -> Optional[_Attempt]:
+    # -- routing the escape of an array pad ------------------------------------------------
+    def _route_escape(self, unit: _Unit, soft: bool) -> Optional[_Attempt]:
+        """Route a pad inside an array's escape window out to the rim of the
+        window, or onto copper of its net inside the window.
+
+        What the pad needs depends on its net: if the net has pads outside the
+        window, the pad's copper must reach the rim - directly, or by joining
+        copper of the net that already does; a net that lives inside the
+        window only is simply connected up."""
+        ctx = unit.ctx
+        p = unit.pads[0]
+        att = _Attempt()
+        st = self._net_state(ctx, unit.uid)
+        if unit.targets is None:
+            unit.targets = self._escape_targets(unit)         # prepared once per unit
+        rim, bias, inside, has_outside = unit.targets
+        root = st.find(("p", p.idx))
+        mine = [u for u in st.units if st.find(("u", u.uid)) == root]
+        need_rim = has_outside and not any(u.at_rim for u in mine)
+        # copper of the net inside the window that this pad is not joined to yet
+        roots: Dict[Any, bool] = {}
+        for q in inside:
+            rq = st.find(("p", q.idx))
+            if rq != root:
+                roots.setdefault(rq, False)
+        for u in st.units:
+            ru = st.find(("u", u.uid))
+            if ru in roots and u.at_rim:
+                roots[ru] = True
+        # joining copper that is not on the rim either does not help a pad that
+        # has to get out
+        joinable = [r for r, on_rim in roots.items() if on_rim or not need_rim]
+        if not need_rim and (mine or not joinable):
+            att.trivial = True                                # nothing left to do for it
+            return att
+        cells = []
+        extra = []
+        if need_rim and len(rim):
+            cells.append(rim)
+            extra.append(bias)
+        for r in joinable:
+            rc_cells = self._comp_cells(ctx, st, r, True)
+            if len(rc_cells):
+                cells.append(rc_cells)
+                extra.append(np.zeros(len(rc_cells), dtype=np.int64))
+        if not cells:
+            unit.reason = "no way out of the array for pad %s" % p.key
+            return None
+        dst = np.concatenate(cells, axis=0)
+        dbias = np.concatenate(extra, axis=0)
+        src = self._comp_cells(ctx, st, root, False)          # the pad and what hangs on it
+        rcs = [ctx.rct]
+        if ctx.rct_alt is not None:
+            dim = min(p.bbox[2] - p.bbox[0], p.bbox[3] - p.bbox[1])
+            rcs = [ctx.rct_alt] if dim < ctx.width - 1e-9 else [ctx.rct, ctx.rct_alt]
+        res = None
+        rc = rcs[0]
+        for rc in rcs:
+            res = self._search_path(ctx, att, src, dst, soft, rc, unit.win,
+                                    via_cost=self.via_cost, dst_bias=dbias, heuristic=False,
+                                    vias_left=self._vias_left(ctx))
+            if res is not None:
+                break
+        if res is None:
+            unit.reason = "no way out of the array for pad %s" % p.key
+            return None
+        path, segs, vias = res
+        att.touch, att.deps = self._touched(st, path, vias)
+        att.touch.add(p.idx)
+        att.items = list(segs) + list(vias) + self._end_stubs(ctx, st, path, att, rc.hw)
+        att.vias = list(vias)
+        att.cells = list(path)
+        att.hw = rc.hw
+        att.at_rim = tuple(path[-1]) in unit.rimset or \
+            any(self.units[d].at_rim for d in att.deps)
+        return att
+
+    def _escape_targets(self, unit: _Unit):
+        """What an escape aims for: the rim cells with their extra cost, the
+        other pads of the net inside the window, and whether the net has
+        pads outside it at all.
+
+        A rim cell costs the distance from there to the nearest pad of the
+        net outside the window (times ``escape_direction``), so that escapes
+        leave toward where their net has to go."""
+        g = self.grid
+        ctx = unit.ctx
+        p = unit.pads[0]
+        iy0, iy1, ix0, ix1 = unit.win
+        others = [q for q in ctx.pads if q is not p]
+        rim = unit.rim
+        bias = np.zeros(len(rim), dtype=np.int64)
+        w = max(0.0, self.opt.escape_direction)
+        outside = [q for q in others
+                   if not (g.x_of(ix0) < q.x < g.x_of(ix1 - 1)
+                           and g.y_of(iy0) < q.y < g.y_of(iy1 - 1))]
+        inside = [q for q in others if q not in outside]
+        if outside and w > 0 and len(rim):
+            xs = g.xs[rim[:, 1]]
+            ys = g.ys[rim[:, 2]]
+            dist = None
+            for q in outside:
+                dq = np.hypot(xs - q.x, ys - q.y)
+                dist = dq if dist is None else np.minimum(dist, dq)
+            bias = np.round(w * dist / g.pitch * STEP).astype(np.int64)
+        return rim, bias, inside, bool(outside)
+
+    def _escape_sweep(self, units: Sequence[_Unit]) -> None:
+        """Stage A book-keeping: a group of pads of one net inside the window
+        whose copper does not reach the rim (although the net goes on outside)
+        gets one of its escapes reopened - it will then head for the rim."""
+        nets: Dict[str, List[_Unit]] = {}
+        for u in units:
+            if u.kind == "escape":
+                nets.setdefault(u.ctx.name, []).append(u)
+        for name in sorted(nets):
+            ctx = self.ctx[name]
+            for _guard in range(len(nets[name]) + 1):
+                st = self._net_state(ctx, cells=False)
+                groups: Dict[Any, List[_Unit]] = {}
+                for u in nets[name]:
+                    if u.routed:
+                        groups.setdefault(st.find(("p", u.pads[0].idx)), []).append(u)
+                on_rim = set()
+                for u in st.units:
+                    if u.at_rim:
+                        on_rim.add(st.find(("u", u.uid)))
+                reopened = False
+                for root in sorted(groups, key=lambda r: min(u.uid for u in groups[r])):
+                    group = groups[root]
+                    if root in on_rim:
+                        continue
+                    if group[0].targets is None:
+                        group[0].targets = self._escape_targets(group[0])
+                    if not group[0].targets[3]:
+                        continue                              # the net lives in the window
+                    # the one that costs least to reopen: no copper, no dependents
+                    pick = min(group, key=lambda u: (bool(u.items), len(u.dependents), u.uid))
+                    self._rip(pick)
+                    reopened = True
+                    break
+                if not reopened:
+                    break
+
+    # -- unit driver -------------------------------------------------------------------------
+    def _route_unit(self, unit: _Unit, soft: bool) -> Optional[_Attempt]:
         """Route one unit; the returned attempt lists the units its copper
         conflicts with (``victims``; always empty for a strict route unless
         the maps are wrong)."""
         unit.attempts += 1
         unit.reason = ""
-        if unit.kind == "tree":
-            att = self._route_tree(unit, soft, keep=keep, partial=partial)
+        if unit.kind == "conn":
+            att = self._route_conn(unit, soft)
+        elif unit.kind == "escape":
+            att = self._route_escape(unit, soft)
         else:
             att = self._route_fanout(unit, soft)
         if att is None:
@@ -1700,36 +2202,89 @@ class Router:
         att = _Attempt()
         att.items = list(unit.items)
         att.deps = set(unit.deps)
-        att.paths = list(unit.paths)
-        att.root = unit.root
-        att.missing = list(unit.missing)
+        att.touch = set(unit.touch)
+        att.cells = list(unit.cells)
+        att.hw = unit.hw
+        att.trivial = unit.trivial
+        att.at_rim = unit.at_rim
         return att
 
     def _time_up(self) -> bool:
         return self.opt.time_limit is not None and \
             time.time() - self.t0 > self.opt.time_limit
 
-    def run(self) -> "RouteResult":
-        """Negotiated routing (see module docstring), then cleanup and audit."""
+    def _unsatisfied(self, units: Sequence[_Unit], optional_escapes: bool = True
+                     ) -> List[_Unit]:
+        """The units that still have work to do: fan-outs without a route and
+        connections whose two pads are not joined by copper.  A connection
+        that counts as routed but no longer joins its pads (the copper it
+        relied on has moved) is ripped up here.  Escapes are optional helpers
+        unless ``optional_escapes`` is off."""
+        out: List[_Unit] = []
+        by_net: Dict[str, List[_Unit]] = {}
+        if not optional_escapes:
+            self._escape_sweep(units)
+        for u in units:
+            if u.kind == "conn":
+                by_net.setdefault(u.ctx.name, []).append(u)
+            elif not u.routed and (u.kind == "fanout" or not optional_escapes):
+                out.append(u)
+        for name, conns in by_net.items():
+            ctx = self.ctx[name]
+            while True:
+                st = self._net_state(ctx, cells=False)
+                broken = None
+                for u in conns:
+                    if u.routed and st.find(("p", u.pads[0].idx)) != st.find(("p", u.pads[1].idx)):
+                        broken = u
+                        break
+                if broken is None:
+                    break
+                self._rip(broken)
+            out.extend(u for u in conns if not u.routed)
+        out.sort(key=lambda u: (u.order, u.uid))
+        return out
+
+    def _negotiate(self, units: Sequence[_Unit], max_iterations: int, patience: int,
+                   label: str = "", optional_escapes: bool = True,
+                   start_price: Optional[float] = None) -> Tuple[Dict[int, str], int]:
+        """Negotiated congestion routing of ``units``: every unit is routed
+        with other nets' copper allowed at a price, then the units that
+        conflict are routed again and again while the price of sharing and
+        the history cost of contested cells go up.  Stops when nothing
+        conflicts, after ``max_iterations`` rounds or when the number of open
+        units has not improved for ``patience`` rounds (the best state seen is
+        restored).  Conflicts that remain are left in ``self.conf``.
+
+        Returns ({uid: reason} of the units that found no path at all,
+        number of rounds)."""
         o = self.opt
-        self.log("router: %d nets, %d units, grid %.3f mm (%d x %d), layers %s, kernel %s" % (
-            len(self.routable), len(self.units), self.grid.pitch, self.grid.nx, self.grid.ny,
-            "/".join(self.layers), "numba" if _astar.HAVE_NUMBA else "python"))
-        self.conf = {u.uid: set() for u in self.units}
         failed: Dict[int, str] = {}
-        todo = list(self.order)
+        uset = {u.uid for u in units}
         pen = self.pen0
+        if start_price is not None:
+            pen = max(self.pen0, start_price / self.grid.pitch * STEP)
+        pen_max = max(self.pen0, o.present_max / self.grid.pitch * STEP)
         iteration = 0
-        reroutes = 0
         best = None                              # (score, iteration, failed, snapshot)
-        while todo and iteration < max(1, o.max_iterations) and not self._time_up():
+        tag = (label + ": ") if label else ""
+        while iteration < max(1, max_iterations) and not self._time_up():
+            open_units = self._unsatisfied(units, optional_escapes)
+            if iteration % 8 != 0:
+                open_units = [u for u in open_units if not u.failed]    # hopeless ones rest
+            todo = {u.uid: u for u in open_units}
+            for u in units:
+                if u.routed and self.conf[u.uid] and not u.frozen:
+                    todo[u.uid] = u
+            if not todo:
+                break
             iteration += 1
-            pen_max = max(self.pen0, o.present_max / self.grid.pitch * STEP)
             self.pen = max(1, int(round(min(pen, pen_max))))
+            ordered = sorted(todo.values(), key=lambda u: (u.order, u.uid))
             if iteration % 2 == 0:
-                todo = todo[::-1]                            # take turns in giving way
-            queue = deque(todo)
-            pending = {u.uid for u in todo}
+                ordered.reverse()                            # take turns in giving way
+            queue = deque(ordered)
+            pending = {u.uid for u in ordered}
             forced: Set[int] = set()
             while queue:
                 if self._time_up():
@@ -1738,18 +2293,15 @@ class Router:
                 pending.discard(unit.uid)
                 if unit.routed and not self.conf[unit.uid] and unit.uid not in forced:
                     continue                                 # its partner has moved away
-                keep = None
                 if unit.routed:
-                    if unit.uid not in forced:
-                        keep = self._kept_paths(unit)        # reroute only what conflicts
                     for other in self._rip(unit):
-                        if other is not unit:
-                            forced.add(other.uid)            # hung on this unit's via
+                        if other is not unit and other.uid in uset:
+                            forced.add(other.uid)            # hung on this unit's copper
                             if other.uid not in pending:
                                 queue.append(other)
                                 pending.add(other.uid)
-                att = self._route_unit(unit, soft=True, keep=keep)
-                reroutes += 1
+                att = self._route_unit(unit, soft=True)
+                self.stats["reroutes"] += 1
                 if att is None:
                     failed[unit.uid] = unit.reason or "no path"
                     unit.failed = True
@@ -1762,90 +2314,106 @@ class Router:
                 if att.victims:
                     for (l, ix, iy) in att.hist:
                         self.hist[l, iy, ix] = min(int(self.hist[l, iy, ix]) + 1, 1000)
-            todo = [u for u in self.order if self.conf[u.uid] and u.routed]
-            self.log("iteration %d: %d unit(s) in conflict, %d without path, price %d" % (
-                iteration, len(todo), len(failed), self.pen))
-            score = len(todo) + len(failed)
+            n_conf = sum(1 for u in units if u.routed and self.conf[u.uid] and not u.frozen)
+            n_open = len(self._unsatisfied(units, optional_escapes))
+            self.log("%siteration %d: %d unit(s) in conflict, %d open, price %d" % (
+                tag, iteration, n_conf, n_open, self.pen))
+            score = n_conf + n_open
             if not self._time_up() and (best is None or score < best[0]):
                 best = (score, iteration, dict(failed), self._snapshot())
-            elif best is not None and iteration - best[1] >= o.patience:
-                self.log("no progress for %d iterations" % o.patience)
+            elif best is not None and iteration - best[1] >= patience:
+                self.log("%sno progress for %d iterations" % (tag, patience))
+                break
+            if score == 0:
                 break
             pen *= o.present_growth
         if best is not None and best[1] != iteration:
-            self.log("back to the state after iteration %d (%d open)" % (best[1], best[0]))
+            self.log("%sback to the state after iteration %d (%d open)" % (
+                tag, best[1], best[0]))
             failed = dict(best[2])
             self._restore(best[3])
-        self.stats["iterations"] = iteration
-        self.stats["reroutes"] = reroutes
-        # ---- whatever still conflicts is ripped up, worst offender first ----
+        return failed, iteration
+
+    def _rip_conflicts(self, units: Sequence[_Unit], failed: Dict[int, str]) -> List[_Unit]:
+        """Rip up whatever still conflicts, worst offender first; the ripped
+        units are entered in ``failed``."""
         ripped: List[_Unit] = []
         while True:
             worst = None
-            for u in self.order:
+            for u in units:
                 n = len(self.conf[u.uid])
-                if n and u.routed and (worst is None or n > len(self.conf[worst.uid])
-                                       or (n == len(self.conf[worst.uid]) and u.order > worst.order)):
-                    worst = u
+                if not n or not u.routed or u.frozen:
+                    continue
+                # the fan-out of an array goes last: ordinary copper gives way first
+                key = (0 if u.array else 1, n, u.order)
+                if worst is None or key > worst[0]:
+                    worst = (key, u)
             if worst is None:
                 break
+            worst = worst[1]
             partners = sorted(self.units[v].name for v in self.conf[worst.uid])
             for u in self._rip(worst):
                 u.rips += 1
                 ripped.append(u)
                 failed[u.uid] = "conflict with %s not resolved" % ", ".join(partners[:3])
-        self.stats["ripups"] = len(ripped)
-        # ---- end game: only conflict-free copper is accepted from here.  An
-        # unrouted unit may displace others if they all find a clean path again
-        # (bounded cascade); otherwise the board goes back to how it was. ----
-        pen_max = max(self.pen0, o.present_max / self.grid.pitch * STEP)
-        self.pen = max(1, int(round(pen_max)))
-        forced = 0
-        for _round in range(3):
-            progress = False
-            for uid in sorted(failed, key=lambda i: self.units[i].order):
-                unit = self.units[uid]
-                if unit.routed:
-                    failed.pop(uid, None)
-                    continue
-                reason = failed[uid]
-                depth = 0 if self._time_up() else max(0, o.ripup_depth)
-                placed = False
-                for _try in range(4 if depth else 1):
-                    snap = self._snapshot() if depth else None
-                    self._forced_cells = []
-                    if self._force(unit, depth, frozenset()):
-                        placed = True
-                        break
-                    if snap is not None:
-                        self._restore(snap)
-                    # make the next try look elsewhere: the cells where this one
-                    # ran over other nets get more expensive
-                    for (l, ix, iy) in self._forced_cells:
-                        self.hist[l, iy, ix] = min(int(self.hist[l, iy, ix]) + 4, 1000)
-                    if not self._forced_cells or self._time_up():
-                        break
-                if placed:
-                    failed.pop(uid, None)
-                    progress = True
-                    forced += 1
-                else:
-                    failed[uid] = unit.reason or reason
-                    unit.failed = True
-            if not failed or not progress:
+        return ripped
+
+    def run(self) -> "RouteResult":
+        """Escape stage, negotiated routing, end game, cleanup and audit (see
+        the module docstring)."""
+        o = self.opt
+        self.log("router: %d nets, grid %.3f mm (%d x %d), layers %s, kernel %s" % (
+            len(self.routable), self.grid.pitch, self.grid.nx, self.grid.ny,
+            "/".join(self.layers), "numba" if _astar.HAVE_NUMBA else "python"))
+        self._escape_arrays()
+        self._setup_units()
+        self.log("main stage: %d unit(s)" % len(self.order))
+        reasons: Dict[int, str] = {}
+        self.stats.update({"iterations": 0, "ripups": 0, "endgame_placed": 0,
+                           "plane_repairs": 0, "waves": 0})
+        best = None                              # (open units, snapshot, reasons)
+        stale = 0
+        for wave in range(max(1, o.waves)):
+            # ---- negotiation; later waves start from the board as it is, with
+            # the history forgotten and the price of sharing back at a moderate
+            # level, so that the units still open push their way in ----
+            failed, iteration = self._negotiate(
+                self.order, o.max_iterations, o.patience, "" if wave == 0 else "wave %d" % (wave + 1),
+                start_price=None if wave == 0 else o.reheat_price)
+            self.stats["iterations"] += iteration
+            self.stats["waves"] = wave + 1
+            reasons.update(failed)
+            # ---- whatever still conflicts is ripped up, worst offender first,
+            # then only conflict-free copper is accepted (end game) ----
+            self.stats["ripups"] += len(self._rip_conflicts(self.order, reasons))
+            self.stats["endgame_placed"] += self._endgame(reasons)
+            self._mend_planes(reasons)
+            still_open = self._unsatisfied(self.order)
+            n_open = len(still_open)
+            self.log("wave %d done after %d iteration(s): %d unit(s) open" % (
+                wave + 1, iteration, n_open))
+            if best is None or n_open < best[0]:
+                best = (n_open, self._snapshot(), dict(reasons))
+                stale = 0
+            else:
+                stale += 1
+            if n_open == 0 or self._time_up() or stale >= 2:
                 break
-        self.stats["endgame_placed"] = forced
-        # what still has no complete clean route gets as much of it as possible
-        for uid in sorted(failed, key=lambda i: self.units[i].order):
-            unit = self.units[uid]
-            if unit.routed or unit.kind != "tree":
-                continue
-            att = self._route_unit(unit, soft=False, partial=True)
-            if att is not None and att.items and not att.victims:
-                self._commit(unit, att)
-                failed[uid] = "partly routed, no clean path to %s" % ", ".join(att.missing)
-        self.log("negotiation done after %d iteration(s): %d unit(s) unrouted" % (
-            iteration, len(failed)))
+            if all(u.uid in failed for u in still_open):
+                break                            # walled in by pads, edge or keep-outs: no use
+            self.hist[:] = 0
+        if best is not None and len(self._unsatisfied(self.order)) > best[0]:
+            self.log("back to the best state (%d open)" % best[0])
+            self._restore(best[1])
+            reasons = dict(best[2])
+        if self._unsatisfied(self.order) and not self._time_up():
+            self._renegotiate_regions(reasons)
+            self._mend_planes(reasons)
+        # ---- improvement: plain shortest paths, one unit at a time.  Undone
+        # if it costs a connection (a shorter track can cut a pad off its plane).
+        self.hist[:] = 0
+        open_before = len(self._unsatisfied(self.order))
+        snap = self._snapshot()
         for i in range(max(0, o.improve_passes)):
             if self._time_up():
                 break
@@ -1853,27 +2421,251 @@ class Router:
             self.log("improve pass %d: %.1f mm / %d via(s) saved" % (i + 1, gain[0], gain[1]))
             if gain[0] < 0.05 and gain[1] == 0:
                 break
-        self.failed = {self.units[uid].name: reason for uid, reason in
-                       sorted(failed.items(), key=lambda kv: self.units[kv[0]].order)}
+        self._settle()
+        self._mend_planes(reasons)
+        if len(self._unsatisfied(self.order)) > open_before:
+            self.log("improvement undone: it left more open than before")
+            self._restore(snap)
+        self.failed = {u.name: reasons.get(u.uid) or u.reason or "not routed"
+                       for u in self._unsatisfied(self.order)}
         return self._finish()
+
+    def _renegotiate_regions(self, reasons: Dict[int, str]) -> None:
+        """Last resort for the units that are still open: for each of them,
+        everything routed in a window around it is ripped up and negotiated
+        again as one small puzzle against the rest of the board, which is
+        frozen meanwhile.  Kept only if fewer units are open afterwards."""
+        o = self.opt
+        for margin in o.region_margins:
+            pending = [u for u in self._unsatisfied(self.order) if u.kind != "escape"]
+            for unit in pending[:max(0, o.region_tries)]:
+                if unit.routed or self._time_up():
+                    continue
+                if self._renegotiate_region(unit, margin):
+                    reasons.pop(unit.uid, None)
+            if not self._unsatisfied(self.order) or self._time_up():
+                break
+
+    def _renegotiate_region(self, unit: _Unit, margin: float) -> bool:
+        o = self.opt
+        xs = [p.x for p in unit.pads]
+        ys = [p.y for p in unit.pads]
+        x0, y0, x1, y1 = min(xs) - margin, min(ys) - margin, max(xs) + margin, max(ys) + margin
+        region: Set[int] = set()
+        for u in self.units:
+            if not u.routed or u.frozen or not u.items:
+                continue
+            for it in u.items:
+                bb = it.bbox()
+                if bb[2] >= x0 and bb[0] <= x1 and bb[3] >= y0 and bb[1] <= y1:
+                    region.add(u.uid)
+                    break
+        stack = list(region)
+        while stack:                                         # what hangs on them goes too
+            for d in self.units[stack.pop()].dependents:
+                if d not in region and not self.units[d].frozen:
+                    region.add(d)
+                    stack.append(d)
+        open_before = self._unsatisfied(self.order)
+        snap = self._snapshot()
+        outside = [u for u in self.units if u.routed and not u.frozen and u.uid not in region]
+        for u in outside:
+            self._freeze(u)
+        for uid in sorted(region):
+            self._rip(self.units[uid])
+        todo = {u.uid: u for u in open_before}
+        for uid in region:
+            todo[uid] = self.units[uid]
+        todo_list = sorted(todo.values(), key=lambda u: (u.order, u.uid))
+        self.log("region around %s (%.1f mm margin): %d unit(s) renegotiated" % (
+            unit.name, margin, len(todo_list)))
+        self.hist[:] = 0
+        failed, _its = self._negotiate(todo_list, o.region_iterations, o.region_patience,
+                                       "region")
+        self._rip_conflicts(todo_list, failed)
+        self.hist[:] = 0
+        for u in todo_list:                                  # strict second chance
+            if not u.routed and u.kind != "escape" and not self._time_up():
+                att = self._route_unit(u, soft=False)
+                if att is not None and not att.victims:
+                    self._commit(u, att)
+        better = len(self._unsatisfied(self.order)) < len(open_before)
+        if not better:
+            self._restore(snap)                              # (frozen units stay as they are)
+        for u in outside:
+            self._unfreeze(u)
+        self.log("region around %s: %s" % (unit.name, "kept" if better else "undone"))
+        return better and unit.routed
+
+    def _mend_planes(self, reasons: Dict[int, str]) -> None:
+        """Pads cut off from their plane by other copper get a real track
+        (see :meth:`_repair_planes`), placed by the end game."""
+        for _round in range(max(0, self.opt.plane_repair_rounds)):
+            if self._time_up():
+                break
+            added = self._repair_planes()
+            if not added:
+                break
+            self.stats["plane_repairs"] += added
+            self.stats["endgame_placed"] += self._endgame(reasons)
+
+    def _endgame(self, reasons: Dict[int, str]) -> int:
+        """Only conflict-free copper is accepted here.  An open unit may
+        displace others if they all find a clean path again (bounded cascade,
+        see :meth:`_force`); otherwise the board goes back to how it was.
+        Returns the number of units placed."""
+        o = self.opt
+        pen_max = max(self.pen0, o.present_max / self.grid.pitch * STEP)
+        self.pen = max(1, int(round(pen_max)))
+        forced = 0
+        for _round in range(max(1, o.endgame_rounds)):
+            pending = self._unsatisfied(self.order)
+            if not pending:
+                break
+            self.log("end game round %d: %d unit(s) open" % (_round + 1, len(pending)))
+            progress = False
+            waiting = {p.idx for u in pending if u.kind == "conn" for p in u.pads}
+            for unit in self.order:                          # lost escapes first
+                if unit.kind == "escape" and not unit.routed and not self._time_up() \
+                        and unit.pads[0].idx in waiting:
+                    att = self._route_unit(unit, soft=False)
+                    if att is not None and not att.victims:
+                        self._commit(unit, att)
+            for unit in pending:
+                if unit.routed:
+                    continue                                 # placed along the way
+                if self._time_up():
+                    reasons.setdefault(unit.uid, "time limit reached")
+                    continue
+                placed = self._place(unit)
+                if placed:
+                    reasons.pop(unit.uid, None)
+                    progress = True
+                    forced += 1
+                else:
+                    reasons[unit.uid] = unit.reason or reasons.get(unit.uid, "no clean path")
+                    unit.failed = True
+            if not progress:
+                break
+        return forced
+
+    def _place(self, unit: _Unit) -> bool:
+        """Place one open unit with clean copper, pushing others aside if need
+        be (:meth:`_force`; several tries, each undone if it does not work
+        out); a connection of a class with ``min_track_width`` may neck down
+        as the last resort."""
+        o = self.opt
+        depth = max(0, o.ripup_depth)
+        modes = [False]
+        if unit.ctx.rct_alt is not None and unit.kind == "conn" and not unit.narrow:
+            modes.append(True)                       # last resort: neck the connection down
+        for narrow in modes:
+            unit.narrow = unit.narrow or narrow
+            for _try in range(o.endgame_tries if depth else 1):
+                snap = self._snapshot() if depth else None
+                self._forced_cells = []
+                self._force_left = max(1, o.ripup_budget)
+                if self._force(unit, depth, frozenset()):
+                    return True
+                if snap is not None:
+                    self._restore(snap)
+                # make the next try look elsewhere: the cells where this one ran
+                # over other nets get more expensive
+                for (l, ix, iy) in self._forced_cells:
+                    self.hist[l, iy, ix] = min(int(self.hist[l, iy, ix]) + 4, 1000)
+                if not self._forced_cells or self._time_up():
+                    break
+            if self._time_up():
+                break
+        return False
+
+    def _repair_planes(self) -> int:
+        """Find pads of plane nets that the plane fill will not reach (their
+        via sits in a pocket cut off by other nets' tracks or via clearances,
+        see :func:`plane_regions`) and add a connection from each cut-off
+        group to the main part.  Returns the number of connections added."""
+        nets: Dict[str, List[str]] = {}
+        for layer, net in self.design.full_plane_layers().items():
+            ctx = self.ctx.get(net)
+            if ctx is not None and ctx.plane and ctx.rct is not None:
+                nets.setdefault(net, []).append(layer)
+        if not nets:
+            return 0
+        tracks, vias = self._emit()
+        added = 0
+        last = max([u.order for u in self.order] + [0])
+        for net in sorted(nets):
+            ctx = self.ctx[net]
+            st = self._net_state(ctx, cells=False)
+            find, parent = st.find, st.parent
+            for layer in nets[net]:
+                regions = plane_regions(self.design, layer, net, tracks, vias)
+                for u in st.units:
+                    for it in u.items:
+                        if it.is_via:
+                            k = _region_index(regions, it.x, it.y)
+                            if k is not None:
+                                parent[find(("u", u.uid))] = find(("r", layer, k))
+                for p in ctx.pads:
+                    if layer in p.cu:
+                        k = _region_index(regions, p.x, p.y)
+                        if k is not None:
+                            parent[find(("p", p.idx))] = find(("r", layer, k))
+            groups: Dict[Any, List[_Pad]] = {}
+            for p in ctx.pads:
+                groups.setdefault(find(("p", p.idx)), []).append(p)
+            if len(groups) <= 1:
+                continue
+            ordered = sorted(groups.values(), key=lambda g: (-len(g), g[0].idx))
+            main = ordered[0]
+            for group in ordered[1:]:
+                best = min((math.hypot(a.x - b.x, a.y - b.y), a.idx, b.idx, a, b)
+                           for a in group for b in main)
+                u = self._new_unit("conn", ctx, [best[3], best[4]])
+                u.length = best[0]
+                last += 1
+                u.order = last
+                self.order.append(u)
+                added += 1
+                self.log("plane %s: %s is cut off from the plane - adding a track to %s" % (
+                    net, ", ".join(p.key for p in group[:4]), best[4].key))
+        return added
+
+    def _settle(self) -> None:
+        """Last sweep: whatever is open gets one more strict try (cheap; it
+        catches connections that only counted as made through copper that has
+        since been rerouted)."""
+        for _round in range(3):
+            pending = self._unsatisfied(self.order)
+            progress = False
+            for unit in pending:
+                if unit.routed or self._time_up():
+                    continue
+                att = self._route_unit(unit, soft=False)
+                if att is not None and not att.victims:
+                    self._commit(unit, att)
+                    progress = True
+            if not progress:
+                break
 
     def _force(self, unit: _Unit, depth: int, locked: frozenset) -> bool:
         """Place ``unit`` with clean copper.  If it has no clean path and
         ``depth`` allows, lay it over other units, rip those up and place them
         again the same way.  Returns False when that fails somewhere - the
         caller then restores its snapshot."""
+        self._force_left -= 1
         att = self._route_unit(unit, soft=False)
         if att is not None and not att.victims:
             self._commit(unit, att)
             return True
-        if depth <= 0:
+        if depth <= 0 or self._force_left <= 0:
             return False
         att = self._route_unit(unit, soft=True)
         if att is None:
             return False
         self._forced_cells.extend(att.hist)
         victims = [self.units[v] for v in sorted(att.victims)]
-        if not victims or any(v.uid in locked for v in victims):
+        if not victims or any(v.uid in locked or v.frozen for v in victims):
             return False
         ripped: List[_Unit] = []
         for v in victims:
@@ -1882,11 +2674,13 @@ class Router:
             return False
         left = self._victims(att.items)
         left.discard(unit.uid)
-        if left:
+        if left or any(not self.units[d].routed for d in att.deps):
             return False
         self._commit(unit, att)
         locked = locked | {unit.uid}
-        for v in sorted(ripped, key=lambda u: u.order):
+        for v in sorted(ripped, key=lambda u: (u.order, u.uid)):
+            if v.routed:
+                continue
             if not self._force(v, depth - 1, locked):
                 unit.reason = "no clean path; pushing %s aside did not work either" % v.name
                 return False
@@ -1895,50 +2689,74 @@ class Router:
     def _snapshot(self) -> Dict[str, Any]:
         """Remember the routed copper and conflicts of every unit."""
         return {"units": {u.uid: self._as_attempt(u) for u in self.units if u.routed},
-                "conf": {uid: set(v) for uid, v in self.conf.items()}}
+                "conf": {uid: set(v) for uid, v in self.conf.items()},
+                "narrow": {u.uid: u.narrow for u in self.units},
+                "n_units": len(self.units), "order": list(self.order)}
 
     def _restore(self, snap: Dict[str, Any]) -> None:
         """Go back to a state saved by :meth:`_snapshot`."""
         for u in self.units:
-            if u.routed:
+            if u.routed and not u.frozen:
                 self._rip(u)
-        for u in self.order:
+        n = snap["n_units"]
+        if len(self.units) > n:                  # units made since (plane repairs) go
+            del self.units[n:]
+            self.order = list(snap["order"])
+            for name in self.net_units:
+                self.net_units[name] = [u for u in self.net_units[name] if u.uid < n]
+        for u in sorted(self.units, key=lambda v: (v.order, v.uid)):
+            u.narrow = snap["narrow"].get(u.uid, False)
             att = snap["units"].get(u.uid)
-            if att is not None:
+            if att is not None and not u.frozen:
                 self._commit(u, att)
-        self.conf = {uid: set(v) for uid, v in snap["conf"].items()}
+        self.conf = {uid: set(v) for uid, v in snap["conf"].items() if uid < n}
+        for u in self.units:
+            self.conf.setdefault(u.uid, set())
 
     # -- improvement -------------------------------------------------------------
+    def _score(self, unit: _Unit, att: _Attempt) -> float:
+        """What a route costs, in mm of track: length, vias and - for an
+        escape - how far its end is from where the net has to go."""
+        length = sum(it.length for it in att.items if not it.is_via)
+        vias = sum(1 for it in att.items if it.is_via)
+        score = length + self.opt.via_cost * vias
+        if unit.kind == "escape" and att.cells and unit.targets is not None:
+            dst, bias = unit.targets[0], unit.targets[1]
+            end = att.cells[-1]
+            hit = np.nonzero((dst[:, 0] == end[0]) & (dst[:, 1] == end[1])
+                             & (dst[:, 2] == end[2]))[0] if len(dst) else []
+            if len(hit):
+                score += float(bias[hit[0]]) * self.grid.pitch / STEP
+        return score
+
+    def _improve(self, units: Optional[Sequence[_Unit]] = None) -> Tuple[float, int]:
+        """Rip each unit once and route it again with everything else in
+        place; keep the better of the two.  Returns (mm, vias) saved."""
+        saved_len, saved_vias = 0.0, 0
+        for unit in (self.order if units is None else units):
+            if not unit.routed or unit.dependents or unit.trivial or not unit.items:
+                continue
+            if unit.kind == "fanout" or unit.frozen:
+                continue
+            if self._time_up():
+                break
+            before = self._as_attempt(unit)
+            old = self._score(unit, before)
+            self._rip(unit)
+            att = self._route_unit(unit, soft=False)
+            if att is not None and not att.victims and self._score(unit, att) < old - 1e-9:
+                self._commit(unit, att)
+                a, b = self._unit_cost(before.items), self._unit_cost(att.items)
+                saved_len += a[0] - b[0]
+                saved_vias += a[1] - b[1]
+            else:
+                self._commit(unit, before)
+        return saved_len, saved_vias
+
     def _unit_cost(self, items: Sequence[Any]) -> Tuple[float, int]:
         length = sum(it.length for it in items if not it.is_via)
         vias = sum(1 for it in items if it.is_via)
         return length, vias
-
-    def _improve(self) -> Tuple[float, int]:
-        """Rip each tree unit once and route it again with everything else in
-        place; keep the better of the two."""
-        saved_len, saved_vias = 0.0, 0
-        for unit in self.order:
-            if unit.kind != "tree" or not unit.routed or unit.dependents:
-                continue
-            if unit.missing:
-                continue
-            before = self._as_attempt(unit)
-            old = self._unit_cost(before.items)
-            self._rip(unit)
-            att = self._route_unit(unit, soft=False)
-            better = False
-            if att is not None and not att.victims:
-                new = self._unit_cost(att.items)
-                better = (new[0] + self.opt.via_cost * new[1]
-                          < old[0] + self.opt.via_cost * old[1] - 1e-9)
-            if better:
-                self._commit(unit, att)
-                saved_len += old[0] - new[0]
-                saved_vias += old[1] - new[1]
-            else:
-                self._commit(unit, before)
-        return saved_len, saved_vias
 
     # -- output --------------------------------------------------------------------
     def _finish(self) -> "RouteResult":
@@ -1949,7 +2767,7 @@ class Router:
             length[t.layer] = length.get(t.layer, 0.0) + t.length
         self.stats.update({
             "nets": len(self.routable),
-            "units": len(self.units),
+            "units": len(self.order),
             "grid_mm": self.grid.pitch,
             "grid_nodes": [self.grid.nx, self.grid.ny],
             "routing_layers": list(self.layers),
@@ -1971,8 +2789,7 @@ class Router:
         vias: List[Via] = []
         for name in self.design.nets:
             items = self.net_items.get(name, [])
-            fixed = self.fixed.get(name, [])
-            if not items and not fixed:
+            if not items:
                 continue
             ctx = self.ctx[name]
             stubs = [it for it in items if not it.is_via and it.b is None]
@@ -1987,26 +2804,31 @@ class Router:
             for v in vnodes:
                 for l in range(self.L):
                     anchors.add((l, v[0], v[1]))
-            for fx in fixed:
-                for n in self._seg_nodes(fx):
-                    anchors.add((fx.layer, n[0], n[1]))
-                tracks.append(Track(name, self.layers[fx.layer], fx.x1, fx.y1, fx.x2, fx.y2,
-                                    round(2.0 * fx.hw, 6)))
             groups: Dict[float, List[Any]] = {}
             for it in items:
                 if not it.is_via and it.b is not None:
                     groups.setdefault(round(2.0 * it.hw, 6), []).append((it.layer, it.a, it.b))
+            covered: Dict[float, Set[Tuple[int, int, int]]] = {}
             if len(groups) > 1:
-                # pieces of different width meet end to end: those nodes are anchors too
-                seen: Dict[Tuple[int, int, int], float] = {}
+                # tracks of different width are cleaned up separately: where one
+                # ends on another (end to end or in a T) both keep that node
                 for width, segs in groups.items():
+                    nodes: Set[Tuple[int, int, int]] = set()
                     for layer, a, b in segs:
-                        for n in (a, b):
-                            key = (layer, n[0], n[1])
-                            if seen.setdefault(key, width) != width:
-                                anchors.add(key)
+                        n = max(abs(b[0] - a[0]), abs(b[1] - a[1]))
+                        sx = (b[0] - a[0]) // n if n else 0
+                        sy = (b[1] - a[1]) // n if n else 0
+                        for i in range(n + 1):
+                            nodes.add((layer, a[0] + sx * i, a[1] + sy * i))
+                    covered[width] = nodes
             for width in sorted(groups):
-                cleaned = cleanup_segments(groups[width], anchors, set(vnodes), self.L)
+                other: Set[Tuple[int, int, int]] = set()
+                for w2, nodes in covered.items():
+                    if w2 != width:
+                        other |= nodes
+                joints = (covered.get(width, set()) & other) if other else set()
+                cleaned = cleanup_segments(groups[width], anchors | joints, set(vnodes),
+                                           self.L, breaks=joints)
                 for layer, a, b in cleaned:
                     x1, y1 = g.xy(*a)
                     x2, y2 = g.xy(*b)
@@ -2028,7 +2850,7 @@ _AXES = ((1, 0), (0, 1), (1, 1), (1, -1))
 
 def cleanup_segments(segs: Iterable[Tuple[int, Tuple[int, int], Tuple[int, int]]],
                      anchors: Set[Tuple[int, int, int]], via_nodes: Set[Tuple[int, int]],
-                     n_layers: int
+                     n_layers: int, breaks: Iterable[Tuple[int, int, int]] = ()
                      ) -> List[Tuple[int, Tuple[int, int], Tuple[int, int]]]:
     """Final cleanup of one net's grid tracks.
 
@@ -2042,9 +2864,12 @@ def cleanup_segments(segs: Iterable[Tuple[int, Tuple[int, int], Tuple[int, int]]
     * loops are opened (an edge whose two ends are already connected through
       tracks and vias is dropped, then the pruning is repeated);
     * collinear edges are merged into maximal segments, which are split at
-      junctions and vias so that every connection is end-to-end.
+      junctions, at vias and at the nodes ``breaks`` (``(layer, ix, iy)``:
+      where a track of another width joins) so that every connection is
+      end-to-end.
 
     Returns segments in the same form, sorted."""
+    breaks = set(breaks)
     edges: Dict[int, Set[Tuple[Tuple[int, int], Tuple[int, int]]]] = {}
     for layer, a, b in segs:
         layer = int(layer)
@@ -2124,15 +2949,97 @@ def cleanup_segments(segs: Iterable[Tuple[int, Tuple[int, int], Tuple[int, int]]
         for ax in _AXES:
             mine = sorted(e for e in es if (e[1][0] - e[0][0], e[1][1] - e[0][1]) == ax)
             nxt = {p: q for p, q in mine}
+            cut = {n for n in via_nodes} | {(b[1], b[2]) for b in breaks if b[0] == layer}
             starts = [p for p, q in mine
-                      if (p[0] - ax[0], p[1] - ax[1]) not in nxt or deg[p] != 2 or p in via_nodes]
+                      if (p[0] - ax[0], p[1] - ax[1]) not in nxt or deg[p] != 2 or p in cut]
             for s in starts:
                 e = nxt[s]
-                while e in nxt and deg[e] == 2 and e not in via_nodes:
+                while e in nxt and deg[e] == 2 and e not in cut:
                     e = nxt[e]
                 out.append((layer, s, e))
     out.sort()
     return out
+
+
+# --------------------------------------------------------------------------
+# planes
+# --------------------------------------------------------------------------
+
+def plane_regions(design: Design, layer: str, net: str, tracks: Sequence[Track],
+                  vias: Sequence[Via], margin: float = 0.02) -> List[Any]:
+    """Connected pieces of the filled whole-board plane of ``net`` on
+    ``layer``, predicted the way KiCad fills a zone - a little on the safe
+    side (``margin``): the board area inside the copper-to-edge distance,
+    minus everything foreign on that layer grown by the zone clearance (tracks,
+    via pads, pads, drilled holes, copper keep-outs), with necks narrower than
+    the zone's minimum width removed.
+
+    Returns shapely polygons, largest first.  A via or plated pad of the net
+    is connected to the piece its centre lies in; pieces do not connect to
+    each other on this layer.  One piece = the plane is whole."""
+    r = design.rules
+    plane = None
+    for pl in design.planes:
+        if pl.layer == layer and pl.net == net and pl.shape is None:
+            plane = pl
+            break
+    zc = r.zone_clearance
+    mw = r.zone_min_width
+    if plane is not None:
+        zc = plane.clearance if plane.clearance is not None else max(
+            r.zone_clearance, design.netclass_of(net).clearance)
+        mw = plane.min_width if plane.min_width is not None else r.zone_min_width
+    board_poly = geometry.outline_polygon(design.outline, r.max_arc_error)
+    area = board_poly.buffer(-(max(r.copper_to_edge, zc) + margin))
+    holes: List[Any] = []
+
+    def clr(other: Optional[str], local: Optional[float] = None) -> float:
+        return max(zc, design.clearance(net, other, local_b=local)) + margin
+
+    for t in tracks:
+        if t.layer == layer and t.net != net:
+            line = LineString([(t.x1, t.y1), (t.x2, t.y2)]) if t.length > 1e-9 \
+                else Point(t.x1, t.y1)
+            holes.append(line.buffer(t.width / 2.0 + clr(t.net)))
+    for v in vias:
+        if v.net != net:
+            holes.append(Point(v.x, v.y).buffer(max(
+                v.diameter / 2.0 + clr(v.net), v.drill / 2.0 + r.hole_clearance + margin)))
+    for p in geometry.placed_pads(design):
+        if p.kind == "npth" or p.polygon is None:
+            if p.drill > 0:
+                holes.append(Point(p.x, p.y).buffer(
+                    p.drill / 2.0 + max(r.hole_clearance, r.copper_to_edge, zc) + margin))
+            continue
+        if layer in p.layers and p.net != net:
+            holes.append(p.polygon.buffer(clr(p.net, p.clearance)
+                                          + geometry.PAD_POLYGON_TOLERANCE))
+        if p.kind == "th" and p.drill > 0 and p.net != net:
+            holes.append(Point(p.x, p.y).buffer(p.drill / 2.0 + r.hole_clearance + margin))
+    for h in design.outline.holes:
+        holes.append(Point(h.x, h.y).buffer(
+            h.drill / 2.0 + max(r.hole_clearance, r.copper_to_edge, zc) + margin))
+    for ko in design.keepouts:
+        if ko.copper and layer in ko.layer_names(design.copper_layers):
+            holes.append(geometry.keepout_polygon(ko).buffer(margin))
+    region = area.difference(shapely.unary_union(holes)) if holes else area
+    half = mw / 2.0 + margin / 2.0
+    region = region.buffer(-half).buffer(mw / 2.0)
+    polys = [g for g in getattr(region, "geoms", [region])
+             if g.geom_type == "Polygon" and not g.is_empty and g.area > 1e-4]
+    polys.sort(key=lambda g: (-g.area, g.bounds))
+    for g in polys:
+        shapely.prepare(g)
+    return polys
+
+
+def _region_index(regions: Sequence[Any], x: float, y: float) -> Optional[int]:
+    """Index of the plane piece the point lies in (None: in none)."""
+    pt = Point(x, y)
+    for k, g in enumerate(regions):
+        if g.contains(pt):
+            return k
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -2149,9 +3056,10 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
       copper and hole to hole (same net included), copper to board edge, track
       and via keep-outs;
     * connectivity computed from the copper: pads, tracks and vias that touch
-      are joined, and every via or plated pad of a net that owns a whole-board
-      plane is joined to that plane.  (The plane itself is assumed to be in
-      one piece - KiCad's zone fill and DRC have the last word on that.)
+      are joined, and every via or pad of a net that owns a whole-board plane
+      is joined to the piece of that plane's fill its centre lies in
+      (:func:`plane_regions` - a prediction of KiCad's zone fill; KiCad's own
+      fill and DRC have the last word).
 
     Nets with ``no_route`` and single-pad nets are not expected to be
     connected."""
@@ -2310,10 +3218,6 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
         if ra != rb:
             parent[ra] = rb
 
-    planes = design.full_plane_layers()
-    plane_layers: Dict[str, Set[str]] = {}
-    for layer, net in planes.items():
-        plane_layers.setdefault(net, set()).add(layer)
     touch = 1e-6
     for i, t in enumerate(tracks):
         gt = t_geoms[i]
@@ -2330,15 +3234,24 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
             if vias[j].net == t.net and gt.distance(v_geoms[j]) <= touch:
                 union(("t", i), ("v", j))
     for i, v in enumerate(vias):
-        if v.net in plane_layers:
-            union(("v", i), ("plane", v.net))
         for j in near(pad_tree, v_geoms[i]):
             p = pads[j]
             if p.net == v.net and v_geoms[i].distance(pad_geoms[j]) - pad_rad[j] <= touch:
                 union(("v", i), ("p", j))
-    for j, p in enumerate(pads):
-        if p.net in plane_layers and plane_layers[p.net] & set(p.layers):
-            union(("p", j), ("plane", p.net))
+    # planes: a via or pad is on the piece of the fill its centre lies in
+    for layer, net in sorted(design.full_plane_layers().items()):
+        regions = plane_regions(design, layer, net, tracks, vias)
+        res.plane_pieces["%s/%s" % (net, layer)] = len(regions)
+        for i, v in enumerate(vias):
+            if v.net == net:
+                k = _region_index(regions, v.x, v.y)
+                if k is not None:
+                    union(("v", i), ("plane", net, layer, k))
+        for j, p in enumerate(pads):
+            if p.net == net and layer in p.layers:
+                k = _region_index(regions, p.x, p.y)
+                if k is not None:
+                    union(("p", j), ("plane", net, layer, k))
     by_net: Dict[str, List[int]] = {}
     for j, p in enumerate(pads):
         if p.net:
@@ -2391,5 +3304,83 @@ def route_board(design: Design, pcb_path: str, options: Optional[RouterOptions] 
     return result, drc_result
 
 
+# --------------------------------------------------------------------------
+# keeping a routing result
+# --------------------------------------------------------------------------
+
+def fingerprint(design: Design, options: Optional[RouterOptions] = None) -> str:
+    """Hash of everything the router's result depends on: the design (parts
+    and their placement, nets, classes, rules, planes), the outline, the
+    keep-outs and the router options.  Two designs with the same fingerprint
+    get the same routing."""
+    import hashlib
+    opt = options or RouterOptions()
+    outline = geometry.outline_polygon(design.outline, design.rules.max_arc_error)
+    data = {
+        "design": design.to_dict(),
+        "outline": [[round(x, 6), round(y, 6)] for x, y in outline.exterior.coords],
+        "cutouts": [[[round(x, 6), round(y, 6)] for x, y in ring.coords]
+                    for ring in outline.interiors],
+        "holes": [[h.x, h.y, h.drill] for h in design.outline.holes],
+        "keepouts": [{"shape": repr(k.shape), "layers": list(k.layer_names(design.copper_layers)),
+                      "tracks": k.tracks, "vias": k.vias, "copper": k.copper, "pads": k.pads}
+                     for k in design.keepouts],
+        "options": {k: (list(v) if isinstance(v, tuple) else v)
+                    for k, v in sorted(vars(opt).items()) if k not in ("progress", "time_limit")},
+        "router": ROUTER_VERSION,
+    }
+    text = json.dumps(data, sort_keys=True, default=str)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def save_routing(path: str, design: Design, result: RouteResult,
+                 options: Optional[RouterOptions] = None) -> str:
+    """Write the routed copper of ``result`` to a JSON file (tracks, vias,
+    the design's :func:`fingerprint`, the routing statistics without the run
+    time - the file is the same for every run of the same design)."""
+    stats = {k: v for k, v in result.stats.items() if k != "runtime_s"}
+    data = {
+        "design": design.name,
+        "fingerprint": fingerprint(design, options),
+        "complete": result.complete,
+        "connections_total": result.connections_total,
+        "connections_routed": result.connections_routed,
+        "stats": stats,
+        "failures": dict(result.failures),
+        "unrouted": [u.to_dict() for u in result.unrouted],
+        "tracks": [[t.net, t.layer, t.x1, t.y1, t.x2, t.y2, t.width] for t in result.tracks],
+        "vias": [[v.net, v.x, v.y, v.diameter, v.drill] for v in result.vias],
+    }
+    with open(path, "w") as f:
+        json.dump(data, f, indent=0, sort_keys=True)
+        f.write("\n")
+    return path
+
+
+def load_routing(path: str, design: Optional[Design] = None,
+                 options: Optional[RouterOptions] = None) -> RouteResult:
+    """Read a file written by :func:`save_routing`.  With ``design`` the
+    stored fingerprint must match (else :class:`RoutingError`) and the copper
+    is audited again against that design, so the returned result is as
+    trustworthy as a fresh one."""
+    with open(path) as f:
+        data = json.load(f)
+    tracks = [Track(*t) for t in data["tracks"]]
+    vias = [Via(*v) for v in data["vias"]]
+    if design is None:
+        aud = AuditResult(connections_total=data.get("connections_total", 0))
+        return RouteResult(tracks, vias, aud, dict(data.get("stats", {})),
+                           dict(data.get("failures", {})))
+    if data.get("fingerprint") != fingerprint(design, options):
+        raise RoutingError("%s was made for another version of the design or other router "
+                           "options (fingerprint mismatch)" % path)
+    return RouteResult(tracks, vias, audit(design, tracks, vias), dict(data.get("stats", {})),
+                       dict(data.get("failures", {})))
+
+
+#: bumped whenever the router's output for a given design can change
+ROUTER_VERSION = "2"
+
 __all__ = ["RouterOptions", "RouteResult", "AuditResult", "Unrouted", "RoutingError",
-           "Router", "route", "route_board", "audit", "cleanup_segments"]
+           "Router", "route", "route_board", "audit", "cleanup_segments", "plane_regions",
+           "fingerprint", "save_routing", "load_routing", "ROUTER_VERSION"]

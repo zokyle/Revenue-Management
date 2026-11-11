@@ -1,7 +1,7 @@
 /*
  * gl_provisional.h - every PROVISIONAL hardware fact the firmware depends on.
  *
- * DESIGN_SPEC.md (rev B) marks facts as VERIFIED or PROVISIONAL.  Anything
+ * DESIGN_SPEC.md (rev C) marks facts as VERIFIED or PROVISIONAL.  Anything
  * provisional that changes what the firmware does is a named constant HERE
  * and nowhere else, with the reason and what to check.  When a release gate
  * is closed, change the value (if needed), move the constant to its module
@@ -214,6 +214,13 @@
  *  sleep) before a strip is trusted: exposure / gain loop settling.  Guess. */
 #define GL_PROV_CAM_SETTLE_FRAMES 2u
 
+/** SCCB calls the 9th bit of every byte "don't care".  OmniVision sensors
+ *  of this family pull it low like an I2C acknowledge; that is from
+ *  experience with sister parts, not from the OVM7692 datasheet.  1 = the
+ *  STM32 backend's bit-banged SCCB reports GL_ERR_IO when the 9th bit stays
+ *  high (missing or unpowered sensor); 0 = it ignores the bit. */
+#define GL_PROV_OV7692_SCCB_ACKS 1
+
 /** Time for the software reset (register 0x12 bit 7) to complete; the
  *  driver polls the bit and gives up after this. */
 #define GL_PROV_OV7692_RESET_TIMEOUT_MS 50u
@@ -315,5 +322,17 @@
 #define GL_PROV_MX25R_ERASE_TIMEOUT_MS 2000u
 #define GL_PROV_MX25R_DP_DELAY_US 100u
 #define GL_PROV_MX25R_SPI_HZ 8000000u
+
+/* ======================================================================= */
+/* MCU pin assignment                                                       */
+/* ======================================================================= */
+
+/* DESIGN_SPEC section 4 fixes 19 MCU pins (DCMI, MCO, SPI1 MISO, USB,
+ * LPTIM1_CH1, OPAMP1).  The other 26 signals have NO assignment yet (no
+ * netlist exists): hal/stm32u5/gl_pins.h carries this firmware's PROPOSED
+ * assignment for them, each row marked GL_PINSRC_PROPOSED, generated and
+ * cross-checked against the spec text by tools/gen_pins.py.  The pin map is
+ * data of the STM32 backend only; nothing in core, drivers or app depends
+ * on which pad a signal is on. */
 
 #endif /* GL_PROVISIONAL_H */

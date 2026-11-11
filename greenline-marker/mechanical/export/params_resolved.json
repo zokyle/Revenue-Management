@@ -1,8 +1,8 @@
 {
- "rev": "B-EVT1",
+ "rev": "C-EVT1",
  "source": "/home/user/Revenue-Management/greenline-marker/design/master_params.yaml",
  "yaml": {
-  "rev": "B-EVT1",
+  "rev": "C-EVT1",
   "envelope": {
    "outer_radius": 23.0,
    "thickness": 7.6,
@@ -13,7 +13,12 @@
    "front_flat_wall": 0.8
   },
   "base_plate": {
-   "thickness": 1.0,
+   "thickness": 0.87,
+   "psa": {
+    "mpn": "3M 9472LE (300LSE) adhesive transfer tape, die cut",
+    "thickness": 0.13,
+    "basis": "provisional"
+   },
    "radius": 21.75,
    "flat_y": 18.25,
    "seal_land": {
@@ -27,7 +32,9 @@
     "dia": 13.0
    },
    "pad_holes": {
+    "form": "slot",
     "dia": 2.2,
+    "slot_length": 17.44,
     "y": -17.0,
     "xs": [
      -7.62,
@@ -42,6 +49,8 @@
    "feet": {
     "ball_dia": 1.0,
     "protrusion": 0.1,
+    "hole_dia": 1.15,
+    "psa_hole_dia": 2.0,
     "positions": [
      [
       0.0,
@@ -56,13 +65,39 @@
       -9.5
      ]
     ]
+   },
+   "baffle": {
+    "inner_dia": 5.91,
+    "wall": 0.8,
+    "outer_dia": 7.51,
+    "spokes_deg": [
+     90,
+     225,
+     315
+    ],
+    "spoke_width": 0.8
    }
   },
   "pcb": {
    "thickness": 0.8,
    "z_bottom": 1.0,
-   "radius": 21.2,
+   "radius": 21.1,
    "flat_y": 17.3,
+   "locating_holes": {
+    "round": {
+     "x": -4.2,
+     "y": 14.55,
+     "dia": 1.15
+    },
+    "slot": {
+     "x": 4.2,
+     "y": 14.55,
+     "dia": 1.15,
+     "length_x": 1.65
+    },
+    "spigot_dia": 1.0,
+    "spigot_height": 0.6
+   },
    "component_edge_clearance": 0.2,
    "max_top_height_under_lcd": 2.55
   },
@@ -117,14 +152,14 @@
    "body_dy": 2.95,
    "height": 2.76,
    "left": {
-    "x": -10.2,
+    "x": -10.0,
     "y": 15.6
    },
    "right": {
-    "x": 10.2,
+    "x": 10.0,
     "y": 15.6
    },
-   "baseline": 20.4,
+   "baseline": 20.0,
    "efl_mm": 1.15,
    "pixel_um": 1.75,
    "f_px": 657,
@@ -146,24 +181,107 @@
    "prism_pocket_underside_z": 6.8
   },
   "visor_window": {
-   "w": 4.3,
+   "w": 5.0,
    "h": 3.4,
    "t": 0.5,
+   "recess_w": 5.5,
    "recess_depth": 0.55,
    "z0": 4.2,
    "z1": 7.6,
    "opening": {
-    "half_w": 1.65,
+    "half_w": 2.0,
     "z0": 4.6,
     "z1": 6.8
    },
+   "min_wall_behind_recess": 0.525,
    "material": "EVT: 0.5 mm clear cast acrylic or cover glass; production: AR-coated borosilicate or sapphire, custom cut"
   },
   "vent": {
    "type": "W. L. Gore VE80205 adhesive ePTFE vent, OD 5.0, vent dia 2.0, 0.26 thick",
    "hole_dia": 1.0,
-   "location": "roof underside in a lateral segment, about x=17, y=-3",
+   "x": 17.9,
+   "y": -3.0,
+   "location": "roof underside, on a pad raised 0.2 mm",
    "basis": "provisional"
+  },
+  "tub_keepouts": {
+   "post_feet": {
+    "size": 1.6,
+    "centres": [
+     [
+      -15.4,
+      1.8
+     ],
+     [
+      15.4,
+      1.8
+     ],
+     [
+      -14.35,
+      10.8
+     ],
+     [
+      14.35,
+      10.8
+     ],
+     [
+      -6.5,
+      -18.6
+     ],
+     [
+      6.5,
+      -18.6
+     ],
+     [
+      -4.2,
+      14.55
+     ],
+     [
+      4.2,
+      14.55
+     ]
+    ]
+   },
+   "camera_hoods": {
+    "half_w": 2.85,
+    "y0": 13.7,
+    "y1": 17.3,
+    "max_part_height": 0.95,
+    "note": "per camera, centred on the camera x; the camera cube itself is exempt"
+   }
+  },
+  "cradle": {
+   "body": {
+    "dx": 60.0,
+    "dy": 60.0,
+    "dz": 14.0
+   },
+   "orientations": [
+    0
+   ],
+   "pad_plane_z": 1.0,
+   "pin_row_y": -17.0,
+   "pins": {
+    "mpn_series": "Mill-Max 0914 long-stroke spring pin",
+    "positions": 7,
+    "populated_consumer": [
+     "VBUS",
+     "D-",
+     "D+",
+     "GND"
+    ],
+    "populated_factory": 7,
+    "working_height": 5.82,
+    "force_working_N": 0.59,
+    "basis": "provisional"
+   },
+   "hold_down": "fixed front lip between the camera windows (|x| <= 6) plus a rear cantilever latch with a thumb tab; retention at least 3x the total pin force",
+   "pcb": {
+    "dx": 30.0,
+    "dy": 22.0,
+    "thickness": 1.6,
+    "connector": "GCT USB4105 USB-C receptacle, rear exit"
+   }
   },
   "top_side_parts": [
    {
@@ -178,7 +296,7 @@
    {
     "ref": "U2",
     "name": "OVM7692 camera L",
-    "x": -10.2,
+    "x": -10.0,
     "y": 15.6,
     "dx": 3.47,
     "dy": 2.95,
@@ -187,7 +305,7 @@
    {
     "ref": "U3",
     "name": "OVM7692 camera R",
-    "x": 10.2,
+    "x": 10.0,
     "y": 15.6,
     "dx": 3.47,
     "dy": 2.95,
@@ -268,7 +386,7 @@
    {
     "ref": "U10",
     "name": "USBLC6-2SC6 ESD SOT-23-6",
-    "x": -14.5,
+    "x": -14.3,
     "y": -12.0,
     "dx": 3.0,
     "dy": 3.0,
@@ -290,6 +408,8 @@
     "y": -4.0,
     "radius": 5.2,
     "count_pairs": 8,
+    "first_azimuth_deg": 22.5,
+    "step_deg": 45.0,
     "led_height": 0.45
    },
    "photodiode": {
@@ -324,43 +444,18 @@
   ],
   "cover_tape_id": 23.0,
   "lcd_psa_window_dia": 23.0,
-  "posts": {
-   "A": [
-    14.6,
-    16.2,
-    1.0,
-    2.6
-   ],
-   "B": [
-    13.55,
-    15.15,
-    10.0,
-    11.6
-   ],
-   "C": [
-    5.7,
-    7.3,
-    -19.4,
-    -17.8
-   ],
-   "E": [
-    3.4,
-    5.0,
-    13.75,
-    15.35
-   ]
-  },
+  "post_names": [
+   "A",
+   "B",
+   "C",
+   "E"
+  ],
+  "locating_posts": "E",
   "hood_wall": 0.8,
   "hood_skirt_z0": 3.0,
-  "hood_corner_fill_y0": 16.0,
-  "visor_land": 0.5,
-  "visor_bevel_deg": 30.0,
+  "hood_fill_margin": 0.05,
   "hood_rear_chamfer_margin": 0.015,
   "window_bond": 0.05,
-  "vent_xy": [
-   17.9,
-   -3.0
-  ],
   "vent_pad": 5.6,
   "vent_pad_h": 0.2,
   "vent_od": 5.0,
@@ -368,16 +463,6 @@
   "vent_area_dia": 2.0,
   "nose_w": 1.0,
   "nose_depth": 0.3,
-  "baffle_pd_clear": 0.25,
-  "baffle_wall": 0.8,
-  "spoke_w": 0.8,
-  "spoke_angles_deg": [
-   90.0,
-   225.0,
-   315.0
-  ],
-  "ball_seat_cone_half_angle_deg": 45.0,
-  "ball_seat_model_gap": 0.01,
   "key_w": 1.2,
   "key_x": 9.25,
   "pad_dia": 1.8,
@@ -387,7 +472,8 @@
    0.5
   ],
   "led_pair_offset": 0.45,
-  "pcb_psa_t": 0.13,
+  "epoxy_cap_dia": 1.6,
+  "epoxy_cap_h": 0.08,
   "flex_w": 6.0,
   "flex_t": 0.15,
   "flex_z_top_run": 4.775,
@@ -399,43 +485,25 @@
   "n_prism": 1.517,
   "fov_h_half_deg": 26.0,
   "fov_up_deg": 17.6,
-  "fov_down_deg": 15.0,
-  "cradle_size": [
-   60.0,
-   60.0,
-   14.0
-  ],
+  "fov_down_deg": 8.0,
+  "fov_down_sensor_deg": 15.0,
   "cradle_nest_wall_h": 3.0,
+  "cradle_y_rear": -36.0,
   "cradle_corner_r": 4.0,
-  "plate_t": 1.5,
-  "plate_hole_dia": 2.0,
   "pin_free_len": 8.3,
-  "pin_working_h": 5.82,
   "pin_plunger_dia": 1.07,
   "pin_body_dia": 1.83,
   "pin_tail_dia": 0.76,
   "pin_max_working_h": 6.96,
   "pin_mid_stroke": 1.14,
   "pin_full_stroke": 2.29,
-  "pin_force_working_N": 0.59,
-  "pin_body_top_below_plate": 0.3,
+  "pin_body_margin": 0.2,
   "pin_tail_below_pcb": 0.7,
-  "real_pad_height": 1.13,
-  "cradle_pcb": [
-   22.0,
-   30.0,
-   1.6
-  ],
-  "cradle_pcb_rear_y": -30.5,
-  "cradle_pcb_screw_xy": [
-   [
-    8.5,
-    -28.0
-   ],
-   [
-    8.5,
-    -3.0
-   ]
+  "cradle_pcb_rear_inset": 1.8,
+  "cradle_pcb_screw_x": 12.5,
+  "cradle_pcb_screw_inset": [
+   2.7,
+   2.3
   ],
   "cradle_screw_pilot_dia": 1.7,
   "cradle_screw_pilot_depth": 0.5,
@@ -445,12 +513,24 @@
    3.26
   ],
   "usb_mouth_recess": 0.5,
-  "scallop_half_w": 8.0,
+  "scallop_deg": [
+   -42.0,
+   0.0
+  ],
+  "scallop_inset": 2.0,
   "lighten_x": [
-   13.75,
+   17.0,
    26.5
   ],
-  "lighten_y_half": 17.0,
+  "lighten_y": [
+   -22.0,
+   10.0
+  ],
+  "lighten_front": [
+   13.0,
+   -9.5,
+   20.0
+  ],
   "lighten_ceiling_z": -4.1,
   "foot_pocket_dia": 8.4,
   "foot_pocket_depth": 1.0,
@@ -459,10 +539,63 @@
    23.5
   ],
   "foot_h": 3.0,
-  "foot_dia": 8.0
+  "foot_dia": 8.0,
+  "lip_half_w": 6.0,
+  "lip_overlap": 1.2,
+  "lip_t": 1.6,
+  "lip_pocket": 1.0,
+  "latch_w": 14.0,
+  "latch_h": 1.15,
+  "latch_root_z": -3.8,
+  "latch_overhang": 1.75,
+  "hook_nose_flat": 0.4,
+  "hook_lead_deg": 30.0,
+  "latch_root_fillet": 0.5,
+  "latch_side_gap": 1.2,
+  "latch_front_gap": 2.2,
+  "latch_back_gap": 2.6,
+  "latch_stop_deflection": 1.9,
+  "guard_t": 2.0,
+  "guard_top_z": 6.5,
+  "stop_rib_w": 1.0,
+  "stop_rib_x": 4.0,
+  "tab_len": 8.6,
+  "tab_t": 1.6,
+  "tab_press_inset": 1.5,
+  "pa12_E_MPa": 1700.0,
+  "pa12_yield_MPa": 48.0,
+  "latch_strain_limit": 0.025,
+  "friction_mu": 0.3,
+  "friction_mu_range": [
+   0.2,
+   0.4
+  ],
+  "retention_factor_required": 3.0,
+  "insertion_tilts_deg": [
+   17.0,
+   15.0,
+   14.0,
+   13.0,
+   12.0,
+   11.0,
+   10.0,
+   9.0,
+   8.0,
+   7.0,
+   6.0,
+   5.0,
+   4.0,
+   3.0,
+   2.0,
+   1.5,
+   1.0,
+   0.5,
+   0.0
+  ],
+  "insertion_gap": 0.05
  },
  "derived": {
-  "REV": "B-EVT1",
+  "REV": "C-EVT1",
   "R_OUT": 23.0,
   "T": 7.6,
   "WALL": 1.0,
@@ -472,9 +605,12 @@
   "VISOR_WALL": 0.8,
   "R_IN": 22.0,
   "Y_VISOR_IN": 17.599999999999998,
-  "BASE_T": 1.0,
+  "BASE_T": 0.87,
   "BASE_R": 21.75,
   "BASE_FLAT": 18.25,
+  "PSA_T": 0.13,
+  "PSA_Z0": 0.87,
+  "PSA_Z1": 1.0,
   "LAND_RI": 21.35,
   "LAND_FLAT_IN": 17.6,
   "GRAIN_X": 0.0,
@@ -491,8 +627,11 @@
    5.08,
    7.62
   ],
+  "PAD_SLOT_L": 17.44,
   "BALL_D": 1.0,
   "BALL_PROT": 0.1,
+  "BALL_HOLE_D": 1.15,
+  "PSA_FOOT_HOLE_D": 2.0,
   "BALL_XY": [
    [
     0.0,
@@ -508,16 +647,42 @@
    ]
   ],
   "BALL_Z": 0.4,
+  "BALL_TOP_Z": 0.9,
+  "BAFFLE_RI": 2.955,
+  "BAFFLE_RO": 3.755,
+  "BAFFLE_WALL": 0.8,
+  "SPOKE_W": 0.8,
+  "SPOKE_ANGLES": [
+   90,
+   225,
+   315
+  ],
   "PCB_T": 0.8,
   "PCB_Z0": 1.0,
-  "PCB_R": 21.2,
+  "PCB_R": 21.1,
   "PCB_FLAT": 17.3,
   "PCB_Z1": 1.8,
   "PCB_EDGE_CLR": 0.2,
+  "PCB_FREE_H": 2.55,
+  "LOC_ROUND": [
+   -4.2,
+   14.55,
+   1.15
+  ],
+  "LOC_SLOT": [
+   4.2,
+   14.55,
+   1.15,
+   1.65
+  ],
+  "SPIGOT_D": 1.0,
+  "SPIGOT_H": 0.6,
+  "SPIGOT_Z0": 1.2000000000000002,
+  "SPIGOT_FIT": 0.07499999999999996,
   "LEDGE_RI": 21.35,
   "LEDGE_Z0": 1.2,
   "LEDGE_Z1": 2.2,
-  "BEAD_T": 0.19999999999999996,
+  "BEAD_T": 0.32999999999999996,
   "LCD": {
    "x": 0.0,
    "y": -1.65,
@@ -564,11 +729,11 @@
   "CAM_H": 2.76,
   "CAM_XY": {
    "L": [
-    -10.2,
+    -10.0,
     15.6
    ],
    "R": [
-    10.2,
+    10.0,
     15.6
    ]
   },
@@ -582,18 +747,62 @@
   "PRISM_Y0": 14.600000000000001,
   "AXIS_Z": 5.609999999999999,
   "PRISM_ROOF_CLR": 0.1900000000000004,
-  "WIN_W": 4.3,
+  "WIN_W": 5.0,
   "WIN_H": 3.4,
   "WIN_T": 0.5,
+  "WIN_RECESS_W": 5.5,
   "WIN_RECESS_DEPTH": 0.55,
   "WIN_Z0": 4.2,
   "WIN_Z1": 7.6,
-  "WIN_RECESS_W": 4.3999999999999995,
-  "OPEN_HALF_W": 1.65,
+  "OPEN_HALF_W": 2.0,
   "OPEN_Z0": 4.6,
   "OPEN_Z1": 6.8,
   "WIN_RECESS_FLOOR_Y": 17.849999999999998,
   "VENT_HOLE_D": 1.0,
+  "VENT_XY": [
+   17.9,
+   -3.0
+  ],
+  "KO_POST_SIZE": 1.6,
+  "KO_POST_CENTRES": [
+   [
+    -15.4,
+    1.8
+   ],
+   [
+    15.4,
+    1.8
+   ],
+   [
+    -14.35,
+    10.8
+   ],
+   [
+    14.35,
+    10.8
+   ],
+   [
+    -6.5,
+    -18.6
+   ],
+   [
+    6.5,
+    -18.6
+   ],
+   [
+    -4.2,
+    14.55
+   ],
+   [
+    4.2,
+    14.55
+   ]
+  ],
+  "KO_HOOD_HW": 2.85,
+  "KO_HOOD_Y0": 13.7,
+  "KO_HOOD_Y1": 17.3,
+  "KO_HOOD_MAX_H": 0.95,
+  "KO_FREE_Z": 4.35,
   "TOP_PARTS": [
    {
     "ref": "U1",
@@ -607,7 +816,7 @@
    {
     "ref": "U2",
     "name": "OVM7692 camera L",
-    "x": -10.2,
+    "x": -10.0,
     "y": 15.6,
     "dx": 3.47,
     "dy": 2.95,
@@ -616,7 +825,7 @@
    {
     "ref": "U3",
     "name": "OVM7692 camera R",
-    "x": 10.2,
+    "x": 10.0,
     "y": 15.6,
     "dx": 3.47,
     "dy": 2.95,
@@ -697,7 +906,7 @@
    {
     "ref": "U10",
     "name": "USBLC6-2SC6 ESD SOT-23-6",
-    "x": -14.5,
+    "x": -14.3,
     "y": -12.0,
     "dx": 3.0,
     "dy": 3.0,
@@ -718,6 +927,8 @@
    "y": -4.0,
    "radius": 5.2,
    "count_pairs": 8,
+   "first_azimuth_deg": 22.5,
+   "step_deg": 45.0,
    "led_height": 0.45
   },
   "PD": {
@@ -727,37 +938,58 @@
    "dy": 2.5,
    "h": 0.48
   },
+  "CRADLE_SIZE": [
+   60.0,
+   60.0,
+   14.0
+  ],
+  "CRADLE_PAD_Z": 1.0,
+  "PIN_ROW_Y": -17.0,
+  "PIN_WORK_H": 5.82,
+  "PIN_FORCE_N": 0.59,
+  "PIN_POSITIONS": 7,
+  "PINS_CONSUMER": [
+   "VBUS",
+   "D-",
+   "D+",
+   "GND"
+  ],
+  "CPCB_SIZE": [
+   30.0,
+   22.0,
+   1.6
+  ],
   "LCD_POCKET_X": 13.55,
   "LCD_POCKET_Y1": 13.75,
   "LCD_POCKET_Y0": -17.05,
   "THICK_RING_R": 15.05,
-  "HOOD_IN_HW": 1.985,
-  "HOOD_OUT_HW": 2.785,
+  "HOOD_IN_HW": 2.0,
+  "HOOD_OUT_HW": 2.8,
   "HOOD_Z_OVER_CUBE": 4.81,
   "HOOD_REAR_Y0": 13.75,
   "HOOD_REAR_Y1": 14.55,
   "HOOD_FRONT_IN_Y": 17.049999999999997,
   "HOOD_PAD_Y": 17.325,
   "THIN_STRIP_T": 0.5249999999999986,
-  "BEVEL_GROW": 0.17320508075688812,
-  "OPEN_HALF_W_INSIDE": 1.823205080756888,
+  "CAM_X": 10.0,
+  "HOOD_FILL_Y0": 16.785814889033638,
   "HORN_X_OUT": 13.800000000000002,
   "HORN_ANGLE_DEG": 53.13010235415597,
   "HORN_X_IN": 13.200000000000003,
   "HORN_Y_IN": 17.599999999999998,
   "HOOD_REAR_CHAMFER": 0.11855339059327288,
   "PRISM_HOOD_CLR": 0.2606066017177982,
+  "HOOD_SLIT": [
+   0.25,
+   0.36855339059327274
+  ],
   "PD_HALF_DIAG": 2.7060118255469616,
-  "BAFFLE_RI": 2.9560118255469616,
-  "BAFFLE_RO": 3.7560118255469614,
   "GRAIN_R": 6.5,
-  "BALL_SEAT_APEX_Z": 1.1212489168102786,
-  "BALL_SEAT_R_BOTTOM": 1.1212489168102784,
-  "BALL_SEAT_R_TOP": 0.12124891681027859,
   "KEY_NOTCH_HW": 0.85,
   "KEY_NOTCH_Y0": 17.349999999999998,
   "PAD_WEB": 0.33999999999999986,
   "PAD_Z0": 0.965,
+  "EPOXY_Z1": 0.95,
   "VENT_PAD_Z": 6.6,
   "VENT_Z0": 6.34,
   "PUPIL_Z": 4.159999999999999,
@@ -765,35 +997,58 @@
   "VIRTUAL_PUPIL_Y": 14.831608437705999,
   "NEST_R": 23.25,
   "NEST_FLAT": 18.65,
-  "NEST_SHIFT": 4.600000000000001,
-  "NEST_CY": -2.3000000000000007,
-  "PLATE_Z1": -0.1,
-  "PLATE_Z0": -1.6,
+  "NEST_FLOOR_Z": -0.1,
   "CRADLE_TOP_Z": 3.0,
   "CRADLE_BOT_Z": -11.0,
   "CRADLE_X": 30.0,
-  "CRADLE_Y0": -32.3,
-  "CRADLE_Y1": 27.7,
-  "CPCB_Z1": -4.69,
-  "CPCB_Z0": -6.290000000000001,
-  "CPCB_Y0": -30.5,
-  "CPCB_Y1": -0.5,
-  "CPCB_HX": 11.0,
-  "PIN_BODY_Z1": -1.9000000000000001,
+  "CRADLE_Y0": -36.0,
+  "CRADLE_Y1": 24.0,
+  "CRADLE_CY": -6.0,
+  "CPCB_Z1": -4.82,
+  "CPCB_Z0": -6.42,
+  "CPCB_HX": 15.0,
+  "CPCB_Y0": -34.2,
+  "CPCB_Y1": -12.200000000000003,
+  "CPCB_SCREWS": [
+   [
+    12.5,
+    -31.500000000000004
+   ],
+   [
+    12.5,
+    -14.500000000000004
+   ]
+  ],
+  "PIN_TIP_FREE_Z": 2.1399999999999997,
+  "PIN_BODY_Z1": -0.35000000000000037,
+  "PIN_TIP_GAP": 0.03500000000000003,
   "CRADLE_PIN_SLOT_W": 2.33,
-  "PIN_MODEL_COMPRESSION_EXTRA": 0.16499999999999992,
-  "USB_Y0": -31.799999999999997,
-  "USB_Y1": -24.449999999999996,
-  "USB_Z1": -1.4300000000000006
+  "USB_Y0": -35.5,
+  "USB_Y1": -28.15,
+  "USB_Z1": -1.5600000000000005,
+  "LIP_Z0": 7.85,
+  "LIP_Z1": 9.45,
+  "LIP_Y0": 17.2,
+  "LIP_POCKET_Y": 19.65,
+  "LATCH_Y_FACE": -23.25,
+  "LATCH_Y_BACK": -24.4,
+  "LATCH_Y_NA": -23.825,
+  "HOOK_Z0": 7.85,
+  "HOOK_R": 21.5,
+  "TUB_TOP_FLAT_R": 22.4,
+  "HOOK_OVERLAP": 0.8999999999999986,
+  "LATCH_L": 11.649999999999999,
+  "HOOK_LEAD_Z0": 8.25,
+  "LATCH_TOP_Z": 11.281088913245537,
+  "TAB_Y0": -33.0,
+  "TAB_Z0": 9.681088913245537,
+  "WELL_HX": 8.2,
+  "WELL_Y1": -21.05,
+  "WELL_Y0": -27.0,
+  "LATCH_STOP_GAP": 1.571220736707387,
+  "STOP_RIB_Y1": -25.971220736707387
  },
  "posts": [
-  {
-   "name": "A+",
-   "x0": 14.6,
-   "x1": 16.2,
-   "y0": 1.0,
-   "y1": 2.6
-  },
   {
    "name": "A-",
    "x0": -16.2,
@@ -802,46 +1057,53 @@
    "y1": 2.6
   },
   {
-   "name": "B+",
-   "x0": 13.55,
-   "x1": 15.15,
-   "y0": 10.0,
-   "y1": 11.6
+   "name": "A+",
+   "x0": 14.6,
+   "x1": 16.2,
+   "y0": 1.0,
+   "y1": 2.6
   },
   {
    "name": "B-",
    "x0": -15.15,
-   "x1": -13.55,
+   "x1": -13.549999999999999,
    "y0": 10.0,
-   "y1": 11.6
+   "y1": 11.600000000000001
   },
   {
-   "name": "C+",
-   "x0": 5.7,
-   "x1": 7.3,
-   "y0": -19.4,
-   "y1": -17.8
+   "name": "B+",
+   "x0": 13.549999999999999,
+   "x1": 15.15,
+   "y0": 10.0,
+   "y1": 11.600000000000001
   },
   {
    "name": "C-",
    "x0": -7.3,
    "x1": -5.7,
-   "y0": -19.4,
+   "y0": -19.400000000000002,
    "y1": -17.8
   },
   {
-   "name": "E+",
-   "x0": 3.4,
-   "x1": 5.0,
-   "y0": 13.75,
-   "y1": 15.35
+   "name": "C+",
+   "x0": 5.7,
+   "x1": 7.3,
+   "y0": -19.400000000000002,
+   "y1": -17.8
   },
   {
    "name": "E-",
    "x0": -5.0,
-   "x1": -3.4,
+   "x1": -3.4000000000000004,
    "y0": 13.75,
-   "y1": 15.35
+   "y1": 15.350000000000001
+  },
+  {
+   "name": "E+",
+   "x0": 3.4000000000000004,
+   "x1": 5.0,
+   "y0": 13.75,
+   "y1": 15.350000000000001
   }
  ]
 }

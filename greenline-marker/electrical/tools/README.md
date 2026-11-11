@@ -5,9 +5,9 @@ KiCad 7 board.  KiCad's own DRC is the judge; nothing is reported as passing
 unless KiCad says so.
 
 This file documents the **core** of the toolchain (design model, checks,
-footprints, board builder, DRC runner).  The router, the fabrication outputs,
-the schematic generator and the demo design build on the API described here
-and are documented in their own sections / module docstrings.
+footprints, board builder, DRC runner), the **router** and the **demo build**.
+The fabrication outputs and the schematic generator build on the API
+described here and are documented in their own sections / module docstrings.
 
 ```
 tools/
@@ -21,6 +21,15 @@ tools/
                    primitives in/out, via tenting
     drc.py         zone fill + KiCad DRC + report parser + pass/fail policy
     kicad_cli.py   kicad-cli wrapper, SVG export, SVG reader
+    router.py      autorouter (escape stage, negotiated routing, end game,
+                   cleanup, exact audit, plane-fill prediction)
+    raster.py      routing grid and exact obstacle rasterisation
+    _astar.py      A* search kernel (numba-compiled when numba is installed)
+    routeplot.py   quick matplotlib picture of a routed design (debug aid)
+  demo/
+    demo_design.py     the GreenLine DEMO board (stand-in for the real GL-1)
+    build_demo.py      checks -> board -> route -> DRC -> outputs -> schematic
+    demo_out/          everything the last demo build produced
   tests/           pytest suite
     mini_design.py     round 30 mm fixture (castellated module, cutout, notch, slot)
     dshape_design.py   GreenLine-shaped fixture (D outline, LQFP-64, two BGAs,
@@ -196,6 +205,46 @@ KiCad rule area on exactly those copper layers:
   keep-out on any layer blocks vias (KiCad reports `items_not_allowed`).
 * placement keep-out per side: `footprints=True` with `layers=("F.Cu",)`
   rejects top-side parts only (`in_keepout`), bottom-side parts are fine.
+  `Design.add_placement_keepout(shape, side="top", name=...)` is the short
+  form (no parts, copper unrestricted) - e.g. the 1.6 mm feet of the tub posts
+  that land on the board.  Such an area may sit on an NPTH locating hole: the
+  hole is a footprint to KiCad, so `board.py` cuts the hole's courtyard out of
+  the rule area (a "keyhole" outline) and KiCad reports parts in the area but
+  not the hole.
+
+### Height-limited zones
+
+`Design.add_height_limit(shape, max_height, side="top", exempt=("U2",),
+name=...)` describes an enclosure feature that hangs over the board (the
+camera hoods of the tub: nothing taller than 0.95 mm but the camera).  KiCad 7
+has no height rule, so this is a check only: a part body inside the zone that
+is taller is a `height_limit` error, a part without `height_mm` there a
+`height_unknown` warning.  The zones are part of `Design.to_dict()` for the
+mechanical team.
+
+### Locating holes and slots
+
+`Outline.add_hole(x, y, drill, name)` is a non-plated drilled hole (a
+board-only footprint with an NPTH pad).  `Outline.add_npth_slot(x, y, width,
+length, rotation=0)` is a non-plated slot given by its overall size, drawn as
+a routed stadium on Edge.Cuts - copper keeps the copper-to-edge distance from
+it and KiCad checks that.  The GL-1 locating features:
+
+```python
+outline = Outline(PathShape.d_shape(21.1, 17.3))
+outline.add_hole(-4.2, 14.55, 1.15, name="H1")
+outline.add_npth_slot(4.2, 14.55, width=1.15, length=1.65)
+```
+
+### Planes that share their layer with tracks
+
+`design.add_plane("V2V8", "In2.Cu", routable=True)` makes In2.Cu the V2V8
+plane AND keeps it a routing layer (`Design.signal_layers()` lists it).  The
+router connects every V2V8 pad with a stub and a via (as for any plane),
+routes on that layer only what does not fit elsewhere
+(`RouterOptions.plane_layer_cost`) and, because tracks cut a plane, predicts
+the fill (`router.plane_regions`) and gives every pad the fill does not reach
+a real track.  KiCad's zone fill and DRC then confirm it.
 
 ### Via tenting
 
@@ -422,3 +471,141 @@ Rules of the judge:
 * The checks are ERC-style, not a simulator: for example they cannot tell that
   a regulator's enable pin is driven to the wrong level.
 * KiCad 7 only (file format 20221018).
+
+## Router (`gleda/router.py`)
+
+```python
+from gleda import router, board, drc
+
+result = router.route(design)                      # or route(design, RouterOptions(...))
+print(result.summary())                            # routed 261/261 connections (100.0 %) ...
+result.complete                                    # every connection made, audit clean
+result.unrouted                                    # [Unrouted(net, pieces)] - never hidden
+board.apply_routing(files.pcb, result.tracks, result.vias, via_tenting=design.via_tenting)
+drc.assert_clean(drc.run_drc(files.pcb))           # KiCad's zone fill + DRC is the judge
+
+router.route_board(design, files.pcb)              # the same in one call -> (RouteResult, DrcResult)
+router.save_routing("routing.json", design, result)        # deterministic file
+router.load_routing("routing.json", design)                # fingerprint-checked, re-audited
+```
+
+### How it routes
+
+1. **Grid and obstacle maps.**  Tracks run between the nodes of a 0.05 mm grid
+   in 8 directions, vias sit on nodes.  For every track width / clearance and
+   via size in use the router keeps maps of where the centre of such a track
+   or via may not be: every pad on every layer, routed copper, keep-outs,
+   board edge, cutouts and drilled holes, each grown by exactly the clearance
+   KiCad will ask for (`Design.clearance`: the larger class clearance of the
+   two nets or the pad's own override; hole-to-copper; hole-to-hole, also
+   within one net; copper-to-edge plus `geometry.DRC_SLACK`).  Distances are
+   exact (`gleda/raster.py`): a 0.09 mm track passes between two 0.23 mm balls
+   at 0.5 mm pitch with exactly 0.09 mm on both sides.  Pads whose centre is
+   not on the grid are entered at a node inside the pad and connected to the
+   centre with a short stub.
+2. **Units.**  A net is cut into connections (the edges of its minimum
+   spanning tree); each connection joins the *copper* of its two sides
+   wherever they are closest, so multi-pin nets become trees with T junctions.
+   A pad of a plane net (whole-board plane on an inner layer) gets a stub and
+   a through via instead - never a via in the pad, neighbours may share one.
+3. **Stage A - array escape.**  The pads of each fine-pitch array (nine or
+   more round pads at 0.65 mm pitch or less) and the other pads in a 3 mm
+   window around it are routed first, among themselves: each signal pad out
+   to the rim of the window (any layer, pulled toward the rest of its net) or
+   to a pad of its net inside the window, each plane pad to its via, no via
+   closer than 0.75 mm to the ball field.  This fan-out is negotiated to zero
+   conflicts and frozen.
+4. **Negotiation.**  Everything else is routed with other nets' copper allowed
+   at a price (A*, integer costs, via cost, optional preferred direction per
+   layer); the units in conflict are rerouted while the price of sharing and
+   the history cost of contested cells rise.
+5. **End game.**  Remaining conflicts are ripped up; from then on only clean
+   copper is accepted.  An open connection may push others aside if they all
+   find a clean path again (bounded cascade, undone otherwise); connections
+   still open trigger another negotiation wave.  A class with
+   `min_track_width` may neck a connection down as the last resort.
+6. **Planes.**  `plane_regions()` predicts KiCad's zone fill.  A pad whose via
+   lands in a piece of the plane that tracks or via clearances have cut off
+   gets a real track to the main part.
+7. **Improvement, cleanup, audit.**  Each connection is rerouted once along
+   the plain shortest path (kept if shorter); collinear pieces are merged,
+   stubs and loops removed, segments split at junctions.  `audit()` then
+   re-checks all copper with exact geometry and derives the connectivity from
+   the copper alone - that is where `RouteResult.unrouted` comes from.
+
+### Per-net options (on `Design.net(...)` / `gleda.model.Net`)
+
+| option | effect |
+|--------|--------|
+| `netclass="Fine"` | track width, clearance and via of the class; the clearance to another net is the larger of the two classes |
+| `width=0.4` | this net's track width (never necked down) |
+| `layers=("F.Cu",)` | routing layers the net may use |
+| `max_vias=0` | upper limit of vias for the whole net |
+| `no_route=True` | leave the net to you (not routed, not counted) |
+| `priority=1` | routed before nets of lower priority |
+| `NetClass.min_track_width` | nets of the class may neck down to this width (pads narrower than the track, last resort in the end game) |
+| `Design.add_plane(net, layer)` | the net is not routed pad to pad: stub + via into the plane |
+| `Design.add_plane(net, layer, routable=True)` | the same, and the layer stays a routing layer |
+
+`RouterOptions` (all documented in the class docstring) tunes the router
+itself: `grid`, `layers`, `via_cost`, `layer_directions` (`{"F.Cu": "h",
+"B.Cu": "v"}`), `plane_layer_cost`, `array_via_keepout`, `escape_reach`,
+`max_iterations`, `patience`, `waves`, `ripup_depth`, `improve_passes`,
+`time_limit`, `progress` (a callable that receives log lines).
+
+### Router: limits
+
+* Through vias only, one via size per net class, vias on grid nodes.
+* Tracks are 0 / 45 / 90 degree grid segments (plus short stubs to off-grid
+  pad centres); no arcs, no teardrops, no length or skew matching, no
+  differential pairs (USB D+/D- are routed as two ordinary nets).
+* One width per connection: a class with `min_track_width` necks a whole
+  connection (pad to junction) down, not just its last millimetre.
+* Pads smaller than the grid pitch must sit on the grid (the 0.5 mm-pitch
+  balls do); a pad that contains no grid node is entered at the nodes around
+  its centre.
+* Fine-pitch arrays are recognised by their round pads; the escape of a
+  full-matrix array deeper than two rings on two routing layers is beyond
+  this router.
+* A net class's clearance applies along the whole net (KiCad's rule), so a
+  fine-class net may run its fine track anywhere - give the fine class only
+  to the nets that need it.
+* The plane-fill prediction is deliberately a little pessimistic (0.02 mm);
+  it may add a bridging track KiCad would not have needed.  Thermal reliefs
+  are not modelled (planes connect solid).
+* It is a negotiating maze router, not a shove router: on a board this dense
+  the result is DRC-clean and complete but not pretty - expect more vias and
+  longer tracks than a hand layout.  Analog and RF nets deserve manual
+  routing (`no_route=True`).
+* Run time grows with board area / grid pitch and with congestion; without
+  numba the search kernel runs in pure Python (about 100x slower - fine for
+  the unit tests, not for the demo board).
+* Routing is reproducible but not stable: a small change of the design can
+  change many tracks.
+
+## Demo build (`demo/build_demo.py`)
+
+`demo/demo_design.py` is a stand-in for the real GL-1 board with the same
+mechanics: D-shaped outline (r = 21.1 mm, flat at y = 17.3 mm), 4 layers,
+0.8 mm, NPTH locating hole and slot, eight post-foot placement keep-outs, a
+height-limited zone under each camera hood, LQFP-64 MCU, two 25-ball 0.5 mm
+BGAs sharing an 11-signal bus, LGA sensors, flash, regulators, 10-pin FPC,
+61 x 0402, and on the bottom a 16-LED ring (charlieplexed on 5 lines), a
+photodiode and seven bare contact pads.  GND is a solid plane on In1.Cu;
+In2.Cu is the V2V8 plane and the third routing layer.
+
+```
+cd electrical/tools
+/usr/bin/python3 demo/build_demo.py                   # all stages
+/usr/bin/python3 demo/build_demo.py --reuse-routing   # skip the router when the design is unchanged
+/usr/bin/python3 demo/build_demo.py --stages checks,board,route,drc
+```
+
+The script exits non-zero unless every stage passed: 0 check errors, 100 %
+of the connections routed with a clean audit, KiCad DRC with 0 errors and 0
+unconnected items (only the cosmetic silkscreen checks listed in
+`drc.COSMETIC_CHECKS` are tolerated, and they are still reported), and the
+later stages.  `demo_out/build_summary.json` records every stage,
+`routing.json` the copper (identical on every run of the same design),
+`routing_log.txt` the router's progress, `drc.json` / `drc_report.txt` what
+KiCad said.

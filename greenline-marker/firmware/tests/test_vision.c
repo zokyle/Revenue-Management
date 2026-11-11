@@ -1170,10 +1170,10 @@ GL_TEST(test_end_to_end_with_camera_models)
         }
     }
     /* how many rows is 0.4 m of stick? */
-    GL_CHECK_EQ(gl_vis_segment_rows(13.4028f / 10.0f, 0.0204f, 0.4f), 26);
-    GL_CHECK_EQ(gl_vis_segment_rows(13.4028f / 3.0f, 0.0204f, 0.4f), 87);
-    GL_CHECK_EQ(gl_vis_segment_rows(0.2f, 0.0204f, 0.4f), 12);  /* clamped */
-    GL_CHECK_EQ(gl_vis_segment_rows(-1.0f, 0.0204f, 0.4f), 40); /* unknown */
+    GL_CHECK_EQ(gl_vis_segment_rows(GL_CFG_STEREO_F_TIMES_B_PX_M / 10.0f, GL_CFG_CAM_BASELINE_M, 0.4f), 26);
+    GL_CHECK_EQ(gl_vis_segment_rows(GL_CFG_STEREO_F_TIMES_B_PX_M / 3.0f, GL_CFG_CAM_BASELINE_M, 0.4f), 87);
+    GL_CHECK_EQ(gl_vis_segment_rows(0.2f, GL_CFG_CAM_BASELINE_M, 0.4f), 12);  /* clamped */
+    GL_CHECK_EQ(gl_vis_segment_rows(-1.0f, GL_CFG_CAM_BASELINE_M, 0.4f), 40); /* unknown */
 }
 
 int main(void)

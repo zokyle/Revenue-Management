@@ -23,7 +23,7 @@
    "defect": "0.4 mm bar across the camera R opening",
    "check": "3 field of view",
    "caught": true,
-   "message": "FAILED: camera R chief rays hits tub: 0.39602 mm3; camera R full beam hits tub: 0.45659 mm3; camera R chief ray blocked at 0.00 deg left (< 26.0); camera R chie"
+   "message": "FAILED: camera R chief rays hits tub: 0.39608 mm3; camera R full beam hits tub: 0.45659 mm3; camera R chief ray blocked at 0.00 deg left (< 26.0); camera R chie"
   },
   {
    "defect": "0.4 mm bar across the camera R opening",
@@ -35,25 +35,37 @@
    "defect": "2 x 2 mm pocket leaving a 0.30 mm roof",
    "check": "5 wall thickness",
    "caught": true,
-   "message": "FAILED: tub: undocumented region, min 0.3 mm at (-17.99, -6.0, 7.3)..(-16.0, -4.0, 7.6)"
+   "message": "FAILED: tub: undocumented region, min 0.3 mm at (-18.0, -6.0, 7.3)..(-16.0, -4.0, 7.6)"
   },
   {
    "defect": "closed 4 mm void inside the cradle body",
    "check": "6 trapped volume",
    "caught": true,
-   "message": "FAILED: cradle: 1 closed void(s), 64.00 mm3; cradle: cavity near [22.9 20.8 -7.1]..[25.1 23.  -4.9] has no 2.0 mm escape path; cradle: B-rep has 2 shells (an in"
+   "message": "FAILED: cradle: 1 closed void(s), 64.00 mm3; cradle: cavity near [ 22.9 -33.1  -6.1]..[ 25.1 -30.9  -3.9] has no 2.0 mm escape path; cradle: B-rep has 2 shells "
   },
   {
    "defect": "4 mm cavity in the cradle with only a dia 1.0 exit",
    "check": "6 trapped volume",
    "caught": true,
-   "message": "FAILED: cradle: cavity near [22.9 20.8 -7.1]..[25.1 23.  -4.9] has no 2.0 mm escape path"
+   "message": "FAILED: cradle: cavity near [ 22.9 -33.1  -6.1]..[ 25.1 -30.9  -3.9] has no 2.0 mm escape path"
   },
   {
-   "defect": "dia 2.2 hole in the base under a pin at 180 deg",
-   "check": "7 cradle pins",
+   "defect": "lip 0.4 mm too low (no clearance over the tub)",
+   "check": "7 cradle: pins, key, hold-down, insertion",
    "caught": true,
-   "message": "FAILED: pin 4"
+   "message": "FAILED: orientation 0 deg: common volume 1.980 mm3; lip underside above the tub top: measured 1.8499999999999992 vs 0.25; insertion pose 17.0 deg: body/lip 2.17"
+  },
+  {
+   "defect": "latch hook cut back by 0.6 mm (overlap 0.3)",
+   "check": "7 cradle: pins, key, hold-down, insertion",
+   "caught": true,
+   "message": "FAILED: the latch is not present in the cradle solid as designed (499.9 of 507.8 mm3); retaining face z: measured nan vs 7.85; latch free length L (root to reta"
+  },
+  {
+   "defect": "2 mm rib from the roof down to z 3.0 over the PCB, outside the keep-outs",
+   "check": "12 tub keep-out contract (YAML tub_keepouts)",
+   "caught": true,
+   "message": "FAILED: 5.4000 mm3 of tub inside the layout space at x -1.00..1.00, y -3.00..-1.00, z 3.00..4.35; under the LCD glass: tub 1.20 mm above the PCB at (-0.9, -2.9)"
   },
   {
    "defect": "support post A+ shortened by 0.5 mm",

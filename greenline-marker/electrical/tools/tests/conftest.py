@@ -15,8 +15,24 @@ for p in (TOOLS_DIR, TESTS_DIR):
         sys.path.insert(0, p)
 
 
+def pytest_addoption(parser):
+    parser.addoption("--runslow", action="store_true", default=False,
+                     help="also run the tests marked slow (the full demo build: "
+                          "several minutes of routing)")
+
+
 def pytest_configure(config):
-    config.addinivalue_line("markers", "slow: long running end-to-end tests")
+    config.addinivalue_line("markers", "slow: long running end-to-end tests "
+                                       "(run with --runslow or GLEDA_RUN_SLOW=1)")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--runslow") or os.environ.get("GLEDA_RUN_SLOW") == "1":
+        return
+    skip = pytest.mark.skip(reason="slow test: run with --runslow (or GLEDA_RUN_SLOW=1)")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip)
 
 
 @pytest.fixture()

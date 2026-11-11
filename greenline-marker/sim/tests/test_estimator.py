@@ -30,13 +30,13 @@ def _meas(**overrides) -> Measurements:
     """A hand-made measurement: 5 m putt, flag dead ahead, flat, no horizon."""
     base = dict(
         f_px=657.0,
-        baseline=0.0204,
+        baseline=0.0200,
         h_cam=H,
         tilt=np.array([0.0, 0.0]),
         tilt_reads=1,
         flag_found=True,
         flag_bearing=0.0,
-        flag_disparity=657.0 * 0.0204 / 5.0,
+        flag_disparity=657.0 * 0.0200 / 5.0,
         flag_low_elev=math.atan(-(H - 0.75e-3) / 5.0),
         flag_base_visible=True,
         flag_top_visible=False,
@@ -156,7 +156,7 @@ def test_horizon_far_limit():
 
 def test_range_fusion_is_inverse_variance():
     cfg = es.EstimatorConfig()
-    fb = 657.0 * 0.0204
+    fb = 657.0 * 0.0200
     low = math.atan(-0.005 / 9.0)
     meas = _meas(
         flag_disparity=fb / 9.4,
@@ -200,7 +200,8 @@ def test_range_channels_fall_back_gracefully():
 # recovery from noise-free measurements
 # --------------------------------------------------------------------------
 
-EXACT = dict(sink_mean=0.0, sigma_curv=10.0, sigma_slope_prior=10.0)  # true lens height, priors switched off
+# true lens height, priors switched off, grain reading used (the sensor ships disabled: default off)
+EXACT = dict(sink_mean=0.0, sigma_curv=10.0, sigma_slope_prior=10.0, use_grain=True)
 
 
 def _exact_config(green):
@@ -254,19 +255,28 @@ def test_full_fusion_recovers_a_quadratic(coeffs):
 
 
 def test_full_fusion_recovers_a_crowned_quadratic_with_hidden_base():
-    """On a crowned line the base is hidden; the horizon (crest) residuals still pin the patch."""
+    """On a crowned line the base is hidden.  The JOINT fit pins the whole
+    patch from the crest residuals (noise-free data, exact model).  The
+    default anchored fit does not: it keeps the Quick Read's along-line
+    profile, which on a hidden base is only bounded, and adds the twist."""
     surf = ph.QuadraticSurface(0.010, 0.006, -0.0015, 0.0010, -0.0020)
     green = gr.green_from_surface(surf, collar_step=0.0, rough_step=0.0)
     ball, hole = np.zeros(2), np.array([4.0, 3.0])
     meas, truth = se.measure(green, ball, hole, QUIET, 3)
     assert not meas.flag_base_visible
     true_patch = surf.in_frame(ball, truth.bearing).coeffs
-    est = es.estimate(meas, "B2", _exact_config(green))
-    assert est.base_hidden and est.fit.converged
-    assert np.allclose(est.patch, true_patch, rtol=0.0, atol=2e-6)
+    joint = es.estimate(meas, "B2", dataclasses.replace(_exact_config(green), horizon_joint=True))
+    assert joint.base_hidden and joint.fit.converged
+    assert np.allclose(joint.patch, true_patch, rtol=0.0, atol=2e-6)
     # B1 has only the bound: its hole height is pulled down onto the sight line and stops there,
     # above the true hole height by the hidden length of the stick
     b1 = es.estimate(meas, "B1", _exact_config(green))
+    est = es.estimate(meas, "B2", _exact_config(green))
+    assert est.base_hidden and est.fit.converged
+    assert np.array_equal(est.patch[:3], b1.patch[:3]) and np.allclose(est.patch[:2], true_patch[:2], atol=2e-8)
+    assert est.patch[2] != pytest.approx(true_patch[2], rel=0.02)  # c is the Quick Read's, not the truth
+    assert est.patch[3] == pytest.approx(true_patch[3], abs=2e-5)  # the twist is still recovered
+    assert est.dz_hole == b1.dz_hole
     bound = H + 5.0 * math.tan(meas.flag_low_elev)
     assert truth.dz_hole < bound and truth.hidden_height == pytest.approx(bound - truth.dz_hole, abs=1e-6)
     assert b1.dz_hole == pytest.approx(bound, abs=1e-6) and b1.dz_hole > truth.dz_hole
@@ -348,35 +358,145 @@ def test_fit_converges_to_a_stationary_point_on_realistic_reads():
     assert n_checked >= 40
 
 
-def test_fit_minimises_the_robust_cost():
-    """No small perturbation of the solution lowers the Huber MAP cost (B2, realistic horizon)."""
+def _realistic_reads(n_seeds, fringes=("realistic",), distances=(3.0, 6.0, 12.0)):
+    """Camera reads (flag found) on generated greens: (label, Measurements)."""
+    out = []
+    for cls in gr.GREEN_CLASSES:
+        for seed in range(n_seeds):
+            sc = gr.make_scenario(cls, distances[seed % len(distances)], seed)
+            for fringe in fringes:
+                green = {"realistic": sc.green, "no_fringe": sc.green.without_fringe(),
+                         "mounded": sc.green.with_mounded_surrounds(seed=seed)}[fringe]
+                meas, _ = se.measure(green, sc.ball_xy, sc.hole_xy, se.SensorParams(), seed)
+                if meas.flag_found:
+                    out.append((f"{cls}/{seed}/{fringe}", meas))
+    return out
+
+
+def _random_start(rng, fit):
+    start = np.zeros(7)
+    start[:2] = fit.coeffs[:2] + rng.normal(0.0, 0.01, 2)
+    start[2:5] = rng.normal(0.0, 0.005, 3)
+    start[5:] = rng.normal(0.0, 0.002, 2)
+    return start
+
+
+def test_fit_kernel_gradient_and_solver():
+    """The analytic Jacobian of the residual kernel matches finite
+    differences, and the Cholesky solver matches numpy."""
     sc = gr.make_scenario("undulating", 6.0, 3)
     meas, _ = se.measure(sc.green, sc.ball_xy, sc.hole_xy, se.SensorParams(), 1)
     cfg = es.EstimatorConfig()
-    captured = {}
-    original = es._levenberg_marquardt
+    problem = es._Problem(6.0, np.array([0.05, 0.05, 0.004, 0.004, 0.004, 4.3e-4, 4.3e-4]), cfg.huber_k)
+    problem.add_linear([1.0, 0, 0, 0, 0, 0, 0], 0.01, 2.7e-3)
+    problem.add_linear([0, 1.0, 0, 0, 0, 0, 0], -0.004, 2.7e-3)
+    problem.add_linear([6.0, 0, 18.0, 0, 0, 0, 0], 0.05, 3e-3, one_sided=True)
+    problem.set_horizon(meas.horizon_az, np.tan(meas.horizon_elev), 1e-3, 0.00485, 0.15, 9.0)
+    rng = np.random.default_rng(4)
+    for _ in range(20):
+        x = np.array([0.01, -0.004, 0.0, 0.0, 0.0, 0.0, 0.0]) + es._SCALE * rng.normal(0.0, 1.0, 7)
+        grad = problem.gradient(x)
+        num = np.empty(7)
+        for j in range(7):
+            step = np.zeros(7)
+            step[j] = 1e-7 * es._SCALE[j] / 1e-3
+            num[j] = (problem.cost(x + step) - problem.cost(x - step)) / (2.0 * step[j])
+        assert np.allclose(grad, num, rtol=2e-5, atol=1e-3 * np.abs(grad).max())
+    # Cholesky solve against numpy, and its refusal of an indefinite matrix
+    a = rng.normal(size=(7, 7))
+    spd = a @ a.T + 7.0 * np.eye(7)
+    rhs = rng.normal(size=7)
+    out = np.empty(7)
+    assert es._chol_solve(spd.copy(), rhs, 7, out) and np.allclose(out, np.linalg.solve(spd, rhs), rtol=1e-12, atol=1e-12)
+    indefinite = spd.copy()
+    indefinite[3, 3] = -1.0
+    assert not es._chol_solve(indefinite, rhs, 7, out)
 
-    def spy(problem, x0, config):
-        out = original(problem, x0, config)
-        captured["problem"], captured["x"], captured["cost"] = problem, out[0], out[4]
-        return out
 
-    es._levenberg_marquardt = spy
-    try:
-        fit = es.fit_patch(meas, "B2", cfg)
-    finally:
-        es._levenberg_marquardt = original
-    problem, x, cost = captured["problem"], captured["x"], captured["cost"]
-    assert fit.used_horizon and cost == pytest.approx(problem.cost(x))
+def test_quick_read_fit_is_convex_and_start_independent():
+    """Without horizon rows the cost is convex: every start gives the same
+    minimum (B1, hidden and visible bases, and Survey fits)."""
     rng = np.random.default_rng(0)
-    for scale in (1e-3, 1e-5):
+    cfg = es.EstimatorConfig()
+    n = 0
+    for label, meas in _realistic_reads(4):
+        ref = es.fit_patch(meas, "B1", cfg)
+        assert ref.converged and ref.n_starts == 1 and ref.cost == ref.cost_first_start
+        for _ in range(8):
+            alt = es.fit_patch(meas, "B1", cfg, start=_random_start(rng, ref))
+            assert alt.cost == pytest.approx(ref.cost, rel=1e-9, abs=1e-12), label
+            assert np.allclose(alt.coeffs / es._SCALE[:5], ref.coeffs / es._SCALE[:5], atol=1e-6), label
+        n += 1
+    assert n >= 12
+
+
+def test_anchored_horizon_fit_keeps_the_quick_read_and_finds_the_lowest_minimum():
+    """B2 (anchored): a, b, c are exactly the Quick-Read values, and no other
+    start finds a lower minimum of the conditional cost.  This is the test
+    that fails when a lower minimum exists: 40 random starts per read, three
+    silhouette geometries."""
+    rng = np.random.default_rng(1)
+    cfg = es.EstimatorConfig()
+    n = n_other_start_won = 0
+    for label, meas in _realistic_reads(5, fringes=("realistic", "no_fringe", "mounded")):
+        b1 = es.fit_patch(meas, "B1", cfg)
+        b2 = es.fit_patch(meas, "B2", cfg)
+        assert b2.used_horizon and b2.n_starts == 5 and b2.converged
+        # the horizon cannot move the slopes at the ball nor the along-line curvature
+        assert np.array_equal(b2.coeffs[:3], b1.coeffs[:3]), label
+        assert b2.cost <= b2.cost_first_start
+        n_other_start_won += b2.cost < b2.cost_first_start * (1.0 - 1e-6)
         for _ in range(40):
-            trial = x + scale * es._SCALE * rng.standard_normal(7)
-            assert problem.cost(trial) >= cost - 1e-12
-    # and it is far better than the starting point (the tilt plane)
-    x0 = np.zeros(7)
-    x0[:2] = es._rotate_to(meas.tilt, meas.flag_bearing)
-    assert cost < problem.cost(x0)
+            alt = es.fit_patch(meas, "B2", cfg, start=_random_start(rng, b2))
+            assert alt.cost >= b2.cost * (1.0 - 1e-6) - 1e-9, f"{label}: a start found a lower minimum"
+            assert np.array_equal(alt.coeffs[:3], b1.coeffs[:3])
+        n += 1
+    assert n >= 50
+    # the conditional problem is very nearly unimodal: the first start is almost always the lowest
+    assert n_other_start_won <= 0.05 * n
+    # the comparison form with c free: 9 starts, the hole height is no longer respected
+    free_c = es.fit_patch(meas, "B2", es.EstimatorConfig(horizon_free_c=True))
+    assert free_c.n_starts == 9 and np.array_equal(free_c.coeffs[:2], b1.coeffs[:2]) and free_c.coeffs[2] != b1.coeffs[2]
+
+
+def test_joint_horizon_fit_has_many_local_minima():
+    """The joint fit (comparison only) is NOT start-independent: a single
+    run from the tilt plane misses the lowest minimum in a sizeable share of
+    realistic reads, and its 25-start search is never worse than one start.
+    (This is why B2 is not the joint fit; the report shows both.)"""
+    joint = es.EstimatorConfig(horizon_joint=True)
+    single = dataclasses.replace(joint, multi_start=False)
+    n = n_lower = 0
+    slope_shift = []
+    for label, meas in _realistic_reads(8, fringes=("realistic", "mounded")):
+        one = es.fit_patch(meas, "B2", single)
+        many = es.fit_patch(meas, "B2", joint)
+        assert one.n_starts == 1 and many.n_starts == 25
+        assert many.cost_first_start == pytest.approx(one.cost, rel=1e-12)
+        assert many.cost <= one.cost * (1.0 + 1e-12)
+        n += 1
+        n_lower += many.cost < one.cost * (1.0 - 1e-6)
+        b1 = es.fit_patch(meas, "B1")
+        slope_shift.append(abs(many.coeffs[0] - b1.coeffs[0]))
+    assert n >= 50 and n_lower >= 0.10 * n
+    # ... and its lowest minimum lets the horizon overrule the puck's along-line tilt
+    assert np.sqrt(np.mean(np.square(slope_shift))) > 3 * es._tilt_sigma(meas, joint)
+
+
+def test_displayed_slope_at_the_ball_is_the_tilt_reading():
+    sc = gr.make_scenario("undulating", 9.0, 2)
+    meas, _ = se.measure(sc.green.with_mounded_surrounds(seed=1), sc.ball_xy, sc.hole_xy, se.SensorParams(), 7)
+    assert meas.flag_found
+    a_t, b_t = es._rotate_to(meas.tilt, meas.flag_bearing)
+    for method, cfg in (("B0", es.EstimatorConfig()), ("B1", es.EstimatorConfig()), ("B2", es.EstimatorConfig()),
+                        ("B2", es.EstimatorConfig(horizon_joint=True))):
+        est = es.estimate(meas, method, cfg)
+        assert np.allclose(est.fit.tilt_slopes, [a_t, b_t])
+        assert est.slope_pct == pytest.approx(100.0 * math.hypot(a_t, b_t))
+        assert est.fall_line_azimuth == pytest.approx(math.atan2(-b_t, -a_t))
+    # the joint fit moved the patch slope away from the reading; the display did not follow
+    joint = es.estimate(meas, "B2", es.EstimatorConfig(horizon_joint=True))
+    assert abs(joint.patch[0] - a_t) > 1e-3
 
 
 def test_huber_loss_limits_the_pull_of_outlying_horizon_samples():
@@ -389,9 +509,13 @@ def test_huber_loss_limits_the_pull_of_outlying_horizon_samples():
     spoiled = dataclasses.replace(meas, horizon_elev=elev)
     robust = es.estimate(spoiled, "B2", cfg)
     naive = es.estimate(spoiled, "B2", dataclasses.replace(cfg, huber_k=1e9))
-    err_robust = np.abs(robust.patch[:2] - clean.patch[:2]).max()
-    err_naive = np.abs(naive.patch[:2] - clean.patch[:2]).max()
-    assert err_robust < 2e-4 and err_naive > 5 * err_robust
+    # a, b and c are anchored on the Quick Read; the mound can only reach d and e
+    assert np.array_equal(robust.patch[:3], clean.patch[:3]) and np.array_equal(naive.patch[:3], clean.patch[:3])
+    err_robust = np.abs(robust.patch[3:] - clean.patch[3:])
+    err_naive = np.abs(naive.patch[3:] - clean.patch[3:])
+    # d stays put; e (seen only through sin^2 <= 0.19, and with its prior switched off here) moves a little
+    assert err_robust[0] < 2e-4 and err_robust.max() < 1e-3
+    assert np.all(err_naive > 5 * err_robust)
     assert robust.fit.horizon_rms > 1.0
 
 
@@ -444,21 +568,27 @@ def test_straight_ignores_the_slope():
 def test_measured_bearing_defines_the_putt_frame():
     """Turning the device does not change the read: tilt and grain are rotated by the flag bearing."""
     slope_putt = np.array([0.004, 0.012])
-    ref = es.estimate(_meas(tilt=slope_putt, grain_kappa=0.08, grain_azimuth=1.0), "B1")
+    grain_on = es.EstimatorConfig(use_grain=True)
+    ref = es.estimate(_meas(tilt=slope_putt, grain_kappa=0.08, grain_azimuth=1.0), "B1", grain_on)
+    assert np.hypot(*ref.grain) == pytest.approx(0.08)
     for beta in (-0.4, 0.25):
         cb, sb = math.cos(beta), math.sin(beta)
         tilt_dev = np.array([slope_putt[0] * cb - slope_putt[1] * sb, slope_putt[0] * sb + slope_putt[1] * cb])
-        est = es.estimate(_meas(tilt=tilt_dev, flag_bearing=beta, grain_kappa=0.08, grain_azimuth=1.0 + beta), "B1")
+        est = es.estimate(_meas(tilt=tilt_dev, flag_bearing=beta, grain_kappa=0.08, grain_azimuth=1.0 + beta), "B1", grain_on)
         assert est.phi == pytest.approx(ref.phi, abs=1e-9) and est.v0 == pytest.approx(ref.v0, rel=1e-9)
         assert est.aim_azimuth_device == pytest.approx(beta + ref.phi, abs=1e-9)
         assert np.allclose(est.patch, ref.patch, atol=1e-12) and np.allclose(est.grain, ref.grain, atol=1e-12)
 
 
 def test_grain_and_stimp_inputs():
-    with_grain = es.estimate(_meas(grain_kappa=0.1, grain_azimuth=math.pi / 2), "B0")  # pushes left
-    assert with_grain.phi < -0.01 and np.allclose(with_grain.grain, [0.0, 0.1], atol=1e-12)
-    no_grain = es.estimate(_meas(grain_kappa=0.1, grain_azimuth=math.pi / 2), "B0", es.EstimatorConfig(use_grain=False))
+    # the grain sensor ships disabled: by default the reading is ignored
+    assert es.EstimatorConfig().use_grain is False
+    no_grain = es.estimate(_meas(grain_kappa=0.1, grain_azimuth=math.pi / 2), "B0")
     assert abs(no_grain.phi) < 1e-9 and np.all(no_grain.grain == 0.0)
+    with_grain = es.estimate(_meas(grain_kappa=0.1, grain_azimuth=math.pi / 2), "B0", es.EstimatorConfig(use_grain=True))
+    assert with_grain.phi < -0.01 and np.allclose(with_grain.grain, [0.0, 0.1], atol=1e-12)  # pushes left: aim right
+    # not knowing the grain is itself an uncertainty: with the reading in use the score is higher on a grainless green
+    assert es.estimate(_meas(), "B0", es.EstimatorConfig(use_grain=True)).confidence > es.estimate(_meas(), "B0").confidence
     # the entered green speed sets the pace and scales the break
     slow = es.estimate(_meas(tilt=np.array([0.0, 0.01]), stimp_ft=8.0), "B0")
     fast = es.estimate(_meas(tilt=np.array([0.0, 0.01]), stimp_ft=12.0), "B0")
@@ -468,21 +598,83 @@ def test_grain_and_stimp_inputs():
 
 
 def test_confidence_score_behaviour():
+    cfg = es.EstimatorConfig()
+    kf = ph.ROLL_FACTOR * ph.G
     confs = []
     for dist in (1.5, 3.0, 6.0, 12.0):
-        meas = _meas(flag_disparity=657.0 * 0.0204 / dist, flag_low_elev=math.atan(-(H - 0.75e-3) / dist))
+        meas = _meas(flag_disparity=657.0 * 0.0200 / dist, flag_low_elev=math.atan(-(H - 0.75e-3) / dist))
         est = es.estimate(meas, "B1")
         assert 0.0 <= est.confidence <= 1.0
         confs.append(est.confidence)
-        cfg = es.EstimatorConfig()
-        sigma_cross = math.sqrt(est.patch_cov[1, 1] + dist * est.patch_cov[1, 3] + 0.25 * dist**2 * est.patch_cov[3, 3])
-        assert est.cross_slope_sigma == pytest.approx(sigma_cross)
-        sigma_lat = dist * 0.5 * ph.ROLL_FACTOR * ph.G * sigma_cross / est.a_r * es._pace_factor(dist, cfg.past)
-        assert est.confidence == pytest.approx(math.erf(ph.HOLE_R / (math.sqrt(2) * sigma_lat)))
+        # one placement: reading error and the representativeness allowance in quadrature
+        sigma_tilt = es._tilt_sigma(meas, cfg)
+        sigma_twist = cfg.conf_twist_sigma / math.sqrt(1.0 + (dist / cfg.conf_twist_length) ** 2)
+        prior_shrink = 1.0 / math.sqrt(1.0 + (sigma_tilt / cfg.sigma_slope_prior) ** 2)
+        sigma_cross = math.hypot(sigma_tilt * prior_shrink, 0.5 * dist * sigma_twist)
+        assert est.cross_slope_sigma == pytest.approx(sigma_cross, rel=1e-6)
+        assert est.cross_slope_sigma == pytest.approx(est.fit.cross_sigma_read)
+        sigma_phi = 0.5 * es._pace_factor(dist, cfg.past) * math.hypot(kf * sigma_cross / est.a_r, cfg.conf_grain_kappa)
+        assert est.confidence == pytest.approx(math.erf(ph.HOLE_R / (math.sqrt(2) * dist * sigma_phi)))
     assert confs == sorted(confs, reverse=True) and confs[0] > 0.7 and confs[-1] < 0.1
     visible = es.estimate(_meas(), "B1")
     hidden = es.estimate(_meas(flag_base_visible=False), "B1")
     assert hidden.confidence == pytest.approx(0.8 * visible.confidence, rel=1e-6)
+    # the allowance for the slope changing along the line is the calibrated one, not the fit prior
+    assert cfg.conf_twist_sigma < cfg.sigma_curv
+
+
+def test_confidence_reflects_the_mode_that_produced_the_read():
+    """More information about the cross slope raises the score: Quick Read <
+    Precision Read < Survey; the horizon never raises it (its samples are
+    not independent evidence), and a poor horizon lowers it."""
+    sc = gr.make_scenario("gentle", 6.0, 4)
+    params = se.SensorParams()
+    quick, _ = se.measure(sc.green, sc.ball_xy, sc.hole_xy, params, 3)
+    spin, _ = se.measure(sc.green, sc.ball_xy, sc.hole_xy, params, 3, spin=True)
+    drops = [m for m, _ in se.measure_survey(sc.green, sc.ball_xy, sc.hole_xy, params, 3)]
+    assert quick.flag_found and len(drops) == 3
+    c_quick = es.estimate(quick, "B1")
+    c_spin = es.estimate(spin, "B1")
+    c_two = es.estimate_survey(drops[:2])
+    c_three = es.estimate_survey(drops)
+    assert c_quick.confidence < c_spin.confidence < c_two.confidence < c_three.confidence
+    assert c_quick.cross_slope_sigma > c_spin.cross_slope_sigma > c_two.cross_slope_sigma > c_three.cross_slope_sigma
+    b2 = es.estimate(quick, "B2")
+    assert b2.fit.used_horizon and b2.cross_slope_sigma == c_quick.cross_slope_sigma
+    assert b2.confidence == pytest.approx(c_quick.confidence * (0.8 if b2.poor_horizon else 1.0))
+    mounded, _ = se.measure(sc.green.with_mounded_surrounds(seed=2), sc.ball_xy, sc.hole_xy, params, 3)
+    assert es.estimate(mounded, "B2").confidence <= es.estimate(mounded, "B1").confidence
+
+
+def test_survey_drop_off_the_line_is_down_weighted_on_a_slope():
+    """A drop placed by eye sits an unknown distance off the line, which
+    rotates its "toward the hole" frame.  On a steep along-line slope that
+    leaks into the cross tilt, so the drop's cross reading counts for less;
+    on a flat line it counts fully."""
+    def mid_drop(along):
+        return _meas(tilt=np.array([along, 0.010]), flag_disparity=657.0 * 0.0200 / 1.0,
+                     flag_low_elev=math.atan(along - (H - 0.75e-3) / 1.0))
+
+    def ball(along):
+        return _meas(tilt=np.array([along, 0.0]), flag_low_elev=math.atan(along - (H - 0.75e-3) / 5.0))
+
+    flat = es.estimate_survey([ball(0.0), mid_drop(0.0)])
+    steep = es.estimate_survey([ball(0.05), mid_drop(0.05)])
+    assert flat.fit.stations == pytest.approx((0.0, 4.0))
+    # the fitted twist d follows the drop's cross tilt less on the steep line
+    assert 0.0 < steep.patch[3] < 0.9 * flat.patch[3]
+    assert steep.cross_slope_sigma > flat.cross_slope_sigma
+    # the cross-talk allowance: 0.15 m off the line at 1 m from the hole turns the frame by 0.15 rad,
+    # i.e. 7.5 mrad of the 5 % along slope leaks into the cross tilt of that drop
+    cfg = es.EstimatorConfig()
+    assert cfg.sigma_drop_lateral == 0.15
+    sig_drop = math.hypot(es._tilt_sigma(mid_drop(0.05), cfg), cfg.sigma_field)
+    expected = es._cross_sigma_read(5.0, (0.0, 4.0), (sig_drop, math.hypot(sig_drop, 0.15 * 0.05)), cfg)
+    assert steep.cross_slope_sigma == pytest.approx(expected, rel=1e-3)
+    # with the allowance switched off the two agree
+    off = es.EstimatorConfig(sigma_drop_lateral=0.0)
+    assert es.estimate_survey([ball(0.05), mid_drop(0.05)], off).patch[3] == pytest.approx(
+        es.estimate_survey([ball(0.0), mid_drop(0.0)], off).patch[3], rel=1e-6)
 
 
 # --------------------------------------------------------------------------
@@ -499,11 +691,39 @@ def test_flag_not_found_falls_back_to_tilt_only_along_the_visor_axis():
         assert est.flag_missing and est.bearing == 0.0 and est.distance == 7.0 and math.isnan(est.distance_sigma)
         assert np.allclose(est.patch, [0.004, 0.012, 0, 0, 0])
         assert est.aim_azimuth_device == pytest.approx(est.phi) and est.phi > 0.0
-    found = es.estimate(_meas(tilt=np.array([0.004, 0.012]), flag_disparity=657.0 * 0.0204 / 7.0), "B0")
-    assert est.confidence < 0.5 * found.confidence  # low confidence is flagged
+    found = es.estimate(_meas(tilt=np.array([0.004, 0.012]), flag_disparity=657.0 * 0.0200 / 7.0), "B0")
+    # low confidence is flagged: the hand-pointing error is in the score, and the flag multiplier on top
+    cfg = es.EstimatorConfig()
+    assert est.confidence < 0.8 * found.confidence
+    sigma_phi = math.hypot(found.cross_slope_sigma * ph.ROLL_FACTOR * ph.G / found.a_r, cfg.conf_grain_kappa)
+    sigma_phi = math.hypot(0.5 * es._pace_factor(7.0, cfg.past) * sigma_phi, cfg.sigma_hand_bearing)
+    assert est.confidence == pytest.approx(cfg.conf_flag_missing * math.erf(ph.HOLE_R / (math.sqrt(2) * 7.0 * sigma_phi)), rel=1e-3)
     # no dialled distance either: the default distance
     assert es.estimate(_meas(**lost), "B1").distance == es.EstimatorConfig().default_distance
     assert es.estimate(_meas(**lost), "STRAIGHT").flag_missing
+
+
+def test_flag_found_but_not_ranged_keeps_the_camera_bearing():
+    """Regression: a found flag whose stereo disparity is below the accepted
+    minimum (and whose top is out of the field) used to be treated like a
+    missing flag - bearing 0 along the visor axis, which in a camera read is
+    pointed only to about 10 degrees."""
+    beta = math.radians(9.0)
+    slope_putt = np.array([0.004, 0.012])
+    tilt_dev = np.array([slope_putt[0] * math.cos(beta) - slope_putt[1] * math.sin(beta),
+                         slope_putt[0] * math.sin(beta) + slope_putt[1] * math.cos(beta)])
+    weak = _meas(tilt=tilt_dev, flag_bearing=beta, flag_disparity=0.24)
+    assert es.EstimatorConfig().min_disparity == 0.25 and not es.fuse_range(weak).valid
+    for method in ("B0", "B1", "B2"):
+        est = es.estimate(weak, method)
+        assert est.range_missing and not est.flag_missing
+        assert est.bearing == pytest.approx(beta) and est.distance == es.EstimatorConfig().default_distance
+        assert np.allclose(est.patch, [0.004, 0.012, 0, 0, 0], atol=1e-12)  # tilt rotated by the measured bearing
+        assert est.aim_azimuth_device == pytest.approx(beta + est.phi)
+    ranged = es.estimate(_meas(tilt=tilt_dev, flag_bearing=beta, flag_disparity=657.0 * 0.0200 / 3.0), "B0")
+    assert est.confidence == pytest.approx(0.5 * ranged.confidence, rel=1e-6)  # low confidence is flagged
+    assert es.estimate(dataclasses.replace(weak, user_distance=7.0), "B1").distance == 7.0
+    assert es.estimate(weak, "STRAIGHT").aim_azimuth_device == pytest.approx(beta)
 
 
 def test_unsolvable_patch_falls_back_and_says_so():
@@ -524,7 +744,7 @@ def test_unsolvable_patch_falls_back_and_says_so():
 def test_survey_ignores_a_drop_that_did_not_find_the_flag():
     nan = math.nan
     ball = _meas(tilt=np.array([0.0, 0.010]))
-    mid = _meas(tilt=np.array([0.0, 0.004]), flag_disparity=657.0 * 0.0204 / 2.5,
+    mid = _meas(tilt=np.array([0.0, 0.004]), flag_disparity=657.0 * 0.0200 / 2.5,
                 flag_low_elev=math.atan(-(H - 0.75e-3) / 2.5))
     blind = _meas(tilt=np.array([0.3, 0.3]), flag_found=False, flag_bearing=nan, flag_disparity=nan, flag_low_elev=nan)
     both = es.estimate_survey([ball, mid])
@@ -567,9 +787,10 @@ def test_estimator_is_deterministic():
 
 
 def test_estimator_module_cannot_see_the_true_green():
-    """Structural check: the estimator imports only the Measurements record and the physics solver."""
+    """Structural check: the estimator imports only the Measurements record,
+    the physics solver and the numba shim."""
     source = pathlib.Path(es.__file__).read_text()
-    allowed_local = {"measurements", "physics"}
+    allowed_local = {"measurements", "physics", "_jit"}
     allowed_external = {"__future__", "math", "dataclasses", "typing", "numpy"}
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.ImportFrom):
@@ -583,7 +804,17 @@ def test_estimator_module_cannot_see_the_true_green():
     # nothing from the truth side is reachable through the module namespace
     forbidden = {"Green", "PuttScenario", "MeasurementTruth", "HorizonTruth", "greens", "sensors", "montecarlo", "make_green"}
     assert forbidden.isdisjoint(vars(es))
-    for word in ("greens", "MeasurementTruth", "make_green", "PuttScenario"):
+    # ... and no identifier in the code refers to it (prose in docstrings may say "greens")
+    used = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Name):
+            used.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            used.add(node.attr)
+        elif isinstance(node, ast.arg):
+            used.add(node.arg)
+    assert forbidden.isdisjoint(used)
+    for word in ("MeasurementTruth", "make_green", "PuttScenario", "HorizonTruth"):
         assert word not in source
     # the measurements module itself is free of truth-side imports
     import greenline_sim.measurements as mm

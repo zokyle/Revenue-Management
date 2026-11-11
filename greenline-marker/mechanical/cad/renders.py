@@ -23,21 +23,21 @@ COLORS = {            # r, g, b, opacity (render colours; black PA12 is drawn da
     "pcb_adhesive": (0.95, 0.84, 0.36, 1), "seal_bead": (0.96, 0.50, 0.12, 1), "lcd_glass": (0.70, 0.78, 0.70, 1),
     "lcd_flex": (0.88, 0.55, 0.10, 1), "lcd_adhesive": (0.96, 0.86, 0.40, 1), "cover_glass": (0.72, 0.88, 0.98, 0.32),
     "cover_tape": (0.10, 0.10, 0.11, 1), "battery": (0.76, 0.77, 0.81, 1), "foam_pad": (0.42, 0.34, 0.50, 1),
-    "vent": (0.97, 0.97, 0.97, 1), "cradle": (0.56, 0.60, 0.67, 1), "cradle_plate": (0.80, 0.82, 0.85, 1),
+    "vent": (0.97, 0.97, 0.97, 1), "cradle": (0.56, 0.60, 0.67, 1),
     "cradle_pcb": (0.06, 0.36, 0.52, 1), "usb_receptacle": (0.82, 0.82, 0.84, 1),
 }
-PREFIX_COLORS = {"camera_": (0.33, 0.33, 0.40, 1), "prism_": (0.50, 0.78, 0.96, 0.62), "visor_window_": (0.62, 0.86, 0.96, 0.42),
+PREFIX_COLORS = {"ball_epoxy_": (0.40, 0.66, 0.90, 1), "camera_": (0.33, 0.33, 0.40, 1), "prism_": (0.50, 0.78, 0.96, 0.62), "visor_window_": (0.62, 0.86, 0.96, 0.42),
                  "ball_": (0.88, 0.89, 0.92, 1), "spring_pin_": (0.86, 0.70, 0.22, 1), "cradle_foot_": (0.08, 0.08, 0.09, 1)}
 LIGHT_EDGES = ("tub", "base_plate", "cover_tape", "cradle_foot_", "camera_", "foam_pad")
 CAP_COLORS = {"tub": (0.80, 0.80, 0.83), "base_plate": (0.58, 0.65, 0.80), "cradle": (0.74, 0.77, 0.83), "main_pcb": (0.45, 0.78, 0.52),
-              "battery": (0.90, 0.90, 0.93), "cradle_plate": (0.93, 0.94, 0.96)}
+              "battery": (0.90, 0.90, 0.93)}
 NAMES = {            # label text per part
     "tub": "Tub (top shell), MJF PA12", "base_plate": "Base plate, MJF PA12", "main_pcb": "Main PCB assembly (0.8 mm)",
-    "pcb_adhesive": "PSA sheet PCB-to-base (0.13 mm)", "seal_bead": "Perimeter seal bead (dispensed adhesive)",
+    "pcb_adhesive": "Adhesive sheet PCB-to-base (0.13 mm)", "seal_bead": "Perimeter seal bead (dispensed adhesive)",
     "lcd_glass": "Memory LCD LS013B7DH03", "lcd_flex": "LCD flex tail (representative)", "lcd_adhesive": "LCD adhesive frame (0.15 mm)",
     "cover_glass": "Cover glass dia 28 x 1.0", "cover_tape": "VHB 5907 tape ring (0.2 mm)", "battery": "LiPo cell GM201030-PCB",
     "foam_pad": "Foam pad (0.3 mm)", "vent": "ePTFE vent (Gore VE80205)", "cradle": "Cradle body (printed)",
-    "cradle_plate": "Reference plate, 304 stainless 1.5 mm", "cradle_pcb": "Cradle PCB 30 x 22 x 1.6", "usb_receptacle": "USB-C receptacle (USB4105)",
+    "cradle_pcb": "Cradle PCB 30 x 22 x 1.6", "usb_receptacle": "USB-C receptacle (USB4105)",
 }
 
 
@@ -55,7 +55,7 @@ def _entry(name, stl, offset=None, **kw):
     e = dict(stl=str(stl), color=[r, g, b], opacity=a)
     if any(name.startswith(k) for k in LIGHT_EDGES):
         e["edgeColor"] = [0.62, 0.64, 0.68]; e["edgeOpacity"] = 0.55
-    if name.startswith(("ball_", "spring_pin_", "cradle_plate", "usb_")):
+    if name.startswith(("ball_", "spring_pin_", "usb_")) and not name.startswith("ball_epoxy_"):
         e["metalness"] = 0.55; e["roughness"] = 0.35
     if name.startswith("ball_"):
         e["edges"] = False
@@ -164,7 +164,7 @@ def render_all(parts=None, verbose=True):
                    labels=[dict(text="Visor window R", anchor=[cxr, P.Y_VISOR, 6.3], side="L"),
                            dict(text="Camera opening behind the window", anchor=[cxr, P.Y_VISOR, 5.3], side="L"),
                            dict(text="Tub: top edge R0.6", anchor=[21.6, 6.0, P.T - 0.15], side="L"),
-                           dict(text="Vent hole dia 1.0", anchor=[M["vent_xy"][0], M["vent_xy"][1], P.T], side="L"),
+                           dict(text="Vent hole dia 1.0", anchor=[P.VENT_XY[0], P.VENT_XY[1], P.T], side="L"),
                            dict(text="Base plate under the visor wall", anchor=[4.0, P.BASE_FLAT, 0.5], side="L"),
                            dict(text="Cover glass dia 28 x 1.0", anchor=[-9.5, -8.5, P.CG_Z1], side="R"),
                            dict(text="LCD behind the dia 22 aperture", anchor=[-4, 1, P.CG_Z1], side="R"),
@@ -178,9 +178,9 @@ def render_all(parts=None, verbose=True):
         gx, gy = P.GRAIN_X, P.GRAIN_Y
         cfg = dict(out=str(RENDER_DIR / "GL1_render_b_underside.png"), width=W, height=H, eye=eye, target=tgt, fov=fov,
                    title="GL-1 marker - underside",
-                   subtitle="grain-sensor opening with baffle ring, pad slot with the seven contact pads, three 1.0 mm ball feet (0.10 mm proud)",
+                   subtitle="grain-sensor opening with baffle ring, pad slot with the seven contact pads, three 1.0 mm ball feet potted in through holes (0.10 mm proud)",
                    footer=FOOT, parts=[_entry(n, stl[n]) for n in puck] + list(detail.values()),
-                   labels=[dict(text="Ball foot 3", anchor=[P.BALL_XY[2][0], P.BALL_XY[2][1], -0.1], side="L"),
+                   labels=[dict(text="Ball foot 3 in its epoxy potting", anchor=[P.BALL_XY[2][0], P.BALL_XY[2][1], -0.1], side="L"),
                            dict(text="Grain opening dia 13", anchor=[gx + 5.9, gy + 2.2, 0.0], side="L"),
                            dict(text="LED pairs on r 5.2 (PCB underside)", anchor=[gx + 5.2 * math.cos(math.radians(247.5)), gy + 5.2 * math.sin(math.radians(247.5)), 0.6], side="L"),
                            dict(text="Pad slot 17.44 x 2.2", anchor=[P.PAD_XS[-1] + 0.6, P.PAD_Y, 0.0], side="L"),
@@ -194,7 +194,7 @@ def render_all(parts=None, verbose=True):
                            dict(text="Ball foot 2", anchor=[P.BALL_XY[1][0], P.BALL_XY[1][1], -0.1], side="R")])
         outs.append(_run(cfg, tmp))
         # ---------------- (c) exploded, every part separated along z
-        dz = {"ball_": -34, "base_plate": -24, "seal_bead": -12, "pcb_adhesive": -2, "main_pcb": 10, "camera_": 21, "battery": 21, "prism_": 29,
+        dz = {"ball_epoxy_": -31, "ball_": -38, "base_plate": -24, "seal_bead": -12, "pcb_adhesive": -2, "main_pcb": 10, "camera_": 21, "battery": 21, "prism_": 29,
               "foam_pad": 32, "lcd_flex": 38, "lcd_glass": 46, "lcd_adhesive": 58, "vent": 69, "tub": 74, "visor_window_": 74,
               "cover_tape": 95, "cover_glass": 106}
 
@@ -208,10 +208,10 @@ def render_all(parts=None, verbose=True):
         r = _screen_right(eye, tgt)
         order = [("cover_glass", "R"), ("cover_tape", "L"), ("tub", "R"), ("visor_window_L", "R"), ("vent", "L"), ("lcd_adhesive", "L"),
                  ("lcd_glass", "R"), ("lcd_flex", "L"), ("foam_pad", "L"), ("prism_L", "R"), ("battery", "L"), ("camera_L", "R"), ("main_pcb", "L"),
-                 ("pcb_adhesive", "R"), ("seal_bead", "L"), ("base_plate", "R"), ("ball_3", "L")]
+                 ("pcb_adhesive", "R"), ("seal_bead", "L"), ("base_plate", "R"), ("ball_epoxy_1", "R"), ("ball_3", "L")]
         extra = {"visor_window_L": "Visor windows x2", "prism_L": "Fold prisms x2 (2 mm, N-BK7)",
-                 "camera_L": "Camera cubes x2 (OVM7692)", "ball_3": "Ball feet x3 (dia 1.0)", "lcd_flex": "LCD flex tail (representative)",
-                 "seal_bead": "Seal bead (dispensed)", "pcb_adhesive": "PSA sheet 0.13", "lcd_adhesive": "LCD adhesive frame 0.15",
+                 "camera_L": "Camera cubes x2 (OVM7692)", "ball_3": "Ball feet x3 (dia 1.0)", "ball_epoxy_1": "UV epoxy potting x3", "lcd_flex": "LCD flex tail (representative)",
+                 "seal_bead": "Seal bead 0.33 (dispensed)", "pcb_adhesive": "Adhesive sheet 0.13 (die cut)", "lcd_adhesive": "LCD adhesive frame 0.15",
                  "cover_tape": "VHB 5907 ring 0.2", "main_pcb": "Main PCB assembly", "tub": "Tub (top shell)", "base_plate": "Base plate",
                  "cover_glass": "Cover glass dia 28 x 1.0", "lcd_glass": "Memory LCD (glass 0.75)", "battery": "LiPo cell 34 x 10 x 2",
                  "foam_pad": "Foam pad 0.3", "vent": "ePTFE vent (inside the roof)"}
@@ -241,9 +241,9 @@ def render_all(parts=None, verbose=True):
                   dict(text="Foam pad 0.3", anchor=[0, -9.6, P.FOAM_Z0 + 0.15], side="L"),
                   dict(text="Battery 2.0 (swell gap above)", anchor=[0, -8.6, 2.8], side="L"),
                   dict(text="FPC connector J1", anchor=[0, -14.0, 2.9], side="L"),
-                  dict(text="PCB 0.8 on PSA sheet", anchor=[0, -20.3, 1.4], side="L"),
+                  dict(text="PCB 0.8 on the 0.13 adhesive sheet", anchor=[0, -20.3, 1.4], side="L"),
                   dict(text="Seal bead under the ledge", anchor=[0, -P.LAND_RI - 0.2, 1.1], side="L"),
-                  dict(text="Base plate 1.0", anchor=[0, -19.3, 0.5], side="L"),
+                  dict(text="Base plate 0.87", anchor=[0, -19.3, 0.43], side="L"),
                   dict(text="Section step at y = %.1f" % ystep, anchor=[5.5, ystep, 7.0], side="R"),
                   dict(text="Visor window", anchor=[cxr, P.Y_VISOR - 0.25, 7.0], side="R"),
                   dict(text="Fold prism", anchor=[cxr, 16.1, 5.2], side="R"),
@@ -259,37 +259,47 @@ def render_all(parts=None, verbose=True):
                    parts=[_entry(n, f) for n, f in cut.items()])
         outs.append(_run(cfg, tmp))
         # ---------------- (e) marker in the cradle
-        tgt, fove = (0, -2.5, -2.5), 20
-        eye = _eye((0.52, -0.66, 0.54), tgt, 120, W, H, fove)
+        tgt, fove = (0, -6.0, 0.5), 20
+        eye = _eye((0.50, -0.68, 0.54), tgt, 124, W, H, fove)
+        a0, a1 = M["scallop_deg"]
+        am = math.radians(0.5 * (a0 + a1))
         cfg = dict(out=str(RENDER_DIR / "GL1_render_e_in_cradle.png"), width=W, height=H, eye=eye, target=tgt, fov=fove,
-                   title="GL-1 marker in its cradle (0 deg: charging / data position)",
-                   subtitle="seen from the rear right; the USB-C receptacle exits the rear face; no hold-down is modelled (open issue D17)",
+                   title="GL-1 marker in its cradle (charging / data dock, one orientation)",
+                   subtitle="seen from the rear right: sprung latch with thumb tab at the rear, fixed lip over the front edge between the camera windows, USB-C in the rear face",
                    footer=FOOT, parts=[_entry(n, stl[n]) for n in puck + cradle],
                    labels=[dict(text="Marker, visor toward +y", anchor=[-8, 6, P.T], side="L"),
-                           dict(text="Nest wall (0 and 180 deg only)", anchor=[-16.5, -19.0, P.CRADLE_TOP_Z], side="L"),
+                           dict(text="Fixed lip (|x| <= 6) on its tower", anchor=[-M["lip_half_w"] + 1.0, P.LIP_Y0 + 1.0, P.LIP_Z1], side="L"),
+                           dict(text="Nest wall; the D flat is the key", anchor=[-19.0, -13.4, P.CRADLE_TOP_Z], side="L"),
+                           dict(text="Guard wall with stop ribs", anchor=[-P.WELL_HX + 1.0, P.WELL_Y0 - 1.0, M["guard_top_z"]], side="L"),
                            dict(text="Cradle body 60 x 60 x 14", anchor=[-P.CRADLE_X + 8, P.CRADLE_Y0, -5.0], side="L"),
                            dict(text="USB-C receptacle", anchor=[0, P.CRADLE_Y0, P.CPCB_Z1 + 1.6], side="L"),
-                           dict(text="Finger scallop (both sides)", anchor=[P.CRADLE_X - 3.0, P.NEST_CY + 2.0, 0.5], side="R"),
-                           dict(text="Reference plate, 304 stainless", anchor=[24.5, P.NEST_CY - 5.5, P.PLATE_Z1], side="R"),
-                           dict(text="Bumper feet x4 underneath", anchor=[M["foot_xy"][0] + 2.0, P.NEST_CY - M["foot_xy"][1] - 2.0, P.CRADLE_BOT_Z + 0.3], side="R")])
+                           dict(text="Latch hook over the tub top", anchor=[3.0, -P.HOOK_R - 0.6, P.LATCH_TOP_Z - 1.5], side="R"),
+                           dict(text="Thumb tab: press to release", anchor=[4.0, P.TAB_Y0 + 2.0, P.LATCH_TOP_Z], side="R"),
+                           dict(text="Finger scallop (both sides)", anchor=[27.0 * math.cos(am), 27.0 * math.sin(am), P.NEST_FLOOR_Z], side="R"),
+                           dict(text="Bumper feet x4 underneath", anchor=[M["foot_xy"][0] + 2.0, P.CRADLE_CY - M["foot_xy"][1] - 2.0, P.CRADLE_BOT_Z + 0.3], side="R")])
         outs.append(_run(cfg, tmp))
-        # ---------------- (f) section through the pin row (x = 0), marker in the cradle
+        # ---------------- (f) section on x = 0 through the centre pin, the lip and the latch
         cutter = PT.box(0, big, -big, big, -big, big).val()
         cut = _cut_stls(parts, puck + cradle, cutter, tmp, "cutc")
-        tgt = (0, -2.5, -2.0)
-        eye = _eye((0.86, -0.36, 0.30), tgt, 100, W, H, fove)
+        tgt = (0, -6.0, 0.0)
+        eye = _eye((0.88, -0.30, 0.26), tgt, 84, W, H, fove)
         cfg = dict(out=str(RENDER_DIR / "GL1_render_f_cradle_section.png"), width=W, height=H, eye=eye, target=tgt, fov=fove,
-                   title="GL-1 marker in its cradle - section on x = 0",
-                   subtitle="centre spring pin compressed onto its contact pad; ball feet on the reference plate; no hold-down is modelled (open issue D17)",
+                   title="GL-1 marker in its cradle - section on x = 0: pin compression and hold-down",
+                   subtitle=f"centre spring pin compressed {M['pin_mid_stroke']} of {M['pin_full_stroke']} mm onto its pad; fixed lip (front) and sprung latch (rear) hold the marker "
+                            f"against {len(P.PAD_XS)} x {P.PIN_FORCE_N} N",
                    footer=FOOT, capPlanes=[dict(axis="x", value=0.0)], parts=[_entry(n, f) for n, f in cut.items()],
-                   labels=[dict(text="USB-C receptacle", anchor=[0, P.USB_Y0 + 2.5, P.CPCB_Z1 + 1.6], side="L"),
-                           dict(text="Pad slot in the base plate", anchor=[0, P.PAD_Y - 1.0, 0.5], side="L"),
-                           dict(text="Spring pin on contact pad 4", anchor=[0, P.PAD_Y, -2.8], side="L"),
-                           dict(text="Cradle PCB, top at z = %.2f" % P.CPCB_Z1, anchor=[0, -24.0, 0.5 * (P.CPCB_Z0 + P.CPCB_Z1)], side="L"),
+                   labels=[dict(text="Thumb tab", anchor=[0, P.TAB_Y0 + 2.5, P.LATCH_TOP_Z - 0.8], side="L"),
+                           dict(text="Hook 0.90 on the tub top, 0.25 clear", anchor=[0, -P.HOOK_R - 0.5, P.HOOK_Z0 + 0.6], side="L"),
+                           dict(text="Guard wall / over-travel stop", anchor=[0, P.WELL_Y0 - 1.0, M["guard_top_z"] - 1.0], side="L"),
+                           dict(text="USB-C receptacle", anchor=[0, P.USB_Y0 + 2.5, P.CPCB_Z1 + 1.6], side="L"),
+                           dict(text="Latch: cantilever 1.15 x 14, L 11.65", anchor=[0, P.LATCH_Y_NA, 2.5], side="L"),
+                           dict(text="Cradle PCB, top at z = %.2f" % P.CPCB_Z1, anchor=[0, -28.0, 0.5 * (P.CPCB_Z0 + P.CPCB_Z1)], side="L"),
+                           dict(text="Spring pin 4 compressed on its pad", anchor=[0, P.PAD_Y, -2.4], side="L"),
                            dict(text="Marker (section A-A)", anchor=[0, 2.0, 5.0], side="R"),
-                           dict(text="Front ball foot on the plate", anchor=[0, P.BALL_XY[0][1], -0.05], side="R"),
-                           dict(text="Reference plate 1.5", anchor=[0, 9.0, 0.5 * (P.PLATE_Z0 + P.PLATE_Z1)], side="R"),
-                           dict(text="Cradle body", anchor=[0, 23.0, -5.0], side="R"),
+                           dict(text="Fixed lip 1.2 over the front edge", anchor=[0, P.LIP_Y0 + 0.7, P.LIP_Z0 + 0.8], side="R"),
+                           dict(text="Nose pocket under the lip", anchor=[0, P.NEST_FLAT + 0.5, 5.0], side="R"),
+                           dict(text="Front ball foot on the nest floor", anchor=[0, P.BALL_XY[0][1], -0.05], side="R"),
+                           dict(text="Cradle body", anchor=[0, 22.0, -5.0], side="R"),
                            dict(text="Lightening pocket", anchor=[0, 8.0, -8.5], side="R")])
         outs.append(_run(cfg, tmp))
     finally:

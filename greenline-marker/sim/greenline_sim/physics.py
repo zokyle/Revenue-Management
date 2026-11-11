@@ -34,14 +34,28 @@ Conventions
 Numerics
 --------
 Classical RK4 with a fixed step ``dt`` (default 0.02 s) while the ball is
-moving freely.  When the ball is within two steps of stopping the step is
-shortened to half of the predicted time-to-stop (so the speed roughly halves
-every step and the friction direction never flips inside a step), and below
-``1e-4 m/s`` the last ~1e-8 m are closed analytically.  This gives a
-jitter-free stop; the rest position is converged to ~1e-8 m at the default
-step.  Events inside a step (closest approach to the hole, crossing of the
-hole line) are located on the cubic Hermite segment through the step's end
-states, so they are as accurate as the integration itself.
+moving freely.  Near the stop the step is shortened by two rules:
+
+* to half of the predicted time-to-stop when the ball is within two steps of
+  stopping (so the speed roughly halves every step and the friction
+  direction never flips inside a step);
+* to ``0.5 * speed / a_r``.  The friction term ``-a_r * v_hat`` makes the
+  velocity component across the drive decay at the rate ``a_r / speed``,
+  which is unbounded as the ball stops; explicit RK4 is stable only for
+  ``h * a_r / speed < 2.785``.  The first rule alone satisfies this only
+  while the drive along the motion is below about 0.85 ``a_r``; on steeper
+  (still holdable) slopes a ball stopping with the slope would otherwise
+  zig-zag about the fall line and creep instead of coming to rest.
+
+Below ``1e-4 m/s`` the last ~1e-8 m are closed analytically.  This gives a
+jitter-free stop on every holdable slope; the rest position is converged to
+~1e-8 m at the default step (checked up to a drive of 0.99 ``a_r``).  A roll
+may take at most ``4 * t_max / dt`` steps: a ball still creeping then (only
+possible within a fraction of a percent of the critical slope) is reported
+as ``MAX_TIME`` like one that runs out of time.  Events inside a step
+(closest approach to the hole, crossing of the hole line) are located on the
+cubic Hermite segment through the step's end states, so they are as accurate
+as the integration itself.
 
 The same scalar kernels run either under numba (fast) or as plain Python
 (see :mod:`greenline_sim._jit`); they are the reference for the C firmware.
@@ -165,6 +179,13 @@ green of the same speed [m]."""
 _KF = ROLL_FACTOR * G  # [m/s^2] gravity drive per unit slope
 _S_TINY = 1e-12  # [m/s] below this the ball is treated as exactly at rest
 _V_EPS = 1e-4  # [m/s] speed below which the stop is closed analytically
+_H_STIFF = 0.5  # [-] largest step * a_r / speed (RK4 is stable below 2.785)
+_STEP_BUDGET_FACTOR = 4  # a roll may take at most this many times t_max / dt steps
+# Solver: a trial ball that crosses the (infinite) hole line further to the
+# side than _LINE_MISS_OFFSET + _LINE_MISS_SLOPE * distance has not reached
+# the hole (see _trial).
+_LINE_MISS_OFFSET = 1.0  # [m]
+_LINE_MISS_SLOPE = 0.5  # [m per m of putt length]
 
 _KIND_QUAD = 0
 _KIND_GRID = 1
@@ -734,6 +755,10 @@ def _roll(
         by1 = p[1] + (p[5] - 1.0) / p[3]
     r_max2 = r_max * r_max
     hole_r2 = hole_r * hole_r
+    # Step budget: the stiffness limit shortens the steps of a slow ball, so a
+    # ball creeping for seconds on a slope within a fraction of a percent of
+    # critical could take an unbounded number of them before t_max.
+    n_budget = _STEP_BUDGET_FACTOR * (int(t_max / dt) + 1)
 
     t = 0.0
     n_rec = 0
@@ -766,7 +791,7 @@ def _roll(
             traj[n_rec, 3] = vx
             traj[n_rec, 4] = vy
             n_rec += 1
-        if t >= t_max:
+        if t >= t_max or n_step >= n_budget:
             status = _ROLL_MAX_TIME
             break
 
@@ -810,6 +835,15 @@ def _roll(
                         n_rec += 1
                 elif ts < 2.0 * h:
                     h = 0.5 * ts
+            # A slow ball's velocity component across the drive decays at the
+            # rate a_r / s (Jacobian of the friction term -a_r * v_hat), which
+            # grows without bound as the ball stops.  Explicit RK4 is only
+            # stable for h * a_r / s < 2.785, so the step is also limited by
+            # this rate.  Without it a ball stopping WITH the slope (drive
+            # along the motion above ~0.85 a_r, where 0.5 * ts alone is too
+            # long) zig-zags about the fall line and creeps instead of resting.
+            if h * a_r > _H_STIFF * s:
+                h = _H_STIFF * s / a_r
 
         # ---- first RK4 stage (also decides whether a resting ball holds) --
         if s > _S_TINY:
@@ -1029,6 +1063,14 @@ def _trial(kind, p, c, sx, sy, hx, hy, ux, uy, dist, phi, e0, a_r, agx, agy, vh2
       short of the line can never satisfy ``g = 0`` (no false root).
     * ``y`` [m] lateral miss at the hole line (positive = left of the hole),
       or the lateral offset at the point of furthest progress if short.
+
+    A crossing of the hole line further than ``1 m + 0.5 * dist`` to the side
+    of the hole is treated as not reaching it (``g = -v_h**2 - 2 a_r |y|``,
+    always negative).  On a patch whose cross slope grows along the putt the
+    lowest-energy way to cross the infinite line is to swing far away from
+    the hole; without this rule the pace solve settles on that branch and
+    the aim search then sees a 10 m jump of the miss where the regular
+    solution is.
     """
     v0 = math.sqrt(e0)
     cph = math.cos(phi)
@@ -1040,7 +1082,14 @@ def _trial(kind, p, c, sx, sy, hx, hy, ux, uy, dist, phi, e0, a_r, agx, agy, vh2
         dt, t_max, r_max, 1, 0, 0.0, 0.5, HOLE_R, 0, traj, out,
     )
     if out[_O_CROSSED] > 0.5:
-        return out[_O_SLINE] * out[_O_SLINE] - vh2, out[_O_YLINE]
+        yl = out[_O_YLINE]
+        if abs(yl) > _LINE_MISS_OFFSET + _LINE_MISS_SLOPE * dist:
+            # The hole line is infinite.  A ball that swings away and crosses
+            # it metres to the side has not reached the hole: count it as too
+            # little pace, so the pace solve moves on to the faster branch
+            # that crosses near the hole instead of settling on this one.
+            return -vh2 - 2.0 * a_r * abs(yl), yl
+        return out[_O_SLINE] * out[_O_SLINE] - vh2, yl
     return -vh2 - 2.0 * a_r * (dist - out[_O_XPROG]) - out[_O_SPROG] * out[_O_SPROG], out[_O_YPROG]
 
 
@@ -1873,7 +1922,9 @@ class RollStatus(enum.IntEnum):
     STOPPED = _ROLL_STOPPED
     """Ball at rest (rolling resistance holds it)."""
     MAX_TIME = _ROLL_MAX_TIME
-    """Still moving at ``t_max`` (e.g. slope too steep for the ball to rest)."""
+    """Still moving at ``t_max`` (e.g. slope too steep for the ball to rest), or
+    after ``4 * t_max / dt`` steps (a ball creeping on a slope within a
+    fraction of a percent of the critical one)."""
     OUT_OF_BOUNDS = _ROLL_OUT_OF_BOUNDS
     """Left the surface grid or went beyond ``r_max`` from the start."""
     CAPTURED = _ROLL_CAPTURED
@@ -2244,7 +2295,8 @@ def simulate_putt(
     dt : float [s]
         RK4 step.
     t_max : float [s]
-        Time limit; a ball still moving then gets ``RollStatus.MAX_TIME``.
+        Time limit; a ball still moving then gets ``RollStatus.MAX_TIME``
+        (also after ``4 * t_max / dt`` steps, see the module docstring).
     r_max : float [m]
         Range limit from the start (``RollStatus.OUT_OF_BOUNDS``).
     capture : None | CaptureModel | callable(delta, speed) -> bool

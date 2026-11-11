@@ -175,6 +175,21 @@ typedef struct {
  */
 void gl_gfx_aim_line(gl_gfx_t *g, float aim_rad, float half_width_px, gl_gfx_aim_info_t *info);
 
+/**
+ * The same with the ball centre in a general direction: `ball_az_rad` is the
+ * direction from the marker centre to the ball centre, CCW from marker
+ * forward, in the marker's CURRENT frame (0 = straight ahead, the normal
+ * case and what gl_gfx_aim_line() draws).  After the 180-degree spin of a
+ * Precision Read the marker faces away from the hole and the ball position
+ * lies BEHIND it (ball_az_rad near pi, aim_rad near pi): the line is then
+ * drawn through that point.  The true line is drawn when its chord is long
+ * enough and the putt starts away from the marker (cos(aim - ball_az) > 0).
+ * info->offset_px is positive when the line passes to the right of the
+ * screen centre.
+ */
+void gl_gfx_aim_line_at(gl_gfx_t *g, float aim_rad, float ball_az_rad, float half_width_px,
+                        gl_gfx_aim_info_t *info);
+
 /* ---- text -------------------------------------------------------------- */
 
 #define GL_FONT_W 5

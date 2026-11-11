@@ -7,7 +7,8 @@ display draws, the launch speed, the "plays-like" distance, the break, the
 slope at the ball and a confidence score.
 
 NOTHING in this module may look at the true green.  It imports the physics
-solver and the ``Measurements`` record only (a test enforces this).
+solver, the ``Measurements`` record and the numba shim only (a test enforces
+this).
 
 Method
 ------
@@ -17,8 +18,8 @@ green around the putt is modelled as the quadratic patch
 
     z(x, y) = a x + b y + 0.5 (c x^2 + 2 d x y + e y^2)
 
-and ``p = (a, b, c, d, e)`` is found as the MAP estimate (Levenberg-Marquardt
-on Huber-robustified, sigma-normalised residuals) from
+and ``p = (a, b, c, d, e)`` is fitted by Levenberg-Marquardt on
+Huber-robustified, sigma-normalised residuals plus Gaussian priors:
 
 * **tilt** of each placement at station ``s_i`` on the line:
   ``a + c s_i = tilt_x``, ``b + d s_i = tilt_y``  (sigma: seating noise);
@@ -29,16 +30,50 @@ on Huber-robustified, sigma-normalised residuals) from
 * **turf horizon** (method B2 only): ``tan(elev_k) = E(theta_k; p)`` with the
   exact forward model of a quadratic seen from height ``h``
   (:func:`quad_horizon`), plus two nuisance offsets (pitch and roll) for the
-  level reference of the cameras, each with the prior ``sigma_level``.  (A
-  wide prior on the common offset - to absorb the unknown height of whatever
-  forms the silhouette - was tried and made B2 worse in every geometry
-  tested: with the level pinned, a silhouette that sits at the wrong height
-  shows up as Huber outliers and loses influence.)
+  level reference of the cameras, each with the prior ``sigma_level``;
 * **priors**: curvatures ``c, d, e ~ N(0, 0.004 1/m)``, weak priors on
   ``a, b``.
 
-Then the putt is solved on the fitted patch with the entered green speed and
-the measured grain (:func:`greenline_sim.physics.solve_aim_quadratic_batch`).
+Without horizon rows (``B1``, the Survey) every residual is linear in ``p``,
+the robust cost is convex, and the minimum found is the MAP estimate
+whatever the starting point.
+
+With horizon rows the cost is NOT convex, and how the horizon is used
+matters more than how well the cost is minimised:
+
+* ``B2`` (default form, "anchored"): two stages.  First the ``B1`` fit.
+  Then everything the Quick Read measures directly is HELD at that solution
+  - the slopes at the ball ``a, b`` (the tilt) and the along-line curvature
+  ``c`` (the hole height) - and only the twist ``d``, the cross curvature
+  ``e``, a common-mode silhouette offset and the roll offset are fitted to
+  the horizon rows.  The reason is physical: the silhouette is formed by
+  whatever lies behind the green, at a height the model does not know.  A
+  common-mode height error of the silhouette is indistinguishable from the
+  along-line slope ``a`` and curvature ``c`` (their signatures are
+  ``cos(theta)`` and ``cos^2(theta)``, 0.8 ... 1 across the field), so it
+  gets a nuisance parameter of its own (prior ``sigma_silhouette``,
+  practically free) and the horizon is left to say only how the surface
+  tilts ACROSS the field.  With ``a, b, c`` held the cost has, in practice,
+  a single minimum (see the tests and the report, section 5).
+* ``B2`` with ``EstimatorConfig.horizon_free_c``: as above but ``c`` may
+  move and there is no silhouette offset.  The silhouette height then goes
+  into ``c`` and overrules the flag-base height.  Comparison only.
+* ``B2`` with ``EstimatorConfig.horizon_joint`` ("joint"): all parameters
+  fitted to all rows at once, the literal joint MAP problem.  Its cost has
+  many local minima - a single run from the tilt plane ends in a non-global
+  one in 14-48 % of simulated reads, depending on the surrounds - and its
+  lowest minimum lets the 41 horizon samples overrule the puck's own tilt
+  reading (along-line slope at the ball wrong by 10 mrad RMS against
+  2.5 mrad for the tilt).  It is kept, with a 25-start search, only so that
+  the report can show both.
+
+Then the putt is solved on the fitted patch with the entered green speed
+(:func:`greenline_sim.physics.solve_aim_quadratic_batch`).  The grain
+reading is used only if ``EstimatorConfig.use_grain`` is set; the default is
+off, because the grain sensor ships disabled.
+
+The slope and the fall line reported at the ball are always the tilt reading
+itself, never the fitted patch.
 
 Horizon forward model (derivation)
 ----------------------------------
@@ -62,14 +97,20 @@ Operating modes and baselines
 -----------------------------
 ``STRAIGHT``  aim at the hole, flat-green pace (no slope reading).
 ``B0``        plane from the puck tilt only (a digital-level ball marker).
-``B1``        Quick Read: tilt + flag-base height (MAP fit, no horizon).
+``B1``        Quick Read: tilt + flag-base height (no horizon).
               With a spin-and-reread measurement (``tilt_reads == 2``) this is
               the Precision Read; with several placements it is the Survey.
-``B2``        B1 + turf-horizon residuals.
+``B2``        B1 + turf-horizon residuals (anchored; see above).
 
-If the flagstick was not found the estimator falls back to the tilt-only
-plane along the visor axis, with the dialled (or a default) distance, and
-flags low confidence.
+Fallbacks: if the flagstick was not found the estimator uses the tilt-only
+plane along the visor axis with the dialled (or a default) distance and
+flags low confidence (``flag_missing``).  If the flag was found but could
+not be ranged, its measured bearing is kept and only the distance falls back
+(``range_missing``).
+
+The numerical kernels (:func:`_fit_residuals`, :func:`_fit_lm`,
+:func:`_chol_solve`) are scalar code that runs under numba or as plain
+Python; they are what the C port follows.
 """
 
 from __future__ import annotations
@@ -80,6 +121,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
+from ._jit import njit
 from .measurements import Measurements
 from .physics import (
     DEFAULT_PAST,
@@ -116,11 +158,16 @@ DEFAULT_METHOD = "B1"
 """The firmware default: the Quick Read without horizon residuals.
 
 The Monte Carlo (results/REPORT.md, section 5) found that the turf-horizon
-residuals of ``B2`` help when the ground beyond the collar continues the
-green or falls away smoothly, and hurt when the surrounds carry mounds that
-are independent of the green.  The sign of the effect therefore depends on a
-property of the course that the device cannot sense and that the simulator
-can only assume, so ``B2`` stays an option and is not the default."""
+residuals of ``B2`` help when the camera sees the smooth continuation of the
+green, give no reliable gain with the collar, rough and surrounds as
+modelled (a small reduction of the mean miss that disappears when the
+terrain is modelled further out), and hurt when the surrounds carry mounds
+that are independent of the green.  The device cannot sense which case it is
+in, so ``B2`` stays an option and is not the default.
+
+The other firmware default that matters for the numbers: the grain reading
+is NOT used (``EstimatorConfig.use_grain`` is False), because the design
+specification ships the grain sensor disabled until it is validated."""
 
 # aim_source codes
 AIM_FROM_PATCH = 0  # solved on the fitted quadratic patch
@@ -170,6 +217,13 @@ class EstimatorConfig:
         bend the whole fitted line.  The total rise seen from the ball is
         left tight: that is the quantity the pace needs, whatever the shape
         in between.  A-priori value equal to the nominal seating noise.
+    sigma_drop_lateral : float [m]
+        Survey fits only: assumed 1-sigma distance of a drop (placed by eye)
+        from the true ball->hole line.  A drop that is off the line by ``y``
+        at distance ``r`` from the hole has its "toward the hole" frame
+        rotated by ``y / r`` against the putt frame, which leaks the along
+        slope into its cross tilt; the tilt sigmas of the drops after the
+        first are inflated by that cross-talk.
     sigma_horizon : float [rad]
         Per-sample sigma of the horizon residuals: pixel noise (0.23 mrad for
         GL1) plus an allowance for the silhouette not being the fitted
@@ -186,7 +240,9 @@ class EstimatorConfig:
         Treat the lowest visible point of the stick as its base even when the
         measurement says it is hidden (models a device that cannot tell).
     use_grain : bool
-        Use the measured grain (False = solve without grain).
+        Use the measured grain.  Default False: the design specification
+        ships the grain sensor DISABLED until it is validated, so the
+        firmware default solves the putt without grain.
     grain_kappa_max : float
         Clip on the measured grain strength.
     past : float [m]
@@ -203,14 +259,48 @@ class EstimatorConfig:
         Levenberg-Marquardt iteration limit, convergence tolerance on the
         scaled step (slopes in units of 1e-2, curvatures and offsets in
         1e-3), and initial damping.
+    horizon_joint : bool
+        ``B2`` only.  False (default): the anchored two-stage fit - ``a, b,
+        c`` from the Quick-Read problem, ``d, e`` from the horizon.  True:
+        the joint fit of all parameters to all rows (comparison only).
+    horizon_free_c : bool
+        Anchored ``B2`` only, comparison only.  True: the horizon stage may
+        also move the along-line curvature ``c`` and has no silhouette
+        offset - the common-mode height of the silhouette then goes into
+        ``c`` and overrules the flag-base height.
+    sigma_silhouette : float [rad]
+        Anchored ``B2``: prior sigma of the common-mode offset between the
+        measured silhouette and the model.  The silhouette is formed by
+        whatever stands behind the green (40 mm of rough 10 m away is
+        4 mrad, a 0.2 m rise 15 m away 13 mrad), so the offset is left
+        practically free; results do not change between 5 and 20 mrad.
+    multi_start : bool
+        ``B2`` only.  Run the fixed set of extra starts and keep the lowest
+        minimum.  False = a single run from the first start.
     tol_miss, tol_pace : float [m]
         Tolerances of the aim solver.
     poor_horizon_fraction : float
         Fraction of horizon samples beyond the Huber threshold above which
         the horizon is flagged as poor.
-    conf_base_hidden, conf_flag_missing, conf_poor_horizon, conf_aim_fallback : float
+    conf_twist_sigma : float [1/m];  conf_twist_length : float [m]
+        Confidence score only: how much the cross slope is expected to
+        change along the line, ``sigma_d = conf_twist_sigma /
+        sqrt(1 + (D / conf_twist_length)^2)``.  This is the
+        "representativeness" allowance of a local slope sample.  The values
+        were CALIBRATED on the synthetic greens of this simulator (RMS
+        difference between the cross slope at the ball and its path average:
+        1.5 mrad at 1.5 m, 5 mrad at 6 m, 7.6 mrad at 12 m); they are not
+        field data.  (The fit itself keeps the wider prior ``sigma_curv``.)
+    conf_grain_kappa : float;  conf_grain_rel : float
+        Confidence score only: RMS of the cross-line grain strength the
+        solve does not know about - ``conf_grain_kappa`` when the grain is
+        not used (calibrated on the synthetic greens, 35 % of which are
+        strongly grained), ``conf_grain_rel`` times the measured strength
+        when it is (30 % strength and 20 deg direction error).
+    conf_base_hidden, conf_flag_missing, conf_range_missing, conf_poor_horizon, conf_aim_fallback : float
         Multipliers applied to the confidence score when the corresponding
-        flag is raised.
+        flag is raised.  (A missing flag already lowers the score through
+        ``sigma_hand_bearing``; its multiplier is therefore close to 1.)
     """
 
     sigma_seat: float = 2.5e-3
@@ -225,6 +315,7 @@ class EstimatorConfig:
     sigma_curv: float = 0.004
     sigma_slope_prior: float = 0.05
     sigma_field: float = 2.5e-3
+    sigma_drop_lateral: float = 0.15
     sigma_horizon: float = 1.0e-3
     huber_k: float = 1.5
     horizon_d_min: float = 0.15
@@ -233,7 +324,7 @@ class EstimatorConfig:
     horizon_l_cap: float = 20.0
     use_flag_base: bool = True
     assume_base_visible: bool = False
-    use_grain: bool = True
+    use_grain: bool = False
     grain_kappa_max: float = 0.25
     past: float = DEFAULT_PAST
     default_distance: float = 3.0
@@ -244,11 +335,20 @@ class EstimatorConfig:
     lm_max_iter: int = 60
     lm_tol: float = 1e-9
     lm_lambda0: float = 1e-4
+    horizon_joint: bool = False
+    horizon_free_c: bool = False
+    sigma_silhouette: float = 0.02
+    multi_start: bool = True
     tol_miss: float = DEFAULT_TOL_MISS
     tol_pace: float = DEFAULT_TOL_PACE
     poor_horizon_fraction: float = 0.3
+    conf_twist_sigma: float = 0.002
+    conf_twist_length: float = 10.0
+    conf_grain_kappa: float = 0.045
+    conf_grain_rel: float = 0.45
     conf_base_hidden: float = 0.8
-    conf_flag_missing: float = 0.5
+    conf_flag_missing: float = 0.9
+    conf_range_missing: float = 0.5
     conf_poor_horizon: float = 0.8
     conf_aim_fallback: float = 0.7
 
@@ -389,6 +489,10 @@ def _horizon_terms(coeffs: np.ndarray, ct: np.ndarray, st: np.ndarray, h_cam: fl
 # --------------------------------------------------------------------------
 
 _NPAR = 7  # a, b, c, d, e, level pitch offset, level roll offset
+_FREE_ALL = np.ones(7, dtype=np.uint8)
+_FREE_CURVATURES = np.array([0, 0, 1, 1, 1, 1, 1], dtype=np.uint8)  # a, b held
+_FREE_TWIST = np.array([0, 0, 0, 1, 1, 1, 1], dtype=np.uint8)  # a, b, c held
+_NO_HORIZON = np.zeros((0, 3))
 _SCALE = np.array([1e-2, 1e-2, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3])  # natural size of each parameter
 
 
@@ -401,6 +505,9 @@ class PatchFit:
     coeffs : (5,) array ``(a, b, c, d, e)`` in the putt frame [m/m, 1/m]
     cov : (5, 5) array
         Posterior covariance (Gauss-Newton approximation at the solution).
+        For the anchored horizon fit it is the two-stage covariance: the
+        Quick-Read covariance of ``(a, b, c)`` propagated through the
+        conditional fit of ``(d, e)``.
     level_offsets : (2,) array [rad]
         Fitted (pitch, roll) offsets of the cameras' level reference (zero
         unless horizon residuals were used).
@@ -412,6 +519,16 @@ class PatchFit:
         ``+x`` (0 when the flag was not found: the visor axis).
     range : RangeEstimate
         Stereo / monocular / fused range of the first placement.
+    tilt_slopes : (2,) array [m/m]
+        The tilt reading of the placement at the ball, in the putt frame:
+        the slope the puck measured directly.  The displayed slope and fall
+        line at the ball come from this, whatever the fit did.
+    cross_sigma_read : float [m/m]
+        1-sigma of the mean cross slope along the line as far as the tilt
+        readings know it: posterior of ``b + 0.5 d D`` from the cross-tilt
+        of every located placement, with the confidence prior on the twist
+        ``d`` (see :class:`EstimatorConfig`).  The horizon is deliberately
+        left out of it.  Used by the confidence score.
     n_drops : int
         Placements used by the fit.
     stations : tuple of float [m]
@@ -420,11 +537,18 @@ class PatchFit:
         The hole height was only bounded (base of the stick hidden).
     flag_missing : bool
         No flagstick: tilt-only fallback along the visor axis.
+    range_missing : bool
+        The flag was found (its bearing is used) but neither range channel
+        gave a distance: tilt-only plane at the dialled / default distance.
     used_horizon : bool;  poor_horizon : bool;  horizon_rms : float
         Whether horizon residuals entered the fit, whether they were flagged
         as poor, and their RMS in units of ``sigma_horizon`` (NaN if unused).
     n_iter : int;  converged : bool;  cost : float
-        Levenberg-Marquardt diagnostics.
+        Levenberg-Marquardt diagnostics of the run that was kept.
+    cost_first_start : float;  n_starts : int
+        Cost reached from the first start, and the number of starts run.
+        ``cost < cost_first_start`` means another start found a lower
+        minimum than the first.
     """
 
     coeffs: np.ndarray
@@ -434,16 +558,41 @@ class PatchFit:
     distance_sigma: float
     bearing: float
     range: RangeEstimate
+    tilt_slopes: np.ndarray
+    cross_sigma_read: float
     n_drops: int
     stations: Tuple[float, ...]
     base_hidden: bool
     flag_missing: bool
+    range_missing: bool
     used_horizon: bool
     poor_horizon: bool
     horizon_rms: float
     n_iter: int
     converged: bool
     cost: float
+    cost_first_start: float
+    n_starts: int
+
+
+_COST_TIE = 1e-9  # relative cost difference below which two minima count as the same
+_START_CURVATURES_ANCHORED = (0.003,)  # [1/m] corner starts (d, e = +-this) of the anchored horizon fit
+_START_CURVATURES_JOINT = (0.002, 0.005, 0.012)  # [1/m] corner starts of the joint fit
+
+
+def _corner_starts(x0: np.ndarray, magnitudes: Sequence[float]) -> List[np.ndarray]:
+    """Extra starting points of a horizon fit: ``x0`` with the curvatures
+    ``(c, d, e)`` set to every sign combination of each magnitude [1/m]
+    (8 starts per magnitude, in a fixed order)."""
+    out = []
+    for mag in magnitudes:
+        for sign_c in (-1.0, 1.0):
+            for sign_d in (-1.0, 1.0):
+                for sign_e in (-1.0, 1.0):
+                    x = x0.copy()
+                    x[2], x[3], x[4] = sign_c * mag, sign_d * mag, sign_e * mag
+                    out.append(x)
+    return out
 
 
 def _rotate_to(vec: np.ndarray, angle: float) -> Tuple[float, float]:
@@ -460,13 +609,288 @@ def _tilt_sigma(meas: Measurements, config: EstimatorConfig) -> float:
     return math.sqrt(config.sigma_seat**2 + config.sigma_tilt_bias**2 + config.sigma_gravity**2)
 
 
-def _huber_cost(r: np.ndarray, k: float) -> float:
-    a = np.abs(r)
-    return float(np.sum(np.where(a <= k, 0.5 * r * r, k * a - 0.5 * k * k)))
+# ---- scalar kernels (numba or plain Python; the reference for the C port) ----
 
 
-def _huber_weight(r: np.ndarray, k: float) -> np.ndarray:
-    return k / np.maximum(np.abs(r), k)  # 1 for |r| <= k, k / |r| beyond
+@njit(cache=True)
+def _chol_solve(mat, rhs, n, out):
+    """Solve ``mat @ out = rhs`` for a symmetric positive-definite ``mat``
+    (n x n) by Cholesky factorisation.  ``mat`` is overwritten by its lower
+    factor.  Returns False (``out`` undefined) if a pivot is not positive,
+    i.e. the matrix is not positive definite to rounding."""
+    for j in range(n):
+        acc = mat[j, j]
+        for k in range(j):
+            acc -= mat[j, k] * mat[j, k]
+        if not (acc > 0.0):
+            return False
+        piv = math.sqrt(acc)
+        mat[j, j] = piv
+        for i in range(j + 1, n):
+            acc = mat[i, j]
+            for k in range(j):
+                acc -= mat[i, k] * mat[j, k]
+            mat[i, j] = acc / piv
+    for i in range(n):
+        acc = rhs[i]
+        for k in range(i):
+            acc -= mat[i, k] * out[k]
+        out[i] = acc / mat[i, i]
+    for i in range(n - 1, -1, -1):
+        acc = out[i]
+        for k in range(i + 1, n):
+            acc -= mat[k, i] * out[k]
+        out[i] = acc / mat[i, i]
+    return True
+
+
+@njit(cache=True)
+def _fit_residuals(x, rows, targets, one_sided, hz, hpar, r, jac, second):
+    """Sigma-normalised data residuals of a patch fit at ``x`` (7,).
+
+    ``rows`` (m, 7), ``targets`` (m,), ``one_sided`` (m,): the linear rows,
+    residual ``rows[i] . x - targets[i]``; a one-sided row counts only while
+    positive.  ``hz`` (n_h, 3): per horizon sample ``tan(elev), cos(theta),
+    sin(theta)``; ``hpar = (sigma, h_cam, d_min, far_limit)``.  Fills ``r``
+    (m + n_h), the Jacobian ``jac`` (m + n_h, 7) and ``second`` (m + n_h):
+    the second derivative of each residual with respect to its ray curvature
+    ``K`` (non-zero only where the horizon is an interior crest).
+    """
+    n_lin = rows.shape[0]
+    for i in range(n_lin):
+        acc = -targets[i]
+        for j in range(_NPAR):
+            acc += rows[i, j] * x[j]
+        if one_sided[i] != 0 and acc <= 0.0:  # bound satisfied: no residual, no gradient
+            r[i] = 0.0
+            for j in range(_NPAR):
+                jac[i, j] = 0.0
+        else:
+            r[i] = acc
+            for j in range(_NPAR):
+                jac[i, j] = rows[i, j]
+        second[i] = 0.0
+    n_h = hz.shape[0]
+    if n_h > 0:
+        sigma = hpar[0]
+        h_cam = hpar[1]
+        d_min = hpar[2]
+        far = hpar[3]
+        for k in range(n_h):
+            ct = hz[k, 1]
+            st = hz[k, 2]
+            slope = x[0] * ct + x[1] * st
+            curv = x[2] * ct * ct + 2.0 * x[3] * st * ct + x[4] * st * st
+            interior = False
+            r_max = far  # concave-up or flat ray: the horizon is at the far limit
+            if curv < 0.0:  # concave-down: crest at r* = sqrt(2 h / |K|), clipped to the interval
+                r_star = math.sqrt(2.0 * h_cam / (-curv))
+                if r_star <= d_min:
+                    r_max = d_min
+                elif r_star < far:
+                    r_max = r_star
+                    interior = True
+            i = n_lin + k
+            r[i] = (slope + 0.5 * curv * r_max - h_cam / r_max + x[5] + x[6] * st - hz[k, 0]) / sigma
+            jac[i, 0] = ct / sigma
+            jac[i, 1] = st / sigma
+            jac[i, 2] = 0.5 * r_max * ct * ct / sigma
+            jac[i, 3] = r_max * st * ct / sigma
+            jac[i, 4] = 0.5 * r_max * st * st / sigma
+            jac[i, 5] = 1.0 / sigma
+            jac[i, 6] = st / sigma
+            second[i] = 0.25 * r_max / (-curv) / sigma if interior else 0.0
+
+
+@njit(cache=True)
+def _fit_cost(x, r, prior_w, huber_k):
+    """Robust MAP cost: Huber loss of the data residuals + Gaussian priors."""
+    cost = 0.0
+    for i in range(r.shape[0]):
+        a = abs(r[i])
+        if a <= huber_k:
+            cost += 0.5 * a * a
+        else:
+            cost += huber_k * a - 0.5 * huber_k * huber_k
+    for j in range(_NPAR):
+        cost += 0.5 * prior_w[j] * x[j] * x[j]
+    return cost
+
+
+@njit(cache=True)
+def _fit_gauss(r, jac, prior_w, huber_k, gauss):
+    """Gauss-Newton matrix of the robust MAP cost with Huber (IRLS) weights
+    ``min(1, k / |r|)``; its inverse is the posterior covariance reported."""
+    for a in range(_NPAR):
+        for b in range(_NPAR):
+            gauss[a, b] = 0.0
+        gauss[a, a] = prior_w[a]
+    for i in range(r.shape[0]):
+        ar = abs(r[i])
+        w = 1.0 if ar <= huber_k else huber_k / ar
+        for a in range(_NPAR):
+            wa = w * jac[i, a]
+            if wa != 0.0:
+                for b in range(_NPAR):
+                    gauss[a, b] += wa * jac[i, b]
+
+
+@njit(cache=True)
+def _fit_lm(x0, free, rows, targets, one_sided, hz, hpar, prior_w, huber_k, scale, max_iter, tol, lam0, x_out, gauss_out):
+    """Levenberg-Marquardt minimisation of the robust MAP cost from ``x0``.
+
+    Solves ``(H + lam * diag(H_gauss)) step = -grad`` by Cholesky, accepts
+    the step only if it does not increase the cost, otherwise raises ``lam``
+    tenfold (also when the matrix is not positive definite).  ``H`` is the
+    Gauss-Newton matrix with Huber (IRLS) weights - a majoriser of the robust
+    cost, safe far from the solution but only linearly convergent while
+    outliers remain - until the set of Huber outliers is the same at two
+    consecutive iterates; from then on it is the exact Hessian of the Huber
+    cost for that outlier set (weight 1 for inliers, 0 for outliers, which
+    still pull through the gradient), giving quadratic convergence.  In both
+    cases the exact second-order term of the horizon rows (the only
+    non-linear ones) is added: ``psi(r_k) * d2r_k/dK2 * q_k q_k^T`` with
+    ``q_k = dK/dp = (cos^2, 2 sin cos, sin^2)``.
+
+    Parameters with ``free[j] == 0`` are held at their value in ``x0`` (their
+    row and column of the system are replaced by the identity).
+
+    Converged when the scaled step falls below ``tol``.  Fills ``x_out`` (7)
+    and ``gauss_out`` (7, 7; the Gauss-Newton matrix of ALL seven parameters
+    at the solution) and returns ``(cost, n_iter, converged)``.  Without
+    horizon rows the cost is convex and the minimum is the global one; with
+    horizon rows it is not convex and the minimum found is a LOCAL one.
+    """
+    n_lin = rows.shape[0]
+    n_h = hz.shape[0]
+    m = n_lin + n_h
+    x = x0.copy()
+    r = np.empty(m)
+    jac = np.empty((m, _NPAR))
+    second = np.empty(m)
+    r_new = np.empty(m)
+    jac_new = np.empty((m, _NPAR))
+    second_new = np.empty(m)
+    x_new = np.empty(_NPAR)
+    grad = np.empty(_NPAR)
+    hess = np.empty((_NPAR, _NPAR))
+    gauss = np.empty((_NPAR, _NPAR))
+    work = np.empty((_NPAR, _NPAR))
+    rhs = np.empty(_NPAR)
+    step = np.empty(_NPAR)
+    outlier_prev = np.zeros(m, dtype=np.uint8)
+    have_prev = False
+
+    _fit_residuals(x, rows, targets, one_sided, hz, hpar, r, jac, second)
+    cost = _fit_cost(x, r, prior_w, huber_k)
+    lam = lam0
+    converged = False
+    n_iter = 0
+    for it in range(1, max_iter + 1):
+        n_iter = it
+        # ---- same outlier set as at the previous iterate? -> exact Hessian
+        exact = have_prev
+        for i in range(m):
+            flag = 1 if abs(r[i]) > huber_k else 0
+            if flag != outlier_prev[i]:
+                exact = False
+            outlier_prev[i] = flag
+        have_prev = True
+        # ---- gradient, Gauss-Newton matrix, iteration matrix
+        _fit_gauss(r, jac, prior_w, huber_k, gauss)
+        for a in range(_NPAR):
+            grad[a] = prior_w[a] * x[a]
+            for b in range(_NPAR):
+                hess[a, b] = 0.0 if exact else gauss[a, b]
+            if exact:
+                hess[a, a] = prior_w[a]
+        for i in range(m):
+            ri = r[i]
+            psi = ri
+            if psi > huber_k:
+                psi = huber_k
+            elif psi < -huber_k:
+                psi = -huber_k
+            for a in range(_NPAR):
+                grad[a] += jac[i, a] * psi
+            if exact and abs(ri) <= huber_k:
+                for a in range(_NPAR):
+                    ja = jac[i, a]
+                    if ja != 0.0:
+                        for b in range(_NPAR):
+                            hess[a, b] += ja * jac[i, b]
+            if second[i] != 0.0:
+                k = i - n_lin
+                ct = hz[k, 1]
+                st = hz[k, 2]
+                wq = psi * second[i]
+                q0 = ct * ct
+                q1 = 2.0 * st * ct
+                q2 = st * st
+                hess[2, 2] += wq * q0 * q0
+                hess[2, 3] += wq * q0 * q1
+                hess[2, 4] += wq * q0 * q2
+                hess[3, 2] += wq * q1 * q0
+                hess[3, 3] += wq * q1 * q1
+                hess[3, 4] += wq * q1 * q2
+                hess[4, 2] += wq * q2 * q0
+                hess[4, 3] += wq * q2 * q1
+                hess[4, 4] += wq * q2 * q2
+        for a in range(_NPAR):
+            if free[a] == 0:  # held: unit row and column, no step
+                grad[a] = 0.0
+                for b in range(_NPAR):
+                    hess[a, b] = 0.0
+                    hess[b, a] = 0.0
+                hess[a, a] = 1.0
+        # ---- damped step
+        accepted = False
+        small = False
+        while lam <= 1e12:
+            for a in range(_NPAR):
+                rhs[a] = -grad[a]
+                for b in range(_NPAR):
+                    work[a, b] = hess[a, b]
+                if free[a] != 0:
+                    work[a, a] += lam * gauss[a, a]
+            if not _chol_solve(work, rhs, _NPAR, step):  # not positive definite: damp harder
+                lam *= 10.0
+                continue
+            biggest = 0.0
+            for a in range(_NPAR):
+                rel = abs(step[a]) / scale[a]
+                if rel > biggest:
+                    biggest = rel
+                x_new[a] = x[a] + step[a]
+            small = biggest < tol
+            _fit_residuals(x_new, rows, targets, one_sided, hz, hpar, r_new, jac_new, second_new)
+            cost_new = _fit_cost(x_new, r_new, prior_w, huber_k)
+            if cost_new <= cost:
+                for a in range(_NPAR):
+                    x[a] = x_new[a]
+                for i in range(m):
+                    r[i] = r_new[i]
+                    second[i] = second_new[i]
+                    for a in range(_NPAR):
+                        jac[i, a] = jac_new[i, a]
+                cost = cost_new
+                lam = lam * 0.1
+                if lam < 1e-12:
+                    lam = 1e-12
+                accepted = True
+                break
+            if small:  # at the minimum to rounding: keep the better point
+                break
+            lam *= 10.0
+        if small:
+            converged = True
+            break
+        if not accepted:
+            break
+    _fit_gauss(r, jac, prior_w, huber_k, gauss_out)
+    for a in range(_NPAR):
+        x_out[a] = x[a]
+    return cost, n_iter, converged
 
 
 class _Problem:
@@ -483,8 +907,9 @@ class _Problem:
         self.targets: List[float] = []
         self.one_sided: List[bool] = []
         self.prior_w = 1.0 / (prior_sigma * prior_sigma)
-        self.huber_k = huber_k
-        self.horizon = None
+        self.huber_k = float(huber_k)
+        self.hz = np.zeros((0, 3))
+        self.hpar = np.zeros(4)
         self._lin = None
 
     def add_linear(self, row, target: float, sigma: float, one_sided: bool = False) -> None:
@@ -493,146 +918,98 @@ class _Problem:
         self.rows.append(np.asarray(row, dtype=float) / sigma)
         self.targets.append(target / sigma)
         self.one_sided.append(one_sided)
+        self._lin = None
 
     def set_horizon(self, theta, tan_elev, sigma: float, h_cam: float, d_min: float, far_limit: float) -> None:
         theta = np.asarray(theta, dtype=float)
-        self.horizon = (np.asarray(tan_elev, dtype=float), sigma, h_cam, d_min, far_limit, np.cos(theta), np.sin(theta))
+        self.hz = np.ascontiguousarray(np.column_stack([np.asarray(tan_elev, dtype=float), np.cos(theta), np.sin(theta)]))
+        self.hpar = np.array([sigma, h_cam, d_min, far_limit], dtype=float)
+
+    @property
+    def n_linear(self) -> int:
+        return len(self.rows)
 
     def _linear(self):
         if self._lin is None:
             self._lin = (
-                np.array(self.rows, dtype=float).reshape(-1, _NPAR),
+                np.ascontiguousarray(np.array(self.rows, dtype=float).reshape(-1, _NPAR)),
                 np.array(self.targets, dtype=float),
-                np.array(self.one_sided, dtype=bool),
+                np.array(self.one_sided, dtype=np.uint8),
             )
         return self._lin
 
-    def data(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
-        """Data residuals ``r`` (m,), their Jacobian (m, 7) and - for the
-        horizon rows only - the second derivative of each residual with
-        respect to its ray curvature ``K`` (None without a horizon)."""
+    def data(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Data residuals ``r`` (m,), their Jacobian (m, 7) and the second
+        derivative of each residual with respect to its ray curvature."""
         rows, targets, one_sided = self._linear()
-        r = rows @ x - targets
-        jac = rows
-        idle = one_sided & (r <= 0.0)  # bound satisfied: no residual, no gradient
-        if idle.any():
-            r = np.where(idle, 0.0, r)
-            jac = np.where(idle[:, None], 0.0, rows)
-        if self.horizon is None:
-            return r, jac, None
-        tan_elev, sigma, h_cam, d_min, far_limit, ct, st = self.horizon
-        horizon, r_max, second = _horizon_terms(x, ct, st, h_cam, d_min, far_limit)
-        r_h = (horizon + x[5] + x[6] * st - tan_elev) / sigma
-        jac_h = np.empty((ct.size, _NPAR))
-        jac_h[:, 0] = ct
-        jac_h[:, 1] = st
-        jac_h[:, 2] = 0.5 * r_max * ct * ct
-        jac_h[:, 3] = r_max * st * ct
-        jac_h[:, 4] = 0.5 * r_max * st * st
-        jac_h[:, 5] = 1.0
-        jac_h[:, 6] = st
-        return np.concatenate([r, r_h]), np.vstack([jac, jac_h / sigma]), second / sigma
+        m = rows.shape[0] + self.hz.shape[0]
+        r = np.empty(m)
+        jac = np.empty((m, _NPAR))
+        second = np.empty(m)
+        _fit_residuals(np.asarray(x, dtype=float), rows, targets, one_sided, self.hz, self.hpar, r, jac, second)
+        return r, jac, second
 
-    def cost(self, x: np.ndarray, r: Optional[np.ndarray] = None) -> float:
-        if r is None:
-            r = self.data(x)[0]
-        return _huber_cost(r, self.huber_k) + 0.5 * float(np.sum(self.prior_w * x * x))
+    def cost(self, x: np.ndarray) -> float:
+        x = np.asarray(x, dtype=float)
+        return float(_fit_cost(x, self.data(x)[0], self.prior_w, self.huber_k))
 
-    def normal_equations(self, r: np.ndarray, jac: np.ndarray) -> np.ndarray:
-        """Gauss-Newton matrix of the robust MAP cost with Huber (IRLS)
-        weights; its inverse is the posterior covariance reported."""
-        w = _huber_weight(r, self.huber_k)
-        return jac.T @ (jac * w[:, None]) + np.diag(self.prior_w)
+    def gradient(self, x: np.ndarray) -> np.ndarray:
+        """Gradient of the robust MAP cost (for the tests)."""
+        x = np.asarray(x, dtype=float)
+        r, jac, _ = self.data(x)
+        return jac.T @ np.clip(r, -self.huber_k, self.huber_k) + self.prior_w * x
 
-    def newton_system(self, x: np.ndarray, r: np.ndarray, jac: np.ndarray, second: Optional[np.ndarray],
-                      exact: bool):
-        """Gradient, iteration matrix and a positive damping diagonal.
+    def minimise(self, x0: np.ndarray, config: "EstimatorConfig", *, horizon: bool = True, free: np.ndarray = None):
+        """One Levenberg-Marquardt run from ``x0``: ``(x, gauss, n_iter, converged, cost)``.
 
-        ``exact=False``: the Gauss-Newton matrix with Huber (IRLS) weights
-        ``min(1, k / |r|)`` - a majoriser of the robust cost, safe far from
-        the solution but only linearly convergent while outliers remain.
-
-        ``exact=True``: the exact Hessian of the Huber cost for the current
-        set of outliers (weight 1 for inliers, 0 for outliers; the outliers
-        still pull through the gradient).  Used once the outlier set has
-        stopped changing; it gives quadratic convergence.
-
-        In both cases the exact second-order term of the horizon rows (the
-        only non-linear ones) is added:
-        ``psi(r_k) * d2r_k/dK2 * q_k q_k^T`` with
-        ``q_k = dK/dp = (cos^2, 2 sin cos, sin^2)``.
+        ``horizon=False`` leaves the horizon rows out (the convex Quick-Read
+        problem); ``free`` (7 flags, default all 1) marks the parameters
+        that may move - the others keep their values in ``x0``.  ``gauss``
+        is the Gauss-Newton matrix of all seven parameters at the solution.
         """
-        k = self.huber_k
-        psi = np.clip(r, -k, k)
-        grad = jac.T @ psi + self.prior_w * x
-        gauss = self.normal_equations(r, jac)
-        if exact:
-            inlier = (np.abs(r) <= k).astype(float)
-            hess = jac.T @ (jac * inlier[:, None]) + np.diag(self.prior_w)
-        else:
-            hess = gauss.copy()
-        if second is not None:
-            ct, st = self.horizon[5], self.horizon[6]
-            q = np.stack([ct * ct, 2.0 * st * ct, st * st], axis=1)
-            wq = psi[-ct.size:] * second
-            hess[2:5, 2:5] += q.T @ (q * wq[:, None])
-        return grad, hess, np.diag(gauss).copy()
+        rows, targets, one_sided = self._linear()
+        x = np.empty(_NPAR)
+        gauss = np.empty((_NPAR, _NPAR))
+        cost, n_iter, converged = _fit_lm(
+            np.asarray(x0, dtype=float), _FREE_ALL if free is None else free, rows, targets, one_sided,
+            self.hz if horizon else _NO_HORIZON, self.hpar, self.prior_w, self.huber_k,
+            _SCALE, int(config.lm_max_iter), float(config.lm_tol), float(config.lm_lambda0), x, gauss,
+        )
+        return x, gauss, int(n_iter), bool(converged), float(cost)
 
 
-def _levenberg_marquardt(problem: _Problem, x0: np.ndarray, config: EstimatorConfig):
-    """Minimise the robust MAP cost.  Returns ``(x, cov, n_iter, converged, cost)``.
+def _cross_sigma_read(distance: float, stations: Sequence[float], sigmas: Sequence[float], config: EstimatorConfig) -> float:
+    """1-sigma of the mean cross slope ``b + 0.5 d D`` from cross-tilt
+    readings at ``stations`` with 1-sigma errors ``sigmas`` [rad].
 
-    Levenberg-Marquardt: solve ``(H + lam * diag(H_gauss)) step = -grad``
-    with ``H`` from :meth:`_Problem.newton_system`, accept the step only if
-    it does not increase the cost, otherwise raise ``lam`` tenfold.  ``H`` is
-    the IRLS majoriser until the set of Huber outliers is the same at two
-    consecutive iterates, and the exact Hessian from then on.  Converged
-    when the scaled step falls below ``config.lm_tol``.  Deterministic.
+    Bayesian straight-line fit ``tilt_y(s) = b + d s`` with the weak slope
+    prior on ``b`` and the CONFIDENCE prior on the twist ``d``:
+    ``sigma_d = conf_twist_sigma / sqrt(1 + (D / conf_twist_length)^2)``.
+    For one placement at the ball this is
+    ``sqrt(sigma_tilt^2 + (0.5 D sigma_d)^2)``: the reading error plus how
+    far the slope at the ball is expected to differ from the average along
+    the line.
     """
-    x = x0.copy()
-    r, jac, second = problem.data(x)
-    cost = problem.cost(x, r)
-    lam = config.lm_lambda0
-    converged = False
-    n_iter = 0
-    outliers_prev = None
-    for n_iter in range(1, config.lm_max_iter + 1):
-        outliers = np.abs(r) > problem.huber_k
-        exact = outliers_prev is not None and np.array_equal(outliers, outliers_prev)
-        outliers_prev = outliers
-        grad, hess, diag = problem.newton_system(x, r, jac, second, exact)
-        accepted = False
-        small = False
-        while lam <= 1e12:
-            try:
-                step = -np.linalg.solve(hess + lam * np.diag(diag), grad)
-            except np.linalg.LinAlgError:  # singular (indefinite matrix): damp harder
-                lam *= 10.0
-                continue
-            small = float(np.max(np.abs(step) / _SCALE)) < config.lm_tol
-            x_new = x + step
-            r_new, jac_new, second_new = problem.data(x_new)
-            cost_new = problem.cost(x_new, r_new)
-            if cost_new <= cost:
-                x, r, jac, second, cost = x_new, r_new, jac_new, second_new, cost_new
-                lam = max(lam * 0.1, 1e-12)
-                accepted = True
-                break
-            if small:  # at the minimum to rounding: keep the better point
-                break
-            lam *= 10.0
-        if small:
-            converged = True
-            break
-        if not accepted:
-            break
-    cov = np.linalg.inv(problem.normal_equations(r, jac))
-    return x, cov, n_iter, converged, cost
+    sigma_d = config.conf_twist_sigma / math.sqrt(1.0 + (distance / config.conf_twist_length) ** 2)
+    n00 = 1.0 / config.sigma_slope_prior**2
+    n01 = 0.0
+    n11 = 1.0 / sigma_d**2
+    for station, sig in zip(stations, sigmas):
+        w = 1.0 / (sig * sig)
+        n00 += w
+        n01 += w * station
+        n11 += w * station * station
+    det = n00 * n11 - n01 * n01
+    v_b = n11 / det
+    v_d = n00 / det
+    v_bd = -n01 / det
+    return math.sqrt(max(v_b + distance * v_bd + 0.25 * distance * distance * v_d, 0.0))
 
 
 def _tilt_only_fit(meas: Measurements, config: EstimatorConfig, *, bearing: float, distance: float,
-                   distance_sigma: float, rng_est: RangeEstimate, flag_missing: bool) -> PatchFit:
-    """Plane from the puck tilt alone (method B0 and the no-flag fallback)."""
+                   distance_sigma: float, rng_est: RangeEstimate, flag_missing: bool,
+                   range_missing: bool = False) -> PatchFit:
+    """Plane from the puck tilt alone (method B0 and the fallbacks)."""
     a_t, b_t = _rotate_to(meas.tilt, bearing)
     sig = _tilt_sigma(meas, config)
     cov = np.diag([sig**2, sig**2, config.sigma_curv**2, config.sigma_curv**2, config.sigma_curv**2])
@@ -644,16 +1021,21 @@ def _tilt_only_fit(meas: Measurements, config: EstimatorConfig, *, bearing: floa
         distance_sigma=distance_sigma,
         bearing=bearing,
         range=rng_est,
+        tilt_slopes=np.array([a_t, b_t]),
+        cross_sigma_read=_cross_sigma_read(distance, (0.0,), (sig,), config),
         n_drops=1,
         stations=(0.0,),
         base_hidden=False,
         flag_missing=flag_missing,
+        range_missing=range_missing,
         used_horizon=False,
         poor_horizon=False,
         horizon_rms=math.nan,
         n_iter=0,
         converged=True,
         cost=0.0,
+        cost_first_start=0.0,
+        n_starts=0,
     )
 
 
@@ -678,13 +1060,32 @@ def fit_patch(
     config : EstimatorConfig
     start : (7,) sequence, optional
         Starting point ``(a, b, c, d, e, pitch offset, roll offset)`` of the
-        iteration.  The default - and the firmware's - is the tilt plane of
-        the first placement with everything else zero.  Only for checking
-        that the minimum found does not depend on the start.
+        iteration INSTEAD of the firmware's start(s); a single run is made
+        from it.  In the anchored horizon fit ``a``, ``b`` and ``c`` of the
+        start are ignored (they are held at the Quick-Read solution).  Only
+        for checking that the minimum found does not depend on the start.
 
     Returns
     -------
     PatchFit
+
+    The fit (see the module docstring)
+    ----------------------------------
+    ``B1``: one Levenberg-Marquardt run from the tilt plane.  The cost is
+    convex, so the minimum is the MAP estimate whatever the start.
+
+    ``B2`` (default, anchored): first the ``B1`` fit; then ``a``, ``b`` and
+    ``c`` are held at its solution and ``d``, ``e``, a common-mode
+    silhouette offset and the roll offset are fitted to the horizon rows and
+    the priors, from the ``B1`` solution and from 4 further starts
+    (``d, e = +-0.003`` 1/m in every sign combination); the lowest minimum
+    is kept.
+
+    ``B2`` with ``config.horizon_joint``: all seven parameters fitted
+    jointly to all rows, from the tilt plane and (``config.multi_start``) 24
+    further starts; the lowest minimum is kept.  This is the literal joint
+    MAP problem; its cost has many local minima (see the tests and the
+    report) and is kept for comparison only.
     """
     if method not in ("B0", "B1", "B2"):
         raise ValueError("fit_patch method must be 'B0', 'B1' or 'B2'")
@@ -695,12 +1096,18 @@ def fit_patch(
     first = drops[0]
     rng_first = fuse_range(first, config)
 
-    # ---- no usable flag: tilt-only plane along the visor axis -------------------
-    if not (first.flag_found and rng_first.valid and math.isfinite(first.flag_bearing)):
+    # ---- no usable flag, or no usable range: tilt-only plane -------------------
+    have_bearing = bool(first.flag_found and math.isfinite(first.flag_bearing))
+    if not (have_bearing and rng_first.valid):
         if math.isfinite(first.user_distance) and first.user_distance > 0.0:
             dist = float(first.user_distance)
         else:
             dist = config.default_distance
+        if have_bearing:
+            # the flag was found but could not be ranged: its bearing (about
+            # 1 mrad) is still far better than the visor axis
+            return _tilt_only_fit(first, config, bearing=float(first.flag_bearing), distance=dist,
+                                  distance_sigma=math.nan, rng_est=rng_first, flag_missing=False, range_missing=True)
         return _tilt_only_fit(first, config, bearing=0.0, distance=dist, distance_sigma=math.nan,
                               rng_est=rng_first, flag_missing=True)
 
@@ -716,6 +1123,10 @@ def fit_patch(
         config.sigma_curv, config.sigma_curv, config.sigma_curv,
         config.sigma_level, config.sigma_level,
     ])
+    anchored = method == "B2" and not config.horizon_joint
+    if anchored and not config.horizon_free_c:
+        # the common-mode height of the silhouette is a nuisance of its own
+        prior_sigma[5] = math.hypot(config.sigma_level, config.sigma_silhouette)
     problem = _Problem(dist, prior_sigma, config.huber_k)
     # placements that can be located on the line (the first one always can)
     located: List[Tuple[Measurements, RangeEstimate, float]] = [(first, rng_first, 0.0)]
@@ -726,6 +1137,7 @@ def fit_patch(
     sigma_field = config.sigma_field if len(located) > 1 else 0.0
 
     stations: List[float] = []
+    cross_sigmas: List[float] = []
     base_hidden = False
     a0 = b0 = 0.0
     for i, (drop, rng_i, station) in enumerate(located):
@@ -735,8 +1147,19 @@ def fit_patch(
         if i == 0:
             a0, b0 = a_t, b_t
         sig_t = math.hypot(_tilt_sigma(drop, config), sigma_field)
-        problem.add_linear([1.0, 0.0, station, 0.0, 0.0, 0.0, 0.0], a_t, sig_t)
-        problem.add_linear([0.0, 1.0, 0.0, station, 0.0, 0.0, 0.0], b_t, sig_t)
+        sig_x = sig_y = sig_t
+        if i > 0:
+            # A drop placed by eye lies an unknown distance off the ball->hole
+            # line, so its "toward the hole" frame is rotated against the putt
+            # frame by about (lateral offset) / (distance to the hole).  That
+            # mixes the two slope components: cross-talk of the along slope
+            # into the cross tilt, and vice versa.
+            rot = config.sigma_drop_lateral / max(rng_i.distance, 0.3)
+            sig_x = math.hypot(sig_t, rot * b_t)
+            sig_y = math.hypot(sig_t, rot * a_t)
+        cross_sigmas.append(sig_y)
+        problem.add_linear([1.0, 0.0, station, 0.0, 0.0, 0.0, 0.0], a_t, sig_x)
+        problem.add_linear([0.0, 1.0, 0.0, station, 0.0, 0.0, 0.0], b_t, sig_y)
         # hole height above this drop
         if config.use_flag_base and math.isfinite(drop.flag_low_elev):
             h_lens = drop.h_cam - config.sink_mean
@@ -754,7 +1177,7 @@ def fit_patch(
             problem.add_linear(row, dz, sig_z, one_sided=hidden)
 
     used_horizon = False
-    n_data_before_horizon = len(problem.rows)
+    n_linear = problem.n_linear
     if method == "B2" and first.horizon_az.size > 0:
         valid = np.isfinite(first.horizon_elev)
         if int(valid.sum()) >= 5:
@@ -768,41 +1191,100 @@ def fit_patch(
             )
             used_horizon = True
 
-    if start is None:
-        x0 = np.zeros(_NPAR)
-        x0[0] = a0
-        x0[1] = b0
-    else:
-        x0 = np.asarray(start, dtype=float).copy()
-        if x0.shape != (_NPAR,) or not np.all(np.isfinite(x0)):
+    x_tilt = np.zeros(_NPAR)
+    x_tilt[0] = a0
+    x_tilt[1] = b0
+    if start is not None:
+        x_user = np.asarray(start, dtype=float).copy()
+        if x_user.shape != (_NPAR,) or not np.all(np.isfinite(x_user)):
             raise ValueError("start must be 7 finite numbers")
-    x, cov, n_iter, converged, cost = _levenberg_marquardt(problem, x0, config)
+
+    if not used_horizon:
+        # convex problem: one run, the same minimum from any start
+        x, gauss, n_iter, converged, cost = problem.minimise(x_tilt if start is None else x_user, config, horizon=False)
+        cost_first = cost
+        n_starts = 1
+        cov = np.linalg.inv(gauss)[:5, :5]
+    elif config.horizon_joint:
+        # joint fit of all seven parameters (non-convex)
+        x, gauss, n_iter, converged, cost = problem.minimise(x_tilt if start is None else x_user, config)
+        cost_first = cost
+        n_starts = 1
+        if start is None and config.multi_start:
+            for x_alt in _corner_starts(x_tilt, _START_CURVATURES_JOINT):
+                n_starts += 1
+                cand = problem.minimise(x_alt, config)
+                if cand[4] < cost - _COST_TIE * (1.0 + cost):
+                    x, gauss, n_iter, converged, cost = cand
+        cov = np.linalg.inv(gauss)[:5, :5]
+    else:
+        # anchored fit: what the Quick Read measures directly is held, the horizon adds the rest
+        x_quick, gauss_quick, _, conv_quick, _ = problem.minimise(x_tilt, config, horizon=False)
+        if config.horizon_free_c:
+            n_held, free, corners = 2, _FREE_CURVATURES, _corner_starts(x_quick, _START_CURVATURES_ANCHORED)
+        else:
+            n_held, free = 3, _FREE_TWIST
+            corners = [x for x in _corner_starts(x_quick, _START_CURVATURES_ANCHORED) if x[2] > 0.0]
+            for x_alt in corners:
+                x_alt[2] = x_quick[2]
+        if start is None:
+            x_first = x_quick
+        else:
+            x_first = x_user
+            x_first[:n_held] = x_quick[:n_held]
+        x, gauss, n_iter, converged, cost = problem.minimise(x_first, config, free=free)
+        cost_first = cost
+        n_starts = 1
+        if start is None and config.multi_start:
+            for x_alt in corners:
+                n_starts += 1
+                cand = problem.minimise(x_alt, config, free=free)
+                if cand[4] < cost - _COST_TIE * (1.0 + cost):
+                    x, gauss, n_iter, converged, cost = cand
+        converged = bool(converged and conv_quick)
+        # two-stage covariance: the held parameters as in the Quick Read; the
+        # rest follows them through the conditional fit
+        # (theta_2 = -G22^-1 G21 theta_1 + ...)
+        cov_held = np.linalg.inv(gauss_quick)[:n_held, :n_held]
+        cond = np.linalg.inv(gauss[n_held:, n_held:])
+        gain = -cond @ gauss[n_held:, :n_held]
+        full = np.empty((_NPAR, _NPAR))
+        full[:n_held, :n_held] = cov_held
+        full[n_held:, :n_held] = gain @ cov_held
+        full[:n_held, n_held:] = full[n_held:, :n_held].T
+        full[n_held:, n_held:] = cond + gain @ cov_held @ gain.T
+        cov = full[:5, :5]
 
     poor_horizon = False
     horizon_rms = math.nan
     if used_horizon:
-        r_h = problem.data(x)[0][n_data_before_horizon:]
+        r_h = problem.data(x)[0][n_linear:]
         horizon_rms = float(np.sqrt(np.mean(r_h * r_h)))
         poor_horizon = bool(np.mean(np.abs(r_h) > config.huber_k) > config.poor_horizon_fraction)
 
     return PatchFit(
         coeffs=x[:5].copy(),
-        cov=cov[:5, :5].copy(),
+        cov=cov.copy(),
         level_offsets=x[5:].copy(),
         distance=dist,
         distance_sigma=rng_first.sigma,
         bearing=bearing,
         range=rng_first,
+        tilt_slopes=np.array([a0, b0]),
+        cross_sigma_read=_cross_sigma_read(dist, stations, cross_sigmas, config),
         n_drops=len(stations),
         stations=tuple(stations),
         base_hidden=bool(base_hidden and config.use_flag_base),
         flag_missing=False,
+        range_missing=False,
         used_horizon=used_horizon,
         poor_horizon=poor_horizon,
         horizon_rms=horizon_rms,
         n_iter=n_iter,
         converged=converged,
         cost=cost,
+        cost_first_start=cost_first,
+        n_starts=n_starts,
     )
 
 
@@ -835,25 +1317,30 @@ class Estimate:
     bearing : float [rad]
         Direction of the hole in the device frame.
     slope_pct : float [%]
-        Slope magnitude at the ball, ``100 * hypot(a, b)``.
+        Slope magnitude at the ball, from the tilt reading of the placement
+        at the ball (``PatchFit.tilt_slopes``): the direct measurement, not
+        the fitted patch.
     fall_line_azimuth : float [rad]
         Direction of steepest descent at the ball in the putt frame (CCW
-        from the direction to the hole).
+        from the direction to the hole), from the same tilt reading.
     fall_line_azimuth_device : float [rad]
         The same in the device frame.
     dz_hole : float [m]
         Fitted height of the hole above the ball, ``a D + 0.5 c D^2``.
     patch : (5,) array ``(a, b, c, d, e)`` (putt frame);  patch_cov : (5, 5)
     cross_slope_sigma : float [m/m]
-        Posterior 1-sigma of the mean cross slope along the line,
-        ``b + 0.5 d D``.
+        1-sigma of the mean cross slope along the line as known from the
+        tilt readings (``PatchFit.cross_sigma_read``): reading error plus
+        the expected difference between the sampled and the path-average
+        slope.  The horizon never tightens it.
     confidence : float in [0, 1]
         ``erf(HOLE_R / (sqrt(2) sigma_lat))`` - the probability that the
         read error alone leaves the ball inside the hole's width, where
         ``sigma_lat`` is the lateral 1-sigma at the hole implied by
-        ``cross_slope_sigma`` (and by the hand-pointing error when the flag
-        is missing) - multiplied by the factors for the raised flags.
-    base_hidden, flag_missing, poor_horizon : bool
+        ``cross_slope_sigma``, by the grain the solve does not know about
+        and (flag missing) by the hand-pointing error - multiplied by the
+        factors for the raised flags.  See :func:`_confidence`.
+    base_hidden, flag_missing, range_missing, poor_horizon : bool
     aim_source : int
         0 solved on the fitted patch; 1 patch not solvable, solved on its
         secant plane; 2 best iterate of that solve; 3 straight at flat pace.
@@ -888,6 +1375,7 @@ class Estimate:
     confidence: float
     base_hidden: bool
     flag_missing: bool
+    range_missing: bool
     poor_horizon: bool
     aim_source: int
     solve_status: int
@@ -911,13 +1399,29 @@ def _pace_factor(distance: float, past: float) -> float:
     return 1.0 + rho2 * math.log(rho2) / (1.0 - rho2)
 
 
-def _confidence(fit: PatchFit, a_r: float, aim_source: int, config: EstimatorConfig) -> Tuple[float, float]:
-    """Confidence score and the posterior sigma of the mean cross slope."""
+def _confidence(fit: PatchFit, a_r: float, kappa_used: float, aim_source: int, config: EstimatorConfig) -> Tuple[float, float]:
+    """Confidence score and the 1-sigma of the mean cross slope it rests on.
+
+    The lateral error at the hole is modelled from what the read cannot
+    know, in the small-slope break formula ``phi = F / 2 * (cross drive) /
+    a_r`` (``F`` = pace factor):
+
+    * the mean cross slope along the line, known to ``fit.cross_sigma_read``
+      (tilt reading error, and how far a local sample is expected to be from
+      the path average; several drops and a spin read tighten it, the
+      horizon does not);
+    * the cross-line grain: ``conf_grain_kappa`` when the grain is not used,
+      ``conf_grain_rel * kappa_used`` when it is;
+    * the hand-pointing error when the flag is missing.
+
+    ``confidence = erf(HOLE_R / (sqrt(2) D sigma_phi))`` times the factors
+    of the raised flags.  The constants were calibrated on the simulator's
+    synthetic greens; the score is a ranking aid, not a measured probability.
+    """
     dist = fit.distance
-    cov = fit.cov
-    var = cov[1, 1] + dist * cov[1, 3] + 0.25 * dist * dist * cov[3, 3]
-    sigma_cross = math.sqrt(max(var, 0.0))
-    sigma_phi = 0.5 * ROLL_FACTOR * G * sigma_cross / a_r * _pace_factor(dist, config.past)
+    sigma_cross = fit.cross_sigma_read
+    sigma_kappa = config.conf_grain_rel * kappa_used if config.use_grain else config.conf_grain_kappa
+    sigma_phi = 0.5 * _pace_factor(dist, config.past) * math.hypot(ROLL_FACTOR * G * sigma_cross / a_r, sigma_kappa)
     if fit.flag_missing:
         sigma_phi = math.hypot(sigma_phi, config.sigma_hand_bearing)
     sigma_lat = dist * sigma_phi
@@ -926,6 +1430,8 @@ def _confidence(fit: PatchFit, a_r: float, aim_source: int, config: EstimatorCon
         conf *= config.conf_base_hidden
     if fit.flag_missing:
         conf *= config.conf_flag_missing
+    if fit.range_missing:
+        conf *= config.conf_range_missing
     if fit.poor_horizon:
         conf *= config.conf_poor_horizon
     if aim_source != AIM_FROM_PATCH:
@@ -1013,15 +1519,17 @@ def estimate_batch(
 
     out: List[Estimate] = []
     for i, (m, f) in enumerate(zip(firsts, fits)):
-        a, b, c = float(f.coeffs[0]), float(f.coeffs[1]), float(f.coeffs[2])
+        a, c = float(f.coeffs[0]), float(f.coeffs[2])
         if method == "STRAIGHT":
             conf, sigma_cross = 0.0, math.nan
             fit_out = None
         else:
-            conf, sigma_cross = _confidence(f, float(a_r[i]), int(source[i]), config)
+            conf, sigma_cross = _confidence(f, float(a_r[i]), float(np.hypot(grain[i, 0], grain[i, 1])), int(source[i]), config)
             fit_out = f
-        slope = math.hypot(a, b)
-        fall = math.atan2(-b, -a) if slope > 0.0 else 0.0
+        # slope and fall line at the ball: the tilt reading itself
+        t_x, t_y = float(f.tilt_slopes[0]), float(f.tilt_slopes[1])
+        slope = math.hypot(t_x, t_y)
+        fall = math.atan2(-t_y, -t_x) if slope > 0.0 else 0.0
         brk = float(dist[i] * math.tan(phi[i]))
         out.append(
             Estimate(
@@ -1045,6 +1553,7 @@ def estimate_batch(
                 confidence=conf,
                 base_hidden=f.base_hidden,
                 flag_missing=f.flag_missing,
+                range_missing=f.range_missing,
                 poor_horizon=f.poor_horizon,
                 aim_source=int(source[i]),
                 solve_status=int(status[i]),

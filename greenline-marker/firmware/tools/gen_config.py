@@ -10,6 +10,12 @@ differs from what would be generated (stale header), 0 otherwise.
 Only numbers that the firmware needs are exported.  Every macro carries its
 unit in the name.  Derived values are computed here, once, so that the C code
 contains no hand-copied geometry.
+
+The generator reads the keys it needs by name and ignores every other key,
+so mechanical / layout additions to the YAML (rev C: pcb.locating_holes,
+tub_keepouts, cradle, base_plate.psa, ...) do not disturb it.  Keys that were
+added after rev B and that the firmware uses are read with a fallback, so an
+older YAML still generates (the fallback is the documented rev B behaviour).
 """
 import sys
 
@@ -56,6 +62,20 @@ def generate(params):
         raise SystemExit("cameras.baseline disagrees with left/right x positions")
     if active_mm != float(lcd["active"]["dy"]):
         raise SystemExit("LCD active area is expected to be square")
+
+    # Grain ring azimuths (explicit in the YAML since rev C; 22.5 / 45 before).
+    grain_first_deg = float(ring.get("first_azimuth_deg", 22.5))
+    grain_step_deg = float(ring.get("step_deg", 45.0))
+    if abs(grain_step_deg * int(ring["count_pairs"]) - 360.0) > 1e-6:
+        raise SystemExit("grain LED ring: count_pairs * step_deg must be 360")
+
+    # Cradle (rev C): how many ways round the marker fits.  One orientation
+    # means a 180-degree reversal is impossible in the cradle, which is why
+    # the user zeroing routine is done on a flat surface.  Absent key = 1.
+    cradle = params.get("cradle", {}) or {}
+    cradle_orientations = cradle.get("orientations", [0])
+    if not isinstance(cradle_orientations, (list, tuple)) or len(cradle_orientations) < 1:
+        raise SystemExit("cradle.orientations must be a non-empty list")
 
     out = []
     w = out.append
@@ -125,7 +145,16 @@ def generate(params):
     w("#define GL_CFG_GRAIN_CENTRE_Y_MM        %s" % f(ring["y"]))
     w("#define GL_CFG_GRAIN_RING_RADIUS_MM     %s" % f(ring["radius"]))
     w("#define GL_CFG_GRAIN_LED_PAIRS          %d" % int(ring["count_pairs"]))
+    w("#define GL_CFG_GRAIN_LED0_AZIMUTH_DEG   %s  /* CCW from +x seen from above */" %
+      f(grain_first_deg))
+    w("#define GL_CFG_GRAIN_LED_STEP_DEG       %s" % f(grain_step_deg))
     w("#define GL_CFG_GRAIN_OPENING_DIA_MM     %s" % f(base["grain_cavity"]["dia"]))
+    w("")
+    w("/* ---- charging / data cradle ---- */")
+    w("/* Number of ways round the marker seats in the cradle.  1 = it cannot be")
+    w(" * turned 180 degrees there, so the user zeroing (read, turn 180 degrees,")
+    w(" * read) is done on a hard flat surface, never in the cradle. */")
+    w("#define GL_CFG_CRADLE_ORIENTATIONS      %d" % len(cradle_orientations))
     w("")
     w("#endif /* GL_CONFIG_H */")
     return "\n".join(out) + "\n"

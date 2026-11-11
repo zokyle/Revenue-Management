@@ -109,7 +109,9 @@ static gl_status_t m_start_cal(void *ctx, uint8_t proc, uint8_t arg)
     app.calproc = proc;
     app.calarg = arg;
     app.start_cal_calls++;
-    return (proc == GL_CALPROC_FLIP) ? GL_OK : GL_ERR_BUSY;
+    /* like the application: zeroing cannot run in the cradle (and USB exists
+     * only there); the factory procedures can */
+    return (proc == GL_CALPROC_ZERO) ? GL_ERR_STATE : GL_OK;
 }
 static gl_status_t m_log_info(void *ctx, gl_proto_log_info_t *li)
 {
@@ -364,13 +366,13 @@ GL_TEST(test_commands)
 
     /* START_CAL passes through, including the app's refusal */
     {
-        const uint8_t a[2] = { GL_CALPROC_FLIP, 0 }, b[2] = { GL_CALPROC_SIX_FACE, 4 };
+        const uint8_t a[2] = { GL_CALPROC_ZERO, 0 }, b[2] = { GL_CALPROC_SIX_FACE, 4 };
         request(9, GL_CMD_START_CAL, a, 2);
         GL_CHECK_EQ(response(8, &seq, &cmd, &pl), 1);
-        GL_CHECK_EQ(pl[0], GL_OK);
+        GL_CHECK_EQ(pl[0], GL_ERR_STATE);
         request(10, GL_CMD_START_CAL, b, 2);
         GL_CHECK_EQ(response(9, &seq, &cmd, &pl), 1);
-        GL_CHECK_EQ(pl[0], GL_ERR_BUSY);
+        GL_CHECK_EQ(pl[0], GL_OK);
         GL_CHECK_EQ(app.calproc, GL_CALPROC_SIX_FACE);
         GL_CHECK_EQ(app.calarg, 4);
     }

@@ -187,6 +187,91 @@ def test_stop_is_clean_without_jitter():
     assert math.hypot(gvec[0] - KF * gx, gvec[1] - KF * gy) < A10
 
 
+@pytest.mark.parametrize("ratio", [0.90, 0.95, 0.97, 0.99])
+def test_ball_stops_on_steep_but_holdable_slope(ratio):
+    """A ball that stops while rolling WITH a slope at 0.90-0.99 of critical
+    comes to rest at the right place.  Regression: with the step limited
+    only by the time-to-stop, RK4 was unstable in the heading of a slow ball
+    there, and the ball crept at about 0.36 * drive * dt until MAX_TIME
+    (5 cm error at 0.95 of critical)."""
+    from scipy.integrate import solve_ivp
+
+    slope = ratio * ph.critical_slope(A10)
+    off = math.radians(10.0)  # fall line 10 degrees off the launch direction
+    surf = ph.PlaneSurface(-slope * math.cos(off), -slope * math.sin(off))
+    v0 = math.sqrt(2.0 * (A10 - KF * slope * math.cos(off)) * 2.7)
+    t_max = 120.0  # at 0.99 of critical the last metre takes about a minute
+    r = ph.simulate_putt(surf, (0, 0), (3, 0), 0.0, v0, A10, t_max=t_max)
+    assert r.status == ph.RollStatus.STOPPED
+    assert r.speed[-1] == 0.0
+    # the speed decays monotonically over the whole adaptive stopping phase
+    slow = r.speed < 0.5 * A10 * ph.DEFAULT_DT
+    assert slow.sum() > 10 and np.all(np.diff(r.speed[slow]) < 0.0)
+    # heading settles on the fall line instead of oscillating about it
+    k = np.flatnonzero(slow)[:-1]
+    heading = np.arctan2(r.v[k, 1], r.v[k, 0])
+    assert np.all(np.abs(heading - off) < 0.02) and np.all(np.diff(np.abs(heading - off)) <= 1e-12)
+
+    # independent reference: implicit Radau down to 1e-5 m/s + analytic remainder
+    def rhs(_t, u):
+        sp = math.hypot(u[2], u[3])
+        return [u[2], u[3], -KF * surf.a - A10 * u[2] / sp, -KF * surf.b - A10 * u[3] / sp]
+
+    def nearly_stopped(_t, u):
+        return math.hypot(u[2], u[3]) - 1e-5
+
+    nearly_stopped.terminal = True
+    ref = solve_ivp(rhs, (0.0, t_max), [0.0, 0.0, v0, 0.0], method="Radau", rtol=1e-11, atol=1e-13, events=nearly_stopped)
+    assert ref.success and ref.t_events[0].size == 1
+    x_e, y_e, vx_e, vy_e = ref.y[:, -1]
+    s_e = math.hypot(vx_e, vy_e)
+    dec = A10 - (-KF * surf.a * vx_e - KF * surf.b * vy_e) / s_e
+    rem = s_e**2 / (2.0 * dec)
+    rest = np.array([x_e + vx_e / s_e * rem, y_e + vy_e / s_e * rem])
+    assert np.hypot(*(r.stop_xy - rest)) < 2e-7
+    assert r.t_end == pytest.approx(ref.t[-1] + s_e / dec, abs=1e-4)
+    # and the default step agrees with a 20 times finer one
+    fine = ph.simulate_putt(surf, (0, 0), (3, 0), 0.0, v0, A10, dt=ph.DEFAULT_DT / 20, t_max=t_max)
+    assert fine.status == ph.RollStatus.STOPPED and np.hypot(*(r.stop_xy - fine.stop_xy)) < 2e-7
+
+
+def test_stop_on_steep_curved_patches_is_step_converged():
+    """Random mildly curved patches on which the ball rests where the drive
+    is 0.85-0.99 of a_r: STOPPED, at the same place as with a 20x finer step."""
+    rng = np.random.default_rng(2718)
+    n = 0
+    worst = 0.0
+    while n < 40:
+        a_r = ph.stimp_to_decel(rng.uniform(8.5, 13.0))
+        slope = rng.uniform(0.85, 0.99) * ph.critical_slope(a_r)
+        off = rng.uniform(-0.6, 0.6)
+        cxx, cxy, cyy = rng.normal(0.0, 0.002, 3)
+        surf = ph.QuadraticSurface(-slope * math.cos(off), -slope * math.sin(off), cxx, cxy, cyy)
+        v0 = rng.uniform(0.3, 1.2)
+        fine = ph.simulate_putt(surf, (0, 0), (3, 0), 0.0, v0, a_r, dt=ph.DEFAULT_DT / 20)
+        if fine.status != ph.RollStatus.STOPPED or fine.t_end > 20.0:
+            continue  # ran away down a slope that steepens past critical
+        gx, gy = surf.grad(*fine.stop_xy)
+        if not 0.85 <= KF * math.hypot(gx, gy) / a_r < 0.99:
+            continue
+        n += 1
+        r = ph.simulate_putt(surf, (0, 0), (3, 0), 0.0, v0, a_r)
+        assert r.status == ph.RollStatus.STOPPED
+        worst = max(worst, float(np.hypot(*(r.stop_xy - fine.stop_xy))))
+    assert worst < 1e-6
+
+
+def test_step_budget_ends_an_endless_creep_with_max_time():
+    """Within a hair of the critical slope the ball neither stops nor gets
+    away within t_max; the roll then ends with MAX_TIME after a bounded
+    number of steps (4 * t_max / dt), not after an unbounded number."""
+    slope = (1.0 + 1e-6) * ph.critical_slope(A10)
+    r = ph.simulate_putt(ph.PlaneSurface(-slope, 0.0), (0, 0), (3, 0), 0.0, 0.0, A10)
+    assert r.status == ph.RollStatus.MAX_TIME
+    assert len(r.t) <= 4 * (int(ph.DEFAULT_T_MAX / ph.DEFAULT_DT) + 1) + 2
+    assert 0.0 <= r.stop_xy[0] < 1e-3
+
+
 def test_ball_at_rest_stays_or_starts():
     # holdable slope: nothing happens
     r = ph.simulate_putt(ph.PlaneSurface(0.03, 0.0), (0, 0), (3, 0), 0.0, 0.0, A10)

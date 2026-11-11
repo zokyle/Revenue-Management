@@ -124,13 +124,14 @@ class CameraPreset:
 GL1 = CameraPreset(
     name="GL1",
     f_px=657.0,
-    baseline=0.0204,
+    baseline=0.0200,
     h_cam=0.0056,
     half_fov_h=math.radians(26.0),
     up_fov=math.radians(17.6),
 )
-"""The fixed GL-1 hardware (design/master_params.yaml): OVM7692 cubes with fold
-prisms, f = 657 px, 20.4 mm baseline, optical axis 5.6 mm above the base."""
+"""The fixed GL-1 hardware, revision C (design/master_params.yaml): OVM7692
+cubes with fold prisms, f = 657 px, 20.0 mm baseline, optical axis 5.6 mm
+above the base."""
 
 CAMERA_PRESETS: Dict[str, CameraPreset] = {
     "GL1": GL1,
@@ -163,6 +164,10 @@ class SensorParams:
     sigma_seat : float [rad per axis]
         Seating noise: random tilt of the puck relative to the true local
         slope, per placement.  ESTIMATE, no published data.
+    p_seat_outlier : float;  seat_outlier_sigma : float [rad per axis]
+        Outlier mixture of the seating: with probability ``p_seat_outlier`` a
+        seating carries an extra error ``N(0, seat_outlier_sigma)`` per axis
+        (the puck rocking on a tuft, a spike mark, sand).  Default 0: off.
     seat_repeat_correlation : float in [0, 1]
         Correlation of the seating error between the two readings of a
         180-degree spin-and-reread (0 = independent seatings, the assumption
@@ -170,8 +175,14 @@ class SensorParams:
         of the turf spot and does not average out).
     sigma_tilt_bias : float [rad per axis]
         Device bias of the tilt reading (accelerometer offset and its
-        alignment to the base plane after cradle calibration, including
-        thermal drift).  Fixed in the device frame; cancelled by the spin.
+        alignment to the base plane after the user's zeroing on a hard flat
+        surface, including thermal drift).  Fixed in the device frame;
+        cancelled by the spin.
+    level_shares_tilt_bias : bool
+        If True the same bias also tilts the cameras' level reference (the
+        level comes from the same accelerometer).  Default False: the level
+        reference carries ``sigma_gravity`` and ``sigma_boresight`` only, as
+        specified; True is a sensitivity case.
     sigma_gravity : float [rad per axis]
         Noise of the gravity direction: sensor noise on each tilt reading and
         on the level reference of the cameras.
@@ -182,6 +193,11 @@ class SensorParams:
         horizon samples).
     sigma_disp : float [px]
         Stereo disparity noise on the flagstick.
+    disparity_bias : float [px]
+        Systematic disparity error (stereo calibration drift: 0.1 px is
+        0.15 mrad of relative yaw between the two cameras).  Default 0;
+        the Monte Carlo sweeps it.  Every optical error above is zero-mean
+        random; this is the one systematic term.
     sigma_bearing : float [rad]
         Noise of the measured flagstick bearing (pixel noise, stick lean and
         its play in the cup).
@@ -222,10 +238,21 @@ class SensorParams:
     stick_height_default : float [m];  stick_height_default_rel_error : float
         The default prior and its 1-sigma relative error.
     sigma_grain_azimuth : float [rad];  sigma_grain_strength : float [relative]
+    grain_noise_floor : float
+        Additive noise of the grain reading, per axis of ``kappa * g_hat``:
+        with it the sensor can report grain where there is none.  Default 0
+        (the specified sensor is purely multiplicative); swept.
+    p_grain_flip : float
+        Probability that the reported grain direction is off by 180 degrees
+        (a photometric sensor sees the grain axis more easily than its
+        sense).  Default 0; swept.
     sigma_stimp : float [relative]
         Error of the green speed the golfer enters.
     sigma_survey_lateral : float [m]
-        Survey mode: lateral distance of a drop from the true ball->hole line.
+        Survey mode: lateral distance (1 sigma) of a drop from the true
+        ball->hole line.  Once the puck is lifted from the ball position
+        nothing marks the line, so the drops are placed by eye.  ASSUMPTION,
+        no data; the Monte Carlo sweeps 0.05 ... 0.5 m.
     sigma_survey_along : float [m]
         Survey mode: how well the golfer hits the intended station along the
         line (the device measures its own range, so this hardly matters).
@@ -234,12 +261,16 @@ class SensorParams:
     camera: CameraPreset = GL1
     sink_max: float = 1.5e-3
     sigma_seat: float = 2.5e-3
+    p_seat_outlier: float = 0.0
+    seat_outlier_sigma: float = 11.0e-3
     seat_repeat_correlation: float = 0.0
     sigma_tilt_bias: float = 1.0e-3
+    level_shares_tilt_bias: bool = False
     sigma_gravity: float = 0.3e-3
     sigma_boresight: float = 0.3e-3
     sigma_pixel_elev: float = 0.15
     sigma_disp: float = 0.08
+    disparity_bias: float = 0.0
     sigma_bearing: float = 1.0e-3
     sigma_heading: float = math.radians(10.0)
     sigma_hand_bearing: float = math.radians(1.5)
@@ -259,8 +290,10 @@ class SensorParams:
     stick_height_default_rel_error: float = 0.07
     sigma_grain_azimuth: float = math.radians(20.0)
     sigma_grain_strength: float = 0.30
+    grain_noise_floor: float = 0.0
+    p_grain_flip: float = 0.0
     sigma_stimp: float = 0.07
-    sigma_survey_lateral: float = 0.05
+    sigma_survey_lateral: float = 0.15
     sigma_survey_along: float = 0.20
 
 
@@ -284,11 +317,16 @@ class HorizonTruth:
         What forms the silhouette there: ``REGION_GREEN`` (0, the putting
         surface itself), ``REGION_COLLAR`` (1) or ``REGION_ROUGH`` (2, rough
         and surrounds).
+    at_boundary : (n,) bool array
+        The silhouette sits where the ray leaves the modelled terrain (or at
+        ``d_max``): its elevation is then set by where the simulated world
+        ends, not by a crest of the terrain.
     """
 
     ratio: np.ndarray
     distance: np.ndarray
     region: np.ndarray
+    at_boundary: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -524,7 +562,8 @@ def horizon_profile(
                 best_d[i] = d_val
 
     region = np.asarray(green.region(cam_xy[0] + best_d * ux, cam_xy[1] + best_d * uy))
-    return HorizonTruth(ratio=best, distance=best_d, region=np.atleast_1d(region).astype(int))
+    at_boundary = best_d >= d_exit - 1e-6
+    return HorizonTruth(ratio=best, distance=best_d, region=np.atleast_1d(region).astype(int), at_boundary=at_boundary)
 
 
 def flag_sight_lines(
@@ -589,8 +628,8 @@ def detection_probability(distance, params: SensorParams):
 # The measurement
 # --------------------------------------------------------------------------
 
-_N_NORMAL = 32
-_N_UNIFORM = 4
+_N_NORMAL = 36
+_N_UNIFORM = 6
 
 RngLike = Union[int, np.integer, np.random.Generator]
 
@@ -690,6 +729,10 @@ def measure(
     seat_common = math.sqrt(rho) * zn[5:7]
     seat_1 = params.sigma_seat * (seat_common + math.sqrt(1.0 - rho) * zn[1:3])
     seat_2 = params.sigma_seat * (seat_common + math.sqrt(1.0 - rho) * zn[3:5])
+    if un[4] < params.p_seat_outlier:  # this seating is an outlier
+        seat_1 = seat_1 + params.seat_outlier_sigma * zn[29:31]
+    if un[5] < params.p_seat_outlier:
+        seat_2 = seat_2 + params.seat_outlier_sigma * zn[32:34]
     if tilt_bias is None:
         bias = params.sigma_tilt_bias * zn[7:9]
     else:
@@ -715,6 +758,13 @@ def measure(
     # ---- level reference of the cameras -----------------------------------------
     pitch_err = params.sigma_gravity * zn[13] + params.sigma_boresight * zn[15]
     roll_err = params.sigma_gravity * zn[14] + params.sigma_boresight * zn[16]
+    if params.level_shares_tilt_bias:
+        # The device converts a pixel to an elevation by adding the tilt it
+        # believes its base plane has to the pixel's angle above that plane.
+        # A tilt bias (b_x, b_y) therefore raises every elevation by
+        # b_x * cos(azimuth) + b_y * sin(azimuth) ~ b_x + b_y * sin(azimuth).
+        pitch_err += bias[0]
+        roll_err += bias[1]
     pix = params.sigma_pixel_elev / cam.f_px  # [rad] per-sample elevation noise
 
     # ---- flagstick -----------------------------------------------------------------
@@ -732,7 +782,7 @@ def measure(
     if found:
         common = pitch_err + roll_err * math.sin(bearing_dev)
         flag_bearing = bearing_dev + params.sigma_bearing * zn[18]
-        flag_disparity = cam.f_px * cam.baseline / dist + params.sigma_disp * zn[19]
+        flag_disparity = cam.f_px * cam.baseline / dist + params.disparity_bias + params.sigma_disp * zn[19]
         flag_low_elev = math.atan(max(base_ratio, crest_ratio)) + common + pix * zn[20]
         flag_base_visible = base_visible_true
         if un[2] < params.p_base_misclass:
@@ -763,7 +813,15 @@ def measure(
         stimp_entered = max(1.0, green.stimp_ft * (1.0 + params.sigma_stimp * zn[25]))
     # the photometric grain reading is taken afresh at every placement
     grain_kappa = max(0.0, green.grain.kappa * (1.0 + params.sigma_grain_strength * zn[24]))
-    grain_azimuth = _wrap(green.grain.azimuth + params.sigma_grain_azimuth * zn[23] - heading)
+    grain_world_az = green.grain.azimuth + params.sigma_grain_azimuth * zn[23]
+    if un[3] < params.p_grain_flip:  # axis seen, sense wrong
+        grain_world_az += math.pi
+    if params.grain_noise_floor > 0.0:  # additive floor on the vector kappa * g_hat
+        gvx = grain_kappa * math.cos(grain_world_az) + params.grain_noise_floor * zn[27]
+        gvy = grain_kappa * math.sin(grain_world_az) + params.grain_noise_floor * zn[28]
+        grain_kappa = math.hypot(gvx, gvy)
+        grain_world_az = math.atan2(gvy, gvx)
+    grain_azimuth = _wrap(grain_world_az - heading)
     user_distance = dist * (1.0 + params.sigma_user_distance * zn[26]) if mode == "flag_out" else math.nan
 
     # ---- turf horizon -------------------------------------------------------------------

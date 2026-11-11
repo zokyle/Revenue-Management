@@ -56,6 +56,14 @@
 #define GL_CFG_GRAIN_CENTRE_Y_MM        -4.0f
 #define GL_CFG_GRAIN_RING_RADIUS_MM     5.2f
 #define GL_CFG_GRAIN_LED_PAIRS          8
+#define GL_CFG_GRAIN_LED0_AZIMUTH_DEG   22.5f  /* CCW from +x seen from above */
+#define GL_CFG_GRAIN_LED_STEP_DEG       45.0f
 #define GL_CFG_GRAIN_OPENING_DIA_MM     13.0f
+
+/* ---- charging / data cradle ---- */
+/* Number of ways round the marker seats in the cradle.  1 = it cannot be
+ * turned 180 degrees there, so the user zeroing (read, turn 180 degrees,
+ * read) is done on a hard flat surface, never in the cradle. */
+#define GL_CFG_CRADLE_ORIENTATIONS      1
 
 #endif /* GL_CONFIG_H */

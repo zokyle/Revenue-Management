@@ -56,6 +56,8 @@ in_keepout             error     courtyard inside a no-footprint keep-out
 pad_in_keepout         error     pad copper inside a no-pads keep-out
 keepout_blocks_pad     warning   connected pad lies completely inside a no-track
                                  keep-out on its only copper layer
+height_limit           error     part body taller than a height-limited zone allows
+height_unknown         warning   part without height inside a height-limited zone
 hole_collision         error     courtyard or pad over an NPTH hole
 pad_edge_clearance     error     pad copper closer to the edge than the rule
 pad_spacing            error     two pads of one part on different nets are closer
@@ -532,6 +534,30 @@ def check_placement(design: Design, report: CheckReport, geoms: Dict[str, Any]) 
                     msg = "%s pad %s is %.3f mm from the board edge (min %.3f)" % (
                         part.ref, worst[1], worst[0], rules.copper_to_edge)
                 report.error("pad_edge_clearance", msg, [part.ref])
+        # height-limited zones (enclosure features over the board)
+        for hl in getattr(design, "height_limits", ()):
+            if hl.side not in _sides_occupied(part, geom) or part.ref in hl.exempt:
+                continue
+            zone = geometry.shape_polygon(hl.shape, design.rules.max_arc_error,
+                                          "circumscribed")
+            try:
+                body = geometry.part_body_polygon(part)
+            except Exception:
+                body = cy
+            if body.is_empty or body.area <= _AREA_EPS:
+                body = cy
+            if not body.intersects(zone) or body.intersection(zone).area <= _AREA_EPS:
+                continue
+            height = part.height_mm if part.height_mm is not None else geom.height
+            label = hl.name or "(unnamed)"
+            if height is None:
+                report.warning("height_unknown", "%s is inside the height-limited zone %s "
+                               "(max %.2f mm) but has no height_mm" % (
+                                   part.ref, label, hl.max_height), [part.ref])
+            elif height > hl.max_height + _DIST_EPS:
+                report.error("height_limit", "%s is %.2f mm tall inside the height-limited "
+                             "zone %s (max %.2f mm on the %s side)" % (
+                                 part.ref, height, label, hl.max_height, hl.side), [part.ref])
         # pads of this part against each other (land pattern vs. the rules)
         pads = pads if pads is not None else geometry.part_pads(design, part)
         _check_pad_spacing(design, report, part, pads)

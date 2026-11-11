@@ -1,7 +1,7 @@
 """GreenLine GL-1 parts.  One function per part, each returning a CadQuery Workplane holding one
 solid (or a compound for multi-body reference parts) in the assembly frame (see params.py).
 
-Printed parts: tub(), base_plate(), cradle().  Everything else is a purchased / reference part
+Printed parts: tub(), base_plate(), cradle() (rev C: the cradle carries a fixed lip and a sprung latch).  Everything else is a purchased / reference part
 modelled as a simple envelope solid for fit, clearance and optical checks.
 """
 from __future__ import annotations
@@ -73,7 +73,7 @@ def _hood_positive(cx):
     ]
     # corner fill between the outer skirt and the tub wall (avoids a tapering crevice)
     xa, xb = sorted((s * (abs(cx) + P.HOOD_OUT_HW - EPS), s * (P.R_IN + 0.5)))
-    fill = box(xa, xb, M["hood_corner_fill_y0"], yw, zs, zr).intersect(cyl(0, 0, P.R_IN + 0.5, zs - 1, zr + 1))
+    fill = box(xa, xb, P.HOOD_FILL_Y0, yw, zs, zr).intersect(cyl(0, 0, P.R_IN + 0.5, zs - 1, zr + 1))
     items.append(fill)
     return union(items)
 
@@ -81,12 +81,10 @@ def _hood_positive(cx):
 def _hood_negative(cx):
     xi0, xi1 = cx - P.HOOD_IN_HW, cx + P.HOOD_IN_HW
     bay = box(xi0, xi1, P.HOOD_REAR_Y1, P.HOOD_FRONT_IN_Y, P.HOOD_Z_OVER_CUBE, P.ROOF_Z)
-    # bevelled opening: clear aperture at the window-recess floor, 0.3 land, then widening inward
-    a, b = P.OPEN_HALF_W, P.OPEN_HALF_W_INSIDE
-    y_f, y_l, y_i = P.WIN_RECESS_FLOOR_Y, P.WIN_RECESS_FLOOR_Y - M["visor_land"], P.HOOD_FRONT_IN_Y
-    pts = [(cx - a, y_f + 0.05), (cx + a, y_f + 0.05), (cx + a, y_l), (cx + b, y_i), (cx + b, y_i - 0.1),
-           (cx - b, y_i - 0.1), (cx - b, y_i), (cx - a, y_l)]
-    tunnel = poly_prism(pts, P.OPEN_Z0, P.OPEN_Z1)
+    # clear opening: straight through the thickened visor wall, as wide as the bay (rev C: no bevel - the light bundle is
+    # narrower inside the wall than at the aperture, and a wider bay would leave the hood keep-out zone of the YAML)
+    a = P.OPEN_HALF_W
+    tunnel = box(cx - a, cx + a, P.HOOD_FRONT_IN_Y - 0.1, P.WIN_RECESS_FLOOR_Y + 0.05, P.OPEN_Z0, P.OPEN_Z1)
     recess = box(cx - P.WIN_RECESS_W / 2, cx + P.WIN_RECESS_W / 2, P.WIN_RECESS_FLOOR_Y, P.Y_VISOR + 1,
                  P.WIN_Z0, P.T + 1)
     out = bay.union(tunnel).union(recess)
@@ -132,11 +130,14 @@ def tub():
     # support posts roof -> PCB top
     for _, x0, x1, y0, y1 in P.post_rects():
         pos.append(box(x0, x1, y0, y1, P.PCB_Z1, zt))
+    # PCB locating spigots under the two posts E (they enter the non-plated PCB holes; the post foot seats round them)
+    for (sx_, sy_) in (P.LOC_ROUND[:2], P.LOC_SLOT[:2]):
+        pos.append(cyl(sx_, sy_, P.SPIGOT_D / 2, P.SPIGOT_Z0, P.PCB_Z1 + EPS))
     # camera hoods
     for cx, _cy in P.CAM_XY.values():
         pos.append(_hood_positive(cx))
     # vent pad and the pad that keeps 0.8 mm under the nose groove
-    vx, vy = M["vent_xy"]; hp = M["vent_pad"] / 2
+    vx, vy = P.VENT_XY; hp = M["vent_pad"] / 2
     pos.append(box(vx - hp - 0.6, vx + hp, vy - hp, vy + hp, P.VENT_PAD_Z, zt))
     nw = M["nose_w"] / 2 + P.MIN_WALL
     pos.append(box(-nw, nw, P.THICK_RING_R - 0.3, P.Y_VISOR_IN + EPS, P.ROOF_Z - M["nose_depth"], zt))
@@ -180,98 +181,127 @@ def _pad_slot(z0, z1):
 
 
 def _grain_negative(z0, z1):
-    """Grain opening minus the baffle ring and its three spokes."""
+    """Grain opening minus the baffle ring and its three spokes (all from the YAML)."""
     gx, gy = P.GRAIN_X, P.GRAIN_Y
     opening = cyl(gx, gy, P.GRAIN_R, z0, z1)
     ring = cyl(gx, gy, P.BAFFLE_RO, z0 - 1, z1 + 1).cut(cyl(gx, gy, P.BAFFLE_RI, z0 - 2, z1 + 2))
     keep = ring
-    w = M["spoke_w"] / 2
-    for a in M["spoke_angles_deg"]:
+    w = P.SPOKE_W / 2
+    for a in P.SPOKE_ANGLES:
         sp = box(P.BAFFLE_RO - 0.2, P.GRAIN_R + 0.5, -w, w, z0 - 1, z1 + 1)
         keep = keep.union(sp.rotate((0, 0, 0), (0, 0, 1), a).translate((gx, gy, 0)))
     return opening.cut(keep)
 
 
-def _ball_seat(x, y):
-    """90 deg conical seat, apex above the plate top (leaves a pin-hole that the PCB adhesive sheet covers)."""
-    rb, za = P.BALL_SEAT_R_BOTTOM, P.BALL_SEAT_APEX_Z
-    ext = 0.5                                                        # start below the base plane
-    cone = cq.Solid.makeCone(rb * (za + ext) / za, 0, za + ext, pnt=cq.Vector(x, y, -ext), dir=cq.Vector(0, 0, 1))
-    return cq.Workplane("XY").add(cone)
-
-
 def base_plate():
+    """0.87 mm plate: grain opening with baffle, pad slot, key notches and three THROUGH holes for the ball feet
+    (the balls are set on a gauge plate and potted from the inside; the print cannot hold a 0.10 mm protrusion)."""
     z0, z1 = 0.0, P.BASE_T
     body = dprism(P.BASE_R, P.BASE_FLAT, z0, z1)
     for n in _key_notches(z0 - 1, z1 + 1):
         body = body.cut(n)
     body = body.cut(_grain_negative(z0 - 1, z1 + 1)).cut(_pad_slot(z0 - 1, z1 + 1))
     for (x, y) in P.BALL_XY:
-        body = body.cut(_ball_seat(x, y))
+        body = body.cut(cyl(x, y, P.BALL_HOLE_D / 2, z0 - 1, z1 + 1))
     return body.clean()
 
 
 # ----------------------------------------------------------------------------------------------
-# 3. CRADLE - printed (PA12 or SLA) + its reference plate, pins and PCB
+# 3. CRADLE (rev C: charging / data dock, one orientation, lip + latch hold-down) with its pins and PCB
 # ----------------------------------------------------------------------------------------------
-def _barrel(r, flat, z0, z1):
-    """Two-fold symmetric nest outline: union of the puck D at 0 deg and at 180 deg (about the nest centre)."""
-    a = cyl(0, 0, r, z0, z1).union(cyl(0, -P.NEST_SHIFT, r, z0, z1))
-    return a.intersect(box(-r - 1, r + 1, -P.NEST_SHIFT - flat, flat, z0 - 1, z1 + 1))
-
-
 def _pin_slot(w, z0, z1):
     xa, xb = min(P.PAD_XS), max(P.PAD_XS)
     return box(xa, xb, P.PAD_Y - w / 2, P.PAD_Y + w / 2, z0, z1).union(cyl(xa, P.PAD_Y, w / 2, z0, z1)).union(cyl(xb, P.PAD_Y, w / 2, z0, z1))
 
 
-def cradle():
+def _xbar(y, z, r, x0, x1):
+    """Cylinder of radius r along x through (y, z)."""
+    return cq.Workplane("YZ").center(y, z).circle(r).extrude(x1 - x0).translate((x0, 0, 0))
+
+
+def latch():
+    """Rear hold-down latch as one solid: a uniform rectangular cantilever (latch_w x latch_h) rooted on the floor of
+    the latch well, a hook whose 90 deg retaining face sits one fit clearance above the tub top and whose nose and
+    30 deg lead-in are concentric with the marker, and a thumb tab that projects rearward from the top (press it
+    down to release).  Root fillets on both faces."""
+    hw, zr, rf = M["latch_w"] / 2, M["latch_root_z"], M["latch_root_fillet"]
+    beam = box(-hw, hw, P.LATCH_Y_BACK, P.LATCH_Y_FACE, zr - EPS, P.HOOK_Z0 + EPS)
+    rbig = 40.0
+    prof = (cq.Workplane("XZ").polyline([(P.HOOK_R, P.HOOK_Z0), (P.HOOK_R, P.HOOK_LEAD_Z0), (P.NEST_R, P.LATCH_TOP_Z),
+                                          (rbig, P.LATCH_TOP_Z), (rbig, P.HOOK_Z0)]).close())
+    ring = prof.revolve(360, (0, 0, 0), (0, 1, 0))
+    hook = ring.intersect(box(-hw, hw, P.LATCH_Y_BACK, 0.0, P.HOOK_Z0 - 1, P.LATCH_TOP_Z + 1))
+    tab = box(-hw, hw, P.TAB_Y0, P.LATCH_Y_BACK + EPS, P.TAB_Z0, P.LATCH_TOP_Z)
+    out = beam.union(hook).union(tab)
+    for yf, sg in ((P.LATCH_Y_FACE, 1), (P.LATCH_Y_BACK, -1)):          # concave root fillets
+        ya, yb = sorted((yf, yf + sg * rf))
+        fil = box(-hw, hw, ya, yb, zr - EPS, zr + rf).cut(_xbar(yf + sg * rf, zr + rf, rf, -hw - 1, hw + 1))
+        out = out.union(fil)
+    return out.clean()
+
+
+def lip():
+    """Fixed front hold-down: tower in front of the visor between the camera windows and the lip over the tub top."""
+    lw = M["lip_half_w"]
+    tower = box(-lw, lw, P.LIP_POCKET_Y, P.CRADLE_Y1 - 0.8, P.CRADLE_TOP_Z - EPS, P.LIP_Z1)
+    plate = box(-lw, lw, P.LIP_Y0, P.LIP_POCKET_Y + EPS, P.LIP_Z0, P.LIP_Z1)
+    return tower.union(plate)
+
+
+def cradle(with_latch=True, with_lip=True):
+    """Printed dock body.  Nest = the marker D outline + fit clearance (the flat is the orientation key), floor at the
+    ball-foot plane.  with_latch / with_lip = False give the body without those features (used by the insertion check)."""
     X, y0, y1 = P.CRADLE_X, P.CRADLE_Y0, P.CRADLE_Y1
     zb, zt = P.CRADLE_BOT_Z, P.CRADLE_TOP_Z
     body = box(-X, X, y0, y1, zb, zt).edges("|Z").fillet(M["cradle_corner_r"]).faces(">Z").edges().chamfer(0.8)
-    body = body.cut(_barrel(P.NEST_R, P.NEST_FLAT, P.PLATE_Z0, zt + 1))                 # nest + plate seat
-    body = body.cut(_pin_slot(P.CRADLE_PIN_SLOT_W, P.CPCB_Z1 - 1, P.PLATE_Z0 + 1))      # spring-pin clearance
-    for sx in (1, -1):                                                                  # finger scallops (square to the nest wall)
-        xa, xb = sorted((sx * (P.NEST_R - 1.75), sx * (X + 1)))
-        body = body.cut(box(xa, xb, P.NEST_CY - M["scallop_half_w"], P.NEST_CY + M["scallop_half_w"], P.PLATE_Z1, zt + 1))
+    body = body.cut(dprism(P.NEST_R, P.NEST_FLAT, P.NEST_FLOOR_Z, zt + 1))               # nest: the feet rest on its floor
+    a0, a1 = (math.radians(a) for a in M["scallop_deg"])                                # finger scallops: sectors of the nest wall
+    r1, r2 = P.NEST_R - M["scallop_inset"], 3 * X                                       # removed down to the nest floor (radial end faces)
+    for sx in (1, -1):
+        pts = [(sx * r * math.cos(a), r * math.sin(a)) for r, a in ((r1, a0), (r2, a0), (r2, a1), (r1, a1))]
+        body = body.cut(poly_prism(pts, P.NEST_FLOOR_Z, zt + 1))
+    # latch well: open pocket in which the cantilever stands free (front gap, side gaps, back cavity)
+    body = body.cut(box(-P.WELL_HX, P.WELL_HX, P.WELL_Y0, P.WELL_Y1, M["latch_root_z"], zt + 1))
+    # guard wall behind the latch with two over-travel stop ribs
+    body = body.union(box(-P.WELL_HX, P.WELL_HX, P.WELL_Y0 - M["guard_t"], P.WELL_Y0, zt - EPS, M["guard_top_z"]))
+    for sx in (1, -1):
+        xa, xb = sorted((sx * (M["stop_rib_x"] - M["stop_rib_w"] / 2), sx * (M["stop_rib_x"] + M["stop_rib_w"] / 2)))
+        body = body.union(box(xa, xb, P.WELL_Y0 - EPS, P.STOP_RIB_Y1, M["latch_root_z"] - EPS, M["guard_top_z"]))
+    if with_lip:
+        body = body.union(lip())
+    if with_latch:
+        body = body.union(latch())
+    body = body.cut(_pin_slot(P.CRADLE_PIN_SLOT_W, P.CPCB_Z1 - 1, P.NEST_FLOOR_Z + 1))  # one slot for the spring pins
     # PCB pocket (open underneath) and the USB-C receptacle pocket / rear opening
     body = body.cut(box(-P.CPCB_HX - P.CLR, P.CPCB_HX + P.CLR, P.CPCB_Y0 - P.CLR, P.CPCB_Y1 + P.CLR, zb - 1, P.CPCB_Z1))
     uw = M["usb"][0] / 2 + 0.3
     body = body.cut(box(-uw, uw, y0 - 1, P.USB_Y1 + P.CLR, P.CPCB_Z1 - P.CLR, P.USB_Z1 + P.CLR))   # clear under the overhanging shell too
-    for (sx, sy) in M["cradle_pcb_screw_xy"]:                                           # pilot holes for 4 screws
+    for (sx, sy_) in P.CPCB_SCREWS:                                                     # spot marks for 4 screws
         for s in (1, -1):
-            body = body.cut(cyl(s * sx, sy, M["cradle_screw_pilot_dia"] / 2, P.CPCB_Z1 - 0.01,
+            body = body.cut(cyl(s * sx, sy_, M["cradle_screw_pilot_dia"] / 2, P.CPCB_Z1 - 0.01,
                                 P.CPCB_Z1 + M["cradle_screw_pilot_depth"]))
     # lightening pockets from below
-    lx0, lx1 = M["lighten_x"]; lh = M["lighten_y_half"]; lz = M["lighten_ceiling_z"]
+    lx0, lx1 = M["lighten_x"]; ly0, ly1 = M["lighten_y"]; lz = M["lighten_ceiling_z"]
     for s in (1, -1):
         xa, xb = sorted((s * lx0, s * lx1))
-        body = body.cut(box(xa, xb, P.NEST_CY - lh, P.NEST_CY + lh, zb - 1, lz).edges("|Z").fillet(2.0))
-    body = body.cut(box(-P.CPCB_HX - P.CLR, P.CPCB_HX + P.CLR, P.CPCB_Y1 + P.CLR + 2.5, P.NEST_CY + lh, zb - 1, lz)
-                    .edges("|Z").fillet(2.0))
+        body = body.cut(box(xa, xb, ly0, ly1, zb - 1, lz).edges("|Z").fillet(2.0))
+    fx_, fy0, fy1 = M["lighten_front"]
+    body = body.cut(box(-fx_, fx_, fy0, fy1, zb - 1, lz).edges("|Z").fillet(2.0))
     fx, fy = M["foot_xy"]
     for sx in (1, -1):
-        for sy in (1, -1):
-            body = body.cut(cyl(sx * fx, P.NEST_CY + sy * fy, M["foot_pocket_dia"] / 2, zb - 1, zb + M["foot_pocket_depth"]))
-    return body.clean()
-
-
-def cradle_plate():
-    """Hard reference plate: laser-cut 304 stainless, 1.5 mm; the three ball feet rest on it."""
-    body = _barrel(P.R_OUT, P.Y_VISOR, P.PLATE_Z0, P.PLATE_Z1)
-    for x in P.PAD_XS:
-        body = body.cut(cyl(x, P.PAD_Y, M["plate_hole_dia"] / 2, P.PLATE_Z0 - 1, P.PLATE_Z1 + 1))
+        for s in (1, -1):
+            body = body.cut(cyl(sx * fx, P.CRADLE_CY + s * fy, M["foot_pocket_dia"] / 2, zb - 1, zb + M["foot_pocket_depth"]))
     return body.clean()
 
 
 def cradle_pcb():
     hx = P.CPCB_HX
     body = box(-hx, hx, P.CPCB_Y0, P.CPCB_Y1, P.CPCB_Z0, P.CPCB_Z1)
-    for x in P.PAD_XS:
+    for x in P.PAD_XS:                                  # seven pin positions (consumer build fits four)
         body = body.cut(cyl(x, P.PAD_Y, M["pin_tail_dia"] / 2 + 0.07, P.CPCB_Z0 - 1, P.CPCB_Z1 + 1))
-    for (sx, sy) in M["cradle_pcb_screw_xy"]:
+    for (sx, sy_) in P.CPCB_SCREWS:
         for s in (1, -1):
-            body = body.cut(cyl(s * sx, sy, 1.1, P.CPCB_Z0 - 1, P.CPCB_Z1 + 1))
+            body = body.cut(cyl(s * sx, sy_, 1.1, P.CPCB_Z0 - 1, P.CPCB_Z1 + 1))
     return body
 
 
@@ -281,12 +311,17 @@ def usb_receptacle():
 
 
 def spring_pin(x):
-    """Mill-Max 0914-series pin (PROVISIONAL envelope), drawn compressed onto the modelled pad plane."""
+    """Mill-Max 0914-series pin (PROVISIONAL envelope), drawn compressed onto the modelled pad face."""
     y = P.PAD_Y
     tail = cyl(x, y, M["pin_tail_dia"] / 2, P.CPCB_Z0 - M["pin_tail_below_pcb"], P.CPCB_Z1)
     body = cyl(x, y, M["pin_body_dia"] / 2, P.CPCB_Z1, P.PIN_BODY_Z1)
     plunger = cyl(x, y, M["pin_plunger_dia"] / 2, P.PIN_BODY_Z1, P.PAD_Z0)
     return tail.union(body).union(plunger)
+
+
+def spring_pin_free_plunger(x):
+    """The plunger of a pin at its FREE length (tip at PIN_TIP_FREE_Z): what the marker meets while it is being inserted."""
+    return cyl(x, P.PAD_Y, M["pin_plunger_dia"] / 2, P.PIN_BODY_Z1, P.PIN_TIP_FREE_Z)
 
 
 def spring_pins():
@@ -300,7 +335,7 @@ def cradle_feet():
         for sy in (1, -1):
             i += 1
             z1 = P.CRADLE_BOT_Z + M["foot_pocket_depth"]
-            out[f"cradle_foot_{i}"] = cyl(sx * fx, P.NEST_CY + sy * fy, M["foot_dia"] / 2, z1 - M["foot_h"], z1)
+            out[f"cradle_foot_{i}"] = cyl(sx * fx, P.CRADLE_CY + sy * fy, M["foot_dia"] / 2, z1 - M["foot_h"], z1)
     return out
 
 
@@ -311,7 +346,14 @@ PCB_SKIP = ("U2", "U3", "BT1")       # cameras and battery are separate solids
 
 
 def pcb_board():
-    return dprism(P.PCB_R, P.PCB_FLAT, P.PCB_Z0, P.PCB_Z1)
+    """Bare board with the two non-plated locating holes (round + slot along x) for the tub spigots."""
+    body = dprism(P.PCB_R, P.PCB_FLAT, P.PCB_Z0, P.PCB_Z1)
+    z0, z1 = P.PCB_Z0 - 1, P.PCB_Z1 + 1
+    rx, ry, rd = P.LOC_ROUND
+    body = body.cut(cyl(rx, ry, rd / 2, z0, z1))
+    sx, sy, sd, sl = P.LOC_SLOT
+    h = (sl - sd) / 2
+    return body.cut(box(sx - h, sx + h, sy - sd / 2, sy + sd / 2, z0, z1).union(cyl(sx - h, sy, sd / 2, z0, z1)).union(cyl(sx + h, sy, sd / 2, z0, z1)))
 
 
 def led_boxes():
@@ -413,20 +455,31 @@ def foam_pad():
 
 
 def pcb_adhesive():
-    """Die-cut PSA sheet between PCB and base at its TRUE thickness (overlaps the YAML-nominal PCB: see README)."""
-    z0, z1 = P.BASE_T, P.BASE_T + M["pcb_psa_t"]
+    """Die-cut adhesive sheet between base plate and PCB (z 0.87 .. 1.00): grain opening, pad slot and three
+    2.0 mm holes round the potted ball feet."""
+    z0, z1 = P.PSA_Z0, P.PSA_Z1
     body = dprism(P.PCB_R, P.PCB_FLAT, z0, z1)
     body = body.cut(_grain_negative(z0 - 1, z1 + 1)).cut(_pad_slot(z0 - 1, z1 + 1))
+    for (x, y) in P.BALL_XY:
+        body = body.cut(cyl(x, y, P.PSA_FOOT_HOLE_D / 2, z0 - 1, z1 + 1))
     return body.clean()
 
 
 def seal_bead():
-    """Dispensed perimeter bead between the base seal land and the tub seal face (0.2 mm)."""
+    """Dispensed perimeter bead between the base seal land and the tub seal face (0.33 mm in rev C)."""
     z0, z1 = P.BASE_T, P.LEDGE_Z0
     body = dprism(P.BASE_R, P.BASE_FLAT, z0, z1).cut(dprism(P.LAND_RI, P.LAND_FLAT_IN, z0 - 1, z1 + 1))
     for n in _key_notches(z0 - 1, z1 + 1):
         body = body.cut(n)
     return body.clean()
+
+
+def ball_epoxy(i):
+    """UV epoxy that pots ball i: fills the through hole round the ball (flush with the base plane, where the gauge
+    plate was) and domes slightly over the plate top inside the 2.0 mm hole of the adhesive sheet."""
+    x, y = P.BALL_XY[i]
+    plug = cyl(x, y, P.BALL_HOLE_D / 2, 0.0, P.BASE_T).union(cyl(x, y, M["epoxy_cap_dia"] / 2, P.BASE_T, P.EPOXY_Z1))
+    return plug.cut(cq.Workplane("XY").sphere(P.BALL_D / 2).translate((x, y, P.BALL_Z)))
 
 
 def ball(i):
@@ -435,5 +488,5 @@ def ball(i):
 
 
 def vent():
-    vx, vy = M["vent_xy"]
+    vx, vy = P.VENT_XY
     return cyl(vx, vy, M["vent_od"] / 2, P.VENT_Z0, P.VENT_PAD_Z)

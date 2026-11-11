@@ -40,8 +40,8 @@ def _catalog():
     c["tub"] = (PT.tub, (0.13, 0.13, 0.14, 1), *PA12, "puck", "printed", "GL1-010 tub (top shell)")
     c["base_plate"] = (PT.base_plate, (0.20, 0.20, 0.22, 1), *PA12, "puck", "printed", "GL1-011 base plate")
     c["main_pcb"] = (PT.main_pcb, (0.05, 0.40, 0.18, 1), "FR-4 + parts (envelope)", 2.2, "puck", "purchased", "main PCB assembly, part boxes from the YAML")
-    c["pcb_adhesive"] = (PT.pcb_adhesive, (0.95, 0.85, 0.35, 0.8), "PSA sheet 0.13 (e.g. 3M 468MP) PROVISIONAL", 1.0, "puck", "adhesive", "die-cut PSA between PCB and base")
-    c["seal_bead"] = (PT.seal_bead, (0.95, 0.55, 0.15, 0.9), "dispensed adhesive bead 0.2", 1.1, "puck", "adhesive", "perimeter seal bead")
+    c["pcb_adhesive"] = (PT.pcb_adhesive, (0.95, 0.85, 0.35, 0.8), "3M 9472LE (300LSE) transfer tape 0.13, die cut (PROVISIONAL)", 1.0, "puck", "adhesive", "die-cut adhesive sheet between PCB and base")
+    c["seal_bead"] = (PT.seal_bead, (0.95, 0.55, 0.15, 0.9), "dispensed adhesive bead 0.33", 1.1, "puck", "adhesive", "perimeter seal bead")
     for s in ("L", "R"):
         c[f"camera_{s}"] = (lambda s=s: PT.camera(s), (0.25, 0.25, 0.30, 1), "OVM7692-RYAA cube", 2.5, "puck", "purchased", f"camera cube {s}")
         c[f"prism_{s}"] = (lambda s=s: PT.prism(s), (0.55, 0.80, 0.95, 0.55), "N-BK7 prism, Edmund 32-526", 2.51, "puck", "purchased", f"2 mm fold prism {s}")
@@ -55,9 +55,9 @@ def _catalog():
     c["foam_pad"] = (PT.foam_pad, (0.35, 0.35, 0.35, 0.9), "PU foam 0.3 (e.g. Poron) PROVISIONAL", 0.32, "puck", "purchased", "foam pad under the LCD")
     for i in range(len(P.BALL_XY)):
         c[f"ball_{i + 1}"] = (lambda i=i: PT.ball(i), (0.85, 0.86, 0.90, 1), "stainless ball 1.0 mm", 7.9, "puck", "purchased", f"foot ball {i + 1}")
+        c[f"ball_epoxy_{i + 1}"] = (lambda i=i: PT.ball_epoxy(i), (0.55, 0.75, 0.90, 0.9), "UV-cure epoxy potting (PROVISIONAL)", 1.15, "puck", "adhesive", f"potting of foot ball {i + 1}")
     c["vent"] = (PT.vent, (0.95, 0.95, 0.95, 1), "Gore VE80205 ePTFE vent (PROVISIONAL)", 0.9, "puck", "purchased", "adhesive vent")
-    c["cradle"] = (PT.cradle, (0.30, 0.32, 0.36, 1), "MJF PA12 or SLA", 1.01, "cradle", "printed", "GL1-020 cradle body")
-    c["cradle_plate"] = (PT.cradle_plate, (0.78, 0.79, 0.82, 1), "304 stainless 1.5 mm, laser cut", 8.0, "cradle", "purchased", "reference plate")
+    c["cradle"] = (PT.cradle, (0.30, 0.32, 0.36, 1), "MJF PA12 (the latch is sized for PA12)", 1.01, "cradle", "printed", "GL1-020 cradle body with lip and latch")
     c["cradle_pcb"] = (PT.cradle_pcb, (0.05, 0.35, 0.50, 1), "FR-4 1.6", 1.85, "cradle", "purchased", "cradle PCB 30 x 22")
     c["usb_receptacle"] = (PT.usb_receptacle, (0.80, 0.80, 0.82, 1), "GCT USB4105 (PROVISIONAL envelope)", 2.0, "cradle", "purchased", "USB-C receptacle")
     return c
@@ -116,7 +116,7 @@ def print_orientation(name, wp):
 
 # Pairs that touch by design (zero-volume contact) - documented for the interference report.
 INTENDED_CONTACTS = {
-    ("tub", "main_pcb"): "support posts land on the PCB top face",
+    ("tub", "main_pcb"): "support posts land on the PCB top face (posts E round their spigots)",
     ("tub", "seal_bead"): "seal face on the bead",
     ("tub", "lcd_adhesive"): "LCD bonded under the roof ledge",
     ("tub", "cover_tape"): "tape ring on the recess floor",
@@ -124,14 +124,14 @@ INTENDED_CONTACTS = {
     ("tub", "visor_window_L"): "window bottom edge on the recess shelf",
     ("tub", "visor_window_R"): "window bottom edge on the recess shelf",
     ("base_plate", "seal_bead"): "bead on the seal land",
-    ("base_plate", "pcb_adhesive"): "PSA on the base top",
-    ("base_plate", "main_pcb"): "PCB bottom on the base top (YAML zero-thickness PSA convention)",
+    ("base_plate", "pcb_adhesive"): "adhesive sheet on the base top",
+    ("main_pcb", "pcb_adhesive"): "adhesive sheet on the PCB underside",
     ("main_pcb", "camera_L"): "soldered", ("main_pcb", "camera_R"): "soldered",
     ("main_pcb", "battery"): "battery on the PCB",
     ("lcd_glass", "lcd_adhesive"): "bond", ("lcd_glass", "foam_pad"): "foam under the glass",
     ("lcd_glass", "lcd_flex"): "tail attached at the rear edge",
     ("cover_glass", "cover_tape"): "bond",
-    ("cradle", "cradle_plate"): "plate seated in the nest", ("cradle", "cradle_pcb"): "PCB against the pocket ceiling",
+    ("cradle", "cradle_pcb"): "PCB against the pocket ceiling",
     ("cradle_pcb", "usb_receptacle"): "soldered",
 }
 for _i in range(1, 8):
@@ -140,14 +140,12 @@ for _i in range(1, 8):
 for _i in range(1, 5):
     INTENDED_CONTACTS[("cradle", f"cradle_foot_{_i}")] = "foot in its pocket"
 for _i in range(1, 4):
-    INTENDED_CONTACTS[(f"ball_{_i}", "cradle_plate")] = "ball foot rests on the reference plate"
+    INTENDED_CONTACTS[(f"ball_{_i}", "cradle")] = "ball foot rests on the printed nest floor"
+    INTENDED_CONTACTS[(f"ball_{_i}", f"ball_epoxy_{_i}")] = "ball potted in epoxy"
+    INTENDED_CONTACTS[("base_plate", f"ball_epoxy_{_i}")] = "epoxy fills the through hole and sits on the plate top"
 
-# Pairs that overlap in VOLUME because of a documented modelling convention (not a physical clash).
-MODELLING_OVERLAPS = {
-    ("main_pcb", "pcb_adhesive"): "The YAML (rev B) carries the PCB-to-base PSA at zero thickness (pcb.z_bottom = base top). "
-                                  "The sheet is modelled at its true 0.13 mm, so it overlaps the nominal PCB by exactly its own "
-                                  "volume. In the real stack the base plate sits 0.13 mm lower relative to the tub (see README).",
-}
+# Pairs that overlap in VOLUME because of a modelling convention: none in rev C (the adhesive sheet has its own 0.13 mm).
+MODELLING_OVERLAPS = {}
 
 
 def export_all(parts, verbose=True):

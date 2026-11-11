@@ -325,6 +325,9 @@ typedef enum {
  * Arm a snapshot capture of ONE frame into `buf` (DMA).  The expected byte
  * count is (width_bytes / byte_select_every) * height_lines and must be
  * <= buf_len.  Returns immediately; completion raises GL_IRQ_DCMI_DONE.
+ * Portable callers keep to what the STM32 backend can do: `buf` aligned to
+ * 4 bytes, an expected byte count that is a multiple of 4 and below 65536
+ * (one DMA block of 32-bit words); otherwise GL_ERR_PARAM on that backend.
  */
 gl_status_t gl_hal_dcmi_start(const gl_dcmi_cfg_t *cfg, uint8_t *buf, size_t buf_len);
 

@@ -178,9 +178,9 @@ GL_TEST(test_full_frame_length_and_time)
 /* Panel memory bit for screen pixel (x, y) under a mounting. */
 static bool panel_pixel_(const gl_lcd_cfg_t *cfg, int x, int y)
 {
-    const int line = cfg->row0_at_front ? y : (127 - y);
-    const int col = cfg->col0_at_left ? x : (127 - x);
-    return ((gl_sim_lcd()->mem[line * 16 + (col >> 3)] >> (col & 7)) & 1u) != 0u;
+    const unsigned line = (unsigned)(cfg->row0_at_front ? y : (127 - y));
+    const unsigned col = (unsigned)(cfg->col0_at_left ? x : (127 - x));
+    return (((unsigned)gl_sim_lcd()->mem[line * 16u + (col >> 3)] >> (col & 7u)) & 1u) != 0u;
 }
 
 GL_TEST(test_random_images_all_mountings)

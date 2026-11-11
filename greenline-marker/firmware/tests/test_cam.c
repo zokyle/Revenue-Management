@@ -23,7 +23,7 @@ GL_TEST(test_nominal_camera)
     GL_CHECK_NEAR(cal.fx_px, 657.0, 1e-6);
     GL_CHECK_NEAR(cal.cx_px, 319.5, 1e-6);
     GL_CHECK_NEAR(cal.cy_px, 239.5, 1e-6);
-    GL_CHECK_NEAR(cal.pos_mm[0], -10.2, 1e-5);
+    GL_CHECK_NEAR(cal.pos_mm[0], -10.0, 1e-5);
     GL_CHECK_NEAR(cal.pos_mm[2], 5.61, 1e-5);
     gl_cam_model_init(&m, &cal);
 
@@ -51,7 +51,7 @@ GL_TEST(test_nominal_camera)
     /* a point 5 m ahead, 0.3 m left, 1 m up, seen from the left camera */
     GL_CHECK(gl_cam_point_to_pixel(&m, v3(-0.3f, 5.0f, 1.0f), &u, &v));
     {
-        double dx = -0.3 + 0.0102, dy = 5.0 - 0.0156, dz = 1.0 - 0.00561;
+        double dx = -0.3 + 0.0100, dy = 5.0 - 0.0156, dz = 1.0 - 0.00561;
         GL_CHECK_NEAR(u, 319.5 + 657.0 * dx / dy, 2e-3);
         GL_CHECK_NEAR(v, 239.5 - 657.0 * dz / dy, 2e-3);
     }
@@ -222,12 +222,12 @@ GL_TEST(test_rectified_stereo)
                 /* rectified disparity = f B / depth, rows match */
                 double depth = (double)z - 0.0156;
                 double d = 657.0 * (double)(xl - xr);
-                double e = fabs(d - 657.0 * 0.0204 / depth);
+                double e = fabs(d - 657.0 * 0.0200 / depth);
                 if (e > worst) {
                     worst = e;
                 }
                 GL_CHECK_NEAR(yl, yr, 2e-5);
-                e = fabs((double)(ul - ur) - 657.0 * 0.0204 / depth);
+                e = fabs((double)(ul - ur) - 657.0 * 0.0200 / depth);
                 if (e > worst_raw) {
                     worst_raw = e;
                 }

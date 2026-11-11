@@ -20,7 +20,7 @@ static double nrand(void)
     return sqrt(-2.0 * log(urand())) * cos(6.283185307179586 * urand());
 }
 
-static const double F = 657.0, B = 0.0204;
+static const double F = 657.0, B = 0.0200; /* rev C baseline */
 
 /* Measurement of a stick of true visible height `h_true` at range z. */
 static gl_range_input_t measure2(double z, double h_true, double disp_noise, double base_noise,
@@ -76,7 +76,7 @@ GL_TEST(test_stereo_only)
     GL_CHECK_EQ(gl_range_fuse(&in, NULL, &r), GL_OK);
     GL_CHECK_EQ(r.sources, GL_RANGE_SRC_STEREO);
     GL_CHECK_NEAR(r.range_m, 3.0, 1e-4);
-    /* sigma = Z^2 sigma_d / (f B): 9 * 0.08 / 13.40 = 0.0537 m (1.8 %) */
+    /* sigma = Z^2 sigma_d / (f B): 9 * 0.08 / 13.14 = 0.0548 m (1.8 %) */
     GL_CHECK_NEAR(r.sigma_m, 9.0 * 0.08 / (F * B), 1e-4);
     GL_CHECK(r.consistent);
     GL_CHECK_NEAR(r.chi2, 0.0, 1e-9);
@@ -316,13 +316,13 @@ GL_TEST(test_ball_geometry)
     /* right is negative */
     t = gl_range_from_ball(5.0f, -0.1f);
     GL_CHECK(t.bearing_rad < -0.1f);
-    /* a bearing measured by the LEFT camera (10.2 mm off the axis): a stick
-     * dead ahead of the marker centre at 3 m is seen 3.4 mrad to the right */
+    /* a bearing measured by the LEFT camera (10.0 mm off the axis): a stick
+     * dead ahead of the marker centre at 3 m is seen 3.35 mrad to the right */
     {
         const double cam_x = (double)GL_CFG_CAM_LEFT_X_MM / 1000.0;
         const double b_left = atan2(-(0.0 - cam_x), 3.0 - cam_y); /* negative: to the right */
         const double r_left = sqrt(cam_x * cam_x + (3.0 - cam_y) * (3.0 - cam_y));
-        GL_CHECK_NEAR(b_left, -0.0034, 0.0001);
+        GL_CHECK_NEAR(b_left, -0.00335, 0.00002);
         t = gl_range_from_ball_at((float)r_left, (float)b_left, (float)cam_x, (float)cam_y);
         GL_CHECK_NEAR(t.bearing_rad, 0.0, 2e-5);
         GL_CHECK_NEAR(t.distance_m, 3.0 - ball_y, 1e-5);

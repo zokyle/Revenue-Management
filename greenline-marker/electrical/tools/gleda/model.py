@@ -503,6 +503,26 @@ class Outline:
         """Add a routed slot (stadium shape)."""
         return self.add_cutout(Slot(x1, y1, x2, y2, width))
 
+    def add_npth_slot(self, x: float, y: float, width: float, length: float,
+                      rotation: float = 0.0) -> "Outline":
+        """Add a non-plated slot centred on (x, y): ``length`` overall (tip to
+        tip) along the direction ``rotation`` (degrees CCW from +x), ``width``
+        across, e.g. the 1.15 x 1.65 mm locating slot of the GL-1 board::
+
+            outline.add_npth_slot(4.2, 14.55, width=1.15, length=1.65)
+
+        It is drawn as a routed stadium on Edge.Cuts (the usual way to order
+        a small non-plated slot), so copper keeps the copper-to-edge distance
+        from it and KiCad's DRC checks that."""
+        if length < width:
+            raise ValueError("slot length (overall) must not be smaller than its width")
+        half = (length - width) / 2.0
+        if half < 1e-9:
+            return self.add_hole(x, y, width)
+        dx = half * math.cos(math.radians(rotation))
+        dy = half * math.sin(math.radians(rotation))
+        return self.add_slot(x - dx, y - dy, x + dx, y + dy, width)
+
     def add_hole(self, x: float, y: float, drill: float, name: str = "") -> "Outline":
         """Add an NPTH drilled hole."""
         self.holes.append(Hole(x, y, drill, name))
@@ -546,12 +566,36 @@ class Keepout:
 
 
 @dataclass
+class HeightLimit:
+    """Height-limited zone: on board side ``side`` no part body inside
+    ``shape`` may be taller than ``max_height`` mm (e.g. under an enclosure
+    feature that hangs over the board).  Parts listed in ``exempt`` are
+    allowed (the part the feature is there for).
+
+    KiCad 7 has no component-height rule, so this is not written to the board
+    file; it is enforced by :func:`gleda.checks.run_checks` (``height_limit``
+    error, ``height_unknown`` warning for a part without ``height_mm``)."""
+    shape: Shape
+    max_height: float
+    side: str = TOP
+    exempt: Tuple[str, ...] = ()
+    name: str = ""
+
+
+@dataclass
 class Plane:
     """Copper plane / pour: ``net`` filled on ``layer``.
 
     ``shape`` None means "the whole board" (KiCad clips the fill to the board
     edge).  Higher ``priority`` zones are filled first (islands inside a
     bigger plane need a higher priority).
+
+    ``routable`` marks a whole-board plane on an inner layer that signals may
+    also be routed on (a "mixed" plane layer): the layer then counts as a
+    signal layer (:meth:`Design.signal_layers`), the plane's net is still
+    connected pad by pad with a stub and a via, and the fill flows around the
+    tracks.  The router keeps such a layer for what does not fit elsewhere and
+    checks that the fill stays in one piece (:func:`gleda.router.plane_regions`).
     """
     net: str
     layer: str
@@ -562,6 +606,7 @@ class Plane:
     thermal: bool = False        # thermal reliefs on pads (vias are always solid)
     keep_islands: bool = False
     name: str = ""
+    routable: bool = False       # signals may share this (inner) plane layer
 
 
 # --------------------------------------------------------------------------
@@ -856,6 +901,7 @@ class Design:
         self.netclasses: Dict[str, NetClass] = {}
         self.no_connects: Set[Node] = set()
         self.keepouts: List[Keepout] = []
+        self.height_limits: List[HeightLimit] = []
         self.planes: List[Plane] = []
         self.tracks: List[Track] = []
         self.vias: List[Via] = []
@@ -1143,6 +1189,30 @@ class Design:
         self.keepouts.append(ko)
         return ko
 
+    def add_placement_keepout(self, shape: Shape, side: str = TOP, name: str = "") -> Keepout:
+        """No part may be placed inside ``shape`` on board side ``side`` (top
+        or bottom); copper is not restricted.  It becomes a KiCad rule area
+        "no footprints" on that side's outer copper layer, so KiCad's DRC
+        checks it as well as :func:`gleda.checks.run_checks` (``in_keepout``)."""
+        if side not in (TOP, BOTTOM):
+            raise ValueError("side must be %r or %r" % (TOP, BOTTOM))
+        layer = self.copper_layers[0] if side == TOP else self.copper_layers[-1]
+        return self.add_keepout(shape, (layer,), tracks=False, vias=False, copper=False,
+                                pads=False, footprints=True, name=name)
+
+    def add_height_limit(self, shape: Shape, max_height: float, side: str = TOP,
+                         exempt: Sequence[str] = (), name: str = "") -> HeightLimit:
+        """Limit the component height inside ``shape`` on one board side (see
+        :class:`HeightLimit`); ``exempt`` lists the references that may be
+        taller."""
+        if side not in (TOP, BOTTOM):
+            raise ValueError("side must be %r or %r" % (TOP, BOTTOM))
+        if max_height < 0:
+            raise ValueError("max_height must not be negative")
+        hl = HeightLimit(shape, float(max_height), side, tuple(exempt), name)
+        self.height_limits.append(hl)
+        return hl
+
     def add_body_keepout(self, ref: str, layers: Union[str, Sequence[str]] = ("F.Cu",),
                          margin: float = 0.15, **kwargs) -> Keepout:
         """Keep copper out from under a component body, e.g. no tracks, vias
@@ -1179,11 +1249,25 @@ class Design:
                 out.setdefault(p.layer, p.net)
         return out
 
+    def routable_plane_layers(self) -> Dict[str, str]:
+        """layer -> net for whole-board planes that signals may be routed on
+        as well (``Plane.routable``)."""
+        out: Dict[str, str] = {}
+        for p in self.planes:
+            if p.shape is None and p.routable and p.layer not in out \
+                    and self.full_plane_layers().get(p.layer) == p.net:
+                out[p.layer] = p.net
+        return out
+
     def signal_layers(self) -> Tuple[str, ...]:
-        """Copper layers not occupied by a whole-board plane, top to bottom."""
+        """Copper layers available for routing, top to bottom: the outer
+        layers and every inner layer that is not given to a whole-board plane
+        (or whose plane is ``routable``)."""
         planes = self.full_plane_layers()
+        shared = self.routable_plane_layers()
         inner = set(self.copper_layers[1:-1])
-        return tuple(l for l in self.copper_layers if not (l in planes and l in inner))
+        return tuple(l for l in self.copper_layers
+                     if not (l in planes and l in inner and l not in shared))
 
     # -- export --------------------------------------------------------------
     def netlist(self) -> Dict[str, Any]:
@@ -1214,7 +1298,10 @@ class Design:
             "parts": [p.to_dict() for p in self.parts],
             "netlist": self.netlist(),
             "planes": [{"net": p.net, "layer": p.layer, "whole_board": p.shape is None,
-                        "priority": p.priority} for p in self.planes],
+                        "priority": p.priority, "routable": p.routable}
+                       for p in self.planes],
+            "height_limits": [{"name": h.name, "side": h.side, "max_height": h.max_height,
+                               "exempt": list(h.exempt)} for h in self.height_limits],
         }
 
     def __repr__(self) -> str:
@@ -1226,7 +1313,7 @@ __all__ = [
     "TOP", "BOTTOM", "ELECTRICAL_TYPES", "ALL_LAYERS", "Rules", "US_4L_STD", "US_4L_FINE",
     "NetClass", "Stackup", "StackupLayer", "Circle", "RoundedPolygon", "Slot",
     "PathShape", "PathSegment", "VIA_TENTING",
-    "Hole", "Outline", "Keepout", "Plane", "Pin", "Part", "Net", "Track", "Via",
+    "Hole", "Outline", "Keepout", "HeightLimit", "Plane", "Pin", "Part", "Net", "Track", "Via",
     "Design", "make_pin", "two_pin", "n_pin", "parse_node", "copper_layer_names",
     "replace",
 ]

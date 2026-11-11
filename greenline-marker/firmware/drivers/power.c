@@ -25,7 +25,11 @@ uint16_t gl_power_counts_to_mv(uint16_t counts, uint16_t vdda_mv)
 {
     const float mv = (float)counts / (float)GL_HAL_ADC_FULL_SCALE * (float)vdda_mv *
                      GL_PROV_BATT_DIVIDER_RATIO;
-    return (mv > 65535.0f) ? (uint16_t)65535u : (uint16_t)(mv + 0.5f);
+    uint16_t out = 65535u;
+    if (mv < 65535.0f) {
+        out = (uint16_t)(mv + 0.5f);
+    }
+    return out;
 }
 
 uint8_t gl_power_percent(uint16_t batt_mv)

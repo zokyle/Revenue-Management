@@ -1,0 +1,1513 @@
+/*
+ * test_e2e.c - the whole firmware on the host simulator, end to end.
+ *
+ * The application (app/), the drivers and the portable core run unmodified
+ * against the simulated board (hal/host): simulated IMU, two simulated
+ * camera cubes fed by the synthetic strip renderer, the LCD, flash, ADC and
+ * USB models.  The tests drive the board only from OUTSIDE - how the marker
+ * moves, what the cameras see, what the cradle and a USB host do - and
+ * check what the firmware does at its pins and on its buses.
+ *
+ *   complete Quick Read   wake on motion -> still -> 1 s tilt -> camera
+ *                         rail on -> horizon band -> L R R L x 8 strips ->
+ *                         vision -> range -> solver stub -> screen ->
+ *                         camera rail off -> sleep; with an independent
+ *                         replay of the pin trace for the camera rail rule
+ *   no flagstick          falls back without leaving the rail on
+ *   bumped during a read  the read is aborted, rail off at once, re-read
+ *   Precision Read        spin 180 degrees, re-read, combined slope, line
+ *                         drawn through the ball position behind the marker
+ *   zeroing               on a sloped table top (never in the cradle)
+ *   cradle / USB          protocol over the simulated CDC port, charge gate,
+ *                         reboot to the ROM bootloader, no Stop mode on USB
+ */
+#include <stdlib.h>
+
+#include "gl_test.h"
+
+#include "gl_app.h"
+#include "gl_config.h"
+#include "gl_crc.h"
+#include "gl_provisional.h"
+#include "gl_sim.h"
+#include "gl_synth.h"
+
+static gl_app_t app;
+
+/* ======================================================================= */
+/* the world outside the marker                                             */
+/* ======================================================================= */
+
+#define PI_D 3.14159265358979323846
+
+typedef struct {
+    /* the green: a plane; the marker lies in it.  Slope = uphill gradient in
+     * the marker frame the marker had at t = 0 ("world") */
+    double slope_x, slope_y;
+    /* the flagstick */
+    bool stick;
+    double dist_m;          /* from the marker centre, in the plane of the green */
+    double bearing_rad;     /* CCW from marker forward */
+    double height_m;        /* visible height */
+    double sway_amp_px;     /* the stick sways in the wind: image motion amplitude ... */
+    double sway_hz;         /* ... and frequency */
+    double drift_px_per_s;  /* steady image motion of the stick from drift_t0_s on */
+    double drift_t0_s;
+    /* camera models the scene is rendered through (the truth) */
+    gl_cam_model_t cam[2];
+    float ub[2], vb[2], ut[2], vt[2];
+    float horizon_row[2];
+    uint32_t frames_rendered;
+    /* copies of the first stick strip each camera delivered (raw-log test) */
+    bool keep_first_strips;
+    bool have_first[2];
+    uint16_t first_x0[2];
+    /* how the marker is handled: wobble between t_pick and t_place, then at
+     * rest; optionally a jolt, optionally a turn about the vertical */
+    double t_pick_s, t_place_s;
+    double jolt_at_s, jolt_len_s;
+    double turn_at_s, turn_len_s, turn_rad;
+} world_t;
+
+static world_t W;
+static uint8_t first_strip_[2][96 * 480];
+
+static gl_vec3_t up_of_(double sx, double sy)
+{
+    const double n = sqrt(sx * sx + sy * sy + 1.0);
+    gl_vec3_t u = { (float)(sx / n), (float)(sy / n), (float)(1.0 / n) };
+    return u;
+}
+
+/* Heading of the marker (rad, CCW) relative to its heading at t = 0. */
+static double heading_(double t)
+{
+    double f;
+    if (W.turn_len_s <= 0.0 || t <= W.turn_at_s) {
+        return 0.0;
+    }
+    if (t >= W.turn_at_s + W.turn_len_s) {
+        return W.turn_rad;
+    }
+    f = (t - W.turn_at_s) / W.turn_len_s;
+    return W.turn_rad * 0.5 * (1.0 - cos(PI_D * f)); /* smooth start and stop */
+}
+
+static double heading_rate_(double t)
+{
+    double f;
+    if (W.turn_len_s <= 0.0 || t <= W.turn_at_s || t >= W.turn_at_s + W.turn_len_s) {
+        return 0.0;
+    }
+    f = (t - W.turn_at_s) / W.turn_len_s;
+    return W.turn_rad * 0.5 * PI_D / W.turn_len_s * sin(PI_D * f);
+}
+
+/* What the IMU physically experiences, marker axes. */
+static void imu_fn_(void *ctx, uint64_t t_us, float a[3], float g[3])
+{
+    const double t = (double)t_us * 1e-6;
+    const double psi = heading_(t);
+    /* the slope vector seen from the turned marker: R(-psi) c */
+    const double cx = cos(psi) * W.slope_x + sin(psi) * W.slope_y;
+    const double cy = -sin(psi) * W.slope_x + cos(psi) * W.slope_y;
+    const gl_vec3_t u = up_of_(cx, cy);
+    const double rate = heading_rate_(t);
+    (void)ctx;
+    a[0] = u.x;
+    a[1] = u.y;
+    a[2] = u.z;
+    /* turning about the vertical: angular velocity = rate * up */
+    g[0] = (float)rate * u.x;
+    g[1] = (float)rate * u.y;
+    g[2] = (float)rate * u.z;
+    if (t >= W.t_pick_s && t < W.t_place_s) {
+        /* in the hand: tilted and wobbling */
+        const double w = 2.0 * PI_D * 3.1 * (t - W.t_pick_s);
+        a[0] += (float)(0.35 * sin(w));
+        a[1] += (float)(0.25 * cos(1.7 * w));
+        a[2] += (float)(0.20 * sin(2.3 * w));
+        g[0] += (float)(1.5 * cos(w));
+        g[1] += (float)(1.0 * sin(1.3 * w));
+    }
+    if (W.jolt_len_s > 0.0 && t >= W.jolt_at_s && t < W.jolt_at_s + W.jolt_len_s) {
+        const double w = 2.0 * PI_D * 9.0 * (t - W.jolt_at_s);
+        a[0] += (float)(0.15 * sin(w));
+        a[2] += (float)(0.10 * cos(w));
+        g[1] += (float)(0.8 * sin(w));
+    }
+}
+
+static void project_scene_(void)
+{
+    const gl_vec3_t u = up_of_(W.slope_x, W.slope_y);
+    /* base of the stick on the green (z = 0 of the marker frame), top along
+     * gravity-up */
+    const gl_vec3_t base = { (float)(-W.dist_m * sin(W.bearing_rad)),
+                             (float)(W.dist_m * cos(W.bearing_rad)), 0.0f };
+    const gl_vec3_t top = { base.x + (float)W.height_m * u.x, base.y + (float)W.height_m * u.y,
+                            base.z + (float)W.height_m * u.z };
+    for (int c = 0; c < 2; c++) {
+        (void)gl_cam_point_to_pixel(&W.cam[c], base, &W.ub[c], &W.vb[c]);
+        (void)gl_cam_point_to_pixel(&W.cam[c], top, &W.ut[c], &W.vt[c]);
+        W.horizon_row[c] = gl_cam_base_plane_row(&W.cam[c], 319.5f);
+    }
+}
+
+/* What a camera sees: synthetic strip of the requested window. */
+static void scene_fn_(void *ctx, gl_cam_id_t cam, uint16_t x0, uint16_t y0, uint16_t w, uint16_t h,
+                      uint32_t frame_no, uint64_t t_us, uint8_t *luma)
+{
+    gl_synth_scene_t s;
+    (void)ctx;
+    gl_synth_defaults(&s, w, h, x0, y0);
+    s.horizon_row = W.horizon_row[cam];
+    s.noise_sigma = 3.0f; /* stick 60 grey above the background: SNR 20 */
+    s.noise_seed = 77u + 1000003u * (uint32_t)cam + 7919u * frame_no + (uint32_t)(t_us / 1000u);
+    if (W.stick) {
+        s.stick_present = true;
+        s.stick_width_px = (float)(0.015 / W.dist_m * 657.0);
+        s.stick_level = 170.0f;
+        s.stick_x = W.ub[cam] +
+                    (float)(W.sway_amp_px * sin(2.0 * PI_D * W.sway_hz * (double)t_us * 1e-6));
+        if (W.drift_px_per_s != 0.0 && (double)t_us * 1e-6 > W.drift_t0_s) {
+            s.stick_x += (float)(W.drift_px_per_s * ((double)t_us * 1e-6 - W.drift_t0_s));
+        }
+        s.stick_ref_row = W.vb[cam];
+        s.stick_slant = (W.ub[cam] - W.ut[cam]) / (W.vb[cam] - W.vt[cam]);
+        s.stick_bottom_row = W.vb[cam];
+        s.stick_top_row = W.vt[cam];
+    }
+    gl_synth_render(&s, luma);
+    W.frames_rendered++;
+    if (W.keep_first_strips && w == 96u && !W.have_first[cam]) {
+        memcpy(first_strip_[cam], luma, sizeof(first_strip_[cam]));
+        W.have_first[cam] = true;
+        W.first_x0[cam] = x0;
+    }
+}
+
+static void world_defaults_(void)
+{
+    gl_cal_cam_t cl, cr;
+    memset(&W, 0, sizeof(W));
+    W.slope_x = 0.012;
+    W.slope_y = -0.020;
+    W.stick = true;
+    W.dist_m = 6.0;
+    W.bearing_rad = 0.05;
+    W.height_m = 1.96;
+    W.sway_amp_px = 0.0;
+    W.sway_hz = 1.5;
+    W.t_pick_s = 1.0;
+    W.t_place_s = 1.6;
+    gl_cal_cam_defaults(&cl, 0);
+    gl_cal_cam_defaults(&cr, 1);
+    gl_cam_model_init(&W.cam[0], &cl);
+    gl_cam_model_init(&W.cam[1], &cr);
+    project_scene_();
+}
+
+/* Power-on of the simulated board with the world attached. */
+static void board_up_(bool erase_flash)
+{
+    static const float gyro_bias[3] = { 0.004f, -0.002f, 0.001f };
+    gl_sim_reset(erase_flash);
+    gl_sim_imu_set_motion(imu_fn_, NULL);
+    gl_sim_imu_set_errors(0.0008f, 0.002f, NULL, gyro_bias);
+    gl_sim_imu_set_temperature(22.0f);
+    gl_sim_cam_set_scene(scene_fn_, NULL);
+    gl_sim_cam_set_phase_us(GL_CAM_RIGHT, 9000); /* the two sensors are not synchronised */
+    gl_sim_set_vbat_mv(3900);
+}
+
+/* ---- running the main loop and watching it -------------------------------- */
+
+#define MAX_SEEN 64
+static struct {
+    uint8_t state[MAX_SEEN];
+    uint32_t t_ms[MAX_SEEN];
+    unsigned n;
+    unsigned rail_outside_capture; /* loop iterations that ended with the rail on outside CAPTURE */
+    unsigned stop_violations_seen;
+} seen;
+
+static void watch_reset_(void)
+{
+    memset(&seen, 0, sizeof(seen));
+    seen.state[0] = app.ui.state;
+    seen.n = 1;
+}
+
+static void run_until_ms_(uint32_t t_ms)
+{
+    while (gl_sim_now_us() < (uint64_t)t_ms * 1000u) {
+        gl_app_run_once(&app);
+        if (seen.n < MAX_SEEN && app.ui.state != seen.state[seen.n - 1u]) {
+            seen.state[seen.n] = app.ui.state;
+            /* the UI's own time stamp of the transition: one loop iteration
+             * ends with a sleep, which can be long (16 s when asleep) */
+            seen.t_ms[seen.n] = app.ui.state_since_ms;
+            seen.n++;
+        }
+        if (gl_sim_cam_rail_on() && app.ui.state != GL_UI_CAPTURE) {
+            seen.rail_outside_capture++;
+        }
+    }
+}
+
+/* Run until the UI reaches `state` (true) or t_ms passes (false). */
+static bool run_until_state_(gl_ui_state_t state, uint32_t t_ms)
+{
+    while (gl_sim_now_us() < (uint64_t)t_ms * 1000u) {
+        if (app.ui.state == (uint8_t)state) {
+            return true;
+        }
+        run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 1u);
+    }
+    return app.ui.state == (uint8_t)state;
+}
+
+static void print_seen_(void)
+{
+    printf("    states:");
+    for (unsigned i = 0; i < seen.n; i++) {
+        printf(" %s@%.2fs", gl_ui_state_name((gl_ui_state_t)seen.state[i]),
+               (double)seen.t_ms[i] / 1000.0);
+    }
+    printf("\n");
+}
+
+static bool cam_pins_parked_(void)
+{
+    for (int p = (int)GL_PIN_CAM_FACING_FIRST; p <= (int)GL_PIN_CAM_FACING_LAST; p++) {
+        if (gl_sim_pin_mode((gl_pin_t)p) != GL_PIN_MODE_ANALOG && !gl_sim_pin_drives_low((gl_pin_t)p)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/*
+ * INDEPENDENT check of the camera rail rule: replay the recorded pin trace
+ * with a model written here (not the simulator's checker) and count every
+ * moment at which a camera-facing pin is neither analog nor driven low
+ * while the rail enable is not driving high (or was raised less than 1 ms
+ * ago).  Also: no SCCB, clock or DCMI activity while the rail is off.
+ * Initial pin state: everything analog (MCU reset state).
+ */
+typedef struct {
+    unsigned pin_violations;
+    unsigned bus_violations;
+    unsigned rail_on_edges;
+    unsigned sccb_writes, dcmi_starts;
+    uint64_t rail_on_us;
+} replay_t;
+
+static void replay_rail_rule_(replay_t *out)
+{
+    uint8_t mode[GL_PIN_COUNT];
+    bool latch[GL_PIN_COUNT];
+    bool rail = false;
+    uint64_t rail_since = 0;
+
+    memset(out, 0, sizeof(*out));
+    memset(latch, 0, sizeof(latch));
+    for (int p = 0; p < (int)GL_PIN_COUNT; p++) {
+        mode[p] = (uint8_t)GL_PIN_MODE_ANALOG;
+    }
+    for (size_t i = 0; i < gl_sim_trace_count(); i++) {
+        const gl_sim_trace_t *t = gl_sim_trace_at(i);
+        bool pin_event = false;
+        switch ((gl_sim_tr_type_t)t->type) {
+        case GL_SIM_TR_GPIO_MODE:
+            mode[t->a] = (uint8_t)t->b;
+            pin_event = true;
+            break;
+        case GL_SIM_TR_GPIO_WRITE:
+            latch[t->a] = (t->b != 0u);
+            pin_event = true;
+            break;
+        case GL_SIM_TR_SCCB_WRITE:
+        case GL_SIM_TR_SCCB_READ:
+            out->sccb_writes += (t->type == (uint8_t)GL_SIM_TR_SCCB_WRITE) ? 1u : 0u;
+            if (!rail) {
+                out->bus_violations++;
+            }
+            break;
+        case GL_SIM_TR_DCMI_START:
+            out->dcmi_starts++;
+            if (!rail) {
+                out->bus_violations++;
+            }
+            break;
+        case GL_SIM_TR_XVCLK:
+            if (t->a == 1u && !rail) {
+                out->bus_violations++;
+            }
+            break;
+        default:
+            break;
+        }
+        if (!pin_event) {
+            continue;
+        }
+        {
+            const bool en = (mode[GL_PIN_CAM_PWR_EN] == (uint8_t)GL_PIN_MODE_OUTPUT_PP) &&
+                            latch[GL_PIN_CAM_PWR_EN];
+            if (en && !rail) {
+                rail = true;
+                rail_since = t->t_us;
+                out->rail_on_edges++;
+            } else if (!en && rail) {
+                rail = false;
+                out->rail_on_us += t->t_us - rail_since;
+            }
+        }
+        if (!rail || t->t_us - rail_since < 1000u) {
+            for (int p = (int)GL_PIN_CAM_FACING_FIRST; p <= (int)GL_PIN_CAM_FACING_LAST; p++) {
+                const bool analog = (mode[p] == (uint8_t)GL_PIN_MODE_ANALOG);
+                const bool low = (mode[p] == (uint8_t)GL_PIN_MODE_OUTPUT_PP ||
+                                  mode[p] == (uint8_t)GL_PIN_MODE_OUTPUT_OD) && !latch[p];
+                if (!analog && !low) {
+                    out->pin_violations++;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/* The panel memory of the LCD model as a pixel test: true = black. */
+static bool panel_black_(int x, int y)
+{
+    const gl_sim_lcd_t *lcd = gl_sim_lcd();
+    return (lcd->mem[(unsigned)y * 16u + ((unsigned)x >> 3)] & (1u << ((unsigned)x & 7u))) == 0u;
+}
+
+static unsigned panel_differs_from_framebuffer_(void)
+{
+    const gl_sim_lcd_t *lcd = gl_sim_lcd();
+    unsigned bad = 0;
+    for (unsigned i = 0; i < sizeof(lcd->mem); i++) {
+        if (lcd->mem[i] != app.gfx.px[i]) {
+            bad++;
+        }
+    }
+    return bad;
+}
+
+/* ======================================================================= */
+/* 1. a complete Quick Read                                                 */
+/* ======================================================================= */
+
+GL_TEST(test_complete_quick_read)
+{
+    replay_t rp;
+    const gl_sim_stats_t *stats;
+    double true_d, true_range, ball_dist, ball_bearing;
+    uint32_t t_result_ms = 0, t_capture_ms = 0;
+
+    world_defaults_();
+    W.sway_amp_px = 0.3; /* the stick sways +-0.3 px at 1.5 Hz: up to 2.8 px/s, 0.09 px per frame */
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+
+    /* ---- asleep after power-on ---- */
+    GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP);
+    GL_CHECK(!gl_sim_lcd()->disp && !gl_sim_lcd()->extcomin);
+    GL_CHECK(!gl_sim_cam_rail_on() && cam_pins_parked_());
+    GL_CHECK(gl_sim_flash_stats()->deep_power_down);
+    /* IMU: accelerometer low-power 15 Hz, gyro off, wake-up on INT1 */
+    GL_CHECK_EQ(gl_sim_imu_reg(0x10), 0x43);
+    GL_CHECK_EQ(gl_sim_imu_reg(0x11), 0x00);
+    GL_CHECK_EQ(gl_sim_imu_reg(0x5E), 0x20);
+    run_until_ms_(900);
+    GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP);
+    stats = gl_sim_stats();
+    GL_CHECK(stats->stop_us > 850000u); /* in Stop mode practically all the time */
+    GL_CHECK_EQ(stats->idle_us, 0u);
+
+    /* ---- the golfer puts the marker down at t = 1.0 .. 1.6 s ---- */
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 9000));
+    t_result_ms = (uint32_t)(gl_sim_now_us() / 1000u);
+    print_seen_();
+    {
+        static const uint8_t expect[] = { GL_UI_SLEEP, GL_UI_WAKE, GL_UI_WAIT_STILL,
+                                          GL_UI_READ_TILT, GL_UI_CAPTURE, GL_UI_SHOW_RESULT };
+        GL_CHECK_EQ(seen.n, GL_ARRAY_LEN(expect));
+        for (unsigned i = 0; i < GL_ARRAY_LEN(expect) && i < seen.n; i++) {
+            GL_CHECK_EQ(seen.state[i], expect[i]);
+        }
+        /* SOLVE is entered and left inside one loop iteration: 6 transitions
+         * in all (MOTION, TIMEOUT, STILL, TILT_DONE, CAPTURE_DONE, SOLVE_DONE)
+         * and nothing else */
+        GL_CHECK_EQ(app.ui.transitions, 6u);
+        if (seen.n >= 5u) {
+            t_capture_ms = seen.t_ms[4];
+        }
+    }
+    GL_CHECK(seen.t_ms[1] >= 1000u && seen.t_ms[1] < 1200u); /* woken by the motion */
+    /* stillness for 0.5 s, then 1 s of averaging */
+    if (seen.n >= 5u) {
+        GL_CHECK(seen.t_ms[3] >= 1600u + 500u && seen.t_ms[3] < 1600u + 1000u);
+        GL_CHECK(seen.t_ms[4] - seen.t_ms[3] >= 1000u && seen.t_ms[4] - seen.t_ms[3] < 1300u);
+    }
+    printf("    marker at rest at 1.60 s; result on the screen at %.2f s (%.2f s after coming to "
+           "rest); camera part %.2f s\n", (double)t_result_ms / 1000.0,
+           (double)t_result_ms / 1000.0 - 1.6, (double)(t_result_ms - t_capture_ms) / 1000.0);
+    GL_CHECK(t_result_ms < 1600u + 4000u);
+
+    /* ---- the camera rail ---- */
+    stats = gl_sim_stats();
+    GL_CHECK_EQ(stats->cam_rail_cycles, 1u);
+    GL_CHECK(!gl_sim_cam_rail_on());
+    GL_CHECK(cam_pins_parked_());
+    GL_CHECK_EQ(seen.rail_outside_capture, 0u);
+    GL_CHECK_EQ(stats->frames_captured, 1u + 4u * GL_APP_LRRL_REPEATS); /* band + 32 strips */
+    GL_CHECK(stats->cam_rail_on_us < 2500000u);
+    GL_CHECK_EQ(gl_sim_trace_lost(), 0u);
+    replay_rail_rule_(&rp);
+    printf("    camera rail: on once for %.0f ms; %u SCCB writes, %u captures; independent replay "
+           "of %u trace records: %u pin-rule violations, %u bus accesses with the rail off\n",
+           (double)rp.rail_on_us / 1000.0, rp.sccb_writes, rp.dcmi_starts,
+           (unsigned)gl_sim_trace_count(), rp.pin_violations, rp.bus_violations);
+    GL_CHECK_EQ(rp.pin_violations, 0u);
+    GL_CHECK_EQ(rp.bus_violations, 0u);
+    GL_CHECK_EQ(rp.rail_on_edges, 1u);
+    GL_CHECK_EQ(rp.dcmi_starts, 33u);
+    GL_CHECK_EQ(rp.rail_on_us, stats->cam_rail_on_us);
+    GL_CHECK_NEAR(app.read.result.rail_on_ms, (double)rp.rail_on_us / 1000.0, 1.5);
+
+    /* ---- what was measured ---- */
+    true_d = 657.0 * (double)GL_CFG_CAM_BASELINE_M /
+             (W.dist_m * cos(W.bearing_rad) - (double)GL_CFG_CAM_LEFT_Y_MM * 0.001);
+    {
+        /* horizontal distance from the stereo head (0, 15.6 mm) to the stick */
+        const double sx = -W.dist_m * sin(W.bearing_rad);
+        const double sy = W.dist_m * cos(W.bearing_rad);
+        const double hy = (double)GL_CFG_CAM_LEFT_Y_MM * 0.001;
+        const double by = (double)GL_CFG_BALL_CENTRE_Y_MM * 0.001;
+        true_range = sqrt(sx * sx + (sy - hy) * (sy - hy));
+        ball_dist = sqrt(sx * sx + (sy - by) * (sy - by));
+        ball_bearing = atan2(-sx, sy - by);
+    }
+    GL_CHECK(app.cur.tilt_valid && app.cur.flag_found && app.cur.range_valid);
+    GL_CHECK_EQ(app.read.result.groups_ok, GL_APP_LRRL_REPEATS);
+    printf("    tilt: slope (%.3f, %.3f) %%, true (%.3f, %.3f) %%\n", 100.0 * (double)app.cur.slope.x,
+           100.0 * (double)app.cur.slope.y, 100.0 * W.slope_x, 100.0 * W.slope_y);
+    GL_CHECK_NEAR(app.cur.slope.x, W.slope_x, 0.0004);
+    GL_CHECK_NEAR(app.cur.slope.y, W.slope_y, 0.0004);
+    printf("    stereo: disparity %.4f px (true %.4f, claimed sigma %.4f) with the stick swaying "
+           "+-0.3 px at 1.5 Hz and a 9 ms sensor phase offset\n", (double)app.cur.disparity_px,
+           true_d, (double)app.cur.disparity_sigma_px);
+    GL_CHECK_NEAR(app.cur.disparity_px, true_d, 0.03);
+    printf("    range %.3f m +- %.3f (true %.3f; stereo %.3f, by angular height %.3f), bearing "
+           "%.2f mrad (true from the left camera %.2f)\n", (double)app.cur.range.range_m,
+           (double)app.cur.range.sigma_m, true_range, (double)app.cur.range.stereo_m,
+           (double)app.cur.range.mono_m,
+           1000.0 * (double)app.cur.bearing_rad,
+           1000.0 * atan2(-(-W.dist_m * sin(W.bearing_rad) - (double)W.cam[0].pos_m.x),
+                          W.dist_m * cos(W.bearing_rad) - (double)W.cam[0].pos_m.y));
+    GL_CHECK_NEAR(app.cur.range.range_m, true_range, 0.03 * true_range);
+    GL_CHECK(app.cur.top_valid); /* at 6 m the top of a 1.96 m stick is in the frame */
+    GL_CHECK(app.cur.range.sources & GL_RANGE_SRC_STEREO);
+    GL_CHECK_NEAR(app.cur.target.distance_m, ball_dist, 0.03 * ball_dist);
+    GL_CHECK_NEAR(app.cur.target.bearing_rad, ball_bearing, 0.001);
+
+    /* ---- solver stub -> tilt-and-bearing screen ---- */
+    GL_CHECK_EQ(app.solver_status, GL_ERR_NOT_IMPLEMENTED);
+    GL_CHECK(app.view.have_result && !app.view.solved && app.view.flag_found);
+    GL_CHECK_NEAR(app.view.aim_rad, ball_bearing, 0.001);
+    GL_CHECK_NEAR(app.view.ball_az_rad, 0.0, 1e-6);
+    GL_CHECK_NEAR(app.view.slope_pct, 100.0 * sqrt(W.slope_x * W.slope_x + W.slope_y * W.slope_y),
+                  0.05);
+    GL_CHECK(app.view.confidence > 0.1f && app.view.confidence <= 0.5f);
+    GL_CHECK_NEAR(app.meas_cur.flag_bearing_rad, app.cur.bearing_rad, 1e-6);
+    GL_CHECK(app.meas_cur.flag_found && app.meas_cur.n_horizon > 20u);
+    GL_CHECK_NEAR(app.meas_cur.tilt_x, W.slope_y, 0.0004); /* device +x = marker +y */
+    GL_CHECK_NEAR(app.meas_cur.tilt_y, -W.slope_x, 0.0004);
+
+    /* ---- the screen: the panel shows exactly the framebuffer, DISP is on,
+     *      EXTCOMIN runs at 60 Hz, and the aim line is where it must be ---- */
+    GL_CHECK(gl_sim_lcd()->disp && gl_sim_lcd()->extcomin);
+    GL_CHECK_EQ(gl_sim_lcd()->extcomin_period, 546);
+    GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
+    {
+        /* the line passes through the ball centre (off-screen, straight ahead)
+         * in direction aim: at screen row y its column is
+         * 63.5 + (y - 63.5 + BALL) * tan(aim) */
+        unsigned on_line = 0, rows = 0;
+        for (int y = 40; y <= 70; y += 5) {
+            const double x = 63.5 + ((double)y - 63.5 + (double)GL_CFG_BALL_CENTRE_Y_PX) *
+                                        tan(ball_bearing);
+            rows++;
+            if (panel_black_((int)(x + 0.5), y)) {
+                on_line++;
+            }
+        }
+        GL_CHECK_EQ(on_line, rows);
+        /* and it is a line, not a filled screen */
+        GL_CHECK(!panel_black_(30, 45) && !panel_black_(64, 45));
+    }
+    /* only changed lines are sent: far fewer line writes than 128 per update */
+    printf("    LCD: %u frames, %u lines written in %u ms of display-on time\n",
+           (unsigned)gl_sim_lcd()->frames, (unsigned)gl_sim_lcd()->lines_written,
+           (unsigned)(t_result_ms - seen.t_ms[1]));
+    GL_CHECK(gl_sim_lcd()->lines_written < 5u * 128u);
+
+    /* ---- while the result is shown: Stop mode between IMU samples ---- */
+    {
+        const uint64_t stop0 = gl_sim_stats()->stop_us, t0 = gl_sim_now_us();
+        run_until_ms_(t_result_ms + 5000u);
+        const double frac = (double)(gl_sim_stats()->stop_us - stop0) / (double)(gl_sim_now_us() - t0);
+        printf("    result shown: MCU in Stop mode %.1f %% of the time (IMU at 240 Hz)\n",
+               100.0 * frac);
+        GL_CHECK(frac > 0.9);
+        GL_CHECK_EQ(app.ui.state, GL_UI_SHOW_RESULT);
+    }
+
+    /* ---- 45 s later: asleep again ---- */
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, t_result_ms + 46000u));
+    GL_CHECK(!gl_sim_lcd()->disp && !gl_sim_lcd()->extcomin);
+    GL_CHECK(gl_sim_pin_drives_low(GL_PIN_LCD_DISP) && gl_sim_pin_drives_low(GL_PIN_LCD_SCS));
+    GL_CHECK(!gl_sim_cam_rail_on() && cam_pins_parked_());
+    GL_CHECK_EQ(gl_sim_imu_reg(0x10), 0x43);
+    GL_CHECK_EQ(gl_sim_imu_reg(0x11), 0x00);
+    GL_CHECK(gl_sim_flash_stats()->deep_power_down);
+    {
+        /* and it stays asleep, in Stop mode, waking only to kick the watchdog */
+        const uint64_t stop0 = gl_sim_stats()->stop_us, t0 = gl_sim_now_us();
+        const uint32_t loops0 = app.loops;
+        run_until_ms_((uint32_t)(t0 / 1000u) + 60000u);
+        GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP);
+        GL_CHECK(gl_sim_stats()->stop_us - stop0 > 59900000u);
+        GL_CHECK(app.loops - loops0 <= 6u);
+    }
+
+    /* ---- the log: boot event + this read ---- */
+    {
+        gl_log_iter_t it;
+        gl_log_rec_t rec;
+        gl_log_read_t rd;
+        uint8_t buf[128];
+        unsigned reads = 0, events = 0;
+        gl_log_iter_begin(&app.log, &it);
+        while (gl_log_iter_next(&app.log, &it, &rec, buf, sizeof(buf)) == GL_OK) {
+            if (rec.type == GL_LOG_REC_READ) {
+                reads++;
+                GL_CHECK_EQ(gl_log_read_decode(buf, rec.len, &rd), GL_OK);
+                GL_CHECK(rd.flags & GL_LOG_READ_FLAG_STICK_FOUND);
+                GL_CHECK(rd.flags & GL_LOG_READ_FLAG_TOP_VISIBLE);
+                GL_CHECK(!(rd.flags & GL_LOG_READ_FLAG_PRECISION));
+                GL_CHECK_NEAR(rd.range_m, app.cur.range.range_m, 1e-6);
+                GL_CHECK_NEAR(rd.slope_x, app.cur.slope.x, 1e-9);
+                GL_CHECK_NEAR(rd.disparity_px, app.cur.disparity_px, 1e-9);
+                GL_CHECK_EQ(rd.solver_status, GL_SOLVE_NOT_RUN);
+                GL_CHECK_EQ(rd.n_repeats, GL_APP_LRRL_REPEATS);
+                GL_CHECK_EQ(rd.stimp_x2, 20);
+                GL_CHECK_NEAR(rd.batt_mv, 3900.0, 5.0);
+                GL_CHECK_NEAR(rd.temp_c_x100, 2200.0, 2.0);
+            } else if (rec.type == GL_LOG_REC_EVENT) {
+                events++;
+            }
+        }
+        GL_CHECK_EQ(reads, 1u);
+        GL_CHECK_EQ(events, 1u); /* the boot record */
+        (void)gl_mx25r_sleep(&app.flash);
+    }
+    /* the stick height was learned from this read (stereo range inside 4-7 m,
+     * top and base seen) and stored */
+    GL_CHECK_EQ(app.stick_height.updates, 1u);
+
+    /* ---- nothing the board model objects to ---- */
+    if (gl_sim_violation_total() != 0u) {
+        printf("    first violation: %s\n", gl_sim_violations()->first);
+    }
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+    GL_CHECK(gl_sim_stats()->watchdog_kicks > 100u);
+}
+
+/* ======================================================================= */
+/* 1b. what the L R R L timing correction is worth                          */
+/* ======================================================================= */
+
+/* The stick leans over steadily at 6 px/s (0.2 px per frame) during the
+ * capture.  The two sensors are 9 ms out of phase, so the L and R strips of
+ * a group are not symmetric in time; without the correction the disparity
+ * picks up (rate x mean time difference). */
+static double drift_error_px_(bool correction, double phase_ms)
+{
+    double true_d;
+    world_defaults_();
+    W.dist_m = 5.0;
+    W.bearing_rad = -0.03;
+    project_scene_();
+    board_up_(true);
+    gl_sim_cam_set_phase_us(GL_CAM_RIGHT, (uint32_t)(phase_ms * 1000.0));
+    (void)gl_app_init(&app);
+    app.read.time_correction = correction;
+    watch_reset_();
+    if (!run_until_state_(GL_UI_CAPTURE, 6000)) {
+        return 99.0;
+    }
+    W.drift_t0_s = (double)gl_sim_now_us() * 1e-6;
+    W.drift_px_per_s = 6.0;
+    if (!run_until_state_(GL_UI_SHOW_RESULT, 9000) || !app.cur.flag_found) {
+        return 99.0;
+    }
+    true_d = 657.0 * (double)GL_CFG_CAM_BASELINE_M /
+             (W.dist_m * cos(W.bearing_rad) - (double)GL_CFG_CAM_LEFT_Y_MM * 0.001);
+    return (double)app.cur.disparity_px - true_d;
+}
+
+GL_TEST(test_lrrl_timing_correction)
+{
+    static const double phases_ms[] = { 2.0, 9.0, 16.0, 24.0, 31.0 };
+    double worst_on = 0.0, worst_off = 0.0;
+    printf("    stick drifting 6 px/s, disparity error (px) by sensor phase offset:\n");
+    printf("    %-12s %12s %12s\n", "phase ms", "corrected", "uncorrected");
+    for (size_t i = 0; i < GL_ARRAY_LEN(phases_ms); i++) {
+        const double e_on = drift_error_px_(true, phases_ms[i]);
+        const double e_off = drift_error_px_(false, phases_ms[i]);
+        printf("    %-12.0f %+12.4f %+12.4f\n", phases_ms[i], e_on, e_off);
+        if (fabs(e_on) > worst_on) {
+            worst_on = fabs(e_on);
+        }
+        if (fabs(e_off) > worst_off) {
+            worst_off = fabs(e_off);
+        }
+        GL_CHECK(fabs(e_on) < 0.02);
+    }
+    printf("    worst: %.4f px corrected, %.4f px uncorrected\n", worst_on, worst_off);
+    GL_CHECK(worst_off > 3.0 * worst_on);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* ======================================================================= */
+/* 1c. the fallback windowing mode: full VGA from the sensor, DCMI crop     */
+/* ======================================================================= */
+
+GL_TEST(test_quick_read_with_dcmi_crop_windowing)
+{
+    double true_range;
+    world_defaults_();
+    W.dist_m = 3.0; /* a short putt: the top of the stick is above the frame */
+    W.bearing_rad = -0.08;
+    project_scene_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    /* GL_PROV_OV7692_SENSOR_WINDOWING = 0: no sensor start / size register
+     * is touched, the DCMI cuts the strips out of full frames */
+    app.cam.cfg.sensor_windowing = false;
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 9000));
+    {
+        const double sx = -W.dist_m * sin(W.bearing_rad), sy = W.dist_m * cos(W.bearing_rad);
+        const double hy = (double)GL_CFG_CAM_LEFT_Y_MM * 0.001;
+        true_range = sqrt(sx * sx + (sy - hy) * (sy - hy));
+    }
+    printf("    DCMI-crop windowing, stick at 3 m, 4.6 deg right: range %.3f m (true %.3f), "
+           "bearing %.2f mrad, top in frame: %s, sources 0x%X\n", (double)app.cur.range.range_m,
+           true_range, 1000.0 * (double)app.cur.bearing_rad, app.cur.top_valid ? "yes" : "no",
+           (unsigned)app.cur.range.sources);
+    GL_CHECK(app.cur.flag_found && app.cur.range_valid);
+    GL_CHECK_NEAR(app.cur.range.range_m, true_range, 0.02 * true_range);
+    GL_CHECK(app.cur.bearing_rad < -0.07f); /* to the right */
+    GL_CHECK(!app.cur.top_valid);
+    GL_CHECK_EQ(app.cur.range.sources, GL_RANGE_SRC_STEREO);
+    GL_CHECK_EQ(app.stick_height.updates, 0u); /* nothing to learn from without the top */
+    GL_CHECK_EQ(gl_sim_stats()->frames_captured, 33u);
+    /* the sensors' window start / size registers still hold their reset values */
+    GL_CHECK_EQ(seen.rail_outside_capture, 0u);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* ======================================================================= */
+/* 1d. raw-strip logging for field data collection                          */
+/* ======================================================================= */
+
+static uint8_t logged_strip_[96 * 480];
+
+GL_TEST(test_raw_strip_logging)
+{
+    gl_log_iter_t it;
+    gl_log_rec_t rec;
+    gl_log_raw_hdr_t h;
+    static uint8_t buf[1024];
+    unsigned chunks[2] = { 0, 0 }, other = 0, reads = 0;
+    uint32_t t_result;
+
+    /* level FIRST: the first left and the first right stick strip of a read */
+    world_defaults_();
+    W.keep_first_strips = true;
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    {
+        gl_settings_t s = app.settings;
+        s.raw_log_level = GL_RAWLOG_FIRST;
+        GL_CHECK_EQ(gl_app_set_settings(&app, &s), GL_OK);
+    }
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 12000));
+    t_result = (uint32_t)(gl_sim_now_us() / 1000u);
+    GL_CHECK(app.cur.flag_found);
+    GL_CHECK(W.have_first[0] && W.have_first[1]);
+    for (int c = 0; c < 2; c++) {
+        unsigned n = 0;
+        uint32_t next_off = 0;
+        memset(logged_strip_, 0, sizeof(logged_strip_));
+        gl_log_iter_begin(&app.log, &it);
+        while (gl_log_iter_next(&app.log, &it, &rec, buf, sizeof(buf)) == GL_OK) {
+            if (rec.type != GL_LOG_REC_RAW_CHUNK) {
+                continue;
+            }
+            GL_CHECK_EQ(gl_log_raw_hdr_decode(buf, rec.len, &h), GL_OK);
+            if (h.camera != (uint8_t)c) {
+                continue;
+            }
+            GL_CHECK_EQ(h.read_id, app.read_id);
+            GL_CHECK_EQ(h.kind, 1);
+            GL_CHECK_EQ(h.frame_index, c); /* strip 0 is the first left, strip 1 the first right */
+            GL_CHECK(h.width == 96u && h.height == 480u && h.y0 == 0u);
+            GL_CHECK_EQ(h.x0, W.first_x0[c]);
+            GL_CHECK_EQ(h.offset, next_off); /* chunks in order, no gap */
+            GL_CHECK(rec.len > GL_LOG_RAW_HDR_LEN && h.offset + (rec.len - GL_LOG_RAW_HDR_LEN) <=
+                                                     sizeof(logged_strip_));
+            memcpy(&logged_strip_[h.offset], &buf[GL_LOG_RAW_HDR_LEN], rec.len - GL_LOG_RAW_HDR_LEN);
+            next_off = h.offset + (uint32_t)(rec.len - GL_LOG_RAW_HDR_LEN);
+            n++;
+        }
+        chunks[c] = n;
+        GL_CHECK_EQ(next_off, 96u * 480u);
+        /* byte for byte what the camera delivered */
+        GL_CHECK_MEM(logged_strip_, first_strip_[c], sizeof(logged_strip_));
+    }
+    gl_log_iter_begin(&app.log, &it);
+    while (gl_log_iter_next(&app.log, &it, &rec, buf, sizeof(buf)) == GL_OK) {
+        if (rec.type == GL_LOG_REC_READ) {
+            reads++;
+        } else if (rec.type != GL_LOG_REC_RAW_CHUNK) {
+            other++;
+        }
+        GL_CHECK(rec.len <= 1014u); /* every record fits one LOG_READ response */
+    }
+    printf("    raw log level FIRST: %u + %u chunks of 960 pixels, read took %.2f s (3.44 s "
+           "without logging)\n", chunks[0], chunks[1], (double)t_result / 1000.0 - 1.6);
+    GL_CHECK_EQ(chunks[0], 48u);
+    GL_CHECK_EQ(chunks[1], 48u);
+    GL_CHECK_EQ(reads, 1u);
+    GL_CHECK_EQ(other, 1u); /* the boot event */
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+
+    /* level ALL: the band and all 32 strips; the read outlasts the 8 s
+     * capture limit of the UI and must still complete */
+    world_defaults_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    {
+        gl_settings_t s = app.settings;
+        s.raw_log_level = GL_RAWLOG_ALL;
+        GL_CHECK_EQ(gl_app_set_settings(&app, &s), GL_OK);
+    }
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 60000));
+    t_result = (uint32_t)(gl_sim_now_us() / 1000u);
+    GL_CHECK(app.cur.flag_found && app.cur.range_valid);
+    {
+        unsigned n = 0, bands = 0;
+        gl_log_iter_begin(&app.log, &it);
+        while (gl_log_iter_next(&app.log, &it, &rec, buf, sizeof(buf)) == GL_OK) {
+            if (rec.type == GL_LOG_REC_RAW_CHUNK) {
+                n++;
+                GL_CHECK_EQ(gl_log_raw_hdr_decode(buf, rec.len, &h), GL_OK);
+                if (h.kind == 0u) {
+                    bands++;
+                }
+            }
+        }
+        printf("    raw log level ALL: %u chunks (%u of the band), %.1f kB of flash, read took "
+               "%.1f s, camera rail on %.1f s\n", n, bands,
+               (double)gl_sim_flash_stats()->bytes_programmed / 1000.0,
+               (double)t_result / 1000.0 - 1.6, (double)gl_sim_stats()->cam_rail_on_us / 1e6);
+        GL_CHECK_EQ(bands, 64u);          /* 640 x 96 / 960 */
+        GL_CHECK_EQ(n, 64u + 32u * 48u);
+    }
+    GL_CHECK_EQ(seen.rail_outside_capture, 0u);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* ======================================================================= */
+/* 2. no flagstick in view                                                  */
+/* ======================================================================= */
+
+GL_TEST(test_no_flagstick_falls_back)
+{
+    world_defaults_();
+    W.stick = false;
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    /* no flag and no dialled distance: the UI asks for the distance */
+    GL_CHECK(run_until_state_(GL_UI_SETTINGS_DIAL, 9000));
+    print_seen_();
+    GL_CHECK(app.ui.dist_prompt);
+    GL_CHECK_EQ(app.ui.item, GL_ITEM_DISTANCE);
+    GL_CHECK(!app.cur.flag_found);
+    /* the cameras were on for the horizon band only */
+    GL_CHECK_EQ(gl_sim_stats()->frames_captured, 1u);
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 1u);
+    GL_CHECK(!gl_sim_cam_rail_on() && cam_pins_parked_());
+    GL_CHECK(gl_sim_stats()->cam_rail_on_us < 400000u);
+    GL_CHECK_EQ(seen.rail_outside_capture, 0u);
+    GL_CHECK(app.read.result.n_horizon > 20u); /* the turf horizon was still measured */
+    printf("    no stick: camera rail on for %.0f ms (band only), %u horizon samples kept\n",
+           (double)gl_sim_stats()->cam_rail_on_us / 1000.0, (unsigned)app.read.result.n_horizon);
+
+    /* with a dialled distance the same situation gives a tilt-only result */
+    world_defaults_();
+    W.stick = false;
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    {
+        gl_settings_t s = app.settings;
+        s.manual_distance_cm = 450;
+        GL_CHECK_EQ(gl_app_set_settings(&app, &s), GL_OK);
+    }
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 9000));
+    GL_CHECK(app.view.have_result && !app.view.flag_found && !app.view.solved);
+    GL_CHECK_NEAR(app.view.distance_m, 4.5, 1e-4);
+    GL_CHECK_NEAR(app.view.aim_rad, 0.0, 1e-6); /* along the visor axis */
+    GL_CHECK(app.view.confidence <= 0.4f);
+    GL_CHECK(isnan(app.meas_cur.flag_bearing_rad) && !app.meas_cur.flag_found);
+    GL_CHECK_NEAR(app.meas_cur.user_distance_m, 4.5, 1e-4);
+    GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* ======================================================================= */
+/* 3. bumped during the capture                                             */
+/* ======================================================================= */
+
+GL_TEST(test_bump_during_capture_aborts_and_rereads)
+{
+    uint32_t t_abort_ms = 0;
+    world_defaults_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_CAPTURE, 6000));
+    /* 0.4 s into the capture somebody kicks the marker */
+    W.jolt_at_s = (double)gl_sim_now_us() * 1e-6 + 0.4;
+    W.jolt_len_s = 0.25;
+    GL_CHECK(run_until_state_(GL_UI_WAIT_STILL, 8000));
+    t_abort_ms = (uint32_t)(gl_sim_now_us() / 1000u);
+    /* aborted within one stillness block of the jolt, and the rail is off NOW */
+    GL_CHECK((double)t_abort_ms / 1000.0 < W.jolt_at_s + 0.30);
+    GL_CHECK(!gl_sim_cam_rail_on() && cam_pins_parked_());
+    GL_CHECK(!app.capture_active && !gl_read_busy(&app.read));
+    GL_CHECK(gl_sim_stats()->frames_captured < 33u);
+    /* it settles and reads again by itself */
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 14000));
+    print_seen_();
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 2u);
+    GL_CHECK(app.cur.flag_found && app.view.have_result);
+    GL_CHECK_EQ(seen.rail_outside_capture, 0u);
+    {
+        replay_t rp;
+        replay_rail_rule_(&rp);
+        GL_CHECK_EQ(rp.pin_violations, 0u);
+        GL_CHECK_EQ(rp.bus_violations, 0u);
+        GL_CHECK_EQ(rp.rail_on_edges, 2u);
+    }
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* ======================================================================= */
+/* 4. Precision Read: spin 180 degrees, re-read                             */
+/* ======================================================================= */
+
+GL_TEST(test_precision_read_spin_and_reread)
+{
+    static const float acc_bias[3] = { 0.004f, -0.003f, 0.0f }; /* a device bias of 4 / 3 mrad */
+    static const float gyro_bias[3] = { 0.004f, -0.002f, 0.001f };
+    double t_now;
+
+    world_defaults_();
+    board_up_(true);
+    gl_sim_imu_set_errors(0.0008f, 0.002f, acc_bias, gyro_bias);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 9000));
+    /* the single read carries the device bias */
+    GL_CHECK_NEAR(app.cur.slope.x, W.slope_x + 0.004, 0.0005);
+    GL_CHECK_NEAR(app.cur.slope.y, W.slope_y - 0.003, 0.0005);
+    printf("    single read: slope (%.3f, %.3f) %% with a device bias of (0.4, -0.3) %%; true "
+           "(%.3f, %.3f) %%\n", 100.0 * (double)app.cur.slope.x, 100.0 * (double)app.cur.slope.y,
+           100.0 * W.slope_x, 100.0 * W.slope_y);
+
+    /* double tap -> "SPIN 180" prompt */
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 300u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_PRECISION_WAIT_SPIN);
+    /* the golfer turns the marker by 176 degrees in 1.2 s */
+    t_now = (double)gl_sim_now_us() * 1e-6;
+    W.turn_at_s = t_now + 0.5;
+    W.turn_len_s = 1.2;
+    W.turn_rad = 176.0 * PI_D / 180.0;
+    GL_CHECK(run_until_state_(GL_UI_READ_TILT, (uint32_t)(t_now * 1000.0) + 5000u));
+    GL_CHECK_EQ(app.ui.read_kind, GL_READ_PRECISION);
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, (uint32_t)(t_now * 1000.0) + 8000u));
+    print_seen_();
+    /* no second camera read: the rail was on once */
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 1u);
+    GL_CHECK(app.cur.precision && app.view.precision);
+    printf("    spin measured %.2f deg (true 176.00); combined slope (%.3f, %.3f) %%, true "
+           "(%.3f, %.3f) %%\n", (double)app.cur.view_yaw_rad * 57.29578,
+           100.0 * (double)app.cur.slope.x, 100.0 * (double)app.cur.slope.y, 100.0 * W.slope_x,
+           100.0 * W.slope_y);
+    GL_CHECK_NEAR(app.cur.view_yaw_rad, W.turn_rad, 0.02);
+    /* the device bias has cancelled */
+    GL_CHECK_NEAR(app.cur.slope.x, W.slope_x, 0.0006);
+    GL_CHECK_NEAR(app.cur.slope.y, W.slope_y, 0.0006);
+    /* the marker now faces away from the hole: the ball position is behind
+     * it and the line is drawn through that point */
+    GL_CHECK_NEAR(fabs((double)app.view.ball_az_rad), 176.0 * PI_D / 180.0, 0.02);
+    GL_CHECK_NEAR(gl_wrap_pi(app.view.aim_rad - app.view.ball_az_rad), app.cur.target.bearing_rad,
+                  1e-4);
+    GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
+    {
+        gl_gfx_aim_info_t info;
+        static gl_gfx_t tmp;
+        gl_gfx_init(&tmp);
+        gl_gfx_set_clip(&tmp, true);
+        gl_gfx_aim_line_at(&tmp, app.view.aim_rad, app.view.ball_az_rad, 3.0f, &info);
+        GL_CHECK(info.on_screen); /* a solid line through the ball, not the dashed fallback */
+    }
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* ======================================================================= */
+/* 4b. Survey: a second drop along the line                                 */
+/* ======================================================================= */
+
+GL_TEST(test_survey_second_drop)
+{
+    double t_now;
+    world_defaults_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 9000));
+    /* double tap twice: Precision prompt, then Survey (the shown read is drop 1) */
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 100u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_PRECISION_WAIT_SPIN);
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 100u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_SURVEY_NEXT_DROP);
+    GL_CHECK_EQ(app.survey.count, 1);
+    GL_CHECK(app.survey.drop[0].flags & GL_DROP_FLAG_STICK);
+    GL_CHECK_NEAR(app.survey.drop[0].range_m, 6.0, 0.15);
+    GL_CHECK(app.meas[0].flag_found);
+
+    /* the golfer carries the marker 3 m along the line and puts it down:
+     * the stick is now 3 m away, the green there slopes differently */
+    t_now = (double)gl_sim_now_us() * 1e-6;
+    W.t_pick_s = t_now + 0.5;
+    W.t_place_s = t_now + 2.0;
+    run_until_ms_((uint32_t)((t_now + 1.0) * 1000.0));
+    W.dist_m = 3.0;
+    W.bearing_rad = -0.02;
+    W.slope_x = -0.004;
+    W.slope_y = -0.015;
+    project_scene_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, (uint32_t)(t_now * 1000.0) + 9000u));
+    print_seen_();
+    GL_CHECK_EQ(app.ui.read_kind, GL_READ_SURVEY);
+    GL_CHECK_EQ(app.ui.survey_count, 2);
+    GL_CHECK_EQ(app.survey.count, 2);
+    GL_CHECK_NEAR(app.survey.drop[1].range_m, 3.0, 0.08);
+    GL_CHECK_NEAR(app.survey.drop[1].slope.y, -0.015, 0.0005);
+    GL_CHECK_NEAR(app.meas[1].tilt_x, -0.015, 0.0005); /* device +x = marker +y */
+    GL_CHECK_NEAR(app.meas[0].tilt_x, -0.020, 0.0005);
+    GL_CHECK_EQ(gl_survey_farthest(&app.survey), 0);   /* drop 1 is the ball end */
+    /* the survey estimator is phase 2: the stub answered, the screen shows
+     * this drop's tilt and bearing */
+    GL_CHECK_EQ(app.solver_status, GL_ERR_NOT_IMPLEMENTED);
+    GL_CHECK(app.view.have_result && !app.view.solved);
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 2u);
+    GL_CHECK_EQ(seen.rail_outside_capture, 0u);
+    /* double tap ends the survey */
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 100u);
+    GL_CHECK_EQ(app.ui.survey_count, 0);
+    GL_CHECK_EQ(app.survey.count, 0);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* ======================================================================= */
+/* 5. zeroing on a hard flat surface (never in the cradle)                  */
+/* ======================================================================= */
+
+/* Drive the UI into the zeroing state the way the golfer does (the
+ * gestures themselves are tested in test_gesture.c; here their events are
+ * injected). */
+static void start_zeroing_(void)
+{
+    gl_app_post(&app, GL_EV_UPRIGHT, 0);
+    for (int i = 0; i < 7; i++) {
+        gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    }
+    gl_app_post(&app, GL_EV_DIAL_STEP, 1);
+    gl_app_post(&app, GL_EV_FLAT, 0);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 50u);
+}
+
+GL_TEST(test_zeroing_on_a_table_top)
+{
+    static const float acc_bias[3] = { 0.0035f, -0.0025f, 0.0f };
+    static const float gyro_bias[3] = { 0.004f, -0.002f, 0.001f };
+    double t_now;
+
+    world_defaults_();
+    W.stick = false;
+    W.slope_x = 0.006; /* the table top is not level: 0.6 % and -1.1 % */
+    W.slope_y = -0.011;
+    board_up_(true);
+    gl_sim_imu_set_errors(0.0008f, 0.002f, acc_bias, gyro_bias);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_WAIT_STILL, 4000));
+    GL_CHECK_EQ(app.cal_tilt.flags & GL_CAL_TILT_FLAG_FLIP, 0);
+
+    start_zeroing_();
+    GL_CHECK_EQ(app.ui.state, GL_UI_CAL_ZERO);
+    GL_CHECK(app.zero.active);
+    GL_CHECK_EQ(app.zero.step, 0);
+    /* first read done -> "TURN 180" */
+    t_now = (double)gl_sim_now_us() * 1e-6;
+    while (app.zero.active && app.zero.step == 0u && (double)gl_sim_now_us() * 1e-6 < t_now + 4.0) {
+        run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 10u);
+    }
+    GL_CHECK_EQ(app.zero.step, 1);
+    GL_CHECK_EQ(app.view.cal_step, 1);
+    /* turned by 171 degrees (it need not be exact: the gyro measures it) */
+    t_now = (double)gl_sim_now_us() * 1e-6;
+    W.turn_at_s = t_now + 0.4;
+    W.turn_len_s = 1.5;
+    W.turn_rad = -171.0 * PI_D / 180.0;
+    GL_CHECK(run_until_state_(GL_UI_WAIT_STILL, (uint32_t)(t_now * 1000.0) + 9000u));
+    print_seen_();
+    GL_CHECK(app.cal_tilt.flags & GL_CAL_TILT_FLAG_FLIP);
+    printf("    zeroing on a table sloped (0.6, -1.1) %%, turn of -171 deg: stored bias (%.3f, "
+           "%.3f) mrad, true (3.500, -2.500)\n", 1000.0 * (double)app.cal_tilt.flip_bias_x,
+           1000.0 * (double)app.cal_tilt.flip_bias_y);
+    GL_CHECK_NEAR(app.cal_tilt.flip_bias_x, 0.0035, 0.0004);
+    GL_CHECK_NEAR(app.cal_tilt.flip_bias_y, -0.0025, 0.0004);
+    GL_CHECK_NEAR(app.cal_tilt.flip_temp_c, 22.0, 0.1);
+    /* it is in the flash store: a fresh boot loads it */
+    {
+        const float bx = app.cal_tilt.flip_bias_x, by = app.cal_tilt.flip_bias_y;
+        world_defaults_();
+        W.stick = false;
+        W.t_pick_s = 1e9; /* left alone */
+        W.t_place_s = 1e9;
+        board_up_(false); /* power cycle: the flash keeps its contents */
+        GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+        GL_CHECK(app.cal_tilt.flags & GL_CAL_TILT_FLAG_FLIP);
+        GL_CHECK(app.cal_tilt.flip_bias_x == bx && app.cal_tilt.flip_bias_y == by);
+    }
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+
+    /* a turn of only 120 degrees is refused and nothing is stored */
+    world_defaults_();
+    W.stick = false;
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_WAIT_STILL, 4000));
+    start_zeroing_();
+    t_now = (double)gl_sim_now_us() * 1e-6;
+    while (app.zero.active && app.zero.step == 0u && (double)gl_sim_now_us() * 1e-6 < t_now + 4.0) {
+        run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 10u);
+    }
+    t_now = (double)gl_sim_now_us() * 1e-6;
+    W.turn_at_s = t_now + 0.4;
+    W.turn_len_s = 1.2;
+    W.turn_rad = 120.0 * PI_D / 180.0;
+    GL_CHECK(run_until_state_(GL_UI_ERROR, (uint32_t)(t_now * 1000.0) + 9000u));
+    GL_CHECK_EQ(app.ui.error_code, GL_ERR_RANGE);
+    GL_CHECK_EQ(app.cal_tilt.flags & GL_CAL_TILT_FLAG_FLIP, 0);
+
+    /* put into the cradle half way through: abandoned, nothing stored */
+    world_defaults_();
+    W.stick = false;
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_WAIT_STILL, 4000));
+    start_zeroing_();
+    GL_CHECK_EQ(app.ui.state, GL_UI_CAL_ZERO);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 100u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    GL_CHECK(!app.zero.active);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 4000u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    GL_CHECK_EQ(app.cal_tilt.flags & GL_CAL_TILT_FLAG_FLIP, 0);
+    /* and it cannot be started there, neither by gesture nor over USB */
+    start_zeroing_();
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    GL_CHECK_EQ(gl_app_start_cal(&app, GL_CALPROC_ZERO, 0), GL_ERR_STATE);
+    GL_CHECK(!app.zero.active);
+}
+
+/* ======================================================================= */
+/* 6. cradle: USB protocol, charging, reboot to the ROM bootloader          */
+/* ======================================================================= */
+
+static uint8_t host_rx_[4096];
+static size_t host_rx_len_;
+
+static void host_send_(uint8_t seq, uint8_t cmd, const void *payload, size_t n)
+{
+    uint8_t f[GL_PROTO_MAX_FRAME];
+    const size_t len = gl_proto_encode(f, sizeof(f), seq, cmd, (const uint8_t *)payload, n);
+    gl_sim_usb_host_send(f, len);
+}
+
+/* Run the device for a moment, then take the first complete frame with the
+ * given CMD byte out of what the host received.  Returns the payload length
+ * or -1. */
+static int host_get_(uint8_t want_cmd, uint8_t *seq, const uint8_t **payload)
+{
+    static const uint8_t none[8];
+    *payload = none;
+    *seq = 0;
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 30u);
+    host_rx_len_ += gl_sim_usb_host_recv(&host_rx_[host_rx_len_], sizeof(host_rx_) - host_rx_len_);
+    for (size_t pos = 0; pos + GL_PROTO_OVERHEAD <= host_rx_len_;) {
+        const size_t n = gl_get_u16(&host_rx_[pos + 2]);
+        if (host_rx_[pos] != 0xA5 || host_rx_[pos + 1] != 0x5A || pos + n + 8u > host_rx_len_ ||
+            gl_crc16(&host_rx_[pos + 2], n + 4u) != gl_get_u16(&host_rx_[pos + 6u + n])) {
+            pos++;
+            continue;
+        }
+        if (host_rx_[pos + 5] == want_cmd) {
+            static uint8_t copy[GL_PROTO_MAX_PAYLOAD];
+            *seq = host_rx_[pos + 4];
+            memcpy(copy, &host_rx_[pos + 6], n);
+            *payload = copy;
+            host_rx_len_ = 0; /* everything up to here is consumed */
+            return (int)n;
+        }
+        pos += n + 8u;
+    }
+    return -1;
+}
+
+GL_TEST(test_cradle_usb_charging_and_dfu)
+{
+    uint8_t seq;
+    const uint8_t *pl;
+    int n;
+
+    /* a device that has done one read, so that the log holds something */
+    world_defaults_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 9000));
+
+    /* into the cradle: VBUS appears */
+    host_rx_len_ = 0;
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    gl_sim_usb_host_open(true);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 200u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    GL_CHECK(app.usb_on && gl_hal_usb_connected());
+    /* charging allowed: 22 C is inside 0..45 C -> PROG enable pulled LOW */
+    GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+    GL_CHECK(app.power.charge_enabled);
+
+    /* PING */
+    host_send_(1, GL_CMD_PING, "hello", 5);
+    n = host_get_(GL_CMD_PING | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    GL_CHECK_EQ(n, 6);
+    GL_CHECK_EQ(seq, 1);
+    GL_CHECK(pl[0] == GL_OK && memcmp(&pl[1], "hello", 5) == 0);
+    /* GET_INFO: protocol 1, hardware rev C, solver version 0 = stub */
+    host_send_(2, GL_CMD_GET_INFO, NULL, 0);
+    n = host_get_(GL_CMD_GET_INFO | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    GL_CHECK_EQ(n, 1 + (int)GL_PROTO_INFO_LEN);
+    GL_CHECK_EQ(pl[1], GL_PROTO_VERSION);
+    GL_CHECK_EQ(pl[2], GL_APP_HW_REV);
+    GL_CHECK_EQ(gl_get_u32(&pl[9]), 0u);
+    /* GET_STATUS */
+    host_send_(3, GL_CMD_GET_STATUS, NULL, 0);
+    n = host_get_(GL_CMD_GET_STATUS | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    GL_CHECK_EQ(n, 1 + (int)GL_PROTO_STATUS_LEN);
+    GL_CHECK_NEAR(gl_get_u16(&pl[1]), 3900.0, 5.0);          /* battery mV */
+    GL_CHECK_NEAR((int16_t)gl_get_u16(&pl[3]), 220.0, 1.0);  /* 22.0 C */
+    GL_CHECK_EQ(pl[5], GL_UI_CRADLE_USB);
+    GL_CHECK_EQ(pl[6] & 0x05u, 0x05u);                       /* VBUS, charge enabled */
+    GL_CHECK_EQ(gl_get_u32(&pl[9]), 1u);                     /* one read so far */
+    /* SET_SETTINGS: Stimp 11.5, metres -> applied and stored */
+    {
+        gl_settings_t s = app.settings;
+        uint8_t blob[GL_SETTINGS_BLOB_LEN];
+        s.stimp_x2 = 23;
+        s.units = GL_UNITS_METRES;
+        gl_settings_encode(&s, blob);
+        host_send_(4, GL_CMD_SET_SETTINGS, blob, sizeof(blob));
+        n = host_get_(GL_CMD_SET_SETTINGS | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+        GL_CHECK_EQ(n, 1);
+        GL_CHECK_EQ(pl[0], GL_OK);
+        GL_CHECK_EQ(app.settings.stimp_x2, 23);
+        GL_CHECK_EQ(app.ui.edit.units, GL_UNITS_METRES);
+    }
+    /* GET_CAL tilt */
+    {
+        const uint8_t id = GL_CAL_ID_TILT;
+        host_send_(5, GL_CMD_GET_CAL, &id, 1);
+        n = host_get_(GL_CMD_GET_CAL | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+        GL_CHECK_EQ(n, 2 + (int)GL_CAL_TILT_BLOB_LEN);
+        GL_CHECK_EQ(pl[1], GL_CAL_ID_TILT);
+    }
+    /* START_CAL: the zeroing is refused in the cradle; an unimplemented
+     * factory procedure says so */
+    {
+        const uint8_t zero[2] = { GL_CALPROC_ZERO, 0 }, hor[2] = { GL_CALPROC_CAM_HORIZON, 0 };
+        host_send_(6, GL_CMD_START_CAL, zero, 2);
+        n = host_get_(GL_CMD_START_CAL | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+        GL_CHECK_EQ(n, 1);
+        GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+        GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+        host_send_(7, GL_CMD_START_CAL, hor, 2);
+        n = host_get_(GL_CMD_START_CAL | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+        GL_CHECK_EQ(pl[0], GL_ERR_UNSUPPORTED);
+    }
+    /* LOG_READ from the start: the boot event and the read record */
+    {
+        const uint8_t restart = 1;
+        size_t pos = 2;
+        unsigned reads = 0, events = 0;
+        host_send_(8, GL_CMD_LOG_READ, &restart, 1);
+        n = host_get_(GL_CMD_LOG_READ | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+        GL_CHECK(n > 2);
+        GL_CHECK_EQ(pl[0], GL_OK);
+        GL_CHECK_EQ(pl[1], 0); /* no more */
+        while (n > 0 && pos + 8u <= (size_t)n) {
+            const unsigned len = gl_get_u16(&pl[pos + 2u]);
+            if (pl[pos] == GL_LOG_REC_READ) {
+                gl_log_read_t rd;
+                reads++;
+                GL_CHECK_EQ(len, GL_LOG_READ_LEN);
+                GL_CHECK_EQ(gl_log_read_decode(&pl[pos + 8u], len, &rd), GL_OK);
+                GL_CHECK_NEAR(rd.range_m, app.cur.range.range_m, 1e-6);
+            } else if (pl[pos] == GL_LOG_REC_EVENT) {
+                events++;
+            }
+            pos += 8u + len;
+        }
+        GL_CHECK_EQ(reads, 1u);
+        GL_CHECK_EQ(events, 1u);
+    }
+    /* live stream for the factory: IMU and power every 20 ms */
+    {
+        const uint8_t req[4] = { (uint8_t)((1u << GL_STREAM_IMU) | (1u << GL_STREAM_POWER)), 0, 20, 0 };
+        const uint8_t off[4] = { 0, 0, 0, 0 };
+        host_send_(9, GL_CMD_STREAM, req, 4);
+        n = host_get_(GL_CMD_STREAM | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+        GL_CHECK_EQ(pl[0], GL_OK);
+        n = host_get_(GL_PROTO_STREAM_FLAG | GL_STREAM_IMU, &seq, &pl);
+        GL_CHECK_EQ(n, 14);
+        /* at rest on a green sloped (1.2, -2.0) %: az near 1 g = 16393 counts */
+        GL_CHECK_NEAR((int16_t)gl_get_u16(&pl[4]), 16389.0, 60.0);
+        GL_CHECK_NEAR((int16_t)gl_get_u16(&pl[0]), 0.012 * 16389.0, 60.0);
+        n = host_get_(GL_PROTO_STREAM_FLAG | GL_STREAM_POWER, &seq, &pl);
+        GL_CHECK_EQ(n, 4);
+        GL_CHECK_NEAR(gl_get_u16(&pl[0]), 3900.0, 5.0);
+        host_send_(10, GL_CMD_STREAM, off, 4);
+        (void)host_get_(GL_CMD_STREAM | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    }
+    /* too hot to charge: the gate opens the PROG path at the next check */
+    gl_sim_imu_set_temperature(47.0f);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_BATT_PERIOD_MS + 500u);
+    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+    GL_CHECK(!app.power.charge_enabled);
+    gl_sim_imu_set_temperature(30.0f);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_BATT_PERIOD_MS + 500u);
+    GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+
+    /* on USB the MCU never enters Stop mode (the simulator would count it) */
+    GL_CHECK_EQ(gl_sim_violations()->stop_mode, 0u);
+    GL_CHECK(gl_sim_stats()->idle_us > 60000000u);
+
+    /* REBOOT to the ROM DFU bootloader */
+    host_rx_len_ = 0;
+    host_send_(11, GL_CMD_REBOOT, "DFU!", 4);
+    n = host_get_(GL_CMD_REBOOT | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 100u);
+    GL_CHECK_EQ(gl_sim_stats()->reboots, 1u);
+    GL_CHECK_EQ(gl_sim_stats()->last_reboot, GL_REBOOT_ROM_DFU);
+
+    /* out of the cradle: USB off, asleep, charging path released */
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
+    gl_sim_usb_host_open(false);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 300u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP);
+    GL_CHECK(!app.usb_on && !gl_hal_usb_connected());
+    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+    GL_CHECK(!gl_sim_lcd()->disp);
+    if (gl_sim_violation_total() != 0u) {
+        printf("    first violation: %s\n", gl_sim_violations()->first);
+    }
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* ======================================================================= */
+/* 7. start-up with a device missing                                        */
+/* ======================================================================= */
+
+GL_TEST(test_missing_devices_are_reported_not_fatal)
+{
+    /* no IMU: fault screen, then asleep; the cradle still works */
+    world_defaults_();
+    board_up_(true);
+    gl_sim_imu_set_present(false);
+    GL_CHECK(gl_app_init(&app) != GL_OK);
+    watch_reset_();
+    run_until_ms_(200);
+    GL_CHECK_EQ(app.ui.state, GL_UI_ERROR);
+    GL_CHECK(gl_sim_lcd()->disp);
+    GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, 7000));
+    GL_CHECK(!gl_sim_lcd()->disp);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 200u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    /* temperature unknown -> no charging */
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 2000u);
+    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+    GL_CHECK(!gl_sim_cam_rail_on() && cam_pins_parked_());
+
+    /* a camera that does not answer: CAPTURE fails, the rail is off again */
+    world_defaults_();
+    board_up_(true);
+    gl_sim_cam_set_present(GL_CAM_RIGHT, false);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_ERROR, 9000));
+    print_seen_();
+    GL_CHECK_EQ(app.last_error, GL_ERR_IO);
+    GL_CHECK(!gl_sim_cam_rail_on() && cam_pins_parked_());
+    GL_CHECK_EQ(gl_sim_violations()->cam_rail, 0u);
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, (uint32_t)(gl_sim_now_us() / 1000u) + 6000u));
+}
+
+/* Battery: below the LOW threshold the device still reads; below CRITICAL
+ * it shows the warning and sleeps without ever switching the cameras on. */
+GL_TEST(test_low_and_critical_battery)
+{
+    world_defaults_();
+    board_up_(true);
+    gl_sim_set_vbat_mv(3450); /* low (< 3500), not critical (>= 3350) */
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 9000));
+    GL_CHECK(app.power.low && !app.power.critical);
+    GL_CHECK(app.cur.flag_found);
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 1u);
+
+    world_defaults_();
+    board_up_(true);
+    gl_sim_set_vbat_mv(3300); /* critical */
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_LOW_BATT, 3000));
+    GL_CHECK(gl_sim_lcd()->disp);
+    GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, (uint32_t)(gl_sim_now_us() / 1000u) + 5000u));
+    print_seen_();
+    GL_CHECK(!gl_sim_lcd()->disp);
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 0u); /* the cameras were never powered */
+    GL_CHECK(cam_pins_parked_());
+    /* in the cradle the same cell is no obstacle (and gets charged) */
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 500u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* A wake-up interrupt right after the device has gone to sleep (the IMU's
+ * slope detector may trip on its own mode change) must not wake it. */
+static void int1_pulse_(void *arg)
+{
+    (void)arg;
+    gl_sim_set_input(GL_PIN_IMU_INT1, true);
+    gl_sim_set_input(GL_PIN_IMU_INT1, false);
+}
+
+static struct {
+    uint8_t state;
+    bool disp;
+    uint32_t loops;
+} snap_;
+
+static void snapshot_(void *arg)
+{
+    (void)arg;
+    snap_.state = app.ui.state;
+    snap_.disp = gl_sim_lcd()->disp;
+    snap_.loops = app.loops;
+}
+
+GL_TEST(test_spurious_wake_right_after_sleep_is_ignored)
+{
+    world_defaults_();
+    W.t_pick_s = 1e9; /* nobody touches the marker */
+    W.t_place_s = 1e9;
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    /* the device sleeps in Stop mode, so the outside world acts at
+     * scheduled simulated times: a wake-up pulse 50 ms after it went to
+     * sleep, a look at it at 250 ms, a second pulse at 600 ms */
+    GL_CHECK(gl_sim_at_ms(50, int1_pulse_, NULL));
+    GL_CHECK(gl_sim_at_ms(250, snapshot_, NULL));
+    GL_CHECK(gl_sim_at_ms(600, int1_pulse_, NULL));
+    snap_.state = 0xFF;
+    run_until_ms_(700);
+    GL_CHECK_EQ(snap_.state, GL_UI_SLEEP); /* the early pulse did not wake it ... */
+    GL_CHECK(!snap_.disp);
+    GL_CHECK(snap_.loops >= 2u);           /* ... although the loop ran for it */
+    GL_CHECK_EQ(app.ui.state, GL_UI_WAKE); /* the later one did */
+    GL_CHECK(app.ui.state_since_ms >= 600u && app.ui.state_since_ms < 620u);
+    GL_CHECK(gl_sim_lcd()->disp);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+int main(void)
+{
+    GL_RUN(test_complete_quick_read);
+    GL_RUN(test_lrrl_timing_correction);
+    GL_RUN(test_quick_read_with_dcmi_crop_windowing);
+    GL_RUN(test_raw_strip_logging);
+    GL_RUN(test_no_flagstick_falls_back);
+    GL_RUN(test_bump_during_capture_aborts_and_rereads);
+    GL_RUN(test_precision_read_spin_and_reread);
+    GL_RUN(test_survey_second_drop);
+    GL_RUN(test_zeroing_on_a_table_top);
+    GL_RUN(test_cradle_usb_charging_and_dfu);
+    GL_RUN(test_missing_devices_are_reported_not_fatal);
+    GL_RUN(test_low_and_critical_battery);
+    GL_RUN(test_spurious_wake_right_after_sleep_is_ignored);
+    return gl_test_summary();
+}

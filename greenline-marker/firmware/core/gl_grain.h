@@ -21,8 +21,9 @@
  * GL_GRAIN_LED0_AZIMUTH_DEG + 45 k degrees, measured counter-clockwise
  * from marker +x seen from above (the angle atan2(y, x) of the LED position
  * about the ring centre).  Indices 0..7 are red, 8..15 near-infrared.
- * NOTE: that the zero of the azimuth is the +x axis is this firmware's
- * reading of "azimuth in the marker frame"; it must match the PCB layout.
+ * Both numbers and the "counter-clockwise from +x seen from above"
+ * convention come from design/master_params.yaml (rev C states them at
+ * bottom_side_parts.grain_led_ring); the PCB layout must follow the YAML.
  *
  * Results are reported in the firmware's usual convention: radians,
  * counter-clockwise from marker FORWARD (+y).
@@ -36,13 +37,14 @@
 #define GL_GRAIN_H
 
 #include "gl_cal.h"
+#include "gl_config.h"
 #include "gl_settings.h"
 #include "gl_types.h"
 
 #define GL_GRAIN_LEDS_PER_COLOUR 8u
 #define GL_GRAIN_MAX_CYCLES 4u
-#define GL_GRAIN_LED0_AZIMUTH_DEG 22.5f
-#define GL_GRAIN_LED_STEP_DEG 45.0f
+#define GL_GRAIN_LED0_AZIMUTH_DEG GL_CFG_GRAIN_LED0_AZIMUTH_DEG
+#define GL_GRAIN_LED_STEP_DEG GL_CFG_GRAIN_LED_STEP_DEG
 
 /** Azimuth of LED index 0..15 in the firmware convention (rad, CCW from
  *  marker forward), wrapped to (-pi, pi]. */

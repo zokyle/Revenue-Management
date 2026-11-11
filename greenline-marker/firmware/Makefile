@@ -7,7 +7,8 @@
 #   make cross   compile core/, drivers/ and app/ (NOT hal/stm32u5, NOT hal/host)
 #                with arm-none-eabi-gcc for the Cortex-M33 and print the size
 #                table, the largest stack frames and the forbidden-symbol check
-#   make config  regenerate core/gl_config.h and core/gl_font_data.c
+#   make config  regenerate core/gl_config.h, core/gl_font_data.c and
+#                hal/stm32u5/gl_pins.h
 #   make clean
 #
 # Layout rules the wildcards rely on:
@@ -16,6 +17,9 @@
 #   app/*.c       main loop and glue       (app/gl_main.c holds main() and is
 #                                           left out of the host test library)
 #   hal/host/*.c  host simulator backend of hal/gl_hal.h
+#   hal/stm32u5/  STM32U585 backend: NOT compiled by any target here (no
+#                 vendor SDK); only its generated pin table gl_pins.h is
+#                 checked, by tests/test_pins.c
 #   tests/synth/*.c  synthetic data generators shared by tests
 #   tests/test_*.c   one executable each, each with its own main()
 
@@ -34,7 +38,7 @@ WARN     := -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror
 # Extra checks for firmware code (core, drivers, app): no silent double
 # arithmetic, no variable-length arrays, every global function declared.
 FW_WARN  := -Wdouble-promotion -Wvla -Wmissing-prototypes -Wstrict-prototypes -Wundef
-INC      := -Icore -Idrivers -Ihal -Ihal/host -Iapp -Itests -Itests/synth
+INC      := -Icore -Idrivers -Ihal -Ihal/host -Ihal/stm32u5 -Iapp -Itests -Itests/synth
 
 CORE_SRC    := $(sort $(wildcard core/*.c))
 DRV_SRC     := $(sort $(wildcard drivers/*.c))
@@ -139,13 +143,15 @@ cross: config-check $(XOBJ)
 config:
 	$(PYTHON) tools/gen_config.py ../design/master_params.yaml core/gl_config.h
 	$(PYTHON) tools/gen_font.py core/gl_font_data.c
+	$(PYTHON) tools/gen_pins.py ../design/DESIGN_SPEC.md hal/stm32u5/gl_pins.h
 
 # Fails if the checked-in generated files are stale.  Skipped (with a note)
 # when python3 or PyYAML is not installed: the generated files are checked in.
 config-check:
 	@if $(PYTHON) -c "import yaml" 2>/dev/null; then \
 	  $(PYTHON) tools/gen_config.py --check ../design/master_params.yaml core/gl_config.h && \
-	  $(PYTHON) tools/gen_font.py --check core/gl_font_data.c; \
+	  $(PYTHON) tools/gen_font.py --check core/gl_font_data.c && \
+	  $(PYTHON) tools/gen_pins.py --check ../design/DESIGN_SPEC.md hal/stm32u5/gl_pins.h; \
 	else echo "config-check skipped (python3 + PyYAML not available)"; fi
 
 clean:

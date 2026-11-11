@@ -236,6 +236,65 @@ def test_ok_solutions_are_always_true_solutions_even_on_wild_patches():
     assert counts.get("OK", 0) >= 0.85 * 300
 
 
+def _fine_roll_ends_at_hole(surf, dist, a_r, grain, sol):
+    """Roll a past = 0 solution with a 10x finer step: the ball must die at
+    the hole (rest within 2 mm, or reach the hole line within 0.2 mm of the
+    centre at almost no speed)."""
+    r = ph.simulate_putt(surf, (0, 0), (dist, 0), sol.phi, sol.v0, a_r, grain, dt=ph.DEFAULT_DT / 10)
+    at_rest = r.status == ph.RollStatus.STOPPED and math.hypot(r.stop_xy[0] - dist, r.stop_xy[1]) < 2e-3
+    at_line = r.crossed_hole_line and abs(r.lateral_at_line) < 2e-4 and r.speed_at_line < 5e-3
+    return at_rest or at_line
+
+
+def test_dying_putt_on_steep_downhill_is_a_true_solution():
+    """Regression: with past = 0 on a downhill at 0.86-0.97 of critical the
+    solver used to return OK for launches whose ball, in a converged roll,
+    stops 5 cm short (the trial rolls crept over the hole line)."""
+    surf = ph.QuadraticSurface(a=-0.07, b=0.004, c=0.0005, d=0.001, e=0.001)
+    sol = ph.solve_aim(surf, (0, 0), (2.0, 0), A10, None, past=0.0)
+    if sol.ok:
+        assert _fine_roll_ends_at_hole(surf, 2.0, A10, None, sol)
+    else:
+        assert sol.status in (ph.SolveStatus.PACE_LIMITED, ph.SolveStatus.NO_BRACKET, ph.SolveStatus.NO_CONVERGENCE)
+
+    rng = np.random.default_rng(777)
+    n_ok = 0
+    for _ in range(80):
+        a_r = ph.stimp_to_decel(rng.uniform(9.0, 13.0))
+        slope = rng.uniform(0.86, 0.97) * ph.critical_slope(a_r)
+        off = rng.uniform(-0.25, 0.25)
+        curv = rng.normal(0.0, 0.001, 3)
+        patch = ph.QuadraticSurface(-slope * math.cos(off), -slope * math.sin(off), *curv)
+        dist = rng.uniform(1.5, 4.0)
+        s2 = ph.solve_aim(patch, (0, 0), (dist, 0), a_r, None, past=0.0)
+        if s2.ok:
+            n_ok += 1
+            assert _fine_roll_ends_at_hole(patch, dist, a_r, None, s2)
+    assert n_ok >= 50
+
+
+def test_crossing_the_hole_line_far_from_the_hole_is_not_reaching_it():
+    """Regression: on a long patch whose cross slope grows along the putt the
+    lowest-energy crossing of the (infinite) hole line is metres to the side
+    of the hole.  The pace solve used to settle on that branch and the aim
+    search then failed (NO_CONVERGENCE, 1.1 m miss) although a regular
+    solution exists."""
+    coeffs = [0.0015494940810168451, 0.0007377930191904871, 0.0011549920136925864,
+              -0.006981195744842645, -0.0039816409861887754]
+    grain = np.array([-0.13533811536032703, 0.052071653954183256])
+    dist = 11.0017
+    a_r = ph.stimp_to_decel(9.099)
+    surf = ph.QuadraticSurface(*coeffs)
+    sol = ph.solve_aim(surf, (0, 0), (dist, 0), a_r, grain, past=0.30)
+    assert sol.status == ph.SolveStatus.OK
+    assert sol.phi == pytest.approx(-0.19509, abs=2e-5) and sol.v0 == pytest.approx(4.16786, abs=2e-5)
+    _check_solution(surf, (0, 0), (dist, 0), a_r, grain, 0.30, sol)
+    # the far branch still exists in the physics: a slow launch near phi = 0
+    # crosses the infinite line more than 9 m from the hole
+    slow = ph.simulate_putt(surf, (0, 0), (dist, 0), 0.0, 3.6, a_r, grain)
+    assert slow.crossed_hole_line and abs(slow.lateral_at_line) > 1.0 + 0.5 * dist
+
+
 def test_solver_general_start_and_hole_positions_on_grid_surface():
     quad = ph.QuadraticSurface(0.012, -0.008, 0.002, 0.001, -0.002)
     grid = ph.GridSurface.from_function(quad.z, (-15.0, 15.0), (-15.0, 15.0), 0.5)

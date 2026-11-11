@@ -372,15 +372,25 @@ GL_TEST(test_capture_sensor_side_windowing)
 
 GL_TEST(test_capture_dcmi_crop_windowing)
 {
+    unsigned size_writes = 0;
     capture_contents_(false);
-    /* in this mode the sensor's window registers are never written */
+    /* in this mode the sensor's window START / SIZE registers (whose meaning
+     * is the uncertain part) are never written; the input and output size
+     * registers are written with the full 640 x 480 only, once per camera at
+     * power-up (the model's reset value is 640 x 384) */
     GL_CHECK_EQ(tr_find(0, GL_SIM_TR_SCCB_WRITE, -1) >= 0, 1);
     for (size_t i = 0; i < gl_sim_trace_count(); i++) {
         const gl_sim_trace_t *t = gl_sim_trace_at(i);
         if (t->type == (uint8_t)GL_SIM_TR_SCCB_WRITE) {
-            GL_CHECK(t->b != 0x17 && t->b != 0x18 && t->b != 0x19 && t->b != 0x1A && t->b < 0xC8);
+            GL_CHECK(t->b != 0x17 && t->b != 0x18 && t->b != 0x19 && t->b != 0x1A);
+            if (t->b >= 0xC8 && t->b <= 0xCF) {
+                static const uint8_t vga[8] = { 0x02, 0x80, 0x01, 0xE0, 0x02, 0x80, 0x01, 0xE0 };
+                GL_CHECK_EQ(t->c, vga[t->b - 0xC8]);
+                size_writes++;
+            }
         }
     }
+    GL_CHECK_EQ(size_writes, 2u * 8u);
 }
 
 GL_TEST(test_settle_frames_and_lrrl_timing)
@@ -443,9 +453,31 @@ GL_TEST(test_faults_leave_the_rail_off)
 
     /* a wrong product id is refused when enforced, accepted when not */
     gl_ov7692_cfg_defaults(&cfg);
+    cfg.enforce_pid = true;
     fresh_(&cfg);
+    gl_sim_cam_set_pid(GL_CAM_LEFT, 0x7690);
+    GL_CHECK_EQ(gl_ov7692_power_up(&cam_), GL_ERR_NOT_FOUND);
+    GL_CHECK(!cam_.powered && !gl_sim_cam_rail_on() && all_parked_());
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+    cfg.enforce_pid = false;
+    fresh_(&cfg);
+    gl_sim_cam_set_pid(GL_CAM_LEFT, 0x7690);
     GL_CHECK_EQ(gl_ov7692_power_up(&cam_), GL_OK);
+    GL_CHECK_EQ(cam_.cam[GL_CAM_LEFT].pid, 0x7690);
+    GL_CHECK_EQ(cam_.cam[GL_CAM_RIGHT].pid, 0x7692);
     gl_ov7692_power_down(&cam_);
+
+    /* a sensor that never comes out of its software reset: time-out, and
+     * the rail is off again with every pin parked */
+    fresh_(NULL);
+    gl_sim_cam_set_reset_stuck(GL_CAM_RIGHT, true);
+    {
+        const uint64_t t_start = gl_sim_now_us();
+        GL_CHECK_EQ(gl_ov7692_power_up(&cam_), GL_ERR_TIMEOUT);
+        GL_CHECK(gl_sim_now_us() - t_start < 200000u);
+    }
+    GL_CHECK(!cam_.powered && !gl_sim_cam_rail_on() && all_parked_());
+    GL_CHECK_EQ(gl_sim_violations()->cam_rail, 0u);
 
     /* capture from a camera that is not the selected one, without a window,
      * into a buffer that is too small */

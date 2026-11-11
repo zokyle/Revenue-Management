@@ -23,7 +23,7 @@ matplotlib.rcParams["font.family"] = "DejaVu Sans"
 
 MM = 1 / 25.4
 PT = 0.3528                     # mm per point
-DRAWING_REV = "A-EVT1"
+DRAWING_REV = "C-EVT1"
 LW_VIS, LW_THIN, LW_DIM = 0.75, 0.35, 0.3
 C_DIM = "#1a3f8f"
 

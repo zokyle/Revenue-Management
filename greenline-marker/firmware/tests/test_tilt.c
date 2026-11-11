@@ -1,6 +1,6 @@
 /*
  * test_tilt.c - block averaging with stillness gating, calibration maths,
- * slope conversion, gyro rotation integrator, flip calibration, Precision
+ * slope conversion, gyro rotation integrator, zeroing (reversal), Precision
  * Read combining and the Survey store.
  */
 #include <stdlib.h>
@@ -443,8 +443,8 @@ GL_TEST(test_flip_solve)
                     GL_ERR_RANGE);
         GL_CHECK_EQ(gl_tilt_flip_solve(m1, m2, -151.0f * GL_DEG2RAD_F, &bias, &surf), GL_OK);
     }
-    /* What ignoring the measured yaw would cost: a 172-degree flip treated
-     * as 180 on a cradle sloped 1 %. */
+    /* What ignoring the measured yaw would cost: a 172-degree turn treated
+     * as 180 on a table top sloped 1 %. */
     {
         const double yaw = 172.0 * 3.141592653589793 / 180.0, cx = 0.01, cy = 0.0;
         const gl_vec2_t m1 = { (float)cx, (float)cy };
@@ -452,7 +452,7 @@ GL_TEST(test_flip_solve)
         gl_vec2_t b180, bmeas;
         gl_tilt_flip_solve(m1, m2, GL_PI_F, &b180, NULL);
         gl_tilt_flip_solve(m1, m2, (float)yaw, &bmeas, NULL);
-        printf("    flip 172 deg on a 1 %% cradle: bias error %.2f mrad if yaw assumed 180, "
+        printf("    zeroing turn of 172 deg on a surface sloped 1 %%: bias error %.2f mrad if yaw assumed 180, "
                "%.4f mrad with the gyro yaw\n",
                1000.0 * sqrt((double)(b180.x * b180.x + b180.y * b180.y)),
                1000.0 * sqrt((double)(bmeas.x * bmeas.x + bmeas.y * bmeas.y)));
@@ -461,18 +461,19 @@ GL_TEST(test_flip_solve)
     }
 }
 
-/* End to end: biased accelerometer, flip calibration in a sloped cradle
+/* End to end: biased accelerometer, zeroing on a hard flat surface that is
+ * not level (a sloped table top; the routine is never run in the cradle)
  * with a gyro-measured 174-degree turn, then a read on a green. */
-GL_TEST(test_flip_calibration_end_to_end)
+GL_TEST(test_zeroing_end_to_end)
 {
     gl_tilt_cfg_t cfg = cfg_default();
     gl_tilt_avg_t a;
     gl_tilt_mean_t m1, m2, m3;
     gl_cal_tilt_t cal;
     gl_rot_int_t rot;
-    gl_vec2_t s1, s2, s3, bias, cradle;
+    gl_vec2_t s1, s2, s3, bias, surface;
     const double acc_bias_x = 0.0031, acc_bias_y = -0.0022; /* g: 3 mrad of tilt error */
-    const double cradle_x = 0.006, cradle_y = -0.011;       /* cradle is not level */
+    const double surf_x = 0.006, surf_y = -0.011;       /* the surface is not level */
     const double yaw = 174.0 * 3.141592653589793 / 180.0;
     const double gyro_bias_z = 0.012;
     float yaw_meas;
@@ -483,7 +484,7 @@ GL_TEST(test_flip_calibration_end_to_end)
 
     /* read 1 */
     for (int i = 0; i < 256; i++) {
-        gl_imu_raw_t s = sample(cradle_x + acc_bias_x, cradle_y + acc_bias_y, 1.0, 0.0008,
+        gl_imu_raw_t s = sample(surf_x + acc_bias_x, surf_y + acc_bias_y, 1.0, 0.0008,
                                 gyro_bias_z);
         gl_tilt_avg_add(&a, &s);
     }
@@ -504,10 +505,10 @@ GL_TEST(test_flip_calibration_end_to_end)
     yaw_meas = gl_rot_int_yaw(&rot, m1.accel_g);
     GL_CHECK_NEAR(yaw_meas, yaw, 0.003);
 
-    /* read 2: the cradle slope seen from the turned marker */
+    /* read 2: the surface slope seen from the turned marker */
     {
-        const double c2x = cos(yaw) * cradle_x + sin(yaw) * cradle_y;
-        const double c2y = -sin(yaw) * cradle_x + cos(yaw) * cradle_y;
+        const double c2x = cos(yaw) * surf_x + sin(yaw) * surf_y;
+        const double c2y = -sin(yaw) * surf_x + cos(yaw) * surf_y;
         gl_tilt_avg_reset(&a);
         for (int i = 0; i < 256; i++) {
             gl_imu_raw_t s = sample(c2x + acc_bias_x, c2y + acc_bias_y, 1.0, 0.0008, gyro_bias_z);
@@ -517,15 +518,15 @@ GL_TEST(test_flip_calibration_end_to_end)
     GL_CHECK_EQ(gl_tilt_avg_result(&a, &m2), GL_OK);
     GL_CHECK_EQ(gl_tilt_slope(gl_tilt_apply_cal(&cal, m2.accel_g, 25.0f), &s2), GL_OK);
 
-    GL_CHECK_EQ(gl_tilt_flip_solve(s1, s2, yaw_meas, &bias, &cradle), GL_OK);
-    printf("    flip cal: bias found (%.3f, %.3f) mrad, true (%.3f, %.3f); cradle slope "
+    GL_CHECK_EQ(gl_tilt_flip_solve(s1, s2, yaw_meas, &bias, &surface), GL_OK);
+    printf("    zeroing: bias found (%.3f, %.3f) mrad, true (%.3f, %.3f); surface slope "
            "(%.3f, %.3f) mrad, true (%.3f, %.3f)\n", 1e3 * (double)bias.x, 1e3 * (double)bias.y,
-           1e3 * acc_bias_x, 1e3 * acc_bias_y, 1e3 * (double)cradle.x, 1e3 * (double)cradle.y,
-           1e3 * cradle_x, 1e3 * cradle_y);
+           1e3 * acc_bias_x, 1e3 * acc_bias_y, 1e3 * (double)surface.x, 1e3 * (double)surface.y,
+           1e3 * surf_x, 1e3 * surf_y);
     GL_CHECK_NEAR(bias.x, acc_bias_x, 0.00025);
     GL_CHECK_NEAR(bias.y, acc_bias_y, 0.00025);
-    GL_CHECK_NEAR(cradle.x, cradle_x, 0.00025);
-    GL_CHECK_NEAR(cradle.y, cradle_y, 0.00025);
+    GL_CHECK_NEAR(surface.x, surf_x, 0.00025);
+    GL_CHECK_NEAR(surface.y, surf_y, 0.00025);
     cal.flip_bias_x = bias.x;
     cal.flip_bias_y = bias.y;
     cal.flags |= GL_CAL_TILT_FLAG_FLIP;
@@ -622,7 +623,7 @@ int main(void)
     GL_RUN(test_slope_conversion);
     GL_RUN(test_rotation_integrator);
     GL_RUN(test_flip_solve);
-    GL_RUN(test_flip_calibration_end_to_end);
+    GL_RUN(test_zeroing_end_to_end);
     GL_RUN(test_precision_read_combine);
     GL_RUN(test_survey_store);
     return gl_test_summary();

@@ -14,7 +14,9 @@
  *   - Window: column 0 at HSTART (17h) = 69h in units of 4 pixels, row 0 at
  *     VSTART (19h) = 0Ch in units of 2 lines, HSIZE (18h) = (width + 16) / 4,
  *     VSIZE (1Ah) = (height + 12) / 2, output size in CCh..CFh, input size in
- *     C8h..CBh equal to the output size (no scaling).
+ *     C8h..CBh equal to the output size (no scaling).  After a reset the
+ *     vertical output size reads 180h (384 lines), as the comments of the
+ *     public driver say, so a driver that wants VGA must program it.
  *   - YUV422 with Y as the first byte of each pair while 0Ch bit 4 is clear.
  *   - The image is upright (as the firmware defines it) when the vertical
  *     flip bit is set and the mirror bit clear: the fold prism is assumed to
@@ -40,6 +42,8 @@
 
 typedef struct {
     bool present;
+    uint16_t pid;
+    bool reset_stuck;
     uint8_t reg[2][256];
     uint8_t bank;
     bool powered, clocked, pwdn;
@@ -74,8 +78,8 @@ static void defaults_(cam_t *c)
 {
     memset(c->reg, 0, sizeof(c->reg));
     c->bank = 0;
-    c->reg[0][0x0A] = 0x76;
-    c->reg[0][0x0B] = 0x92;
+    c->reg[0][0x0A] = (uint8_t)(c->pid >> 8);
+    c->reg[0][0x0B] = (uint8_t)(c->pid & 0xFFu);
     c->reg[0][0x1C] = 0x7F;
     c->reg[0][0x1D] = 0xA2;
     c->reg[0][0x0C] = 0x16;
@@ -90,7 +94,7 @@ static void defaults_(cam_t *c)
     c->reg[0][0xCC] = 0x02;
     c->reg[0][0xCD] = 0x80;
     c->reg[0][0xCE] = 0x01;
-    c->reg[0][0xCF] = 0xE0;
+    c->reg[0][0xCF] = 0x80; /* 384 lines: see the file comment */
 }
 
 void sim_cam_reset(void)
@@ -104,6 +108,7 @@ void sim_cam_reset(void)
     scene_ctx_ = NULL;
     for (int i = 0; i < (int)GL_CAM_COUNT; i++) {
         C[i].present = true;
+        C[i].pid = 0x7692u;
         defaults_(&C[i]);
     }
 }
@@ -117,6 +122,18 @@ void gl_sim_cam_set_scene(gl_sim_scene_fn_t fn, void *ctx)
 void gl_sim_cam_set_present(gl_cam_id_t cam, bool present)
 {
     C[cam].present = present;
+}
+
+void gl_sim_cam_set_pid(gl_cam_id_t cam, uint16_t pid)
+{
+    C[cam].pid = pid;
+    C[cam].reg[0][0x0A] = (uint8_t)(pid >> 8);
+    C[cam].reg[0][0x0B] = (uint8_t)(pid & 0xFFu);
+}
+
+void gl_sim_cam_set_reset_stuck(gl_cam_id_t cam, bool stuck)
+{
+    C[cam].reset_stuck = stuck;
 }
 
 void gl_sim_cam_set_phase_us(gl_cam_id_t cam, uint32_t phase_us)
@@ -154,12 +171,13 @@ void sim_cam_update(void)
         const gl_pin_t pwdn_pin = (i == 0) ? GL_PIN_CAM_L_PWDN : GL_PIN_CAM_R_PWDN;
         if (!rail && c->powered) {
             defaults_(c); /* registers are lost with the supply */
+            c->reset_done_at = 0;
         }
         c->powered = rail;
         c->clocked = xvclk_on_;
         c->pwdn = sim_pin_out_high(pwdn_pin);
         const bool streaming = c->present && c->powered && c->clocked && !c->pwdn &&
-                               (c->reg[0][0x0E] & 0x08u) == 0u;
+                               c->reset_done_at != SIM_NEVER && (c->reg[0][0x0E] & 0x08u) == 0u;
         if (streaming && !c->streaming) {
             uint64_t t = sim_now();
             if (c->reset_done_at > t) {
@@ -223,7 +241,7 @@ gl_status_t gl_hal_sccb_write(gl_cam_id_t cam, uint8_t addr7, uint8_t reg, uint8
         c->bank = val & 0x01u;
     } else if (c->bank == 0u && reg == 0x12u && (val & 0x80u) != 0u) {
         defaults_(c);
-        c->reset_done_at = sim_now() + SCCB_WRITE_US + CAM_RESET_US;
+        c->reset_done_at = c->reset_stuck ? SIM_NEVER : sim_now() + SCCB_WRITE_US + CAM_RESET_US;
         c->streaming = false; /* restarts when the reset completes */
     } else if (c->bank == 0u && (reg == 0x0Au || reg == 0x0Bu || reg == 0x1Cu || reg == 0x1Du)) {
         sim_violation(&sim_viol()->cam_sccb, "write to read-only camera register 0x%02X", reg);

@@ -11,8 +11,8 @@ montecarlo    Monte-Carlo evaluation (``python -m greenline_sim.montecarlo``)
 report        REPORT.md and plots from the Monte-Carlo summary
 refvectors    reference vectors for the C port
 
-``estimator`` imports only ``measurements`` and ``physics``; it cannot see
-the true green.
+``estimator`` imports only ``measurements``, ``physics`` and the numba shim
+``_jit``; it cannot see the true green.
 
 All quantities are SI (metres, seconds, radians) unless a name says otherwise
 (``stimp_ft``).

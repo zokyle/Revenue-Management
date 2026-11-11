@@ -428,25 +428,31 @@ void gl_gfx_arrow(gl_gfx_t *g, float x, float y, float angle_rad, float len_px, 
     gl_gfx_triangle(g, tx, ty, bx - hw * dy, by + hw * dx, bx + hw * dy, by - hw * dx, ink);
 }
 
-void gl_gfx_aim_line(gl_gfx_t *g, float aim_rad, float half_width_px, gl_gfx_aim_info_t *info)
+void gl_gfx_aim_line_at(gl_gfx_t *g, float aim_rad, float ball_az_rad, float half_width_px,
+                        gl_gfx_aim_info_t *info)
 {
-    /* Ball centre in screen coordinates: straight "up" from the centre. */
-    const float bx = GL_GFX_CENTRE_F;
-    const float by = GL_GFX_CENTRE_F - GL_CFG_BALL_CENTRE_Y_PX;
+    /* Ball centre in screen coordinates (x right = marker +x, y down =
+     * marker -y): a marker direction at angle t CCW from forward is the
+     * screen vector (-sin t, -cos t).  For ball_az = 0 the ball is straight
+     * "up" from the centre. */
+    const float bx = GL_GFX_CENTRE_F - GL_CFG_BALL_CENTRE_Y_PX * sinf(ball_az_rad);
+    const float by = GL_GFX_CENTRE_F - GL_CFG_BALL_CENTRE_Y_PX * cosf(ball_az_rad);
     const float r = 0.5f * (float)GL_CFG_LCD_CLIP_DIA_PX;
     /* With n = (cos a, -sin a) the screen centre lies at signed distance
-     * n . (centre - ball) = -BALL_Y * sin(a) from the line, so the line passes
-     * BALL_Y * sin(a) to the RIGHT of the centre for a positive (aim-left)
-     * angle: the backward extension of a start line that goes forward-left. */
-    float offset = GL_CFG_BALL_CENTRE_Y_PX * sinf(aim_rad);
+     * n . (centre - ball) = BALL_Y * sin(az - a) from the line, so the line
+     * passes BALL_Y * sin(a - az) to the RIGHT of the centre: for the ball
+     * straight ahead and a positive (aim-left) angle that is the backward
+     * extension of a start line that goes forward-left. */
+    float offset = GL_CFG_BALL_CENTRE_Y_PX * sinf(aim_rad - ball_az_rad);
     float rem = r * r - offset * offset;
     float chord = (rem > 0.0f) ? 2.0f * sqrtf(rem) : 0.0f;
     gl_gfx_aim_info_t local;
 
     local.offset_px = offset;
     local.chord_px = chord;
-    /* cos(aim) <= 0 would mean the putt starts backwards: never on screen. */
-    if (chord >= GL_GFX_AIM_MIN_CHORD_PX && cosf(aim_rad) > 0.0f) {
+    /* cos(aim - ball_az) <= 0 would mean the putt starts back across the
+     * marker: never on screen. */
+    if (chord >= GL_GFX_AIM_MIN_CHORD_PX && cosf(aim_rad - ball_az_rad) > 0.0f) {
         local.on_screen = true;
         const gl_gfx_line_style_t solid = { 0.0f, 0.0f, true };
         local.pixels = gl_gfx_line_angle(g, bx, by, aim_rad, half_width_px, &solid,
@@ -460,6 +466,11 @@ void gl_gfx_aim_line(gl_gfx_t *g, float aim_rad, float half_width_px, gl_gfx_aim
     if (info != NULL) {
         *info = local;
     }
+}
+
+void gl_gfx_aim_line(gl_gfx_t *g, float aim_rad, float half_width_px, gl_gfx_aim_info_t *info)
+{
+    gl_gfx_aim_line_at(g, aim_rad, 0.0f, half_width_px, info);
 }
 
 /* ---- text -------------------------------------------------------------- */
