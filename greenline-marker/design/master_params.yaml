@@ -13,8 +13,8 @@ envelope:
 base_plate:
   thickness: 1.0              # z 0..1.0
   radius: 21.85               # drops into the tub from below (0.15 radial clearance)
-  flat_y: 17.45
-  seal_land: {r_inner: 21.35, r_outer: 21.85}   # VHB/RTV ring between base top face and tub ledge
+  flat_y: 18.25               # base plate runs UNDER the visor wall on the flat front (wall sits on the base there)
+  seal_land: {r_inner: 21.35, r_outer: 21.85, flat_y_inner: 17.6}   # VHB/RTV band: under the tub ledge on the arc, under the visor wall on the flat
   grain_cavity: {x: 0.0, y: -4.0, dia: 13.0}    # through-opening; PCB bottom is the cavity ceiling
   pad_holes: {dia: 2.2, y: -17.0, xs: [-7.62, -5.08, -2.54, 0.0, 2.54, 5.08, 7.62]}
   feet: {ball_dia: 1.0, protrusion: 0.10, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]]}
@@ -59,6 +59,16 @@ prisms:
   exit_face_y: 16.6
   optical_axis_z: 5.61            # 1.8 + 2.76 + 0.05 + 1.0
 roof: {underside_z: 6.5, thickness: 0.8, prism_pocket_underside_z: 6.8}
+visor_window:               # one per camera, centred on the camera x, bonded in a recess on the flat visor face
+  w: 4.3
+  h: 3.1
+  t: 0.5
+  recess_depth: 0.55         # recess is open to the top surface (window top edge flush with the top)
+  z0: 4.2
+  z1: 7.3
+  opening: {half_w: 1.65, z0: 4.6, z1: 6.8}   # clear aperture through the visor wall, bevelled on the inside
+  material: "EVT: 0.5 mm clear cast acrylic or cover glass; production: AR-coated borosilicate or sapphire, custom cut"
+vent: {type: "adhesive ePTFE vent, OD <= 4.5 mm", hole_dia: 0.6, location: "roof underside in a lateral segment, about x=17, y=-3", basis: provisional}
 top_side_parts:   # name, x, y, dx, dy, height (z above PCB top = 1.8); footprint courtyard sizes
   - {ref: U1,  name: "STM32U585RIT6 LQFP-64",       x: 0.0,   y: 7.2,   dx: 12.2, dy: 12.2, h: 1.6}
   - {ref: U2,  name: "OVM7692 camera L",            x: -10.2, y: 15.6,  dx: 3.47, dy: 2.95, h: 2.76}
