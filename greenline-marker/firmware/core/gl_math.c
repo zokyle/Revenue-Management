@@ -165,14 +165,11 @@ gl_vec3_t gl_vec3_unit(gl_vec3_t a)
     return u;
 }
 
-float gl_median_inplace(float *v, size_t n)
+/* Shell sort (non-recursive) with Ciura's gap sequence: about half the
+ * moves of the n/2, n/4, ... sequence for the 150-480 element arrays of the
+ * vision code. */
+static void shell_sort_(float *v, size_t n)
 {
-    if (n == 0u) {
-        return 0.0f;
-    }
-    /* Shell sort (non-recursive) with Ciura's gap sequence: about half the
-     * moves of the n/2, n/4, ... sequence for the 150-480 element medians of
-     * the vision code, where this sort was the largest single cost. */
     static const uint16_t gaps[8] = { 701, 301, 132, 57, 23, 10, 4, 1 };
     for (unsigned g = 0; g < 8u; g++) {
         const size_t gap = gaps[g];
@@ -186,10 +183,89 @@ float gl_median_inplace(float *v, size_t n)
             v[j] = t;
         }
     }
+}
+
+float gl_median_inplace(float *v, size_t n)
+{
+    if (n == 0u) {
+        return 0.0f;
+    }
+    shell_sort_(v, n);
     if ((n & 1u) != 0u) {
         return v[n / 2u];
     }
     return 0.5f * (v[n / 2u - 1u] + v[n / 2u]);
+}
+
+float gl_select_inplace(float *v, size_t n, size_t k)
+{
+    ptrdiff_t lo = 0, hi, kk;
+    unsigned rounds = 0;
+
+    if (n == 0u) {
+        return 0.0f;
+    }
+    if (k >= n) {
+        k = n - 1u;
+    }
+    kk = (ptrdiff_t)k;
+    hi = (ptrdiff_t)n - 1;
+    /* Wirth's selection: partition v[lo..hi] about x = v[k], then keep the
+     * side that holds index k.  Invariant: nothing left of lo is larger and
+     * nothing right of hi is smaller than any element of v[lo..hi].  The two
+     * scans cannot leave [lo, hi]: the first time they are stopped by x
+     * itself, afterwards by an element the previous swap put there. */
+    while (lo < hi) {
+        const float x = v[kk];
+        ptrdiff_t i = lo, j = hi;
+        if (++rounds > GL_SELECT_MAX_ROUNDS) {
+            /* a pathological order: finish with the sort, on what is left */
+            shell_sort_(&v[lo], (size_t)(hi - lo + 1));
+            break;
+        }
+        do {
+            while (v[i] < x) {
+                i++;
+            }
+            while (x < v[j]) {
+                j--;
+            }
+            if (i <= j) {
+                const float t = v[i];
+                v[i] = v[j];
+                v[j] = t;
+                i++;
+                j--;
+            }
+        } while (i <= j);
+        if (j < kk) {
+            lo = i;
+        }
+        if (kk < i) {
+            hi = j;
+        }
+    }
+    return v[kk];
+}
+
+float gl_median_select(float *v, size_t n)
+{
+    float hi_mid, lo_mid;
+    if (n == 0u) {
+        return 0.0f;
+    }
+    hi_mid = gl_select_inplace(v, n, n / 2u);
+    if ((n & 1u) != 0u) {
+        return hi_mid;
+    }
+    /* even n: the other middle value is the largest of the lower half */
+    lo_mid = v[0];
+    for (size_t i = 1; i < n / 2u; i++) {
+        if (v[i] > lo_mid) {
+            lo_mid = v[i];
+        }
+    }
+    return 0.5f * (lo_mid + hi_mid);
 }
 
 void gl_put_f32(uint8_t *p, float v)

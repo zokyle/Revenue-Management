@@ -144,6 +144,27 @@ gl_vec3_t gl_vec3_unit(gl_vec3_t a);
  */
 float gl_median_inplace(float *v, size_t n);
 
+/**
+ * The k-th smallest (k = 0 .. n - 1; larger k are taken as n - 1) of n
+ * floats, n >= 1, by selection instead of a full sort (Wirth's algorithm:
+ * non-recursive, in place).  `v` is PERMUTED, not sorted: afterwards v[k]
+ * holds the result, no element before it is larger and none after it is
+ * smaller.  The value returned is exactly the one a full sort would put at
+ * index k.  Run time: about 3 n comparisons on average; bounded - after
+ * GL_SELECT_MAX_ROUNDS partition rounds the remaining range is Shell-sorted,
+ * so the worst case is that many passes over the data plus one sort.
+ */
+#define GL_SELECT_MAX_ROUNDS 24u
+float gl_select_inplace(float *v, size_t n, size_t k);
+
+/**
+ * Median of n floats (n >= 1) by selection: the same VALUE as
+ * gl_median_inplace() (for even n the mean of the two middle values) at a
+ * fraction of the cost; `v` is permuted, NOT sorted.  This is what the
+ * vision code uses: its medians were a quarter of its run time.
+ */
+float gl_median_select(float *v, size_t n);
+
 /* ---- little-endian (de)serialisation helpers --------------------------- */
 
 /** Store / load 16- and 32-bit unsigned values as little-endian bytes. */
