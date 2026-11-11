@@ -3,18 +3,20 @@
 # +x = right, +y = forward (toward the ball / hole), +z = up, as seen from above.
 # Status of every dimension is given in `basis`: datasheet | search-verified | provisional (must be
 # checked against the manufacturer drawing before release) | design (our choice).
-rev: A-EVT1
+rev: B-EVT1
 envelope:
   outer_radius: 23.0          # dia 46.0, design
-  thickness: 7.3              # design (driven by battery+LCD stack and camera+prism stack)
+  thickness: 7.6              # design: every printed wall >= 0.8 mm (MJF PA12 bureau minimums 0.76-1.0 mm)
   wall: 1.0                   # side wall, MJF PA12 vapor-smoothed, design
+  min_printed_wall: 0.8
+  fit_clearance: 0.25         # nominal gap for every drop-in fit (MJF tolerance +-0.2 to 0.3 mm)
   front_flat_y_outer: 18.4    # D-cut "visor" flat face that carries the two camera openings
   front_flat_wall: 0.8
 base_plate:
   thickness: 1.0              # z 0..1.0
-  radius: 21.85               # drops into the tub from below (0.15 radial clearance)
+  radius: 21.75               # drops into the tub from below (0.25 radial clearance)
   flat_y: 18.25               # base plate runs UNDER the visor wall on the flat front (wall sits on the base there)
-  seal_land: {r_inner: 21.35, r_outer: 21.85, flat_y_inner: 17.6}   # VHB/RTV band: under the tub ledge on the arc, under the visor wall on the flat
+  seal_land: {r_inner: 21.35, r_outer: 21.75, flat_y_inner: 17.6}   # dispensed adhesive bead (not tape: the land is only 0.4 mm wide); the 0.25 mm radial gap to the wall is filled too
   grain_cavity: {x: 0.0, y: -4.0, dia: 13.0}    # through-opening; PCB bottom is the cavity ceiling
   pad_holes: {dia: 2.2, y: -17.0, xs: [-7.62, -5.08, -2.54, 0.0, 2.54, 5.08, 7.62]}
   feet: {ball_dia: 1.0, protrusion: 0.10, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]]}
@@ -33,7 +35,7 @@ lcd:
   aperture_dia: 22.0
   fpc_exit_edge: rear        # driver ledge / FPC at the -y edge of the glass; tail geometry PROVISIONAL
   psa_thickness: 0.15
-cover_glass: {dia: 28.0, thickness: 1.0, recess_dia: 28.3, recess_depth: 1.2, bond: "VHB 5907 ring 0.2 mm"}
+cover_glass: {dia: 28.0, thickness: 1.0, recess_dia: 28.5, recess_depth: 1.25, bond: "VHB 5907 ring 0.2 mm"}
 battery:
   mpn: GM201030-PCB           # PowerStream, 2 x 10 x 30 mm cell + PCM (search-verified listing; PCM length provisional)
   body: {x: 0.0, y: -5.2, dx: 34.0, dy: 10.0, z0: 1.8, z1: 3.8}
@@ -58,28 +60,28 @@ prisms:
   # prism sits centred on the cube lens axis; exit face looks +y
   exit_face_y: 16.6
   optical_axis_z: 5.61            # 1.8 + 2.76 + 0.05 + 1.0
-roof: {underside_z: 6.5, thickness: 0.8, prism_pocket_underside_z: 6.8}
+roof: {underside_z: 6.8, thickness: 0.8, prism_pocket_underside_z: 6.8}
 visor_window:               # one per camera, centred on the camera x, bonded in a recess on the flat visor face
   w: 4.3
-  h: 3.1
+  h: 3.4
   t: 0.5
   recess_depth: 0.55         # recess is open to the top surface (window top edge flush with the top)
   z0: 4.2
-  z1: 7.3
+  z1: 7.6
   opening: {half_w: 1.65, z0: 4.6, z1: 6.8}   # clear aperture through the visor wall, bevelled on the inside
   material: "EVT: 0.5 mm clear cast acrylic or cover glass; production: AR-coated borosilicate or sapphire, custom cut"
-vent: {type: "adhesive ePTFE vent, OD <= 4.5 mm", hole_dia: 0.6, location: "roof underside in a lateral segment, about x=17, y=-3", basis: provisional}
+vent: {type: "W. L. Gore VE80205 adhesive ePTFE vent, OD 5.0, vent dia 2.0, 0.26 thick", hole_dia: 1.0, location: "roof underside in a lateral segment, about x=17, y=-3", basis: provisional}
 top_side_parts:   # name, x, y, dx, dy, height (z above PCB top = 1.8); footprint courtyard sizes
   - {ref: U1,  name: "STM32U585RIT6 LQFP-64",       x: 0.0,   y: 7.2,   dx: 12.2, dy: 12.2, h: 1.6}
   - {ref: U2,  name: "OVM7692 camera L",            x: -10.2, y: 15.6,  dx: 3.47, dy: 2.95, h: 2.76}
   - {ref: U3,  name: "OVM7692 camera R",            x: 10.2,  y: 15.6,  dx: 3.47, dy: 2.95, h: 2.76}
   - {ref: U4,  name: "LSM6DSV16X IMU LGA-14",       x: -11.0, y: 6.0,   dx: 3.0,  dy: 2.5,  h: 0.86}
-  - {ref: U5,  name: "IIS2ICLX inclinometer LGA-16",x: 12.0,  y: 6.0,   dx: 5.0,  dy: 5.0,  h: 1.7}
-  - {ref: U6,  name: "SPI NOR flash USON",          x: -9.5,  y: 11.6,  dx: 3.2,  dy: 2.2,  h: 0.6}
+  - {ref: U6,  name: "MX25R6435F flash WSON-8 6x5", x: 11.5,  y: 6.4,   dx: 6.4,  dy: 5.4,  h: 0.8}
   - {ref: U8,  name: "LP5907-2.8 LDO SOT-23-5",     x: 0.0,   y: 15.3,  dx: 3.0,  dy: 3.0,  h: 1.45}
   - {ref: BT1, name: "LiPo GM201030-PCB",           x: 0.0,   y: -5.2,  dx: 34.0, dy: 10.0, h: 2.4}
-  - {ref: J1,  name: "LCD FPC conn 10p 0.5mm",      x: 0.0,   y: -13.9, dx: 10.4, dy: 4.6,  h: 1.2}
-  - {ref: U7,  name: "MCP1700-3.0 LDO SOT-23",      x: 10.5,  y: -13.5, dx: 3.0,  dy: 3.0,  h: 1.2}
+  - {ref: J1,  name: "LCD FPC conn FH12A-10S-0.5SH top-contact", x: 0.0, y: -13.9, dx: 8.4, dy: 5.8, h: 2.0}
+  - {ref: U7,  name: "MCP1700-2.8 LDO SOT-23",      x: 10.5,  y: -13.5, dx: 3.0,  dy: 3.0,  h: 1.2}
+  - {ref: U11, name: "MCP1700-3.3 LDO SOT-23 (VDDUSB)", x: 14.0, y: -12.2, dx: 3.0,  dy: 3.0,  h: 1.2}
   - {ref: U9,  name: "MCP73831 charger SOT-23-5",   x: -10.5, y: -13.5, dx: 3.0,  dy: 3.0,  h: 1.45}
   - {ref: U10, name: "USBLC6-2SC6 ESD SOT-23-6",    x: -14.5, y: -12.0, dx: 3.0,  dy: 3.0,  h: 1.45}
   - {ref: Y1,  name: "32.768 kHz xtal 3215",        x: 8.6,   y: 12.2,  dx: 3.4,  dy: 1.7,  h: 0.9}

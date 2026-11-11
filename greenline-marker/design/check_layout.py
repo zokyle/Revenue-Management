@@ -14,7 +14,7 @@ pcb_poly = dshape(pcb["radius"], pcb["flat_y"])
 keep = pcb_poly.buffer(-pcb["component_edge_clearance"])
 z_pcb_top = pcb["z_bottom"] + pcb["thickness"]
 glass = rect(lcd["glass"])
-if not inner.buffer(-0.15).contains(glass): errs.append("LCD glass does not fit inside the tub wall with 0.15 clearance")
+if not inner.buffer(-0.25).contains(glass): errs.append("LCD glass does not fit inside the tub wall with 0.25 clearance")
 else: notes.append(f"LCD glass corner margin to inner wall: {inner.exterior.distance(glass):.2f} mm")
 parts = P["top_side_parts"]
 for p in parts:
@@ -34,13 +34,13 @@ for a, b in itertools.combinations(parts, 2):
 cam, pr = P["cameras"], P["prisms"]
 prism_top = z_pcb_top + cam["height"] + pr["bond_line"] + pr["leg"]
 if prism_top > P["roof"]["prism_pocket_underside_z"] - 0.05: errs.append(f"prism top {prism_top:.2f} hits pocket roof")
-if P["roof"]["prism_pocket_underside_z"] > env["thickness"] - 0.45: errs.append("roof over prism thinner than 0.45")
+if P["roof"]["prism_pocket_underside_z"] > env["thickness"] - env["min_printed_wall"] + 1e-9: errs.append("roof over prism thinner than the printed-wall minimum")
 for side in ("left", "right"):
     c = cam[side]; pz = box(c["x"] - 1.2, c["y"] - 1.2, c["x"] + 1.2, c["y"] + 1.2)
     if pz.intersects(glass.buffer(0.5)): errs.append(f"prism pocket {side} too close to LCD glass")
     if pz.distance(Point(0, 0)) < P["cover_glass"]["recess_dia"] / 2 + 0.8: errs.append(f"prism pocket {side} too close to cover-glass recess")
 ledge = env["thickness"] - P["cover_glass"]["recess_depth"] - (lcd["glass"]["z1"] + lcd["psa_thickness"])
-if ledge < 0.55 - 1e-9: errs.append(f"cover-glass ledge only {ledge:.2f} mm thick")
+if ledge < env['min_printed_wall'] - 1e-9: errs.append(f"cover-glass ledge only {ledge:.2f} mm thick")
 notes.append(f"cover-glass ledge thickness: {ledge:.2f} mm")
 notes.append(f"prism top z = {prism_top:.2f}; optical axis z = {z_pcb_top + cam['height'] + pr['bond_line'] + pr['leg']/2:.2f}")
 notes.append(f"PCB area {pcb_poly.area:.0f} mm^2; top-side parts {sum(rect(p).area for p in parts):.0f} mm^2 "

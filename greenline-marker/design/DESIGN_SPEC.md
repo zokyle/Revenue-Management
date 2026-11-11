@@ -1,4 +1,4 @@
-# GreenLine GL-1 — master design specification (rev A, EVT1)
+# GreenLine GL-1 — master design specification (rev B, EVT1)
 
 This file records every architecture decision. `master_params.yaml` holds the numbers that the
 mechanical CAD and the PCB layout must share; `check_layout.py` verifies them. Where this file
@@ -11,7 +11,7 @@ Evidence levels used below:
 
 ## 1. What the product is
 
-A self-contained electronic golf ball marker, a D-shaped puck 46.0 mm across and 7.3 mm thick.
+A self-contained electronic golf ball marker, a D-shaped puck 46.0 mm across and 7.6 mm thick.
 The golfer sets it behind the ball with its flat "visor" face toward the hole, lifts the ball,
 and about three seconds later a line on the round display shows the start direction for the putt,
 with the distance, slope and expected break.
@@ -46,11 +46,11 @@ Operating modes:
 ## 3. System architecture
 
 ```
-                 +--------------------------- always-on 3.0 V (MCP1700) ---------------------------+
+                 +--------------------------- always-on 2.8 V (MCP1700) ---------------------------+
  LiPo 3.7 V ---->|                                                                                 |
  2x10x30 mm      |   STM32U585RIT6  <--SPI2-->  LSM6DSV16X IMU (wake-on-motion, tilt, gyro)        |
-   ^             |   Cortex-M33     <--SPI2-->  IIS2ICLX precision inclinometer (EVT option)       |
-   | MCP73831    |   2 MB / 786 kB  <--SPI1-->  LS013B7DH03 memory LCD 128x128 (LPTIM 64 Hz VCOM)  |
+   ^             |   Cortex-M33                                                                    |
+   | MCP73831    |   2 MB / 786 kB  <--SPI1-->  LS013B7DH03 memory LCD 128x128 (LPTIM 60 Hz VCOM)  |
    | 20 mA       |                  <--SPI1-->  SPI NOR flash (raw-frame logging)                  |
  VBUS 5 V        |                  <--USB FS-> pogo pads D+/D- (settings, logs, ROM DFU)          |
  (cradle pogo)   |                  <--OPAMP1+ADC-- photodiode   --> 16 LEDs charlieplexed (grain) |
@@ -65,11 +65,11 @@ Decisions and reasons:
 
 - **One microcontroller, no radio.** The brief asks for a self-contained device. Dropping Bluetooth removes a module (140 mm2 and 2.1 mm tall), the antenna keep-out, the intentional-radiator work and the Bluetooth SIG listing fee (reported at about $12k, PROVISIONAL). Settings are made on the device; logs, calibration and firmware updates go through the charging cradle as a USB full-speed device (the STM32 ROM bootloader provides USB DFU). A Bluetooth variant is a later option.
 - **STM32U585RIT6 (LQFP-64).** Hardware camera port (DCMI) with DMA and crop, 786 kB RAM (two VGA strips fit easily), single-precision FPU, Stop-mode current of a few microamps, crystal-less USB, and a pin map that is in the installed KiCad library (VERIFIED source of pad numbers). LQFP-64 is routable with ordinary 5/5 mil rules; the WLCSP and 0.5 mm BGA variants would need an HDI board.
-- **OVM7692-RYAA camera cubes, mounted flat, each with a 2 mm aluminised right-angle prism bonded on top.** The cube is 2.95 x 3.47 x 2.76 mm (VERIFIED: OmniVision product brief via search; DigiKey 884-1027-1-ND, in stock). Mounting it flat keeps both cameras and the accelerometer on one rigid FR-4 board, which the stereo and gravity-reference budgets need (a printed shell moves by milliradians with temperature). The prism turns the view to horizontal and puts the optical axis 5.6 mm above the turf. The prism exit face is also the sealed window: no separate camera windows.
+- **OVM7692-RYAA camera cubes, mounted flat, each with a 2 mm aluminised right-angle prism bonded on top.** The cube is 2.95 x 3.47 x 2.76 mm (VERIFIED: OmniVision product brief via search; DigiKey 884-1027-1-ND, in stock). Mounting it flat keeps both cameras and the accelerometer on one rigid FR-4 board, which the stereo and gravity-reference budgets need (a printed shell moves by milliradians with temperature). The prism turns the view to horizontal and puts the optical axis 5.6 mm above the turf. Two small flat windows on the visor face close the openings, so the optics stay dry and are mechanically isolated from the shell.
 - **20.4 mm stereo baseline.** Set by the display: the 26.6 x 30.3 mm LCD glass leaves room for the cubes only in front of its forward edge. Stereo covers short and medium putts; flagstick angular height covers long ones.
-- **Tilt sensing.** LSM6DSV16X as the always-fitted 6-axis IMU (pin-compatible with the LSM6DSx LGA-14 family whose pin map is in the KiCad library). IIS2ICLX precision 2-axis inclinometer is fitted on EVT units to measure how much it actually helps, because turf seating, not sensor error, is expected to dominate. Its pin map is PROVISIONAL.
+- **Tilt sensing.** LSM6DSV16X 6-axis IMU (VERIFIED pin-compatible with the LSM6DSM symbol in the KiCad library; LGA-14L 2.5 x 3.0 x 0.83 mm), with per-unit factory temperature compensation and a user flip calibration in the cradle. Target 0.5-1 mrad. A precision inclinometer (ST IIS2ICLX) was considered and left off this board: its pin map and footprint could not be verified from any reachable source, it costs about $28 and is 1.7 mm tall, and turf seating (2-5 mrad), not sensor error, is expected to dominate. It remains a documented option for a later revision.
 - **Display.** Sharp LS013B7DH03, 1.28 inch 128 x 128 reflective memory LCD (outline 26.6 x 30.3 x 0.746 mm VERIFIED from Sharp's brochure via search; DigiKey 425-2903-ND). Sunlight readable, about 15 microwatts static. Seen through a 22 mm round aperture under a 28 mm mineral-glass watch crystal. The smaller LS010B7DH04 would allow a smaller puck but has no US distributor listing.
-- **Power.** PowerStream GM201030-PCB lithium-polymer cell, 2 x 10 x 30 mm, about 43 mAh (VERIFIED listing; capacity to be measured), charged at 20 mA by a Microchip MCP73831 from cradle VBUS. Microchip MCP1700-3.0 (1.6 uA quiescent) feeds the always-on rail; TI LP5907-2.8 with enable feeds the cameras only during a read. No coin cell (Reese's Law / UL 4200A obligations and height).
+- **Power.** PowerStream GM201030-PCB lithium-polymer cell, 2 x 10 x 30 mm, about 43 mAh (VERIFIED listing; capacity, protection-board size and safety certificates still to be obtained), charged at 20 mA by a Microchip MCP73831 from cradle VBUS. Microchip MCP1700-2.8 (1.6 uA quiescent) feeds the always-on 2.8 V rail; TI LP5907-2.8 with enable feeds the cameras only during a read, so MCU and camera logic levels match. A second MCP1700 (3.3 V) fed from VBUS powers only the MCU's independent VDDUSB pin, because USB needs at least 3.0 V there and is only used in the cradle. No coin cell (Reese's Law / UL 4200A obligations and height).
 - **Grain sensor.** Eight red and eight near-infrared 0402 LEDs on a 5.2 mm radius and one low-profile photodiode, all on the PCB underside inside a 13 mm opening in the base. The photodiode current is amplified by the MCU's internal op-amp and sampled by its ADC with LED-on minus LED-off differencing. Experimental (section 2).
 - **Charging and data contacts.** Seven flush gold pads on the PCB underside, reached through holes in the base by pogo pins in the cradle: VBUS, D-, D+, GND, SWDIO, SWCLK, NRST. The row is off-centre so that a puck placed 180 degrees round in the cradle for flip calibration touches no pins.
 
@@ -80,28 +80,32 @@ Rails:
 | Rail | Source | Loads | Notes |
 |---|---|---|---|
 | VBUS | cradle pad, 5 V | MCP73831 VDD, VBUS-sense divider | USBLC6-2SC6 clamps VBUS, D+, D-. Series Schottky from pad to charger. |
-| VBAT | cell + PCM, 3.0-4.2 V | MCP1700 in, LP5907 in, LED anodes via MCU pins is NOT allowed (see LEDs), battery divider | 2 x 1 Mohm divider with 100 nF to an ADC pin. |
-| V3V0 | MCP1700T-3002E/TT | MCU VDD/VDDA/VDDUSB/VBAT pin, IMU, inclinometer, LCD VDD/VDDA, flash | 1 uF in, 1 uF out ceramic (stable with ceramics). 100 nF per MCU supply pin plus 4.7 uF bulk; VDDA through a ferrite or 10 ohm with 1 uF + 10 nF. |
+| VBAT | cell + PCM, 3.0-4.2 V | MCP1700-2.8 in, LP5907 in, battery divider | 2 x 1 Mohm divider with 100 nF to an ADC pin. The grain LEDs are driven from MCU pins on the 2.8 V rail, not from VBAT. |
+| V2V8 | MCP1700T-2802E/TT | MCU VDD/VDDA/VBAT pin, IMU, LCD VDD/VDDA, flash | 1 uF in, 1 uF out ceramic. 100 nF per MCU supply pin plus 4.7 uF bulk; VDDA through 10 ohm with 1 uF + 10 nF. LCD VDD range 2.7-3.3 V (PROVISIONAL). |
+| VDDUSB | MCP1700T-3302E/TT fed from VBUS (after the Schottky) | MCU VDDUSB pin only | Present only in the cradle. Firmware sets the USB-supply-valid bit only when VBUS is detected. 1 uF in, 1 uF out. |
 | V2V8_CAM | LP5907MFX-2.8/NOPB, EN from MCU with 100k pull-down | both camera AVDD and DOVDD | 1 uF in, 1 uF out. Camera DVDD pin: 1 uF to ground each (internal 1.5 V regulator). |
 
 Rules the firmware must honour and the schematic must make possible:
 
-- Every MCU pin that faces a camera (data, PCLK, HREF, VSYNC, XVCLK, SCCB, PWDN) must be driven low or left analog while V2V8_CAM is off, to avoid back-powering the sensors through their protection diodes. SCCB pull-ups (2.2 kohm) go to V2V8_CAM, not V3V0.
+- Every MCU pin that faces a camera (data, PCLK, HREF, VSYNC, XVCLK, SCCB, PWDN) must be driven low or left analog while V2V8_CAM is off, to avoid back-powering the sensors through their protection diodes. SCCB pull-ups (2.2 kohm) go to V2V8_CAM, not V2V8.
 - The two cameras share the 8 data lines, PCLK, HREF and VSYNC. Only one drives the bus at a time: the idle camera has its outputs tri-stated through register 0x0C bits 2 and 1 (register address and default 0x16 VERIFIED from the public Analog Devices OV7692 driver; the bit meanings are PROVISIONAL) and is held in sleep. Each camera has its own SCCB clock line and its own PWDN line; SCCB data is shared. 33 ohm series resistors on PCLK and XVCLK at the source.
 - XVCLK comes from the MCU MCO pin (PA8), nominally 12 MHz.
-- DCMI pin assignment on LQFP-64 (alternate functions PROVISIONAL, confirm in STM32CubeMX): D0 PC6, D1 PC7, D2 PC8, D3 PC9, D4 PC11, D5 PB6, D6 PB8, D7 PB9, PIXCLK PA6, HSYNC PA4, VSYNC PB7.
-- USB: PA11 = D-, PA12 = D+, crystal-less (HSI48 with clock recovery). VDDUSB tied to V3V0.
-- LCD: SPI clock and data plus an active-high chip select; DISP on a GPIO with pull-down; EXTCOMIN from a low-power timer output at 64 Hz; EXTMODE tied high. LCD connector pin order (PROVISIONAL, from the Sharp datasheet as remembered and consistent with public drivers): 1 SCLK, 2 SI, 3 SCS, 4 EXTCOMIN, 5 DISP, 6 VDDA, 7 VDD, 8 EXTMODE, 9 VSS, 10 VSSA.
-- IMU and inclinometer on one SPI bus with separate chip selects; IMU INT1 to a wake-capable pin.
+- DCMI pin assignment on LQFP-64 (VERIFIED against ST's open pin data: pad numbers and alternate functions): D0 PC6 pad 37 AF10, D1 PC7 pad 38 AF10, D2 PC8 pad 39 AF10, D3 PC9 pad 40 AF4, D4 PC11 pad 52 AF10 (not AF4, which is D2 on that pin), D5 PB6 pad 58 AF10, D6 PB8 pad 61 AF10, D7 PB9 pad 62 AF10, PIXCLK PA6 pad 22 AF4, HSYNC PA4 pad 20 AF10, VSYNC PB7 pad 59 AF10. MCO PA8 pad 41. Because PA6 is PIXCLK, SPI1 MISO for the flash must be PB4 (pad 56, AF5). The pin data is at raw.githubusercontent.com/STMicroelectronics/STM32_open_pin_data (mcu/STM32U585RITx.xml and mcu/IP/GPIO-STM32U5x_gpio_v1_0_Modes.xml); use it for every alternate-function choice.
+- USB: PA11 = D- (pad 44), PA12 = D+ (pad 45), crystal-less (HSI48 with clock recovery; PROVISIONAL). VDDUSB (pad 48) from its own 3.3 V regulator as above.
+- LCD: SPI clock and data plus an active-high chip select; DISP on a GPIO with pull-down; EXTCOMIN from LPTIM1 or LPTIM3 (they run in Stop 2; LPTIM2 does not), for example LPTIM1_CH1 on PB2 (pad 28), at 60 Hz (32768 / 546), which is inside both frequency ranges Sharp publishes (54-65 Hz and 1-60 Hz); EXTMODE tied high. J1 is a TOP-contact connector (Hirose FH12A-10S-0.5SH(55), 2.0 mm high, on the FH12 land pattern) because the LCD tail makes one U-fold under the glass, which turns its contacts upward. Which end of the tail is pin 1 is PROVISIONAL and must be read from the Sharp drawing: a wrong guess mirrors all ten pins. LCD connector pin order (PROVISIONAL, from the Sharp datasheet as remembered and consistent with public drivers): 1 SCLK, 2 SI, 3 SCS, 4 EXTCOMIN, 5 DISP, 6 VDDA, 7 VDD, 8 EXTMODE, 9 VSS, 10 VSSA.
+- IMU on its own SPI bus; INT1 to a wake-capable pin, INT2 to a second GPIO.
 - Grain LEDs: 16 LEDs charlieplexed on 5 MCU pins with one series resistor per pin (5 x 68 ohm), red and NIR LED of each pair antiparallel where possible. Photodiode cathode to the op-amp inverting input, 470 kohm + 10 pF feedback, non-inverting input at a mid-rail bias from a 2 x 100 kohm divider with 100 nF.
 - Charger: PROG resistor 49.9 kohm (20 mA). PROG is taken to ground through an N-MOSFET (or an MCU open-drain pin) so firmware can stop charging outside 0-45 C using the IMU temperature. STAT to an MCU input with pull-up.
-- 32.768 kHz crystal on PC14/PC15 with load capacitors; no high-speed crystal.
+- 32.768 kHz crystal on PC14/PC15: Abracon ABS07-120-32.768KHZ-T (6 pF load, lower drive requirement than the 12.5 pF part) with load capacitors sized for 6 pF; no high-speed crystal.
 - BOOT0 (PH3) pulled down with 10 kohm; NRST with 100 nF.
 - Test and service pads on the underside: VBUS, D-, D+, GND, SWDIO, SWCLK, NRST.
-- No copper pours or vias under the IMU and inclinometer bodies on the top layer; keep them away from the charger and regulators.
+- No copper pours or vias under the IMU body on the top layer; keep it away from the charger and regulators.
 
 PCB: 4 layers, 0.8 mm, ENIG, D-shaped outline (radius 21.2 mm, flat at y = 17.3 mm), through vias only,
-tented and plugged on the underside (the underside is a wetted surface inside the grain opening and
+0.25 mm drill, default 0.15 mm tracks with 0.127 mm clearance, and a fine net class of 0.10 mm track /
+0.10 mm clearance used only to escape the camera BGAs (provisional 5 x 5 footprint, 0.5 mm pitch, 0.20 mm
+pads). 4 mil features are a standard tier at Sierra Circuits and Bay Area Circuits; OSH Park has no
+0.8 mm 4-layer service. Vias tented and plugged on the underside (the underside is a wetted surface inside the grain opening and
 the pad holes). Layer 2 solid ground. Parts on the top side except the grain LEDs, photodiode and
 contact pads.
 
@@ -118,18 +122,20 @@ Stack at the centre, bottom to top (mm above the base plane):
 | 4.35 | 4.65 | Foam pad |
 | 4.65 | 5.40 | LCD glass |
 | 5.40 | 5.55 | Adhesive frame bonding the LCD under the roof ledge |
-| 5.55 | 6.10 | Roof ledge (0.55 mm) around the 22 mm aperture |
-| 6.10 | 7.30 | Cover-glass recess: 0.2 mm tape ring and 1.0 mm mineral-glass crystal, flush with the top |
+| 5.55 | 6.35 | Roof ledge (0.80 mm) around the 22 mm aperture |
+| 6.35 | 7.60 | Cover-glass recess: 0.2 mm tape ring and 1.0 mm mineral-glass crystal, 0.05 mm below flush |
 
-Stack at the cameras: base 1.00, PCB 0.80, cube 2.76, bond 0.05, prism 2.00 (top at 6.61), roof 0.5 (pocket underside at 6.80), top at 7.30. Optical axis 5.61 mm above the base plane.
+Stack at the cameras: base 1.00, PCB 0.80, cube 2.76, bond 0.05, prism 2.00 (top at 6.61), 0.19 clearance, roof 0.80 (underside at 6.80), top at 7.60. Optical axis 5.61 mm above the base plane.
+
+Every printed wall is at least 0.8 mm and every drop-in fit has 0.25 mm nominal clearance, because US Multi Jet Fusion bureaus state minimum walls of 0.76-1.0 mm and tolerances of +-0.2 to 0.3 mm. A tighter-tolerance process (Carbon DLS epoxy) could take about 0.3 mm off the thickness.
 
 Parts:
 
-1. **Tub (top shell)** — HP Multi Jet Fusion PA12, dyed black, vapor smoothed. Side wall 1.0 mm, roof 0.8 mm, D-shaped with a flat visor face at y = 18.4 mm that carries two bevelled camera openings. Inside: the LCD pocket and ledge, the cover-glass recess, two prism pockets with light-tight snouts, support posts that carry a footstep load from the roof to the PCB without loading the LCD or the battery, an inward ledge near the bottom that seats on the base-plate seal, and a flat pad for a pressure-equalisation vent.
+1. **Tub (top shell)** — HP Multi Jet Fusion PA12, dyed black, vapor smoothed. Side wall 1.0 mm, roof 0.8 mm, D-shaped with a flat visor face at y = 18.4 mm that carries two bevelled camera openings, each closed by a small flat window bonded into a recess on the visor face (the prisms stay dry inside). Inside: the LCD pocket and ledge, the cover-glass recess, two prism pockets with light-tight snouts, support posts that carry a footstep load from the roof to the PCB without loading the LCD or the battery, an inward ledge near the bottom that seats on the base-plate seal, and a flat pad for a pressure-equalisation vent.
 2. **Base plate** — MJF PA12, 1.0 mm, with the 13 mm grain opening (and a central baffle ring on three spokes that shades the photodiode from direct LED light), seven 2.2 mm pad holes, three ball seats, and the seal land round the edge.
 3. **Cover glass** — 28.0 x 1.0 mm flat mineral-glass watch crystal for EVT; chemically strengthened glass with a printed black border for production.
-4. **Prisms** — two Edmund Optics 32-526 (VERIFIED: 2.00 mm legs, N-BK7, aluminised hypotenuse, $105 each at 1-5; a volume source such as Tower Optical must be quoted for production). Bonded to the cube top at the four corners with UV-cure adhesive, leaving an air gap over the lens. Sealed to the tub snout with black silicone, which also decouples the optics from shell strain.
-5. **Charging and calibration cradle** — printed nest with seven Mill-Max spring pins, a small 2-layer board with a USB-C receptacle, and a hard flat seat that accepts the puck at 0 and 180 degrees.
+4. **Prisms** — two Edmund Optics 32-526 (VERIFIED: 2.00 mm legs, N-BK7, aluminised hypotenuse, $105 each at 1-5; a volume source such as Tower Optical must be quoted for production). Bonded to the cube top at the four corners with UV-cure adhesive, leaving an air gap over the lens. They are not part of the seal: the visor windows close the openings, so shell strain does not reach the optics.
+5. **Charging and calibration cradle** — printed nest with seven Mill-Max 0914-series long-stroke spring pins soldered into the cradle board, a small 2-layer board with a USB-C receptacle, and a hard flat seat that accepts the puck at 0 and 180 degrees.
 
 Sealing: bonded construction (no O-ring; a standard gland does not fit). Seal qualification loads and the vent requirement are in `docs/research/enclosure-manufacturing.md`.
 
@@ -148,7 +154,7 @@ port tested against vectors exported from the reference. Sequence for a Quick Re
 ## 7. Release gates (summary)
 
 Nothing here has been built or tested. Before boards and parts are ordered a person must close the
-provisional items: the OVM7692 ball map and ball pitch from the registered OmniVision datasheet,
-the IIS2ICLX and LSM6DSV16X pin maps, the LCD connector contact side and FPC tail geometry, the
-STM32 alternate-function assignments, the flash footprint, every distributor stock check, and
-the mechanical first-article fit. The full list is kept in `docs/RELEASE_GATES.md`.
+provisional items: the OVM7692 ball map, ball pitch and image orientation from the registered
+OmniVision datasheet (the Analog Devices MAX78000FTHR schematic uses the same part), the LCD tail
+geometry and pin-1 side, the battery protection-board size and certificates, every distributor
+stock check, and the mechanical first-article fit. The full list is kept in `docs/RELEASE_GATES.md`.
