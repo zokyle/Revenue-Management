@@ -12,10 +12,16 @@ from the real one.
   0.09 / 0.09 mm)
 * net classes: Default 0.15 / 0.127, Power 0.30 / 0.127 (may neck down to
   0.15), Fine 0.09 / 0.09 (only the signals on the two camera BGAs), CamPower
-  0.15 / 0.09 (the camera supply balls)
+  0.15 / 0.09 (the camera supply balls).  The demo declares NO fine areas
+  (``FINE_AREAS``): with the fine classes confined to windows around the
+  cameras this router leaves connections open on this board, so their nets
+  may be fine anywhere; the router widens them to 0.15 mm where it finds room
+  and the fab README states, measured, where the fine tracks are
 * GND plane on In1.Cu; In2.Cu is the V2V8 plane and, marked ``routable``, the
   third routing layer next to F.Cu and B.Cu; the other supplies are tracks;
-  through vias only, tented on the bottom side only
+  through vias only, tented and plugged on the bottom side (the underside is
+  a wetted surface), open on the top side
+* three global fiducials (1 mm copper in a 2 mm mask opening) on each side
 * top: LQFP-64 MCU (real STM32U585RITx pad map from the KiCad library, the
   camera port on the pads the design spec lists), two 25-ball 0.5 mm-pitch
   camera BGAs sharing an 11-signal bus, LGA-14 IMU, LGA-16 inclinometer,
@@ -70,6 +76,22 @@ HOOD_MAX_HEIGHT = 0.95
 LED_RING = (0.0, -4.0, 5.2)          # centre x, centre y, radius
 PAD_ROW_Y = -17.0
 BATTERY_BODY = (0.0, -5.2, 34.0, 10.0)   # centre x, centre y, dx, dy
+#: Fine areas (``Design.add_fine_area``) confine the fine classes to windows
+#: around the camera BGAs: ``FINE_AREAS = (("U2", 5.0), ("U3", 5.0))`` asks for
+#: 5 mm around each ball field (the router's escape window of 3 to 4 mm plus
+#: 1 mm in which the fan-out spreads to the standard pitch).  The toolchain
+#: supports that end to end (router, audit, KiCad rule, output checks) - but
+#: on THIS board the router then leaves 2 to 11 of the 261 connections open
+#: (ten attempts with windows from 5 mm up to the whole upper half of the
+#: board, both tenting modes).  The shared camera bus has to reach MCU pins on
+#: three sides of the LQFP, and at 0.15 / 0.127 mm that is more than this
+#: router can do here.  So the demo does not confine them; nothing is claimed
+#: that is not measured (see fab/README.txt).
+FINE_AREAS = ()
+#: global fiducials (x, y): three per side, far apart, not in line, not
+#: mirror-symmetric, clear of the tub post feet and of the battery body
+FIDUCIALS_TOP = [(-19.3, -0.8), (19.0, -3.0), (-16.5, 9.9)]
+FIDUCIALS_BOTTOM = [(-13.5, -3.0), (14.0, -7.0), (0.0, -13.3)]
 
 #: stand-in camera ball map: ball -> (pin name, electrical type).  Row A faces
 #: the flat board edge, only 0.7 mm away: one track fits between the balls and
@@ -304,6 +326,13 @@ def demo_design(name="greenline_demo"):
                    clearance=US_4L_FINE.default_clearance, min_track_width=0.15,
                    description="supply nets; neck-down to 0.15 mm allowed")
     d.via_tenting = "bottom"
+    # design/DESIGN_SPEC.md: "Vias tented and plugged on the underside (the
+    # underside is a wetted surface)"
+    d.via_protection = ("plugged with solder mask from the BOTTOM side and tented there "
+                        "(IPC-4761 type III-a); the top side of the vias stays open")
+    d.fab_notes += [
+        "The bottom side is a wetted surface in use: no open via holes there.",
+    ]
 
     # ---- ICs, top side ----------------------------------------------------
     mcu_pins = {name_: (str(pad), etype) for pad, (name_, etype) in MCU_PADS.items()}
@@ -519,6 +548,12 @@ def demo_design(name="greenline_demo"):
     for i, (x, y) in enumerate(POST_FEET, start=1):
         d.add_placement_keepout(RoundedPolygon.rect(x, y, POST_FOOT_SIZE, POST_FOOT_SIZE),
                                 side="top", name="post_foot_%d" % i)
+    for ref, margin in FINE_AREAS:           # (none in the demo, see FINE_AREAS)
+        d.add_fine_area(ref, margin=margin)
+    for x, y in FIDUCIALS_TOP:
+        d.add_fiducial(x, y)
+    for x, y in FIDUCIALS_BOTTOM:
+        d.add_fiducial(x, y, side=BOTTOM)
     for ref, x in (("U2", -CAMERA_X), ("U3", CAMERA_X)):
         d.add_height_limit(RoundedPolygon.rect(x, (HOOD_Y0 + FLAT_Y) / 2.0, 2.0 * HOOD_HALF_W,
                                                FLAT_Y - HOOD_Y0),

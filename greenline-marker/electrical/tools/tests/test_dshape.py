@@ -168,7 +168,10 @@ def dshape_drc(dshape):
 def test_reference_design_passes_the_checks():
     d = dshape_design()
     report = checks.run_checks(d)
-    assert report.ok and not report.findings, report.text()
+    assert report.ok, report.text()
+    # this core-proof fixture has a fine class but declares no fine area and no
+    # fiducials: both are pointed out, neither is an error
+    assert sorted(f.code for f in report.findings) == ["fine_unconfined", "no_fiducials"]
     sides = {p.side for p in d.parts}
     assert sides == {TOP, BOTTOM}
     assert sum(1 for p in d.parts if p.side == BOTTOM) == 18          # 16 LEDs, PD1, J2

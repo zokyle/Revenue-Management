@@ -9,8 +9,10 @@ import zipfile
 
 import pytest
 
-from gleda import board, drc, outputs
-from gleda.model import Design, Outline, Circle, Part, Via, two_pin, BOTTOM
+from gleda import board, drc, geometry, outputs
+from gleda import footprints as F
+from gleda.model import (Design, Outline, Circle, RoundedPolygon, Part, Track, Via, two_pin,
+                         BOTTOM, US_4L_FINE)
 
 R0402 = "Resistor_SMD:R_0402_1005Metric"
 C0402 = "Capacitor_SMD:C_0402_1005Metric"
@@ -360,11 +362,112 @@ def test_fab_readme_states_fine_minimums():
     assert "Minimum track width:        0.090 mm (3.5 mil)" in text
     assert "Minimum copper clearance:   0.090 mm (3.5 mil)" in text
     assert "Rule set:                   US_4L_FINE" in text
-    assert "Fine" in text and "fine-pitch package" in text
+    # nothing is claimed about WHERE the fine geometry is unless it was measured
+    assert "Fine" in text and "was not measured" in text
+    assert "only where a fine-pitch package needs them" not in text
     assert "DO NOT FABRICATE" not in text
     assert "DO NOT FABRICATE" in outputs.fab_readme(design, {}, [("x.gbr", "c")], "bad", False)
     design.via_tenting = "bottom"
-    assert "tented on the BOTTOM side" in outputs.fab_readme(design, {}, [("x", "c")], "", True)
+    design.via_protection = "plugged from the bottom side (IPC-4761 type III-a)"
+    design.fab_notes = ["The bottom side is a wetted surface."]
+    text = outputs.fab_readme(design, {}, [("x", "c")], "", True)
+    assert "tented on the BOTTOM side" in text
+    assert "Via protection:      plugged from the bottom side (IPC-4761 type III-a)" in text
+    assert "FAB NOTES" in text and "- The bottom side is a wetted surface." in text
+    # the mask web between an open via and a pad of its net is a stated rule
+    assert "Via to pad, top:     design rule 0.200 mm" in text and "solder-mask web" in text
+    assert "Via to pad, bottom:  design rule 0.100 mm" in text and "vias tented" in text
+
+
+def _fine_design(areas=True):
+    d = Design("finefab", Outline(RoundedPolygon.rect(0.0, 0.0, 30.0, 16.0)), layers=4,
+               rules=US_4L_FINE)
+    d.add_netclass("Fine", track_width=0.09, clearance=0.09)
+    fp = F.bga("FabBGA9", 3, 3, pitch=0.5, pad_d=0.23, pad_clearance=0.09, height=1.0)
+    balls = ["%s%d" % (r, c) for r in "ABC" for c in (1, 2, 3)]
+    d.add(Part("U1", "bga", fp, pins={b: (b, "bidir") for b in balls}, x=-8.0, y=0.0,
+               in_bom=False, height_mm=1.0))
+    d.add(Part("T1", "TP", F.test_pad(0.6), pins={"1": "1"}, x=10.0, y=0.0, in_bom=False,
+               height_mm=0.0))
+    d.net("SIG", "U1.B3", "T1.1", netclass="Fine")
+    d.no_connect(*["U1.%s" % b for b in balls if b != "B3"])
+    if areas:
+        d.add_fine_area("U1", margin=3.0)
+    return d
+
+
+def test_copper_report_measures_where_the_fine_tracks_are():
+    """The review finding: the README said the fine classes "are used only
+    where a fine-pitch package needs them" while a third of all track was
+    0.09 mm wide and ran across the whole board.  Now it is measured."""
+    confined = [Track("SIG", "F.Cu", -7.5, 0.0, -4.5, 0.0, 0.09),      # ends inside the area
+                Track("SIG", "F.Cu", -4.5, 0.0, 10.0, 0.0, 0.15)]
+    # one fine piece that starts inside the area and leaves it, one outside
+    everywhere = [Track("SIG", "F.Cu", -7.5, 0.0, -4.5, 0.0, 0.09),
+                  Track("SIG", "F.Cu", -4.5, 0.0, 3.0, 0.0, 0.09),
+                  Track("SIG", "B.Cu", 3.0, 0.0, 10.0, 0.0, 0.09)]
+    d = _fine_design()
+    assert geometry.fine_area_polygon(d.fine_areas[0]).bounds == pytest.approx(
+        (-11.615, -3.615, -4.385, 3.615))
+    rep = outputs.copper_report(d, confined, [])
+    assert rep["confined"] is True and rep["offender_count"] == 0
+    assert rep["length_by_width"] == {"0.090": {"F.Cu": 3.0, "total": 3.0},
+                                      "0.150": {"F.Cu": 14.5, "total": 14.5}}
+    assert rep["narrow_length_mm"] == 3.0 and rep["narrow_outside_fine_areas_mm"] == 0.0
+    assert rep["narrow_farthest"]["distance_mm"] == pytest.approx(2.885, abs=1e-3)
+    assert rep["fine_pitch_arrays"] == ["U1"] and rep["narrow_nets"] == ["SIG"]
+    text = outputs.fab_readme(d, {}, [("x", "c")], "", True, rep)
+    assert "TRACKS AS ROUTED (measured" in text
+    assert " 0.090 mm    3.0 mm" in text and " 0.150 mm   14.5 mm" in text
+    assert "Net classes below the standard 0.150 / 0.127 mm: Fine." in text
+    assert "Tracks narrower than 0.150 mm: 3.0 mm on 1 net(s)." in text
+    assert "Every one of these tracks lies completely inside a fine area; the farthest " \
+           "reaches 2.9 mm from the pad field of U1." in text
+    assert "fine_U1 x -11.62..-4.38, y -3.62..3.62 - 52 mm2, 11 % of the board." in text
+    assert outputs.check_fine_geometry(d, confined) == []
+    # the same class laid across the whole board: said so, and a problem
+    rep = outputs.copper_report(d, everywhere, [])
+    assert rep["confined"] is False and rep["offender_count"] == 2
+    assert rep["narrow_outside_fine_areas_mm"] == 14.5
+    assert rep["narrow_farthest"] == {"net": "SIG", "layer": "B.Cu", "x": 10.0, "y": 0.0,
+                                      "distance_mm": pytest.approx(17.385, abs=1e-3),
+                                      "nearest_array": "U1"}
+    text = outputs.fab_readme(d, {}, [("x", "c")], "", True, rep)
+    assert "*** 14.5 mm of them (2 track piece(s)) lie OUTSIDE the fine areas" in text
+    assert "Every one of these tracks" not in text
+    problems = outputs.check_fine_geometry(d, everywhere)
+    assert len(problems) == 2 and "is not completely inside a fine area (0.150 mm needed " \
+        "there)" in problems[0]
+    # a design that declares no fine area: no reassurance, the real reach is printed
+    d2 = _fine_design(areas=False)
+    rep = outputs.copper_report(d2, everywhere, [])
+    assert rep["confined"] is False and rep["fine_areas"] == []
+    assert rep["offender_count"] == 0 and rep["narrow_outside_fine_areas_mm"] is None
+    assert rep["narrow_length_mm"] == 17.5
+    text = outputs.fab_readme(d2, {}, [("x", "c")], "", True, rep)
+    assert "The design declares no fine areas: these tracks may run anywhere along their " \
+           "nets; the farthest is SIG on B.Cu at (10.00, 0.00), 17.4 mm from the nearest " \
+           "fine-pitch array (U1)." in text
+    assert "Quote the whole board at the board-level minimums." in text
+    assert outputs.check_fine_geometry(d2, everywhere) == []       # nothing was promised
+
+
+def test_copper_report_states_the_smallest_via_to_pad_web():
+    d = Design("web", Outline(RoundedPolygon.rect(0.0, 0.0, 10.0, 8.0)), layers=4)
+    d.add(Part("C1", "100n", C0402, pins=two_pin(), mpn="x", x=0.0, y=0.0, height_mm=0.5))
+    d.add(Part("C2", "100n", C0402, pins=two_pin(), mpn="x", x=0.0, y=2.0, side=BOTTOM,
+               height_mm=0.5))
+    d.net("GND", "C1.2", "C2.2")
+    d.net("V", "C1.1", "C2.1")
+    pad = [p for p in geometry.placed_pads(d) if p.key == "C1.2"][0]
+    right = pad.polygon.bounds[2]
+    vias = [Via("GND", right + 0.25 + 0.21, 0.0, 0.5, 0.25)]
+    rep = outputs.copper_report(d, [], vias)
+    assert rep["min_via_to_own_pad_gap"]["top"] == pytest.approx(0.21, abs=1e-3)
+    d.via_tenting = "bottom"
+    text = outputs.fab_readme(d, {}, [("x", "c")], "", True, rep)
+    assert "Via to pad, top:     design rule 0.200 mm" in text
+    assert "smallest on this board 0.210 mm" in text
 
 
 def test_zip_and_manifest_are_complete_and_deterministic(mini_out, tmp_path):
@@ -486,7 +589,7 @@ def test_verify_outputs_catches_differences(mini_out):
     assert outputs.verify_outputs(design, fab, [VIA]) == []
 
 
-def test_drilled_slots_are_checked_by_position(mini_out, tmp_path):
+def test_drilled_slots_must_be_the_slots_of_the_design(mini_out, tmp_path):
     import shutil
     design, files, out, produced = mini_out
     fab = str(tmp_path / "fab")
@@ -494,11 +597,14 @@ def test_drilled_slots_are_checked_by_position(mini_out, tmp_path):
     path = os.path.join(fab, "mini-NPTH.drl")
     original = open(path).read()
     assert "X-11.5Y5.0\n" in original
-    # the hole at (-11.5, 5) drilled as a 1 mm long slot: same place, accepted
+    # the round hole at (-11.5, 5) drilled as a 1 mm long slot: not what the design has
     with open(path, "w") as fh:
         fh.write(original.replace("X-11.5Y5.0\n", "X-12.0Y5.0G85X-11.0Y5.0\n"))
     assert outputs.read_excellon(path).slots == [(1.2, -12.0, 5.0, -11.0, 5.0)]
-    assert outputs.verify_outputs(design, fab, [VIA]) == []
+    text = " | ".join(outputs.verify_outputs(design, fab, [VIA]))
+    assert "the drilled slot at (-11.500, 5.000) (1.200 mm tool, 2.200 mm long) is not the " \
+           "hole the design has there" in text
+    assert "no 1.200 mm hole at (-11.500, 5.000)" in text
     # a slot where the design has no hole, and the real hole now missing
     with open(path, "w") as fh:
         fh.write(original.replace("X-11.5Y5.0\n", "X0.0Y0.0G85X1.0Y0.0\n"))
@@ -651,3 +757,222 @@ def test_outputs_run_drc_themselves_on_a_clean_board(tmp_path):
                                                        "README.txt")).read()
     assert result.renders == {} and not os.path.exists(os.path.join(str(tmp_path), "renders"))
     assert result.drill_tables["tiny-PTH.drl"] == []
+
+
+# --------------------------------------------------------------------------
+# solder mask, paste and via tenting are part of the verification
+# --------------------------------------------------------------------------
+
+def _mask_design():
+    d = Design("masks", Outline(RoundedPolygon.rect(0.0, 0.0, 16.0, 10.0)), layers=4)
+    d.add(Part("C1", "100n", C0402, pins=two_pin(), mpn="x", x=-4.0, y=2.0, height_mm=0.5))
+    d.add(Part("U1", "flash", "Package_SON:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4.3mm",
+               pins={str(i): str(i) for i in range(1, 10)}, mpn="x", x=3.0, y=0.0,
+               height_mm=0.8))
+    d.add(Part("J2", "pads", F.pad_row("Row3", 3, 2.54, 1.8), pins={"1": "1", "2": "2", "3": "3"},
+               x=-3.0, y=-2.5, side=BOTTOM, in_bom=False, height_mm=0.0))
+    d.add_fiducial(-6.5, -3.5)
+    d.net("A", "C1.1", "J2.1", "U1.1")
+    d.net("B", "C1.2", "J2.2", "U1.9")
+    d.no_connect("J2.3", *["U1.%d" % i for i in range(2, 9)])
+    d.via_tenting = "bottom"
+    return d
+
+
+MASK_VIAS = [Via("A", -6.0, 3.5, 0.5, 0.25), Via("B", 6.5, -3.5, 0.5, 0.25)]
+
+
+@pytest.fixture(scope="module")
+def mask_out(tmp_path_factory):
+    design = _mask_design()
+    out = str(tmp_path_factory.mktemp("mask_out"))
+    files = board.build_board(design, out)
+    board.apply_routing(files.pcb, [], MASK_VIAS, via_tenting=design.via_tenting)
+    produced = outputs.generate_outputs(design, files.pcb, out, vias=MASK_VIAS,
+                                        require_clean=False, renders=False, step=False)
+    return design, files, out, produced
+
+
+def test_mask_paste_and_tenting_agree_with_the_model(mask_out):
+    design, files, out, produced = mask_out
+    assert produced.problems == []
+    fab = os.path.join(out, "fab")
+    top_mask = outputs.read_gerber(os.path.join(fab, "masks-F_Mask.gbr"))
+    bot_mask = outputs.read_gerber(os.path.join(fab, "masks-B_Mask.gbr"))
+    top_paste = outputs.read_gerber(os.path.join(fab, "masks-F_Paste.gbr"))
+    bot_paste = outputs.read_gerber(os.path.join(fab, "masks-B_Paste.gbr"))
+    # top: C1 (2) + U1 (9) + fiducial; paste: C1 (2) + U1 leads (8) + 4 split EP apertures
+    assert len(top_mask.flashes) == 12 and len(top_paste.flashes) == 14
+    assert len(bot_mask.flashes) == 3 and bot_paste.flashes == []     # bare pads: no paste
+    assert len(top_mask.discs()) == 2 and bot_mask.discs() == {}      # vias open on top only
+    assert set(top_mask.discs().values()) == {0.25}
+    pads = {p.key: p for p in geometry.placed_pads(design)}
+    assert pads["C1.1"].tech == ("F.Mask", "F.Paste") and pads["J2.1"].tech == ("B.Mask",)
+    assert pads["U1.9"].tech == ("F.Mask",) and pads["FID1."].tech == ("F.Mask",)
+    assert len(geometry.placed_apertures(design)) == 4
+
+
+def test_a_different_model_is_caught_on_mask_paste_and_tenting(mask_out):
+    design, files, out, produced = mask_out
+    fab = os.path.join(out, "fab")
+
+    def verify(mutate):
+        other = _mask_design()
+        mutate(other)
+        return " | ".join(outputs.verify_outputs(other, fab, MASK_VIAS))
+
+    # tenting: the files have openings on top, none on the bottom
+    text = verify(lambda d: setattr(d, "via_tenting", "both"))
+    assert "F.Mask: a round mask opening at (-6.000, 3.500) although vias are tented on the " \
+           "top side (via_tenting = 'both')" in text
+    text = verify(lambda d: setattr(d, "via_tenting", "none"))
+    assert "B.Mask: the via at (-6.000, 3.500) has no mask opening although vias are not " \
+           "tented on the bottom side" in text and "F.Mask" not in text
+    text = verify(lambda d: setattr(d, "via_tenting", "top"))
+    assert "B.Mask: the via at" in text and "F.Mask: a round mask opening" in text
+    # a via the files do not have / one the model does not have
+    other = _mask_design()
+    text = " | ".join(outputs.verify_outputs(other, fab, MASK_VIAS[:1]))
+    assert "F.Mask: a via mask opening at (6.500, -3.500) where the design has no via" in text
+    # paste on the bare pad row, no paste on C1, no mask on the fiducial
+    def paste_row(d):
+        d.part("J2").footprint = F.pad_row("Row3", 3, 2.54, 1.8, paste=True)
+    assert "B.Paste: pad J2.1 at (-5.540, -2.500) has no paste in the Gerber" in verify(paste_row)
+
+    def bare_cap(d):
+        d.part("C1").footprint = F.two_pad("C_bare", pad_w=0.56, pad_h=0.62, pitch=0.96,
+                                           paste=False)
+    text = verify(bare_cap)
+    assert "F.Paste: unexpected paste at (-4.480, 2.000) - pad C1.1 must not have one" in text
+
+    def moved_fiducial(d):
+        d.part("FID1").place(-6.5, -3.0)
+    text = verify(moved_fiducial)
+    assert "F.Mask: pad FID1. at (-6.500, -3.000) has no mask opening" in text
+    assert "F.Mask: unexpected mask opening at (-6.500, -3.500)" in text
+
+
+def test_a_tampered_board_is_caught_on_mask_paste_and_tenting(mask_out, tmp_path):
+    """The review's experiment: mask and paste removed from a part, paste
+    added to bare contact pads, the via openings deleted.  KiCad's DRC has no
+    objection to any of it - the output verification must."""
+    import shutil
+    import pcbnew
+    design, files, out, produced = mask_out
+    work = str(tmp_path / "tampered")
+    shutil.copytree(out, work)
+    pcb = os.path.join(work, "masks.kicad_pcb")
+    brd = board.load_board(pcb)
+    for fp in brd.GetFootprints():
+        ref = str(fp.GetReference())
+        for pad in fp.Pads():
+            layers = pad.GetLayerSet()
+            if ref == "C1":
+                layers.RemoveLayer(pcbnew.F_Mask)
+                layers.RemoveLayer(pcbnew.F_Paste)
+            elif ref == "J2":
+                layers.AddLayer(pcbnew.B_Paste)
+            pad.SetLayerSet(layers)
+    group = board._via_mask_group(brd)
+    for member in list(group.GetItems()):
+        brd.Remove(member)
+    board.save_board(brd, pcb)
+    result = drc.run_drc(pcb)
+    assert result.error_count == 0                              # KiCad does not mind
+    produced = outputs.generate_outputs(design, pcb, work, drc_result=result, vias=MASK_VIAS,
+                                        require_clean=False, renders=False, step=False)
+    text = " | ".join(produced.problems)
+    assert not produced.ok
+    assert "F.Mask: pad C1.1 at (-4.480, 2.000) has no mask opening in the Gerber" in text
+    assert "F.Paste: pad C1.2 at (-3.520, 2.000) has no paste in the Gerber" in text
+    assert "B.Paste: unexpected paste at (-5.540, -2.500) - pad J2.1 must not have one" in text
+    assert "F.Mask: the via at (-6.000, 3.500) has no mask opening although vias are not " \
+           "tented on the top side (via_tenting = 'bottom')" in text
+    assert json.load(open(os.path.join(work, "outputs.json")))["ok"] is False
+
+
+# --------------------------------------------------------------------------
+# assembly package
+# --------------------------------------------------------------------------
+
+def test_assembly_readme_states_units_origin_and_conventions(mini_out):
+    design, files, out, produced = mini_out
+    text = open(os.path.join(out, "assembly", "README.txt")).read()
+    for needle in ("Units:    millimetres, degrees.",
+                   "Origin:   the centre of the board - the same origin as the Gerber and "
+                   "drill files.",
+                   "Axes:     X to the right, Y up, seen from the TOP side, for both sides.",
+                   "Bottom:   X is NOT mirrored",
+                   "Rot:      footprint rotation counter-clockwise seen from the TOP side, for "
+                   "both sides",
+                   "PosX/Y:   the footprint anchor", "BodyX/Y:  the centre of the component body",
+                   "DNP (do not place):", "FIDUCIALS", "mini-pos.csv", "mini-bom.csv"):
+        assert needle in text, needle
+    rows = list(csv.DictReader(open(os.path.join(out, "assembly", "mini-pos.csv"))))
+    by_side = {side: sum(1 for r in rows if r["Side"] == side) for side in ("top", "bottom")}
+    assert "top:    %d placed part(s)" % by_side["top"] in text
+    assert "bottom: %d placed part(s)" % by_side["bottom"] in text
+    # the zip holds the same three files, with fixed time stamps
+    with zipfile.ZipFile(os.path.join(out, "mini-assembly.zip")) as zf:
+        assert sorted(zf.namelist()) == ["README.txt", "mini-bom.csv", "mini-pos.csv"]
+        assert {i.date_time for i in zf.infolist()} == {(1980, 1, 1, 0, 0, 0)}
+    assert "assembly/README.txt" in {f["path"] for f in produced.files}
+
+
+def test_anchor_that_is_not_the_body_centre_is_pointed_out(mini_out):
+    """The FPC connector's KiCad anchor sits on its pad row, 1.6 mm from the
+    centre of its body: the position file gives both, the README names it."""
+    design, files, out, produced = mini_out
+    offs = outputs.anchor_offsets(design)
+    assert [o["ref"] for o in offs] == ["J1"] and offs[0]["offset"] == pytest.approx(1.6)
+    assert produced.anchor_offsets == offs
+    assert json.load(open(os.path.join(out, "outputs.json")))["anchor_offsets"][0]["ref"] == "J1"
+    rows = {r["Ref"]: r for r in csv.DictReader(open(os.path.join(out, "assembly",
+                                                                    "mini-pos.csv")))}
+    j1 = design.part("J1")
+    body = geometry.part_body(j1)
+    assert (float(rows["J1"]["PosX"]), float(rows["J1"]["PosY"])) == (j1.x, j1.y)
+    assert (float(rows["J1"]["BodyX"]), float(rows["J1"]["BodyY"])) == \
+        pytest.approx((body["cx"], body["cy"]), abs=1e-4)
+    other = [r for r in rows.values() if r["Ref"] != "J1"]
+    assert other and all(abs(float(r["BodyX"]) - float(r["PosX"])) < 0.05 and
+                         abs(float(r["BodyY"]) - float(r["PosY"])) < 0.05 for r in other)
+    text = open(os.path.join(out, "assembly", "README.txt")).read()
+    assert "J1     anchor (%.3f, %.3f), body centre (%.3f, %.3f), 1.600 mm apart" % (
+        j1.x, j1.y, body["cx"], body["cy"]) in text
+    # a wrong body centre in the file is a problem
+    bad = [dict(r, PosX=float(r["PosX"]), PosY=float(r["PosY"]), Rot=float(r["Rot"]),
+                BodyX=float(r["BodyX"]) + (0.3 if r["Ref"] == "J1" else 0.0),
+                BodyY=float(r["BodyY"])) for r in rows.values()]
+    assert any("J1 body centre" in p for p in outputs.check_positions(design, bad))
+
+
+# --------------------------------------------------------------------------
+# oblong holes of footprints
+# --------------------------------------------------------------------------
+
+def test_oblong_footprint_holes_are_slots_in_the_drill_file(tmp_path):
+    harwin = "Connector_Harwin:Harwin_Gecko-G125-MVX0605L1X_2x03_P1.25mm_Vertical"
+    d = Design("slotdrill", Outline(RoundedPolygon.rect(0.0, 0.0, 16.0, 10.0)), layers=4)
+    d.add(Part("J1", "hdr", harwin, pins={str(i): str(i) for i in range(1, 7)}, mpn="x",
+               x=0.0, y=0.0, rotation=90.0, height_mm=4.0))
+    for i in range(1, 7):
+        d.no_connect("J1.%d" % i)
+    plated, npth = outputs.expected_slots(d)
+    assert plated == [] and len(npth) == 2
+    # rotated by 90 degrees the slots lie along x: 1.0 mm tool, 0.9 mm travel
+    assert sorted(npth)[0] == pytest.approx((1.0, -0.175, -1.25, -1.075, -1.25))
+    files = board.build_board(d, str(tmp_path))
+    fab = str(tmp_path / "fab")
+    outputs.export_gerbers(files.pcb, fab, outputs.fab_layers(d))
+    outputs.export_drill(files.pcb, fab)
+    drill = outputs.read_excellon(os.path.join(fab, "slotdrill-NPTH.drl"))
+    assert len(drill.slots) == 2 and drill.hits == []
+    assert outputs.verify_outputs(d, fab, []) == []
+    # the same files against a part turned back to 0 degrees: slots along y expected
+    other = Design("slotdrill", Outline(RoundedPolygon.rect(0.0, 0.0, 16.0, 10.0)), layers=4)
+    other.add(Part("J1", "hdr", harwin, pins={str(i): str(i) for i in range(1, 7)}, mpn="x",
+                   x=0.0, y=0.0, rotation=0.0, height_mm=4.0))
+    text = " | ".join(outputs.verify_outputs(other, fab, []))
+    assert "slotdrill-NPTH.drl: no 1.000 mm slot from (3.750, 0.175) to (3.750, 1.075)" in text
+    assert "where the design has no hole" in text

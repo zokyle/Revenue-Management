@@ -712,6 +712,31 @@ def pad_row(name: str, n: int, pitch: float, pad_w: float, pad_h: Optional[float
         courtyard_margin=0.15)
 
 
+def fiducial(copper: float = 1.0, mask: float = 2.0, name: Optional[str] = None
+             ) -> FootprintSpec:
+    """Global fiducial for the pick-and-place machine: a round bare copper
+    dot of diameter ``copper`` in a solder-mask opening of diameter ``mask``,
+    no paste (the IPC "1 mm in 2 mm" mark by default).
+
+    The pad carries a clearance override of ``(mask - copper) / 2`` so that
+    no other copper (track, via, pour) shows in the mask opening - the router
+    and KiCad's DRC both honour it.  The footprint is board-only: no
+    schematic symbol, not in the BOM or the position file.  Place it with
+    :meth:`gleda.model.Design.add_fiducial`."""
+    if mask < copper:
+        raise ValueError("fiducial: the mask opening must not be smaller than the copper")
+    margin = (mask - copper) / 2.0
+    pad = PadSpec("", 0.0, 0.0, copper, copper, "circle", "conn",
+                  mask_margin=margin if margin > 0 else None,
+                  clearance=margin if margin > 0 else None)
+    return FootprintSpec(
+        name=name or "Fiducial_%smm_Mask%smm" % (_f(copper), _f(mask)), pads=[pad],
+        body=(mask, mask), height=0.0, silk=False,
+        description="Fiducial, %g mm copper in a %g mm mask opening" % (copper, mask),
+        tags="fiducial", exclude_from_bom=True, exclude_from_pos=True, board_only=True,
+        courtyard_margin=0.25)
+
+
 def npth_hole(drill: float, name: Optional[str] = None) -> FootprintSpec:
     """Non-plated drilled hole as a board-only footprint."""
     pad = PadSpec("", 0.0, 0.0, drill, drill, "circle", "npth", drill=drill)
@@ -735,6 +760,13 @@ class PadGeom:
     the copper outline (arcs approximated by KiCad, max error ~5 um).
     ``clearance`` is the pad's (or its footprint's) local clearance override
     in mm, None if there is none.
+
+    Holes: ``drill`` is the tool diameter - the hole diameter, or the WIDTH of
+    an oblong hole.  ``slot`` is then the half vector of the slot's centre
+    line: the hole is everything within ``drill / 2`` of the segment from
+    ``(x, y) - slot`` to ``(x, y) + slot`` ((0, 0) for a round hole).
+    ``ring`` is the copper of a non-plated pad that is larger than its hole
+    (netless copper around an NPTH hole); empty otherwise.
     """
     number: str
     x: float
@@ -748,6 +780,28 @@ class PadGeom:
     layers: Tuple[str, ...]
     polygon: Tuple[Point, ...]
     clearance: Optional[float] = None
+    slot: Point = (0.0, 0.0)
+    ring: Tuple[Point, ...] = ()
+
+    @property
+    def slotted(self) -> bool:
+        return abs(self.slot[0]) > 1e-9 or abs(self.slot[1]) > 1e-9
+
+    @property
+    def hole_length(self) -> float:
+        """Overall length of the hole (= ``drill`` for a round one)."""
+        return self.drill + 2.0 * math.hypot(self.slot[0], self.slot[1])
+
+
+@dataclass(frozen=True)
+class ApertureGeom:
+    """A pad without copper: an extra paste or mask aperture of a footprint
+    (the split paste of an exposed pad, say).  Local mm, +y up, top side."""
+    x: float
+    y: float
+    w: float
+    h: float
+    layers: Tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -761,6 +815,8 @@ class FootprintGeom:
     height: Optional[float]
     smd: bool
     has_courtyard: bool
+    #: copper-less paste / mask apertures (not pads of the model)
+    apertures: Tuple[ApertureGeom, ...] = ()
 
     @property
     def pad_numbers(self) -> List[str]:
@@ -890,6 +946,18 @@ def geom_from_pcbnew(fp, height: Optional[float] = None) -> FootprintGeom:
     board.Add(fp)
     nm = coords.nm_to_mm
     pads: List[PadGeom] = []
+    apertures: List[ApertureGeom] = []
+
+    def outline_points(pad) -> List[Point]:
+        ps = pad.GetEffectivePolygon()
+        pts: List[Point] = []
+        if ps.OutlineCount() > 0:
+            outline = ps.Outline(0)
+            for i in range(outline.PointCount()):
+                pt = outline.CPoint(i)
+                pts.append(coords.local_from_kicad_mm(nm(pt.x), nm(pt.y)))
+        return pts
+
     for pad in fp.Pads():
         pos = pad.GetPosition()
         x, y = coords.local_from_kicad_mm(nm(pos.x), nm(pos.y))
@@ -899,26 +967,44 @@ def geom_from_pcbnew(fp, height: Optional[float] = None) -> FootprintGeom:
         has_copper = any(l.endswith(".Cu") for l in layers)
         poly_pts: List[Point] = []
         if has_copper and kind != "npth":
-            ps = pad.GetEffectivePolygon()
-            if ps.OutlineCount() > 0:
-                outline = ps.Outline(0)
-                for i in range(outline.PointCount()):
-                    pt = outline.CPoint(i)
-                    poly_pts.append(coords.local_from_kicad_mm(nm(pt.x), nm(pt.y)))
-        drill = nm(pad.GetDrillSize().x) if kind in ("th", "npth") else 0.0
+            poly_pts = outline_points(pad)
+        drill = 0.0
+        slot: Point = (0.0, 0.0)
+        ring: List[Point] = []
+        angle = pad.GetOrientationDegrees()
+        if kind in ("th", "npth"):
+            dsz = pad.GetDrillSize()
+            dx, dy = nm(dsz.x), nm(dsz.y)
+            if dy <= 0:
+                dy = dx
+            drill = min(dx, dy)
+            half = abs(dx - dy) / 2.0
+            if half > 1e-9:
+                # long axis: the pad's own x (or y) axis, turned with the pad.
+                # KiCad angles are counter-clockwise on the screen, i.e. in the
+                # +y-up frame used here.
+                a = math.radians(angle + (0.0 if dx > dy else 90.0))
+                slot = (round(half * math.cos(a), 6) + 0.0, round(half * math.sin(a), 6) + 0.0)
+            if kind == "npth" and has_copper and (
+                    nm(size.x) > dx + 1e-6 or nm(size.y) > dy + 1e-6):
+                ring = outline_points(pad)
         # KiCad: a pad's own override wins, else the footprint-level one
         local_clearance = pad.GetLocalClearance() or fp.GetLocalClearance()
-        if not has_copper and kind == "smd":
-            # paste-only / mask-only aperture pads carry no copper: skip them
+        if not has_copper and kind in ("smd", "conn"):
+            # paste-only / mask-only aperture pads carry no copper: not pads of
+            # the model, but what they open is remembered for the output checks
+            apertures.append(ApertureGeom(round(x, 6), round(y, 6), nm(size.x), nm(size.y),
+                                          layers))
             continue
         pads.append(PadGeom(
             number=str(pad.GetNumber()), x=round(x, 6), y=round(y, 6),
             w=nm(size.x), h=nm(size.y),
             shape=_SHAPE_NAMES.get(pad.GetShape(), "custom"),
-            rotation=coords.normalize_angle(pad.GetOrientationDegrees()),
+            rotation=coords.normalize_angle(angle),
             kind=kind, drill=drill, layers=layers,
             polygon=tuple((round(px, 6), round(py, 6)) for px, py in poly_pts),
-            clearance=(nm(local_clearance) if local_clearance > 0 else None)))
+            clearance=(nm(local_clearance) if local_clearance > 0 else None),
+            slot=slot, ring=tuple((round(px, 6), round(py, 6)) for px, py in ring)))
     # body: bounding box of the fab-layer drawings (line width removed)
     body: Optional[List[float]] = None
     for g in fp.GraphicalItems():
@@ -947,8 +1033,10 @@ def geom_from_pcbnew(fp, height: Optional[float] = None) -> FootprintGeom:
     ys = [p[1] for pad in pads for p in pad.polygon] + [pad.y for pad in pads]
     for pad in pads:
         if pad.kind == "npth":
-            xs += [pad.x - pad.drill / 2, pad.x + pad.drill / 2]
-            ys += [pad.y - pad.drill / 2, pad.y + pad.drill / 2]
+            ex = abs(pad.slot[0]) + pad.drill / 2
+            ey = abs(pad.slot[1]) + pad.drill / 2
+            xs += [pad.x - ex, pad.x + ex]
+            ys += [pad.y - ey, pad.y + ey]
     if body is None:
         if xs:
             body = [min(xs), min(ys), max(xs), max(ys)]
@@ -969,7 +1057,7 @@ def geom_from_pcbnew(fp, height: Optional[float] = None) -> FootprintGeom:
         courtyard=tuple(round(v, 5) for v in cbox),          # type: ignore[arg-type]
         courtyard_polygon=tuple(cy_pts),
         body=tuple(round(v, 5) for v in body),               # type: ignore[arg-type]
-        height=height, smd=smd, has_courtyard=has_cy)
+        height=height, smd=smd, has_courtyard=has_cy, apertures=tuple(apertures))
     return geom
 
 
@@ -1012,7 +1100,8 @@ def lib_id_of(footprint: Union[str, FootprintSpec]) -> str:
 
 
 __all__ = [
-    "PadSpec", "Graphic", "FootprintSpec", "PadGeom", "FootprintGeom", "FootprintError",
+    "PadSpec", "Graphic", "FootprintSpec", "PadGeom", "ApertureGeom", "FootprintGeom",
+    "FootprintError", "fiducial",
     "castellated_module", "fpc_connector", "quad_package", "bga", "bga_row_name",
     "two_pad", "smd_pad", "test_pad",
     "pogo_pad", "battery_tab", "pad_row", "npth_hole", "kicad_mod_text",

@@ -919,10 +919,12 @@ def _root_text(design: Design, pages: Sequence[Page], root_uuid: str, paper: str
     rows = (len(pages) + per_row - 1) // per_row
     y_notes = y + rows * 16 + 4
     bom_parts = [p for p in design.parts if p.in_bom]
+    board_only = len(design.parts) - len(design.schematic_parts)
     notes = [
-        "%d parts (%d on the BOM), %d nets, %d copper layers, %.2f mm, rule set %s" % (
-            len(design.parts), len(bom_parts), len(design.nets), design.layers,
-            design.board_thickness, design.rules.name),
+        "%d parts (%d on the BOM%s), %d nets, %d copper layers, %.2f mm, rule set %s" % (
+            len(design.schematic_parts), len(bom_parts),
+            "; plus %d board-only item(s) such as fiducials" % board_only if board_only else "",
+            len(design.nets), design.layers, design.board_thickness, design.rules.name),
         "Net classes (track / clearance, mm):",
     ]
     for name in ["Default"] + sorted(n for n in design.netclasses if n != "Default"):
@@ -985,7 +987,7 @@ class SchematicFiles:
 def build_pages(design: Design, max_paper: str = "A3", min_paper: str = "A4"
                 ) -> Tuple[List[Page], Dict[str, SymbolDef]]:
     """Symbols and page layouts of a design (nothing is written)."""
-    refs = [p.ref for p in design.parts]
+    refs = [p.ref for p in design.schematic_parts]
     dup = sorted({r for r in refs if refs.count(r) > 1})
     if dup:
         raise SchematicError("duplicate reference(s): %s" % ", ".join(dup))
@@ -993,7 +995,7 @@ def build_pages(design: Design, max_paper: str = "A3", min_paper: str = "A4"
     pages: List[Page] = []
     for group in design.groups:
         cells = []
-        for part in design.parts:
+        for part in design.schematic_parts:
             if part.group != group:
                 continue
             sym = table.intern(make_symbol(design, part), hint=part.ref)
@@ -1344,7 +1346,7 @@ def compare_netlist(design: Design, netlist: KicadNetlist) -> RoundTrip:
         if extra:
             problems.append("net %s: schematic adds %s" % (name, ", ".join(extra)))
     all_pads: Set[str] = set()
-    for part in design.parts:
+    for part in design.schematic_parts:
         for pad in part.pad_numbers():
             all_pads.add("%s.%s" % (part.ref, pad))
     connected: Set[str] = set()
@@ -1357,7 +1359,7 @@ def compare_netlist(design: Design, netlist: KicadNetlist) -> RoundTrip:
                         "schematic" % key)
     for key in sorted(open_got - open_want, key=natural_key):
         problems.append("%s is unconnected in the schematic but on a net in the design" % key)
-    parts = design.parts_by_ref
+    parts = {p.ref: p for p in design.schematic_parts}
     for ref in sorted(set(parts) - set(netlist.components), key=natural_key):
         problems.append("component %s is missing in the schematic" % ref)
     for ref in sorted(set(netlist.components) - set(parts), key=natural_key):

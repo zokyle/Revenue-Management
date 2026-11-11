@@ -1,4 +1,18 @@
 {
+ "anchor_offsets": [
+  {
+   "anchor": [
+    0.0,
+    -13.9
+   ],
+   "body_centre": [
+    0.0,
+    -15.5
+   ],
+   "offset": 1.6,
+   "ref": "J1"
+  }
+ ],
  "bom": {
   "cost_per_board": 58.06,
   "lines": 31,
@@ -6,7 +20,75 @@
   "parts_fitted": 91,
   "unpriced_refs": []
  },
- "drc": "KiCad DRC 0 error(s), 0 unconnected, 35 warning(s) (silk_edge_clearance 1, silk_over_copper 34)",
+ "copper": {
+  "confined": false,
+  "fine_areas": [],
+  "fine_pitch_arrays": [
+   "U2",
+   "U3"
+  ],
+  "length_by_width": {
+   "0.090": {
+    "B.Cu": 159.326,
+    "F.Cu": 159.076,
+    "In2.Cu": 109.43,
+    "total": 427.832
+   },
+   "0.150": {
+    "B.Cu": 647.181,
+    "F.Cu": 612.691,
+    "In2.Cu": 148.237,
+    "total": 1408.109
+   },
+   "0.300": {
+    "B.Cu": 67.969,
+    "F.Cu": 223.961,
+    "In2.Cu": 25.465,
+    "total": 317.396
+   }
+  },
+  "min_via_to_own_pad_gap": {
+   "bottom": 0.1,
+   "top": 0.2062
+  },
+  "narrow_farthest": {
+   "distance_mm": 15.557,
+   "layer": "F.Cu",
+   "nearest_array": "U2",
+   "net": "CAM_D2",
+   "x": -0.75,
+   "y": 1.225
+  },
+  "narrow_in_fine_areas_mm": 0.0,
+  "narrow_length_mm": 427.832,
+  "narrow_nets": [
+   "CAM_D0",
+   "CAM_D1",
+   "CAM_D2",
+   "CAM_D3",
+   "CAM_D4",
+   "CAM_D5",
+   "CAM_D6",
+   "CAM_D7",
+   "CAM_HREF",
+   "CAM_PCLK_L",
+   "CAM_PCLK_R",
+   "CAM_PWDN_L",
+   "CAM_PWDN_R",
+   "CAM_SCL_L",
+   "CAM_SCL_R",
+   "CAM_SDA",
+   "CAM_VSYNC",
+   "CAM_XVCLK"
+  ],
+  "narrow_outside_fine_areas_mm": null,
+  "offender_count": 0,
+  "offenders": [],
+  "standard_track": 0.15,
+  "tracks": 2422,
+  "vias": 298
+ },
+ "drc": "KiCad DRC 0 error(s), 0 unconnected, 39 warning(s) (silk_edge_clearance 1, silk_over_copper 38)",
  "drc_clean": true,
  "drill_tables": {
   "greenline_demo-NPTH.drl": [
@@ -18,45 +100,50 @@
   "greenline_demo-PTH.drl": [
    [
     0.25,
-    284
+    298
    ]
   ]
  },
  "files": [
+  {
+   "bytes": 1738,
+   "path": "assembly/README.txt",
+   "sha256": "f099e2642a3f93739f8f952f45413bc6f12c6ccc665c89dc5ecbc7b0dfa18d8c"
+  },
   {
    "bytes": 4576,
    "path": "assembly/greenline_demo-bom.csv",
    "sha256": "4e04f55bbb7b89b26fc203025214a183d3e50e98fcf8e27c723563ce256c5f13"
   },
   {
-   "bytes": 6499,
+   "bytes": 7939,
    "path": "assembly/greenline_demo-pos.csv",
-   "sha256": "83abf1d573483ea8d9b8e0616ef2f0b838bb49cf86553082e58a22a22c19a36e"
+   "sha256": "ed2f808bf2ad186ed254f611660d9cf043f58381063f976849db8b71018740b2"
   },
   {
-   "bytes": 4087,
+   "bytes": 5229,
    "path": "fab/README.txt",
-   "sha256": "242a0c0028ec755dd870a17ea4dc2232f974966a30b6e43cba231b68a850b9cd"
+   "sha256": "1d7ad459611f6007a464ee002e4b38c1354ca3e4a04ea7e93afde51fde6ca6b3"
   },
   {
-   "bytes": 43027,
+   "bytes": 47392,
    "path": "fab/greenline_demo-B_Cu.gbr",
-   "sha256": "f4f8a8a7cc3d42276fd1768bb188290621aa009ec1c3505c4f274da621cc2052"
+   "sha256": "d8e0e92bc5b657a251131de6cd821f4f32aa5cf74ba1c9437a5cdafcf4c5863d"
   },
   {
-   "bytes": 4140,
+   "bytes": 4295,
    "path": "fab/greenline_demo-B_Mask.gbr",
-   "sha256": "cd2ef5b263b83e974609ae08c12204f220ca51cbbe0612467a18889876e47a5e"
+   "sha256": "a71deea9c8abafc88fa3f53bde6bc7c3e263ac305948609e61eb4e8fe259604a"
   },
   {
    "bytes": 3872,
    "path": "fab/greenline_demo-B_Paste.gbr",
-   "sha256": "1233220d1b959a6217b15987219847305beecee994577551cc28a49a730d6691"
+   "sha256": "3d72ff97f4d0662e3666ca4204e57f447458fb9256fe146a14c24fa1e6af13eb"
   },
   {
-   "bytes": 7169,
+   "bytes": 7324,
    "path": "fab/greenline_demo-B_Silkscreen.gbr",
-   "sha256": "d6ac2de17b8e663058cf4086093615bb3efeaa6c1432da8d3ce9f7ad74acce01"
+   "sha256": "f3339fafaa999bab658c1223a09ddb774094734d97c08de53ff083b387dee6f7"
   },
   {
    "bytes": 800,
@@ -64,34 +151,34 @@
    "sha256": "e47fa7de5eb1b9d5cad544ed9b1121f716033df4d7dc94fc518f00124aa0af7b"
   },
   {
-   "bytes": 91517,
+   "bytes": 97090,
    "path": "fab/greenline_demo-F_Cu.gbr",
-   "sha256": "f3973e731b9b50e0f71436328e7572979373de7f5f37e67244731acb1cd315f8"
+   "sha256": "a7c2cbff0af25986ce0173457ed9e9360e4850ef9cb24999bb6542f667baf418"
   },
   {
-   "bytes": 50888,
+   "bytes": 53061,
    "path": "fab/greenline_demo-F_Mask.gbr",
-   "sha256": "a83fc89f28f09884feb56279e73192fd900344967c2c13bd59e9aeeb076a19df"
+   "sha256": "75cc728cfe4fb466e317a335e95e01a167b040fc9ea782b7cbbe351b06da5d7a"
   },
   {
-   "bytes": 11646,
+   "bytes": 11631,
    "path": "fab/greenline_demo-F_Paste.gbr",
-   "sha256": "5657cc5c5c8e80eed2b1cd0468721cc0dbaf2cd1995736440653c8b468bf8f1a"
+   "sha256": "4f5e6ea38f2efc8062009a5867a7683934ce80de801b5800a8de375b8652d220"
   },
   {
-   "bytes": 62162,
+   "bytes": 64335,
    "path": "fab/greenline_demo-F_Silkscreen.gbr",
-   "sha256": "90e4e0f1b03a0a9806addcd2ca6dcee8e57a13fc77364bea3dba21aa5f23e500"
+   "sha256": "8d807fc52331bb5e2d9e411839e2f0303143c122f2157c7d94e04111171f0668"
   },
   {
-   "bytes": 169411,
+   "bytes": 173400,
    "path": "fab/greenline_demo-In1_Cu.gbr",
-   "sha256": "7b6c428e2e6dad9de46d5420bef0146ef9a2101566fa047bb8d2fa04191f0956"
+   "sha256": "797e8c9ba6273e09befd42a4268b731f33c48e1783afa3c81e7d4ab6ac269d6b"
   },
   {
-   "bytes": 143784,
+   "bytes": 154395,
    "path": "fab/greenline_demo-In2_Cu.gbr",
-   "sha256": "adb67882d9efcff0b939b153a6883475396c30175b18a0a8d5b4d082d7cfd161"
+   "sha256": "74b5fe8625159b937c87c1ee8cbf1bd46a26b26e4cdb93286621263b0bebc3b5"
   },
   {
    "bytes": 18473,
@@ -104,14 +191,14 @@
    "sha256": "eb1d4c68b1c8c95feddcb434c139c7f8f1d6282b57d8c3a6c71c531b6346fbb0"
   },
   {
-   "bytes": 41785,
+   "bytes": 43777,
    "path": "fab/greenline_demo-PTH-drl_map.gbr",
-   "sha256": "198ae6c242935cf10aa7fd18a6562b7be6c82567e9a758a735f7c300da5d8fcc"
+   "sha256": "a2f459e7ee4f17945542b27db7820fc101ca0d00e30b2074bb96f12cf30c711d"
   },
   {
-   "bytes": 3540,
+   "bytes": 3701,
    "path": "fab/greenline_demo-PTH.drl",
-   "sha256": "bee62bf44c22c5b35de79a597a7299641fc7fb48ae650a33dfd2cea7eece6cc8"
+   "sha256": "f7e7e759aa3b40e5df1d22a9e9f28ca3dd6f55b35fc978ad5f2aee2ca7c5d157"
   },
   {
    "bytes": 3668,
@@ -119,64 +206,69 @@
    "sha256": "aa8d2bf0f999058f4d3015ce8dca940049506ccb30269819ea654fd69b747f61"
   },
   {
+   "bytes": 4723,
+   "path": "greenline_demo-assembly.zip",
+   "sha256": "15fb9658a5bcfbf5a59599bdc01dc2afc3cf55ceb08fac42b0278a819154368f"
+  },
+  {
    "bytes": 548793,
    "path": "greenline_demo-board.step",
    "sha256": "3af7b2dad1b19a01281a7dd57c4571c83525f3b9d8b7a38c21b2b84abe28432c"
   },
   {
-   "bytes": 147694,
+   "bytes": 154467,
    "path": "greenline_demo-fab.zip",
-   "sha256": "046af000d31d7834a2b877c57e52f7c4c4979b09252323c9f0c82522ff8e28f9"
+   "sha256": "faa5481a0925b3f8587198d11e59e8076887c0666f0373e94391f9c1b1694142"
   },
   {
-   "bytes": 71542,
+   "bytes": 75293,
    "path": "greenline_demo-mechanical.json",
-   "sha256": "e86e3a22430ae55cd3da4dcbc8aa2cb9f938507933ad086d40caff33a227745e"
+   "sha256": "4cb84d9217a8fa2120c24a595a66d5121363b83fad7c28bf6cf3deb9296c43c1"
   },
   {
-   "bytes": 78865,
+   "bytes": 79904,
    "path": "greenline_demo-netlist.json",
-   "sha256": "95883ac6b920297980def51147e18e1e19a11cb692772a4320a7f8dd590554be"
+   "sha256": "329473c42f5e4be0875669714b665ab5bea05f0f903b205a94203d612443855b"
   },
   {
-   "bytes": 148860,
+   "bytes": 152779,
    "path": "renders/greenline_demo-In1_Cu.png",
-   "sha256": "72ae12e2f575e6047751ff6cd4ca652848533ccb2c990d924d7948a7d1ab1671"
+   "sha256": "31d27d4a7531f87756f1f6c0ec95b00b09669b24deffed39d40183a36ba2377c"
   },
   {
-   "bytes": 318877,
+   "bytes": 331840,
    "path": "renders/greenline_demo-In1_Cu.svg",
-   "sha256": "1341ea11fd1c37611c4727800b5568d2b24e6d707a6125f4a7a533492913a23d"
+   "sha256": "c5a0c529557abe4ae547675357bf69ff3509d58eaf31f40b86e4fb097417279b"
   },
   {
-   "bytes": 142366,
+   "bytes": 150637,
    "path": "renders/greenline_demo-In2_Cu.png",
-   "sha256": "f25898cd2911bfb675274d7aa3fbe8443e50306c5c9bf792c64018e66ea8a846"
+   "sha256": "b5d32ad40a486814d3904d74aadf7b68ea5e8fc8cc0a87721164301ef301e4ec"
   },
   {
-   "bytes": 306562,
+   "bytes": 329578,
    "path": "renders/greenline_demo-In2_Cu.svg",
-   "sha256": "160e3d55539f6441e6fb7a7f9ab416bb988851216774ff74477b13aef803f221"
+   "sha256": "d264f18975de48d93f947a71907f858b54c25b0d9c6cdc4035d921f0e53ed80a"
   },
   {
-   "bytes": 126147,
+   "bytes": 137779,
    "path": "renders/greenline_demo-bottom.png",
-   "sha256": "50aab840021a03223d940ef4918237cdf0c66a104b1fa3b4f8a39522cdb88226"
+   "sha256": "46f9269b37637b7a59770e70d129185ccb3dd996ba158b3e53ea4367815bab90"
   },
   {
-   "bytes": 365759,
+   "bytes": 397290,
    "path": "renders/greenline_demo-bottom.svg",
-   "sha256": "8fd3eb88735bc01d949789f11e58646a1a5ac10a7307fd4c3edfd792558f10df"
+   "sha256": "5e77b2e419140cd14a2abd9b782e35d416cd73a8e4c7f02740edece2498dc909"
   },
   {
-   "bytes": 186183,
+   "bytes": 197639,
    "path": "renders/greenline_demo-top.png",
-   "sha256": "a73d91a29140cb1fa8f502ac6b8727f8a6c2141a36c2ec3cee4d6360bde524d0"
+   "sha256": "16209f59d97cfeb427ab442ce3a567d1f17aeb92a7063f571618c40c469f255e"
   },
   {
-   "bytes": 549830,
+   "bytes": 584575,
    "path": "renders/greenline_demo-top.svg",
-   "sha256": "d43bfcf7d7bdb9da8e6dfb676cc903fad96946ff49dd241681eb2bd6537c8442"
+   "sha256": "a8d4052d687a9c32970997fdfdc39eae757e8f3c3764f69615aafd45d35a8b00"
   },
   {
    "bytes": 1392,

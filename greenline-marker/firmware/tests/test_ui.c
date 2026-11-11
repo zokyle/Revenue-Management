@@ -473,7 +473,7 @@ GL_TEST(test_settings_dial)
     /* double tap steps through the items, wrapping round */
     {
         const uint8_t order[] = { GL_ITEM_UNITS, GL_ITEM_PACE, GL_ITEM_GRASS, GL_ITEM_GRAIN,
-                                  GL_ITEM_DISTANCE, GL_ITEM_RAWLOG, GL_UI_ITEM_ZERO,
+                                  GL_ITEM_DISTANCE, GL_ITEM_RAWLOG, GL_ITEM_METHOD, GL_UI_ITEM_ZERO,
                                   GL_ITEM_STIMP, GL_ITEM_UNITS, GL_ITEM_PACE, GL_ITEM_GRASS };
         for (size_t i = 0; i < sizeof(order); i++) {
             a = ev(GL_EV_DOUBLE_TAP, 0);
@@ -515,7 +515,7 @@ GL_TEST(test_settings_dial)
     }
     STATE_IS(GL_UI_SETTINGS_DIAL);
     /* zeroing from the menu */
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < (int)GL_UI_ITEM_ZERO; i++) {
         ev(GL_EV_DOUBLE_TAP, 0);
     }
     GL_CHECK_EQ(ui.item, GL_UI_ITEM_ZERO);
@@ -531,7 +531,7 @@ GL_TEST(test_settings_dial)
     STATE_IS(GL_UI_WAIT_STILL);
     /* with "NO" selected, laying flat just leaves the menu */
     ev(GL_EV_UPRIGHT, 0);
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < (int)GL_UI_ITEM_ZERO; i++) {
         ev(GL_EV_DOUBLE_TAP, 0);
     }
     a = ev(GL_EV_FLAT, 0);
@@ -544,7 +544,7 @@ static void enter_zeroing(void)
 {
     wake_up();
     ev(GL_EV_UPRIGHT, 0);
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < (int)GL_UI_ITEM_ZERO; i++) {
         ev(GL_EV_DOUBLE_TAP, 0);
     }
     GL_CHECK_EQ(ui.item, GL_UI_ITEM_ZERO);
@@ -985,12 +985,13 @@ static void view_default(gl_ui_view_t *v)
     memset(v, 0, sizeof(*v));
     v->have_result = true;
     v->solved = true;
+    v->line_here = true;
     v->flag_found = true;
     v->aim_rad = 0.03f;
     v->distance_m = 4.4f;
+    v->plays_like_m = 4.9f;
     v->slope_pct = 2.1f;
     v->fall_line_rad = 1.2f;
-    v->along_pct = 1.2f;
     v->break_cups = 2.5f;
     v->confidence = 0.7f;
     v->battery_pct = 80;
@@ -1026,7 +1027,12 @@ GL_TEST(test_every_screen_stays_in_the_aperture)
         v.aim_rad = -1.6f + 0.008f * (float)i;
         v.fall_line_rad = 0.31f * (float)i;
         v.slope_pct = (float)(i % 9);
-        v.along_pct = (float)(i % 13) - 6.0f;
+        v.plays_like_m = (float)(i % 13) - 2.0f;
+        v.line_here = (i % 5) != 0;
+        v.note = (uint8_t)(i % ((int)GL_UI_NOTE_COUNT + 2));
+        v.drop = (uint8_t)((i / 3) % 6);
+        v.distance_assumed = (i % 4) == 1;
+        v.chg_blocked = (uint8_t)(i % 5);
         v.break_cups = (float)(i % 31) - 15.0f;
         v.distance_m = (i % 7 == 0) ? 0.0f : (0.3f * (float)i);
         v.confidence = (float)(i % 6) / 5.0f;
@@ -1138,6 +1144,146 @@ GL_TEST(test_result_screen_shows_the_aim_line)
     }
 }
 
+/* Phase 2: the result screen says what kind of result it is.  A fallback
+ * or a weak read is a plain message and a tentative (dashed) line, never
+ * only a normal-looking line; a Survey drop that is not at the ball has no
+ * line at all. */
+static unsigned black_in_rows_(int y0, int y1)
+{
+    unsigned n = 0;
+    for (int y = y0; y <= y1; y++) {
+        for (int x = 0; x < 128; x++) {
+            n += gl_gfx_get(&gfx, x, y) ? 0u : 1u;
+        }
+    }
+    return n;
+}
+
+GL_TEST(test_result_screen_messages_and_tentative_line)
+{
+    static gl_gfx_t plain;
+    gl_ui_view_t v;
+    gl_ui_result_text_t t;
+    unsigned solid_mid, n;
+    uint8_t rows[GL_GFX_H];
+
+    gl_gfx_init(&gfx);
+    gl_gfx_init(&plain);
+    fresh();
+    ui.state = GL_UI_SHOW_RESULT;
+    view_default(&v);
+    gl_ui_render(&ui, &v, &plain);
+    gl_ui_render(&ui, &v, &gfx);
+    solid_mid = black_in_rows_(46, 88);
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.distance, "14.4FT") == 0);
+    GL_CHECK(strcmp(t.plays, "PLAYS 16.1FT") == 0);
+    GL_CHECK(strcmp(t.brk, "<2.5 CUP") == 0);
+    GL_CHECK(strcmp(t.slope, "2.1%") == 0);
+    GL_CHECK(t.note[0] == '\0' && t.mode[0] == '\0');
+    /* every message: its text, and it only touches the message line */
+    for (int note = 1; note < (int)GL_UI_NOTE_COUNT; note++) {
+        v.note = (uint8_t)note;
+        gl_ui_render(&ui, &v, &gfx);
+        gl_ui_result_text(&ui, &v, &t);
+        GL_CHECK(strlen(t.note) >= 6 && strlen(t.note) <= 14);
+        GL_CHECK(strcmp(t.note, gl_ui_note_text((gl_ui_note_t)note)) == 0);
+        n = gl_gfx_changed_rows(&gfx, plain.px, rows);
+        GL_CHECK(n >= 7 && n <= 11);
+        GL_CHECK(rows[0] >= 34 && rows[n - 1] <= 44);
+        for (int other = 1; other < note; other++) {
+            GL_CHECK(strcmp(gl_ui_note_text((gl_ui_note_t)other), t.note) != 0);
+        }
+    }
+    GL_CHECK(gl_ui_note_text(GL_UI_NOTE_NONE)[0] == '\0');
+    GL_CHECK(gl_ui_note_text((gl_ui_note_t)200)[0] == '\0');
+    v.note = GL_UI_NOTE_NONE;
+    /* an aim that is not a solution: long dashes, no break, no plays-like */
+    v.solved = false;
+    v.note = GL_UI_NOTE_NOT_SOLVED;
+    gl_ui_render(&ui, &v, &gfx);
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.brk, "BREAK ?") == 0);
+    GL_CHECK(t.plays[0] == '\0');
+    GL_CHECK(black_in_rows_(46, 88) < solid_mid - 60u); /* the line lost its gaps' worth of ink */
+    GL_CHECK(black_in_rows_(46, 88) > solid_mid / 3u);  /* but it is there */
+    v.solved = true;
+    v.note = GL_UI_NOTE_NONE;
+    /* a distance that was dialled or assumed is marked; an unknown one is
+     * not shown, and neither is a break in cups that would need it */
+    v.distance_assumed = true;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.distance, "14.4FT?") == 0);
+    v.distance_m = 0.0f;
+    v.plays_like_m = 0.0f;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.distance, "--") == 0);
+    GL_CHECK(strcmp(t.brk, "BREAK ?") == 0);
+    GL_CHECK(t.plays[0] == '\0');
+    view_default(&v);
+    /* the side of the break and the units */
+    v.break_cups = -1.26f;
+    ui.edit.units = GL_UNITS_METRES;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.brk, "1.3 CUP>") == 0);
+    GL_CHECK(strcmp(t.distance, "4.4M") == 0);
+    GL_CHECK(strcmp(t.plays, "PLAYS 4.9M") == 0);
+    v.break_cups = 0.03f;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.brk, "STRAIGHT") == 0);
+    ui.edit.units = GL_UNITS_FEET;
+    view_default(&v);
+    /* Survey: the drop number; not at the ball = no line, the prompt */
+    v.drop = 3;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.mode, "D3") == 0);
+    v.line_here = false;
+    v.note = GL_UI_NOTE_APPROX; /* the prompt takes the message line */
+    gl_ui_render(&ui, &v, &gfx);
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.note, "PUT AT BALL") == 0);
+    {
+        /* no column of the middle band carries a line: the tallest run of
+         * black in any column is a glyph, 7 px */
+        int tallest = 0;
+        for (int x = 0; x < 128; x++) {
+            int run = 0;
+            for (int y = 46; y <= 88; y++) {
+                run = gl_gfx_get(&gfx, x, y) ? 0 : run + 1;
+                if (run > tallest) {
+                    tallest = run;
+                }
+            }
+        }
+        GL_CHECK(tallest <= GL_FONT_H);
+    }
+    view_default(&v);
+    v.precision = true;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.mode, "2X") == 0);
+    /* confidence boxes */
+    GL_CHECK_EQ(gl_ui_conf_boxes(0.0f), 0);
+    GL_CHECK_EQ(gl_ui_conf_boxes(0.09f), 0);
+    GL_CHECK_EQ(gl_ui_conf_boxes(0.11f), 1);
+    GL_CHECK_EQ(gl_ui_conf_boxes(0.2f), 1);
+    GL_CHECK_EQ(gl_ui_conf_boxes(0.95f), 5);
+    GL_CHECK_EQ(gl_ui_conf_boxes(7.0f), 5);
+    GL_CHECK_EQ(gl_ui_conf_boxes(-1.0f), 0);
+    GL_CHECK_EQ(gl_ui_conf_boxes((float)NAN), 0);
+    /* the cradle screen says why the charge is stopped */
+    ui.state = GL_UI_CRADLE_USB;
+    view_default(&v);
+    gl_ui_render(&ui, &v, &plain);
+    for (int blocked = 1; blocked <= 3; blocked++) {
+        v.chg_blocked = (uint8_t)blocked;
+        gl_ui_render(&ui, &v, &gfx);
+        n = gl_gfx_changed_rows(&gfx, plain.px, rows);
+        GL_CHECK(n >= 5 && n <= 7);
+        GL_CHECK(rows[0] >= 96 && rows[n - 1] <= 102);
+        GL_CHECK_EQ(ink_outside(), 0);
+    }
+}
+
 /* Review finding: gl_ui_render() with view.confidence = NaN was undefined
  * behaviour ("nan is outside the range of representable values of type
  * 'int'", gl_ui.c:479); phase 2 will feed solver output into the view.
@@ -1164,7 +1310,7 @@ GL_TEST(test_render_with_hostile_view_values)
                 case 3: v.distance_m = bad[k]; break;
                 case 4: v.slope_pct = bad[k]; break;
                 case 5: v.fall_line_rad = bad[k]; break;
-                case 6: v.along_pct = bad[k]; break;
+                case 6: v.plays_like_m = bad[k]; break;
                 default: v.break_cups = bad[k]; break;
                 }
                 gl_ui_render(&ui, &v, &gfx);
@@ -1178,7 +1324,8 @@ GL_TEST(test_render_with_hostile_view_values)
                 v.have_result = true;
                 v.solved = true;
                 v.confidence = v.aim_rad = v.ball_az_rad = v.distance_m = v.slope_pct = bad[k];
-                v.fall_line_rad = v.along_pct = v.break_cups = bad[k];
+                v.fall_line_rad = v.plays_like_m = v.break_cups = bad[k];
+                v.line_here = true;
                 v.battery_pct = 255;
                 v.cal_step = 255;
                 gl_ui_render(&ui, &v, &gfx);
@@ -1209,6 +1356,7 @@ int main(void)
     GL_RUN(test_random_event_fuzz);
     GL_RUN(test_every_screen_stays_in_the_aperture);
     GL_RUN(test_result_screen_shows_the_aim_line);
+    GL_RUN(test_result_screen_messages_and_tentative_line);
     GL_RUN(test_render_with_hostile_view_values);
     return gl_test_summary();
 }

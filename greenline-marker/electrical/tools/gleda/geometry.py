@@ -550,6 +550,13 @@ class PlacedPad:
                  mm, None if it has none.  KiCad uses it INSTEAD of the net
                  class clearances - pass it to :meth:`Design.clearance` as
                  ``local_a`` / ``local_b`` (or use :func:`pad_clearance`)
+    ``slot``     centre line ``(x1, y1, x2, y2)`` of an oblong hole in board
+                 coordinates (the hole is everything within ``drill / 2`` of
+                 it); None for a round hole.  ``drill`` is then the slot WIDTH
+    ``ring``     netless copper of a non-plated pad that is larger than its
+                 hole (identical on every copper layer), else None
+    ``tech``     the mask / paste layers of THIS board the pad opens, e.g.
+                 ``("B.Mask",)`` for a bare pad on the bottom side
     """
     ref: str
     number: str
@@ -567,10 +574,28 @@ class PlacedPad:
     shape: str
     side: str
     clearance: Optional[float] = None
+    slot: Optional[Tuple[float, float, float, float]] = None
+    ring: Optional[Polygon] = None
+    tech: Tuple[str, ...] = ()
 
     @property
     def key(self) -> str:
         return "%s.%s" % (self.ref, self.number)
+
+    @property
+    def hole_segment(self) -> Tuple[float, float, float, float]:
+        """Centre line of the hole: ``slot``, or a point for a round hole."""
+        return self.slot if self.slot is not None else (self.x, self.y, self.x, self.y)
+
+    def hole_geometry(self):
+        """Shapely point / line whose ``drill / 2`` neighbourhood is the hole
+        (None for a pad without a hole)."""
+        if self.drill <= 0:
+            return None
+        from shapely.geometry import LineString, Point as SPoint
+        if self.slot is None:
+            return SPoint(self.x, self.y)
+        return LineString([self.slot[:2], self.slot[2:]])
 
     def inflated(self, distance: float, resolution: int = 8) -> Optional[Polygon]:
         """Copper outline grown by ``distance`` plus :data:`PAD_POLYGON_TOLERANCE`
@@ -614,15 +639,150 @@ def part_pads(design: Design, part: Part) -> List[PlacedPad]:
                 poly = poly.buffer(0)
         layers = () if pg.kind == "npth" else _board_copper_layers(
             pg.layers, part.side, design.copper_layers)
+        slot = None
+        if pg.slotted:
+            a = coords.local_to_board(pg.x - pg.slot[0], pg.y - pg.slot[1], part.x, part.y,
+                                      part.rotation, part.side)
+            b = coords.local_to_board(pg.x + pg.slot[0], pg.y + pg.slot[1], part.x, part.y,
+                                      part.rotation, part.side)
+            slot = (a[0], a[1], b[0], b[1])
+        ring = None
+        if pg.ring:
+            ring = Polygon(coords.points_local_to_board(
+                pg.ring, part.x, part.y, part.rotation, part.side))
+            if not ring.is_valid:
+                ring = ring.buffer(0)
         out.append(PlacedPad(
             ref=part.ref, number=pg.number, pin=pad_pin.get(pg.number),
             net=pad_net.get(pg.number) if pg.number else None,
             x=x, y=y, layers=layers, polygon=poly, kind=pg.kind, drill=pg.drill,
             w=pg.w, h=pg.h,
             rotation=coords.local_angle_to_board(pg.rotation, part.rotation, part.side),
-            shape=pg.shape, side=part.side, clearance=pg.clearance))
+            shape=pg.shape, side=part.side, clearance=pg.clearance, slot=slot, ring=ring,
+            tech=_board_tech_layers(pg.layers, part.side)))
     return out
 
+
+def _board_tech_layers(pad_layers: Sequence[str], side: str) -> Tuple[str, ...]:
+    """Mask and paste layers a pad opens once the part is on ``side``."""
+    names = set()
+    for l in pad_layers:
+        if l.endswith((".Mask", ".Paste")):
+            names.add(coords.flip_layer(l) if side == BOTTOM else l)
+    return tuple(sorted(names))
+
+
+def placed_apertures(design: Design) -> List[Tuple[str, float, float, Tuple[str, ...]]]:
+    """Copper-less paste / mask apertures of all placed parts in board
+    coordinates: ``(ref, x, y, layers)`` (see
+    :class:`gleda.footprints.ApertureGeom`)."""
+    from . import footprints
+    out = []
+    for part in design.parts:
+        if not part.placed:
+            continue
+        for ap in footprints.resolve(part.footprint).apertures:
+            x, y = coords.local_to_board(ap.x, ap.y, part.x, part.y, part.rotation, part.side)
+            out.append((part.ref, x, y, _board_tech_layers(ap.layers, part.side)))
+    return out
+
+
+def part_pads_bbox(design: Design, ref: str) -> Tuple[float, float, float, float]:
+    """(xmin, ymin, xmax, ymax) of the pad copper of a placed part on the board."""
+    pads = [p for p in part_pads(design, design.part(ref)) if p.polygon is not None]
+    if not pads:
+        raise ValueError("%s has no pad copper" % ref)
+    boxes = [p.polygon.bounds for p in pads]
+    return (min(b[0] for b in boxes), min(b[1] for b in boxes),
+            max(b[2] for b in boxes), max(b[3] for b in boxes))
+
+
+def npth_holes(design: Design) -> List[Tuple[Tuple[float, float, float, float], float,
+                                              Optional[Polygon], str]]:
+    """Every non-plated hole of the board: the outline's drilled holes and the
+    NPTH pads of footprints, as ``(centre line (x1, y1, x2, y2), width, netless
+    copper ring or None, name)``.  A round hole has a centre line of length 0."""
+    out = [((h.x, h.y, h.x, h.y), h.drill, None, h.name or "hole") for h in design.outline.holes]
+    for pad in placed_pads(design):
+        if pad.kind == "npth" and pad.drill > 0:
+            out.append((pad.hole_segment, pad.drill, pad.ring, pad.key))
+    return out
+
+
+# --------------------------------------------------------------------------
+# fine areas
+# --------------------------------------------------------------------------
+
+#: The router uses fine geometry only at grid nodes this far inside a fine
+#: area, so that every fine track - copper, not just centre line - lies
+#: completely inside the area as KiCad sees it (``A.enclosedByArea``).
+FINE_AREA_INSET = 0.1
+
+
+def fine_area_polygon(area, tol: float = DEFAULT_TOL) -> Polygon:
+    """Shapely polygon of one :class:`gleda.model.FineArea` (inscribed)."""
+    return shape_polygon(area.shape, tol, "inscribed")
+
+
+def fine_region(design: Design, inset: float = FINE_AREA_INSET):
+    """Union of the design's fine areas shrunk by ``inset`` (a shapely
+    geometry, prepared; None when the design has no fine area): the grid
+    nodes the router may connect with fine tracks."""
+    if not design.fine_areas:
+        return None
+    region = unary_union([fine_area_polygon(a, design.rules.max_arc_error).buffer(-inset)
+                          for a in design.fine_areas])
+    import shapely
+    shapely.prepare(region)
+    return region
+
+
+class FineAreas:
+    """Answers "does this copper lie completely inside one fine area?" - the
+    question KiCad's generated rule asks with ``A.enclosedByArea`` and the
+    one the audit, the output checks and the fab README are based on.
+
+    A track is inside when its centre line lies in ONE area shrunk by half
+    the track width (areas that touch or overlap do not add up - give them as
+    one shape); a via when its pad does.  ``slack`` (1 um) absorbs rounding."""
+
+    def __init__(self, design: Design, slack: float = 1e-3):
+        self.polys = [fine_area_polygon(a, design.rules.max_arc_error)
+                      for a in design.fine_areas]
+        self.slack = slack
+        self._cache: Dict[float, list] = {}
+
+    def __bool__(self) -> bool:
+        return bool(self.polys)
+
+    def _shrunk(self, half_width: float) -> list:
+        key = round(half_width, 6)
+        polys = self._cache.get(key)
+        if polys is None:
+            polys = [p.buffer(-(half_width - self.slack)) for p in self.polys]
+            self._cache[key] = polys
+        return polys
+
+    def encloses(self, geom, half_width: float) -> bool:
+        """``geom`` is the centre line (LineString) or centre (Point)."""
+        return any(p.covers(geom) for p in self._shrunk(half_width))
+
+    def track_inside(self, track) -> bool:
+        from shapely.geometry import LineString, Point as SPoint
+        if track.length > 1e-9:
+            geom = LineString([(track.x1, track.y1), (track.x2, track.y2)])
+        else:
+            geom = SPoint(track.x1, track.y1)
+        return self.encloses(geom, track.width / 2.0)
+
+    def via_inside(self, via) -> bool:
+        from shapely.geometry import Point as SPoint
+        return self.encloses(SPoint(via.x, via.y), via.diameter / 2.0)
+
+
+# --------------------------------------------------------------------------
+# placed parts: pads by net, courtyards, bodies
+# --------------------------------------------------------------------------
 
 def placed_pads(design: Design) -> List[PlacedPad]:
     """All pads of all placed parts (board coordinates) - the router's view

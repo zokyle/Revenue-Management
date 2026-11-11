@@ -26,7 +26,8 @@
  *  - EVERY stop / disable / power-down call (gl_hal_dcmi_stop,
  *    gl_hal_xvclk_stop, gl_hal_extcomin_stop, gl_hal_usb_stop,
  *    gl_hal_adc_power(false), gl_hal_opamp_enable(false),
- *    gl_hal_wake_timer_start(0)) must be safe at any time after
+ *    gl_hal_wake_timer_start(0), gl_hal_clock_set(GL_CLOCK_SLOW)) must be
+ *    safe at any time after
  *    gl_hal_init(), in particular BEFORE the matching start has ever been
  *    called: the drivers put their devices into the off state at boot by
  *    calling exactly these.  tests/test_basics.c calls each of them first
@@ -51,12 +52,20 @@ extern "C" {
 /* ======================================================================= */
 
 /**
- * Bring up clocks, the tick, GPIO defaults and the always-on peripherals.
- * After this call every camera-facing pin is ANALOG, the camera rail enable
- * is driven low, the LCD chip select and DISP are driven low, the charger
- * PROG enable is in its "charging stopped" state (drivers/power.h; with the
- * rev C circuit: released, high-Z) and all chip selects of active-low
- * devices are driven high.
+ * Bring up clocks (the SLOW clock, see gl_hal_clock_set), the tick, GPIO
+ * defaults and the always-on peripherals.  After this call every
+ * camera-facing pin is ANALOG, the camera rail enable is driven low, the LCD
+ * chip select and DISP are driven low and all chip selects of active-low
+ * devices are driven high - each at the level its board pull resistor
+ * already holds during reset (DESIGN_SPEC section 4: 100 kohm pull-down on
+ * the LCD chip select and DISP, 100 kohm pull-ups on the flash and IMU chip
+ * selects), written to the output latch BEFORE the pin becomes an output, so
+ * that no chip select moves at the hand-over.
+ *
+ * CHG_INHIBIT and NTC_BIAS are NOT touched: they stay ANALOG (high-Z), the
+ * MCU's reset state.  The charger is ON BY DEFAULT in hardware; only
+ * drivers/power pulls CHG_INHIBIT low, and only as the result of a
+ * temperature measurement (see drivers/power.h for the state table).
  */
 gl_status_t gl_hal_init(void);
 
@@ -163,13 +172,19 @@ typedef enum {
     /* --- power --- */
     GL_PIN_VBAT_SENSE,     /**< ADC input behind the 2 x 1 Mohm divider */
     GL_PIN_CHG_STAT,       /**< MCP73831 STAT, input with pull-up, low = charging */
-    GL_PIN_CHG_PROG_EN,    /**< open drain; which level allows charging is a provisional
-                                board fact (GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE, drivers/power.h):
-                                rev C circuit LOW = charging allowed, Hi-Z = stopped */
+    GL_PIN_CHG_INHIBIT,    /**< rev C2: open-drain MCU pin on the gate of the PROG MOSFET.
+                                LOW = charging STOPPED; released (high-Z) = the hardware
+                                default, charging ON whenever VBUS is present.  Never
+                                push-pull, never driven high (drivers/power.h) */
     GL_PIN_VBUS_SENSE,     /**< digital input from the VBUS divider, high = in cradle */
     /* --- USB --- */
     GL_PIN_USB_DM,
     GL_PIN_USB_DP,
+    /* --- cell temperature (rev C2), appended: the order is the trace format --- */
+    GL_PIN_NTC_BIAS,       /**< top of the NTC divider (10.0 kohm to NTC_SENSE, the 10 kohm
+                                NTC from there to ground): push-pull HIGH only while a
+                                conversion runs, ANALOG otherwise */
+    GL_PIN_NTC_SENSE,      /**< ADC input at the divider's mid point */
     GL_PIN_COUNT
 } gl_pin_t;
 
@@ -252,6 +267,44 @@ typedef enum {
  * modes (PROVISIONAL for Stop 2: see GL_PROV_LPTIM_PWM_RUNS_IN_STOP2).
  */
 uint32_t gl_hal_sleep(gl_sleep_mode_t mode);
+
+/* ======================================================================= */
+/* Core clock                                                               */
+/* ======================================================================= */
+
+/**
+ * DESIGN_SPEC section 4 (rev C2): no high-speed crystal; the MCU runs from
+ * its internal oscillators.  During a read the PLL raises the core clock to
+ * 160 MHz (the vision needs about 145 million instructions per read, a
+ * worst-case putt solve more), otherwise it runs slowly or sleeps in Stop 2.
+ */
+typedef enum {
+    GL_CLOCK_SLOW = 0, /**< the base clock of the backend (STM32: MSIS, no PLL) */
+    GL_CLOCK_FAST = 1  /**< 160 MHz from the PLL */
+} gl_clock_t;
+
+/**
+ * Switch the CORE clock.  Blocks until the switch is complete (PLL locked:
+ * of the order of 100 us on the target).  Idempotent; safe at any time after
+ * gl_hal_init(), which leaves the clock SLOW.
+ *
+ * What does NOT change with it (a backend must guarantee this): the tick and
+ * gl_hal_time_us(), gl_hal_delay_*, the SPI and SCCB bit rates, XVCLK, the
+ * ADC timing, EXTCOMIN, USB.  Drivers never need to know which clock runs.
+ *
+ * Rules for the caller (the host simulator checks them):
+ *  - every switch to GL_CLOCK_FAST is paired with a switch back to
+ *    GL_CLOCK_SLOW when the compute-heavy work is done or abandoned;
+ *  - GL_SLEEP_STOP is never entered with the fast clock (the PLL does not
+ *    survive Stop mode; a backend may treat it as GL_SLEEP_IDLE).
+ *
+ * Returns GL_ERR_IO if the PLL did not lock: the clock is then still SLOW
+ * and everything works, only slower.
+ */
+gl_status_t gl_hal_clock_set(gl_clock_t speed);
+
+/** The clock in effect. */
+gl_clock_t gl_hal_clock_get(void);
 
 /* ======================================================================= */
 /* SPI                                                                      */
@@ -372,6 +425,10 @@ typedef enum {
     GL_ADC_CH_VBAT_DIV,      /**< battery through the 2 x 1 Mohm divider (100 nF) */
     GL_ADC_CH_VREFINT,       /**< internal reference, for VDDA measurement */
     GL_ADC_CH_MCU_TEMP,      /**< MCU die temperature sensor */
+    GL_ADC_CH_CELL_NTC,      /**< NTC_SENSE: mid point of the cell-temperature divider.
+                                  Ratiometric (the divider is fed from a GPIO at VDDA):
+                                  counts / full scale = R_ntc / (R_ntc + 10.0 kohm).  Reads
+                                  near zero unless GL_PIN_NTC_BIAS is driven high */
     GL_ADC_CH_COUNT
 } gl_adc_ch_t;
 
@@ -447,6 +504,7 @@ typedef enum {
     GL_TRACE_VISION_BAND = 0,  /**< a horizon band has just been analysed */
     GL_TRACE_VISION_STRIP,     /**< one flagstick strip has just been analysed */
     GL_TRACE_VISION_GROUP,     /**< one L R R L group has just been combined */
+    GL_TRACE_SOLVE,            /**< one putt estimate has just been computed */
     GL_TRACE_COUNT
 } gl_trace_point_t;
 

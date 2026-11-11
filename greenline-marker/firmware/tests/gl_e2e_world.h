@@ -44,6 +44,15 @@ typedef struct {
     double drift_px_per_s;  /* steady image motion of the stick from drift_t0_s on */
     double drift_t0_s;
     double drift_turn_s;    /* > 0: the drift reverses every this many seconds (triangle wave) */
+    /* a second pole in view (tests of the ambiguity flag): another thin
+     * upright object that is, by its width, height and disparity, as good a
+     * flagstick as the first */
+    bool pole2;
+    double pole2_dist_m, pole2_bearing_rad, pole2_height_m;
+    float ub2[2], vb2[2], ut2[2], vt2[2];
+    /* the right camera does not see the stick (its window is covered):
+     * a left-camera-only read */
+    bool right_blind;
     /* camera models the scene is rendered through (the truth) */
     gl_cam_model_t cam[2];
     float ub[2], vb[2], ut[2], vt[2];
@@ -138,9 +147,18 @@ static inline void project_scene_(void)
                              (float)(W.dist_m * cos(W.bearing_rad)), 0.0f };
     const gl_vec3_t top = { base.x + (float)W.height_m * u.x, base.y + (float)W.height_m * u.y,
                             base.z + (float)W.height_m * u.z };
+    const gl_vec3_t base2 = { (float)(-W.pole2_dist_m * sin(W.pole2_bearing_rad)),
+                              (float)(W.pole2_dist_m * cos(W.pole2_bearing_rad)), 0.0f };
+    const gl_vec3_t top2 = { base2.x + (float)W.pole2_height_m * u.x,
+                             base2.y + (float)W.pole2_height_m * u.y,
+                             base2.z + (float)W.pole2_height_m * u.z };
     for (int c = 0; c < 2; c++) {
         (void)gl_cam_point_to_pixel(&W.cam[c], base, &W.ub[c], &W.vb[c]);
         (void)gl_cam_point_to_pixel(&W.cam[c], top, &W.ut[c], &W.vt[c]);
+        if (W.pole2) {
+            (void)gl_cam_point_to_pixel(&W.cam[c], base2, &W.ub2[c], &W.vb2[c]);
+            (void)gl_cam_point_to_pixel(&W.cam[c], top2, &W.ut2[c], &W.vt2[c]);
+        }
         W.horizon_row[c] = gl_cam_base_plane_row(&W.cam[c], 319.5f);
     }
 }
@@ -155,7 +173,19 @@ static inline void scene_fn_(void *ctx, gl_cam_id_t cam, uint16_t x0, uint16_t y
     s.horizon_row = W.horizon_row[cam];
     s.noise_sigma = 3.0f; /* stick 60 grey above the background: SNR 20 */
     s.noise_seed = 77u + 1000003u * (uint32_t)cam + 7919u * frame_no + (uint32_t)(t_us / 1000u);
-    if (W.stick) {
+    if (W.pole2) {
+        /* the second pole: a bar of its own width from its top to its base */
+        const float w2 = (float)(0.015 / W.pole2_dist_m * 657.0);
+        const float slant2 = (W.ub2[cam] - W.ut2[cam]) / (W.vb2[cam] - W.vt2[cam]);
+        s.n_clutter = 1;
+        s.clutter[0].x_left = W.ut2[cam] - 0.5f * w2;
+        s.clutter[0].x_right = W.ut2[cam] + 0.5f * w2;
+        s.clutter[0].row_top = W.vt2[cam];
+        s.clutter[0].row_bottom = W.vb2[cam];
+        s.clutter[0].level = 170.0f;
+        s.clutter[0].slant = slant2;
+    }
+    if (W.stick && !(W.right_blind && cam == GL_CAM_RIGHT)) {
         s.stick_present = true;
         s.stick_width_px = (float)(0.015 / W.dist_m * 657.0);
         s.stick_level = 170.0f;

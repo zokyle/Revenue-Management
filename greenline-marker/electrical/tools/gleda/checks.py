@@ -29,6 +29,15 @@ rule_violation         error     rule set / net class / net option inconsistent
                                  minimum, bad via, unknown layer, bad
                                  ``via_tenting``, name unusable in a DRC rule)
 plane_invalid          error     plane on an unknown net or non-copper layer
+plane_overlap          error     two pours of different nets overlap on a layer
+                                 with the same priority (KiCad: zones_intersect)
+plane_partial          warning   a pour with a shape: the router does not connect
+                                 pads into it, its net is routed with tracks
+fine_unconfined        warning   a net class finer than the standard track /
+                                 clearance but no fine area: its nets may use
+                                 the fine geometry anywhere on the board
+fine_area_invalid      error     fine area outside the board, or a fine class
+                                 without ``enforce_track_widths``
 net_name_case          warning   two net names differ only in upper / lower case
 =====================  ========  ==============================================
 
@@ -58,12 +67,18 @@ keepout_blocks_pad     warning   connected pad lies completely inside a no-track
                                  keep-out on its only copper layer
 height_limit           error     part body taller than a height-limited zone allows
 height_unknown         warning   part without height inside a height-limited zone
-hole_collision         error     courtyard or pad over an NPTH hole
+hole_collision         error     courtyard over an NPTH hole, or pad copper closer
+                                 to a non-plated hole (of the outline or of a
+                                 footprint, round or oblong) than the larger of
+                                 hole clearance and copper-to-edge
 pad_edge_clearance     error     pad copper closer to the edge than the rule
 pad_spacing            error     two pads of one part on different nets are closer
                                  than the clearance KiCad's DRC will require
 missing_decoupling     error     IC power pin net has no capacitor to ground
 decoupling_far         warning   nearest decoupling capacitor is far from the pin
+no_fiducials           warning   a side with machine-placed fine-pitch parts
+                                 (pad pitch 0.65 mm or less) has fewer than
+                                 three fiducials (``Design.add_fiducial``)
 =====================  ========  ==============================================
 """
 from __future__ import annotations
@@ -335,6 +350,71 @@ def check_electrical(design: Design, report: CheckReport) -> None:
             if layer not in design.copper_layers:
                 report.error("rule_violation", "keep-out %r on unknown layer %r"
                              % (ko.name, layer))
+    _check_pours(design, report)
+    _check_fine(design, report)
+
+
+def _check_pours(design: Design, report: CheckReport) -> None:
+    """Pours with a shape: what the router does with them, and overlaps."""
+    for plane in design.planes:
+        if plane.shape is not None and plane.net in design.nets:
+            report.warning("plane_partial", "the pour of %s on %s has a shape: the router "
+                           "connects pads to whole-board planes only, so this net is routed "
+                           "with tracks and the pour joins just the pads and vias that "
+                           "happen to lie in it" % (plane.net, plane.layer), net=plane.net)
+    try:
+        from . import geometry
+    except Exception:                                   # pragma: no cover - no shapely
+        return
+    try:
+        board = geometry.outline_polygon(design.outline)
+    except ValueError:
+        return
+    planes = [pl for pl in design.planes if pl.layer in design.copper_layers]
+    for i, a in enumerate(planes):
+        for b in planes[i + 1:]:
+            if a.layer != b.layer or a.net == b.net or a.priority != b.priority:
+                continue
+            pa = board if a.shape is None else geometry.shape_polygon(a.shape)
+            pb = board if b.shape is None else geometry.shape_polygon(b.shape)
+            if pa.intersection(pb).area > _AREA_EPS:
+                report.error("plane_overlap", "the pours of %s and %s overlap on %s with the "
+                             "same priority %d: give the one that is to be cut out of the "
+                             "other a higher priority" % (a.net, b.net, a.layer, a.priority),
+                             net=a.net)
+
+
+def _check_fine(design: Design, report: CheckReport) -> None:
+    """Fine net classes and the areas they are confined to."""
+    used = {n.netclass for n in design.nets.values()}
+    fine = sorted(name for name, nc in design.netclasses.items()
+                  if name in used and design.is_fine_class(nc))
+    if fine and not design.fine_areas:
+        report.warning("fine_unconfined", "net class(es) %s are finer than the standard "
+                       "%.3f / %.3f mm but the design has no fine area "
+                       "(Design.add_fine_area): their nets may use the fine geometry anywhere "
+                       "on the board" % (", ".join(fine), design.rules.default_track,
+                                         design.rules.default_clearance))
+    if not design.fine_areas:
+        return
+    if fine and not design.enforce_track_widths:
+        report.error("fine_area_invalid", "fine areas need Design.enforce_track_widths: "
+                     "without the generated DRC rules KiCad cannot check that %s stay "
+                     "inside them" % ", ".join(fine))
+    names = [a.name for a in design.fine_areas]
+    for name in sorted(set(names)):
+        if names.count(name) > 1 or _bad_rule_name(name):
+            report.error("fine_area_invalid", "fine area name %r is used twice or cannot be "
+                         "used in a DRC rule" % (name,))
+    try:
+        from . import geometry
+        board = geometry.outline_polygon(design.outline)
+    except Exception:
+        return
+    for area in design.fine_areas:
+        if geometry.fine_area_polygon(area).intersection(board).area <= _AREA_EPS:
+            report.error("fine_area_invalid", "fine area %s lies outside the board"
+                         % area.name)
 
 
 # --------------------------------------------------------------------------
@@ -427,6 +507,15 @@ def check_placement(design: Design, report: CheckReport, geoms: Dict[str, Any]) 
         return
     rules = design.rules
     holes = [(h, SPoint(h.x, h.y).buffer(h.drill / 2.0, 32)) for h in design.outline.holes]
+    # copper keeps the larger of the hole clearance and the edge clearance from a
+    # non-plated hole (KiCad checks both; the router keeps that distance too)
+    hole_need = max(rules.hole_clearance, rules.copper_to_edge)
+    fp_holes = []
+    for p in design.parts:
+        if p.placed and p.ref in geoms and any(pg.kind == "npth" for pg in geoms[p.ref].pads):
+            for pad in geometry.part_pads(design, p):
+                if pad.kind == "npth" and pad.drill > 0:
+                    fp_holes.append((p.ref, pad.hole_geometry(), pad.drill))
 
     placed: List[Tuple[Part, Any, Any]] = []       # (part, geom, courtyard polygon)
     seen: Set[str] = set()
@@ -522,11 +611,20 @@ def check_placement(design: Design, report: CheckReport, geoms: Dict[str, Any]) 
                 if d < rules.copper_to_edge - _DIST_EPS and (worst is None or d < worst[0]):
                     worst = (d, pad.number)
                 for hole, hpoly in holes:
-                    if pad.polygon.distance(hpoly) < rules.hole_clearance - _DIST_EPS:
+                    if pad.polygon.distance(hpoly) < hole_need - _DIST_EPS:
                         report.error("hole_collision", "%s pad %s is closer than %.2f mm to "
                                      "the NPTH hole at (%.2f, %.2f)" % (
-                                         part.ref, pad.number, rules.hole_clearance,
+                                         part.ref, pad.number, hole_need,
                                          hole.x, hole.y), [part.ref])
+                # non-plated holes of footprints (round or oblong), the part's own
+                # included: KiCad treats them like a board edge
+                for fref, hgeom, width in fp_holes:
+                    gap = pad.polygon.distance(hgeom) - width / 2.0
+                    if gap < hole_need - _DIST_EPS:
+                        report.error("hole_collision", "%s pad %s is %.3f mm from the "
+                                     "non-plated hole of %s (min %.2f: KiCad's hole and "
+                                     "edge clearance)" % (part.ref, pad.number, gap, fref,
+                                                          hole_need), [part.ref])
             if worst is not None:
                 if worst[0] < 0:
                     msg = "%s pad %s is outside the board" % (part.ref, worst[1])
@@ -561,6 +659,51 @@ def check_placement(design: Design, report: CheckReport, geoms: Dict[str, Any]) 
         # pads of this part against each other (land pattern vs. the rules)
         pads = pads if pads is not None else geometry.part_pads(design, part)
         _check_pad_spacing(design, report, part, pads)
+    _check_fiducials(design, report, placed)
+
+
+FINE_PITCH = 0.65          # mm: pad pitch at or below which a part needs fiducials
+
+
+def is_fiducial(part: Part) -> bool:
+    """True for a fiducial mark (generated or from KiCad's Fiducial library)."""
+    return "fiducial" in part.footprint_name.lower()
+
+
+def _pad_pitch(geom) -> Optional[float]:
+    """Smallest centre distance between two numbered pads of a footprint."""
+    pts = [(p.x, p.y) for p in geom.pads if p.number and p.kind != "npth"]
+    if len(pts) < 3:
+        return None
+    best = None
+    for i, a in enumerate(pts):
+        for b in pts[i + 1:]:
+            d = math.hypot(a[0] - b[0], a[1] - b[1])
+            if d > 1e-6 and (best is None or d < best):
+                best = d
+    return best
+
+
+def _check_fiducials(design: Design, report: CheckReport, placed) -> None:
+    """A side on which a machine places fine-pitch parts needs fiducials."""
+    for side in (TOP, BOTTOM):
+        fine = []
+        marks = 0
+        for part, geom, _cy in placed:
+            if part.side != side:
+                continue
+            if is_fiducial(part):
+                marks += 1
+            elif part.in_bom and not part.dnp:
+                pitch = _pad_pitch(geom)
+                if pitch is not None and pitch <= FINE_PITCH + 1e-9:
+                    fine.append(part.ref)
+        if fine and marks < 3:
+            report.warning("no_fiducials", "the %s side has fine-pitch parts (%s%s) but %d "
+                           "fiducial(s): the assembler wants three per side "
+                           "(Design.add_fiducial)" % (
+                               side, ", ".join(fine[:5]), " ..." if len(fine) > 5 else "",
+                               marks), fine[:5])
 
 
 def _check_pad_spacing(design: Design, report: CheckReport, part: Part, pads) -> None:

@@ -319,3 +319,79 @@ def test_bare_pad_row_on_the_bottom_side():
     # flipping to the bottom keeps x: pad 1 stays at -x as seen from the TOP
     assert [(p.number, round(p.x, 2)) for p in pads][0] == ("1", -7.62)
     assert all(p.layers == ("B.Cu",) and p.y == pytest.approx(-5.0) for p in pads)
+
+
+# -- review findings: fiducials, oblong holes, copper-less apertures ------------
+
+def test_fiducial_generator():
+    spec = F.fiducial()
+    assert spec.name == "Fiducial_1mm_Mask2mm" and spec.board_only and not spec.silk
+    assert spec.exclude_from_bom and spec.exclude_from_pos
+    pad = spec.pads[0]
+    assert (pad.number, pad.kind, pad.shape, pad.w) == ("", "conn", "circle", 1.0)
+    assert pad.mask_margin == 0.5 and pad.clearance == 0.5      # nothing else in the opening
+    text = F.kicad_mod_text(spec)
+    assert "(attr smd board_only exclude_from_pos_files exclude_from_bom)" in text
+    assert '(pad "" connect circle (at 0 0) (size 1 1) (layers "F.Cu" "F.Mask") ' \
+           '(solder_mask_margin 0.5) (clearance 0.5))' in text
+    geom = F.resolve(spec)
+    assert len(geom.pads) == 1 and geom.pads[0].clearance == 0.5
+    assert geom.pads[0].layers == ("F.Cu", "F.Mask") and geom.pad_numbers == []
+    assert F.fiducial(1.5, 3.0).name == "Fiducial_1.5mm_Mask3mm"
+    with pytest.raises(ValueError):
+        F.fiducial(2.0, 1.0)
+
+
+def test_oblong_holes_keep_both_dimensions_and_their_direction():
+    """KiCad library footprints with slotted NPTH holes: the hole is a
+    stadium, not a circle of its x size."""
+    harwin = F.resolve("Connector_Harwin:Harwin_Gecko-G125-MVX0605L1X_2x03_P1.25mm_Vertical")
+    slots = [p for p in harwin.pads if p.kind == "npth"]
+    assert len(slots) == 2
+    for p in slots:                                # drill 1.0 x 1.9, long axis along y
+        assert p.drill == pytest.approx(1.0) and p.hole_length == pytest.approx(1.9)
+        assert p.slot == pytest.approx((0.0, 0.45)) and p.slotted
+        assert len(p.ring) > 8                     # the pad (1.1 x 2.0) is larger: netless copper
+        ys = [q[1] for q in p.ring]
+        assert max(ys) - min(ys) == pytest.approx(2.0, abs=0.01)
+    led = F.resolve("LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm")
+    hole = [p for p in led.pads if p.kind == "npth"][0]
+    assert hole.drill == pytest.approx(1.8) and hole.hole_length == pytest.approx(2.4)
+    assert hole.slot == pytest.approx((0.0, 0.3)) and hole.ring == ()   # pad = hole: no copper
+    # round holes are unchanged
+    spec = F.npth_hole(1.2)
+    round_hole = F.resolve(spec).pads[0]
+    assert round_hole.drill == 1.2 and not round_hole.slotted and round_hole.hole_length == 1.2
+    th = F.resolve("Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical").pads[0]
+    assert th.kind == "th" and th.drill == pytest.approx(1.0) and not th.slotted
+
+
+def test_slots_follow_the_part_on_the_board():
+    from gleda import geometry
+    from gleda.model import Design, Outline, Part, RoundedPolygon, BOTTOM
+    fp = "Connector_Harwin:Harwin_Gecko-G125-MVX0605L1X_2x03_P1.25mm_Vertical"
+    d = Design("slots", Outline(RoundedPolygon.rect(0.0, 0.0, 30.0, 20.0)))
+    pins = {str(i): str(i) for i in range(1, 7)}
+    d.add(Part("J1", "h", fp, pins=dict(pins), x=0.0, y=0.0, in_bom=False))
+    d.add(Part("J2", "h", fp, pins=dict(pins), x=8.0, y=4.0, rotation=90.0, in_bom=False))
+    d.add(Part("J3", "h", fp, pins=dict(pins), x=-8.0, y=-4.0, side=BOTTOM, in_bom=False))
+    slots = {p.ref: p for p in geometry.placed_pads(d) if p.kind == "npth" and p.x > -9.5
+             and (p.ref != "J1" or p.x > 0) and (p.ref != "J2" or p.y > 6.0)}
+    assert slots["J1"].slot == pytest.approx((3.75, 0.175, 3.75, 1.075))
+    assert slots["J2"].slot == pytest.approx((7.825, 7.75, 6.925, 7.75))     # turned by 90
+    j3 = [p for p in geometry.placed_pads(d) if p.ref == "J3" and p.kind == "npth"]
+    # bottom side: flipped about the footprint x axis, so the slots hang below the anchor
+    assert sorted(p.slot for p in j3)[1] == pytest.approx((-4.25, -4.175, -4.25, -5.075))
+    holes = geometry.npth_holes(d)
+    assert len(holes) == 6 and all(width == pytest.approx(1.0) for _s, width, _r, _n in holes)
+    assert all(ring is not None for _s, _w, ring, _n in holes)
+    assert slots["J1"].hole_geometry().length == pytest.approx(0.9)
+
+
+def test_copperless_apertures_are_kept_for_the_output_checks():
+    geom = F.resolve("Package_SON:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4.3mm")
+    assert len(geom.pads) == 9 and len(geom.apertures) == 4
+    assert {a.layers for a in geom.apertures} == {("F.Paste",)}
+    assert sorted((a.x, a.y) for a in geom.apertures) == [(-0.85, -1.075), (-0.85, 1.075),
+                                                          (0.85, -1.075), (0.85, 1.075)]
+    assert F.resolve("Capacitor_SMD:C_0402_1005Metric").apertures == ()

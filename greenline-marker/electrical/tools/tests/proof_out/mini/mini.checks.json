@@ -2,8 +2,21 @@
   "design": "mini",
   "error_count": 0,
   "errors_by_code": {},
-  "findings": [],
+  "findings": [
+    {
+      "code": "no_fiducials",
+      "message": "the bottom side has fine-pitch parts (U2, J1) but 0 fiducial(s): the assembler wants three per side (Design.add_fiducial)",
+      "net": null,
+      "refs": [
+        "U2",
+        "J1"
+      ],
+      "severity": "warning"
+    }
+  ],
   "ok": true,
-  "warning_count": 0,
-  "warnings_by_code": {}
+  "warning_count": 1,
+  "warnings_by_code": {
+    "no_fiducials": 1
+  }
 }

@@ -18,8 +18,19 @@
  *               and data-ready interrupts)
  *   SCCB+DCMI   two OVM7692 models on the shared bus; frames come from a
  *               scene callback supplied by the test
- *   ADC/OPAMP   battery divider and the grain photodiode stage, driven by
- *               the charlieplex pin states
+ *   ADC/OPAMP   battery divider, the cell-temperature divider (NTC_BIAS,
+ *               10.0 kohm, NTC_SENSE, the NTC to ground) and the grain
+ *               photodiode stage, driven by the charlieplex pin states
+ *   charger     the rev C2 circuit: the charger runs whenever VBUS is present
+ *               and CHG_INHIBIT is not pulled low - with the MCU in reset
+ *               (before gl_hal_init) as much as with firmware running.  The
+ *               TRUE cell temperature is a property of the model; the time
+ *               the charger runs with it outside 0..45 C is measured
+ *   core clock  SLOW / FAST as set by gl_hal_clock_set: every call is in the
+ *               trace, the time spent FAST and the heavy computation done
+ *               while SLOW are counted
+ *   board pulls the level each chip select has while the MCU does not drive
+ *               it (reset, ROM bootloader): gl_sim_pin_level()
  *   USB         byte pipes to an imaginary host
  *
  * It CHECKS, and counts in gl_sim_violations_t:
@@ -45,8 +56,19 @@
  *     started, the ADC or the op-amp powered, or a chip select asserted
  *   - more than one grain LED lit, ADC use while unpowered
  *   - the watchdog not kicked for longer than its period
- *   - USB left started, at a sleep, with VBUS absent; the charger enabled
- *     at the entry of Stop mode (nothing supervises the temperature then)
+ *   - USB left started, at a sleep, with VBUS absent
+ *   - the charger rules of rev C2 (counted as `power`):
+ *       Stop mode entered with CHG_INHIBIT pulled low and VBUS absent (an
+ *       inhibit left behind by a sleeping MCU: nothing would ever lift it);
+ *       Stop mode entered with VBUS present and no wake-up within
+ *       GL_SIM_CHG_SUPERVISE_MAX_MS (nobody would supervise the charge);
+ *       the charger running for longer than GL_SIM_CHG_REACT_MAX_MS at a
+ *       stretch with the true cell temperature outside 0..45 C while
+ *       firmware runs;
+ *       CHG_INHIBIT driven push-pull or driven high (it may only pull low)
+ *   - NTC_BIAS still driven at a Stop-mode entry; an NTC conversion before
+ *     the divider has settled (counted as `analog`)
+ *   - Stop mode entered with the fast core clock (counted as `clock`)
  *
  * The device models encode THIS PROJECT'S UNDERSTANDING of the parts (the
  * same datasheet recollections the drivers are written from, see the README
@@ -99,7 +121,8 @@ typedef enum {
     GL_SIM_TR_USB,            /**< a = 1 start / 0 stop */
     GL_SIM_TR_SLEEP,          /**< a = mode, c = microseconds slept (low 32 bits) */
     GL_SIM_TR_REBOOT,         /**< a = gl_reboot_t */
-    GL_SIM_TR_IRQ_ENABLE      /**< a = enable, c = mask */
+    GL_SIM_TR_IRQ_ENABLE,     /**< a = enable, c = mask */
+    GL_SIM_TR_CLOCK           /**< a = gl_clock_t asked for, b = gl_clock_t before the call */
 } gl_sim_tr_type_t;
 
 typedef enum {
@@ -138,9 +161,28 @@ bool gl_sim_pin_latch(gl_pin_t pin);
 /** True if the MCU actively drives the pin high / low right now. */
 bool gl_sim_pin_drives_high(gl_pin_t pin);
 bool gl_sim_pin_drives_low(gl_pin_t pin);
+/**
+ * The electrical level of a pin as the BOARD sees it: the MCU's level where
+ * it drives, otherwise the level of the board's pull resistor (DESIGN_SPEC
+ * section 4: 100 kohm pull-down on LCD_SCS, LCD_DISP and CAM_PWR_EN,
+ * 100 kohm pull-ups on FLASH_CS and IMU_CS; CHG_INHIBIT follows its gate
+ * divider: high while VBUS is present) or the external level set for an
+ * input.  Valid before gl_hal_init() too: that is the reset state.  For a
+ * pin with neither driver nor pull the result is false.
+ */
+bool gl_sim_pin_level(gl_pin_t pin);
 /** Set the level an external circuit puts on an input pin (IMU interrupts
  *  are driven by the IMU model; use this for CHG_STAT and VBUS_SENSE). */
 void gl_sim_set_input(gl_pin_t pin, bool level);
+
+/**
+ * An MCU reset WITHOUT a power cycle (reset pin, watchdog, software reset):
+ * every pin goes high-Z at the same instant, the peripherals stop, the
+ * devices on the board keep their state.  From then until the next
+ * gl_hal_init() the model is "MCU in reset": the board's pull resistors and
+ * the charger's hardware default are all there is.  `reason`: GL_RESET_*.
+ */
+void gl_sim_mcu_reset(uint32_t reason);
 
 /* ---- rule violations ------------------------------------------------------------ */
 
@@ -157,7 +199,8 @@ typedef struct {
     unsigned analog;          /**< ADC / op-amp misuse, several grain LEDs lit */
     unsigned watchdog;        /**< not kicked within the watchdog period */
     unsigned deadlock;        /**< gl_hal_sleep with nothing that could ever wake it */
-    unsigned power;           /**< USB started without VBUS; charger enabled in Stop mode */
+    unsigned power;           /**< USB started without VBUS; the charger rules (see above) */
+    unsigned clock;           /**< Stop mode with the fast core clock */
     char first[160];          /**< description of the first violation of any kind */
 } gl_sim_violations_t;
 
@@ -184,6 +227,22 @@ typedef struct {
     uint64_t cam_powerup_overlap_streaming_us;
     uint32_t trace_points[GL_TRACE_COUNT]; /**< gl_hal_trace() calls per point */
     uint64_t compute_us;       /**< simulated time charged for computation */
+    /* core clock */
+    uint32_t clock_to_fast;    /**< SLOW -> FAST switches */
+    uint32_t clock_to_slow;    /**< FAST -> SLOW switches */
+    uint32_t clock_calls;      /**< gl_hal_clock_set() calls, including the ones that change nothing */
+    uint64_t clock_fast_us;    /**< time spent with the fast clock */
+    uint32_t heavy_while_slow; /**< gl_hal_trace() points reached with the SLOW clock */
+    /* cell temperature divider */
+    uint32_t ntc_reads;        /**< conversions of GL_ADC_CH_CELL_NTC with the bias driven */
+    uint64_t ntc_bias_us;      /**< total time NTC_BIAS was driven high */
+    /* charger (the model, not what the firmware believes) */
+    uint64_t chg_on_us;        /**< time the charger ran (VBUS present, CHG_INHIBIT not low) */
+    uint64_t chg_outside_us;   /**< of it, with the true cell temperature outside 0..45 C
+                                    while firmware was running */
+    uint64_t chg_outside_longest_us; /**< the longest single stretch of that */
+    uint64_t chg_in_reset_us;  /**< time the charger ran before gl_hal_init (MCU in reset) */
+    uint64_t inhibit_us;       /**< time CHG_INHIBIT was pulled low */
 } gl_sim_stats_t;
 
 const gl_sim_stats_t *gl_sim_stats(void);
@@ -252,6 +311,45 @@ void gl_sim_imu_power_glitch(void);
 /** Die temperature the MCU's own sensor reports.  By default it follows
  *  the IMU's (one board, one temperature); calling this pins it. */
 void gl_sim_set_mcu_temperature(float temp_c);
+
+/* ---- cell temperature, NTC divider and charger -------------------------------- */
+
+/** The TRUE cell temperature (what the NTC sits on, and what the charge
+ *  rules are judged by).  By default it follows the IMU's temperature (one
+ *  board, one temperature); calling this pins it. */
+void gl_sim_set_cell_temperature(float temp_c);
+float gl_sim_cell_temperature(void);
+
+typedef enum {
+    GL_SIM_NTC_NORMAL = 0,
+    GL_SIM_NTC_OPEN,      /**< NTC broken off: the sense pin floats / follows the bias */
+    GL_SIM_NTC_SHORT,     /**< NTC shorted: the sense pin stays at ground */
+    GL_SIM_NTC_STUCK_HIGH /**< the sense pin is bridged to the 2.8 V rail */
+} gl_sim_ntc_fault_t;
+
+void gl_sim_ntc_set_fault(gl_sim_ntc_fault_t fault);
+/** Part tolerances of the divider of THIS simulated unit, as relative errors
+ *  (0.01 = +1 %): NTC resistance at 25 C, B constant, series resistor. */
+void gl_sim_ntc_set_tolerance(float r25_rel, float b_rel, float series_rel);
+/** Counts GL_ADC_CH_CELL_NTC would read (noise-free) at a cell temperature
+ *  with the bias driven: the model's own forward calculation, in double
+ *  precision, for the tests of the driver's conversion. */
+double gl_sim_ntc_counts_at(double temp_c);
+
+/** True while the charger of the model is running: VBUS present and
+ *  CHG_INHIBIT not pulled low (the firmware's opinion is not asked). */
+bool gl_sim_charger_on(void);
+/** Longest stretch the charger may run outside 0..45 C before it counts as
+ *  a violation, and the longest Stop-mode sleep allowed in the cradle. */
+#define GL_SIM_CHG_REACT_MAX_MS 10000u
+#define GL_SIM_CHG_SUPERVISE_MAX_MS 10000u
+
+/* ---- core clock ----------------------------------------------------------------- */
+
+/** The clock the firmware last asked for. */
+gl_clock_t gl_sim_clock(void);
+/** Make the next `count` switches to GL_CLOCK_FAST fail (PLL does not lock). */
+void gl_sim_clock_fail(unsigned count);
 /** Make the next `count` transfers on an SPI bus fail with `st` AFTER they
  *  have taken place (what a HAL time-out looks like to the driver). */
 void gl_sim_spi_fail(gl_spi_bus_t bus, unsigned count, gl_status_t st);

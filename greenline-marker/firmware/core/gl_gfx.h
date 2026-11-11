@@ -201,6 +201,22 @@ void gl_gfx_aim_line(gl_gfx_t *g, float aim_rad, float half_width_px, gl_gfx_aim
 void gl_gfx_aim_line_at(gl_gfx_t *g, float aim_rad, float ball_az_rad, float half_width_px,
                         gl_gfx_aim_info_t *info);
 
+/** Dash pattern of a TENTATIVE aim line (see gl_gfx_aim_line_styled). */
+#define GL_GFX_AIM_TENTATIVE_DASH_PX 9.0f
+#define GL_GFX_AIM_TENTATIVE_GAP_PX 7.0f
+
+/**
+ * gl_gfx_aim_line_at() with a choice of style.  `tentative` false: the
+ * solid line, exactly as gl_gfx_aim_line_at().  `tentative` true: the aim is
+ * NOT a solution of the putt (the estimator's best effort, or straight at
+ * the hole for want of anything better) and must not look like one: the
+ * true line through the ball position is drawn in long dashes (edge
+ * dithering kept, so its direction is still readable).  The substitute for
+ * a line that leaves the aperture is the same in both styles.
+ */
+void gl_gfx_aim_line_styled(gl_gfx_t *g, float aim_rad, float ball_az_rad, float half_width_px,
+                            bool tentative, gl_gfx_aim_info_t *info);
+
 /* ---- text -------------------------------------------------------------- */
 
 #define GL_FONT_W 5

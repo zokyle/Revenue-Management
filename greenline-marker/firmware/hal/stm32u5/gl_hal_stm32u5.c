@@ -21,11 +21,22 @@
  * class plus the usual usbd_conf.c / usbd_desc.c glue.
  *
  * DESIGN
- *   clocks    MSIS 48 MHz is the system clock (no PLL: fast wake-up from
- *             Stop 2), trimmed against the 32.768 kHz crystal (MSI PLL
- *             mode).  XVCLK = MSI / 4 = 12 MHz on MCO.  USB runs from
- *             HSI48 with the clock-recovery system (PROVISIONAL in
- *             DESIGN_SPEC: crystal-less USB).
+ *   clocks    SLOW (the state after init and after every Stop): MSIS 48 MHz
+ *             is the system clock, no PLL (fast wake-up from Stop 2),
+ *             trimmed against the 32.768 kHz crystal (MSI PLL mode).
+ *             FAST (gl_hal_clock_set(GL_CLOCK_FAST), DESIGN_SPEC rev C2:
+ *             160 MHz during a read): PLL1 from MSIS, 48 MHz / 3 x 20 / 2 =
+ *             160 MHz, which needs voltage range 1, the EPOD booster and 4
+ *             flash wait states; switching back stops the PLL and returns
+ *             to range 3.  NOTHING else follows the core clock: SPI1, SPI2
+ *             and the ADC take their kernel clock from MSIK (48 MHz, on in
+ *             both states), XVCLK = MSIS / 4 = 12 MHz on MCO, the tick, the
+ *             wake-up timer and EXTCOMIN run from LSE, USB from HSI48 with
+ *             the clock-recovery system (PROVISIONAL in DESIGN_SPEC:
+ *             crystal-less USB); gl_hal_delay_us() scales its cycle count
+ *             with the clock in effect.  WRITTEN BY INSPECTION like the rest
+ *             of this file: the PLL / booster sequence in particular is from
+ *             memory of RM0456 and of generated code, and has never run.
  *   tick      LPTIM3, clocked by LSE, free running 16 bit at 32768 Hz with
  *             an overflow interrupt every 2 s; it keeps counting in Stop 2,
  *             so gl_hal_tick_ms() is monotonic through sleep.
@@ -94,23 +105,34 @@
 #define GLH_VOLTAGE_SCALE        PWR_REGULATOR_VOLTAGE_SCALE3
 #define GLH_MCO_SRC_MSI          RCC_MCO1SOURCE_MSI
 #define GLH_MCO_SRC_NONE         RCC_MCO1SOURCE_NOCLOCK
-#define GLH_DCMI_DMA_REQUEST     GPDMA1_REQUEST_DCMI
+#define GLH_DCMI_DMA_REQUEST     GPDMA1_REQUEST_DCMI_PSSI /* (GPDMA1_REQUEST_DCMI is only a legacy alias) */
 #define GLH_DCMI_BSM_ALL         DCMI_BSM_ALL
 #define GLH_DCMI_BSM_EVERY_OTHER DCMI_BSM_OTHER          /* keep 1 byte out of 2 */
 #define GLH_DCMI_OEBS_FIRST      DCMI_OEBS_ODD           /* keep the 1st byte of each pair */
 #define GLH_DCMI_OEBS_SECOND     DCMI_OEBS_EVEN          /* keep the 2nd byte of each pair */
 #define GLH_ADC_SMP_SHORT        ADC_SAMPLETIME_12CYCLES     /*   1.0 us at 12 MHz */
 #define GLH_ADC_SMP_MEDIUM       ADC_SAMPLETIME_68CYCLES     /*   5.7 us */
-#define GLH_ADC_SMP_LONG         ADC_SAMPLETIME_391CYCLES_5  /*  32.6 us */
+#define GLH_ADC_SMP_LONG         ADC_SAMPLETIME_391CYCLES    /*  32.6 us (the _5 name is a legacy alias) */
 #define GLH_ADC_SMP_LONGEST      ADC_SAMPLETIME_814CYCLES    /*  67.8 us */
 #define GLH_ADC_CH_GRAIN         ADC_CHANNEL_8           /* PA3 = OPAMP1_VOUT = ADC1_IN8 (verified) */
 #define GLH_ADC_CH_VBAT          ADC_CHANNEL_7           /* PA2 = ADC1_IN7 (from memory) */
+#define GLH_ADC_CH_NTC           ADC_CHANNEL_13          /* PC4 = ADC1_IN13 (from memory; GL_PINS_ADC_CH_CELL_NTC) */
+/* fast clock: PLL1 from MSIS 48 MHz -> 16 MHz -> VCO 320 MHz -> 160 MHz */
+#define GLH_PLL_M                3u
+#define GLH_PLL_N                20u
+#define GLH_PLL_R                2u
+#define GLH_PLL_VCI_RANGE        RCC_PLLVCIRANGE_1       /* 8..16 MHz at the phase detector */
+#define GLH_PLL_MBOOST           RCC_PLLMBOOST_DIV4      /* EPOD booster clock 48 / 4 = 12 MHz (4..16 MHz allowed) */
+#define GLH_VOLTAGE_SCALE_FAST   PWR_REGULATOR_VOLTAGE_SCALE1 /* needed above 110 MHz */
+#define GLH_FLASH_LATENCY_160MHZ FLASH_LATENCY_4         /* range 1: 32 MHz per wait state */
+#define GLH_MSIK_RANGE_48MHZ     RCC_MSIKRANGE_0         /* MSIK 48 MHz: SPI and ADC kernel clock */
 #define GLH_ROM_BOOTLOADER_ADDR  0x0BF90000u             /* AN2606, STM32U575/585 (from memory) */
 #define GLH_DFU_MAGIC            0x474C4446u             /* "GLDF" in TAMP backup register 0 */
 #define GLH_RTC_SET_MAGIC        0x474C5254u             /* "GLRT" in backup register 1: RTC has been set */
 
 #define GLH_LSE_HZ 32768u
-#define GLH_SYSCLK_HZ 48000000u
+#define GLH_SYSCLK_HZ 48000000u      /* SLOW core clock, and the MSIK kernel clock in both states */
+#define GLH_SYSCLK_FAST_HZ 160000000u
 #define GLH_IWDG_RELOAD 4000u /* LSI 32 kHz / 256 = 125 Hz -> 32 s */
 
 /* ======================================================================= */
@@ -195,11 +217,18 @@ void glh_irq_raise(uint32_t bit)
 /* clocks                                                                   */
 /* ======================================================================= */
 
+/* Core clock in effect (gl_hal_delay_us scales with it). */
+static gl_clock_t clock_ = GL_CLOCK_SLOW;
+static uint32_t sysclk_hz_ = GLH_SYSCLK_HZ;
+
 static gl_status_t clocks_init_(void)
 {
     RCC_OscInitTypeDef osc;
     RCC_ClkInitTypeDef clk;
     RCC_PeriphCLKInitTypeDef pclk;
+
+    clock_ = GL_CLOCK_SLOW;
+    sysclk_hz_ = GLH_SYSCLK_HZ;
 
     __HAL_RCC_PWR_CLK_ENABLE();
     HAL_PWR_EnableBkUpAccess();
@@ -208,12 +237,17 @@ static gl_status_t clocks_init_(void)
     }
     /* LSE (32.768 kHz, 6 pF crystal: low drive) and MSIS 48 MHz locked to it */
     memset(&osc, 0, sizeof(osc));
-    osc.OscillatorType = RCC_OSCILLATORTYPE_LSE | RCC_OSCILLATORTYPE_MSI | RCC_OSCILLATORTYPE_LSI;
+    osc.OscillatorType = RCC_OSCILLATORTYPE_LSE | RCC_OSCILLATORTYPE_MSI | RCC_OSCILLATORTYPE_LSI |
+                         RCC_OSCILLATORTYPE_MSIK;
     osc.LSEState = RCC_LSE_ON;
     osc.LSIState = RCC_LSI_ON; /* independent watchdog */
     osc.MSIState = RCC_MSI_ON;
     osc.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
     osc.MSIClockRange = GLH_MSI_RANGE_48MHZ;
+    /* MSIK: the kernel clock of SPI1, SPI2 and the ADC, so that their
+     * timing does not move when the core clock is switched */
+    osc.MSIKState = RCC_MSIK_ON;
+    osc.MSIKClockRange = GLH_MSIK_RANGE_48MHZ;
     osc.PLL.PLLState = RCC_PLL_NONE;
     if (HAL_RCC_OscConfig(&osc) != HAL_OK) {
         return GL_ERR_IO;
@@ -235,18 +269,110 @@ static gl_status_t clocks_init_(void)
     __HAL_RCC_WAKEUPSTOP_CLK_CONFIG(RCC_STOP_WAKEUPCLOCK_MSI);
 
     /* kernel clocks: LPTIM1 and LPTIM3 from LSE (they must run in Stop 2),
-     * RTC from LSE, ADC from HCLK */
+     * RTC from LSE; ADC, SPI1 and SPI2 from MSIK (48 MHz whatever the core
+     * clock is: gl_hal.h promises that bit rates and ADC timing do not
+     * change with gl_hal_clock_set) */
     memset(&pclk, 0, sizeof(pclk));
     pclk.PeriphClockSelection = RCC_PERIPHCLK_LPTIM1 | RCC_PERIPHCLK_LPTIM34 | RCC_PERIPHCLK_RTC |
-                                RCC_PERIPHCLK_ADCDAC;
+                                RCC_PERIPHCLK_ADCDAC | RCC_PERIPHCLK_SPI1 | RCC_PERIPHCLK_SPI2;
     pclk.Lptim1ClockSelection = RCC_LPTIM1CLKSOURCE_LSE;
     pclk.Lptim34ClockSelection = RCC_LPTIM34CLKSOURCE_LSE;
     pclk.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
-    pclk.AdcDacClockSelection = RCC_ADCDACCLKSOURCE_HCLK;
+    pclk.AdcDacClockSelection = RCC_ADCDACCLKSOURCE_MSIK;
+    pclk.Spi1ClockSelection = RCC_SPI1CLKSOURCE_MSIK;
+    pclk.Spi2ClockSelection = RCC_SPI2CLKSOURCE_MSIK;
     if (HAL_RCCEx_PeriphCLKConfig(&pclk) != HAL_OK) {
         return GL_ERR_IO;
     }
     return GL_OK;
+}
+
+/* ---- core clock: SLOW (MSIS 48 MHz) <-> FAST (PLL1 160 MHz) ----------------------
+ * BY INSPECTION ONLY.  Order when going up: voltage range 1 (with the EPOD
+ * booster, which the U5 HAL enables from PLLMBOOST when the PLL is the
+ * system clock - from memory), PLL on and locked, then SYSCLK with the
+ * higher flash latency.  Order when going down: SYSCLK back to MSIS first,
+ * then PLL off, then the lower voltage range.  HAL_RCC_ClockConfig() updates
+ * SystemCoreClock and the HAL's SysTick time base itself. */
+static gl_status_t clock_fast_(void)
+{
+    RCC_OscInitTypeDef osc;
+    RCC_ClkInitTypeDef clk;
+
+    if (HAL_PWREx_ControlVoltageScaling(GLH_VOLTAGE_SCALE_FAST) != HAL_OK) {
+        return GL_ERR_IO;
+    }
+    memset(&osc, 0, sizeof(osc));
+    osc.OscillatorType = RCC_OSCILLATORTYPE_NONE;
+    osc.PLL.PLLState = RCC_PLL_ON;
+    osc.PLL.PLLSource = RCC_PLLSOURCE_MSI;
+    osc.PLL.PLLMBOOST = GLH_PLL_MBOOST;
+    osc.PLL.PLLM = GLH_PLL_M;
+    osc.PLL.PLLN = GLH_PLL_N;
+    osc.PLL.PLLP = 2;
+    osc.PLL.PLLQ = 2;
+    osc.PLL.PLLR = GLH_PLL_R;
+    osc.PLL.PLLRGE = GLH_PLL_VCI_RANGE;
+    osc.PLL.PLLFRACN = 0;
+    if (HAL_RCC_OscConfig(&osc) != HAL_OK) {
+        (void)HAL_PWREx_ControlVoltageScaling(GLH_VOLTAGE_SCALE);
+        return GL_ERR_IO; /* no lock: still on MSIS */
+    }
+    memset(&clk, 0, sizeof(clk));
+    clk.ClockType = RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 |
+                    RCC_CLOCKTYPE_PCLK2 | RCC_CLOCKTYPE_PCLK3;
+    clk.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    clk.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    clk.APB1CLKDivider = RCC_HCLK_DIV1; /* the APB buses take 160 MHz on this family */
+    clk.APB2CLKDivider = RCC_HCLK_DIV1;
+    clk.APB3CLKDivider = RCC_HCLK_DIV1;
+    if (HAL_RCC_ClockConfig(&clk, GLH_FLASH_LATENCY_160MHZ) != HAL_OK) {
+        (void)clocks_init_(); /* back to a known state: MSIS, PLL off */
+        return GL_ERR_IO;
+    }
+    clock_ = GL_CLOCK_FAST;
+    sysclk_hz_ = GLH_SYSCLK_FAST_HZ;
+    return GL_OK;
+}
+
+static void clock_slow_(void)
+{
+    RCC_OscInitTypeDef osc;
+    RCC_ClkInitTypeDef clk;
+
+    memset(&clk, 0, sizeof(clk));
+    clk.ClockType = RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 |
+                    RCC_CLOCKTYPE_PCLK2 | RCC_CLOCKTYPE_PCLK3;
+    clk.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+    clk.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    clk.APB1CLKDivider = RCC_HCLK_DIV1;
+    clk.APB2CLKDivider = RCC_HCLK_DIV1;
+    clk.APB3CLKDivider = RCC_HCLK_DIV1;
+    /* still in range 1 here: the latency of range 3 at 48 MHz is safe in both */
+    (void)HAL_RCC_ClockConfig(&clk, GLH_FLASH_LATENCY_48MHZ);
+    clock_ = GL_CLOCK_SLOW;
+    sysclk_hz_ = GLH_SYSCLK_HZ;
+    memset(&osc, 0, sizeof(osc));
+    osc.OscillatorType = RCC_OSCILLATORTYPE_NONE;
+    osc.PLL.PLLState = RCC_PLL_OFF;
+    (void)HAL_RCC_OscConfig(&osc);
+    (void)HAL_PWREx_ControlVoltageScaling(GLH_VOLTAGE_SCALE);
+}
+
+gl_status_t gl_hal_clock_set(gl_clock_t speed)
+{
+    if (speed == GL_CLOCK_FAST) {
+        return (clock_ == GL_CLOCK_FAST) ? GL_OK : clock_fast_();
+    }
+    if (clock_ == GL_CLOCK_FAST) {
+        clock_slow_();
+    }
+    return GL_OK;
+}
+
+gl_clock_t gl_hal_clock_get(void)
+{
+    return clock_;
 }
 
 /* ======================================================================= */
@@ -419,9 +545,10 @@ void gl_hal_delay_ms(uint32_t ms)
 
 void gl_hal_delay_us(uint32_t us)
 {
-    /* DWT cycle counter at 48 MHz: 48 cycles per microsecond */
+    /* DWT cycle counter: 48 cycles per microsecond with the slow clock, 160
+     * with the fast one (10000 us x 160 = 1.6e6 cycles: no overflow) */
     const uint32_t start = DWT->CYCCNT;
-    const uint32_t cycles = us * (GLH_SYSCLK_HZ / 1000000u);
+    const uint32_t cycles = us * (sysclk_hz_ / 1000000u);
     while ((uint32_t)(DWT->CYCCNT - start) < cycles) {
     }
 }
@@ -783,16 +910,20 @@ uint32_t gl_hal_sleep(gl_sleep_mode_t mode)
             __enable_irq();
             break;
         }
-        if (mode == GL_SLEEP_STOP) {
+        if (mode == GL_SLEEP_STOP && clock_ != GL_CLOCK_FAST) {
             HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
             stopped = true;
         } else {
+            /* idle sleep; also what Stop becomes while the PLL runs (the
+             * application never asks for that: gl_hal.h) */
             HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
         }
         __enable_irq(); /* the handler of whatever woke the core runs here */
     }
     if (stopped) {
-        /* the core woke on MSIS (the wake-up clock): re-apply the clock set-up */
+        /* the core woke on MSIS (the wake-up clock): re-apply the clock
+         * set-up.  Stop is only entered from the SLOW clock, so that is the
+         * state to restore. */
         (void)clocks_init_();
     }
     HAL_ResumeTick();
@@ -809,7 +940,7 @@ static uint32_t spi_prescaler_(uint32_t max_hz)
                                       SPI_BAUDRATEPRESCALER_8,  SPI_BAUDRATEPRESCALER_16,
                                       SPI_BAUDRATEPRESCALER_32, SPI_BAUDRATEPRESCALER_64,
                                       SPI_BAUDRATEPRESCALER_128, SPI_BAUDRATEPRESCALER_256 };
-    uint32_t hz = GLH_SYSCLK_HZ / 2u;
+    uint32_t hz = GLH_SYSCLK_HZ / 2u; /* kernel clock MSIK, 48 MHz with either core clock */
     unsigned i = 0;
     while (i < 7u && hz > max_hz) {
         hz /= 2u;
@@ -1242,7 +1373,7 @@ gl_status_t gl_hal_adc_power(bool on)
     __HAL_RCC_ADC12_CLK_ENABLE();
     memset(&hadc_, 0, sizeof(hadc_));
     hadc_.Instance = ADC1;
-    hadc_.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV4; /* 48 MHz / 4 = 12 MHz */
+    hadc_.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV4; /* MSIK 48 MHz / 4 = 12 MHz, with either core clock */
     hadc_.Init.Resolution = ADC_RESOLUTION_14B;
     hadc_.Init.GainCompensation = 0;
     hadc_.Init.ScanConvMode = ADC_SCAN_DISABLE;
@@ -1310,6 +1441,7 @@ gl_status_t gl_hal_adc_read(gl_adc_ch_t ch, uint16_t n_avg, uint16_t sample_time
     case GL_ADC_CH_VBAT_DIV: channel = GLH_ADC_CH_VBAT; break;
     case GL_ADC_CH_VREFINT: channel = ADC_CHANNEL_VREFINT; break;
     case GL_ADC_CH_MCU_TEMP: channel = ADC_CHANNEL_TEMPSENSOR; break;
+    case GL_ADC_CH_CELL_NTC: channel = GLH_ADC_CH_NTC; break; /* 5 kohm source: any setting >= 5 us */
     default: return GL_ERR_PARAM;
     }
     /* shortest setting that is at least the requested time (ADC clock 12 MHz) */
@@ -1353,7 +1485,7 @@ uint16_t gl_hal_adc_vdda_mv(void)
         raw == 0u) {
         return 0;
     }
-    mv = __HAL_ADC_CALC_VREFANALOG_VOLTAGE(raw, ADC_RESOLUTION_14B);
+    mv = __HAL_ADC_CALC_VREFANALOG_VOLTAGE(ADC1, raw, ADC_RESOLUTION_14B);
     return (uint16_t)((mv > 65535u) ? 65535u : mv);
 }
 
@@ -1378,7 +1510,7 @@ gl_status_t gl_hal_opamp_enable(bool on)
     __HAL_RCC_OPAMP_CLK_ENABLE();
     memset(&hopamp_, 0, sizeof(hopamp_));
     hopamp_.Instance = OPAMP1;
-    hopamp_.Init.PowerMode = OPAMP_POWERMODE_NORMAL;
+    hopamp_.Init.PowerMode = OPAMP_POWERMODE_NORMALPOWER_NORMALSPEED;
     /* standalone: the 470 kohm || 10 pF feedback and the mid-rail bias are
      * external (transimpedance stage) */
     hopamp_.Init.Mode = OPAMP_STANDALONE_MODE;
@@ -1504,11 +1636,13 @@ gl_status_t gl_hal_init(void)
     gl_hal_gpio_mode(GL_PIN_FLASH_CS, GL_PIN_MODE_OUTPUT_PP);
     gl_hal_gpio_write(GL_PIN_IMU_CS, true);
     gl_hal_gpio_mode(GL_PIN_IMU_CS, GL_PIN_MODE_OUTPUT_PP);
-    /* charging stopped until the application's gate has run: with the rev C
-     * circuit the pin is released, with the inverted (default-on) circuit
-     * it is pulled low (GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE) */
-    gl_hal_gpio_write(GL_PIN_CHG_PROG_EN, GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE != 0);
-    gl_hal_gpio_mode(GL_PIN_CHG_PROG_EN, GL_PIN_MODE_OUTPUT_OD);
+    /* CHG_INHIBIT (rev C2: the charger is on by default in hardware, the pin
+     * can only stop it) and NTC_BIAS are left ANALOG, as the loop above and
+     * the reset before it put them: drivers/power pulls CHG_INHIBIT low only
+     * as the result of a temperature measurement, and drives NTC_BIAS only
+     * while a conversion runs.  NOTE for the pin choice: CHG_INHIBIT must be
+     * a pin without a protection diode to VDD (an FT pin), or the unpowered
+     * MCU clamps the MOSFET gate and defeats the default (gl_pins.h). */
     extcomin_on_ = false;
     opamp_on_ = false;
     gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT_PULLUP);

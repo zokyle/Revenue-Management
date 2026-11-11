@@ -2,7 +2,7 @@
  "counts": {
   "nets": 72,
   "pads_on_nets": 332,
-  "parts": 94
+  "parts": 100
  },
  "design": "greenline_demo",
  "netclasses": {
@@ -3099,6 +3099,60 @@
     }
    },
    "value": "LED red"
+  },
+  "FID1": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID2": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID3": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID4": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID5": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID6": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
   },
   "J1": {
    "dnp": false,

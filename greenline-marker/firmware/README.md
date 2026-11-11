@@ -1,7 +1,9 @@
-# GreenLine GL-1 firmware (phase 1)
+# GreenLine GL-1 firmware (phase 2)
 
-Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.md` rev C,
-`../design/master_params.yaml` rev D-EVT1).
+Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.md` and
+`../design/master_params.yaml` rev D-EVT1). The board changes this file calls **rev C2** are the
+ones of section 4 of that specification (charger inhibit, cell NTC, EXTCOMIN divider, core
+clock, chip-select pulls, PWDN pins); the specification's own header reads "rev D, EVT1".
 
 ## Status - read this first
 
@@ -18,11 +20,25 @@ Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.m
   model agree and that the bus traffic is self-consistent and obeys the board rules; it does not
   show that the real part behaves that way. Every register and command of the IMU and the flash
   is in one table below, marked "from memory - verify against datasheet".
-* **The putt solver is a stub.** `core/gl_solver.h` is the interface that phase 2 will implement
-  by porting the Python reference (`../sim/greenline_sim`); `core/gl_solver_stub.c` returns
-  `GL_ERR_NOT_IMPLEMENTED`. Until then the result screen shows a tilt-and-bearing line marked
-  "TILT ONLY": the aim line points straight at the flagstick, with distance and slope, and no
-  break.
+* **The putt solver is ported** (phase 2, builder 1). `core/gl_solver*.c` is a C99 port of the
+  Python reference (`../sim/greenline_sim`: roll kernel, aim solver, range fusion, patch fit,
+  estimate, fallbacks, confidence) behind `core/gl_solver.h`; `gl_solver_version()` is
+  0x00020000. One source builds in double precision (host, compared with the reference) and
+  in single precision (the firmware). What was run and measured, and what is not met, is in
+  "Solver" under Measured results. **None of it has run on the target**: its run time there is
+  an estimate.
+* **The application uses the estimator end to end, and the rev C2 board changes are in** (phase
+  2, builder 2). What a read hands to the estimator is gated, never synthesised; the estimator's
+  range fusion is the only one that feeds the aim; its result is mapped to the screen with every
+  fallback shown as such. Read sequence, vision, estimator and rendering are tested together on
+  the simulator against the reference, with the direction of the drawn line measured from the
+  panel's pixels ("Putt on the display"), and `make appdiff` repeats the comparison with the
+  Python reference itself. Charger inhibit, cell NTC, EXTCOMIN divider, core-clock switching,
+  chip-select states and the moved pins are implemented and tested on the simulator ("Charger
+  and cell temperature", "Board changes of rev C2"). **Two requirements are NOT MET and are
+  pinned as such by tests: nothing supervises the charger while the ROM bootloader runs
+  (in the test: charging at 50 C for the 600 s the test lasts), and a hung firmware leaves it
+  unsupervised until the watchdog resets it (measured: 33 s).**
 * All accuracy figures below are **measured on synthetic data** (`tests/synth`). They say what
   the algorithms do on idealised images; they are not a prediction of field performance. In
   particular the renderer does not model the Bayer mosaic of the colour sensor.
@@ -34,7 +50,10 @@ Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.m
   and several of them are worse - and truer - than the ones this file used to carry.
 * **The vision's run time on the target is the largest known risk.** It has now been counted
   (about 145 million instructions per read on the host build) and does not fit the 1.6 s the read was
-  designed around without a faster clock; see "Run time" under Memory and open issue 1.
+  designed around without a faster clock; see "Run time" under Memory and open issue 1. The
+  application now asks the HAL for the fast clock (160 MHz) from the start of the capture to the
+  end of the solve; on the simulator that is a recorded and checked call, on the target an
+  uncompiled PLL sequence whose effect on the run time is **not verified** (no board).
 * **Rev C.** `core/gl_config.h` is regenerated from the rev C YAML (stereo baseline 20.0 mm,
   cameras at x = +-10.0 mm). The user calibration is a **zeroing on any hard flat surface**
   (read, turn the marker 180 degrees in place, read again). It is never done in the cradle,
@@ -46,7 +65,7 @@ Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.m
 
 | Area | Findings | Outcome |
 |---|---|---|
-| Charge gate (2 findings, one critical) | fails open with a dead or silent IMU; trusts unvalidated bytes | **Fixed**: liveness-checked IMU temperature, MCU die sensor as second opinion, staleness limit, gate evaluated in every state; simulator rule "charger enabled at Stop entry". The cell still has no temperature sensor of its own (open issue 5). |
+| Charge gate (2 findings, one critical) | fails open with a dead or silent IMU; trusts unvalidated bytes | **Fixed**: liveness-checked IMU temperature, MCU die sensor as second opinion, staleness limit, gate evaluated in every state; simulator rule "charger enabled at Stop entry". **Superseded in phase 2:** rev C2 gives the cell an NTC and turns the charger's default round; gate, rules and tests were rewritten ("Charger and cell temperature"). |
 | IMU faults (3) | one bus error disables motion input until reset; lost interrupt latch stalls the loop (backend and application) | **Fixed** in the application (recovery with back-off, polling fallback, watchdog as last resort) and in the uncompiled backend (latch updated with interrupts masked). |
 | Capture pipeline (1) | assumed the vision is faster than a frame | **Fixed** structurally (whole group captured, then analysed; frame-end times latched in the interrupt; progress-based time-out). **The run time itself is not fixed**: open issue 1. |
 | Precision Read, SET_CAL, LOG_ERASE, store geometry, DFU gate, USB stop outside the cradle state, float-to-int conversions, integer drawing overflow (8) | as titled | **Fixed**, each with a regression test (`test_e2e_faults.c`, `test_log.c`, `test_proto.c`, `test_gfx.c`, `test_basics.c`). DFU has no way back without a host: stated, not fixable here. |
@@ -57,7 +76,7 @@ Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.m
 | Range fusion (1) | contradicting sources averaged; insignificant disparity | **Fixed** (`test_range.c`). |
 | Camera bus at power-up (1) | depends on PWDN releasing the bus | **Not fixable in firmware**: measured, asserted, documented (open issue 3). |
 | Backend: EXTCOMIN stop on an uninitialised handle (1) | | **Fixed by inspection only** (uncompiled); the rule "every stop is safe before its start" is in `gl_hal.h` and tested on the simulator. |
-| Charger default-off with the MCU unpowered (1) | | **Escalated to hardware** (open issue 2). |
+| Charger default-off with the MCU unpowered (1) | | **Escalated to hardware; answered by rev C2** (charger on by default, the MCU can only stop it: `CHG_INHIBIT`). |
 | Register table says "pulsed"; register 0x0C bit 4; EXTCOMIN 546 ticks; bootloader pins (4) | | **Fixed** in driver, table and generator; two SPEC pins remain a release gate (open issue 4). |
 
 No finding was rejected as false. Two were closed only as far as firmware can (camera bus,
@@ -92,7 +111,7 @@ charger default), one only as far as an uncompiled file can (EXTCOMIN handle).
   |   gl_proto    USB framing              |            |
   |   gl_log      ring log, blob store     |  +---------v---------------------------------+
   |   gl_settings gl_cal gl_event ...      |  | hal/gl_hal.h   the ONLY hardware interface |
-  |   gl_solver.h + stub (phase 2)         |  +------+---------------------------+---------+
+  |   gl_solver   putt estimator + solver  |  +------+---------------------------+---------+
   +----------------------------------------+         |                           |
                                             +--------v---------+   +-------------v-----------+
                                             | hal/host         |   | hal/stm32u5             |
@@ -108,20 +127,23 @@ IMU INT1 (wake-on-motion) -> GL_EV_MOTION -> WAKE: display on, IMU 240 Hz
  -> flat and still for 0.5 s (4 blocks of 32 samples) -> GL_EV_STILL
  -> READ_TILT: 8 still blocks (1.07 s) -> temperature polynomial, 6-face matrix, slope,
     minus the zeroing bias -> GL_EV_TILT_DONE
- -> CAPTURE: camera rail on (pins handed over in the rule's order) -> 640 x 96 band of the
+ -> CAPTURE: core clock FAST (gl_hal_clock_set) -> camera rail on (pins handed over in the
+    rule's order) -> 640 x 96 band of the
     left camera around its calibrated horizon row -> matched-line detector -> up to 4
     candidates (several: one L R R L group each, then the one that is a flagstick)
     -> 96 x 480 strips L R R L x 8: each group captured into four buffers, then refined
     strip by strip (rows above the turf edge only) -> segment fits over the lowest 0.4 m,
     timing correction, disparity accumulation -> camera rail off -> is it a flagstick
     (width, height, disparity)? -> base class, lowest point, top, horizon over the left
-    strips -> bearing and elevations relative to gravity -> range fusion (stereo + angular
-    height), stick-height learning -> GL_EV_CAPTURE_DONE
- -> SOLVE: gl_measurements_t -> gl_solver_estimate() [stub: NOT_IMPLEMENTED] -> view,
-    log record -> GL_EV_SOLVE_DONE
- -> SHOW_RESULT: aim line through the ball position, distance, slope; MCU in Stop 2
-    between IMU samples -> 45 s -> SLEEP: display off, IMU wake-on-motion, flash in deep
-    power-down, Stop 2, a wake every 16 s for the watchdog
+    strips -> bearing and elevations relative to gravity -> stick-height learning (the
+    application's own range is a diagnostic only) -> GL_EV_CAPTURE_DONE
+ -> SOLVE: the read as gl_measurements_t, GATED (what was not measured is "not available")
+    -> gl_solver_estimate() (method B1, or B2 by setting: range fusion, patch fit, aim solve,
+    confidence) -> core clock SLOW -> view, log records -> GL_EV_SOLVE_DONE
+ -> SHOW_RESULT: aim line through the ball position, distance, plays-like distance, slope
+    with the fall line, break in cups, confidence, one message if anything is unusual; MCU in
+    Stop 2 between IMU samples -> 45 s -> SLEEP: display off, IMU wake-on-motion, flash in
+    deep power-down, CHG_INHIBIT released, Stop 2, a wake every 16 s for the watchdog
 ```
 
 ## Layout
@@ -134,23 +156,34 @@ IMU INT1 (wake-on-motion) -> GL_EV_MOTION -> WAKE: display on, IMU 240 Hz
 | `hal/host/` | Host simulator behind `gl_hal.h`: simulated time, pin and bus trace, models of the LCD, flash, IMU, two cameras, analog front end and USB; rule checkers. |
 | `hal/stm32u5/` | STM32U585 backend (`gl_hal_stm32u5.c`, `gl_hal_stm32u5_usb.c`) and the generated pin map `gl_pins.h`. **Never compiled.** |
 | `app/` | Main loop and glue: `gl_app`, `gl_motion`, `gl_read`, `gl_usb`, `gl_app_cfg.h` (tuning constants, flash layout), `gl_main.c` (`main()`). |
-| `tests/` | Host unit tests, one executable per `test_*.c`, with the tiny runner `gl_test.h`; `test_drv_*.c` check bus traffic, `test_e2e.c` and `test_e2e_faults.c` run the whole firmware on the simulator (the second one with faults injected), `test_read.c` runs the camera part of a read on hard scenes. |
+| `tests/` | Host unit tests, one executable per `test_*.c`, with the tiny runner `gl_test.h`; `test_drv_*.c` check bus traffic, `test_e2e.c` and `test_e2e_faults.c` run the whole firmware on the simulator (the second one with faults injected), `test_e2e_putt.c` runs whole reads on rendered scenes and compares the line on the panel and the numbers shown with the reference, `test_board.c` checks the rev C2 board rules (chip selects through reset, core-clock calls, EXTCOMIN), `test_read.c` runs the camera part of a read on hard scenes, `test_solver.c` runs the solver against the reference vectors in both precisions. |
+| `tests/solver/` | `gl_solver_vectors.c` (**generated** from `../sim/results/reference_vectors.json`, 0.96 MB of C data, host only), its hand-written header, `gl_solver_run.c`, the harness that is compiled once per precision, and `gl_solver_ref.c`, the double-precision build of the solver behind a plain-C interface (`gl_ref_estimate`), which the end-to-end putt test uses as its reference. |
 | `tests/synth/` | Synthetic strip renderer (`gl_synth`), the reviewers' independent, physically consistent scene generator (`gl_scene`, used by `test_read.c`) and simulated NOR flash with power cuts (`gl_simflash`). |
-| `tools/` | `gen_config.py` (YAML -> `core/gl_config.h`), `gen_font.py` (-> `core/gl_font_data.c`), `gen_pins.py` (-> `hal/stm32u5/gl_pins.h`, cross-checked against DESIGN_SPEC), `cross_report.sh`. |
+| `tools/` | `gen_config.py` (YAML -> `core/gl_config.h`), `gen_font.py` (-> `core/gl_font_data.c`), `gen_pins.py` (-> `hal/stm32u5/gl_pins.h`, cross-checked against DESIGN_SPEC), `gen_vectors.py` (reference vectors -> `tests/solver/gl_solver_vectors.c`), `cross_report.sh`; host-only solver tools: `diff_solver.py` + `diff_solver_abi.c` (`make diff`), `solver_bench.c` (`make bench`), `app_diff.py` (`make appdiff`: the estimator inputs the application produced, run through the Python reference). |
 
 ## Building and testing
 
 ```
 make test     # gcc -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror, builds
-              #   core + drivers + app + simulator and runs all 21 test executables
-              #   (about 4.5 minutes, 2.5 of them the 920 reads of tests/test_read.c)
+              #   core + drivers + app + simulator and runs all 24 test executables
+              #   (several minutes, most of them the 920 reads of tests/test_read.c)
 make asan     # the same under -fsanitize=address,undefined,float-cast-overflow
               #   (test_read.c with 3 instead of 8 reads per scene: its yield and accuracy
               #   assertions need the full count and are skipped there)
 make cross    # arm-none-eabi-gcc -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -mfloat-abi=hard -Os
               #   -ffunction-sections: compiles core, drivers and app (NOT hal/stm32u5);
               #   size table, largest stack frames, forbidden-symbol check
-make config   # regenerate core/gl_config.h, core/gl_font_data.c, hal/stm32u5/gl_pins.h
+make config   # regenerate core/gl_config.h, core/gl_font_data.c, hal/stm32u5/gl_pins.h and
+              #   tests/solver/gl_solver_vectors.c
+make diff     # NOT part of make test: the solver as shared libraries against the Python
+              #   reference on 20000 random reads and 20000 random aim problems (about 4.5 min;
+              #   needs the reference's Python environment: numpy, scipy, numba optional)
+make bench    # NOT part of make test: rolls, RK4 steps and fit iterations of typical and
+              #   worst-case estimates (tools/solver_bench.c)
+make appdiff  # NOT part of make test: tests/test_e2e_putt.c dumps every gl_measurements_t the
+              #   application handed to the estimator; tools/app_diff.py runs the Python
+              #   reference on them and compares flags, numbers and the drawn line (a few
+              #   seconds; needs the reference's Python environment)
 make V=1 ...  # show full compiler command lines
 ```
 
@@ -199,12 +232,12 @@ exports the grain LED azimuths
 | `gl_tilt` | Exact integer block averaging with stillness gating, 6-face + cross-axis calibration, temperature polynomial, slope vector / fall line, gyro rotation integrator, the zeroing maths (180-degree reversal with the measured turn angle, `gl_tilt_flip_solve`), Precision Read combining, Survey store. |
 | `gl_gesture` | Posture (flat / upright), roll-to-set dial, double tap, half-turn spin. |
 | `gl_grain` | Grain front-end maths: dark / on / dark differencing with drift rejection, white-reference gains, first-harmonic vector per colour, validity against a *calibrated* threshold, running average, estimate handed to the solver (zero while grain is disabled, the default). |
-| `gl_gfx`, `gl_font_data.c` | 1-bpp 128 x 128 framebuffer in LCD bit order, round clipping to 122 px, thick line from a real-valued angle and point, aim line through the off-screen ball position (also with the ball behind the marker after a Precision spin: `gl_gfx_aim_line_at`), 5x7 font, seven-segment large digits, icons, battery, confidence bar, arrows. |
-| `gl_ui` | Explicit transition table over the 14 states (SLEEP, WAKE, WAIT_STILL, READ_TILT, CAPTURE, SOLVE, SHOW_RESULT, PRECISION_WAIT_SPIN, SURVEY_NEXT_DROP, SETTINGS_DIAL, CRADLE_USB, CAL_ZERO, ERROR, LOW_BATT), guards, timeouts, one screen per state. `CAL_ZERO` is the rev C zeroing (rev B: `CAL_FLIP`): entered only from the dial, never from the cradle state; a structural test checks that. |
-| `gl_proto` | Framed binary USB protocol with CRC-16 and resynchronisation; command dispatch through callbacks. |
+| `gl_gfx`, `gl_font_data.c` | 1-bpp 128 x 128 framebuffer in LCD bit order, round clipping to 122 px, thick line from a real-valued angle and point, aim line through the off-screen ball position (also with the ball behind the marker after a Precision spin: `gl_gfx_aim_line_at`; solid or in long dashes for a tentative aim: `gl_gfx_aim_line_styled`), 5x7 font, seven-segment large digits, icons, battery, confidence bar, arrows. |
+| `gl_ui` | Explicit transition table over the 14 states (SLEEP, WAKE, WAIT_STILL, READ_TILT, CAPTURE, SOLVE, SHOW_RESULT, PRECISION_WAIT_SPIN, SURVEY_NEXT_DROP, SETTINGS_DIAL, CRADLE_USB, CAL_ZERO, ERROR, LOW_BATT), guards, timeouts, one screen per state. The result screen is drawn from `gl_ui_view_t` (aim, ball position, distance, plays-like distance, slope and fall line, break, confidence, one `gl_ui_note_t` message, whether the aim is a solution and whether the marker lies at the ball); `gl_ui_result_text()` returns the strings it shows so that tests compare them glyph for glyph. `CAL_ZERO` is the rev C zeroing (rev B: `CAL_FLIP`): entered only from the dial, never from the cradle state; a structural test checks that. |
+| `gl_proto` | Framed binary USB protocol with CRC-16 and resynchronisation; command dispatch through callbacks. The jump to the ROM bootloader is refused (`GL_ERR_STATE`) unless the `dfu_allowed` callback agrees. |
 | `gl_log` | Power-fail-safe ring log on NOR flash and a small blob store (settings, calibration) on the same code; record formats. |
-| `gl_settings`, `gl_cal`, `gl_fmt`, `gl_event`, `gl_crc`, `gl_buf.h` | Settings and the dial item table, calibration records, number formatting, event queue, CRC-16/CCITT-FALSE, bounded serialisation cursors. |
-| `gl_solver.h`, `gl_solver_stub.c` | Phase-2 interface (mirrors `Measurements`, `Estimate`, `AimSolution` of the Python reference) and the stub. |
+| `gl_settings`, `gl_cal`, `gl_fmt`, `gl_event`, `gl_crc`, `gl_buf.h` | Settings (record **version 2**: units, Stimp, stopping distance past the hole in cm, dialled distance, grain, raw logging, estimator method; a version 1 record is converted, any other version is refused) and the dial item table, calibration records, number formatting, event queue, CRC-16/CCITT-FALSE, bounded serialisation cursors. |
+| `gl_solver.h`, `gl_solver.c`, `gl_solver_fit.c`, `gl_solver_aim.c`, `gl_solver_roll.c`, `gl_solver_priv.h` | The putt estimator, a port of the Python reference (structures mirror `Measurements`, `Estimate`, `PatchFit`, `RangeEstimate`, `AimSolution`): range fusion, Levenberg-Marquardt / Huber MAP fit of the quadratic patch with the anchored horizon stage (method B2), RK4 roll kernel with the capture model, nested bracketing aim solver, fallbacks (secant plane, best iterate, straight), confidence. Written against `gl_real_t`: `float` in the firmware, `double` with `-DGL_SOLVER_DOUBLE` on the host. See "Solver". |
 
 Public functions are documented in the headers; the header comment of each module states its RAM
 and stack use.
@@ -222,12 +255,17 @@ and stack use.
   Suggested regions on the 8 MB part: 4 sectors for `gl_store`, the rest for the read log.
 * **Events.** While awake `GL_EV_MOTION` must mean sustained movement (about 0.4 s without
   stillness, or a posture change), not a tap, or the double-tap gestures cannot work.
-* **Flag-out distance.** The dialled manual distance stays in the settings; the application
-  passes it to `gl_range_fuse()` only when no flagstick was found.
-* **Range means horizontal distance.** Stereo disparity measures depth along the forward axis;
-  the application passes `cos_bearing` so that `gl_range` works in distance (6 % difference at
-  20 degrees off axis). A bearing measured by one camera is referred to the ball with
-  `gl_range_from_ball_at()` (the 10.0 mm camera offset is 3.35 mrad at 3 m).
+* **Dialled distance.** It stays in the settings and is handed to the estimator with every read
+  (`user_distance_m`); the estimator uses it only when the cameras give no range (no flagstick,
+  or a flagstick that could not be ranged), and the screen then shows it with a question mark.
+* **Range means horizontal distance, and there is one of it.** Stereo disparity measures depth
+  along the forward axis; `build_measurement_()` hands the estimator `disparity x cos(bearing)`
+  (the reference's disparity is f B / distance; 6 % difference at 20 degrees off axis). The
+  number shown, logged and solved with is `gl_estimate_t.distance_m`. `gl_range_fuse()` still
+  runs in `flag_measured_()`, for learning the stick height and as a diagnostic, and nothing on
+  the way to the aim reads its result. A bearing measured by the left camera is referred to the
+  ball with `gl_range_from_ball_at()` at the estimator's distance (the 10.0 mm camera offset is
+  3.35 mrad at 3 m).
 * **Over the repeats.** Each left strip gives its own lowest point, base class, top and horizon
   row. `gl_read` takes the base class most strips agree on (a tie goes to the less committal
   one), averages the lowest point over those strips and reports its uncertainty: the way it was
@@ -236,7 +274,9 @@ and stack use.
   clutter (`gl_vis_angles_t.top_valid`).
 * **What a disparity sigma contains.** `gl_read_result_t.disp.sigma_px` = frame noise (shrinks
   with the groups) + static part (does not) + `GL_PROV_STEREO_CAL_SIGMA_PX` (0.05 px, the same
-  in every read of a unit). `gl_range` and the solver get this figure.
+  in every read of a unit). `gl_range` gets this figure; the estimator has no input for it (it
+  assumes 0.08 px, as the reference does), so the application uses it for two things only: the
+  3-sigma gate on the disparity and the confidence shown.
 
 ## Drivers
 
@@ -250,7 +290,7 @@ structure, and is tested against the simulator for its exact bus traffic.
 | `lsm6dsv16x` | IMU on SPI2, mode 3: WHO_AM_I probe, software reset, BDU + IF_INC; MEASURE mode (accel +-2 g high-performance and gyro +-1000 dps at 240 Hz, data-ready on INT2, LATCHED: CTRL4 is written explicitly); WAKE mode (accel low-power 15 Hz, gyro off, wake-up on INT1); samples mapped into marker axes; temperature only from a sensor that proves it is alive (WHO_AM_I, accelerometer running, raw value not 0x0000 / 0xFFFF); a burst of twelve 0xFF or 0x00 bytes is refused as "no device"; `gl_imu_verify()`. | The exact bytes of init; register values of both modes; scale factors; every axis mapping; 240 data-ready interrupts per second; wake-on-motion latency; absent device; the driver's samples through `gl_tilt` to a slope. |
 | `mx25r` | SPI NOR: JEDEC id, read, page program split at 256-byte boundaries with WREN and status polling, 4 kB sector erase, deep power-down with automatic wake; `gl_flash_if_t` for `gl_log` / `gl_store`. | The exact command bytes; page splitting; WREN before every program and erase; deep power-down; the ring log and the blob store running on the driver (3237 page programs, 19 erases, no non-blank byte programmed). |
 | `grain_frontend` | 16 LEDs charlieplexed on 5 pins (anode push-pull high, cathode push-pull low, the other three analog; all analog = off; break before make), OPAMP1 + ADC power sequence, dark / on / dark per LED, scan order alternating red / NIR and reversed on odd cycles. | **The pin states of all 16 LEDs** against a table written out independently in the test, the 9 pin operations of each switch in order, that exactly one LED of the model's netlist lights; a sneak-path analysis of the proposed wiring (30 two-LED paths, none NIR-only beside a lit red LED); the ADC sequence with the lit-LED mask of every conversion; values through `gl_grain` (modulation 0.400, azimuth -30.0 deg recovered); drift, motion, threshold from the calibration record. |
-| `power` | Battery through the 2 x 1 Mohm divider (VDDA from VREFINT), percent, low / critical, VBUS and charger STAT, PROG-enable gate: charging only with VBUS and BOTH temperature sensors (IMU and MCU die sensor, which must agree within 10 K) inside 0-45 C, 2 K hysteresis, unknown or stale temperature = stop; `gl_power_charge_stop()`; PROG polarity from `GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE`; storage threshold. | Pin configuration (PROG open drain, released), the exact ADC sequence (on, one conversion, off), conversion at several cell voltages and a sagging rail, interrupts, and the PROG pin level over a sweep of temperature and VBUS. |
+| `power` | Battery through the 2 x 1 Mohm divider (VDDA from VREFINT), percent, low / critical / storage; VBUS and charger STAT. **Cell temperature** from the NTC divider (`NTC_BIAS` - 10.0 kohm - `NTC_SENSE` - NTC 10 kohm, B 3380 - ground): one conversion with the bias released (must read near ground, else `STUCK`), bias driven push-pull high, 500 us to settle, 8 conversions, bias back to analog; ratiometric B-parameter conversion; open above 98 % and short below 2 % of full scale. **Charge gate** (`gl_power_charge_gate`): with VBUS, `CHG_INHIBIT` is pulled low (open drain) unless the NTC reading is fresh and passed its checks, at least one live die sensor (IMU, MCU) is within 10 K of it, and it is inside 0..45 C narrowed by a 1.5 K guard band, with 2 K of hysteresis; without VBUS the pin is released. `gl_power_init()` does not touch `CHG_INHIBIT` or `NTC_BIAS`. | That init leaves both pins as reset left them; conversion of battery counts; **the B-parameter conversion against a table computed in the test in double precision** (-40..85 C in 0.5 C steps: worst error 0.011 K; the simulator's NTC model agrees with the same table to 2e-12 counts); the tolerance budget (NTC 1 %, B 1 %, resistor 1 %, ADC 0.2 % of full scale: 0.90 K at 0 C, 1.09 K at 45 C, inside the 1.5 K guard); the exact pin and ADC sequence of a measurement (`NTC_BIAS` driven for 684 us); open, short and stuck-high detection; the gate over a sweep of -10..60 C and back (allowed 3.5..43.5 C rising, 1.5..41.5 C falling); unknown, stale, faulty and implausible temperatures; the simulator's charger model and its rules; status pins and interrupts. |
 
 Notes for the hardware review that came out of writing the drivers:
 
@@ -291,7 +331,13 @@ times, deep power-down), the IMU (register map, sample generator driven by a mot
 the test, wake-up and data-ready interrupts, mounting, noise, bias, temperature), two cameras on
 the shared bus (registers, reset, sleep, output enables, windows, free-running frame timing with
 a phase offset between the sensors, frames from a scene callback), the battery divider, the
-photodiode stage driven by the charlieplex pin states, and a USB host.
+photodiode stage driven by the charlieplex pin states, a USB host, and from rev C2: the cell
+NTC and its divider (cell temperature set by the test, part tolerances, open / short / stuck
+faults, a conversion sees the divider only while `NTC_BIAS` is driven and settled), the charger
+(running whenever VBUS is present and `CHG_INHIBIT` is not pulled low, whatever the MCU does),
+the board's pull resistors on the chip selects, DISP and the rail enable, an MCU reset
+(`gl_sim_mcu_reset`: every pin back to analog, the charger back to its default), and the core
+clock as a recorded state.
 
 It **checks**, and counts as violations (all tests require zero):
 
@@ -305,11 +351,23 @@ It **checks**, and counts as violations (all tests require zero):
 * Stop mode with the camera rail on, a capture running, USB started, the ADC or op-amp powered
   or a chip select asserted; more than one grain LED lit; ADC use while unpowered; the watchdog
   not refreshed for 32 s; a sleep that nothing could ever end;
-* power rules: USB started without VBUS when the MCU goes to sleep; the charger enabled on
-  entry to Stop mode; EXTCOMIN outside 1-60 Hz (547..606 LSE ticks accepted).
+* power rules: USB started without VBUS when the MCU goes to sleep; EXTCOMIN outside 1-60 Hz
+  (547..606 LSE ticks accepted);
+* charger rules (rev C2; the phase-1 rule "charger enabled at Stop entry" is gone, because the
+  charger is now ON by default and must stay able to start by itself): Stop mode with
+  `CHG_INHIBIT` held low and no VBUS (a sleeping marker would then refuse the next cradle);
+  Stop mode in the cradle with no wake-up source due within 10 s (nobody would be watching the
+  cell); the charger running for more than 10 s outside 0..45 C while the firmware runs;
+  `CHG_INHIBIT` driven push-pull; an internal pull enabled against a board pull;
+* NTC rules: a conversion of the NTC channel less than 300 us after the bias was driven;
+  `NTC_BIAS` still driven at Stop entry;
+* clock rules: Stop mode with the core clock fast; and it counts vision and solver trace points
+  that ran at the slow clock (`heavy_while_slow`, asserted to be 0 by the end-to-end tests).
 
 It also MEASURES what it cannot forbid: the time both cameras' pads are enabled during power-up
-(`cam_powerup_overlap_us`), and it can charge simulated time to the vision
+(`cam_powerup_overlap_us`), how long the charger ran in all, outside the temperature window
+(total and longest stretch) and during reset, how long `CHG_INHIBIT` was held and `NTC_BIAS`
+driven, the number of clock switches and the time at the fast clock; and it can charge simulated time to the vision
 (`gl_sim_set_compute_us()` per trace point), drop interrupt latches, fail SPI transfers and
 glitch the IMU's supply, which is what `tests/test_e2e_faults.c` uses.
 
@@ -321,8 +379,8 @@ analog nor driven low while the rail is off, and bus accesses with the rail off.
 
 | File | Content |
 |---|---|
-| `gl_pins.h` | **Generated** by `tools/gen_pins.py`: logical pin -> port, pin, LQFP-64 pad, function, AF number, source. 19 rows are SPEC (DESIGN_SPEC section 4: the eleven DCMI pins, MCO, SPI1 MISO, USB D-/D+, LPTIM1_CH1, the three OPAMP1 pins); the generator parses the spec text and refuses to generate if a SPEC row disagrees. **26 rows are PROPOSED** by this firmware because no netlist exists: SPI1 SCK / MOSI (PA5 / PA7), SPI2 (PB13 / PB14 / PB15), chip selects, IMU INT1 on PC13 (WKUP2) and INT2 on PC5, the camera rail enable, PWDN and SCCB lines, the five charlieplex pins (PC0-PC4), VBAT sense on PA2, charger and VBUS pins. Pads outside the verified list come from the LQFP-64 pinout as remembered (it agrees with every pad that the BOM verification lists); AF5 for the SPI pins and ADC1_IN7 for PA2 are from memory. After the review the generator also carries the pins the ROM bootloader drives or samples (22 pins, **from memory of AN2606**, 6 of them driven) and refuses a PROPOSED camera-facing pin on any of them: the left camera's PWDN moved from PC10 (bootloader USART3 TX) to PH0. Two SPEC rows remain on such pins (PB9 = D7, PA6 = PIXCLK): a release gate for the netlist, see open issue 4. |
-| `gl_hal_stm32u5.c` | Clocks (MSIS 48 MHz trimmed against LSE, no PLL; XVCLK = MSI / 4 on MCO), tick on LPTIM3 from LSE (runs through Stop 2), RTC seconds and RTC wake-up timer, GPIO from the pin table, EXTI sources, Stop 2 / sleep that returns only for an enabled source and cannot lose a wake-up, SPI1 / SPI2, **bit-banged SCCB** (two clock lines for two sensors at one address: no I2C peripheral can do that), DCMI snapshot with crop + byte select through GPDMA, ADC1 14-bit, OPAMP1 standalone, LPTIM1 PWM for EXTCOMIN, independent watchdog (32 s), unique id, reboot, jump to the ROM DFU bootloader through a backup-register flag (taken only if VBUS is present, so a marker in a pocket cannot be parked in the ROM). After the review: the interrupt latch is updated with interrupts masked (a lost IMU data-ready used to be possible), `gl_hal_extcomin_stop()` and the op-amp stop are safe before their start, the DCMI frame-end time is latched in the interrupt, the die temperature sensor is read, ICACHE is enabled. None of it compiled. |
+| `gl_pins.h` | **Generated** by `tools/gen_pins.py`: logical pin -> port, pin, LQFP-64 pad, function, AF number, source. 19 rows are SPEC (DESIGN_SPEC section 4: the eleven DCMI pins, MCO, SPI1 MISO, USB D-/D+, LPTIM1_CH1, the three OPAMP1 pins); the generator parses the spec text and refuses to generate if a SPEC row disagrees. **28 rows are PROPOSED** by this firmware because no netlist exists: SPI1 SCK / MOSI (PA5 / PA7), SPI2 (PB13 / PB14 / PB15), chip selects, IMU INT1 on PC13 (WKUP2) and INT2 on PC5, the camera rail enable, PWDN and SCCB lines, the five charlieplex pins, VBAT sense on PA2, VBUS and charger STAT, and the three rev C2 signals `CHG_INHIBIT` (PH1), `NTC_BIAS` (PH3-BOOT0) and `NTC_SENSE` (PC4, ADC1_IN13). Pads outside the verified list come from the LQFP-64 pinout as remembered; AF5 for the SPI pins, ADC1_IN7 for PA2 and ADC1_IN13 for PC4 are from memory. The generator carries the pins the ROM bootloader drives or samples (22 pins, **from memory of AN2606**, 6 of them driven) and refuses a PROPOSED camera-facing, charger or NTC pin on any of them; it reads the pins rev C2 forbids for PWDN (PA9, PA2, PC10) from the spec and refuses a PWDN row on them (PWDN is on PH0 and PC12); it reads the EXTCOMIN divider (547) from the spec and emits `GL_PINS_EXTCOMIN_LSE_TICKS`; it emits the levels the board's pulls give the chip selects, DISP and the rail enable during reset (`GL_PINS_RESET_TABLE`), which the simulator and `tests/test_board.c` use. **Pin budget:** the package has 46 usable I/O pads and rev C2 needs 47 signals, so one signal had to go on PH3-BOOT0: the generator checks the count, and `NTC_BIAS` was chosen because both its loads pull the pin low at reset (see "Board changes of rev C2"). The fourth charlieplex pin moved from PC4 to PC10 to free an ADC input for the NTC. Two SPEC rows remain on bootloader pins (PB9 = D7, PA6 = PIXCLK): a release gate for the netlist, see open issue 4. |
+| `gl_hal_stm32u5.c` | Clocks (MSIS 48 MHz trimmed against LSE; **rev C2: `gl_hal_clock_set()` switches SYSCLK to PLL1 at 160 MHz and back** - PLL1 from MSIS / 3 x 20 / 2; up: voltage range 1 with the EPOD booster, PLL locked, then SYSCLK with flash latency 4; down: SYSCLK back to MSIS, PLL off, then the lower voltage range; a PLL that does not lock leaves the slow clock and is not an error; SPI1, SPI2 and the ADC take their kernel clock from MSIK so that their timing does not move; `gl_hal_delay_us()` scales with the clock; Stop mode is refused (idle sleep instead) while the clock is fast; XVCLK = MSI / 4 on MCO), tick on LPTIM3 from LSE (runs through Stop 2), RTC seconds and RTC wake-up timer, GPIO from the pin table, EXTI sources, Stop 2 / sleep that returns only for an enabled source and cannot lose a wake-up, SPI1 / SPI2, **bit-banged SCCB** (two clock lines for two sensors at one address: no I2C peripheral can do that), DCMI snapshot with crop + byte select through GPDMA, ADC1 14-bit, OPAMP1 standalone, LPTIM1 PWM for EXTCOMIN, independent watchdog (32 s), unique id, reboot, jump to the ROM DFU bootloader through a backup-register flag (taken only if VBUS is present, so a marker in a pocket cannot be parked in the ROM). After the review: the interrupt latch is updated with interrupts masked (a lost IMU data-ready used to be possible), `gl_hal_extcomin_stop()` and the op-amp stop are safe before their start, the DCMI frame-end time is latched in the interrupt, the die temperature sensor is read, ICACHE is enabled. Rev C2: the NTC channel (ADC1_IN13), `CHG_INHIBIT` and `NTC_BIAS` left analog by `gl_hal_init()`, the chip selects taken over at the level of their pulls (output latch written before the mode). None of it compiled; the PLL / booster / latency sequence in particular is written from memory of the reference manual. |
 | `gl_hal_stm32u5_usb.c` | CDC-ACM on ST's USB device library: HSI48 + clock recovery, VDDUSB supply-valid only after VBUS was seen, byte rings, flow control by NAK. |
 
 To build it one needs, outside this repository: STM32CubeU5 (HAL, CMSIS, startup code, linker
@@ -338,8 +396,17 @@ multiples of 4 by design; a compile-time check in `app/gl_read.c` keeps it that 
 
 * **Main loop** (`gl_app.c`). One object (`gl_app_t`, static), one loop, no RTOS, no heap, no
   second context. Sleep policy: Stop 2 whenever nothing needs fast clocks - asleep, and also
-  between IMU samples while a result is shown; idle sleep while the camera rail is on or USB is
-  running (the simulator counts any other combination as a violation).
+  between IMU samples while a result is shown; idle sleep while the camera rail is on, USB is
+  running or the core clock is fast (the simulator counts any other combination as a
+  violation).
+* **Core clock** (rev C2). `gl_hal_clock_set(GL_CLOCK_FAST)` when the capture starts,
+  `GL_CLOCK_SLOW` when the solve is done, and on every way out in between (abort by motion,
+  camera error, time-out; a last check in the main loop drops a fast clock that no read is
+  using). The compute-heavy part of a read is exactly what lies between the two calls: the
+  vision on the band and on every strip, and the putt solve. Measured on the simulator: fast
+  for 1602 ms of a Quick Read, 33 vision trace points and the solve inside, none outside;
+  equally many switches up and down in every end-to-end test; never Stop mode in between. If
+  the switch up fails, the read runs at the slow clock (counted in `clock_fails`).
 * **Motion** (`gl_motion.c`). 240 Hz samples in 32-sample blocks. `GL_EV_STILL`: flat and 4
   still blocks. `GL_EV_MOTION` depends on the state: during a tilt read or a capture ANY moving
   block aborts the read; otherwise only real movement counts (posture left FLAT, gravity
@@ -359,13 +426,82 @@ multiples of 4 by design; a compile-time check in `app/gl_read.c` keeps it that 
   0.64-0.95 x its disparity wide at any range with the 20 mm baseline), its height fits its
   disparity (1.0-3.2 m when both ends are in the strip), it is at least 60 times as tall as
   wide, it is within 40 m, and the background beside it does not put more than 0.5 px on its
-  position. **Tiers:** stereo read; left camera only (bearing, elevations, monocular range if a
-  stick height has been learned; otherwise the dialled distance along the measured bearing);
-  band-only bearing (logged, not aimed at); nothing, with a reason.
-* **Result without a solver.** `gl_solver_estimate()` is called with a fully filled
-  `gl_measurements_t`; the stub's `GL_ERR_NOT_IMPLEMENTED` is shown as a tilt-only result, any
-  other error as a failure. The mapping from `gl_estimate_t` to the screen for a real solver is
-  written but cannot be exercised until phase 2.
+  position. **Tiers:** stereo read; left camera only (bearing and elevations; the estimator ranges
+  it from the stick's angular height if top and base are visible, otherwise it is "flag found,
+  range not available": the dialled distance along the measured bearing); band-only bearing
+  (logged, not aimed at); nothing, with a reason.
+* **Measurement hand-over** (`build_measurement_()`, the one place where firmware quantities
+  become solver inputs). The rule is GATE, DO NOT SYNTHESISE:
+
+  | Read | What the estimator gets | What it does |
+  |---|---|---|
+  | stereo pair, disparity at least 3 sigma above zero | bearing, disparity x cos(bearing), lowest point, base flag (strict), top if in the frame and not in clutter, horizon samples, dialled distance | ranges the flag itself (`gl_solver_fuse_range`) |
+  | left camera only, or a disparity below 3 sigma | the same with the disparity "not available" | ranges from the stick's angular height if top and base are visible; else `range_missing`: the dialled distance, else its 3 m default, along the MEASURED bearing |
+  | stick top in clutter or out of the frame | top "not visible" | no angular-height range |
+  | no flagstick | `flag_found` false, dialled distance | `flag_missing`: tilt-only plane along the visor axis |
+
+  Nothing is passed that the cameras did not measure; a left-camera-only read is no longer
+  turned into "no flag" (its bearing is kept). The bearing is referred to the ball with the
+  distance the estimator will use.
+* **Result on the display** (`compose_view_()` -> `gl_ui_view_t` -> `gl_ui.c`). What is shown,
+  top to bottom: distance in the selected unit (`?` appended when it was dialled or assumed,
+  `--` when nobody measured or dialled it); `PLAYS n` (the distance the launch speed would
+  roll on a level green; only for a solved putt); one message; the fall-line arrow in a rose
+  beside the line with the slope in percent under it; the break in cup widths with the side to
+  aim at (`<2.7 CUP` = aim 2.7 cups LEFT of the hole, `2.3 CUP>` = right, `STRAIGHT`, or
+  `BREAK ?`); five confidence boxes; `2X` for a Precision Read, `Dn` for the n-th Survey drop.
+  **Sign chain, with numbers from `tests/test_e2e_putt.c`:** green rising 2 % to the golfer's
+  left, 3 m: device tilt y +0.020, estimator aim azimuth +129.2 mrad (counter-clockwise from
+  the visor axis = left), break +2.7 cups, label `<2.7 CUP`, line fitted from the panel's
+  pixels at +128.7 mrad, crossing the screen RIGHT of its centre (the line is the backward
+  extension of the start line through the ball, which lies 246 px above the centre of the
+  screen), fall-line arrow pointing right; the mirror image for a green rising to the right
+  (-102.7 mrad, `2.3 CUP>`, -102.8 mrad drawn). Uphill 1.5 % at 6 m: `19.6FT`, `PLAYS
+  24.3FT`; downhill 2 %: `PLAYS 15.5FT`.
+
+  **Never a normal-looking line for an abnormal result:**
+
+  | Estimator says | Message | Line | Break | Confidence shown |
+  |---|---|---|---|---|
+  | aim from the patch, solved, fit converged | none | solid | quoted | estimator's x camera factors |
+  | the same, read by the left camera only / second line in view | `1 CAMERA` / `2 LINES SEEN` | solid | quoted | x 0.6 each |
+  | fit stopped on its iteration limit | `FIT NOT DONE` | solid | quoted | x 0.7 |
+  | pace limited (`solve_status` 1) | `PACE LIMIT` | solid | quoted | estimator's |
+  | aim from the secant plane (`aim_source` 1) | `APPROX` | solid | quoted | estimator's |
+  | `range_missing`, distance dialled | `NO RANGE`, distance with `?` | solid | quoted | estimator's (which has its own factor for the missing range), x 0.6 if one camera read the stick |
+  | `range_missing`, nothing dialled (solved for the estimator's 3 m default) | `NO RANGE`, distance `--` | **dashed** | `BREAK ?`, no plays-like | as above |
+  | `flag_missing`, distance dialled | `NO FLAG` and the no-flag icon, distance with `?` | solid, from the visor axis | quoted | estimator's |
+  | no flagstick and nothing dialled | no result: the UI asks for the distance | | | |
+  | best effort (`aim_source` 2: no convergence, no bracket) | `NOT SOLVED` | **dashed** | `BREAK ?`, no plays-like | at most 0.2 (one box) |
+  | straight for want of anything (`aim_source` 3) | `NO SOLUTION` | **dashed** | `BREAK ?`, no plays-like | 0 (no box) |
+  | Survey, marker not at the ball | `PUT AT BALL` | **none** | quoted | as computed |
+  | estimator refused (`GL_ERR_PARAM`, `GL_ERR_RANGE`) | error screen | none | | |
+
+  The most serious condition gives the one message, in this order: `PUT AT BALL`, `NO
+  SOLUTION`, `NOT SOLVED`, `NO FLAG`, `NO RANGE`, `APPROX`, `PACE LIMIT`, `FIT NOT DONE`, `1
+  CAMERA`, `2 LINES SEEN`. A line more than about 13.5 degrees off the visor axis leaves the aperture: a dashed parallel
+  through the centre and a side arrow replace it, whatever the result.
+
+  **Confidence shown** (`shown_confidence_()`): the estimator's confidence, x 0.6 if the
+  flagstick was measured by the left camera only, x 0.6 if another line in view also passed as
+  a flagstick, x clamp(0.08 px / the read's disparity sigma, 0.5, 1) (the estimator assumes
+  0.08 px whatever the read claims), x 0.7 if the fit did not converge; capped at 0.2 for a
+  best-effort aim; 0 for the straight fallback. Boxes = round(5 x confidence). Measured: 0.205
+  with both cameras against 0.076 with the left one only and 5 m dialled; 0.156 against 0.094
+  with a second flagstick in view.
+* **Survey.** Each placement is stored as its own `gl_measurements_t`; the estimate uses them
+  all. The estimator takes the drops "ball first", and the line on the screen means something
+  only if the marker lies at the ball, so: the ball is the stored drop FARTHEST from the
+  flagstick by the estimator's range; if the newest drop is that one, or within 0.85 of its
+  range, the newest drop is taken as the ball and the line is drawn in its frame; at any
+  other drop the numbers are shown with `PUT AT BALL` and no line. Start at the ball, or come
+  back to it for the last drop. **This rule is this firmware's decision, not the
+  specification's: see open issue 18.**
+* **Log.** A read record's `range_m` is the estimator's distance; every read record is followed
+  by an event `GL_APP_LOGEV_ESTIMATE` carrying aim source, solve status, the flags
+  (`fit_converged`, `base_hidden`, `flag_missing`, `range_missing`, `poor_horizon`), method,
+  read tier, `ambiguous`, whether the line was drawn, and the number of trial rolls. Charge
+  gate changes are logged as `GL_APP_LOGEV_CHARGE` (reason and cell temperature) while awake.
 * **Precision Read.** After the spin the marker faces away from the hole; the line is drawn
   through the ball position behind the marker (`gl_gfx_aim_line_at()`, added for this), with the
   spin angle from the gyro.
@@ -373,6 +509,13 @@ multiples of 4 by design; a compile-time check in `app/gl_read.c` keeps it that 
   turn, second read, `gl_tilt_flip_solve()`, bias stored with temperature and time. Refused
   with VBUS present; a turn more than 30 degrees from 180, a bias above 5 % or a disturbed read
   fails without storing.
+* **Settings** (dial and USB). Stimp, units (feet, metres, paces), **PAST** (how far past the
+  hole a missed putt should stop: 0..90 cm in steps of 5, default 30; shown in inches or
+  centimetres), grass, grain, dialled distance, raw logging, **METHOD** (`B1` default, `B2
+  HORIZ` = the anchored horizon fit), zeroing. The stored record is version 2; a version 1
+  record (which had a three-step pace where PAST is now) is converted on load (pace 0 / 1 / 2
+  -> 0 / 30 / 45 cm, method B1) and a record of any other version is refused, so that an old
+  layout is never read as the new one.
 * **USB** (`gl_usb.c`). All `gl_proto` commands are bound: settings, the four calibration
   records, log information / dump / incremental erase, RTC, reboot and ROM DFU, streams (IMU,
   tilt, power, grain). Writing calibration, starting a factory calibration procedure and the
@@ -387,9 +530,16 @@ multiples of 4 by design; a compile-time check in `app/gl_read.c` keeps it that 
 * **Power.** Battery measured at wake-up and every 30 s (not during a read); below the LOW
   threshold the battery symbol shows it, below CRITICAL the warning screen is shown and the
   device sleeps (no camera read from a cell that the camera rail could brown out). **Charge
-  gate:** evaluated in every state, awake or in the cradle, from two sensors; a temperature
-  older than 45 s, an IMU that does not answer or the two sensors disagreeing by more than 10 K
-  stops the charge. **IMU supervision:** a bus error or a stall (no sample for 100 ms) starts a
+  supervision** (rev C2; rules in `drivers/power.h`, state table under "Charger and cell
+  temperature"): the charger starts by itself whenever VBUS appears; the firmware measures the
+  cell NTC and both die sensors at once on the VBUS edge (also when that edge is what woke it,
+  and at boot in the cradle), then every 5 s while VBUS is present, awake or asleep (a timed
+  wake-up; one measurement is 1.1 ms of simulated bus and conversion time, `NTC_BIAS` driven
+  for 0.68 ms of it), and pulls `CHG_INHIBIT` low when the gate says stop. A cell
+  temperature older than 12 s counts as unknown. `CHG_INHIBIT` is released when VBUS goes and
+  before every sleep without VBUS. The cradle screen says `TOO COLD`, `TOO HOT` or `TEMP
+  SENSOR` when charging is stopped. The jump to the ROM bootloader is refused unless VBUS is
+  present and the gate is satisfied at that moment. **IMU supervision:** a bus error or a stall (no sample for 100 ms) starts a
   recovery (re-probe, re-configure) with a back-off of 1..64 s; a lost data-ready latch is
   bridged by polling after 10 ms; after 8 failed recoveries in a row (and no USB session) the
   watchdog is deliberately left to expire. **Storage mode:** below `GL_PROV_BATT_STORAGE_MV` (3250 mV) the IMU is switched
@@ -411,17 +561,18 @@ when it does is measured further down).
 | Quantity | Result |
 |---|---|
 | State sequence | SLEEP, WAKE (1.02 s), WAIT_STILL (1.82 s), READ_TILT (2.36 s), CAPTURE (3.42 s), SOLVE, SHOW_RESULT (5.03 s) |
-| Result on the screen | 3.44 s after the marker came to rest (0.76 s until stillness is established, 1.07 s tilt read, 1.62 s camera part including power-up and settling) |
+| Result on the screen | 3.45 s after the marker came to rest (0.76 s until stillness is established, 1.07 s tilt read, 1.62 s camera part including power-up and settling) |
 | Camera rail | on once, for 1557 ms; 33 captures, 87 SCCB writes; rail never on outside the CAPTURE state |
-| Camera rail rule | simulator: 0 violations; independent replay of the 17673 trace records: 0 pin-rule violations, 0 bus accesses with the rail off |
+| Camera rail rule | simulator: 0 violations; independent replay of the 17868 trace records: 0 pin-rule violations, 0 bus accesses with the rail off |
 | Slope | (1.202, -1.998) % against (1.200, -2.000) % |
 | Disparity | 2.1991 px against 2.1985 px true; claimed sigma 0.054 px, of which 0.05 px is the (unmeasured) stereo calibration term |
 | Range | 5.982 m +- 0.138 m against 5.984 m (stereo 5.982, angular height 5.982 with the prior stick height) |
 | Bearing | 48.46 mrad against 48.46 mrad |
-| Screen | panel memory identical to the framebuffer; the aim line passes through the predicted pixels |
+| Putt estimate (method B1, single precision) | aim 79.3 mrad right of the line to the hole (-4.40 cups), launch speed 2.276 m/s, distance 5.982 m, hole 124 mm below the ball, confidence 0.16; aim source 0, status OK; 6 trial rolls, 1273 RK4 steps, 3 fit iterations |
+| Screen | panel memory identical to the framebuffer; the aim line (bearing from the ball + aim angle) passes through the predicted pixels |
 | While the result is shown | MCU in Stop 2 for 99.5 % of the time (IMU at 240 Hz) |
 | After 45 s | display off, IMU wake-on-motion, flash in deep power-down, Stop 2; at most 6 loop iterations in the next 60 s (watchdog refresh every 16 s) |
-| Log | one boot event and one read record, decoded and compared with the result |
+| Log | one boot event, one read record (range = the estimator's distance, solve status, launch speed, aim offset) and its estimate event (aim source, status, flags, method, tier, rolls), decoded and compared with the result |
 
 What the L R R L timing correction is worth (stick drifting steadily at 6 px/s = 0.2 px per
 frame, 8 groups):
@@ -458,31 +609,46 @@ Other end-to-end scenarios, all with zero simulator violations:
   for byte (2 x 48 records); the read takes 6.0 s instead of 3.4 s. Level ALL: 1600 records,
   1.6 MB, **47.2 s per read with the camera rail on for 40.1 s** - a bench mode, see open issues.
 * **No flagstick:** the rail is on for 157 ms (band only), the UI asks for the distance; with a
-  dialled distance a tilt-only result along the visor axis.
+  dialled distance of 4.5 m the estimator's flag-out fallback: a tilt-only plane along the visor
+  axis, aim 82 mrad right of the axis, `flag_missing`, confidence 0.21, shown with `NO FLAG`.
 * **Bumped 0.4 s into the capture:** read aborted and rail off within one 133 ms block,
   re-read by itself.
 * **Precision Read:** spin measured 176.08 degrees (true 176.00); a device bias of (0.4, -0.3) %
-  cancels: combined slope (1.203, -2.000) % against (1.200, -2.000) %; no second camera read.
-* **Survey:** second drop 3 m further along, both drops stored with their own range and slope.
+  cancels: combined slope (1.203, -2.000) % against (1.200, -2.000) %; no second camera read;
+  the estimator is told `tilt_reads` = 2.
+* **Survey:** second drop 3 m further along, both drops stored with their own range and slope;
+  the Survey estimate uses both (stations 0 and 3.0 m, fitted curvature c = 0.0008 /m and
+  twist d = 0.0041 /m, solved on the patch). The second drop is nearer the flagstick than the
+  first, so the first is the ball and the screen says `PUT AT BALL` without a line.
 * **Zeroing** on a table sloped (0.6, -1.1) % with a turn of -171 degrees: stored bias
   (3.496, -2.521) mrad against (3.500, -2.500) true, present after a power cycle; a 120 degree
   turn is refused; being put into the cradle abandons it; it cannot be started in the cradle.
 * **Cradle:** protocol over the simulated CDC port (ping, info, status, settings, calibration,
-  log dump, streams), charging enabled at 22 C, stopped at 47 C, re-enabled at 30 C, never Stop
-  mode on USB, reboot to ROM DFU requested (after `UNLOCK`), asleep after removal.
+  log dump, streams), charging at 22 C, stopped at 47 C (the charger ran for 4.30 s of the 5 s
+  supervision period before the firmware stopped it), released again at 30 C, never Stop mode
+  on USB, reboot to ROM DFU requested (after `UNLOCK`) and refused while the cell is too hot,
+  asleep after removal with `CHG_INHIBIT` released.
 * **Missing IMU / missing camera:** shown as an error, not fatal; rail off.
 * **Battery:** at 3.45 V (low) the read runs; at 3.30 V (critical) the warning is shown and the
   device sleeps without ever powering the cameras; in the cradle it charges.
 * **Spurious wake-up interrupt 50 ms after going to sleep:** ignored; a later one wakes.
 
-Fault scenarios (`tests/test_e2e_faults.c`, 16 tests; each reproduces a review finding and
-failed before its fix):
+Fault scenarios (`tests/test_e2e_faults.c`, 18 tests; the IMU, Precision, USB, calibration and
+storage ones each reproduce a review finding and failed before its fix; the charger ones were
+rewritten for rev C2):
 
-* **Charge gate.** One SPI error earlier, then 5 minutes in the cradle at a true 60 C: charging
-  not allowed. IMU silent (its bytes read 0xFF, which used to decode as 25.0 C): temperature
-  invalid, charging not allowed, fault shown. IMU says 22 C while the MCU die sensor says 50 C:
-  not allowed. A fault acknowledged by a double tap in the cradle returns to the cradle state
-  and the gate keeps running (10 minutes at 60 C: not allowed).
+* **Charge gate.** One SPI error earlier, then 5 minutes in the cradle at a true 60 C: the
+  charger ran for 1.1 ms before the firmware stopped it, and stayed stopped. IMU silent: the
+  NTC reads 60 C and stops the charge by itself (the IMU is only a second opinion now); at a
+  permitted temperature a dead IMU leaves the MCU die sensor to vouch for the NTC (driver
+  test). NTC 22 C,
+  IMU 22 C, MCU die 50 C: charging (one die sensor agrees). NTC 22 C with both die sensors at
+  50 C: stopped as implausible. NTC open, shorted, stuck high: stopped, with the reason logged
+  (13 charge events in that test: 2 too hot, 3 NTC faults). 12 NTC conversions in 60 s in the
+  cradle, `NTC_BIAS` driven for 10.3 ms of them. A fault acknowledged by a double tap in the
+  cradle returns to the cradle state and the gate keeps running (10 minutes at 60 C: stopped).
+* **Charger states** (`test_charger_state_table`, `test_rom_dfu_and_the_charger`): the table
+  under "Charger and cell temperature" is measured there.
 * **IMU supervision.** One failed SPI2 transfer: recovered (1 recovery), the read completes and
   15 later pick-up / put-down cycles all wake the device (it used to stay deaf until a reset).
   IMU absent only during boot: found later, 6 of 6 wakes. IMU dead for good: 12 failed
@@ -497,6 +663,317 @@ failed before its fix):
 * **Storage mode** at 3190 mV: IMU off, motion ignored, Stop mode 100.00 % of the time.
 * **L R R L with vision run time:** the table above.
 
+
+### Putt on the display (`tests/test_e2e_putt.c`; `make appdiff`)
+
+Whole reads on the simulator: a rendered scene (sloped or twisted green, flagstick, optionally a
+second flagstick or a blind right camera) seen by the two camera models, the real read sequence,
+the vision, `build_measurement_()`, the single-precision estimator, `compose_view_()`, the
+renderer, the LCD driver and the panel model. From the panel's memory the test fits the aim
+line blind (run centres, a voting stage, least squares) and reads back every label glyph for
+glyph. The reference is the double-precision build of the same solver source
+(`tests/solver/gl_solver_ref.c`, which `make diff` ties to the Python package) and, with `make
+appdiff`, the Python package itself on the dumped inputs.
+
+"Reference aim" is the launch direction in the frame of the marker at the ball, in mrad,
+counter-clockwise (left) from the visor axis: first on the record the application handed to
+the estimator, then on a record built from the TRUE scene (true slope, range, bearing; the
+availability flags of the application's record). "Drawn" is the same angle measured from the
+pixels. `make test` on the final sources:
+
+| Scene | Reference aim: app record / true scene | Drawn | Drawn - reference | Shown |
+|---|---|---|---|---|
+| Quick 3 m, rises LEFT 2 %, level | +129.19 / +127.58 | +128.73 | -0.46 | 9.8FT, PLAYS 10.7FT, <2.7 CUP, 2.0%, 3/5 |
+| Quick 3 m, rises RIGHT 2 %, uphill 1.5 % | -102.69 / -102.27 | -102.80 | -0.11 | 9.8FT, PLAYS 12.7FT, 2.3 CUP>, 2.5%, 2/5 |
+| Quick 6 m, rises RIGHT 1.2 %, downhill 2 % | -28.87 / -28.71 | -28.63 | +0.25 | 19.6FT, PLAYS 15.5FT, 4.4 CUP>, 2.3%, 1/5 |
+| Quick 6 m, rises LEFT 1 %, uphill 1.5 % | +8.42 / +8.56 | +8.42 | +0.00 | 19.6FT, PLAYS 24.3FT, <2.7 CUP, 1.8%, 1/5 |
+| Quick 9 m, rises LEFT 0.8 %, downhill 1 % | +72.55 / +72.80 | +74.86 | +2.32 | 29.4FT, PLAYS 26.7FT, <4.4 CUP, 1.3%, 0/5 |
+| Quick 1.5 m, rises RIGHT 1.5 %, uphill 0.5 % | -59.92 / -58.56 | -59.78 | +0.14 | 4.9FT, PLAYS 6.0FT, 0.8 CUP>, 1.6%, 5/5 |
+| Quick 12 m, rises RIGHT 0.6 %, uphill 1 % | -59.39 / -59.33 | -59.65 | -0.27 | 39.3FT, PLAYS 45.4FT, 3.2 CUP>, 1.2%, 0/5 |
+| Quick 4.5 m, level green | +10.01 / +10.10 | +9.60 | -0.41 | 14.7FT, PLAYS 15.7FT, STRAIGHT, 0.0%, 1/5 |
+| Precision 6 m, rises LEFT 1.2 %, uphill 1.6 %, spun 176 deg | +102.84 / +101.00 | +102.76 | -0.09 | 19.7FT, PLAYS 24.1FT, <2.9 CUP, 2.0%, 1/5, 2X |
+| Survey 2 drops (3 m, then the ball at 6 m) | +54.62 / +54.77 | +54.74 | +0.12 | 19.6FT, PLAYS 15.6FT, <1.4 CUP, 2.2%, 1/5, D2 |
+| Survey 3 drops: at drop 2 (3 m), not at the ball | +50.52 / +50.10 | no line | - | 19.6FT, PLAYS 15.5FT, <0.6 CUP, 2.3%, PUT AT BALL, 1/5, D2 |
+| Survey 3 drops (ball 6 m, 3 m, ball again) | +39.32 / +39.35 | +38.61 | -0.71 | 19.7FT, PLAYS 15.6FT, <0.5 CUP, 2.3%, 1/5, D3 |
+| Survey 4 drops: at drop 3 (2 m), not at the ball | +49.41 / +49.57 | no line | - | 29.4FT, PLAYS 35.2FT, <2.4 CUP, 1.6%, PUT AT BALL, 1/5, D3 |
+| Survey 4 drops (ball 9 m, 6 m, 2 m, ball again) | +19.63 / +19.63 | +19.71 | +0.08 | 29.6FT, PLAYS 35.3FT, <2.5 CUP, 1.6%, 1/5, D4 |
+| Flag out, dialled 4.5 m, rises LEFT 1.5 %, uphill 1 % | +70.12 / +70.21 | +73.97 | +3.85 | 14.8FT?, PLAYS 17.7FT, <2.9 CUP, 1.8%, NO FLAG, 1/5 |
+| Left camera only, 5 m dialled, rises RIGHT 1.4 % | -11.30 / -11.20 | -11.87 | -0.58 | 5.0M?, PLAYS 5.6M, 3.3 CUP>, 1.5%, NO RANGE, 0/5 |
+| Left camera only, nothing dialled (3 m assumed) | -4.05 / -5.48 | -3.96 dashed | +0.09 | --, no plays-like, BREAK ?, 1.5%, NO RANGE, 1/5 |
+| Ambiguous: a second flagstick in view | -28.64 / -28.71 | -28.08 | +0.56 | 19.6FT, PLAYS 15.5FT, 4.4 CUP>, 2.3%, 2 LINES SEEN, 0/5 |
+| Best effort: 7 % cross slope at Stimp 14 (`aim_source` 2, status 2) | +796.98 / +797.72 | off the screen: dashed substitute | - | 13.1FT, no plays-like, BREAK ?, 7.0%, NOT SOLVED, 1/5 |
+| Best effort: 6.5 % downhill at Stimp 14 (`aim_source` 2, status 3) | +975.15 / +976.82 | off the screen: dashed substitute | - | 9.7FT, no plays-like, BREAK ?, 6.5%, NOT SOLVED, 1/5 |
+| Secant plane: twisted green, Survey of 3 drops, Stimp 8 (`aim_source` 1) | -417.53 / -415.37 | off the screen: dashed substitute | - | 16.4FT, PLAYS 19.0FT, 20.5 CUP>, 6.2%, APPROX, 1/5, D3 |
+| Method B2 (setting), 45 cm past, paces | -23.61 / -23.51 | -22.96 | +0.66 | 6.5P, PLAYS 5.3P, 4.1 CUP>, 2.3%, 1/5 |
+
+* Largest |drawn - reference| of a line on the screen: **3.85 mrad (0.22 degree)**; the test
+  allows 6.5 mrad. The free-line figure of the display is 0.28 degree worst ("Display"); the
+  labels of the result screen cover parts of this line, which is what the larger rows show.
+* Largest |firmware (single precision) - reference| of a solved aim: 0.062 mrad. Largest
+  |firmware - reference on the true scene|: 1.85 mrad over the scenes where that comparison is
+  asserted (it contains the vision's and the tilt read's errors).
+* Solid or dashed is decided from the pixels too: of the pixels that only a solid line inks
+  (the gaps of the dashes), at least 0.61 are black for the lines that must be solid and at
+  most 0.07 for the ones that must be dashed.
+* `make appdiff`: 22 estimator calls of the application, 22 agree with the Python reference
+  (flags and codes exactly; C double within 1e-4 relative, largest aim difference 6.3e-7 mrad;
+  firmware within 0.5 mrad of aim, 0.1 % of launch speed, 0.01 cup, 1e-4 of confidence; drawn
+  line within 6.5 mrad; solid / dashed as the reference's flags require).
+* Precision Read: with a device bias of (0.4, -0.3) % the single read aims 16.47 mrad from the
+  true scene's reference, the combined read 1.85 mrad.
+* The best-effort row "6.5 % downhill": the firmware's best iterate is 1200 mrad where the
+  reference's is 975 mrad. Of a failed solve only the class (`aim_source`, `solve_status`) is
+  defined and compared; neither number is an aim, and the screen says so.
+
+**What these tests do not reach, and how it is covered instead.** `PACE_LIMITED`, the straight
+fallback (`aim_source` 3), a fit that stops on its iteration limit and a poor horizon are not
+produced by any read the simulator's scenes could be made to give (pace-limited is a knife edge
+in cross slope; the others need inputs the vision does not deliver). Their MAPPING to the
+screen is tested by overwriting the estimate of a real read and re-composing the view
+(`gl_app_recompose_view()`): message, solid or dashed line, `BREAK ?`, confidence boxes. The
+best-effort and secant-plane results of real reads have aims far off the visor axis, so what
+is on the screen there is the dashed off-screen substitute; a tentative line ON the screen is
+seen in the mapping test and in the "nothing dialled" read. The synthetic green is a plane or
+a twisted plane and the stick's base is at the turf horizon in every scene (`base_hidden`
+true), so the visible-base branch of the estimator is exercised only by `tests/test_solver.c`.
+
+### Charger and cell temperature (rev C2; `tests/test_drv_power.c`, `tests/test_e2e_faults.c`)
+
+Hardware as specified: the MCP73831 charges whenever VBUS is present; the MCU can only STOP it,
+by pulling `CHG_INHIBIT` low (open drain). The firmware's rules: pull low only as the outcome
+of a temperature evaluation made with VBUS present; release whenever it stops supervising.
+
+| State | `CHG_INHIBIT` | `NTC_BIAS` | Charger with VBUS | Who watches the cell | Measured on the simulator |
+|---|---|---|---|---|---|
+| MCU unpowered (cell at its cut-off) | high-Z (no supply) | high-Z | **on** | nobody (the case the default exists for) | by construction of the model; the FT-pin requirement is **not verified** (below) |
+| Reset held, or start-up before `gl_app_init()` has measured | analog (reset state; `gl_hal_init()` and `gl_power_init()` do not touch it) | analog | **on** | nobody, until the first measurement early in `gl_app_init()` | boot in the cradle at -5 C: the charger ran for 1.1 ms after `gl_hal_init()` before the firmware stopped it (`gl_app_init()` takes 88.2 ms in all; the simulator charges no time for computation or for the start-up code before `main()`) |
+| Awake, VBUS present, temperature permitted | released | driven high for 0.68 ms per measurement, analog otherwise | on | firmware: NTC + die sensors every 5 s | allowed 3.5..43.5 C rising, 1.5..41.5 C falling |
+| Awake, VBUS present, too cold / too hot / NTC fault / implausible / unknown | **low** | as above | **off** | firmware, every 5 s (releases when permitted again) | cradle at 47 C: stopped within the 5 s period (4.30 s); every NTC fault stops |
+| In the cradle between loop passes (idle sleep with USB, Stop 2 without) | as last evaluated (low or released) | analog | on or off accordingly | firmware: timed wake-up every 5 s | asleep, put into the cradle at 50 C: charger ran 1.13 ms before it was stopped; simulator rule: Stop in the cradle with no wake-up due within 10 s is a violation |
+| Asleep (Stop 2), no VBUS | **released** before the sleep | analog | nothing to charge; starts by itself at the next cradle, and the VBUS edge wakes the firmware | firmware from the VBUS edge on | simulator rule: Stop with the pin low and no VBUS is a violation (none in any scenario; a test of the rule itself makes it fire) |
+| VBUS removed while awake | released in the same loop pass | analog | - | - | |
+| Watchdog reset (also the deliberate one after a dead IMU) | analog again from the reset | analog | **on** until the firmware has measured again | firmware, from its first measurement after the restart | reset while inhibited at -5 C: charger on for 3.0 ms of reset + 1.1 ms of boot, then stopped |
+| Firmware hung (no reset yet) | whatever it was: low stays low, released stays released | analog, or stuck high if hung inside a measurement | on if it was released | **nobody, for up to one watchdog period** | hung at 50 C: charger ran unsupervised for 33 s (watchdog 32 s). **NOT MET** |
+| ROM bootloader (DFU) | analog (the ROM does not drive PH1; table from memory of AN2606) | analog | **on** | **nobody, for as long as the bootloader runs** | charging at 50 C for all of the 600 s the test lasts. **NOT MET** |
+
+What is done about the two NOT MET rows, and what is not:
+
+* **ROM bootloader.** The firmware refuses the jump (`GL_ERR_STATE`) unless VBUS is present
+  and the gate is satisfied at that moment, so DFU starts from a permitted temperature. It
+  cannot stop a cell from warming past 45 C during a long session in the bootloader, and it
+  cannot prevent entry by other means (BOOT0 strap, empty flash). Only hardware can (a
+  charger with its own NTC input, or a comparator on the NTC).
+* **Hung firmware.** Bounded by the independent watchdog (32 s), after which the reset row
+  applies. Shortening the watchdog period costs more wake-ups from Stop mode (open issue 12).
+
+Cell temperature, as built and as tested:
+
+* **Conversion.** Ratiometric (bias from the ADC's reference rail): R = 10.0 kohm x x / (1 - x),
+  T = 1 / (1/298.15 + ln(R / 10 kohm) / 3380) - 273.15. Against a table computed independently
+  in the test in double precision, -40..85 C in 0.5 C steps: worst error 0.011 K (at -39.5 C;
+  one ADC count is 0.006 K at 25 C and 0.025 K at -40 C).
+* **Tolerances and the guard band.** NTC 1 %, B 1 %, series resistor 1 % in their worst
+  combination: 0.67 K at 0 C, 0.81 K at 45 C; with an ADC error of 0.2 % of full scale 0.90 K
+  and 1.09 K. The window is therefore narrowed by `GL_PROV_CHARGE_TEMP_GUARD_C` = 1.5 K on
+  both sides, with 2 K of hysteresis: charging stops below 1.5 C and above 43.5 C and
+  resumes above 3.5 C and below 41.5 C. **Not covered by the guard band:** a temperature
+  difference between the cell and the NTC beside it, and the difference between the
+  B-parameter equation and the real part's R-T table (no datasheet table here: not quantified,
+  not verified).
+* **Open, short, stuck.** Above 98 % of full scale: open (NTC missing, or a broken trace; the
+  equation would say below -51 C). Below 2 %: short, or no bias (above 180 C). The sense pin
+  not within 5 % of ground with the bias released: stuck (a leak or a short to a rail). Each is
+  a reason of its own and stops the charge.
+* **Plausibility.** The NTC must be within 10 K of at least one die sensor that is alive and
+  fresh (IMU with the driver's liveness check; MCU die sensor). With neither available the
+  temperature counts as unknown. "At least one" and not "both": the MCU's die may run warm
+  during a USB session, and one disagreeing die sensor should not stop a healthy unit from
+  charging (open issue 5).
+* **Bias only while measuring.** `NTC_BIAS` is driven for 684 us per measurement (500 us to
+  settle the node, 8 conversions) and is analog otherwise: 12 measurements and 10.3 ms of
+  bias in 60 s in the cradle (measured), about 0.02 % duty. The simulator counts a conversion
+  before the settling time and a driven bias at Stop entry as violations.
+
+### Board changes of rev C2 (`tests/test_board.c`, `tests/test_pins.c`)
+
+| Change | Firmware | How it is checked |
+|---|---|---|
+| `CHG_INHIBIT` polarity and safe states | `drivers/power.c`, table above | simulator rules and the measured table above |
+| Cell NTC | `GL_ADC_CH_CELL_NTC`, `GL_PIN_NTC_BIAS`, `GL_PIN_NTC_SENSE`, `drivers/power.c` | above |
+| EXTCOMIN divider 547 | the generator reads the divider from the spec into `GL_PINS_EXTCOMIN_LSE_TICKS`; `GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS` must equal it (`test_pins.c`) | simulator: the LCD driver starts LPTIM1 with 547 ticks, 32768 / 547 = 59.905 Hz |
+| Core clock slow / 160 MHz around the read | `gl_hal_clock_set()`, `clock_()` in `app/gl_app.c` | simulator: calls recorded, paired, compute only while fast, never Stop while fast. **STM32: by inspection only** |
+| Chip-select states during reset | pulls on the board (LCD SCS and DISP low, flash and IMU chip selects high, rail enable low: `GL_PINS_RESET_TABLE`); `gl_hal_init()` takes each over at that level | simulator: 0 of the 22 trace records of reset + `gl_hal_init()` leave one of the five pins away from its pull level; an internal pull against a board pull is a violation |
+| PWDN off PA9 / PA2 / PC10 | `tools/gen_pins.py`: PWDN on PH0 and PC12; the forbidden pins are parsed from the spec | generator refuses; `test_pins.c` |
+| New signals | `NTC_BIAS` PH3-BOOT0 (pad 60), `NTC_SENSE` PC4 (pad 24, ADC1_IN13), `CHG_INHIBIT` PH1 (pad 6): PROPOSED rows | `test_pins.c`: 47 signals, 46 on the 46 I/O pads and one on BOOT0; none of the three on a ROM-bootloader pin |
+
+Three things about those pins need the schematic owner, and none is verifiable here:
+
+* **`CHG_INHIBIT` must be an FT pin** (no protection diode to VDD). With the MCU unpowered, a
+  diode would clamp the MOSFET gate to one diode drop and switch the charger off: the very
+  case the default-on circuit exists for. PH1 is an FT pin as remembered; check the pin
+  definition table of the datasheet.
+* **`NTC_BIAS` on PH3-BOOT0.** With all 46 other pads taken, one signal had to go there. The
+  bias was chosen because its loads pull the pin LOW at every reset (the divider to ground,
+  and the BOOT0 pull-down), so it cannot select the bootloader by accident, and because it is
+  driven for 0.7 ms at a time. If the board straps BOOT0 differently, or another signal can be
+  dropped, `tools/gen_pins.py` is the one place to change.
+* **ADC1_IN13 on PC4** is from memory of the datasheet.
+
+### Solver (`tests/test_solver.c`; `make diff`; `make bench`)
+
+All figures here are from runs on the host. "Reference" = the Python package
+`../sim/greenline_sim` and its exported vectors (`../sim/results/reference_vectors.json`, schema
+2: 240 estimator and 120 solver cases from simulated reads, plus the groups appended for this
+port: 82 fallback estimator cases, 32 fallback solver cases, 33 single rolls; see
+`REFERENCE_VECTORS.md`). The same C source is built twice: `gl_real_t` = `double`
+(`-DGL_SOLVER_DOUBLE`, symbols `gl_solver64_*`, host only) and `gl_real_t` = `float` (the
+firmware). `tests/test_solver.c` runs both builds inside `make test` and `make asan`.
+
+**Double build against the reference** (tolerance of REFERENCE_VECTORS.md: relative 1e-4 with
+absolute floors; flags and codes exact):
+
+| Group | Cases | Outside the tolerance | Worst difference, in units of the allowed one | Notes |
+|---|---|---|---|---|
+| `estimator_cases` | 240 | 0 | 3.6e-6 (a curvature, 2.2e-13 /m, in a B2 case) | aim 5.5e-13 rad, launch speed 5.7e-13 m/s; B0 / B1 / Precision / Survey cases agree to the last bit |
+| `fallback_estimator_cases` | 82 | 0 | 2.7e-12 (confidence, last bit) | every flag and code equal; the best iterates of the 12 failed solves also equal (not required) |
+| `solver_cases` | 120 | 0 (status: 0 differ) | 2.1e-12 | 118 solved |
+| `fallback_solver_cases` | 32 | 0 (status: 0 differ) | 0 | same number of trial rolls as the reference in 32 of 32 |
+| `roll_cases` | 33 | 0 | 0 (limit 1e-9) | status, capture, side and RK4 step count exact |
+
+Between them the vectors reach every `aim_source` with every solve status the reference can
+attach to it (0: OK, PACE_LIMITED; 1: OK, PACE_LIMITED; 2: UNREACHABLE, NO_BRACKET,
+NO_CONVERGENCE; 3: OK for method STRAIGHT, INVALID for a zero distance), 6 fits that did not
+converge (5 stopped by an iteration limit of 0 to 2, 1 whose horizon stage cannot run), Survey
+with 2, 3 and 4 drops, B0 / B1 / B2 / STRAIGHT, flag missing, flag not
+ranged, base hidden, stick top visible and not, dialled distance, Precision Read; the test
+asserts that list. The 69 Survey cases are also run with the ball's drop last in the array
+(`ball_index` = n - 1): identical results.
+
+**Single build: tolerances.** The reference's tolerances (1e-5 m, 1e-5 m, fit step 1e-9; the
+vectors use 1e-9 m and 1e-10) are below what single precision resolves: with them 185 of 185
+fits and 17 of 240 pace solves of the vectors end on their limits. The firmware defaults were
+chosen from measurements and are asserted with their margins:
+
+| Option | Single-precision default | Why |
+|---|---|---|
+| `tol_miss_m` | 2e-4 m | the same launch rolled in single and in double precision crosses the hole line up to 2.1e-5 m apart (8580 launches around the solutions of the vectors; median 7.7e-8 m, 99 % 2.5e-6 m): 9.5 x that maximum |
+| `tol_pace_m` | 1e-3 m | the squared arrival speed of those launches differs by up to 1.12e-4 m^2/s^2 (99 %: 6.7e-5); the tolerance as an energy, 2 a_r tol_pace, is 6.9e-4 at Stimp 16 (6.1 x) and more on slower greens |
+| `lm_tol` | 1e-5 | bounded on both sides: at 1e-6 single-precision fits begin to end on the iteration limit (5 of 5542 random nominal fits; 0 at 3e-6 and above), and from 3e-5 on a fit that converges linearly (a Huber outlier row) stops early in EITHER precision (scaled patch error of the double build 8e-7 at 1e-5, 6e-5 at 2e-5, 0.14 at 3e-5) |
+
+Three resolutions of the reference that are written for double (1e-13, 4e-15, 1e-15) are the
+same multiples of the single-precision epsilon in the single build (`gl_solver_priv.h`).
+
+**Single build against the reference** (the reference at 1e-9 m / 1e-10; the single build with
+its defaults). 240 simulated reads: all `GL_OK`, every flag and code equal, every fit converged.
+
+| Quantity, \|single - reference\| | Median | 99 % | Max | Asserted bound |
+|---|---|---|---|---|
+| Aim direction [mrad] | 0.0046 | 0.100 | 0.132 | 0.20 |
+| Launch speed [%] | 0.0013 | 0.022 | 0.029 | 0.045 |
+| Aim point at the hole, D tan(phi) [mm] | 0.026 | 0.29 | 0.46 | 0.70 |
+| Where the single-precision putt crosses the hole line, rolled in double on the reference patch [mm] | 0.008 | 0.18 | 0.19 | 0.30 |
+| Roll-out past the hole of that putt against the 300 mm target [mm] | 0.16 | 0.96 | 0.99 | 1.5 |
+| Displayed distance [mm] | 0.0002 | 0.0013 | 0.0015 | 0.003 |
+| Break [cup widths] | 0.0002 | 0.0027 | 0.0042 | 0.0065 |
+| Confidence [0..1] | 1.4e-8 | 1.2e-7 | 1.3e-7 | 5e-7 |
+| Slope at the ball [%] | 4.7e-8 | 2.7e-7 | 5.0e-7 | 2e-6 |
+| Plays-like distance [mm] | 0.15 | 0.94 | 0.99 | 1.5 |
+| Height of the hole [mm] | 2.5e-6 | 4.6e-5 | 9.0e-5 | 3e-4 |
+
+The aim line on the display moves in steps of 0.94 degree = 16.4 mrad. **The largest
+single-precision error of the aim direction on the simulated reads is 0.132 mrad: 1/125 of one
+display step** (median 1/3600). It is also 1/19 of the 2.5 mrad seating noise the estimator
+assumes per tilt axis. Single precision is not what limits this instrument.
+
+Other groups in single precision:
+
+| Group | Result |
+|---|---|
+| 82 fallback cases | 82 `GL_OK`; flags and codes equal to the reference's in 80. **NOT MET in 2** (pinned): cases 62 and 77, patches on a knife edge, end PACE_LIMITED where the reference at 1e-9 m ends NO_BRACKET / NO_CONVERGENCE. The double build run with the single-precision tolerances ends exactly like the single build in both: a tolerance effect, not an arithmetic one. Values of the 66 cases with a defined aim: aim 0.099 mrad, speed 0.012 %, aim point 0.48 mm at most. Every aim source and every solve status is reached in single precision too. |
+| 120 solver cases | status equal in 120. Solved cases: aim 99 % 0.096 mrad, **max 1.04 mrad** (0.064 display steps), speed max 0.079 %, aim point max 3.1 mm, all three on case 16 (a putt down a slope at 0.9 of critical, where a family of aim / speed pairs holes the putt within the tolerance); rolled in double the single-precision solutions cross within 0.19 mm of the hole centre in every case. |
+| 32 fallback solver cases | status equal in 28. **NOT MET in 4** (pinned): cases 12, 13, 25, 28, whose tags say that the outcome depends on the tolerance (two putts that die at the hole, one knife edge, one roll budget that is only exhausted at 1e-9 m); again the double build with the single tolerances ends like the single build. |
+
+**Differential test beyond the vectors** (`make diff`, seed 20261111, 30 % of the cases pushed
+outside the nominal ranges: slopes beyond what the green holds, curvatures of 0.02 /m, distances
+from 0 to 500 m, green speeds from 0 to 1e6 ft, not-a-number and infinities in every field,
+missing flags, iteration limits of 1 to 5, roll budgets of 8 to 1000):
+
+| Double build | Result |
+|---|---|
+| 20000 random reads against `estimate_batch` | 18461 both return an estimate within the tolerance; 839 both reject (the reference raises `ValueError` 639, `ZeroDivisionError` 119, or returns a not-a-number 81; C returns `GL_ERR_PARAM` / `GL_ERR_RANGE` and the flagged record); 680 refused by contract (C returns `GL_ERR_PARAM` for a focal length or baseline that is not positive, or a lens height or tilt that is not finite, where the reference would compute on); **0 disagreements**; 0 undefined results |
+| - distribution of \|C - reference\| over the 18461 | aim: median 0, 99 % 2.5e-14 rad, 99.9 % 3.3e-7, max 3.7e-5 rad; launch speed: 99 % 6e-15, max 6.6e-5 m/s; patch: 99 % at most 7e-18, max 5e-11; worst case 0.78 of the allowed difference; fit covariance (not in the vectors) within 3.9e-8 relative |
+| - 20 further reads differ in outcome and are explained | 19 with a horizon, 1 Survey: the two fitted patches differ by 1e-19 to 1.6e-11 because two library functions of the reference differ from libm in the last bit (numpy's vectorised cos / sin / tan in the horizon rows; CPython's `math.hypot` in the sigmas of Survey drops, different for 0.6 % of 200000 random arguments), and for each of the 20 the C solve chain run on the REFERENCE's patch reproduces the reference's aim source, status, aim and speed exactly. 19 are failing, pace-limited or dying-putt solves, whose outcome a last-bit change of the patch flips; 1 is a horizon fit at the 1e-10 tolerance whose "converged" flag differs |
+| 20000 random aim problems against `solve_aim` | status equal in 20000 (OK 14852, PACE_LIMITED 523, UNREACHABLE 690, NO_BRACKET 473, NO_CONVERGENCE 3273, INVALID 189); of the 19811 that ran, the number of trial rolls is the same in 19811 and aim and speed are **bit-identical in 19811** |
+| 5000 random rolls against `simulate_putt` | status, capture, side equal in 5000; every real identical |
+| 20000 range fusions, 5000 horizon rays | largest relative difference 1.9e-16 |
+
+Two port bugs were found by this test and fixed (the covariance of an anchored fit whose horizon
+stage failed; a zero stick height, which the reference rejects with a division by zero and the
+port used to answer with the "not ranged" fallback).
+
+The single build on the same random cases, the reference run with the single build's
+tolerances: 0 undefined results. Of 20000 aim problems the status is equal in 19806. Of the 194
+others, 25 are distances within a rounding of the 1e-6 m limit, 150 lie between the classes of
+failing or pace-limited solves, 7 are solved in single and not in double, and 12 are solved in
+double and not in single: 10 of those with a roll budget of 8 or 40, which the single build's
+slightly different path exhausts, 1 on a slope at 0.90 to 0.97 of critical and 1 a dying putt
+with a grain of 0.5. With the default budget of 200, slopes below 0.9 of critical and a pace
+above 0 there is none. Deviation of the 17101 solved problems with equal status: aim median 0.0001, 99 % 0.077,
+99.9 % 0.47, max 3.7 mrad; launch speed 99 % 0.0035 %, max 0.12 %. Random reads: 1.3 % end
+with a different solve status or aim source, almost all between failing classes (12 reads that
+the reference solves on the patch with status OK end otherwise in single precision); for the
+15360 reads
+with the same outcome the aim differs by 0.0001 mrad median, 0.13 mrad at 99 %, 1.2 mrad at
+99.9 % - and by up to 63 mrad in single cases of this deliberately hostile mix (steep or dying
+putts whose solution is not determined to the tolerance).
+
+**Hostile inputs** (`test_hostile_inputs_give_defined_results`, both precisions, also under
+`-fsanitize=address,undefined,float-cast-overflow` in `make asan`): 28000 calls per precision of
+`gl_solver_estimate`, `_estimate_survey`, `_solve_aim`, `_roll`, `_fuse_range`,
+`_quad_horizon` with not-a-number, infinities, the largest and smallest numbers, zero distance,
+absurd slopes, zero green speed, NULL pointers, drop counts 0 to 6, options out of range.
+**0 violations**: every call returns `GL_OK`, `GL_ERR_PARAM` or `GL_ERR_RANGE`; with `GL_OK`
+every real the header promises finite is finite and the codes are defined; with an error the
+output is the flagged record. (Single: 11059 OK, 3764 PARAM, 1177 RANGE; double: 11317, 3764,
+919.) A longer run of 12000 iterations (84000 calls per precision, not under the sanitisers)
+was also clean.
+
+**Run time, bounded.** No loop without a counter: one roll takes at most 6004 RK4 steps, one aim
+solve at most `max_rolls` + 120 = 320 rolls, an estimate at most two aim solves, a fit at most
+60 iterations of at most 25 damping trials for at most 6 starts. `gl_estimate_t.n_rolls` /
+`.n_steps` report what was spent. Measured with `valgrind --tool=callgrind --collect-atstart=no
+--toggle-collect=bench_estimate_ build/host/solver_bench <case>` (host, `-O2`, single
+precision, firmware defaults; 350 host instructions per RK4 step):
+
+| Estimate | Trial rolls | RK4 steps | Fit iterations | Host instructions | At 160 MHz, if one host instruction costs 1.5-3 cycles (ESTIMATE) |
+|---|---|---|---|---|---|
+| Typical Quick Read, B1 (the median of the 24 B1 reads) | 5 | 730 | 3 | 295 316 | 3-6 ms |
+| Survey, 3 drops (median of 24) | 3 | 849 | 3 | 348 793 | 3-7 ms |
+| B2 with 41 horizon samples (median of 69; the horizon stage's 5 starts are most of it) | 5 | 875 | 3 | 1 424 989 | 13-27 ms |
+| Worst case constructed: 20.7 m across a slope near the limit, neither patch nor secant plane solvable | 418 | 492 782 | 3 | 172 948 041 | 1.6-3.2 s |
+| Bound that follows from the counters (640 rolls of 6004 steps) | 640 | 3 842 560 | - | about 1.35e9 (not run) | 13-25 s |
+
+Over the 240 simulated reads: 5.0 rolls and 1026 RK4 steps on average, at most 57 rolls and
+25144 steps. The worst case comes from three random searches of 6000 to 12000 steep reads with
+hill climbing; they ended at 492 782, 507 453 and 519 807 steps, so "half a million steps" is
+what could be constructed, a seventh of the bound. **The time on the target is an estimate, not
+a measurement**: the cycles-per-instruction factor is the same guess as for the vision
+(a Cortex-M33 needs 14 cycles for each of the 5 square roots and 8 divisions of an RK4 step
+alone, 180 of the roughly 500-1000 cycles the factor implies per step); newlib's `powf`,
+`sinf`, `cosf`, `logf`, `erff`, `hypotf`, `atan2f`, `tanf` are not the host's. A typical solve
+is 0.2 % of the 145 million instructions of a read's vision; the worst case is more than a
+whole read. At 48 MHz the worst case constructed would take 5-11 s.
+
+**Stack and RAM** (`make cross`, `-Os`, `-fstack-usage`): `gls_fit_patch` 464, `gls_roll` 304,
+`gls_solve_kernel` 264, `fit_lm_` 240, `estimate_` 208, `trial_` 112, `fit_residuals_` 112,
+`solve_pace_` 96, `solve_patch_` 72, `accel_` 40, `gl_solver_estimate_survey` 40 bytes. Deepest
+chain below the caller: estimate -> solve on the patch -> kernel -> pace solve -> trial -> roll
+-> acceleration = 1136 bytes (the fit chain: 1064), libm frames not included (not compiled
+here). Static RAM: none (`.data` and `.bss` of the four solver objects are 0); the caller
+supplies `gl_solver_work_t`, 6160 bytes on the target (12248 in the double build), which the
+application holds once. Code: 17 149 bytes (`gl_solver` 2445, `_aim` 3808, `_fit` 6654, `_roll`
+4242). No double-precision helper, no double libm function, no heap, no stdio (the
+forbidden-symbol check of `make cross`).
 
 ### Vision
 
@@ -704,74 +1181,87 @@ and the USB library - is not included):
 | Group | Module | text | data | bss |
 |---|---|---|---|---|
 | core | gl_vision | 16606 | 0 | 0 |
-| core | gl_gfx | 4604 | 0 | 0 |
-| core | gl_ui | 4378 | 0 | 0 |
+| core | gl_gfx | 4644 | 0 | 0 |
+| core | gl_ui | 4813 | 0 | 0 |
 | core | gl_log | 4102 | 0 | 0 |
 | core | gl_tilt | 3264 | 0 | 0 |
 | core | gl_range | 2276 | 0 | 0 |
-| core | gl_proto | 2236 | 0 | 0 |
+| core | gl_proto | 2244 | 0 | 0 |
 | core | gl_cal | 2160 | 0 | 0 |
 | core | gl_grain | 1888 | 0 | 0 |
 | core | gl_cam | 1504 | 0 | 0 |
 | core | gl_math | 1440 | 0 | 0 |
-| core | gl_settings | 1286 | 0 | 0 |
+| core | gl_settings | 1443 | 0 | 0 |
 | core | gl_gesture | 970 | 0 | 0 |
 | core | gl_font_data | 632 | 0 | 0 |
 | core | gl_fmt | 477 | 0 | 0 |
-| core | gl_solver_stub | 216 | 0 | 0 |
+| core | gl_solver_fit | 6654 | 0 | 0 |
+| core | gl_solver_roll | 4242 | 0 | 0 |
+| core | gl_solver_aim | 3808 | 0 | 0 |
+| core | gl_solver | 2445 | 0 | 0 |
 | core | gl_event | 148 | 0 | 0 |
 | core | gl_crc | 100 | 0 | 0 |
-| core | **total** | **48287** | **0** | **0** |
+| core | **total** | **65860** | **0** | **0** |
 | drivers | ov7692 | 1941 | 0 | 0 |
 | drivers | lsm6dsv16x | 1254 | 0 | 0 |
 | drivers | mx25r | 870 | 0 | 0 |
 | drivers | ls013b7dh03 | 674 | 0 | 0 |
-| drivers | power | 616 | 0 | 0 |
+| drivers | power | 1306 | 0 | 0 |
 | drivers | grain_frontend | 530 | 0 | 0 |
-| drivers | **total** | **5885** | **0** | **0** |
-| app | gl_app | 8612 | 0 | 1366 |
+| drivers | **total** | **6575** | **0** | **0** |
+| app | gl_app | 9444 | 0 | 1366 |
 | app | gl_read | 4931 | 0 | 0 |
-| app | gl_usb | 2018 | 0 | 388 |
+| app | gl_usb | 2070 | 0 | 388 |
 | app | gl_motion | 860 | 0 | 0 |
-| app | gl_main | 24 | 0 | 306600 |
-| app | **total** | **16445** | **0** | **308354** |
-| all | **total** | **70617** | **0** | **308354** |
+| app | gl_main | 24 | 0 | 312840 |
+| app | **total** | **17329** | **0** | **314594** |
+| all | **total** | **89764** | **0** | **314594** |
 
 RAM (ARM `sizeof`, from the same build; core and drivers have no `.data` / `.bss` of their own,
 all state is in the application object):
 
 | Object | Bytes | Note |
 |---|---|---|
-| `gl_app_t` (bss of `gl_main`) | 306600 | everything below is inside it |
+| `gl_app_t` (bss of `gl_main`) | 312840 | everything below is inside it |
 | - strip buffers `gl_read_t.img` | 184320 | FOUR 96 x 480 strips, one L R R L group (was two: the review showed that analysing while capturing ties the exposure spacing to the vision's run time); the 640 x 96 band (61440) uses the same memory |
 | - `gl_vis_band_work_t` | 42240 | band analysis, including the 5 kB of sampled path sums |
 | - `gl_vis_stick_work_t` x 4 | 66576 | one per strip of a group (16644 each, of which 5760 are the stored flank pixels) |
 | - LCD: `gl_gfx_t` + driver shadow | 2305 + 2060 | |
 | - `gl_proto_t` | 2096 | two 1032-byte frame buffers |
-| - solver inputs `gl_measurements_t` x 5 | about 2000 | the shown read + 4 Survey drops |
+| - solver inputs `gl_measurements_t` x 5 | 2000 | the shown read + 4 Survey drops (400 bytes each) |
+| - `gl_solver_work_t` | 6160 | work area of the patch fit and its record (`gl_patch_fit_t`, 224 bytes); the aim solve needs none |
 | - `gl_store_t` | 1084 | settings and calibration blobs |
 | - everything else (UI, motion, tilt, survey, drivers, log, read state) | about 5900 | |
 | static scratch in `gl_app.c` / `gl_usb.c` | 1754 | one raw-strip log record (978), two raw grain measurements (388 each) |
 | STM32 backend (estimate, not compiled) | about 3000 | HAL handles, pin shadows, two 1 kB USB rings |
 | main stack (recommended) | 4096 | see below |
-| **total** | **about 316 kB of 786 kB** | |
+| **total** | **about 322 kB of 786 kB** | |
 
-Stack (`-fstack-usage`, `-Os`, bytes per frame): `gl_vis_band_analyse` 632, `measure_row_` 352,
-`gl_app_run_once` 320, `gl_cam_model_init` 304, `gl_vis_stick_refine` 248, `gl_read_step` 240,
-`do_actions_` 216, `gl_usb_service` 208, `gl_lcd_update` 200, `gl_store_mount` 200,
-`gl_vis_stick_segment` 168, `measure_all_` 144. Worst chains:
+Stack (`-fstack-usage`, `-Os`, bytes per frame): `gl_vis_band_analyse` 632, `gls_fit_patch` 464,
+`measure_row_` 352, `gls_roll` 304, `gl_cam_model_init` 304, `gl_app_run_once` 296,
+`gls_solve_kernel` 264, `gl_vis_stick_refine` 248, `gl_read_step` 240, `fit_lm_` 240,
+`do_actions_` 216, `estimate_` 208, `gl_usb_service` 208, `gl_lcd_update` 200, `gl_store_mount`
+200, `gl_vis_stick_segment` 168, `measure_all_` 144, `gl_ui_render` 144. The code added in this
+round is shallow: `build_measurement_` 88, `gl_gfx_aim_line_styled` 80, `gl_power_measure` 40,
+`compose_view_`, `charge_supervise_`, `gl_power_measure_temps`, `gl_power_charge_gate` and
+`gl_ui_result_text` 24 each. Worst chains (the two frames that changed, run_once 320 -> 296
+and the actions 224 -> 216, are entered in the sums builder 1 traced):
 
 | Chain | Bytes |
 |---|---|
-| run_once -> read step -> stick refinement -> measure_all_ -> measure_row_ (320 + 240 + 248 + 144 + 352) | about 1300 |
-| run_once -> read step -> band analysis (320 + 240 + 632 + the sort) | about 1230 |
-| run_once -> read step -> raw-strip hook -> log append -> flash driver | about 890 |
-| run_once -> actions -> solve -> log append -> flash driver | about 810 |
-| run_once -> USB service -> protocol -> log read -> log iterator -> flash driver | about 810 |
+| run_once -> read step -> stick refinement -> measure_all_ -> measure_row_ (296 + 240 + 248 + 144 + 352) | about 1280 |
+| run_once -> read step -> band analysis (296 + 240 + 632 + the sort) | about 1210 |
+| run_once -> read step -> raw-strip hook -> log append -> flash driver | about 870 |
+| run_once -> actions -> estimate -> aim solve on the patch -> kernel -> pace solve -> trial -> roll (296 + 216 + 40 + 208 + 72 + 264 + 96 + 112 + 304 + 40) | about 1650 (the deepest; libm frames not included) |
+| run_once -> actions -> estimate -> patch fit -> Levenberg-Marquardt -> residuals (296 + 216 + 40 + 208 + 464 + 240 + 112) | about 1580 |
+| run_once -> actions -> solve -> log append -> flash driver | about 780 |
+| run_once -> USB service -> protocol -> log read -> log iterator -> flash driver | about 790 |
+| run_once -> charge supervision -> temperature measurement (296 + 24 + 24) and the HAL below | about 350 + HAL |
 | init -> store mount -> log walk -> flash driver | about 500 |
 
 Add the HAL's own frames below the drivers (not measured: not compiled) and interrupt frames
-(104 bytes each with FPU state, handlers are short). A 4 kB main stack leaves a factor of two.
+(104 bytes each with FPU state, handlers are short). A 4 kB main stack leaves a factor of two
+over the deepest measured chain (1650 bytes, the solver's), before libm and the HAL.
 No function recurses.
 
 ### Run time
@@ -785,6 +1275,8 @@ host build of one nominal read (band + 32 strips, `tests/test_read A_nominal 1`)
 | One strip refinement | 3.4 million (108 million for 32) | 0.11-0.21 s |
 | A whole read | about 145 million | 4.5-9 s |
 | A read with four band candidates (a person in view) | about 195 million | 6-12 s |
+| The putt estimate after the read, typical (method B1) | 0.3 million | 9-18 ms |
+| The putt estimate, worst case constructed | 173 million | 5-11 s |
 
 The cycles-per-instruction factor is a guess (single-precision FPU code, no cache misses on
 this part, but more instructions per C statement than x86-64); the instruction counts are
@@ -795,13 +1287,23 @@ pipeline that relied on it has been replaced (see Application / Read). What it m
 * a Quick Read at 48 MHz would take of the order of 8-12 s after the marker comes to rest
   instead of the 3.4 s of the simulator (which charges no computation), with the camera rail on
   for most of it (table under "End to end": 8.8 s at 200 ms per strip);
-* the remedy is a hardware / clock decision (open issue 1): the PLL at 160 MHz during a read
-  brings the same figures to about 1.4-2.7 s of computation; and the vision itself can be made
+* the remedy of rev C2 is the PLL at 160 MHz during a read, which the application now requests
+  (`gl_hal_clock_set`, see Application): by the same arithmetic that brings the figures to
+  about 1.4-2.7 s of computation - an estimate, **not verified**: the backend's clock code has
+  never been compiled, and nothing has been timed on a board; and the vision itself can be made
   cheaper (a quarter of a strip's cost is the sorting behind its medians, even after that sort
   was made 20 % cheaper in this round; the band tries 13 leans x 4 widths at full resolution).
   None of that optimisation has been done beyond the sort and the exponential table.
 
-The firmware's own code is 70.6 kB of the 2 MB flash before libraries.
+The putt estimate is counted in "Solver" under Measured results (callgrind commands and the
+figures at 160 MHz there): typically 0.2 % of a read's vision, but 173 million instructions for
+the worst case that could be constructed, and a bound from the loop counters of 1.35e9. **The
+SOLVE state therefore needs the fast clock too**, and has it: the application keeps the fast
+clock until the solve is done. A slope near the limit of what the green holds can still cost
+seconds: see open issue 17 (in `tests/test_e2e_putt.c` the 7 % cross slope at Stimp 14 took
+111 trial rolls and 46880 RK4 steps).
+
+The firmware's own code is 89.8 kB of the 2 MB flash before libraries (phase 2, builder 2 added 2.2 kB: result screen, charge gate and NTC, settings, hand-over).
 
 ## Device registers and commands: "from memory - verify against datasheet"
 
@@ -878,16 +1380,19 @@ check. Changing one is the whole firmware change if the fact turns out different
 | OVM7692 image | `GL_PROV_CAM_SENSOR_VFLIP`, `_HMIRROR`, `GL_PROV_OV7692_Y_IS_FIRST_BYTE`, `_VSYNC_ACTIVE_HIGH`, `_HREF_ACTIVE_HIGH`, `_PCLK_RISING`, `_PID`, `_ENFORCE_PID` | orientation behind the prism, byte order, sync polarities, product id value |
 | OVM7692 window | `GL_PROV_OV7692_SENSOR_WINDOWING`, `_HSTART_FULL`, `_VSTART_FULL`, `_H_UNIT_PX`, `_V_UNIT_LINES`, `_H_BORDER_PX`, `_V_BORDER_LINES` | meaning of the start / size registers; set `_SENSOR_WINDOWING` to 0 to use the DCMI crop instead |
 | OVM7692 timing | `GL_PROV_CAM_XVCLK_HZ`, `_RAIL_SETTLE_MS`, `_CLOCK_SETTLE_MS`, `_FRAME_PERIOD_MS`, `_SETTLE_FRAMES`, `GL_PROV_OV7692_RESET_TIMEOUT_MS` | power-up delays, frame rate at 12 MHz with reset clock settings, frames to settle |
-| LCD | `GL_PROV_LCD_FPC_PIN_*` (10), `GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS`, `GL_PROV_LCD_ROW0_AT_FRONT`, `_COL0_AT_LEFT`, `_ACTIVE_CENTRE_Y_MM`, `_SPI_MAX_HZ`, `_VDD_MIN_MV`, `_SCS_SETUP_US`, `_SCS_HOLD_US`, `_SCS_LOW_US` | FPC pin order and pin-1 side (DESIGN_SPEC PROVISIONAL), EXTCOMIN period (547 ticks = 59.905 Hz; the 546 of DESIGN_SPEC is 60.015 Hz, just outside the 1-60 Hz it quotes), panel orientation, active-area offset, timing |
-| MCU | `GL_PROV_LPTIM_PWM_RUNS_IN_STOP2`, `GL_PROV_USB_CRYSTALLESS_HSI48_CRS`, the 26 PROPOSED rows of `hal/stm32u5/gl_pins.h` | EXTCOMIN in Stop 2 (if 0 the application stays in idle sleep while the display is on), crystal-less USB, pin assignment |
+| LCD | `GL_PROV_LCD_FPC_PIN_*` (10), `GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS`, `GL_PROV_LCD_ROW0_AT_FRONT`, `_COL0_AT_LEFT`, `_ACTIVE_CENTRE_Y_MM`, `_SPI_MAX_HZ`, `_VDD_MIN_MV`, `_SCS_SETUP_US`, `_SCS_HOLD_US`, `_SCS_LOW_US` | FPC pin order and pin-1 side (DESIGN_SPEC PROVISIONAL), EXTCOMIN period (547 ticks = 59.905 Hz, the divider rev C2 specifies; the generator reads it from the spec and a test compares the two), panel orientation, active-area offset, timing |
+| MCU | `GL_PROV_LPTIM_PWM_RUNS_IN_STOP2`, `GL_PROV_USB_CRYSTALLESS_HSI48_CRS`, the 28 PROPOSED rows of `hal/stm32u5/gl_pins.h` | EXTCOMIN in Stop 2 (if 0 the application stays in idle sleep while the display is on), crystal-less USB, pin assignment |
 | IMU | `GL_PROV_IMU_MARKER_{X,Y,Z}_AXIS`, `_SIGN`, `GL_PROV_IMU_WAKE_THRESHOLD_MG`, `GL_PROV_IMU_DRDY_PULSED` | mounting orientation on the PCB (identity is a placeholder), wake threshold, data-ready mode |
 | Flash | `GL_PROV_MX25R_PROG_TIMEOUT_MS`, `_ERASE_TIMEOUT_MS`, `_DP_DELAY_US`, `_SPI_HZ` | timing |
 | Grain | `GL_PROV_GRAIN_RED_ANODE_ON_LOW_PIN`, `_SETTLE_US`, `_ADC_AVG`, `_ADC_SAMPLE_US`, `_POWER_SETTLE_MS`, `_MOD_THRESHOLD_DEFAULT`, `_MAX_EQUIV_SLOPE`, `_HARMONIC_SIGN`, `_KAPPA_BENT`, `_KAPPA_POA`, `_KAPPA_BERMUDA` | charlieplex wiring (proposal), settling, and the unproven physics; the acceptance threshold used is always the one in the calibration record |
-| Power | `GL_PROV_BATT_LOW_MV`, `_CRITICAL_MV`, `_FULL_MV`, `_EMPTY_MV`, `_DIVIDER_RATIO`, `GL_PROV_CHARGE_TEMP_MIN_C`, `_MAX_C`, `_HYST_C`, `_MAX_DISAGREE_C`, `GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE`, `GL_PROV_BATT_STORAGE_MV` | cell thresholds (no cell datasheet), hysteresis, how far the two temperature sensors may disagree, which level of the PROG gate allows charging (open issue 2), storage threshold |
+| Power | `GL_PROV_BATT_LOW_MV`, `_CRITICAL_MV`, `_FULL_MV`, `_EMPTY_MV`, `_DIVIDER_RATIO`, `GL_PROV_BATT_STORAGE_MV`, `GL_PROV_CHARGE_TEMP_MIN_C`, `_MAX_C`, `_HYST_C` (2 K), `_GUARD_C` (1.5 K), `_MAX_DISAGREE_C` (10 K) | cell thresholds (no cell datasheet), hysteresis, the guard band (from the tolerance budget computed in `test_drv_power.c`; it does not cover a cell-to-NTC gradient), how far the NTC may be from a die sensor |
+| Cell NTC | `GL_PROV_NTC_R25_OHM` (10 k), `_B_K` (3380), `_SERIES_OHM` (10.0 k), `_SETTLE_US` (500), `_ADC_AVG` (8), `_ADC_SAMPLE_US` (20), `_OPEN_FRACTION` (0.98), `_SHORT_FRACTION` (0.02), `_IDLE_MAX_FRACTION` (0.05) | part values as specified in rev C2; settling time for the node (source impedance up to 10 kohm into the ADC's sampling capacitor and whatever capacitance the layout adds: the 500 us is a guess with margin, to be checked on the board); the detection thresholds |
 | Estimates | `GL_PROV_SEATING_SIGMA_RAD`, `GL_PROV_STICK_TOTAL_HEIGHT_M`, `_IN_CUP_M`, `_HEIGHT_REL_SIGMA`, `_DIA_MIN_M`, `_DIA_MAX_M` (now used: the width a flagstick may have at its disparity), `GL_PROV_STEREO_CAL_SIGMA_PX` (0.05 px, added to every disparity sigma), `GL_PROV_LENS_BLUR_SIGMA_MIN_PX` / `_MAX_PX` (0.45-0.80 px) | not measurements; the blur range decides which posts are rejected as "too wide for their disparity" and must be replaced by the measured blur at EVT |
 
 Tuning constants that are our own choices rather than hardware facts (gesture timing, repeat
-counts, flash layout) are in `app/gl_app_cfg.h`; none has been tuned on hardware.
+counts, flash layout, the charge supervision period of 5 s and the 12 s staleness limit, the
+confidence factors 0.6 / 0.6 / 0.7 and the cap 0.2, the Survey's "at the ball" fraction 0.85)
+are in `app/gl_app_cfg.h`; none has been tuned on hardware or with golfers.
 
 Two assumptions that are not in DESIGN_SPEC and must be checked against the mechanical design:
 the ball centre is taken at outer radius + ball radius = 23.0 + 21.335 = 44.335 mm ahead of the
@@ -901,9 +1406,18 @@ stated in the rev C YAML).
   HAL configuration and the USB board glue (`usbd_conf.c`, `usbd_desc.c`, VID / PID) do not exist
   here. Timing on the target (vision run time, SCCB bit-bang, Stop 2 wake latency at 240 Hz) is
   unmeasured.
-* **The solver** (phase 2), and with it break, pace and the real confidence figure. The
-  confidence shown now is a heuristic placeholder capped at one half. The Survey estimate calls
-  the stub as well; which drop the line is drawn for (`ball_index`) is a phase-2 decision.
+* **The solver on the target.** The port is tested on the host only; its run time on the
+  Cortex-M33 is an estimate (see "Solver"), and newlib's single-precision libm has not been
+  compared with the host's.
+* **The rev C2 changes on the target.** Everything in "Charger and cell temperature" and "Board
+  changes of rev C2" was run on the simulator, whose NTC, charger and clock models encode this
+  project's reading of the specification. Not verified: the clock switch (PLL, voltage range,
+  booster, flash latency: uncompiled), that PH1 is an FT pin, ADC1_IN13 on PC4, the NTC
+  settling time, the real part's R-T curve against the B-parameter equation, and the thermal
+  coupling between the cell and the NTC.
+* **Estimator results that no simulated read produces** (pace limited, straight fallback, fit
+  on its iteration limit, poor horizon): only their mapping to the screen is tested.
+* **Grain as a solver option.** `use_grain` has no setting and stays off.
 * **Camera exposure and clocking.** No exposure, gain, PLL or frame-rate register is written
   (no verified values): the sensors run on their reset settings. The sun-in-frame flag exists;
   nothing reacts to it beyond the confidence figure.
@@ -916,7 +1430,9 @@ stated in the rev C YAML).
 * **Stimp by watching a rolled ball** (optional later feature in DESIGN_SPEC): not started.
 * **Firmware update** other than the ROM DFU jump; no bootloader of our own, no image check.
   Once in the ROM bootloader there is no way back without a host or a power cycle (no time-out
-  can be added from the application; the jump is now gated by `UNLOCK` and by VBUS).
+  can be added from the application; the jump is gated by `UNLOCK`, by VBUS and by the charge
+  gate), **and nothing watches the cell temperature there while the charger runs** (NOT MET,
+  see "Charger and cell temperature").
 * **Vision speed.** Nothing has been optimised for the target beyond a lookup table for the
   exponential and a better sort; see "Run time".
 * **Vision cases known not to work** (pinned by `tests/test_read.c`, listed under "Vision"):
@@ -933,17 +1449,21 @@ stated in the rev C YAML).
 Hardware and system decisions first: none of them can be closed in firmware.
 
 1. **Vision run time against the system clock.** About 145 million host instructions per read
-   (measured), of the order of 4.5-9 s at 48 MHz; the read was designed around 1.6 s. Decide:
-   PLL (160 MHz) during the capture state, with its wake-up and current cost, and / or an
-   optimisation pass on `gl_vision` once it can be profiled on a board. Until then every timing
-   figure in this file that involves the cameras is the simulator's, with free computation.
-2. **Charger when the MCU is unpowered.** The firmware gates the MCP73832 through PROG, and the
-   proposed circuit leaves the charger OFF unless the MCU drives the gate: a cell that has
-   reached its protection cut-off can then never be recharged (no MCU, no charge). The fail-safe
-   needs a hardware default-ON gate that the MCU can only ever switch OFF (plus an NTC, see
-   below); `GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE` selects the polarity the firmware drives, and
-   the firmware's storage mode (IMU off below 3250 mV) only delays the cut-off. **The schematic
-   owner has to decide; nothing here fixes it.**
+   (measured), of the order of 4.5-9 s at 48 MHz; the read was designed around 1.6 s. Rev C2
+   decides for the PLL (160 MHz) during the read, and the application now brackets capture and
+   solve with `gl_hal_clock_set()`. **Still open:** the backend's clock code is uncompiled, the
+   cost of each switch (PLL lock, voltage range change) and the current at 160 MHz are
+   unmeasured, and an optimisation pass on `gl_vision` is still wanted. Until a board exists,
+   every timing figure in this file that involves the cameras is the simulator's, with free
+   computation.
+2. **Charger when the MCU is not in control.** Answered for the unpowered MCU by rev C2 (the
+   charger runs by default). What remains is the other side of that default, and it is NOT MET
+   in firmware: **in the ROM bootloader nothing can stop the charger** (the firmware only
+   refuses to enter DFU outside the temperature window), and **a hung firmware is not
+   supervised until the watchdog fires (32 s)**. If either matters for the cell's approval,
+   it needs hardware: a charger with an NTC input, or a comparator on the NTC node that pulls
+   `CHG_INHIBIT` by itself. Also for the schematic: `CHG_INHIBIT` must be on an FT pin (PH1 as
+   remembered: verify), or the unpowered MCU clamps the gate and defeats the default.
 3. **Both cameras on the shared bus at power-up.** Unless PWDN tri-states the OVM7692 pads
    (unconfirmed, `GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS` = 0), both sensors drive the eight data
    lines and the three sync lines against each other for 14.4 ms of every power-up (6.4 ms of it
@@ -958,11 +1478,14 @@ Hardware and system decisions first: none of them can be closed in firmware.
    move the nets or accept and document the level; `tests/test_pins.c` prints the two rows.
    Also for the netlist: charger STAT (open drain) into PB0 needs its pull-up to a rail that is
    on whenever VBUS is; the LCD chip select needs a pull-down for the time before the MCU runs.
-5. **Charge temperature.** The gate uses the IMU's die sensor with the MCU's die sensor as a
-   second opinion (10 K agreement). Neither is a cell temperature, neither has a stated
-   absolute accuracy here, and a raw reading of exactly 25.000 C is refused as "sensor not
-   alive" (charging then pauses until the next reading). A cell NTC on the charger is the proper
-   answer; decide whether the 0-45 C limits need a margin until then.
+5. **Charge temperature.** The cell NTC is now the input, with the die sensors as a
+   plausibility check (within 10 K of at least one). Decide: (a) whether the guard band of
+   1.5 K, which covers the part tolerances and the ADC only, should be widened for the
+   gradient between the cell and an NTC "within 1 mm of its edge", which nobody has measured;
+   (b) whether "at least one die sensor agrees" is the wanted rule, or "both" (safer against a
+   wrong NTC, but a warm MCU during USB would then stop a healthy charge); (c) whether a unit
+   whose NTC is broken should refuse to charge for good, as it does now (it says `TEMP SENSOR`
+   on the cradle screen), since such a unit eventually cannot be revived.
 6. **Stereo calibration term.** `GL_PROV_STEREO_CAL_SIGMA_PX` = 0.05 px is a guess and it is
    now the largest part of the claimed range uncertainty on every clean scene (2.3 % at 6 m,
    3.8 % at 10 m). It has to come from the calibration fixture's repeatability.
@@ -972,20 +1495,24 @@ Hardware and system decisions first: none of them can be closed in firmware.
 
 Product decisions:
 
-8. **The weaker tiers.** A read can now end as "left camera only" (bearing and elevations, no
-   disparity; ranged from the angular height if a stick height has been learned, otherwise the
-   dialled distance is applied along the measured bearing) or as "band-only bearing" (logged,
-   not used). Confirm that a single-camera stick, which cannot be checked against a disparity,
+8. **The weaker tiers.** A read can end as "left camera only" (bearing and elevations, no
+   disparity; the estimator ranges it from the angular height if top and base of the stick are
+   visible, otherwise the dialled distance is applied along the measured bearing) or as
+   "band-only bearing" (logged, not used). Confirm that a single-camera stick, which cannot be checked against a disparity,
    should be aimed at; and whether `ambiguous` should block the result rather than lower the
-   confidence figure (x 0.6).
+   confidence figure (x 0.6). As built: both are aimed at with a solid line, a message (`1
+   CAMERA`, `2 LINES SEEN`, or `NO RANGE` when the single camera could not range the stick) and
+   0.6 of the confidence each.
 9. **Base of the stick for ranging.** "At horizon" covers a base just visible on a flat green
    and one hidden behind a crown. For RANGE (and for learning the stick height) the application
    treats the lowest visible point as the base in both cases, with the read's own uncertainty
    for it (0.5-0.6 row at the turf edge, more with a hint of a continuation) on top of 0.3 row;
    for the SLOPE use the solver receives the strict flag. The estimator's owner should confirm.
-10. **Pin assignment.** 26 pins are this firmware's proposal (table in `tools/gen_pins.py`),
-    including bit-banged SCCB on PB5 / PB3 / PA10, the IMU wake line on PC13 and the left
-    camera's PWDN now on PH0. The schematic may choose differently; only the generator changes.
+10. **Pin assignment.** 28 pins are this firmware's proposal (table in `tools/gen_pins.py`),
+    including bit-banged SCCB on PB5 / PB3 / PA10, the IMU wake line on PC13, PWDN on PH0 and
+    PC12, `CHG_INHIBIT` on PH1, `NTC_SENSE` on PC4 and, because rev C2 needs 47 signals where
+    the LQFP-64 has 46 I/O pads, **`NTC_BIAS` on PH3-BOOT0**. The schematic may choose
+    differently (drop a signal, share one, or a larger package); only the generator changes.
 11. **Raw-strip logging level ALL keeps the camera rail on for about 40 s per read** (47 s in
     all; about 1 mAh of a 43 mAh cell, and heat). Level FIRST costs 2.6 s. If ALL is wanted in
     the field it needs a different capture plan (cameras off between groups) or less data.
@@ -1000,43 +1527,89 @@ Product decisions:
     Since the review the other factory procedures also need `UNLOCK` (the zeroing and ABORT do
     not). If the factory wants to trigger zeroing from the fixture, a guarded transition has to
     be added.
-15. **DESIGN_SPEC text to correct:** EXTCOMIN "546 ticks" is 60.015 Hz (547 is used); the
-    register table's "INT pins pulsed" (latched is used and now selected explicitly).
+15. **DESIGN_SPEC text:** the EXTCOMIN divider is corrected in rev C2 (547); still to correct:
+    the register table's "INT pins pulsed" (latched is used and selected explicitly). These
+    board changes were handed to the firmware as "rev C2" while the file's header reads "rev D,
+    EVT1": one of the two names should go.
 16. **State name.** `CAL_FLIP` of the original state list is now `CAL_ZERO` (rev C wording); the
     storage fields `flip_bias_*` and `GL_CAL_TILT_FLAG_FLIP` keep their names because they are the
     record format. The read log record is unchanged: a left-camera-only read is a record with
     the stick flag set, zero disparity and zero repeats.
+17. **Worst-case solve time.** A typical putt estimate is a few milliseconds at 160 MHz
+    (estimate), but a read on a slope near the limit of what the green holds, where neither the
+    fitted patch nor its secant plane can be solved, ran to 0.5 million RK4 steps on the host
+    (173 million instructions: an estimated 1.6-3.2 s at 160 MHz, 5-11 s at 48 MHz), and the
+    loop counters only bound it at 3.8 million steps (13-25 s at 160 MHz), which is of the
+    order of the 32 s watchdog. Decide: keep the fast clock through SOLVE (needed in any case),
+    and either accept seconds for such reads, lower `max_rolls` (200, the reference's value;
+    the 240 simulated reads use at most 57), or add a step budget to the aim solve (not in the
+    reference; it would end the same reads as NO_CONVERGENCE earlier). The fast clock is now
+    kept through SOLVE; the rest is open.
+18. **Survey: where is the ball, and when is there a line.** The estimator needs the drop at
+    the ball first; the specification's flow ("move the marker along the line") leaves the
+    marker somewhere else at the end. As built: the ball is the stored drop farthest from the
+    flagstick; the line is drawn only while the marker lies there (the newest drop is that one
+    or within 0.85 of its range), otherwise the numbers and `PUT AT BALL`. That makes "walk
+    from the hole side back to the ball" or "start at the ball and return to it" the working
+    orders, and a Survey that ends near the hole shows no line. The product owner should
+    confirm the rule and the 0.85, or say in which order golfers are to survey.
+19. **A range that nobody measured or dialled.** When the flagstick is found but cannot be
+    ranged and nothing is dialled, the estimator solves for its 3 m default. As built the
+    screen shows `--`, `NO RANGE`, `BREAK ?` and a DASHED line. The alternative is to ask for
+    the distance, as the no-flag case does. Decide which.
+20. **Distance shown is the cameras' distance to the stick**, which is about 29 mm more than
+    the ball's distance to the hole (the lenses sit behind the ball). Not corrected: it is
+    about one 0.1 ft step of the display, and a known offset.
+21. **Confidence factors.** 0.6 (one camera), 0.6 (ambiguous), 0.7 (fit not converged), the
+    disparity-sigma factor and the caps are this firmware's choices; nothing calibrates them
+    against how often such reads are wrong. They need field data.
 
-## Phase 2: the solver
+## The solver: decisions and open points
 
-`core/gl_solver.h` mirrors the Python reference one to one (`gl_measurements_t` <->
-`Measurements`, `gl_estimate_t` <-> `Estimate`, `gl_aim_solution_t` <-> `AimSolution`, the same
-status values). Phase 2 replaces `gl_solver_stub.c`. Two points to settle then:
+What phase 2 settled (builder 1: the port; builder 2: the application), and what is left to the
+owner:
 
-* `gl_range_fuse()` fuses in inverse range; the reference `estimator.fuse_range()` fuses in
-  range with one re-evaluation of the stereo sigma. They agree to first order. One of them
-  should be chosen and tested against exported vectors.
-* The reference takes the Survey drops "ball first"; the firmware passes a `ball_index`,
-  because the line can only be drawn relative to the marker's current placement.
-* The reference defines `flag_disparity` as f * baseline / range with range the distance to
-  the stick. The rectified disparity measured here is f * baseline / depth; the application
-  multiplies it by cos(bearing) when it fills `gl_measurements_t` (`build_measurement_()` in
-  `app/gl_app.c`, which is the one place where firmware quantities become solver inputs).
-* `flag_base_visible` is passed strictly (the stick was followed, with significance, more than
-  1.5 rows below the turf edge); see open issue 9 for how the range fusion treats the other case.
-* New since the review, for the estimator to use or ignore: the disparity uncertainty now has
-  three parts (noise, static, calibration; `gl_read_result_t.disp` and `.cal_sigma_px`) and the
-  solver is given their sum; `gl_read_result_t.tier`, `.why`, `.ambiguous` and
-  `.bottom_sigma_rows` are not part of `gl_measurements_t`. `core/gl_solver.h` itself is
-  unchanged: if phase 2 wants any of them, the struct and the Python `Measurements` have to
-  grow together.
-* A left-camera-only read has no disparity, and `gl_measurements_t` has no way to say so. If
-  such a read has a range at all (from the angular height with a learned stick height),
-  `build_measurement_()` passes that range as the disparity it corresponds to (f x baseline /
-  range) with `flag_found` true; if it has none, the read is passed as "flag not found" with the
-  dialled distance. Phase 2 should replace this with an explicit input.
-* `gl_range_fuse()` no longer averages sources that contradict each other (chi-square above 9):
-  it takes one (the learned angular height beyond 5 m of stereo range, the stereo otherwise),
-  widens its sigma to half the gap and clears `consistent`; an insignificant or negative
-  disparity is dropped instead of discarding the monocular range; nothing beyond 40 m is
-  reported. The Python reference does none of this.
+* **One range fusion feeds the aim: the estimator's** (the reference's `fuse_range`: fusion in
+  range with one re-evaluation of the stereo sigma). The number shown, the number logged, the
+  range of a Survey drop and the parallax correction of the bearing all come from it.
+  `gl_range_fuse()` of phase 1 still runs, for learning the stick height and as a diagnostic
+  field; its handling of sources that contradict each other has no counterpart in the
+  estimator.
+* **Gating happens before the estimator, by "not available".** `build_measurement_()` passes
+  the disparity only if a stereo pair was read and it is at least 3 sigma
+  (`GL_RANGE_MIN_DISPARITY_SNR`) above zero, otherwise not-a-number; the stick top only if it
+  is in the frame and not in clutter (`top_valid`); the base flag strictly; the dialled
+  distance always. A left-camera-only read is "flag found, range not available"
+  (`range_missing`) unless top and base are visible, in which case the estimator ranges it
+  from the angular height itself; its bearing is kept. **Not an estimator input:** the read's
+  own disparity sigma (the reference assumes 0.08 px); the application uses it for the gate
+  and for the confidence shown.
+* **The bearing is referred to the ball** with the estimator's distance, a correction of
+  3.4 mrad at 3 m for the left camera's 10 mm offset; the estimator's distance is the cameras'
+  range to the stick, about 29 mm more than the ball's (the reference's device sits at the
+  ball). The second one, about one 0.1 ft step of the display, is not corrected (open issue
+  20).
+* **Survey.** The reference takes the drops "ball first"; `gl_solver_estimate_survey()` takes
+  `ball_index` and uses the other drops in array order (tested: the result does not depend on
+  where the ball's drop sits). The application chooses the ball as the farthest drop and draws
+  the line only when the marker lies there (Application / Survey; open issue 18).
+* **Method.** B1 is the default; the setting METHOD switches B2 (anchored horizon fit, 5
+  starts, about 1.4 million host instructions against 0.3 million) on. B0 and STRAIGHT are
+  ported and tested but cannot be selected on the device. The grain option (`use_grain`) is
+  off and has no setting.
+* **`flag_base_visible` is passed strictly** (the stick was followed, with significance, more
+  than 1.5 rows below the turf edge); with the base "at the horizon" the estimator uses the
+  one-sided bound and does not range from the angular height (open issue 9 still applies to
+  the application's own range).
+* **Differences from the reference, all documented in `gl_solver.h`:** the single build's
+  tolerances; C refuses camera constants and tilts that no placement produces
+  (`GL_ERR_PARAM`), where the reference computes on; where the reference raises an exception
+  or returns not-a-number, C returns `GL_ERR_RANGE` and a flagged record; an infinite distance
+  sigma is reported as not-a-number; `gl_solver_solve_aim()` and `gl_solver_roll()` refuse a
+  result that is not finite. Not ported: the joint horizon fit and the other comparison-only
+  switches of `EstimatorConfig`, grid surfaces, trajectories, batches.
+* **For the next agent:** `gl_estimate_t` carries `n_rolls` and `n_steps` (the cost of the
+  solve) and `gl_solver_work_t.fit` the whole fit record (covariance, range channels,
+  stations, horizon diagnostics). The log now carries aim source, status, flags, method and
+  `n_rolls` (`GL_APP_LOGEV_ESTIMATE`); the fit record and `n_steps` still reach neither the log
+  nor the USB protocol.

@@ -2,8 +2,32 @@
   "design": "dshape",
   "error_count": 0,
   "errors_by_code": {},
-  "findings": [],
+  "findings": [
+    {
+      "code": "fine_unconfined",
+      "message": "net class(es) Fine are finer than the standard 0.150 / 0.127 mm but the design has no fine area (Design.add_fine_area): their nets may use the fine geometry anywhere on the board",
+      "net": null,
+      "refs": [],
+      "severity": "warning"
+    },
+    {
+      "code": "no_fiducials",
+      "message": "the top side has fine-pitch parts (U1, U2, U3, U4, J1) but 0 fiducial(s): the assembler wants three per side (Design.add_fiducial)",
+      "net": null,
+      "refs": [
+        "U1",
+        "U2",
+        "U3",
+        "U4",
+        "J1"
+      ],
+      "severity": "warning"
+    }
+  ],
   "ok": true,
-  "warning_count": 0,
-  "warnings_by_code": {}
+  "warning_count": 2,
+  "warnings_by_code": {
+    "fine_unconfined": 1,
+    "no_fiducials": 1
+  }
 }

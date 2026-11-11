@@ -229,20 +229,58 @@ GL_TEST(test_settings)
     gl_settings_item_set(&s, GL_ITEM_DISTANCE, 0);
     gl_settings_item_format(&s, GL_ITEM_DISTANCE, b, sizeof(b));
     GL_CHECK(strcmp(b, "--") == 0);
+    /* the stopping distance past the hole: 5 cm steps, shown in the small
+     * unit of the selected system */
+    gl_settings_defaults(&s);
+    GL_CHECK_EQ(s.past_cm, 30);
+    GL_CHECK_NEAR(gl_settings_past_m(&s), 0.30, 1e-6);
+    GL_CHECK_EQ(gl_settings_item_get(&s, GL_ITEM_PACE), 6);
+    gl_settings_item_format(&s, GL_ITEM_PACE, b, sizeof(b));
+    GL_CHECK(strcmp(b, "12IN") == 0);
+    s.units = GL_UNITS_METRES;
+    gl_settings_item_format(&s, GL_ITEM_PACE, b, sizeof(b));
+    GL_CHECK(strcmp(b, "30CM") == 0);
+    gl_settings_item_set(&s, GL_ITEM_PACE, 0);
+    GL_CHECK_NEAR(gl_settings_past_m(&s), 0.0, 1e-9);
+    gl_settings_item_set(&s, GL_ITEM_PACE, 18);
+    GL_CHECK_NEAR(gl_settings_past_m(&s), 0.90, 1e-6);
+    gl_settings_item_set(&s, GL_ITEM_PACE, 99); /* clamped */
+    GL_CHECK_EQ(s.past_cm, GL_PAST_CM_MAX);
+    GL_CHECK(strcmp(gl_settings_item_name(GL_ITEM_PACE), "PAST") == 0);
+    /* the estimator method: B1 unless the golfer chose B2 */
+    gl_settings_defaults(&s);
+    GL_CHECK_EQ(s.method, GL_METHOD_B1);
+    gl_settings_item_format(&s, GL_ITEM_METHOD, b, sizeof(b));
+    GL_CHECK(strcmp(b, "B1") == 0);
+    gl_settings_item_set(&s, GL_ITEM_METHOD, 1);
+    GL_CHECK_EQ(s.method, GL_METHOD_B2);
+    gl_settings_item_format(&s, GL_ITEM_METHOD, b, sizeof(b));
+    GL_CHECK(strcmp(b, "B2 HORIZ") == 0);
+    gl_settings_item_set(&s, GL_ITEM_METHOD, 0);
+    GL_CHECK_EQ(s.method, GL_METHOD_B1);
     /* storage round trip and rejection of bad blobs */
     s.stimp_x2 = 25;
-    s.pace = GL_PACE_FIRM;
+    s.past_cm = 45;
     s.grass = GL_GRASS_POA;
+    s.method = GL_METHOD_B2;
     s.manual_distance_cm = 731;
     gl_settings_encode(&s, blob);
+    GL_CHECK_EQ(blob[0], 2); /* the version of THIS layout */
     GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_OK);
-    GL_CHECK(memcmp(&s, &t, sizeof(s)) == 0);
+    GL_CHECK(t.stimp_x2 == s.stimp_x2 && t.units == s.units && t.past_cm == s.past_cm &&
+             t.grass == s.grass && t.grain_enable == s.grain_enable &&
+             t.raw_log_level == s.raw_log_level && t.method == s.method &&
+             t.manual_distance_cm == s.manual_distance_cm);
     GL_CHECK_NEAR(gl_settings_past_m(&t), 0.45, 1e-6);
     GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob) - 1, &t), GL_ERR_PARAM);
     blob[0] = 7;
     GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_ERR_UNSUPPORTED);
+    blob[0] = 0;
+    GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_ERR_UNSUPPORTED);
+    blob[0] = 3;
+    GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_ERR_UNSUPPORTED);
     blob[0] = GL_SETTINGS_VERSION;
-    for (int field = 1; field <= 6; field++) {
+    for (int field = 1; field <= 7; field++) {
         uint8_t keep = blob[field];
         blob[field] = 200;
         gl_settings_defaults(&t);
@@ -250,8 +288,78 @@ GL_TEST(test_settings)
         GL_CHECK_EQ(t.stimp_x2, 20); /* untouched on error */
         blob[field] = keep;
     }
+    blob[7] = 1; /* method codes are 0 (B1) and 2 (B2): 1 is B0, not selectable */
+    GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_ERR_RANGE);
+    blob[7] = (uint8_t)GL_METHOD_B2;
     gl_put_u16(&blob[8], 3001);
     GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_ERR_RANGE);
+}
+
+/* The record of the PREVIOUS layout (phase 1, version 1) must not be misread:
+ * its byte 3 is the pace OPTION (0 die, 1 normal, 2 firm), which the present
+ * layout would take for a stopping distance of 0, 1 or 2 cm. */
+GL_TEST(test_settings_record_of_the_previous_layout)
+{
+    static const struct {
+        uint8_t pace_v1;
+        uint8_t past_cm;
+    } map[] = { { 0, 0 }, { 1, 30 }, { 2, 45 } };
+    uint8_t v1[GL_SETTINGS_BLOB_LEN];
+    gl_settings_t t;
+
+    for (size_t i = 0; i < GL_ARRAY_LEN(map); i++) {
+        /* a phase-1 record, byte for byte as phase 1 wrote it */
+        memset(v1, 0, sizeof(v1));
+        v1[0] = 1;            /* version */
+        v1[1] = 23;           /* stimp 11.5 */
+        v1[2] = GL_UNITS_METRES;
+        v1[3] = map[i].pace_v1;
+        v1[4] = GL_GRASS_BERMUDA;
+        v1[5] = 1;            /* grain on */
+        v1[6] = GL_RAWLOG_FIRST;
+        gl_put_u16(&v1[8], 615);
+        gl_settings_defaults(&t);
+        GL_CHECK_EQ(gl_settings_decode(v1, sizeof(v1), &t), GL_OK);
+        GL_CHECK_EQ(t.past_cm, map[i].past_cm); /* converted, not copied */
+        GL_CHECK_EQ(t.method, GL_METHOD_B1);    /* phase 1 had no method: the default */
+        GL_CHECK_EQ(t.stimp_x2, 23);
+        GL_CHECK_EQ(t.units, GL_UNITS_METRES);
+        GL_CHECK_EQ(t.grass, GL_GRASS_BERMUDA);
+        GL_CHECK_EQ(t.grain_enable, 1);
+        GL_CHECK_EQ(t.raw_log_level, GL_RAWLOG_FIRST);
+        GL_CHECK_EQ(t.manual_distance_cm, 615);
+        /* written back, it is a record of the present layout */
+        {
+            uint8_t v2[GL_SETTINGS_BLOB_LEN];
+            gl_settings_t u;
+            gl_settings_encode(&t, v2);
+            GL_CHECK_EQ(v2[0], GL_SETTINGS_VERSION);
+            GL_CHECK_EQ(v2[3], map[i].past_cm);
+            GL_CHECK_EQ(gl_settings_decode(v2, sizeof(v2), &u), GL_OK);
+            GL_CHECK_EQ(u.past_cm, map[i].past_cm);
+        }
+    }
+    /* what a misreading would have been: the same bytes with the version
+     * byte of the present layout decode to 2 cm, which is why the version
+     * is checked first */
+    v1[0] = GL_SETTINGS_VERSION;
+    v1[3] = 2;
+    GL_CHECK_EQ(gl_settings_decode(v1, sizeof(v1), &t), GL_OK);
+    GL_CHECK_EQ(t.past_cm, 2);
+    /* a version-1 record with a pace option that phase 1 never wrote, or
+     * with its reserved byte used, is refused and changes nothing */
+    v1[0] = 1;
+    v1[3] = 3;
+    gl_settings_defaults(&t);
+    GL_CHECK_EQ(gl_settings_decode(v1, sizeof(v1), &t), GL_ERR_RANGE);
+    GL_CHECK_EQ(t.past_cm, GL_PAST_CM_DEFAULT);
+    v1[3] = 1;
+    v1[7] = 2;
+    GL_CHECK_EQ(gl_settings_decode(v1, sizeof(v1), &t), GL_ERR_RANGE);
+    v1[7] = 0;
+    v1[1] = 99; /* out-of-range field of the old record */
+    GL_CHECK_EQ(gl_settings_decode(v1, sizeof(v1), &t), GL_ERR_RANGE);
+    GL_CHECK_EQ(t.stimp_x2, GL_STIMP_X2_DEFAULT);
 }
 
 GL_TEST(test_calibration_records)
@@ -369,19 +477,28 @@ GL_TEST(test_generated_config)
     GL_CHECK_NEAR(GL_PROV_STICK_TOTAL_HEIGHT_M - GL_PROV_STICK_IN_CUP_M, 1.96, 1e-6);
 }
 
-GL_TEST(test_solver_is_a_stub)
+GL_TEST(test_solver_is_the_port)
 {
+    /* The solver is no longer the phase-1 stub.  Its own tests are in
+     * tests/test_solver.c (reference vectors in both precisions, hostile
+     * inputs); here only what the rest of the firmware relies on. */
+    static gl_solver_work_t work;
     gl_measurements_t m;
     gl_estimate_t e;
     gl_aim_solution_t a;
     gl_solver_options_t opt;
-    gl_quad_surface_t surf = { 0.01f, 0.02f, 0, 0, 0, 0 };
+    gl_quad_surface_t surf = { 0.0f, 0.02f, 0, 0, 0, 0 };
     gl_vec2_t p0 = { 0, 0 }, p1 = { 3, 0 }, grain = { 0, 0 };
 
-    GL_CHECK_EQ(gl_solver_version(), 0);
+    GL_CHECK(gl_solver_version() != 0u);
+    GL_CHECK_EQ(gl_solver_version(), GL_SOLVER_VERSION);
+    GL_CHECK_EQ(GL_SOLVER_REAL_BITS, 32); /* the firmware build is single precision */
+    GL_CHECK_EQ(sizeof(gl_real_t), sizeof(float));
     gl_solver_default_options(&opt);
     GL_CHECK_NEAR(opt.past_m, 0.30, 1e-6);
     GL_CHECK_EQ(opt.max_rolls, 200);
+    GL_CHECK_EQ(opt.method, GL_SOLVER_METHOD_B1); /* the firmware default: no horizon fit */
+    GL_CHECK(!opt.use_grain);                     /* the grain reading is not used by default */
     gl_solver_measurements_init(&m);
     GL_CHECK_NEAR(m.f_px, 657.0, 1e-6);
     GL_CHECK_NEAR(m.baseline_m, 0.0200, 1e-7);
@@ -390,16 +507,29 @@ GL_TEST(test_solver_is_a_stub)
     GL_CHECK(isnan(m.user_distance_m) && isnan(m.flag_disparity_px));
     GL_CHECK_EQ(m.n_horizon, 0);
     GL_CHECK_EQ(m.tilt_reads, 1);
-    /* every solving entry point says "not implemented" and marks its output */
+    /* nothing measured but a cross slope of 2 % rising to the left: the
+     * tilt-only fallback along the visor axis at the default 3 m, flagged */
+    m.tilt_y = 0.02f;
     memset(&e, 0x55, sizeof(e));
-    GL_CHECK_EQ(gl_solver_estimate(&m, &opt, &e), GL_ERR_NOT_IMPLEMENTED);
+    GL_CHECK_EQ(gl_solver_estimate(&m, &opt, &work, &e), GL_OK);
+    GL_CHECK(e.flag_missing && !e.range_missing && e.fit_converged);
+    GL_CHECK_EQ(e.aim_source, GL_AIM_FROM_PATCH);
+    GL_CHECK_EQ(e.solve_status, GL_SOLVE_OK);
+    GL_CHECK_NEAR(e.distance_m, 3.0, 1e-6);
+    GL_CHECK(e.phi_rad > 0.08f && e.phi_rad < 0.13f); /* aim left = uphill */
+    GL_CHECK_NEAR(e.break_cups, 3.0 * tan((double)e.phi_rad) / 0.10795, 1e-4);
+    GL_CHECK_NEAR(e.slope_pct, 2.0, 1e-4);
+    GL_CHECK(e.confidence > 0.0f && e.confidence < 1.0f);
+    GL_CHECK_EQ(gl_solver_estimate_survey(&m, 1, 0, &opt, &work, &e), GL_OK);
+    /* the same slope given to the aim solver directly */
+    GL_CHECK_EQ(gl_solver_solve_aim(&surf, p0, p1, e.a_r_mps2, grain, &opt, &a), GL_OK);
+    GL_CHECK_EQ(a.status, GL_SOLVE_OK);
+    GL_CHECK_NEAR(a.phi_rad, e.phi_rad, 2e-4);
+    /* errors are flagged, never silent */
+    GL_CHECK_EQ(gl_solver_estimate(&m, &opt, &work, NULL), GL_ERR_PARAM);
+    GL_CHECK_EQ(gl_solver_estimate(NULL, &opt, &work, &e), GL_ERR_PARAM);
     GL_CHECK_EQ(e.solve_status, GL_SOLVE_NOT_RUN);
     GL_CHECK_NEAR(e.phi_rad, 0.0, 0);
-    GL_CHECK_EQ(gl_solver_estimate_survey(&m, 1, 0, &opt, &e), GL_ERR_NOT_IMPLEMENTED);
-    GL_CHECK_EQ(gl_solver_solve_aim(&surf, p0, p1, 0.549f, grain, &opt, &a),
-                GL_ERR_NOT_IMPLEMENTED);
-    GL_CHECK_EQ(a.status, GL_SOLVE_NOT_RUN);
-    GL_CHECK_EQ(gl_solver_estimate(&m, &opt, NULL), GL_ERR_NOT_IMPLEMENTED); /* NULL is safe */
     /* status values mirror the Python reference */
     GL_CHECK_EQ(GL_SOLVE_OK, 0);
     GL_CHECK_EQ(GL_SOLVE_PACE_LIMITED, 1);
@@ -453,6 +583,7 @@ GL_TEST(test_every_stop_is_safe_before_its_start)
         GL_CHECK_EQ(gl_hal_adc_power(false), GL_OK);
         GL_CHECK_EQ(gl_hal_opamp_enable(false), GL_OK);
         gl_hal_wake_timer_start(0);
+        GL_CHECK_EQ(gl_hal_clock_set(GL_CLOCK_SLOW), GL_OK); /* rev C2: the core clock */
         GL_CHECK_EQ(gl_hal_dcmi_poll(NULL), GL_DCMI_IDLE);
     }
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
@@ -482,8 +613,9 @@ int main(void)
     GL_RUN(test_number_formatting);
     GL_RUN(test_event_queue);
     GL_RUN(test_settings);
+    GL_RUN(test_settings_record_of_the_previous_layout);
     GL_RUN(test_calibration_records);
     GL_RUN(test_generated_config);
-    GL_RUN(test_solver_is_a_stub);
+    GL_RUN(test_solver_is_the_port);
     return gl_test_summary();
 }

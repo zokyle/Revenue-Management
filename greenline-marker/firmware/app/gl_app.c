@@ -21,6 +21,11 @@ typedef char gl_app_store_sector_holds_a_full_set_[
 #error "cradle.orientations changed: revisit where the zeroing routine may run"
 #endif
 
+/* The method setting is stored with the solver's own codes. */
+typedef char gl_app_method_codes_match_[
+    ((int)GL_METHOD_B1 == (int)GL_SOLVER_METHOD_B1 && (int)GL_METHOD_B2 == (int)GL_SOLVER_METHOD_B2)
+        ? 1 : -1];
+
 #define ALL_IRQS                                                                          \
     (GL_IRQ_IMU_INT1 | GL_IRQ_IMU_INT2 | GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT |           \
      GL_IRQ_WAKE_TIMER | GL_IRQ_USB_RX | GL_IRQ_DCMI_DONE | GL_IRQ_TICK)
@@ -204,22 +209,77 @@ static void temp_refresh_(gl_app_t *app, uint32_t now)
     }
 }
 
-/* Apply the charge gate from what is known NOW.  Charging needs all of:
- * the device awake (so that this function runs again), a working IMU, an
- * IMU temperature that passed its liveness check and is fresh, an MCU die
- * temperature that is fresh, the two agreeing, and both inside the window.
- * Anything else stops charging: this is the only cell-temperature
- * protection of the product. */
+/* Apply the charge gate from what is known NOW (drivers/power.h has the
+ * rules).  The cell NTC is the input; the IMU's and the MCU's die sensors
+ * only vouch for it.  A reading counts as known only if it is fresh. */
 static void charge_gate_(gl_app_t *app, uint32_t now)
 {
+    const bool cell_fresh = app->cell_seen &&
+                            (uint32_t)(now - app->cell_temp_ms) <= GL_APP_CELL_TEMP_MAX_AGE_MS;
     const bool imu_t = app->imu_ok && app->temp_valid &&
                        (uint32_t)(now - app->temp_ms) <= GL_APP_TEMP_MAX_AGE_MS;
-    const bool mcu_t = app->power.mcu_temp_valid &&
-                       (uint32_t)(now - app->mcu_temp_ms) <= GL_APP_TEMP_MAX_AGE_MS;
-    const float a = app->temp_c, b = app->power.mcu_temp_c;
-    const bool valid = app->awake && imu_t && mcu_t &&
-                       fabsf(a - b) <= GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C;
-    (void)gl_power_charge_gate(&app->power, (a < b) ? a : b, (a > b) ? a : b, valid);
+    const bool mcu_t = app->cell_seen && app->power.mcu_temp_valid &&
+                       (uint32_t)(now - app->mcu_temp_ms) <= GL_APP_CELL_TEMP_MAX_AGE_MS;
+    const uint8_t before = app->power.chg_reason;
+
+    (void)gl_power_charge_gate(&app->power, cell_fresh, app->temp_c, imu_t, mcu_t);
+    if (app->power.chg_reason != before) {
+        if (app->awake) {
+            /* reason in the low byte, the cell temperature in 0.1 C above it
+             * (not logged while asleep: the flash is in deep power-down) */
+            const int32_t t10 = app->power.cell_temp_valid
+                                    ? (int32_t)gl_roundi(gl_clampf(app->power.cell_temp_c, -100.0f,
+                                                                   200.0f) * 10.0f)
+                                    : -9999;
+            gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_CHARGE,
+                             (int32_t)app->power.chg_reason | (int32_t)((uint32_t)t10 << 8));
+        }
+        if (app->ui.state == (uint8_t)GL_UI_CRADLE_USB) {
+            app->redraw = true;
+        }
+    }
+}
+
+/* Measure the cell and the die temperatures and apply the gate: at a VBUS
+ * edge (the charger has just started by itself), at boot in the cradle, and
+ * every GL_APP_CHG_TEMP_PERIOD_MS while VBUS is present. */
+static void charge_supervise_(gl_app_t *app, uint32_t now)
+{
+    app->next_chg_ms = now + GL_APP_CHG_TEMP_PERIOD_MS;
+    gl_power_poll_pins(&app->power);
+    if (gl_power_measure_temps(&app->power) != GL_OK) {
+        app->last_error = (uint16_t)GL_ERR_IO;
+    }
+    app->cell_seen = true;
+    app->cell_temp_ms = now;
+    app->mcu_temp_ms = now;
+    temp_refresh_(app, now);
+    charge_gate_(app, now);
+}
+
+/* ======================================================================= */
+/* core clock: fast only for the compute-heavy part of a read               */
+/* ======================================================================= */
+
+/* DESIGN_SPEC rev C2: 160 MHz from the PLL during a read, slow otherwise.
+ * "During a read" is: from the start of the capture (the vision runs on
+ * every strip) to the end of the putt solve.  A PLL that does not lock is
+ * not an error: everything works at the slow clock, only later. */
+static void clock_(gl_app_t *app, bool fast)
+{
+    if (fast == app->clock_fast) {
+        return;
+    }
+    if (fast) {
+        if (gl_hal_clock_set(GL_CLOCK_FAST) == GL_OK) {
+            app->clock_fast = true;
+        } else {
+            app->clock_fails++;
+        }
+    } else {
+        (void)gl_hal_clock_set(GL_CLOCK_SLOW);
+        app->clock_fast = false;
+    }
 }
 
 /* ======================================================================= */
@@ -341,6 +401,7 @@ static void abort_read_(gl_app_t *app)
         gl_read_abort(&app->read);
     }
     app->capture_active = false;
+    clock_(app, false);
     gl_motion_set_strict(&app->motion, false);
     irq_setup_(app);
 }
@@ -383,9 +444,17 @@ static void enter_sleep_(gl_app_t *app)
     if (app->usb_on) {
         usb_stop_(app);
     }
-    /* Nothing supervises the temperature while the MCU is in Stop mode:
-     * charging is stopped here and resumes when the gate next runs. */
-    gl_power_charge_stop(&app->power);
+    /* Rev C2: the charger is on by default in hardware and CHG_INHIBIT can
+     * only stop it.  A sleeping MCU must not leave it stopped: without VBUS
+     * the pin is released here, so that the next cradle charges the cell
+     * even if this firmware never wakes again.  (With VBUS present the
+     * device does not sleep: see the end of this function; the gate keeps
+     * whatever it decided.) */
+    gl_power_poll_pins(&app->power);
+    if (!app->power.vbus) {
+        gl_power_charge_release(&app->power);
+        app->power.chg_reason = (uint8_t)GL_CHG_NO_VBUS;
+    }
     app->awake = false;
     app->sleep_since_ms = now;
     app->sleep_ticks = 0;
@@ -425,9 +494,12 @@ static void enter_sleep_(gl_app_t *app)
 /* ======================================================================= */
 
 /* A VBUS or charger-STAT edge.  The HARDWARE rules are applied here, at
- * once and whatever the UI is doing: with VBUS gone, USB is stopped (the
- * USB-supply-valid bit must not stay set with VDDUSB unpowered) and the
- * charge enable is released.  What the UI is told is debounced. */
+ * once and whatever the UI is doing.  With VBUS gone, USB is stopped (the
+ * USB-supply-valid bit must not stay set with VDDUSB unpowered) and
+ * CHG_INHIBIT is released.  With VBUS there, the charger has ALREADY
+ * started by itself (rev C2): the cell temperature is measured in this very
+ * loop pass and the charge is stopped if it must be.  What the UI is told
+ * is debounced. */
 static void vbus_edge_(gl_app_t *app, uint32_t now)
 {
     gl_power_poll_pins(&app->power);
@@ -435,7 +507,9 @@ static void vbus_edge_(gl_app_t *app, uint32_t now)
         if (app->usb_on) {
             usb_stop_(app);
         }
-        gl_power_charge_stop(&app->power);
+        charge_gate_(app, now); /* no VBUS: releases the pin */
+    } else {
+        charge_supervise_(app, now);
     }
     app->vbus_pending = true;
     app->vbus_settle_ms = now + GL_APP_VBUS_DEBOUNCE_MS;
@@ -476,9 +550,10 @@ static void battery_service_(gl_app_t *app, uint32_t now)
     if (gl_power_measure(&app->power) != GL_OK) {
         app->last_error = (uint16_t)GL_ERR_IO;
     }
-    if (app->power.mcu_temp_valid) {
-        app->mcu_temp_ms = now;
-    }
+    app->cell_seen = true; /* gl_power_measure() reads both temperatures too */
+    app->cell_temp_ms = now;
+    app->mcu_temp_ms = now;
+    app->next_chg_ms = now + GL_APP_CHG_TEMP_PERIOD_MS;
     temp_refresh_(app, now);
     charge_gate_(app, now);
     /* Below the LOW threshold the battery symbol on the screens shows it;
@@ -609,8 +684,10 @@ static void capture_start_(gl_app_t *app)
         return;
     }
     app->read_id++;
+    clock_(app, true); /* the vision of a read is about 145 million instructions */
     st = gl_read_start(&app->read, app->cur.up, GL_APP_LRRL_REPEATS);
     if (st != GL_OK) {
+        clock_(app, false);
         app->last_error = (uint16_t)st;
         gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_FAULT, (int32_t)st);
         gl_app_post(app, GL_EV_CAPTURE_FAIL, (int32_t)st);
@@ -620,8 +697,12 @@ static void capture_start_(gl_app_t *app)
     irq_setup_(app);
 }
 
-/* The left camera measured the flagstick (with or without a disparity):
- * range and target. */
+/* The left camera measured the flagstick (with or without a disparity).
+ *
+ * The application's own range fusion (core/gl_range) still runs here, but
+ * NOT on the way to the aim: it learns the stick height of the course and
+ * fills diagnostic fields.  The number shown and the number solved with are
+ * the estimator's (build_measurement_, solve_). */
 static void flag_measured_(gl_app_t *app)
 {
     const gl_read_result_t *res = &app->read.result;
@@ -630,14 +711,14 @@ static void flag_measured_(gl_app_t *app)
 
     c->flag_found = true;
     c->bearing_valid = true;
-    c->manual_range = false;
     c->bearing_rad = res->angles.bearing_rad;
     c->base_elev_rad = res->angles.base_elev_rad;
     c->top_elev_rad = res->angles.top_elev_rad;
     c->top_valid = res->angles.top_valid;
     c->base = res->angles.base;
-    /* GL_READ_TIER_LEFT: no disparity; the range can then only come from the
-     * stick's angular height (if its height has been learned) */
+    c->tier = res->tier;
+    c->ambiguous = res->ambiguous;
+    /* GL_READ_TIER_LEFT: no disparity */
     c->disparity_px = res->stick_found ? res->disp.disparity_px : 0.0f;
     c->disparity_sigma_px = res->stick_found ? res->disp.sigma_px : 0.0f;
 
@@ -650,11 +731,11 @@ static void flag_measured_(gl_app_t *app)
     in.cos_bearing = cosf(c->bearing_rad);
     in.have_height = res->stick_left.top_in_frame;
     in.top_in_clutter = res->stick_left.top_in_clutter; /* a flag over the tip: not for ranging */
-    /* For RANGING the lowest visible point counts as the base also when the
-     * stick ends at the turf horizon: on a flat green the base is then within
-     * (lens height / distance) of it, and a crown hides centimetres of a
-     * 1.96 m stick.  The elevation uncertainty is widened instead.  (For the
-     * SLOPE use of the base the solver gets the strict classification.) */
+    /* For LEARNING THE STICK HEIGHT the lowest visible point counts as the
+     * base also when the stick ends at the turf horizon: on a flat green the
+     * base is then within (lens height / distance) of it, and a crown hides
+     * centimetres of a 1.96 m stick.  The elevation uncertainty is widened
+     * instead.  (The estimator gets the strict classification.) */
     in.base_visible = (res->angles.base != (uint8_t)GL_VIS_BASE_UNKNOWN);
     in.tan_top = tanf(res->angles.top_elev_rad);
     in.tan_base = tanf(res->angles.base_elev_rad);
@@ -667,15 +748,6 @@ static void flag_measured_(gl_app_t *app)
         uint8_t blob[GL_STICK_HEIGHT_BLOB_LEN];
         gl_stick_height_encode(&app->stick_height, blob);
         (void)gl_app_store_put(app, (uint8_t)GL_STORE_ID_COURSE, blob, sizeof(blob));
-    }
-    if (c->range_valid) {
-        /* the bearing was measured by the LEFT camera, not at the head centre */
-        c->target = gl_range_from_ball_at(c->range.range_m, c->bearing_rad,
-                                          GL_CFG_CAM_LEFT_X_MM * 0.001f,
-                                          GL_CFG_CAM_LEFT_Y_MM * 0.001f);
-    } else {
-        c->target.distance_m = 0.0f;
-        c->target.bearing_rad = c->bearing_rad;
     }
 }
 
@@ -702,16 +774,13 @@ static void capture_step_(gl_app_t *app)
     gl_motion_set_strict(&app->motion, false);
     irq_setup_(app);
     if (st == GL_OK) {
+        /* The flagstick was measured by the left camera at least.  A read
+         * without a disparity (GL_READ_TIER_LEFT) is NOT turned into "no
+         * flag" any more: the estimator keeps its bearing and takes the
+         * distance from the stick's angular height if it can, else from the
+         * dial ("flag found, range not available": gl_estimate_t.range_missing). */
         flag_measured_(app);
-        if (!app->read.result.stick_found && !app->cur.range_valid) {
-            /* seen by the left camera only and no learned stick height to
-             * range with: like a missing flag, but the bearing is kept and
-             * the dialled distance is applied along it */
-            app->cur.flag_found = false;
-            gl_app_post(app, GL_EV_CAPTURE_NO_STICK, 0);
-        } else {
-            gl_app_post(app, GL_EV_CAPTURE_DONE, 0);
-        }
+        gl_app_post(app, GL_EV_CAPTURE_DONE, 0);
     } else if (st == GL_ERR_NO_STICK) {
         app->cur.flag_found = false;
         app->cur.bearing_valid = false; /* a band-only bearing is logged, not aimed at */
@@ -727,12 +796,36 @@ static void capture_step_(gl_app_t *app)
 /* solve, result screen, log                                                */
 /* ======================================================================= */
 
-/* The current read as the estimator wants it (device frame = read frame). */
+/*
+ * The current read as the estimator wants it (device frame = read frame).
+ *
+ * THIS IS THE ONE PLACE where firmware quantities become solver inputs, and
+ * it follows one rule: GATE, DO NOT SYNTHESISE.  What was not measured, or
+ * is not significant, is marked "not available"; nothing is passed that the
+ * cameras did not measure.
+ *
+ *   disparity      only from a stereo pair (GL_READ_TIER_STEREO) and only if
+ *                  it is GL_RANGE_MIN_DISPARITY_SNR sigmas above zero; else
+ *                  not-a-number.  A left-camera-only read is therefore "flag
+ *                  found, range not available" unless top and base of the
+ *                  stick are visible (the estimator then ranges from the
+ *                  angular height itself).
+ *   stick top      visible only if in the frame and not in clutter.
+ *   stick base     the strict classification (followed into the turf).
+ *   dialled dist.  always handed over; the estimator uses it only when the
+ *                  cameras give no range.
+ *
+ * ONE range fusion feeds the aim: the estimator's (gl_solver_fuse_range, the
+ * reference's fuse_range).  It is also what refers the bearing to the ball
+ * here: the bearing was measured by the left camera, 10 mm beside the
+ * marker's axis and 28.7 mm behind the ball (3.4 mrad at 3 m).
+ */
 static void build_measurement_(const gl_app_t *app, gl_measurements_t *m)
 {
     const gl_app_read_t *c = &app->cur;
     const gl_read_result_t *res = &app->read.result;
     const gl_vec2_t dev = gl_tilt_slope_to_device(c->slope);
+    const float dialled = gl_settings_manual_distance_m(&app->settings);
     gl_grain_est_t grain;
 
     gl_solver_measurements_init(m);
@@ -748,21 +841,19 @@ static void build_measurement_(const gl_app_t *app, gl_measurements_t *m)
                       app->grain_modulation, app->grain_azimuth_rad, &grain);
     m->grain_kappa = grain.kappa_long;
     m->grain_azimuth_rad = grain.azimuth_rad;
+    if (dialled > 0.0f) {
+        m->user_distance_m = dialled;
+    }
     if (c->flag_found) {
+        gl_range_estimate_t rng;
+        float d_ref;
+
         m->flag_found = true;
-        m->flag_bearing_rad = c->bearing_rad;
-        if (res->stick_found) {
+        m->flag_bearing_rad = c->bearing_rad; /* as the left camera saw it, for now */
+        if (c->tier >= (uint8_t)GL_READ_TIER_STEREO && c->disparity_sigma_px > 0.0f &&
+            c->disparity_px >= GL_RANGE_MIN_DISPARITY_SNR * c->disparity_sigma_px) {
             /* the reference's disparity is f B / DISTANCE; ours measures depth */
             m->flag_disparity_px = c->disparity_px * cosf(c->bearing_rad);
-        } else {
-            /* GL_READ_TIER_LEFT: no disparity was measured.  The reference
-             * has no input that says so; a zero would read as "infinitely
-             * far".  The range found from the angular height is passed as
-             * the disparity it corresponds to (flag_found is only true here
-             * if there is such a range; see capture_step_()). */
-            m->flag_disparity_px = (c->range_valid && c->range.range_m > 0.0f)
-                                       ? (GL_CFG_CAM_F_PX * GL_CFG_CAM_BASELINE_M / c->range.range_m)
-                                       : 0.0f;
         }
         m->flag_low_elev_rad = c->base_elev_rad;
         m->flag_base_visible = (c->base == (uint8_t)GL_VIS_BASE_VISIBLE);
@@ -774,24 +865,54 @@ static void build_measurement_(const gl_app_t *app, gl_measurements_t *m)
             m->horizon_az_rad[i] = res->horizon_az_rad[i];
             m->horizon_elev_rad[i] = res->horizon_elev_rad[i];
         }
-    } else if (c->manual_range) {
-        m->user_distance_m = c->target.distance_m;
+        /* Refer the bearing to the ball with the distance THE ESTIMATOR will
+         * use: its own fusion of what has just been gated, else the dialled
+         * distance, else its default.  (Pure geometry; the correction is
+         * 10 mm / distance, so the choice among the three hardly matters.) */
+        gl_solver_fuse_range(m, &rng);
+        if (isfinite(rng.distance_m) && rng.distance_m > 0.0f) {
+            d_ref = rng.distance_m;
+        } else {
+            d_ref = (dialled > 0.0f) ? dialled : GL_APP_DEFAULT_DISTANCE_M;
+        }
+        m->flag_bearing_rad = gl_range_from_ball_at(d_ref, c->bearing_rad,
+                                                    GL_CFG_CAM_LEFT_X_MM * 0.001f,
+                                                    GL_CFG_CAM_LEFT_Y_MM * 0.001f).bearing_rad;
     }
 }
 
+/* The estimator's range for one stored placement, or a negative number. */
+static float drop_range_(const gl_measurements_t *m)
+{
+    gl_range_estimate_t r;
+    gl_solver_fuse_range(m, &r);
+    return (m->flag_found && isfinite(r.distance_m) && r.distance_m > 0.0f) ? r.distance_m : -1.0f;
+}
+
+/* Append the current read to the Survey: its solver input, and a summary
+ * record for diagnostics whose range is the ESTIMATOR's for that drop. */
 static void survey_store_(gl_app_t *app)
 {
-    const gl_app_read_t *c = &app->cur;
+    gl_app_read_t *c = &app->cur;
     gl_survey_drop_t d;
+    float range;
+
+    if (app->survey.count >= GL_SURVEY_MAX_DROPS || c->stored) {
+        return;
+    }
+    build_measurement_(app, &app->meas[app->survey.count]);
+    range = drop_range_(&app->meas[app->survey.count]);
     memset(&d, 0, sizeof(d));
     d.slope = c->slope;
     d.bearing_rad = c->bearing_rad;
     d.base_elev_rad = c->base_elev_rad;
-    if (c->flag_found && c->range_valid) {
-        /* distance from the marker centre: stereo head range + its offset */
-        d.range_m = c->range.range_m + GL_CFG_CAM_LEFT_Y_MM * 0.001f;
-        d.range_sigma_m = c->range.sigma_m;
+    if (c->flag_found) {
         d.flags |= (uint8_t)GL_DROP_FLAG_STICK;
+    }
+    if (range > 0.0f) {
+        d.range_m = range;
+        d.range_sigma_m = range * range * GL_APP_EST_SIGMA_DISP_PX /
+                          (GL_CFG_CAM_F_PX * GL_CFG_CAM_BASELINE_M);
     }
     if (c->base == (uint8_t)GL_VIS_BASE_VISIBLE) {
         d.flags |= (uint8_t)GL_DROP_FLAG_BASE_VISIBLE;
@@ -799,92 +920,192 @@ static void survey_store_(gl_app_t *app)
     if (c->precision) {
         d.flags |= (uint8_t)GL_DROP_FLAG_PRECISION;
     }
-    if (gl_survey_add(&app->survey, &d) == GL_OK) {
-        build_measurement_(app, &app->meas[app->survey.count - 1u]);
-    }
+    /* (gl_survey_add() refuses a drop without a range; since phase 2 such a
+     * drop is kept as a placement and the estimator ignores it, as the
+     * reference does) */
+    app->survey.drop[app->survey.count++] = d;
+    c->stored = true;
 }
 
-/* Phase-1 confidence figure, 0..1.  A HEURISTIC, not a calibrated
- * probability: the estimator of phase 2 supplies the real one. */
-static float confidence_(const gl_app_t *app, bool solved)
+/*
+ * Which stored drop is the ball, and does the marker lie there now?
+ *
+ * The estimator takes the Survey "ball first": the drop FARTHEST from the
+ * flagstick defines the putt, the others are samples along the line.  The
+ * marker lies wherever the golfer put it down last, and the aim line on the
+ * screen means something only if that is the ball.  So:
+ *   - the ball is the stored drop with the largest estimator range;
+ *   - if the newest drop is that one, or is within
+ *     GL_APP_SURVEY_AT_BALL_FRACTION of its range (the golfer came back to
+ *     the ball; two drops this close are not two stations), the newest drop
+ *     IS taken as the ball, and the result is in its frame: the line can be
+ *     drawn;
+ *   - otherwise the marker lies somewhere along the line: the numbers are
+ *     shown, no line (gl_ui_view_t.line_here false);
+ *   - if no drop was ranged, the newest one is a plain tilt-only read.
+ */
+static unsigned survey_ball_(const gl_app_t *app, bool *at_ball)
+{
+    const unsigned n = app->survey.count;
+    float far = -1.0f, newest = -1.0f;
+    unsigned ball = 0;
+
+    for (unsigned i = 0; i < n; i++) {
+        const float r = drop_range_(&app->meas[i]);
+        if (r > far) {
+            far = r;
+            ball = i;
+        }
+        if (i + 1u == n) {
+            newest = r;
+        }
+    }
+    if (!(far > 0.0f) || newest >= GL_APP_SURVEY_AT_BALL_FRACTION * far) {
+        *at_ball = true;
+        return n - 1u;
+    }
+    *at_ball = false;
+    return ball;
+}
+
+/*
+ * The confidence SHOWN.  The estimator's own score knows the tilt readings,
+ * the distance and the flags of gl_estimate_t; it cannot know how the
+ * cameras came by their numbers.  The rule (each factor multiplies):
+ *
+ *   x 0.6   the flagstick was measured by the left camera only
+ *           (GL_READ_TIER_LEFT): a line that was never checked against a
+ *           disparity is weaker evidence of a flagstick
+ *   x 0.6   ambiguous: another line in view also passed as a flagstick
+ *   x s     the read's own disparity uncertainty against the 0.08 px the
+ *           estimator assumes: s = 0.08 / sigma, limited to 0.5 .. 1 (a
+ *           disparity read behind a person, 0.34 px, halves the score; the
+ *           usual 0.05 px changes nothing)
+ *   x 0.7   the fit stopped on its iteration limit
+ * and two caps for an aim that is not a solution:
+ *   <= 0.2  aim_source 2, the estimator's best effort (at most one box)
+ *   =  0    aim_source 3, straight at the hole for want of anything
+ * A Survey result takes the camera factors of the read at the marker's
+ * present placement.
+ */
+static float shown_confidence_(const gl_app_t *app)
 {
     const gl_app_read_t *c = &app->cur;
-    const gl_vis_quality_t *q = &app->read.result.quality;
-    float conf = 1.0f;
-    if (!c->flag_found) {
-        conf *= 0.4f; /* flag-out fallback */
-    } else {
-        if (c->range_valid && c->range.range_m > 0.0f) {
-            conf *= gl_clampf(1.0f - 4.0f * c->range.sigma_m / c->range.range_m, 0.3f, 1.0f);
-            if (!c->range.consistent) {
-                conf *= 0.7f;
-            }
-        } else {
-            conf *= 0.5f;
+    const gl_estimate_t *e = &app->est;
+    float conf = e->confidence;
+
+    if (c->flag_found) {
+        if (c->tier == (uint8_t)GL_READ_TIER_LEFT) {
+            conf *= GL_APP_CONF_ONE_CAMERA;
         }
-        if (!app->read.result.stick_found) {
-            conf *= 0.6f; /* one camera only: not checked against a disparity */
+        if (c->ambiguous) {
+            conf *= GL_APP_CONF_AMBIGUOUS;
         }
-        if (app->read.result.ambiguous) {
-            conf *= 0.6f; /* a second line in view also passes as a flagstick */
-        }
-        if (q->sun) {
-            conf *= 0.7f;
-        }
-        if (q->sharpness_match < 0.6f) {
-            conf *= 0.7f; /* one window dirty or wet */
-        }
-        if (q->rows_used_frac < 0.5f) {
-            conf *= 0.8f;
+        if (c->tier >= (uint8_t)GL_READ_TIER_STEREO && c->disparity_sigma_px > GL_APP_EST_SIGMA_DISP_PX) {
+            conf *= gl_clampf(GL_APP_EST_SIGMA_DISP_PX / c->disparity_sigma_px, 0.5f, 1.0f);
         }
     }
-    if ((app->cal_tilt.flags & GL_CAL_TILT_FLAG_FACTORY) == 0u) {
-        conf *= 0.8f;
+    if (!e->fit_converged) {
+        conf *= GL_APP_CONF_FIT_NOT_DONE;
     }
-    if ((app->cal_tilt.flags & GL_CAL_TILT_FLAG_FLIP) == 0u) {
-        conf *= 0.9f; /* never zeroed */
-    }
-    if (c->precision) {
-        conf *= 1.15f;
-    }
-    if (!solved && conf > 0.5f) {
-        conf = 0.5f; /* no putt solution behind the line */
+    if (e->aim_source == (uint8_t)GL_AIM_STRAIGHT) {
+        conf = 0.0f;
+    } else if (e->aim_source == (uint8_t)GL_AIM_BEST_EFFORT && conf > GL_APP_CONF_BEST_EFFORT_MAX) {
+        conf = GL_APP_CONF_BEST_EFFORT_MAX;
     }
     return gl_clampf(conf, 0.0f, 1.0f);
 }
 
-static void compose_view_(gl_app_t *app, bool solved)
+/* The one plain message of a result: the most serious condition wins. */
+static uint8_t note_(const gl_app_t *app)
 {
     const gl_app_read_t *c = &app->cur;
+    const gl_estimate_t *e = &app->est;
+
+    if (e->aim_source == (uint8_t)GL_AIM_STRAIGHT) {
+        return (uint8_t)GL_UI_NOTE_NO_SOLUTION;
+    }
+    if (e->aim_source == (uint8_t)GL_AIM_BEST_EFFORT) {
+        return (uint8_t)GL_UI_NOTE_NOT_SOLVED;
+    }
+    if (e->flag_missing) {
+        return (uint8_t)GL_UI_NOTE_NO_FLAG;
+    }
+    if (e->range_missing) {
+        return (uint8_t)GL_UI_NOTE_NO_RANGE;
+    }
+    if (e->aim_source == (uint8_t)GL_AIM_FROM_PLANE) {
+        return (uint8_t)GL_UI_NOTE_APPROX;
+    }
+    if (e->solve_status == (uint8_t)GL_SOLVE_PACE_LIMITED) {
+        return (uint8_t)GL_UI_NOTE_PACE;
+    }
+    if (!e->fit_converged) {
+        return (uint8_t)GL_UI_NOTE_FIT;
+    }
+    if (c->flag_found && c->tier == (uint8_t)GL_READ_TIER_LEFT) {
+        return (uint8_t)GL_UI_NOTE_ONE_CAMERA;
+    }
+    if (c->flag_found && c->ambiguous) {
+        return (uint8_t)GL_UI_NOTE_AMBIGUOUS;
+    }
+    return (uint8_t)GL_UI_NOTE_NONE;
+}
+
+/*
+ * gl_estimate_t -> what the screen shows.
+ *
+ * FRAMES.  The estimate is in the reference's DEVICE frame of the placement
+ * at the ball: +x out of the visor, +y left, azimuths counter-clockwise from
+ * +x.  The firmware's angles are counter-clockwise from marker FORWARD (out
+ * of the visor), so a device-frame azimuth IS a firmware angle - no sign
+ * change, no offset.  The screen measures the same way from "up" (gl_gfx.h:
+ * angle 0 up, +90 degrees left), and "up" on the screen is marker forward
+ * for a golfer standing behind the marker and looking at the hole.  Hence:
+ *   aim_azimuth_device > bearing  <=>  phi > 0  <=>  aim LEFT of the hole
+ *   <=>  the line leans to the left towards the top of the screen and its
+ *   backward extension crosses the screen to the RIGHT of the centre
+ *   <=>  break label "<n CUP"  <=>  the ground rises to the left.
+ * view_yaw_rad takes the read frame to the marker's present frame (the
+ * 180-degree spin of a Precision Read).  tests/test_e2e_putt.c checks every
+ * link of this chain with numbers, from the scene to the pixels.
+ */
+static void compose_view_(gl_app_t *app)
+{
+    const gl_app_read_t *c = &app->cur;
+    const gl_estimate_t *e = &app->est;
     gl_ui_view_t *v = &app->view;
-    float aim, fall;
+    const bool dialled = gl_settings_manual_distance_m(&app->settings) > 0.0f;
+    const bool assumed = e->flag_missing || e->range_missing;
 
     v->have_result = true;
-    v->solved = solved;
-    v->flag_found = c->flag_found;
+    /* a solution of the putt on the estimated surface (patch or its secant
+     * plane); anything else is drawn as a tentative line */
+    v->solved = (e->aim_source == (uint8_t)GL_AIM_FROM_PATCH ||
+                 e->aim_source == (uint8_t)GL_AIM_FROM_PLANE);
+    v->line_here = app->line_here;
+    v->flag_found = !e->flag_missing;
     v->precision = c->precision;
-    if (solved) {
-        aim = app->est.aim_azimuth_device_rad;
-        fall = app->est.fall_line_azimuth_device_rad;
-        v->distance_m = app->est.distance_m;
-        v->slope_pct = app->est.slope_pct;
-        v->break_cups = app->est.break_cups;
-        v->confidence = app->est.confidence;
-    } else {
-        /* no putt solution: the line points straight at the hole (or along
-         * the visor axis when no flag was found) */
-        aim = (c->flag_found || c->manual_range) ? c->target.bearing_rad : 0.0f;
-        fall = gl_tilt_fall_line_rad(c->slope);
-        v->distance_m = c->target.distance_m;
-        v->slope_pct = gl_tilt_slope_percent(c->slope);
-        v->break_cups = 0.0f;
-        v->confidence = confidence_(app, false);
-    }
-    v->along_pct = 100.0f * gl_tilt_slope_along(c->slope, aim).x;
+    v->distance_assumed = assumed;
+    /* the estimator's numbers; a distance nobody measured or dialled (the
+     * estimator's 3 m default) is not shown as if it were known */
+    v->distance_m = (assumed && !dialled) ? 0.0f : e->distance_m;
+    v->plays_like_m = (assumed && !dialled) ? 0.0f : e->plays_like_m;
+    v->slope_pct = e->slope_pct;
+    v->break_cups = e->break_cups;
+    v->confidence = shown_confidence_(app);
+    v->note = note_(app);
+    v->drop = (c->stored && app->survey.count > 0u) ? app->survey.count : 0u;
     /* from the read frame to the marker's present frame */
-    v->aim_rad = gl_wrap_pi(aim - c->view_yaw_rad);
-    v->fall_line_rad = gl_wrap_pi(fall - c->view_yaw_rad);
+    v->aim_rad = gl_wrap_pi(e->aim_azimuth_device_rad - c->view_yaw_rad);
+    v->fall_line_rad = gl_wrap_pi(e->fall_line_azimuth_device_rad - c->view_yaw_rad);
     v->ball_az_rad = gl_wrap_pi(-c->view_yaw_rad);
+}
+
+void gl_app_recompose_view(gl_app_t *app)
+{
+    compose_view_(app);
+    app->redraw = true;
 }
 
 static uint8_t pct_(float x)
@@ -892,10 +1113,11 @@ static uint8_t pct_(float x)
     return (uint8_t)gl_roundi(100.0f * gl_clampf(x, 0.0f, 1.0f));
 }
 
-static void log_read_(gl_app_t *app, bool solved)
+static void log_read_(gl_app_t *app)
 {
     const gl_app_read_t *c = &app->cur;
     const gl_read_result_t *res = &app->read.result;
+    const gl_estimate_t *e = &app->est;
     gl_log_read_t r;
     uint8_t buf[GL_LOG_READ_LEN];
 
@@ -909,7 +1131,7 @@ static void log_read_(gl_app_t *app, bool solved)
                         ((c->flag_found && c->base == (uint8_t)GL_VIS_BASE_VISIBLE)
                              ? GL_LOG_READ_FLAG_BASE_VISIBLE : 0u) |
                         ((c->flag_found && c->top_valid) ? GL_LOG_READ_FLAG_TOP_VISIBLE : 0u) |
-                        (c->manual_range ? GL_LOG_READ_FLAG_MANUAL_RANGE : 0u) |
+                        ((e->flag_missing || e->range_missing) ? GL_LOG_READ_FLAG_MANUAL_RANGE : 0u) |
                         (c->precision ? GL_LOG_READ_FLAG_PRECISION : 0u) |
                         ((app->survey.count > 0u) ? GL_LOG_READ_FLAG_SURVEY : 0u) |
                         (app->grain_valid ? GL_LOG_READ_FLAG_GRAIN_VALID : 0u) |
@@ -922,7 +1144,7 @@ static void log_read_(gl_app_t *app, bool solved)
     r.aim_rad = app->view.aim_rad;
     r.stimp_x2 = app->settings.stimp_x2;
     r.confidence_pct = pct_(app->view.confidence);
-    r.solver_status = solved ? app->est.solve_status : (uint8_t)GL_SOLVE_NOT_RUN;
+    r.solver_status = e->solve_status;
     r.stick_height_m = app->stick_height.height_m;
     if (c->flag_found) {
         r.bearing_rad = c->bearing_rad;
@@ -936,27 +1158,38 @@ static void log_read_(gl_app_t *app, bool solved)
         r.saturation_pct = pct_(res->quality.sat_fraction);
         r.n_repeats = res->groups_ok;
     }
-    if (c->range_valid || c->manual_range) {
-        r.range_m = c->manual_range ? c->target.distance_m : c->range.range_m;
-        r.range_sigma_m = c->manual_range ? (GL_RANGE_MANUAL_REL_SIGMA * c->target.distance_m)
-                                          : c->range.sigma_m;
-    }
-    if (solved) {
-        r.v0_mps = app->est.v0_mps;
-        r.aim_offset_m = app->est.break_m;
-    }
+    /* the distance solved with and shown: the estimator's (0 sigma = unknown) */
+    r.range_m = e->distance_m;
+    r.range_sigma_m = isfinite(e->distance_sigma_m) ? e->distance_sigma_m : 0.0f;
+    r.v0_mps = e->v0_mps;
+    r.aim_offset_m = e->break_m;
     gl_log_read_encode(&r, buf);
     if (gl_log_append(&app->log, (uint8_t)GL_LOG_REC_READ, 0, buf, sizeof(buf), NULL) != GL_OK) {
         app->last_error = (uint16_t)GL_ERR_IO;
     }
+    /* what the read record has no room for: the estimator's flags and cost
+     * (layout: GL_APP_ESTFLAG_* in gl_app_cfg.h) */
+    gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_ESTIMATE,
+                     (int32_t)(((uint32_t)e->aim_source & 3u) |
+                               (((uint32_t)e->solve_status & 7u) << GL_APP_ESTFLAG_STATUS_SHIFT) |
+                               (e->fit_converged ? GL_APP_ESTFLAG_FIT_CONVERGED : 0u) |
+                               (e->base_hidden ? GL_APP_ESTFLAG_BASE_HIDDEN : 0u) |
+                               (e->flag_missing ? GL_APP_ESTFLAG_FLAG_MISSING : 0u) |
+                               (e->range_missing ? GL_APP_ESTFLAG_RANGE_MISSING : 0u) |
+                               (e->poor_horizon ? GL_APP_ESTFLAG_POOR_HORIZON : 0u) |
+                               (((uint32_t)app->solve_opt.method & 3u) << GL_APP_ESTFLAG_METHOD_SHIFT) |
+                               (((uint32_t)c->tier & 3u) << GL_APP_ESTFLAG_TIER_SHIFT) |
+                               (c->ambiguous ? GL_APP_ESTFLAG_AMBIGUOUS : 0u) |
+                               (app->line_here ? GL_APP_ESTFLAG_LINE_HERE : 0u) |
+                               (((uint32_t)((e->n_rolls < 0x7FFFu) ? e->n_rolls : 0x7FFFu))
+                                << GL_APP_ESTFLAG_ROLLS_SHIFT)));
 }
 
 static void solve_(gl_app_t *app, bool precision_reread)
 {
     gl_app_read_t *c = &app->cur;
-    gl_solver_options_t opt;
+    gl_solver_options_t *opt = &app->solve_opt;
     gl_status_t st;
-    bool solved;
 
     if (precision_reread) {
         /* Combine the read at the ball with the re-read after the spin.  The
@@ -977,33 +1210,46 @@ static void solve_(gl_app_t *app, bool precision_reread)
         c->view_yaw_rad = yaw; /* where the marker faces now, whatever came of it */
         gl_motion_spin_end(&app->motion);
     }
-    if (!c->flag_found) {
-        /* flag-out fallback: tilt only, along the visor axis, with the
-         * dialled distance if there is one */
-        const float manual = gl_settings_manual_distance_m(&app->settings);
-        c->manual_range = (manual > 0.0f);
-        c->target.bearing_rad = c->bearing_valid ? c->bearing_rad : 0.0f;
-        c->target.distance_m = c->manual_range ? manual : 0.0f;
-    }
+    /* the solve needs the fast clock as much as the vision does: a typical
+     * estimate is 0.3 million instructions, the worst that could be
+     * constructed 173 million (README "Solver") */
+    clock_(app, true);
     build_measurement_(app, &app->meas_cur);
-    gl_solver_default_options(&opt);
-    opt.past_m = gl_settings_past_m(&app->settings);
-    if (app->survey.count >= 2u) {
-        st = gl_solver_estimate_survey(app->meas, app->survey.count, 0u, &opt, &app->est);
+    gl_solver_default_options(opt);
+    opt->past_m = gl_settings_past_m(&app->settings);
+    opt->method = app->settings.method; /* B1 by default; B2 is a setting */
+    /* the grain reading is not used (gl_solver_default_options) */
+    app->solve_drops = 1;
+    app->solve_ball = 0;
+    app->line_here = true;
+    if (c->stored && app->survey.count >= 2u) {
+        /* the newest drop is the current read: keep its record in step with
+         * what has just been built (a Precision combination changes it) */
+        bool at_ball = true;
+        app->meas[app->survey.count - 1u] = app->meas_cur;
+        app->solve_drops = app->survey.count;
+        app->solve_ball = (uint8_t)survey_ball_(app, &at_ball);
+        app->line_here = at_ball;
+        st = gl_solver_estimate_survey(app->meas, app->solve_drops, app->solve_ball, opt,
+                                       &app->solver_work, &app->est);
     } else {
-        st = gl_solver_estimate(&app->meas_cur, &opt, &app->est);
+        st = gl_solver_estimate(&app->meas_cur, opt, &app->solver_work, &app->est);
     }
+    gl_hal_trace(GL_TRACE_SOLVE);
+    clock_(app, false);
     app->solver_status = st;
-    if (st != GL_OK && st != GL_ERR_NOT_IMPLEMENTED) {
+    if (st != GL_OK) {
+        /* GL_ERR_PARAM / GL_ERR_RANGE: an input no placement should produce,
+         * or arithmetic that left the finite range.  (The solver's own
+         * fallbacks - flag missing, not ranged, secant plane, best iterate -
+         * are results: GL_OK with the flags of gl_estimate_t, shown as a
+         * message and as reduced confidence.) */
         app->last_error = (uint16_t)st;
         gl_app_post(app, GL_EV_SOLVE_FAIL, (int32_t)st);
         return;
     }
-    /* GL_ERR_NOT_IMPLEMENTED is the phase-1 stub: show the tilt-and-bearing
-     * screen ("TILT ONLY"), which is a result, not a failure */
-    solved = (st == GL_OK);
-    compose_view_(app, solved);
-    log_read_(app, solved);
+    compose_view_(app);
+    log_read_(app);
     app->reads_total++;
     gl_app_post(app, GL_EV_SOLVE_DONE, 0);
 }
@@ -1316,7 +1562,7 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
         if (app->motion.spin_active && app->view.have_result) {
             app->cur.view_yaw_rad = gl_spin_yaw(&app->motion.spin);
             app->cur.precision = false;
-            compose_view_(app, app->view.solved);
+            compose_view_(app);
         }
         gl_motion_spin_end(&app->motion);
     }
@@ -1340,6 +1586,13 @@ static void draw_(gl_app_t *app)
     app->view.battery_pct = app->power.percent;
     app->view.charging = app->power.charging;
     app->view.usb_connected = app->usb_on && gl_hal_usb_connected();
+    switch ((gl_chg_reason_t)app->power.chg_reason) {
+    case GL_CHG_ALLOWED:
+    case GL_CHG_NO_VBUS: app->view.chg_blocked = 0u; break;
+    case GL_CHG_TOO_COLD: app->view.chg_blocked = 1u; break;
+    case GL_CHG_TOO_HOT: app->view.chg_blocked = 2u; break;
+    default: app->view.chg_blocked = 3u; break; /* unknown, NTC fault, implausible */
+    }
     app->view.cal_step = app->zero.active ? app->zero.step : 0u;
     gl_ui_render(&app->ui, &app->view, &app->gfx);
     if (gl_lcd_update(&app->lcd, &app->gfx, NULL) != GL_OK) {
@@ -1376,6 +1629,11 @@ gl_status_t gl_app_init(gl_app_t *app)
     gl_lcd_init(&app->lcd, NULL);
     gl_grain_fe_all_off();
     gl_power_init(&app->power);
+    if (app->power.vbus) {
+        /* booted in the cradle: the charger is already running (hardware
+         * default); measure the cell before anything slower is done */
+        charge_supervise_(app, gl_hal_tick_ms());
+    }
     gl_gfx_init(&app->gfx);
 
     st = gl_mx25r_init(&app->flash);
@@ -1413,7 +1671,7 @@ gl_status_t gl_app_init(gl_app_t *app)
     gl_motion_init(&app->motion, GL_IMU_ACCEL_G_PER_LSB_2G, GL_IMU_GYRO_RAD_S_PER_LSB_1000);
     gl_ui_init(&app->ui, &app->settings, gl_hal_tick_ms());
     gl_usb_bind(app);
-    app->solver_status = GL_ERR_NOT_IMPLEMENTED;
+    app->solver_status = GL_ERR_STATE; /* no read solved yet */
 
     gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_BOOT, (int32_t)reset);
 
@@ -1487,12 +1745,19 @@ static void sleep_(gl_app_t *app)
             wait = 1u;
         }
     }
+    if (app->power.vbus) {
+        /* in the cradle the charge is supervised on its own period */
+        const int32_t g = (int32_t)(app->next_chg_ms - now);
+        if (g < (int32_t)wait) {
+            wait = (g > 0) ? (uint32_t)g : 1u;
+        }
+    }
     /* Stop mode needs: no USB (48 MHz clock), no camera activity (DCMI,
      * XVCLK), and an EXTCOMIN output that keeps running in Stop 2 while the
      * display is on (PROVISIONAL) */
     if (app->usb_on || app->capture_active || gl_read_busy(&app->read) || app->cam.powered ||
-        (app->lcd.on && GL_PROV_LPTIM_PWM_RUNS_IN_STOP2 == 0)) {
-        mode = GL_SLEEP_IDLE;
+        app->clock_fast || (app->lcd.on && GL_PROV_LPTIM_PWM_RUNS_IN_STOP2 == 0)) {
+        mode = GL_SLEEP_IDLE; /* (the fast clock is never left on here: see gl_app_run_once) */
     }
     gl_hal_wake_timer_start(wait);
     (void)gl_hal_sleep(mode);
@@ -1609,6 +1874,10 @@ void gl_app_run_once(gl_app_t *app)
         }
         /* 2. timers */
         battery_service_(app, now);
+        if (app->power.vbus && (int32_t)(now - app->next_chg_ms) >= 0 && !app->capture_active &&
+            !app->tilt_active) {
+            charge_supervise_(app, now);
+        }
         if (app->zero.active && app->zero.step >= 3u &&
             (uint32_t)(now - app->zero.saved_at_ms) >= GL_APP_ZERO_SAVED_MS) {
             app->zero.active = false;
@@ -1631,6 +1900,13 @@ void gl_app_run_once(gl_app_t *app)
         if (app->ui.state != (uint8_t)GL_UI_SETTINGS_DIAL) {
             gl_motion_dial_end(&app->motion);
         }
+    }
+    /* The fast clock belongs to the capture and to the solve, which has
+     * run inside the actions above if it was due.  Whatever way a read ended
+     * (no flagstick and nothing dialled, a camera fault), it does not
+     * outlive this point. */
+    if (app->clock_fast && !app->capture_active && !gl_read_busy(&app->read)) {
+        clock_(app, false);
     }
     /* 4. screen */
     if (app->redraw) {

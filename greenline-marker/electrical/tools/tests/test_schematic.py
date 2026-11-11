@@ -162,7 +162,7 @@ def test_layouts_are_free_of_overlaps_and_complete():
     for design in _all_designs():
         pages, symbols = schematic.build_pages(design)
         placed = [c.part.ref for page in pages for c in page.cells]
-        assert sorted(placed) == sorted(p.ref for p in design.parts), design.name
+        assert sorted(placed) == sorted(p.ref for p in design.schematic_parts), design.name
         assert len({p.name for p in pages}) == len(pages)
         for page in pages:
             assert schematic.layout_overlaps(page) == [], (design.name, page.name)
@@ -510,6 +510,26 @@ def test_demo_schematic_round_trip(tmp_path):
     files = schematic.generate_schematic(design, str(tmp_path))
     result = schematic.round_trip(design, files.root)
     assert result.ok, result.problems[:10]
-    assert result.nets_compared == 72 and result.components_compared == len(design.parts)
+    # the six fiducials are board-only parts: no symbols
+    assert len(design.parts) - len(design.schematic_parts) == 6
+    assert result.nets_compared == 72
+    assert result.components_compared == len(design.schematic_parts) == 94
     # one sheet per schematic group, in the order the groups first appear
     assert [p.name for p in files.pages] == design.groups
+
+
+def test_board_only_parts_have_no_symbol_and_do_not_disturb_the_round_trip(tmp_path):
+    """Fiducials exist on the board only: no sheet, no symbol, and KiCad's
+    netlist of the schematic still equals the design."""
+    from mini_design import mini_design
+    design = mini_design()
+    groups = list(design.groups)
+    design.add_fiducial(-11.0, -5.0)
+    design.add_fiducial(11.0, 5.0, side="bottom")
+    assert design.groups == groups and len(design.schematic_parts) == len(design.parts) - 2
+    files = schematic.generate_schematic(design, str(tmp_path))
+    text = "".join(open(p).read() for p in [files.root] + list(files.sheets))
+    assert "FID1" not in text and "Fiducial" not in text
+    result = schematic.round_trip(design, files.root)
+    assert result.ok, result.problems
+    assert result.components_compared == len(design.parts) - 2

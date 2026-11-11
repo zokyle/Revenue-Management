@@ -29,13 +29,11 @@ static uint32_t now_ms_(void)
     return (uint32_t)(gl_sim_now_us() / 1000u);
 }
 
+/* The charger of the MODEL is running: VBUS present and CHG_INHIBIT not
+ * pulled low (rev C2: on by default, the firmware can only stop it). */
 static bool charging_allowed_(void)
 {
-#if GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE
-    return gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN);
-#else
-    return !gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN);
-#endif
+    return gl_sim_charger_on();
 }
 
 /* Marker with one completed read, then asleep. */
@@ -91,11 +89,12 @@ static unsigned pick_up_cycles_(unsigned cycles)
 
 /* Review (critical): after one IMU bus error imu_ok stayed false for ever
  * and the gate ran on the last good temperature: a cell at 60 C was charged
- * ("temp_c=22.0 temp_valid=1 charge_enabled=1").  Now the failure is
- * transient (the IMU recovers), and while it is not recovered there is no
- * temperature and no charging. */
+ * ("temp_c=22.0 temp_valid=1 charge_enabled=1").  The IMU failure is
+ * transient now (the IMU recovers), and since rev C2 the gate does not
+ * depend on the IMU at all: the cell NTC is the input. */
 GL_TEST(test_charge_gate_after_an_imu_bus_error)
 {
+    uint64_t out0;
     read_then_sleep_();
     /* awake again, showing a result */
     W.t_pick_s = (double)now_ms_() / 1000.0 + 0.5;
@@ -108,31 +107,43 @@ GL_TEST(test_charge_gate_after_an_imu_bus_error)
     GL_CHECK_EQ(app.imu_recoveries, 1u);
     GL_CHECK(app.ui.state != (uint8_t)GL_UI_ERROR);
     GL_CHECK(run_until_state_(GL_UI_SLEEP, now_ms_() + 60000u));
+    /* asleep outside the cradle: CHG_INHIBIT is in its reset state */
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
 
-    /* left in a hot car, then put on the cradle */
+    /* left in a hot car, then put on the cradle: the charger starts by
+     * itself (hardware default); the VBUS edge wakes the MCU, which measures
+     * the cell and stops it */
     gl_sim_imu_set_temperature(60.0f);
     run_until_ms_(now_ms_() + 20000u);
+    out0 = gl_sim_stats()->chg_outside_us;
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     gl_sim_set_input(GL_PIN_CHG_STAT, false);
+    GL_CHECK(charging_allowed_()); /* this instant: nobody has looked yet */
     for (unsigned i = 0; i < 300u; i++) { /* 5 minutes, checked every second */
         run_until_ms_(now_ms_() + 1000u);
         GL_CHECK(!charging_allowed_());
-        GL_CHECK(!app.power.charge_enabled);
+        GL_CHECK(!app.power.charge_enabled && app.power.inhibit);
     }
-    printf("    one SPI error earlier, cell at 60 C on the cradle for 5 min: imu_ok=%d temp %.1f C "
-           "(valid %d), charging allowed: %s\n", (int)app.imu_ok, (double)app.temp_c,
-           (int)app.temp_valid, charging_allowed_() ? "YES" : "no");
+    printf("    one SPI error earlier, cell at 60 C on the cradle for 5 min: the charger ran for "
+           "%.1f ms before the firmware stopped it; NTC %.1f C, IMU %.1f C (valid %d), charging: "
+           "%s\n", (double)(gl_sim_stats()->chg_outside_us - out0) / 1000.0,
+           (double)app.power.cell_temp_c, (double)app.temp_c, (int)app.temp_valid,
+           charging_allowed_() ? "YES" : "no");
+    GL_CHECK(gl_sim_stats()->chg_outside_us - out0 < 20000u); /* under 20 ms */
+    GL_CHECK_NEAR(app.power.cell_temp_c, 60.0, 0.1);
     GL_CHECK_NEAR(app.temp_c, 60.0, 0.1);
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TOO_HOT);
     /* cooled down: charging resumes */
     gl_sim_imu_set_temperature(30.0f);
-    run_until_ms_(now_ms_() + GL_APP_BATT_PERIOD_MS + 2000u);
+    run_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 500u);
     GL_CHECK(charging_allowed_());
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }
 
 /* Review (critical / major): a silent IMU (MISO reads 0xFF) decoded to
  * 24.996 C and counted as a valid temperature: "imu_ok=1 temp_valid=1
- * temp_c=24.996 charge_enabled=1" at a true 60 C. */
+ * temp_c=24.996 charge_enabled=1" at a true 60 C.  The driver refuses such
+ * a read, and since rev C2 it could not start a charge anyway. */
 GL_TEST(test_charge_gate_with_a_silent_imu)
 {
     into_cradle_();
@@ -141,20 +152,24 @@ GL_TEST(test_charge_gate_with_a_silent_imu)
     GL_CHECK(app.temp_valid);
 
     gl_sim_imu_set_present(false); /* dead part / open joint: every byte reads 0xFF */
-    gl_sim_imu_set_temperature(60.0f);
+    gl_sim_imu_set_temperature(60.0f); /* the board, and with it the cell, at 60 C */
     gl_sim_set_mcu_temperature(60.0f);
-    /* the sample pump notices within a tenth of a second */
+    /* the sample pump notices the IMU within a tenth of a second, the charge
+     * supervision the cell within its period */
     run_until_ms_(now_ms_() + 300u);
     GL_CHECK(!app.imu_ok);
     GL_CHECK(!app.temp_valid);
+    run_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS);
     GL_CHECK(!charging_allowed_());
     for (unsigned i = 0; i < 120u; i++) {
         run_until_ms_(now_ms_() + 1000u);
         GL_CHECK(!charging_allowed_());
     }
-    printf("    IMU silent in the cradle at a true 60 C: imu_ok=%d temp_valid=%d charging allowed: "
-           "%s, error shown: %s\n", (int)app.imu_ok, (int)app.temp_valid,
-           charging_allowed_() ? "YES" : "no", gl_status_name((gl_status_t)app.ui.error_code));
+    printf("    IMU silent in the cradle at a true 60 C: imu_ok=%d temp_valid=%d NTC %.1f C, "
+           "charging: %s (%u), error shown: %s\n", (int)app.imu_ok, (int)app.temp_valid,
+           (double)app.power.cell_temp_c, charging_allowed_() ? "YES" : "no",
+           (unsigned)app.power.chg_reason, gl_status_name((gl_status_t)app.ui.error_code));
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TOO_HOT);
     /* the driver itself refuses the read */
     {
         float t = -1.0f;
@@ -166,58 +181,127 @@ GL_TEST(test_charge_gate_with_a_silent_imu)
     GL_CHECK(!app.wdg_hold);
     GL_CHECK_EQ(gl_sim_violations()->watchdog, 0u);
 
-    /* the part comes back (it was a contact): the IMU is recovered and, at a
-     * permitted temperature, charging resumes by itself */
-    gl_sim_imu_set_present(true);
+    /* The cell cools to 24 C with the IMU still dead: the NTC says so and
+     * the MCU's die sensor vouches for it - the charge resumes WITHOUT the
+     * IMU (phase 1, whose gate needed it, kept a healthy cell from charging
+     * for as long as the IMU was gone). */
     gl_sim_imu_set_temperature(24.0f);
     gl_sim_set_mcu_temperature(26.0f);
+    run_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 500u);
+    GL_CHECK(!app.imu_ok);
+    GL_CHECK(charging_allowed_());
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_ALLOWED);
+    /* the part comes back (it was a contact): the IMU is recovered */
+    gl_sim_imu_set_present(true);
     run_until_ms_(now_ms_() + GL_APP_IMU_RETRY_MAX_MS + GL_APP_BATT_PERIOD_MS + 2000u);
     GL_CHECK(app.imu_ok);
     GL_CHECK(charging_allowed_());
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }
 
-/* The other ways the temperature can be wrong or missing. */
-GL_TEST(test_charge_gate_second_opinion_and_staleness)
+/* The NTC is the input; the die sensors are plausibility checks only. */
+GL_TEST(test_charge_gate_ntc_faults_and_plausibility)
 {
+    const uint32_t period = GL_APP_CHG_TEMP_PERIOD_MS + 300u;
     into_cradle_();
-    run_until_ms_(now_ms_() + GL_APP_BATT_PERIOD_MS + 1000u);
+    run_until_ms_(now_ms_() + period);
+    GL_CHECK(charging_allowed_());
+    {
+        /* supervised on its own period while VBUS is present */
+        const uint32_t reads0 = gl_sim_stats()->ntc_reads;
+        run_until_ms_(now_ms_() + 60000u);
+        printf("    in the cradle: %u NTC conversions in 60 s, NTC_BIAS driven for %.1f ms of them\n",
+               (unsigned)(gl_sim_stats()->ntc_reads - reads0),
+               (double)gl_sim_stats()->ntc_bias_us / 1000.0);
+        GL_CHECK(gl_sim_stats()->ntc_reads - reads0 >= 11u);
+        GL_CHECK(gl_sim_stats()->ntc_reads - reads0 <= 16u);
+    }
+
+    /* one die sensor is off by 28 K (the MCU reads 50 C, cell and IMU are at
+     * 22 C): the other one vouches for the NTC, the charge goes on */
+    gl_sim_set_mcu_temperature(50.0f);
+    run_until_ms_(now_ms_() + period);
+    GL_CHECK(charging_allowed_());
+    printf("    NTC %.1f C, IMU %.1f C, MCU die %.1f C: charging: %s\n", (double)app.power.cell_temp_c,
+           (double)app.temp_c, (double)app.power.mcu_temp_c, charging_allowed_() ? "YES" : "no");
+    /* the NTC reads a comfortable 22 C while the board is at 50 C by both
+     * die sensors (the NTC has come off the cell, or reads a fixed value):
+     * it is not believed */
+    gl_sim_set_cell_temperature(22.0f);
+    gl_sim_imu_set_temperature(50.0f);
+    run_until_ms_(now_ms_() + period);
+    GL_CHECK(!charging_allowed_());
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_IMPLAUSIBLE);
+    GL_CHECK_EQ(app.view.chg_blocked, 3);
+    printf("    NTC %.1f C, IMU %.1f C, MCU die %.1f C: charging: %s (implausible)\n",
+           (double)app.power.cell_temp_c, (double)app.temp_c, (double)app.power.mcu_temp_c,
+           charging_allowed_() ? "YES" : "no");
+    /* everything at 30 C again */
+    gl_sim_set_cell_temperature(30.0f);
+    gl_sim_imu_set_temperature(30.0f);
+    gl_sim_set_mcu_temperature(31.0f);
+    run_until_ms_(now_ms_() + period);
+    GL_CHECK(charging_allowed_());
+    /* the die sensors cannot overrule a hot cell: cell at 46.5 C, board 40 C */
+    gl_sim_set_cell_temperature(46.5f);
+    gl_sim_imu_set_temperature(40.0f);
+    gl_sim_set_mcu_temperature(40.0f);
+    run_until_ms_(now_ms_() + period);
+    GL_CHECK(!charging_allowed_());
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TOO_HOT);
+    /* the guard band: a cell at 44.0 C reads above 45 - guard and is stopped */
+    gl_sim_set_cell_temperature(30.0f);
+    gl_sim_imu_set_temperature(36.0f);
+    gl_sim_set_mcu_temperature(36.0f);
+    run_until_ms_(now_ms_() + period);
+    GL_CHECK(charging_allowed_());
+    gl_sim_set_cell_temperature(44.0f);
+    run_until_ms_(now_ms_() + period);
+    GL_CHECK(!charging_allowed_());
+    gl_sim_set_cell_temperature(-0.5f); /* and below zero */
+    gl_sim_imu_set_temperature(1.0f);
+    gl_sim_set_mcu_temperature(2.0f);
+    run_until_ms_(now_ms_() + period);
+    GL_CHECK(!charging_allowed_());
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TOO_COLD);
+    GL_CHECK_EQ(app.view.chg_blocked, 1);
+    gl_sim_set_cell_temperature(25.0f);
+    gl_sim_imu_set_temperature(25.5f);
+    gl_sim_set_mcu_temperature(26.0f);
+    run_until_ms_(now_ms_() + period);
     GL_CHECK(charging_allowed_());
 
-    /* the IMU's sensor reads 25 C while the board is at 50 C (a stuck or
-     * offset sensor): the MCU's own sensor disagrees -> stop */
-    gl_sim_set_mcu_temperature(50.0f);
-    run_until_ms_(now_ms_() + GL_APP_BATT_PERIOD_MS + 1000u);
-    GL_CHECK(!charging_allowed_());
-    printf("    IMU says %.1f C, MCU die sensor says %.1f C: charging allowed: %s\n",
-           (double)app.temp_c, (double)app.power.mcu_temp_c, charging_allowed_() ? "YES" : "no");
-    /* they agree within the limit, but the hotter one is above 45 C -> stop */
-    gl_sim_imu_set_temperature(40.0f);
-    gl_sim_set_mcu_temperature(46.5f);
-    run_until_ms_(now_ms_() + GL_APP_BATT_PERIOD_MS + 1000u);
-    GL_CHECK(!charging_allowed_());
-    /* both inside, in agreement: on again (inside the hysteresis) */
-    gl_sim_imu_set_temperature(30.0f);
-    gl_sim_set_mcu_temperature(32.0f);
-    run_until_ms_(now_ms_() + GL_APP_BATT_PERIOD_MS + 1000u);
-    GL_CHECK(charging_allowed_());
+    /* NTC broken off, shorted, bridged to the rail: each stops the charge
+     * within one period and is named; a repaired NTC resumes it */
+    {
+        static const gl_sim_ntc_fault_t faults[] = { GL_SIM_NTC_OPEN, GL_SIM_NTC_SHORT,
+                                                     GL_SIM_NTC_STUCK_HIGH };
+        static const uint8_t expect[] = { GL_NTC_OPEN, GL_NTC_SHORT, GL_NTC_OPEN };
+        for (size_t i = 0; i < GL_ARRAY_LEN(faults); i++) {
+            gl_sim_ntc_set_fault(faults[i]);
+            run_until_ms_(now_ms_() + period);
+            GL_CHECK(!charging_allowed_());
+            GL_CHECK_EQ(app.power.chg_reason, GL_CHG_NTC_FAULT);
+            GL_CHECK_EQ(app.power.ntc_fault, expect[i]);
+            GL_CHECK_EQ(app.view.chg_blocked, 3);
+            gl_sim_ntc_set_fault(GL_SIM_NTC_NORMAL);
+            run_until_ms_(now_ms_() + period);
+            GL_CHECK(charging_allowed_());
+        }
+    }
 
     /* a supply glitch resets the IMU alone: it answers, but both sensors
      * are off and its temperature output is frozen.  The sample pump sees
-     * the silence and re-initialises it; meanwhile no charging on a
-     * temperature that is not being measured */
+     * the silence and re-initialises it; the charge does not depend on it */
     {
         const uint32_t rec = app.imu_recoveries;
         gl_sim_imu_power_glitch();
-        run_until_ms_(now_ms_() + 60u);
-        GL_CHECK(!charging_allowed_() || app.imu_recoveries == rec + 1u);
-        run_until_ms_(now_ms_() + 400u);
+        run_until_ms_(now_ms_() + 460u);
         GL_CHECK_EQ(app.imu_recoveries, rec + 1u);
         GL_CHECK(app.imu_ok);
         GL_CHECK_EQ(gl_sim_imu_reg(0x10), 0x07); /* measuring again */
+        GL_CHECK(charging_allowed_());
     }
-    run_until_ms_(now_ms_() + GL_APP_BATT_PERIOD_MS + 1000u);
-    GL_CHECK(charging_allowed_());
 
     /* an IMU in power-down is not a thermometer (driver level) */
     {
@@ -233,17 +317,214 @@ GL_TEST(test_charge_gate_second_opinion_and_staleness)
         GL_CHECK_EQ(gl_imu_read_temperature(&app.imu, &t), GL_OK);
         gl_sim_imu_set_temperature(30.0f);
     }
-
-    /* staleness: if the periodic temperature read stops happening the gate
-     * must not live on the old value.  (Simulated by ageing the time stamp:
-     * the gate is evaluated on a VBUS / STAT edge.) */
-    run_until_ms_(now_ms_() + GL_APP_BATT_PERIOD_MS + 1000u);
-    GL_CHECK(charging_allowed_());
-    app.temp_ms -= GL_APP_TEMP_MAX_AGE_MS + 1000u;
-    gl_sim_set_input(GL_PIN_CHG_STAT, false);
-    run_until_ms_(now_ms_() + GL_APP_VBUS_DEBOUNCE_MS + 20u);
-    GL_CHECK(!charging_allowed_());
+    /* the charge events are in the log: every change of the gate's mind */
+    {
+        gl_log_iter_t it;
+        gl_log_rec_t rec;
+        uint8_t buf[128];
+        unsigned n = 0, hot = 0, fault = 0;
+        gl_log_iter_begin(&app.log, &it);
+        while (gl_log_iter_next(&app.log, &it, &rec, buf, sizeof(buf)) == GL_OK) {
+            gl_log_event_t ev;
+            if (rec.type == GL_LOG_REC_EVENT && gl_log_event_decode(buf, rec.len, &ev) == GL_OK &&
+                ev.code == GL_APP_LOGEV_CHARGE) {
+                n++;
+                hot += ((ev.arg & 0xFF) == (int32_t)GL_CHG_TOO_HOT) ? 1u : 0u;
+                fault += ((ev.arg & 0xFF) == (int32_t)GL_CHG_NTC_FAULT) ? 1u : 0u;
+            }
+        }
+        printf("    %u charge events in the log (%u too hot, %u NTC fault)\n", n, hot, fault);
+        /* (the first "allowed", when the sleeping marker met the cradle, is
+         * not logged: the flash was in deep power-down) */
+        GL_CHECK_EQ(n, 13u);
+        GL_CHECK_EQ(hot, 2u);
+        GL_CHECK_EQ(fault, 3u);
+    }
+    if (gl_sim_violation_total() != 0u) {
+        printf("    first violation: %s\n", gl_sim_violations()->first);
+    }
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* The state table of the README, "Charger and cell temperature", row by
+ * row: who holds CHG_INHIBIT, whether the charger runs, who supervises. */
+GL_TEST(test_charger_state_table)
+{
+    uint64_t t0;
+
+    /* ---- MCU in reset, in the cradle: the hardware default, nobody
+     *      supervises (a cell at its protection cut-off must come back) ---- */
+    world_defaults_();
+    board_up_(true);
+    gl_sim_imu_set_temperature(-5.0f); /* a cold garage */
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    gl_sim_advance_ms(50);
+    GL_CHECK(gl_sim_charger_on());
+    GL_CHECK(gl_sim_pin_level(GL_PIN_CHG_INHIBIT));
+    GL_CHECK_EQ(gl_sim_stats()->chg_in_reset_us, 50000u);
+    GL_CHECK_EQ(gl_sim_stats()->chg_outside_us, 0u); /* not counted against firmware */
+
+    /* ---- firmware starts in the cradle at -5 C: measures first, stops ---- */
+    t0 = gl_sim_now_us();
+    (void)gl_app_init(&app);
+    GL_CHECK(!gl_sim_charger_on());
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TOO_COLD);
+    printf("    boot in the cradle at -5 C: charger stopped %.1f ms after gl_hal_init (it ran for "
+           "%.1f ms of that)\n", (double)(gl_sim_now_us() - t0) / 1000.0,
+           (double)gl_sim_stats()->chg_outside_us / 1000.0);
+    GL_CHECK(gl_sim_stats()->chg_outside_us < 5000u);
+    watch_reset_();
+    run_until_ms_(now_ms_() + 30000u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    GL_CHECK(!gl_sim_charger_on());
+    GL_CHECK(gl_sim_stats()->chg_outside_us < 5000u);
+
+    /* ---- watchdog reset while the charge is inhibited: the pin goes high-Z
+     *      with every other pin, the charger RUNS until the firmware is back
+     *      and has measured again: inhibit cannot outlive a crash ---- */
+    {
+        const uint64_t out0 = gl_sim_stats()->chg_outside_us;
+        const uint64_t rst0 = gl_sim_stats()->chg_in_reset_us;
+        GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+        gl_sim_mcu_reset(GL_RESET_WATCHDOG);
+        GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+        GL_CHECK(gl_sim_charger_on());
+        gl_sim_advance_ms(3); /* reset and start-up code */
+        (void)gl_app_init(&app);
+        GL_CHECK(!gl_sim_charger_on()); /* still -5 C: stopped again */
+        printf("    watchdog reset while inhibited at -5 C: charger on for %.1f ms of reset and "
+               "%.1f ms of boot, then stopped again\n",
+               (double)(gl_sim_stats()->chg_in_reset_us - rst0) / 1000.0,
+               (double)(gl_sim_stats()->chg_outside_us - out0) / 1000.0);
+        GL_CHECK(gl_sim_stats()->chg_in_reset_us - rst0 >= 3000u);
+        GL_CHECK(gl_sim_stats()->chg_outside_us - out0 < 5000u);
+        watch_reset_();
+    }
+    /* the same reset at a good temperature: the charge simply continues */
+    gl_sim_imu_set_temperature(22.0f);
+    run_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 500u);
+    GL_CHECK(gl_sim_charger_on());
+    gl_sim_mcu_reset(GL_RESET_WATCHDOG);
+    GL_CHECK(gl_sim_charger_on());
+    gl_sim_advance_ms(3);
+    (void)gl_app_init(&app);
+    GL_CHECK(gl_sim_charger_on());
+    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    watch_reset_();
+    run_until_ms_(now_ms_() + 2000u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    GL_CHECK(gl_sim_charger_on());
+
+    /* ---- taken out of the cradle while inhibited: the pin is released in
+     *      the loop pass that sees VBUS go, before any Stop-mode sleep ---- */
+    gl_sim_imu_set_temperature(50.0f);
+    run_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 500u);
+    GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
+    gl_app_run_once(&app);
+    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, now_ms_() + 2000u));
+    run_until_ms_(now_ms_() + 40000u);
+    GL_CHECK_EQ(gl_sim_violations()->power, 0u); /* asleep in Stop mode with the pin released */
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
+
+    /* ---- asleep in Stop mode, then put into a cradle at 50 C: the charger
+     *      starts by itself, the VBUS edge wakes the MCU, the cell is
+     *      measured in that loop pass ---- */
+    {
+        const uint64_t out0 = gl_sim_stats()->chg_outside_us;
+        gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+        GL_CHECK(gl_sim_charger_on());
+        run_until_ms_(now_ms_() + 1000u);
+        GL_CHECK(!gl_sim_charger_on());
+        GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+        printf("    asleep, put into the cradle at 50 C: charger ran for %.2f ms before the "
+               "firmware stopped it\n", (double)(gl_sim_stats()->chg_outside_us - out0) / 1000.0);
+        GL_CHECK(gl_sim_stats()->chg_outside_us - out0 < 5000u);
+    }
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+
+    /* ---- hung firmware (the main loop stops being called) with the charger
+     *      on while the cell heats up: NOTHING stops the charge until the
+     *      watchdog resets the MCU.  The model says so twice: the charge
+     *      rule and the watchdog rule both fire.  This row is a limit of the
+     *      design, not something the firmware can test away. ---- */
+    gl_sim_imu_set_temperature(22.0f);
+    run_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 500u);
+    GL_CHECK(gl_sim_charger_on());
+    gl_sim_imu_set_temperature(50.0f);
+    gl_sim_advance_ms(33000); /* nobody calls gl_app_run_once() */
+    GL_CHECK(gl_sim_charger_on());
+    GL_CHECK_EQ(gl_sim_violations()->power, 1u);
+    GL_CHECK_EQ(gl_sim_violations()->watchdog, 1u);
+    printf("    hung firmware at 50 C: the charger ran unsupervised for %.0f s, until the watchdog "
+           "period (32 s) was over\n", (double)gl_sim_stats()->chg_outside_longest_us / 1e6);
+    /* ... the watchdog reset it would get, and the restart: stopped */
+    gl_sim_mcu_reset(GL_RESET_WATCHDOG);
+    gl_sim_advance_ms(3);
+    (void)gl_app_init(&app);
+    GL_CHECK(!gl_sim_charger_on());
+}
+
+/* The ROM bootloader: CHG_INHIBIT is high-Z there, the charger runs, and
+ * nothing supervises the cell.  The firmware refuses to go there unless the
+ * charge gate is satisfied at that moment; what happens afterwards is
+ * outside its reach (NOT MET, README). */
+GL_TEST(test_rom_dfu_and_the_charger)
+{
+    uint8_t seq;
+    const uint8_t *pl;
+    int n;
+
+    into_cradle_();
+    host_send_(1, GL_CMD_UNLOCK, "GLFC", 4);
+    (void)host_get_(GL_CMD_UNLOCK | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    /* too hot: no DFU, even unlocked */
+    gl_sim_imu_set_temperature(47.0f);
+    run_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 500u);
+    GL_CHECK(!gl_sim_charger_on());
+    host_rx_len_ = 0;
+    host_send_(2, GL_CMD_REBOOT, "DFU!", 4);
+    n = host_get_(GL_CMD_REBOOT | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+    run_until_ms_(now_ms_() + 100u);
+    GL_CHECK_EQ(gl_sim_stats()->reboots, 0u);
+    /* NTC broken: no DFU either (the temperature is unknown) */
+    gl_sim_imu_set_temperature(22.0f);
+    gl_sim_ntc_set_fault(GL_SIM_NTC_OPEN);
+    run_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 500u);
+    host_send_(3, GL_CMD_REBOOT, "DFU!", 4);
+    n = host_get_(GL_CMD_REBOOT | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+    /* a plain reboot is always possible */
+    gl_sim_ntc_set_fault(GL_SIM_NTC_NORMAL);
+    run_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 500u);
+    GL_CHECK(gl_sim_charger_on());
+    host_send_(4, GL_CMD_REBOOT, "DFU!", 4);
+    n = host_get_(GL_CMD_REBOOT | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    run_until_ms_(now_ms_() + 100u);
+    GL_CHECK_EQ(gl_sim_stats()->reboots, 1u);
+    GL_CHECK_EQ(gl_sim_stats()->last_reboot, GL_REBOOT_ROM_DFU);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+    /* in the ROM bootloader: every pin of the charger circuit high-Z, the
+     * charger on - and it stays on whatever the cell does, for as long as
+     * the host keeps the device there */
+    {
+        const uint64_t rst0 = gl_sim_stats()->chg_in_reset_us;
+        gl_sim_mcu_reset(GL_RESET_SOFTWARE);
+        GL_CHECK(gl_sim_charger_on());
+        gl_sim_imu_set_temperature(50.0f);
+        gl_sim_advance_ms(600000);
+        GL_CHECK(gl_sim_charger_on());
+        printf("    in the ROM bootloader with the cell at 50 C: the charger ran for %.0f s and "
+               "nothing could stop it (NOT MET: no supervision outside the firmware)\n",
+               (double)(gl_sim_stats()->chg_in_reset_us - rst0) / 1e6);
+        GL_CHECK(gl_sim_stats()->chg_in_reset_us - rst0 >= 600000000u);
+    }
 }
 
 /* ======================================================================= */
@@ -646,18 +927,21 @@ GL_TEST(test_the_power_rules_of_the_simulator_fire)
     GL_CHECK_EQ(gl_sim_violations()->power, 1u);
     gl_hal_usb_stop();
     (void)gl_hal_irq_take();
-    /* charger enabled at the entry of Stop mode */
+    /* (the charger rules of rev C2 - Stop mode with CHG_INHIBIT low and no
+     * VBUS, Stop mode in the cradle without a wake-up, charging outside the
+     * window, the pin driven push-pull - are each made to fire in
+     * tests/test_drv_power.c, test_charger_model_and_rules) */
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     gl_power_poll_pins(&p);
-    GL_CHECK(gl_power_charge_gate(&p, 25.0f, 25.0f, true));
+    p.cell_temp_c = 25.0f;
+    p.cell_temp_valid = true;
+    p.ntc_fault = (uint8_t)GL_NTC_OK;
+    p.mcu_temp_c = 25.0f;
+    p.mcu_temp_valid = true;
+    GL_CHECK(gl_power_charge_gate(&p, true, 25.0f, true, true));
     gl_hal_wake_timer_start(5);
-    (void)gl_hal_sleep(GL_SLEEP_STOP);
-    GL_CHECK_EQ(gl_sim_violations()->power, 2u);
-    (void)gl_hal_irq_take();
-    gl_power_charge_stop(&p);
-    gl_hal_wake_timer_start(5);
-    (void)gl_hal_sleep(GL_SLEEP_STOP);
-    GL_CHECK_EQ(gl_sim_violations()->power, 2u);
+    (void)gl_hal_sleep(GL_SLEEP_STOP); /* in the cradle, charger on, waking in 5 ms: allowed */
+    GL_CHECK_EQ(gl_sim_violations()->power, 1u);
 }
 
 /* Review (minor): SET_CAL with trailing bytes: "response status 1 (PARAM);
@@ -984,7 +1268,9 @@ int main(void)
 {
     GL_RUN(test_charge_gate_after_an_imu_bus_error);
     GL_RUN(test_charge_gate_with_a_silent_imu);
-    GL_RUN(test_charge_gate_second_opinion_and_staleness);
+    GL_RUN(test_charge_gate_ntc_faults_and_plausibility);
+    GL_RUN(test_charger_state_table);
+    GL_RUN(test_rom_dfu_and_the_charger);
     GL_RUN(test_one_imu_bus_error_is_not_permanent);
     GL_RUN(test_imu_absent_at_boot_only);
     GL_RUN(test_imu_reset_while_asleep_is_repaired);

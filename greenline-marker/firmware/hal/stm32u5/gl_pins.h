@@ -76,18 +76,20 @@
     X(GL_PIN_GRAIN_CP1,    C,  1,  9, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PC1: 68 ohm */ \
     X(GL_PIN_GRAIN_CP2,    C,  2, 10, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PC2: 68 ohm */ \
     X(GL_PIN_GRAIN_CP3,    C,  3, 11, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PC3: 68 ohm */ \
-    X(GL_PIN_GRAIN_CP4,    C,  4, 24, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PC4: 68 ohm */ \
+    X(GL_PIN_GRAIN_CP4,    C, 10, 51, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PC10: 68 ohm; moved from PC4 (now NTC_SENSE). PC10 is the ROM bootloader's USART3_TX: harmless here, no LED conducts with the other four pins high-Z */ \
     X(GL_PIN_OPAMP_VINP,   A,  0, 14, GL_PINFN_ANALOG,  0, GL_PINSRC_SPEC)     /* PA0: OPAMP1_VINP: mid-rail bias */ \
     X(GL_PIN_OPAMP_VINM,   A,  1, 15, GL_PINFN_ANALOG,  0, GL_PINSRC_SPEC)     /* PA1: OPAMP1_VINM: photodiode cathode */ \
     X(GL_PIN_OPAMP_VOUT,   A,  3, 17, GL_PINFN_ANALOG,  0, GL_PINSRC_SPEC)     /* PA3: OPAMP1_VOUT = ADC1_IN8 */ \
     X(GL_PIN_VBAT_SENSE,   A,  2, 16, GL_PINFN_ANALOG,  0, GL_PINSRC_PROPOSED) /* PA2: ADC1_IN7 (channel number from memory) */ \
     X(GL_PIN_CHG_STAT,     B,  0, 26, GL_PINFN_EXTI,    0, GL_PINSRC_PROPOSED) /* PB0: EXTI0, both edges, pull-up; STAT must be open drain: see the notes */ \
-    X(GL_PIN_CHG_PROG_EN,  H,  1,  6, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PH1: open drain; PH1 is free (no HSE crystal) */ \
+    X(GL_PIN_CHG_INHIBIT,  H,  1,  6, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PH1: open drain, LOW = stop charging; gate of the PROG MOSFET. MUST be a pin with no diode to VDD (FT; PH1 is, from memory) and not a ROM bootloader pin */ \
     X(GL_PIN_VBUS_SENSE,   A,  9, 42, GL_PINFN_EXTI,    0, GL_PINSRC_PROPOSED) /* PA9: EXTI9, both edges, from the VBUS divider */ \
     X(GL_PIN_USB_DM,       A, 11, 44, GL_PINFN_AF,     10, GL_PINSRC_SPEC)     /* PA11: USB D- */ \
-    X(GL_PIN_USB_DP,       A, 12, 45, GL_PINFN_AF,     10, GL_PINSRC_SPEC)     /* PA12: USB D+ */
+    X(GL_PIN_USB_DP,       A, 12, 45, GL_PINFN_AF,     10, GL_PINSRC_SPEC)     /* PA12: USB D+ */ \
+    X(GL_PIN_NTC_BIAS,     H,  3, 60, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PH3: PH3-BOOT0 (10k pull-down stays): push-pull HIGH only during a conversion; see PIN BUDGET */ \
+    X(GL_PIN_NTC_SENSE,    C,  4, 24, GL_PINFN_ANALOG,  0, GL_PINSRC_PROPOSED) /* PC4: ADC1_IN13 (channel number from memory) */
 
-#define GL_PINS_COUNT 45
+#define GL_PINS_COUNT 47
 
 /* Pads that carry no signal of the table. */
 /*   pad  1  VBAT */
@@ -105,8 +107,6 @@
 /*   pad 47  VSS */
 /*   pad 48  VDDUSB */
 /*   pad 49  PA14-SWCLK */
-/*   pad 51  PC10 (spare: keep off the camera nets, ROM bootloader USART3_TX) */
-/*   pad 60  PH3-BOOT0 */
 /*   pad 63  VSS */
 /*   pad 64  VDD */
 
@@ -120,9 +120,16 @@
  *   PA6  DCMI_PIXCLK (SPEC)  - RELEASE GATE: series resistor, or accept and document
  *   PB9  DCMI_D7 (SPEC)  - RELEASE GATE: series resistor, or accept and document
  * Also on bootloader pins, without the rail problem: PB10 (I2C2_SCL, open
- * drain) is the active-HIGH LCD chip select - give it a pull-down so that the
- * panel is not selected during an update; PA9 (USART1_TX) is VBUS_SENSE and
- * PA2 (USART2_TX) is VBAT_SENSE: both drive into high-value dividers.
+ * drain) is the active-HIGH LCD chip select - its 100 kohm pull-down keeps the
+ * panel unselected during an update; PA9 (USART1_TX) is VBUS_SENSE and
+ * PA2 (USART2_TX) is VBAT_SENSE: both drive into high-value dividers; PC10
+ * (USART3_TX) is GRAIN_CP4: no LED conducts while the other four charlieplex
+ * pins are high-Z.
+ * Rev C2: each PWDN line must avoid the bootloader's USART transmit pins
+ * PA9, PA2, PC10 (read from DESIGN_SPEC); they are on PH0 and PC12.
+ * CHG_INHIBIT, NTC_BIAS and NTC_SENSE are on no bootloader pin at all: in the
+ * ROM bootloader the charger keeps its hardware default (ON) and nothing
+ * supervises the cell temperature - see the README state table.
  */
 #define GL_PINS_BOOTLOADER_TABLE(X) \
     X(A,  9, USART1_TX, 1) \
@@ -161,9 +168,46 @@
  * VBUS on a wake-up pin (PA2 = WKUP4 as remembered).
  */
 
-/* Analog channels (ADC1).  PA3 = ADC1_IN8 is verified; PA2 = ADC1_IN7 is from
- * memory of the same numbering. */
+/* Analog channels (ADC1).  PA3 = ADC1_IN8 is verified; PA2 = ADC1_IN7 and
+ * PC4 = ADC1_IN13 are from memory of the same numbering. */
 #define GL_PINS_ADC_CH_GRAIN_TIA 8
 #define GL_PINS_ADC_CH_VBAT_DIV  7
+#define GL_PINS_ADC_CH_CELL_NTC  13
+
+/*
+ * RESET STATE (DESIGN_SPEC section 4, rev C2).  X(logical pin, level): the
+ * level the board's pull resistor gives the pin while the MCU does not drive
+ * it - in reset, in the ROM bootloader, unpowered.  gl_hal_init() must make
+ * each of these pins an output AT THIS LEVEL (latch first, then the mode), and
+ * no internal pull may be enabled against it.
+ */
+#define GL_PINS_RESET_TABLE(X) \
+    X(GL_PIN_LCD_SCS,    0) \
+    X(GL_PIN_LCD_DISP,   0) \
+    X(GL_PIN_FLASH_CS,   1) \
+    X(GL_PIN_IMU_CS,     1) \
+    X(GL_PIN_CAM_PWR_EN, 0)
+
+/*
+ * CHG_INHIBIT (PH1, open drain, LOW = stop charging).  The pin hangs on the
+ * gate of the PROG MOSFET, which a 1 Mohm / 1 Mohm divider on the charger
+ * supply holds at about 2.4 V whenever VBUS is present.  It must be a pin
+ * WITHOUT a protection diode to VDD (an "FT" pin): with the MCU unpowered a
+ * diode would clamp the gate to one diode drop and switch the charger OFF,
+ * which is exactly the case (cell at its protection cut-off) the default-on
+ * circuit exists for.  PH0 / PH1 are FT pins as remembered: RELEASE GATE,
+ * check the pin definition table of the datasheet.  Not verifiable here.
+ *
+ * NTC_BIAS (PH3-BOOT0).  All 46 other I/O pads are taken, so the bias of
+ * the cell-temperature divider is proposed on the BOOT0 pin, which is an
+ * ordinary I/O once the MCU has started.  It is driven push-pull HIGH for
+ * about 0.7 ms per measurement and is high-Z otherwise; its 10 kohm BOOT0
+ * pull-down and the divider (10.0 kohm + NTC to ground) both pull it LOW, so
+ * the pin reads 0 at every reset.  RELEASE GATE for the netlist: confirm, or
+ * free another pad.
+ */
+
+/* EXTCOMIN: LSE ticks per period, read from DESIGN_SPEC ("32768 / N"). */
+#define GL_PINS_EXTCOMIN_LSE_TICKS 547
 
 #endif /* GL_PINS_H */

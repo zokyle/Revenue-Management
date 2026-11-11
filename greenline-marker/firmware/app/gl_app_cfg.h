@@ -119,6 +119,19 @@
 #define GL_APP_SLEEP_HOUSEKEEP_MS 16000u
 /** Battery measurement interval while awake / in the cradle. */
 #define GL_APP_BATT_PERIOD_MS 30000u
+/* Charge supervision (rev C2: the charger is on by default, CHG_INHIBIT can
+ * only stop it): how often the cell NTC is read while VBUS is present, and
+ * how old a reading may be before it counts as unknown (two missed checks). */
+#define GL_APP_CHG_TEMP_PERIOD_MS 5000u
+#define GL_APP_CELL_TEMP_MAX_AGE_MS 12000u
+/* The estimator hand-over (app/gl_app.c build_measurement_, shown_confidence_). */
+#define GL_APP_DEFAULT_DISTANCE_M 3.0f        /* the estimator's default_distance */
+#define GL_APP_EST_SIGMA_DISP_PX 0.08f        /* the estimator's sigma_disp */
+#define GL_APP_SURVEY_AT_BALL_FRACTION 0.85f  /* newest drop within this of the farthest: at the ball */
+#define GL_APP_CONF_ONE_CAMERA 0.6f
+#define GL_APP_CONF_AMBIGUOUS 0.6f
+#define GL_APP_CONF_FIT_NOT_DONE 0.7f
+#define GL_APP_CONF_BEST_EFFORT_MAX 0.2f
 /** How long "SAVED" stays on the screen after a zeroing. */
 #define GL_APP_ZERO_SAVED_MS 1500u
 /** Largest device bias a zeroing may store (rise/run); more means the
@@ -149,5 +162,22 @@
 #define GL_APP_LOGEV_GRAIN_WHITE 5u /* arg = gl_status_t */
 #define GL_APP_LOGEV_IMU_RECOVERED 6u /* arg = failed attempts before it answered again */
 #define GL_APP_LOGEV_STORAGE 7u     /* arg = cell voltage in mV: storage mode entered */
+#define GL_APP_LOGEV_ESTIMATE 8u    /* follows every read record: arg = GL_APP_ESTFLAG_* */
+#define GL_APP_LOGEV_CHARGE 9u      /* the charge gate changed its mind: arg = gl_chg_reason_t
+                                       | (cell temperature in 0.1 C, -9999 = unknown) << 8 */
+
+/* GL_APP_LOGEV_ESTIMATE: what the estimator said about the read just logged */
+#define GL_APP_ESTFLAG_SOURCE_MASK 0x0003u   /* gl_aim_source_t */
+#define GL_APP_ESTFLAG_STATUS_SHIFT 2        /* gl_solve_status_t, 3 bits */
+#define GL_APP_ESTFLAG_FIT_CONVERGED (1u << 5)
+#define GL_APP_ESTFLAG_BASE_HIDDEN (1u << 6)
+#define GL_APP_ESTFLAG_FLAG_MISSING (1u << 7)
+#define GL_APP_ESTFLAG_RANGE_MISSING (1u << 8)
+#define GL_APP_ESTFLAG_POOR_HORIZON (1u << 9)
+#define GL_APP_ESTFLAG_METHOD_SHIFT 10       /* gl_solver_method_t, 2 bits */
+#define GL_APP_ESTFLAG_TIER_SHIFT 12         /* gl_read_tier_t, 2 bits */
+#define GL_APP_ESTFLAG_AMBIGUOUS (1u << 14)
+#define GL_APP_ESTFLAG_LINE_HERE (1u << 15)
+#define GL_APP_ESTFLAG_ROLLS_SHIFT 16        /* trial rolls of the solve, 15 bits */
 
 #endif /* GL_APP_CFG_H */

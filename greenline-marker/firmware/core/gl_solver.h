@@ -3,9 +3,11 @@
  *
  * C99 port of the Python reference in sim/greenline_sim:
  *
- *     physics.py     _roll, _trial, _solve_pace, _solve_kernel   -> gl_solver_roll.c, gl_solver_aim.c
- *     estimator.py   fuse_range, _fit_*, fit_patch               -> gl_solver_fit.c
+ *     physics.py     _roll and its helpers (quadratic surface)   -> gl_solver_roll.c
+ *     physics.py     _trial, _solve_pace, _solve_kernel          -> gl_solver_aim.c
+ *     estimator.py   fuse_range, quad_horizon, _fit_*, fit_patch -> gl_solver_fit.c
  *     estimator.py   estimate_batch, _confidence                 -> gl_solver.c
+ *     (shared internals and every constant: gl_solver_priv.h)
  *
  * The data structures mirror the reference one to one so that exported
  * vectors map onto them field by field:
@@ -42,13 +44,23 @@
  * RUN TIME is bounded: no loop without a counter.  One aim solve uses at
  * most max_rolls + 120 trial rolls (reference: the budget is checked
  * between pace solves, each of which uses at most 121), one roll at most
- * 6004 RK4 steps, the fit at most lm_max_iter x 25 residual evaluations per
- * start.  gl_aim_solution_t.n_steps / gl_estimate_t.n_steps report the RK4
- * steps actually spent (the cost driver; see README "Solver").
+ * 6004 RK4 steps, an estimate at most two aim solves (the patch, then its
+ * secant plane); the fit at most lm_max_iter x 25 residual evaluations per
+ * start, 6 starts at most.  gl_aim_solution_t.n_steps and
+ * gl_estimate_t.n_steps report the RK4 steps actually spent (the cost
+ * driver: a typical read needs about 1000, the costliest one that could be
+ * constructed 0.5 million; README "Solver").
  *
- * MEMORY.  No heap, no recursion, no statics.  The fit needs a caller-
- * supplied work area (gl_solver_work_t, 5.3 kB in single precision); the
- * aim solve needs none.  Stack: see README.
+ * MEMORY.  No heap, no recursion, no mutable statics.  The fit needs a caller-
+ * supplied work area (gl_solver_work_t, 6160 bytes in single precision);
+ * the aim solve needs none.  Stack: 1.1 kB below the caller of
+ * gl_solver_estimate*() for the deepest chain, libm excluded (README
+ * "Solver").
+ *
+ * WHAT IS NOT PORTED: the reference's comparison-only switches (joint
+ * horizon fit, horizon_free_c, assume_base_visible, use_flag_base = False,
+ * a caller-supplied start of the fit), grid surfaces, trajectories, the
+ * batch drivers.
  */
 #ifndef GL_SOLVER_H
 #define GL_SOLVER_H
@@ -92,6 +104,8 @@ typedef gl_vec2_t gl_rvec2_t;
 #define GL_SOLVER_MAX_DROPS 4u
 /** Largest budget of trial rolls a caller may ask for. */
 #define GL_SOLVER_MAX_ROLLS_LIMIT 1000u
+/** Largest Levenberg-Marquardt iteration limit a caller may ask for. */
+#define GL_SOLVER_LM_MAX_ITER_LIMIT 1000u
 /** Residual rows of the fit: tilt-x, tilt-y and hole height per drop, plus
  *  the horizon samples. */
 #define GL_SOLVER_MAX_LIN_ROWS (3u * GL_SOLVER_MAX_DROPS)
@@ -128,7 +142,8 @@ typedef struct {
     gl_real_t horizon_elev_rad[GL_SOLVER_MAX_HORIZON]; /**< elevation of the turf silhouette; NaN = invalid */
     gl_real_t grain_kappa;          /**< grain strength (push = kappa * a_r), 0 = none */
     gl_real_t grain_azimuth_rad;    /**< direction the grain pushes the ball, device frame */
-    gl_real_t stimp_ft;             /**< green speed entered by the golfer (clipped to 5..16) */
+    gl_real_t stimp_ft;             /**< green speed entered by the golfer; clipped to 5..16
+                                         (also an infinite one); not-a-number is refused */
     gl_real_t user_distance_m;      /**< dialled distance; used only when the cameras give none.
                                          NaN or <= 0: the default (3 m) is used then */
 } gl_measurements_t;
@@ -159,21 +174,45 @@ typedef struct {
     gl_real_t tol_pace_m;   /**< aim solve: tolerance on pace, as flat roll-out distance */
     gl_real_t lm_tol;       /**< fit: convergence tolerance on the scaled step (slopes in
                                  units of 1e-2, curvatures and offsets in 1e-3) */
-    uint16_t lm_max_iter;   /**< fit: Levenberg-Marquardt iteration limit per start */
+    uint16_t lm_max_iter;   /**< fit: Levenberg-Marquardt iteration limit per start (reference
+                                 60); at most GL_SOLVER_LM_MAX_ITER_LIMIT.  A fit that reaches
+                                 it returns its last iterate with fit_converged false */
 } gl_solver_options_t;
 
-/* Default tolerances.  Double (host comparison build): the reference's own
- * defaults.  Single precision: the tightest values at which the iterations
- * terminate on their tolerance rather than on rounding noise (measured; see
- * README "Solver" for the numbers and tests/test_solver.c for the bounds). */
+/* Default tolerances of the two builds.
+ *
+ * Double (host comparison build): the reference's own defaults.
+ *
+ * Single precision (the firmware): the reference's values are below what
+ * single-precision arithmetic resolves, so the iterations would end on
+ * their limits and report "not converged" / "pace limited" for ordinary
+ * putts.  The values below were chosen from measurements (README "Solver",
+ * asserted by tests/test_solver.c):
+ *   tol_miss 2e-4 m   10 x the largest difference between a single- and a
+ *                     double-precision roll of the same launch (2.1e-5 m
+ *                     lateral at the hole line);
+ *   tol_pace 1e-3 m   as the energy tolerance 2 a_r tol_pace, 5 x (Stimp 16)
+ *                     to 17 x (Stimp 5) the largest such difference of the
+ *                     squared arrival speed (1.3e-4 m^2/s^2);
+ *   lm_tol   1e-5     in units of 1e-2 (slopes) and 1e-3 /m (curvatures).
+ *                     Bounded on both sides: at 1e-6 single-precision fits
+ *                     start to end on the iteration limit, and from 3e-5 on
+ *                     a fit that converges linearly (Huber outliers) stops
+ *                     early IN EITHER PRECISION. */
+#define GL_SOLVER_SINGLE_TOL_MISS_M 2e-4f
+#define GL_SOLVER_SINGLE_TOL_PACE_M 1e-3f
+#define GL_SOLVER_SINGLE_LM_TOL 1e-5f
+#define GL_SOLVER_DOUBLE_TOL_MISS_M 1e-5
+#define GL_SOLVER_DOUBLE_TOL_PACE_M 1e-5
+#define GL_SOLVER_DOUBLE_LM_TOL 1e-9
 #ifdef GL_SOLVER_DOUBLE
-#define GL_SOLVER_DEFAULT_TOL_MISS_M 1e-5
-#define GL_SOLVER_DEFAULT_TOL_PACE_M 1e-5
-#define GL_SOLVER_DEFAULT_LM_TOL 1e-9
+#define GL_SOLVER_DEFAULT_TOL_MISS_M GL_SOLVER_DOUBLE_TOL_MISS_M
+#define GL_SOLVER_DEFAULT_TOL_PACE_M GL_SOLVER_DOUBLE_TOL_PACE_M
+#define GL_SOLVER_DEFAULT_LM_TOL GL_SOLVER_DOUBLE_LM_TOL
 #else
-#define GL_SOLVER_DEFAULT_TOL_MISS_M 1e-4f
-#define GL_SOLVER_DEFAULT_TOL_PACE_M 1e-3f
-#define GL_SOLVER_DEFAULT_LM_TOL 1e-3f
+#define GL_SOLVER_DEFAULT_TOL_MISS_M GL_SOLVER_SINGLE_TOL_MISS_M
+#define GL_SOLVER_DEFAULT_TOL_PACE_M GL_SOLVER_SINGLE_TOL_PACE_M
+#define GL_SOLVER_DEFAULT_LM_TOL GL_SOLVER_SINGLE_LM_TOL
 #endif
 #define GL_SOLVER_DEFAULT_PAST_M 0.30f
 #define GL_SOLVER_DEFAULT_MAX_ROLLS 200u
@@ -265,7 +304,8 @@ typedef struct {
     gl_real_t break_cups;               /**< the same in cup widths */
     gl_real_t distance_m;
     gl_real_t distance_sigma_m;         /**< NaN = unknown (dialled or default distance) */
-    gl_real_t bearing_rad;              /**< direction of the hole in the device frame */
+    gl_real_t bearing_rad;              /**< direction of the hole in the device frame (0 = the
+                                             visor axis when flag_missing) */
     gl_real_t slope_pct;                /**< slope magnitude at the ball (the tilt reading) */
     gl_real_t fall_line_azimuth_rad;    /**< steepest descent at the ball, putt frame */
     gl_real_t fall_line_azimuth_device_rad;
@@ -300,6 +340,8 @@ typedef struct {
     gl_real_t jac[2][GL_SOLVER_MAX_ROWS][GL_SOLVER_NPAR];
     gl_real_t second[2][GL_SOLVER_MAX_ROWS];
     uint8_t outlier_prev[GL_SOLVER_MAX_ROWS];
+    gl_real_t mat[6][GL_SOLVER_NPAR][GL_SOLVER_NPAR];        /**< 7 x 7 matrices of the fit (kept
+                                                                  off the stack) */
 } gl_solver_work_t;
 
 /** How a roll ended (values match RollStatus / the kernel codes in physics.py). */
@@ -356,13 +398,20 @@ void gl_solver_measurements_init(gl_measurements_t *m);
  * fit_converged false.  Every real of the output is then finite, except
  * distance_sigma_m and cross_slope_sigma where NaN means "unknown".
  *
- * Returns GL_ERR_PARAM for an input the reference rejects or cannot use
- * (NULL pointer; non-finite or non-positive f_px / baseline_m; non-finite
- * h_cam_m, tilt or stimp_ft; n_horizon > 41; non-finite horizon azimuth of
- * a valid sample; options out of range), GL_ERR_RANGE when the arithmetic
- * left the finite range (absurd but finite inputs).  The output is then
- * the "explicitly flagged" record: all reals 0, solve_status
+ * Returns GL_ERR_PARAM for an input no placement produces (NULL pointer;
+ * f_px or baseline_m not finite and positive; h_cam_m or the tilt not
+ * finite; stimp_ft not a number; n_horizon > GL_SOLVER_MAX_HORIZON; options
+ * out of range), and GL_ERR_RANGE when the arithmetic left the finite range
+ * (absurd but finite inputs) or a range channel is exactly zero (the
+ * reference raises an exception in both cases).  The output is then the
+ * "explicitly flagged" record: all reals 0, the flags false, solve_status
  * GL_SOLVE_NOT_RUN, aim_source GL_AIM_STRAIGHT, confidence 0.
+ *
+ * Everything else is taken as the reference takes it: a flag field that is
+ * not a number means "not measured" (see gl_measurements_t), and a horizon
+ * sample with a valid elevation but an azimuth that is not a number makes
+ * the horizon stage of method B2 fail as a whole (the Quick-Read patch is
+ * kept, fit_converged false).
  *
  * `opt` may be NULL (defaults).  `work` must not be NULL.
  */
@@ -377,7 +426,8 @@ gl_status_t gl_solver_estimate(const gl_measurements_t *m, const gl_solver_optio
  * array order; a drop whose flag was not found or not ranged is ignored.
  * Reference: estimator.estimate_survey() (which takes the ball drop first).
  * Status and output as gl_solver_estimate(); n_drops == 0, n_drops >
- * GL_SOLVER_MAX_DROPS or ball_index >= n_drops give GL_ERR_PARAM.
+ * GL_SOLVER_MAX_DROPS or ball_index >= n_drops give GL_ERR_PARAM.  Every
+ * drop must be a valid record, also one that the fit then ignores.
  */
 gl_status_t gl_solver_estimate_survey(const gl_measurements_t *drops, unsigned n_drops,
                                       unsigned ball_index, const gl_solver_options_t *opt,
@@ -389,11 +439,17 @@ gl_status_t gl_solver_estimate_survey(const gl_measurements_t *drops, unsigned n
  * surface frame.  Uses opt->past_m, max_rolls, tol_miss_m, tol_pace_m
  * (`opt` may be NULL).  Reference: physics.solve_aim().
  *
- * Returns GL_OK when the solver ran; out->status then tells how it ended
- * and the best iterate is returned also on failure.  Returns GL_ERR_PARAM
- * for an input the reference rejects (non-finite surface, positions,
- * grain; a_r not positive and finite; past negative; start == hole);
- * out->status is then GL_SOLVE_INVALID, phi / v0 / miss / v_hole are NaN.
+ * Returns GL_OK when the solver ran; out->status then tells how it ended,
+ * and the best iterate is returned also on failure (of a failed solve only
+ * the status is defined: the best iterate depends on the iteration path).
+ * A distance of 1e-6 m or less is not an error of the call: GL_OK with
+ * out->status GL_SOLVE_INVALID and phi / v0 / miss / v_hole not-a-number,
+ * as in the reference.
+ * Returns GL_ERR_PARAM for an input the reference rejects (NULL pointer;
+ * surface, positions or grain not finite; a_r not positive and finite;
+ * options out of range) and GL_ERR_RANGE when the result is not finite
+ * (absurd but finite inputs); out->status is then GL_SOLVE_INVALID and
+ * phi / v0 / miss / v_hole are not-a-number.
  */
 gl_status_t gl_solver_solve_aim(const gl_quad_surface_t *surface, gl_rvec2_t start, gl_rvec2_t hole,
                                 gl_real_t a_r_mps2, gl_rvec2_t grain,
@@ -408,8 +464,11 @@ gl_status_t gl_solver_solve_aim(const gl_quad_surface_t *surface, gl_rvec2_t sta
  * / roll_batch() on a QuadraticSurface, dt 0.02 s, t_max 30 s, r_max 100 m.
  * Not used by the firmware's read path; it is here so that the kernel and
  * the capture model can be tested against the reference.
- * Returns GL_ERR_PARAM (status GL_ROLL_INVALID) for non-finite input,
- * a_r not positive or v0 negative.
+ * Returns GL_ERR_PARAM for non-finite input, a_r not positive or v0
+ * negative, GL_ERR_RANGE when the result is not finite (absurd but finite
+ * inputs); the status is then GL_ROLL_INVALID, the reals not-a-number.
+ * With GL_OK every real is finite except lateral_at_line_m and
+ * speed_at_line_mps, which are not-a-number unless crossed_hole_line.
  */
 gl_status_t gl_solver_roll(const gl_quad_surface_t *surface, gl_rvec2_t start, gl_rvec2_t hole,
                            gl_real_t phi_rad, gl_real_t v0_mps, gl_real_t a_r_mps2,
@@ -417,7 +476,8 @@ gl_status_t gl_solver_roll(const gl_quad_surface_t *surface, gl_rvec2_t start, g
                            gl_roll_result_t *out);
 
 /** Range to the flagstick of one placement: stereo fused with the stick's
- *  angular height.  Reference: estimator.fuse_range(). */
+ *  angular height.  Reference: estimator.fuse_range().  Plain arithmetic:
+ *  a channel that cannot be formed is not-a-number.  NULL is safe. */
 void gl_solver_fuse_range(const gl_measurements_t *m, gl_range_estimate_t *out);
 
 /**
@@ -425,7 +485,8 @@ void gl_solver_fuse_range(const gl_measurements_t *m, gl_range_estimate_t *out);
  * origin, along the ray at azimuth `theta_rad`: the tangent of the horizon
  * elevation and the distance at which it occurs.  Reference:
  * estimator.quad_horizon().  Returns GL_ERR_PARAM unless h_cam > 0 and
- * far_limit > d_min > 0.
+ * far_limit > d_min > 0 (all finite), GL_ERR_RANGE if the result is not
+ * finite; the outputs are then not-a-number.
  */
 gl_status_t gl_solver_quad_horizon(const gl_real_t coeffs[5], gl_real_t theta_rad, gl_real_t h_cam_m,
                                    gl_real_t d_min_m, gl_real_t far_limit_m,

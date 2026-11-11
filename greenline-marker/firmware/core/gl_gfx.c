@@ -449,8 +449,8 @@ void gl_gfx_arrow(gl_gfx_t *g, float x, float y, float angle_rad, float len_px, 
     gl_gfx_triangle(g, tx, ty, bx - hw * dy, by + hw * dx, bx + hw * dy, by - hw * dx, ink);
 }
 
-void gl_gfx_aim_line_at(gl_gfx_t *g, float aim_rad, float ball_az_rad, float half_width_px,
-                        gl_gfx_aim_info_t *info)
+void gl_gfx_aim_line_styled(gl_gfx_t *g, float aim_rad, float ball_az_rad, float half_width_px,
+                            bool tentative, gl_gfx_aim_info_t *info)
 {
     /* Ball centre in screen coordinates (x right = marker +x, y down =
      * marker -y): a marker direction at angle t CCW from forward is the
@@ -476,8 +476,10 @@ void gl_gfx_aim_line_at(gl_gfx_t *g, float aim_rad, float ball_az_rad, float hal
     if (chord >= GL_GFX_AIM_MIN_CHORD_PX && cosf(aim_rad - ball_az_rad) > 0.0f) {
         local.on_screen = true;
         const gl_gfx_line_style_t solid = { 0.0f, 0.0f, true };
-        local.pixels = gl_gfx_line_angle(g, bx, by, aim_rad, half_width_px, &solid,
-                                         GL_INK_BLACK);
+        const gl_gfx_line_style_t tent = { GL_GFX_AIM_TENTATIVE_DASH_PX,
+                                           GL_GFX_AIM_TENTATIVE_GAP_PX, true };
+        local.pixels = gl_gfx_line_angle(g, bx, by, aim_rad, half_width_px,
+                                         tentative ? &tent : &solid, GL_INK_BLACK);
     } else {
         local.on_screen = false;
         const gl_gfx_line_style_t dashes = { 6.0f, 4.0f, false };
@@ -487,6 +489,12 @@ void gl_gfx_aim_line_at(gl_gfx_t *g, float aim_rad, float ball_az_rad, float hal
     if (info != NULL) {
         *info = local;
     }
+}
+
+void gl_gfx_aim_line_at(gl_gfx_t *g, float aim_rad, float ball_az_rad, float half_width_px,
+                        gl_gfx_aim_info_t *info)
+{
+    gl_gfx_aim_line_styled(g, aim_rad, ball_az_rad, half_width_px, false, info);
 }
 
 void gl_gfx_aim_line(gl_gfx_t *g, float aim_rad, float half_width_px, gl_gfx_aim_info_t *info)

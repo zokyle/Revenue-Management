@@ -15,7 +15,20 @@
  *                              degrees in place, it re-reads and combines
  *   double tap again        -> Survey: the shown read becomes drop 1; move
  *                              the marker along the line, each placement
- *                              adds a drop (up to 4); double tap ends it
+ *                              adds a drop (up to 4); double tap ends it.
+ *                              The putt is the one from the drop FARTHEST
+ *                              from the flagstick (the ball).  The aim line
+ *                              is drawn only while the marker lies there
+ *                              (start at the ball, or come back to it for
+ *                              the last drop); at any other drop the screen
+ *                              shows the numbers and "PUT AT BALL".
+ *   what a result shows     -> distance, "PLAYS" distance, slope with the
+ *                              fall-line arrow, break in cups with the side,
+ *                              confidence boxes, and ONE plain message when
+ *                              something is not as usual (gl_ui_note_t).  An
+ *                              aim that is not a solution of the putt is
+ *                              drawn DASHED with "BREAK ?", never as a
+ *                              normal line.
  *   hold upright on edge    -> settings; roll like a knob to change the
  *                              value, double tap for the next item, lay
  *                              flat to confirm
@@ -24,8 +37,10 @@
  *                              hole and it shows a tilt-only line along the
  *                              visor axis with low confidence.  The dialled
  *                              distance stays in the settings until changed
- *                              ("--" = none); the application uses it ONLY
- *                              when no flagstick is found.
+ *                              ("--" = none); it is used ONLY when the
+ *                              cameras give no range (no flagstick, or a
+ *                              flagstick that could not be ranged) and is
+ *                              then shown with a question mark.
  *   in the cradle           -> USB screen (charging, data).  The cradle
  *                              takes the marker one way round only and
  *                              holds it down; nothing is calibrated there.
@@ -37,7 +52,7 @@
  *                              tilt, so the surface need not be level.
  *                              Putting the marker in the cradle abandons it.
  *
- * RAM: gl_ui_t 40 bytes.  Stack: gl_ui_render() about 250 bytes.
+ * RAM: gl_ui_t 44 bytes, gl_ui_view_t 48 bytes.  Stack: gl_ui_render() about 250 bytes.
  */
 #ifndef GL_UI_H
 #define GL_UI_H
@@ -209,30 +224,81 @@ const char *gl_ui_event_name(gl_ui_event_t ev);
 
 /* ---- screens ------------------------------------------------------------------ */
 
+/**
+ * The ONE plain message a result may carry.  The application picks the most
+ * serious condition that applies (the order of this enum, highest first):
+ * a fallback or a weak read must be visible to the golfer as a message and
+ * as reduced confidence, never only as a normal-looking line.
+ */
+typedef enum {
+    GL_UI_NOTE_NONE = 0,
+    GL_UI_NOTE_AMBIGUOUS,    /**< "2 LINES SEEN": another line also passed as a flagstick */
+    GL_UI_NOTE_ONE_CAMERA,   /**< "1 CAMERA": left camera only, not checked against a disparity */
+    GL_UI_NOTE_FIT,          /**< "FIT NOT DONE": the fit stopped on its iteration limit */
+    GL_UI_NOTE_PACE,         /**< "PACE LIMIT": through the hole, but cannot arrive as slowly as set */
+    GL_UI_NOTE_APPROX,       /**< "APPROX": solved on the secant plane of the fitted patch */
+    GL_UI_NOTE_NO_RANGE,     /**< "NO RANGE": flag found, distance dialled or assumed */
+    GL_UI_NOTE_NO_FLAG,      /**< "NO FLAG": tilt only, along the visor axis */
+    GL_UI_NOTE_NOT_SOLVED,   /**< "NOT SOLVED": the estimator's best effort, not a solution */
+    GL_UI_NOTE_NO_SOLUTION,  /**< "NO SOLUTION": straight at the hole for want of anything */
+    GL_UI_NOTE_COUNT
+} gl_ui_note_t;
+
+/** The text of a note ("" for GL_UI_NOTE_NONE and out-of-range values). */
+const char *gl_ui_note_text(gl_ui_note_t note);
+
 /** Everything the screens show that the state machine does not own. */
 typedef struct {
     /* result of the last read (GL_UI_SHOW_RESULT) */
     bool have_result;
-    bool solved;             /**< false: no putt solution (phase-1 stub, or flag-out): tilt-only */
+    bool solved;             /**< true: the aim is a solution of the putt on the estimated
+                                  surface (solid line).  false: best effort or straight (the
+                                  line is drawn in dashes, the break is not quoted) */
+    bool line_here;          /**< true: the marker lies at the ball, the aim line applies to
+                                  where it lies.  false (a Survey drop along the line): no
+                                  line is drawn, the numbers are shown with "PUT AT BALL" */
     bool flag_found;
     bool precision;          /**< result of a spin-and-reread */
+    bool distance_assumed;   /**< the distance is the dialled or the default one (shown "?") */
+    uint8_t note;            /**< gl_ui_note_t */
+    uint8_t drop;            /**< Survey: number of the drop this result was taken at (1..4);
+                                  0 = not a Survey */
     float aim_rad;           /**< aim line direction in the marker's CURRENT frame, CCW from forward */
     float ball_az_rad;       /**< direction from the marker centre to the ball centre, CCW from
                                   forward: 0 normally; near pi after the 180-degree spin of a
                                   Precision Read (the marker then faces away from the hole) */
     float distance_m;        /**< to the hole; <= 0 = unknown */
+    float plays_like_m;      /**< flat-green distance with the same launch speed; <= 0 = none */
     float slope_pct;         /**< slope magnitude at the ball */
     float fall_line_rad;     /**< downhill direction, marker frame, CCW from forward */
-    float along_pct;         /**< slope along the line to the hole, + = uphill */
     float break_cups;        /**< + = aim left of the hole */
-    float confidence;        /**< 0..1 */
+    float confidence;        /**< 0..1, as shown (after the application's own reductions) */
     /* status */
     uint8_t battery_pct;
     bool charging;
     bool usb_connected;      /**< host has opened the port */
+    uint8_t chg_blocked;     /**< cradle: 0 = the charger may run; 1 too cold, 2 too hot,
+                                  3 temperature sensor (unknown, faulty or implausible) */
     uint8_t cal_step;        /**< zeroing: 0 hold still (first read), 1 turn 180 degrees in
                                   place, 2 hold still (second read), 3 saved */
 } gl_ui_view_t;
+
+/** The strings of the result screen, as drawn ("" = not drawn). */
+typedef struct {
+    char distance[12];       /**< "19.6FT", "6.0M?", "--" */
+    char plays[16];          /**< "PLAYS 21.3FT" */
+    char note[16];           /**< gl_ui_note_text(), or the Survey prompt */
+    char slope[8];           /**< "2.3%" */
+    char brk[12];            /**< "<2.5 CUP", "2.5 CUP>", "STRAIGHT", "BREAK ?" */
+    char mode[4];            /**< "D2", "2X" */
+} gl_ui_result_text_t;
+
+/** Format the strings of the result screen (pure; gl_ui_render() draws
+ *  exactly these, and the tests read the numbers shown from here). */
+void gl_ui_result_text(const gl_ui_t *ui, const gl_ui_view_t *view, gl_ui_result_text_t *out);
+
+/** Boxes of the confidence bar that are filled (0..5) for a confidence. */
+int gl_ui_conf_boxes(float confidence);
 
 /**
  * Draw the screen of the current state into `g` (cleared first).  All ink

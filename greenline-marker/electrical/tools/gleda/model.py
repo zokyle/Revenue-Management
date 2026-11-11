@@ -122,6 +122,13 @@ class Rules:
     #: board-level solder mask expansion per side and minimum web
     mask_expansion: float = 0.0
     mask_min_web: float = 0.0
+    #: copper gap the router keeps between a via and an SMD pad of the SAME net
+    #: when the via is covered by solder mask on the pad's side (tented) ...
+    via_pad_gap_tented: float = 0.10
+    #: ... and when it is NOT tented there: the solder-mask web between the pad
+    #: and the open via must survive, or solder wicks into the via during
+    #: reflow.  Not a KiCad DRC rule; :func:`gleda.router.audit` checks it.
+    via_pad_gap_open: float = 0.20
     #: silkscreen limits (cosmetic checks)
     min_silk_width: float = 0.10
     min_text_height: float = 0.50
@@ -583,12 +590,30 @@ class HeightLimit:
 
 
 @dataclass
+class FineArea:
+    """Region of the board in which the fine net classes may use their fine
+    geometry (see :meth:`Design.add_fine_area`): the escape window of a
+    fine-pitch package.  ``name`` is the name of the KiCad rule area the
+    board builder draws for it (used by the generated DRC rules)."""
+    shape: Shape
+    name: str
+    ref: str = ""            # the part it was made for, if any
+
+
+@dataclass
 class Plane:
     """Copper plane / pour: ``net`` filled on ``layer``.
 
     ``shape`` None means "the whole board" (KiCad clips the fill to the board
     edge).  Higher ``priority`` zones are filled first (islands inside a
     bigger plane need a higher priority).
+
+    The router connects pads to WHOLE-BOARD planes only (stub + via).  A plane
+    with a ``shape`` (an island) is a pour: its net is routed with tracks like
+    any other, the fill is extra copper on top - and it is cut out of every
+    lower-priority plane on its layer, which the router takes into account
+    (no fan-out via of the big plane lands in the island, see
+    :func:`gleda.router.plane_regions`).
 
     ``routable`` marks a whole-board plane on an inner layer that signals may
     also be routed on (a "mixed" plane layer): the layer then counts as a
@@ -710,6 +735,9 @@ class Part:
     is_ic: Optional[bool] = None
     #: free-form extra fields copied to the BOM / footprint properties
     fields: Dict[str, str] = field(default_factory=dict)
+    #: exists on the board only (fiducials, marks): no schematic symbol, not in
+    #: the netlist round trip, the BOM or the position file
+    board_only: bool = False
 
     def __post_init__(self):
         if self.pins is None:
@@ -769,7 +797,7 @@ class Part:
             "distributor_pn": self.distributor_pn, "unit_price": self.unit_price,
             "x": self.x, "y": self.y, "rotation": self.rotation, "side": self.side,
             "height_mm": self.height_mm, "group": self.group, "dnp": self.dnp,
-            "in_bom": self.in_bom,
+            "in_bom": self.in_bom, "board_only": self.board_only,
             "pins": {n: {"pads": list(p.pads), "type": p.etype} for n, p in self.pins.items()},
             "fields": dict(self.fields),
         }
@@ -915,6 +943,17 @@ class Design:
         #: override) so that KiCad's DRC rejects tracks narrower than the
         #: class allows; without it KiCad only checks the board minimum.
         self.enforce_track_widths: bool = True
+        #: escape windows of the fine-pitch packages (:meth:`add_fine_area`).
+        #: When there is at least one, net classes finer than the standard
+        #: track / clearance of the rule set use their fine values only inside
+        #: these areas - enforced by the router, the audit and KiCad's DRC.
+        self.fine_areas: List[FineArea] = []
+        #: what the fab has to do with the vias beyond tenting, printed in the
+        #: fab README next to the tenting line, e.g.
+        #: ``"plugged from the bottom side (IPC-4761 type III-a)"``
+        self.via_protection: str = ""
+        #: free-form notes for the bare-board fab, one per line of the README
+        self.fab_notes: List[str] = []
         self.add_netclass("Default", track_width=rules.default_track,
                           clearance=rules.default_clearance)
         self.add_netclass("Power", track_width=rules.power_track,
@@ -977,13 +1016,41 @@ class Design:
         return {p.ref: p for p in self.parts}
 
     @property
+    def schematic_parts(self) -> List[Part]:
+        """The parts that have a schematic symbol (all but ``board_only``)."""
+        return [p for p in self.parts if not p.board_only]
+
+    @property
     def groups(self) -> List[str]:
         """Schematic sheet names in order of first use."""
         out: List[str] = []
-        for p in self.parts:
+        for p in self.schematic_parts:
             if p.group not in out:
                 out.append(p.group)
         return out
+
+    def add_fiducial(self, x: float, y: float, side: str = TOP, copper: float = 1.0,
+                     mask: float = 2.0, ref: Optional[str] = None) -> Part:
+        """Place a global fiducial (:func:`gleda.footprints.fiducial`): a bare
+        copper dot in a larger solder-mask opening for the placement machine.
+        It is a board-only part ``FID<n>``; other copper keeps out of the mask
+        opening.  Put three on every side that is assembled by machine, far
+        apart and not in line::
+
+            d.add_fiducial(-19.3, -0.8)
+            d.add_fiducial(-13.5, -3.0, side="bottom")
+        """
+        from . import footprints
+        if ref is None:
+            n = 1 + sum(1 for p in self.parts if p.ref.startswith("FID"))
+            ref = "FID%d" % n
+            while self.has_part(ref):
+                n += 1
+                ref = "FID%d" % n
+        part = Part(ref, "Fiducial", footprints.fiducial(copper, mask), pins={}, x=float(x),
+                    y=float(y), side=side, in_bom=False, board_only=True, height_mm=0.0,
+                    group="board", description="global fiducial")
+        return self.add_part(part)
 
     # -- nets --------------------------------------------------------------
     def net(self, name: str, *nodes: NodeInput, netclass: Optional[str] = None,
@@ -1074,7 +1141,7 @@ class Design:
             return net.width
         return self.netclass_of(net_name).track_width
 
-    def min_track_width(self, net_name: str) -> float:
+    def min_track_width(self, net_name: str, outside: bool = False) -> float:
         """Narrowest track KiCad's DRC accepts on this net.
 
         This is the smaller of the net's ``width`` override and its class's
@@ -1082,13 +1149,88 @@ class Design:
         the board minimum ``rules.min_track``.  With
         ``enforce_track_widths`` (default) the same number is written into the
         board's ``.kicad_dru``; without it only ``rules.min_track`` is checked
-        by KiCad."""
+        by KiCad.
+
+        ``outside=True`` asks for a track that is not completely inside a
+        fine area of a design that has them (:meth:`add_fine_area`): a
+        confined class then needs at least the standard width
+        (:meth:`outside_values`)."""
         nc = self.netclass_of(net_name)
         width = nc.hard_min_track
         net = self.nets.get(net_name)
         if net is not None and net.width is not None:
             width = min(width, net.width)
+        if outside and self.is_confined(net_name):
+            width = max(width, self.outside_values(net_name)[0])
         return max(width, self.rules.min_track)
+
+    # -- fine areas ----------------------------------------------------------
+    def add_fine_area(self, shape_or_ref: Union[Shape, str], margin: float = 4.0,
+                      name: str = "") -> FineArea:
+        """Declare an escape window: a region in which the fine net classes
+        may use their fine track width and clearance.
+
+        ``shape_or_ref`` is a shape, or the reference of a placed part - the
+        area is then the bounding box of that part's pads grown by ``margin``
+        mm (keep it larger than the router's escape window,
+        ``RouterOptions.escape_reach`` = 3 mm, so that the fanned-out tracks
+        have room to spread to the standard pitch before they leave it)::
+
+            d.add_netclass("Fine", track_width=0.09, clearance=0.09)
+            d.add_fine_area("U2")              # 4 mm around the BGA's ball field
+
+        As soon as a design has one fine area, every net class that is finer
+        than the standard values of the rule set (``Rules.default_track`` /
+        ``default_clearance``) is *confined*: outside the areas its nets are
+        routed, audited and DRC-checked with the standard width and clearance
+        (:meth:`outside_values`).  A track counts as inside only when ALL of
+        its copper lies in one area (KiCad: ``A.enclosedByArea``; areas that
+        touch do not add up, describe them as one shape).  A design without
+        fine areas keeps the old behaviour (fine geometry anywhere on the
+        net); the checks then warn (``fine_unconfined``) and the fab README
+        states how far the fine copper really reaches."""
+        if isinstance(shape_or_ref, str):
+            from . import geometry
+            ref = shape_or_ref
+            x0, y0, x1, y1 = geometry.part_pads_bbox(self, ref)
+            shape: Shape = RoundedPolygon((
+                (round(x0 - margin, 6), round(y0 - margin, 6)),
+                (round(x1 + margin, 6), round(y0 - margin, 6)),
+                (round(x1 + margin, 6), round(y1 + margin, 6)),
+                (round(x0 - margin, 6), round(y1 + margin, 6))))
+            name = name or "fine_%s" % ref
+        else:
+            ref, shape = "", shape_or_ref
+            name = name or "fine_%d" % (len(self.fine_areas) + 1)
+        if any(a.name == name for a in self.fine_areas):
+            raise ValueError("fine area name %r is used twice" % (name,))
+        area = FineArea(shape, name, ref)
+        self.fine_areas.append(area)
+        return area
+
+    def is_fine_class(self, nc: NetClass) -> bool:
+        """True for a net class finer than the rule set's standard values
+        (narrower than ``default_track`` or closer than ``default_clearance``)."""
+        r = self.rules
+        return nc.hard_min_track < r.default_track - 1e-9 \
+            or nc.clearance < r.default_clearance - 1e-9
+
+    def is_confined(self, net_name: Optional[str]) -> bool:
+        """True if the net's fine geometry is restricted to the fine areas:
+        the design has fine areas and the net is of a fine class."""
+        return bool(self.fine_areas) and net_name in self.nets \
+            and self.is_fine_class(self.netclass_of(net_name))
+
+    def outside_values(self, net_name: Optional[str]) -> Tuple[float, float]:
+        """(track width, clearance) a net uses outside the fine areas: its
+        own values, raised to the standard ones for a confined class."""
+        nc = self.netclass_of(net_name)
+        width = self.track_width(net_name) if net_name in self.nets else nc.track_width
+        clr = nc.clearance
+        if self.is_confined(net_name):
+            r = self.rules
+            return (max(width, r.default_track), max(clr, r.default_clearance))
+        return (width, clr)
 
     def via_size(self, net_name: Optional[str] = None) -> Tuple[float, float]:
         """(pad diameter, drill) of the via used for a net (from its class)."""
@@ -1097,7 +1239,8 @@ class Design:
 
     def clearance(self, net_a: Optional[str], net_b: Optional[str] = None, *,
                   local_a: Optional[float] = None,
-                  local_b: Optional[float] = None) -> float:
+                  local_b: Optional[float] = None,
+                  outside_a: bool = False, outside_b: bool = False) -> float:
         """Copper clearance KiCad 7's DRC requires between an item of
         ``net_a`` and an item of a different net ``net_b``.
 
@@ -1114,13 +1257,20 @@ class Design:
         ``None`` (or an unknown name) stands for copper without a net, which
         KiCad puts in the Default class.  Zones additionally keep their own
         clearance (``rules.zone_clearance`` / ``Plane.clearance``).
+
+        ``outside_a`` / ``outside_b`` say that the track or via is not
+        completely inside a fine area (:meth:`add_fine_area`); a confined net
+        then counts with the standard clearance (:meth:`outside_values`).
+        Pads are never "outside": their class clearance (or override) applies
+        wherever they sit.
         """
         floor = self.rules.min_clearance
         overrides = [c for c in (local_a, local_b) if c]
         if overrides:
             return max(max(overrides), floor)
-        return max(self.netclass_of(net_a).clearance,
-                   self.netclass_of(net_b).clearance, floor)
+        ca = self.outside_values(net_a)[1] if outside_a else self.netclass_of(net_a).clearance
+        cb = self.outside_values(net_b)[1] if outside_b else self.netclass_of(net_b).clearance
+        return max(ca, cb, floor)
 
     def board_minimums(self) -> Dict[str, Any]:
         """Smallest features the fab must be able to make - for the fab README.
@@ -1158,6 +1308,11 @@ class Design:
             "copper_to_edge": r.copper_to_edge,
             "blind_buried_vias": r.blind_buried_vias,
             "via_tenting": self.via_tenting,
+            "via_protection": self.via_protection,
+            "via_pad_gap_tented": r.via_pad_gap_tented,
+            "via_pad_gap_open": r.via_pad_gap_open,
+            "fine_areas": [a.name for a in self.fine_areas],
+            "fine_classes": sorted(nc.name for nc in classes if self.is_fine_class(nc)),
             "net_classes": {
                 nc.name: {"track_width": nc.track_width, "clearance": nc.clearance,
                           "min_track_width": nc.hard_min_track,
@@ -1295,9 +1450,14 @@ class Design:
             "netclasses": {k: v.to_dict() for k, v in self.netclasses.items()},
             "minimums": self.board_minimums(),
             "via_tenting": self.via_tenting,
+            "via_protection": self.via_protection,
+            "fab_notes": list(self.fab_notes),
+            "fine_areas": [{"name": a.name, "ref": a.ref, "shape": repr(a.shape)}
+                           for a in self.fine_areas],
             "parts": [p.to_dict() for p in self.parts],
             "netlist": self.netlist(),
             "planes": [{"net": p.net, "layer": p.layer, "whole_board": p.shape is None,
+                        "shape": None if p.shape is None else repr(p.shape),
                         "priority": p.priority, "routable": p.routable}
                        for p in self.planes],
             "height_limits": [{"name": h.name, "side": h.side, "max_height": h.max_height,
@@ -1313,7 +1473,8 @@ __all__ = [
     "TOP", "BOTTOM", "ELECTRICAL_TYPES", "ALL_LAYERS", "Rules", "US_4L_STD", "US_4L_FINE",
     "NetClass", "Stackup", "StackupLayer", "Circle", "RoundedPolygon", "Slot",
     "PathShape", "PathSegment", "VIA_TENTING",
-    "Hole", "Outline", "Keepout", "HeightLimit", "Plane", "Pin", "Part", "Net", "Track", "Via",
+    "Hole", "Outline", "Keepout", "HeightLimit", "Plane", "FineArea", "Pin", "Part", "Net",
+    "Track", "Via",
     "Design", "make_pin", "two_pin", "n_pin", "parse_node", "copper_layer_names",
     "replace",
 ]

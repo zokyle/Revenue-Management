@@ -420,95 +420,148 @@ static void battery_small_(gl_gfx_t *g, const gl_ui_view_t *v, int y)
     gl_gfx_battery(g, CX - 9, y, (int)v->battery_pct);
 }
 
+const char *gl_ui_note_text(gl_ui_note_t note)
+{
+    static const char *const text[GL_UI_NOTE_COUNT] = {
+        "", "2 LINES SEEN", "1 CAMERA", "FIT NOT DONE", "PACE LIMIT", "APPROX", "NO RANGE",
+        "NO FLAG", "NOT SOLVED", "NO SOLUTION"
+    };
+    return ((unsigned)note < (unsigned)GL_UI_NOTE_COUNT) ? text[note] : "";
+}
+
+int gl_ui_conf_boxes(float confidence)
+{
+    /* a confidence that is not a number shows as none */
+    return gl_roundi(gl_clampf(confidence, 0.0f, 1.0f) * 5.0f);
+}
+
+void gl_ui_result_text(const gl_ui_t *ui, const gl_ui_view_t *v, gl_ui_result_text_t *t)
+{
+    size_t n;
+
+    memset(t, 0, sizeof(*t));
+    if (!v->have_result) {
+        return;
+    }
+    /* distance to the hole in the selected unit; "?" = dialled or assumed */
+    if (v->distance_m > 0.0f) {
+        gl_settings_format_distance(&ui->edit, v->distance_m, t->distance, sizeof(t->distance) - 1u);
+        if (v->distance_assumed) {
+            gl_fmt_append(t->distance, sizeof(t->distance), "?");
+        }
+    } else {
+        gl_fmt_append(t->distance, sizeof(t->distance), "--");
+    }
+    /* plays-like distance: only for a solved putt (it is the launch speed) */
+    if (v->solved && v->plays_like_m > 0.0f) {
+        gl_fmt_append(t->plays, sizeof(t->plays), "PLAYS ");
+        n = strlen(t->plays);
+        gl_settings_format_distance(&ui->edit, v->plays_like_m, t->plays + n, sizeof(t->plays) - n);
+    }
+    /* the one plain message */
+    if (!v->line_here) {
+        gl_fmt_append(t->note, sizeof(t->note), "PUT AT BALL");
+    } else {
+        gl_fmt_append(t->note, sizeof(t->note), gl_ui_note_text((gl_ui_note_t)v->note));
+    }
+    gl_fmt_fixed(t->slope, sizeof(t->slope), v->slope_pct, 1);
+    gl_fmt_append(t->slope, sizeof(t->slope), "%");
+    /* break in cup widths, with the side to aim at; not quoted for an aim
+     * that is not a solution */
+    if (!v->solved || !(v->distance_m > 0.0f)) {
+        /* (the break in cups is distance x tan(aim): unknown without a distance) */
+        gl_fmt_append(t->brk, sizeof(t->brk), "BREAK ?");
+    } else if (fabsf(v->break_cups) < 0.05f) {
+        gl_fmt_append(t->brk, sizeof(t->brk), "STRAIGHT");
+    } else {
+        gl_fmt_append(t->brk, sizeof(t->brk), (v->break_cups > 0.0f) ? "<" : "");
+        n = strlen(t->brk);
+        gl_fmt_fixed(t->brk + n, sizeof(t->brk) - n, fabsf(v->break_cups), 1);
+        gl_fmt_append(t->brk, sizeof(t->brk), (v->break_cups > 0.0f) ? " CUP" : " CUP>");
+    }
+    if (v->drop > 0u) {
+        t->mode[0] = 'D';
+        t->mode[1] = (char)('0' + (int)((v->drop <= 9u) ? v->drop : 9u));
+    } else if (v->precision) {
+        t->mode[0] = '2';
+        t->mode[1] = 'X';
+    }
+}
+
 static void screen_result_(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g)
 {
     gl_gfx_aim_info_t info;
-    char buf[16];
-    int rose_x;
+    gl_ui_result_text_t t;
+    int rose_x = 28;
 
     if (!v->have_result) {
         text_(g, 60, "NO READ", 1);
         return;
     }
-    /* 1. the aim line: the backward extension of the start line through the ball */
-    gl_gfx_aim_line_at(g, v->aim_rad, v->ball_az_rad, 3.0f, &info);
-    if (!info.on_screen) {
-        /* the true line passes outside the aperture: the dashed line shows
-         * its direction, the arrow the side it lies on */
-        if (info.offset_px > 0.0f) {
-            gl_gfx_arrow(g, 96.0f, 64.0f, -0.5f * GL_PI_F, 16.0f, 7.0f, 1.5f, GL_INK_BLACK);
-        } else {
-            gl_gfx_arrow(g, 32.0f, 64.0f, 0.5f * GL_PI_F, 16.0f, 7.0f, 1.5f, GL_INK_BLACK);
+    gl_ui_result_text(ui, v, &t);
+    info.on_screen = false;
+    info.offset_px = 0.0f;
+    if (v->line_here) {
+        /* 1. the aim line: the backward extension of the start line through
+         * the ball.  Solid for a solution of the putt the golfer has; long
+         * dashes for anything less: an aim that is not a solution, or one
+         * solved for a distance that nobody measured or dialled (exactly the
+         * cases in which the break is not quoted either). */
+        gl_gfx_aim_line_styled(g, v->aim_rad, v->ball_az_rad, 3.0f,
+                               !v->solved || !(v->distance_m > 0.0f), &info);
+        if (!info.on_screen) {
+            /* the true line passes outside the aperture: the dashed line shows
+             * its direction, the arrow the side it lies on */
+            if (info.offset_px > 0.0f) {
+                gl_gfx_arrow(g, 96.0f, 64.0f, -0.5f * GL_PI_F, 16.0f, 7.0f, 1.5f, GL_INK_BLACK);
+            } else {
+                gl_gfx_arrow(g, 32.0f, 64.0f, 0.5f * GL_PI_F, 16.0f, 7.0f, 1.5f, GL_INK_BLACK);
+            }
         }
     }
-    /* 2. distance (top) */
-    if (v->distance_m > 0.0f) {
-        gl_settings_format_distance(&ui->edit, v->distance_m, buf, sizeof(buf));
+    /* 2. distance (top), 3. plays-like distance, 4. the message */
+    label_(g, CX, 12, t.distance, 1);
+    if (t.plays[0] != '\0') {
+        label_(g, CX, 24, t.plays, 1);
+    }
+    if (t.note[0] != '\0') {
+        label_(g, CX, 36, t.note, 1);
+    }
+    if (v->line_here) {
+        /* 5. fall-line rose on the side away from the aim line */
+        rose_x = (info.on_screen && info.offset_px < -14.0f) ? 100 : 28;
+        if (info.on_screen && fabsf(info.offset_px) <= 14.0f) {
+            rose_x = (info.offset_px >= 0.0f) ? 28 : 100;
+        }
+        gl_gfx_disc(g, (float)rose_x, 58.0f, 12.0f, GL_INK_WHITE);
+        if (v->slope_pct >= 0.15f) {
+            float dx = -sinf(v->fall_line_rad), dy = -cosf(v->fall_line_rad);
+            gl_gfx_arrow(g, (float)rose_x - 8.0f * dx, 58.0f - 8.0f * dy, v->fall_line_rad, 16.0f,
+                         6.0f, 1.0f, GL_INK_BLACK);
+        } else {
+            gl_gfx_arc(g, (float)rose_x, 58.0f, 3.0f, 4.5f, 0.0f, 7.0f, GL_INK_BLACK);
+        }
+        label_(g, rose_x, 74, t.slope, 1);
     } else {
-        buf[0] = '\0';
-        gl_fmt_append(buf, sizeof(buf), "--");
+        /* a Survey drop along the line: the marker does not lie at the ball,
+         * so neither the line nor the fall-line arrow would point anywhere
+         * true.  The numbers, and where to go for the line. */
+        text_(g, 50, "FOR THE LINE", 1);
+        text_(g, 64, "SLOPE AT BALL", 1);
+        label_(g, CX, 76, t.slope, 1);
     }
-    label_(g, CX, 12, buf, 1);
-    /* 3. slope along the line to the hole */
-    buf[0] = '\0';
-    if (fabsf(v->along_pct) < 0.1f) {
-        gl_fmt_append(buf, sizeof(buf), "LEVEL");
-    } else {
-        size_t n;
-        gl_fmt_append(buf, sizeof(buf), (v->along_pct > 0.0f) ? "UP " : "DN ");
-        n = strlen(buf);
-        gl_fmt_fixed(buf + n, sizeof(buf) - n, fabsf(v->along_pct), 1);
-        gl_fmt_append(buf, sizeof(buf), "%");
-    }
-    label_(g, CX, 24, buf, 1);
-    /* 4. fall-line rose on the side away from the aim line */
-    rose_x = (info.on_screen && info.offset_px < -14.0f) ? 100 : 28;
-    if (info.on_screen && fabsf(info.offset_px) <= 14.0f) {
-        rose_x = (info.offset_px >= 0.0f) ? 28 : 100;
-    }
-    gl_gfx_disc(g, (float)rose_x, 58.0f, 12.0f, GL_INK_WHITE);
-    if (v->slope_pct >= 0.15f) {
-        float dx = -sinf(v->fall_line_rad), dy = -cosf(v->fall_line_rad);
-        gl_gfx_arrow(g, (float)rose_x - 8.0f * dx, 58.0f - 8.0f * dy, v->fall_line_rad, 16.0f,
-                     6.0f, 1.0f, GL_INK_BLACK);
-    } else {
-        gl_gfx_arc(g, (float)rose_x, 58.0f, 3.0f, 4.5f, 0.0f, 7.0f, GL_INK_BLACK);
-    }
-    buf[0] = '\0';
-    gl_fmt_fixed(buf, sizeof(buf), v->slope_pct, 1);
-    gl_fmt_append(buf, sizeof(buf), "%");
-    label_(g, rose_x, 74, buf, 1);
-    /* 5. break in cup widths, or the reason there is none */
-    buf[0] = '\0';
-    if (!v->solved) {
-        gl_fmt_append(buf, sizeof(buf), "TILT ONLY");
-    } else if (fabsf(v->break_cups) < 0.05f) {
-        gl_fmt_append(buf, sizeof(buf), "STRAIGHT");
-    } else {
-        size_t n;
-        gl_fmt_append(buf, sizeof(buf), (v->break_cups > 0.0f) ? "<" : "");
-        n = strlen(buf);
-        gl_fmt_fixed(buf + n, sizeof(buf) - n, fabsf(v->break_cups), 1);
-        gl_fmt_append(buf, sizeof(buf), (v->break_cups > 0.0f) ? " CUP" : " CUP>");
-    }
-    label_(g, CX, 92, buf, 1);
-    /* 6. confidence bar, flag / mode marks */
-    {
-        int filled = gl_roundi(gl_clampf(v->confidence, 0.0f, 1.0f) * 5.0f);
-        gl_gfx_rect(g, CX - 18, 103, 37, 10, GL_INK_WHITE);
-        gl_gfx_conf_bar(g, CX - 16, 105, filled, 5);
+    /* 6. break in cup widths */
+    label_(g, CX, 92, t.brk, 1);
+    /* 7. confidence bar, mode and flag marks */
+    gl_gfx_rect(g, CX - 18, 103, 37, 10, GL_INK_WHITE);
+    gl_gfx_conf_bar(g, CX - 16, 105, gl_ui_conf_boxes(v->confidence), 5);
+    if (t.mode[0] != '\0') {
+        label_(g, CX + 30, 104, t.mode, 1);
     }
     if (!v->flag_found) {
-        gl_gfx_rect(g, 92, 30, 13, 15, GL_INK_WHITE);
-        gl_gfx_icon(g, 94, 32, GL_ICON_NOFLAG, GL_INK_BLACK);
-    }
-    if (ui->survey_count > 0u) {
-        buf[0] = 'D';
-        buf[1] = (char)('0' + (int)ui->survey_count);
-        buf[2] = '\0';
-        label_(g, CX, 36, buf, 1);
-    } else if (v->precision) {
-        label_(g, CX, 36, "2X", 1);
+        /* beside the message line, clear of the plays-like label above it */
+        gl_gfx_rect(g, 92, 33, 13, 15, GL_INK_WHITE);
+        gl_gfx_icon(g, 94, 35, GL_ICON_NOFLAG, GL_INK_BLACK);
     }
 }
 
@@ -609,7 +662,16 @@ void gl_ui_render(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g)
         gl_fmt_int(buf, sizeof(buf), (int32_t)v->battery_pct);
         gl_fmt_append(buf, sizeof(buf), "%");
         text_(g, 82, buf, 1);
-        text_(g, 96, v->usb_connected ? "LINKED" : "CHARGER", 1);
+        /* a charge the firmware has stopped says why */
+        if (v->chg_blocked == 1u) {
+            text_(g, 96, "TOO COLD", 1);
+        } else if (v->chg_blocked == 2u) {
+            text_(g, 96, "TOO HOT", 1);
+        } else if (v->chg_blocked >= 3u) {
+            text_(g, 96, "TEMP SENSOR", 1);
+        } else {
+            text_(g, 96, v->usb_connected ? "LINKED" : "CHARGER", 1);
+        }
         break;
     case GL_UI_CAL_ZERO:
         /* zeroing: on a hard flat surface, never in the cradle */

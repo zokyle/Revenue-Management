@@ -19,7 +19,8 @@ import pytest
 
 from gleda import board, checks, drc, geometry
 from gleda import footprints as F
-from gleda.model import (Design, Outline, Circle, Part, Track, US_4L_STD, US_4L_FINE)
+from gleda.model import (Design, Outline, Circle, RoundedPolygon, Part, Track, US_4L_STD,
+                         US_4L_FINE)
 
 R0402 = "Resistor_SMD:R_0402_1005Metric"
 
@@ -353,3 +354,90 @@ def test_project_merge_keeps_foreign_text_variables(tmp_path):
     assert pro["schematic"] == {"x": 1}
     assert board.project_via_tenting(str(tmp_path / "merge.kicad_pcb")) == "bottom"
     assert board.project_via_tenting(str(tmp_path / "nope.kicad_pcb")) == "both"
+
+
+# -- fine areas: fine classes confined to the escape windows -------------------------
+
+def _area_design(name="areas"):
+    d = _fine_design(name)
+    _two_resistor_nets(d, [("FA", "Fine"), ("FB", "Fine"), ("FC", "Fine"), ("DA", "Default")])
+    d.add_fine_area(RoundedPolygon.rect(-9.0, 6.0, 6.0, 8.0), name="fine_left")   # x -12..-6
+    return d
+
+
+def test_fine_area_model_and_rules_text():
+    d = _area_design()
+    assert d.is_confined("FA") and not d.is_confined("DA") and not d.is_confined(None)
+    assert d.outside_values("FA") == (0.15, 0.127) and d.outside_values("DA") == (0.15, 0.127)
+    assert d.clearance("FA", "FB") == 0.09
+    assert d.clearance("FA", "FB", outside_a=True) == 0.127
+    assert d.clearance("FA", "FB", outside_b=True) == 0.127
+    assert d.clearance("FA", "FB", local_b=0.09, outside_a=True) == 0.09     # pad override wins
+    assert d.min_track_width("FA", outside=True) == 0.15 and d.min_track_width("FA") == 0.09
+    m = d.board_minimums()
+    assert m["fine_areas"] == ["fine_left"] and m["fine_classes"] == ["Fine"]
+    rules = board.fine_area_rules(d)
+    assert rules == [("gleda fine class Fine outside the fine areas",
+                      "A.NetClass == 'Fine' && (A.Type == 'Track' || A.Type == 'Via') && "
+                      "!A.enclosedByArea('fine_left')", 0.15, 0.127)]
+    text = board.custom_rules_text(d)
+    assert text.index("gleda min track width of net class Fine") < \
+        text.index("gleda fine class Fine outside the fine areas")           # later rules win
+    assert "(constraint track_width (min 0.15mm))\n  (constraint clearance (min 0.127mm)))" \
+        in text
+    # no areas, or no enforcement: no such rule
+    assert board.fine_area_rules(_fine_design()) == []
+    d.enforce_track_widths = False
+    assert board.fine_area_rules(d) == []
+    # the areas are part of what the router's result depends on
+    from gleda import router
+    a, b = _area_design(), _area_design()
+    b.fine_areas[0] = type(b.fine_areas[0])(RoundedPolygon.rect(-9.0, 6.0, 6.2, 8.0),
+                                             "fine_left")
+    assert router.fingerprint(a) != router.fingerprint(b)
+
+
+def test_kicad_enforces_fine_geometry_only_inside_the_fine_area(tmp_path):
+    """Judged by KiCad's DRC with the generated rule area and .kicad_dru: a
+    fine track is legal only if all of it lies inside the area, and outside
+    the fine class needs the standard clearance."""
+    d = _area_design()
+    files = board.build_board(d, str(tmp_path))
+    zones = {z["name"]: z for z in board.board_summary(files.pcb)["zones"]}
+    assert zones["fine_left"]["rule_area"] and zones["fine_left"]["layers"] == \
+        ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"]
+    # floating test tracks between the pad columns at x = -11 and x = +11
+    good = [
+        # FA: fine inside (ends 0.5 mm before the boundary at x = -6), standard outside
+        Track("FA", "F.Cu", -10.0, 8.0, -6.5, 8.0, 0.09),
+        Track("FA", "F.Cu", -6.5, 8.0, 10.0, 8.0, 0.15),
+        # FB: 0.09 mm from FA inside the area, moves away while still fine, then standard
+        Track("FB", "F.Cu", -10.0, 7.82, -8.0, 7.82, 0.09),
+        Track("FB", "F.Cu", -8.0, 7.82, -7.5, 7.6, 0.09),
+        Track("FB", "F.Cu", -7.5, 7.6, -7.0, 7.6, 0.09),
+        Track("FB", "F.Cu", -7.0, 7.6, 10.0, 7.6, 0.15),
+        # FC: outside, exactly the standard 0.127 mm from FA
+        Track("FC", "F.Cu", 0.0, 8.277, 10.0, 8.277, 0.15),
+    ]
+    board.apply_routing(files.pcb, good, [])
+    r = drc.run_drc(files.pcb)
+    assert r.error_count == 0, r.errors_by_type
+    assert "gleda fine class Fine outside the fine areas" in r.custom_rules
+    from gleda import router
+    assert router.audit(d, good, []).violations == []
+    bad = [
+        # a fine piece that crosses the boundary, and a fine piece wholly outside
+        Track("FA", "F.Cu", -10.0, 8.0, -6.5, 8.0, 0.09),
+        Track("FA", "F.Cu", -6.5, 8.0, -5.5, 8.0, 0.09),
+        Track("FA", "F.Cu", -5.5, 8.0, 10.0, 8.0, 0.15),
+        Track("FC", "F.Cu", 0.0, 5.0, 10.0, 5.0, 0.09),
+        # standard width but only 0.1 mm from FA outside the area
+        Track("FB", "F.Cu", 0.0, 7.75, 10.0, 7.75, 0.15),
+    ]
+    board.apply_routing(files.pcb, bad, [])
+    r = drc.run_drc(files.pcb)
+    assert r.errors_by_type == {"track_width": 2, "clearance": 1}
+    assert all("gleda fine class Fine outside the fine areas" in v.description
+               for v in r.violations if v.severity == "error")
+    kinds = sorted(v["type"] for v in router.audit(d, bad, []).violations)
+    assert kinds == ["clearance", "track_width", "track_width"]

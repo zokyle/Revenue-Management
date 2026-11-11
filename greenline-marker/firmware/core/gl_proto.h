@@ -151,6 +151,10 @@ typedef struct {
     gl_status_t (*set_time)(void *ctx, uint32_t rtc_s);
     /** Called AFTER the response has been handed to tx(). */
     gl_status_t (*reboot)(void *ctx, bool rom_dfu);
+    /** Optional: may the device go to the ROM bootloader NOW?  Asked before
+     *  the answer to GL_CMD_REBOOT "DFU!" is sent; false answers
+     *  GL_ERR_STATE.  NULL = always. */
+    bool (*dfu_allowed)(void *ctx);
 } gl_proto_ops_t;
 
 typedef struct {

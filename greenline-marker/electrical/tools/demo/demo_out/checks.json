@@ -2,8 +2,18 @@
  "design": "greenline_demo",
  "error_count": 0,
  "errors_by_code": {},
- "findings": [],
+ "findings": [
+  {
+   "code": "fine_unconfined",
+   "message": "net class(es) CamPower, Fine are finer than the standard 0.150 / 0.127 mm but the design has no fine area (Design.add_fine_area): their nets may use the fine geometry anywhere on the board",
+   "net": null,
+   "refs": [],
+   "severity": "warning"
+  }
+ ],
  "ok": true,
- "warning_count": 0,
- "warnings_by_code": {}
+ "warning_count": 1,
+ "warnings_by_code": {
+  "fine_unconfined": 1
+ }
 }

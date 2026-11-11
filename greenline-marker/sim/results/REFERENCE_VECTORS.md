@@ -155,3 +155,233 @@ Not covered by these vectors: the joint horizon fit
 (`EstimatorConfig.horizon_joint`), which exists in the Python reference for
 comparison only. Its cost has many local minima and its result depends on
 the iteration path, so it is not a port target.
+
+## Fallback, status and roll cases (appended for the firmware port, phase 2)
+
+The cases above are reads of simulated greens: every one of them ends with
+`aim_source` 0 and `solve_status` 0 and a converged fit, and only two solver
+cases end with another status. Three further groups, under their own
+top-level keys, exercise the rest. They were appended without changing a
+byte of the cases above; `schema_version` is still 2 and a reader that
+ignores unknown keys is unaffected. Their inputs are plain numbers written
+in `refvectors.py` (not simulated reads), so they do not depend on the seed.
+
+| Key | Content |
+| --- | --- |
+| `fallback_estimator_cases` | 82 estimator cases with the same layout as `estimator_cases` (`id` counts from 0 in this group; `mode` is the class of the case, `tag` says what it exercises; no `green_*`, `fit_check` or `start_independent` keys). Generated with the same `estimator_config` plus `config_overrides` (`use_grain`, `past`, `lm_max_iter`) |
+| `fallback_solver_cases` | 32 aim problems with the layout of `solver_cases` plus `max_rolls` (the roll budget used) and `n_rolls` (trial rolls the reference used) |
+| `roll_cases` | 33 single rolls (`simulate_putt`) with the capture model |
+
+How the placements were built: `flag_disparity = f_px * baseline / range`
+rounded to 4 decimals; with a stick base `dz` above the marker
+`flag_low_elev = atan((dz - (h_cam - sink_mean)) / range)` and
+`flag_top_elev` the same with `dz + 1.96` m, rounded to 9 decimals; a
+Survey takes the tilt `(a + c s, b + d s)` and the hole height of a patch at
+each station, without noise. Horizon samples are the model horizon of a
+patch plus a fixed 0.4 mrad wobble.
+
+What the `fallback_estimator_cases` cover (`aim_source`, `solve_status`,
+fit converged -> number of cases):
+
+* `aim_source` 0, `solve_status` 0 (OK), NOT converged: 6
+* `aim_source` 0, `solve_status` 0 (OK), converged: 53
+* `aim_source` 0, `solve_status` 1 (PACE_LIMITED), converged: 2
+* `aim_source` 1, `solve_status` 0 (OK), converged: 3
+* `aim_source` 1, `solve_status` 1 (PACE_LIMITED), converged: 2
+* `aim_source` 2, `solve_status` 2 (UNREACHABLE), converged: 5
+* `aim_source` 2, `solve_status` 3 (NO_BRACKET), converged: 4
+* `aim_source` 2, `solve_status` 4 (NO_CONVERGENCE), converged: 3
+* `aim_source` 3, `solve_status` 0 (OK), converged: 2
+* `aim_source` 3, `solve_status` 5 (INVALID), converged: 2
+
+For method `STRAIGHT` the reference keeps no fit record; the fit-derived
+fields of `expected` (`level_offsets`, `range_*`, `stations`, `tilt_slopes`,
+`used_horizon`, `fit_converged`, `fit_cost`, `fit_starts`) are those of the
+`B0` fit the estimate was computed from, and `cross_slope_sigma` is `null`.
+
+### How to compare these groups
+
+* Flags, `aim_source`, `solve_status` and `fit_starts` exactly, and every
+  floating-point output with the rule above, for an implementation that
+  follows the reference's iteration path at these tolerances (the C port in
+  double precision does: it reproduces `n_rolls` of every solver case).
+* An implementation with other tolerances or another arithmetic cannot be
+  held to all of them. Three kinds of case are tolerance-dependent by
+  construction and say so in their `tag`: the putt that dies at the hole
+  (`past` 0), a roll budget that is only exhausted at the 1e-9 m tolerance,
+  and patches on a knife edge between two outcomes. Of a solve that failed
+  (`aim_source` 2, or a solver `status` other than OK) only the outcome
+  class is defined; its best iterate depends on the iteration path.
+* A fit stopped by `lm_max_iter` (`fit_converged` false) returns the iterate
+  it had reached; with the same Levenberg-Marquardt rules that iterate is
+  reproducible, and it is what `expected` holds.
+* `roll_cases`: one roll has no tolerance. `status` (0 STOPPED, 1 MAX_TIME,
+  2 OUT_OF_BOUNDS, 3 CAPTURED), `captured`, `crossed_hole_line`, `side` and
+  `n_steps` (RK4 steps) exactly; `stop_xy`, `t_end`, `delta`,
+  `speed_at_delta`, `lateral_at_line`, `speed_at_line`, `lateral_miss`,
+  `shortfall`, `path_length` to 1e-9. Inputs: `coeffs` and `z0` of the
+  surface, `start`, `hole`, launch `phi` [rad] from the start-to-hole line
+  and `v0` [m/s], `a_r`, `grain`, `capture_exponent` (0.5 or 1) and
+  `stop_on_capture`.
+
+### The fallback estimator cases
+
+| id | mode | method | drops | aim_source | solve_status | converged | what it exercises |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | FLAG_MISSING | B1 | 1 | 0 | 0 OK | yes | flag not found, dialled distance 4.2 m: tilt-only plane along the visor axis |
+| 1 | FLAG_MISSING | B1 | 1 | 0 | 0 OK | yes | flag not found, nothing dialled: default distance 3 m |
+| 2 | FLAG_MISSING | B1 | 1 | 0 | 0 OK | yes | flag_found false although the flag fields are filled in: they are ignored |
+| 3 | FLAG_MISSING | B1 | 1 | 0 | 0 OK | yes | flag bearing not a number: counts as flag not found |
+| 4 | FLAG_MISSING | B2 | 1 | 0 | 0 OK | yes | method B2 with a horizon but no flag: the horizon is not used |
+| 5 | FLAG_MISSING | B0 | 1 | 0 | 0 OK | yes | method B0, flag not found, Precision Read, dialled distance 2.5 m |
+| 6 | RANGE_MISSING | B1 | 1 | 0 | 0 OK | yes | flag found, disparity not a number, top not visible: bearing kept, default distance |
+| 7 | RANGE_MISSING | B1 | 1 | 0 | 0 OK | yes | flag found but not ranged, dialled distance 6.5 m along the measured bearing |
+| 8 | RANGE_MISSING | B1 | 1 | 0 | 0 OK | yes | disparity 0.2 px (below the accepted 0.25), top visible but base hidden: no range channel |
+| 9 | RANGE_MISSING | B2 | 1 | 0 | 0 OK | yes | method B2 with a horizon, flag not ranged: tilt-only plane, horizon not used |
+| 10 | RANGE | B1 | 1 | 0 | 0 OK | yes | range from the angular height only (no disparity; top and base visible), 9 m |
+| 11 | RANGE | B1 | 1 | 0 | 0 OK | yes | stereo and angular height fused, 9 m (the disparity reads 9.4 m) |
+| 12 | RANGE | B1 | 1 | 0 | 0 OK | yes | top visible but base hidden: stereo only, hole height only bounded |
+| 13 | RANGE | B1 | 1 | 0 | 0 OK | yes | learned stick height with 2 % sigma dominates the fusion, 12 m |
+| 14 | RANGE | B1 | 1 | 0 | 0 OK | yes | dialled distance present but the cameras range the flag: the dialled value is not used |
+| 15 | BASE | B1 | 1 | 0 | 0 OK | yes | base hidden, bound active: the sight line lies below the tilt plane at the hole |
+| 16 | BASE | B1 | 1 | 0 | 0 OK | yes | base hidden, bound inactive: the sight line lies above the tilt plane at the hole |
+| 17 | BASE | B1 | 1 | 0 | 0 OK | yes | no elevation of the stick (not a number): tilt rows and priors only |
+| 18 | BASE | B1 | 1 | 0 | 0 OK | yes | hole height far off the tilt plane (0.25 m in 6 m): Huber outlier row |
+| 19 | METHOD | B0 | 1 | 0 | 0 OK | yes | method B0 with flag and range: plane from the tilt only |
+| 20 | METHOD | STRAIGHT | 1 | 3 | 0 OK | yes | method STRAIGHT with flag and range: straight at flat pace |
+| 21 | METHOD | STRAIGHT | 1 | 3 | 0 OK | yes | method STRAIGHT, flag not found, dialled distance 5.5 m |
+| 22 | PRECISION | B1 | 1 | 0 | 0 OK | yes | Precision Read (two tilt reads), B1 |
+| 23 | PRECISION | B1 | 1 | 0 | 0 OK | yes | Precision Read, base hidden |
+| 24 | OPTION | B1 | 1 | 0 | 0 OK | yes | flag bearing 3.1 rad: the aim azimuth wraps |
+| 25 | OPTION | B1 | 1 | 0 | 0 OK | yes | grain used, strength 0.4 clipped to 0.25 |
+| 26 | OPTION | B1 | 1 | 0 | 0 OK | yes | grain used, negative strength clipped to 0 |
+| 27 | OPTION | B1 | 1 | 0 | 0 OK | yes | grain used but its azimuth is not a number: solved without grain |
+| 28 | OPTION | B1 | 1 | 0 | 0 OK | yes | grain used, flag bearing 0.3 rad: the grain is rotated into the putt frame |
+| 29 | OPTION | B1 | 1 | 0 | 0 OK | yes | green speed 3 ft entered: clipped to 5 |
+| 30 | OPTION | B1 | 1 | 0 | 0 OK | yes | green speed 20 ft entered: clipped to 16 |
+| 31 | OPTION | B1 | 1 | 0 | 0 OK | yes | pace: 0.6 m past the hole |
+| 32 | OPTION | B1 | 1 | 0 | 0 OK | yes | pace: the putt that dies at the hole (past 0) on a gentle cross slope |
+| 33 | OPTION | B1 | 1 | 0 | 0 OK | yes | short putt, 0.4 m |
+| 34 | OPTION | B1 | 1 | 0 | 0 OK | yes | long putt, 25 m (stereo only) |
+| 35 | HORIZON | B2 | 1 | 0 | 0 OK | yes | B2, 41 horizon samples of a twisted patch |
+| 36 | HORIZON | B2 | 1 | 0 | 0 OK | yes | B2, only 4 valid horizon samples: horizon not used |
+| 37 | HORIZON | B2 | 1 | 0 | 0 OK | yes | B2, exactly 5 valid horizon samples |
+| 38 | HORIZON | B2 | 1 | 0 | 0 OK | yes | B2, mounds behind 18 of 41 samples: poor horizon |
+| 39 | HORIZON | B2 | 1 | 0 | 0 OK | yes | B2, base hidden |
+| 40 | HORIZON | B2 | 1 | 0 | 0 OK | yes | B2, crowned patch (the horizon is the crest on every ray), silhouette 3 mrad high |
+| 41 | HORIZON | B2 | 1 | 0 | 0 OK | yes | B2, 9 horizon samples, Precision Read |
+| 42 | HORIZON | B2 | 1 | 0 | 0 OK | no | B2, one horizon azimuth is not a number: the horizon stage cannot run (its cost is not a number), the Quick-Read patch is kept and the fit is reported as not converged |
+| 43 | NOT_CONVERGED | B1 | 1 | 0 | 0 OK | no | B1 stopped after 1 iteration |
+| 44 | NOT_CONVERGED | B1 | 1 | 0 | 0 OK | no | B1, base hidden with the bound active, stopped after 2 iterations |
+| 45 | NOT_CONVERGED | B2 | 1 | 0 | 0 OK | no | B2 stopped after 2 iterations per start |
+| 46 | NOT_CONVERGED | B1 | 3 | 0 | 0 OK | no | Survey of 3 drops stopped after 1 iteration |
+| 47 | NOT_CONVERGED | B1 | 1 | 0 | 0 OK | no | iteration limit 0: the tilt plane itself |
+| 48 | SURVEY2 | B1 | 2 | 0 | 0 OK | yes | Survey, 2 drops |
+| 49 | SURVEY3 | B1 | 3 | 0 | 0 OK | yes | Survey, 3 drops |
+| 50 | SURVEY4 | B1 | 4 | 0 | 0 OK | yes | Survey, 4 drops |
+| 51 | SURVEY4 | B1 | 4 | 0 | 0 OK | yes | Survey, 4 drops, Precision Read at every drop |
+| 52 | SURVEY4 | B1 | 4 | 0 | 0 OK | yes | Survey, 4 drops, the third did not find the flag: 3 used |
+| 53 | SURVEY3 | B1 | 3 | 0 | 0 OK | yes | Survey, 3 drops, the second not ranged: 2 used |
+| 54 | SURVEY3 | B1 | 3 | 0 | 0 OK | yes | Survey, 3 drops: one ranged further than the ball (station clipped to 0), one 0.2 m from the hole |
+| 55 | SURVEY2 | B1 | 2 | 0 | 0 OK | yes | Survey, the drop at the ball did not find the flag: tilt-only from that drop |
+| 56 | SURVEY3 | B1 | 3 | 0 | 0 OK | yes | Survey, 3 drops: base hidden at the second, no stick elevation at the third |
+| 57 | SURVEY3 | B2 | 3 | 0 | 0 OK | yes | Survey, 3 drops, method B2 with the horizon of the drop at the ball |
+| 58 | SURVEY3 | B0 | 3 | 0 | 0 OK | yes | Survey, 3 drops, method B0: only the drop at the ball is used |
+| 59 | SURVEY3 | B1 | 3 | 0 | 0 OK | yes | Survey, 3 drops, the second read far off the line with a different tilt (cross-talk sigmas, Huber) |
+| 60 | STEEP | B1 | 1 | 0 | 1 PACE_LIMITED | yes | downhill 7 % at Stimp 13 (steeper than the green can hold): PACE_LIMITED on the patch |
+| 61 | STEEP | B1 | 2 | 0 | 1 PACE_LIMITED | yes | Survey of a patch that steepens downhill: PACE_LIMITED on the patch |
+| 62 | STEEP | B1 | 1 | 2 | 3 NO_BRACKET | yes | 10 m downhill, crowned: NO_BRACKET at this tolerance, best iterate (a knife edge: with a pace tolerance of 1e-3 m the patch solve ends PACE_LIMITED instead) |
+| 63 | STEEP | B1 | 1 | 0 | 0 OK | yes | cross slope 6 % at Stimp 13, just holdable: solved, aim 0.65 rad |
+| 64 | STEEP | B1 | 4 | 1 | 0 OK | yes | twisted patch (Survey, 4 drops): not solvable, solved on its secant plane |
+| 65 | STEEP | B1 | 3 | 1 | 0 OK | yes | twisted patch (Survey, 3 drops): not solvable, solved on its secant plane |
+| 66 | STEEP | B1 | 4 | 1 | 0 OK | yes | twisted patch (Survey, 4 drops), 8 m: solved on its secant plane |
+| 67 | STEEP | B1 | 4 | 1 | 1 PACE_LIMITED | yes | steep uphill twisted patch: secant plane, PACE_LIMITED there |
+| 68 | STEEP | B1 | 2 | 1 | 1 PACE_LIMITED | yes | uphill twisted patch, 8 m: secant plane, PACE_LIMITED there |
+| 69 | STEEP | B1 | 1 | 2 | 2 UNREACHABLE | yes | cross slope 7.5 % at Stimp 13: UNREACHABLE on patch and plane, best iterate |
+| 70 | STEEP | B0 | 1 | 2 | 2 UNREACHABLE | yes | cross slope 9 % at Stimp 10, method B0: UNREACHABLE, best iterate |
+| 71 | STEEP | B1 | 4 | 2 | 2 UNREACHABLE | yes | Survey, 4 drops, cross slope 6.4 % at Stimp 13: UNREACHABLE, best iterate |
+| 72 | STEEP | B1 | 1 | 2 | 2 UNREACHABLE | yes | unreachable hole: 18 m above the marker at 12 m (launch speed limit 15 m/s) |
+| 73 | STEEP | B1 | 1 | 2 | 2 UNREACHABLE | yes | absurd tilt reading (50 % cross slope), 3 m: UNREACHABLE, best iterate |
+| 74 | STEEP | B1 | 1 | 2 | 3 NO_BRACKET | yes | downhill 6.5 % with 3 % cross slope at Stimp 13: NO_BRACKET, best iterate |
+| 75 | STEEP | B1 | 1 | 2 | 3 NO_BRACKET | yes | 10 m downhill crowned patch with cross slope: NO_BRACKET, best iterate |
+| 76 | STEEP | B1 | 1 | 2 | 3 NO_BRACKET | yes | 3 m downhill crowned patch with cross slope: NO_BRACKET, best iterate |
+| 77 | STEEP | B1 | 2 | 2 | 4 NO_CONVERGENCE | yes | Survey, 2 drops, cross slope near the limit: NO_CONVERGENCE at this tolerance, best iterate (a knife edge: with tolerances of 2e-4 m / 1e-3 m the secant plane is solved, PACE_LIMITED) |
+| 78 | STEEP | B1 | 4 | 2 | 4 NO_CONVERGENCE | yes | Survey, 4 drops, strong twist: NO_CONVERGENCE, best iterate |
+| 79 | STEEP | B1 | 1 | 2 | 4 NO_CONVERGENCE | yes | 3 m, 8.4 % cross slope uphill at Stimp 12: NO_CONVERGENCE, best iterate |
+| 80 | ZERO_DISTANCE | B1 | 1 | 3 | 5 INVALID | yes | flag not found, dialled distance 5e-7 m: the solve is INVALID, straight at flat pace |
+| 81 | ZERO_DISTANCE | B0 | 1 | 3 | 5 INVALID | yes | flag found but not ranged, dialled distance 1e-6 m (not above the solver's limit): INVALID, straight at flat pace |
+
+### The fallback solver cases
+
+| id | status | max_rolls | n_rolls | what it is |
+| --- | --- | --- | --- | --- |
+| 0 | 0 OK | 200 | 12 | 0.3 m putt on a 1 % / 2 % plane |
+| 1 | 0 OK | 200 | 9 | 25 m putt on a 1 % cross slope |
+| 2 | 0 OK | 200 | 13 | Stimp 5 (slowest accepted) |
+| 3 | 0 OK | 200 | 22 | Stimp 16 (fastest accepted) |
+| 4 | 0 OK | 200 | 21 | saddle with strong curvature |
+| 5 | 0 OK | 200 | 2 | bowl with strong curvature |
+| 6 | 0 OK | 200 | 16 | pace 0.8 m past the hole |
+| 7 | 0 OK | 200 | 11 | grain 0.25 across the line on a flat green |
+| 8 | 0 OK | 200 | 1 | grain 0.25 against the putt, uphill 2 % |
+| 9 | 0 OK | 200 | 1 | grain 1.5 against the putt (stronger than the rolling resistance) |
+| 10 | 0 OK | 200 | 2 | distance 2e-6 m (just above the solver's limit) |
+| 11 | 0 OK | 200 | 1 | flat green, 1 cm |
+| 12 | 1 PACE_LIMITED | 200 | 115 | dying putt (past 0) uphill across a slope: PACE_LIMITED at 1e-9 m (solved at looser tolerances) |
+| 13 | 4 NO_CONVERGENCE | 200 | 206 | dying putt (past 0) on a twisted patch: NO_CONVERGENCE at 1e-9 m (solved at looser tolerances) |
+| 14 | 1 PACE_LIMITED | 200 | 38 | downhill, steepening beyond what the green holds near the hole: PACE_LIMITED |
+| 15 | 1 PACE_LIMITED | 200 | 5 | downhill 7 % at Stimp 13, 2 m: PACE_LIMITED |
+| 16 | 2 UNREACHABLE | 200 | 101 | cross slope 9 % at Stimp 10 (steeper than the green holds): UNREACHABLE |
+| 17 | 2 UNREACHABLE | 200 | 1 | uphill 150 %: beyond the launch speed limit: UNREACHABLE |
+| 18 | 2 UNREACHABLE | 200 | 51 | grain 1.5 across the line (stronger than the rolling resistance): UNREACHABLE |
+| 19 | 2 UNREACHABLE | 200 | 7 | twisted patch, 8 m: UNREACHABLE |
+| 20 | 2 UNREACHABLE | 200 | 46 | twisted patch, 6 m (the estimator falls back to its secant plane): UNREACHABLE |
+| 21 | 3 NO_BRACKET | 200 | 10 | downhill 9 % with 0.5 % cross slope at Stimp 10: NO_BRACKET |
+| 22 | 3 NO_BRACKET | 200 | 14 | downhill 6.5 % with 3 % cross slope at Stimp 13: NO_BRACKET |
+| 23 | 3 NO_BRACKET | 200 | 14 | downhill 9 % with 4 % cross slope at Stimp 10: NO_BRACKET |
+| 24 | 4 NO_CONVERGENCE | 200 | 212 | 8.4 % cross slope uphill, 3 m, Stimp 12: NO_CONVERGENCE |
+| 25 | 4 NO_CONVERGENCE | 200 | 230 | downhill 8 % with 8 % cross slope at Stimp 12: NO_CONVERGENCE at 1e-9 m (NO_BRACKET at looser tolerances) |
+| 26 | 4 NO_CONVERGENCE | 2 | 4 | roll budget of 2 on a breaking putt: NO_CONVERGENCE |
+| 27 | 4 NO_CONVERGENCE | 1 | 4 | roll budget of 1: NO_CONVERGENCE |
+| 28 | 4 NO_CONVERGENCE | 12 | 14 | roll budget of 12: NO_CONVERGENCE at 1e-9 m (solved within the budget at looser tolerances) |
+| 29 | 5 INVALID | 200 | 0 | zero distance: INVALID |
+| 30 | 5 INVALID | 200 | 0 | distance 1e-7 m: INVALID |
+| 31 | 5 INVALID | 200 | 0 | distance exactly 1e-6 m (not above the limit): INVALID |
+
+### The roll cases
+
+| id | status | holed | steps | what it is |
+| --- | --- | --- | --- | --- |
+| 0 | 0 STOPPED | yes | 180 | flat, dead centre at pace: holed (free roll through the hole) |
+| 1 | 3 CAPTURED | yes | 122 | flat, dead centre at pace, integration stopped on capture |
+| 2 | 0 STOPPED | no | 406 | flat, dead centre, far too fast (4 m/s at the hole): not holed |
+| 3 | 0 STOPPED | yes | 180 | flat, 30 mm off centre at pace: holed |
+| 4 | 0 STOPPED | yes | 180 | flat, 50 mm off centre at pace: just holed with exponent 0.5 |
+| 5 | 0 STOPPED | no | 180 | flat, 52 mm off centre at pace: lips out |
+| 6 | 0 STOPPED | yes | 174 | flat, 52 mm off centre, 0.3 m/s at the hole: holed |
+| 7 | 0 STOPPED | yes | 210 | flat, 30 mm off centre, 1.3 m/s at the hole: holed with exponent 0.5 |
+| 8 | 0 STOPPED | no | 210 | the same with Penner's exponent 1: not holed |
+| 9 | 0 STOPPED | no | 180 | flat, 60 mm off centre: misses on the left |
+| 10 | 0 STOPPED | no | 180 | flat, 60 mm off centre: misses on the right |
+| 11 | 0 STOPPED | no | 157 | flat, short by 0.5 m |
+| 12 | 0 STOPPED | yes | 171 | flat, stops inside the hole radius (2.97 m): holed at rest |
+| 13 | 0 STOPPED | no | 0 | zero launch speed on a flat green: at rest at once |
+| 14 | 1 MAX_TIME | yes | 1510 | zero launch speed on a slope too steep to rest (10 % at Stimp 10): rolls from rest, holed in passing, still rolling at 30 s (MAX_TIME) |
+| 15 | 2 OUT_OF_BOUNDS | no | 1390 | downhill 10 % at Stimp 10: runs away, OUT_OF_BOUNDS |
+| 16 | 0 STOPPED | no | 1738 | downhill 7.7 % at Stimp 10 (0.98 of critical): creeps for 26 s before it rests (stiffness-limited steps) |
+| 17 | 0 STOPPED | no | 542 | stopping with a slope at 0.9 of critical (stiff stop) |
+| 18 | 0 STOPPED | no | 195 | cross slope 2 %, aimed straight: misses low |
+| 19 | 0 STOPPED | yes | 190 | cross slope 2 %, aimed 0.105 rad left |
+| 20 | 0 STOPPED | yes | 152 | uphill 3 %, dead centre: holed |
+| 21 | 1 MAX_TIME | no | 1533 | uphill 9 % at Stimp 10 (not holdable): rolls back past the start |
+| 22 | 0 STOPPED | no | 241 | twisted patch with grain, 6 m |
+| 23 | 0 STOPPED | no | 231 | general position: start (-2, 1), hole (3, 2.5), surface with z0 |
+| 24 | 3 CAPTURED | yes | 165 | general position, the solver's own solution, stopped on capture |
+| 25 | 0 STOPPED | yes | 221 | general position, the solver's own solution with Penner's exponent, free roll |
+| 26 | 0 STOPPED | yes | 0 | start equal to hole: at rest in the hole |
+| 27 | 0 STOPPED | no | 97 | start equal to hole, launched away |
+| 28 | 0 STOPPED | no | 143 | launched away from the hole (phi = 3 rad) |
+| 29 | 0 STOPPED | no | 268 | strong grain across the line (0.5), Stimp 8 |
+| 30 | 2 OUT_OF_BOUNDS | no | 1385 | fast green (Stimp 14), 12 m over a crown: runs away down the far side (OUT_OF_BOUNDS) |
+| 31 | 0 STOPPED | no | 433 | fast green (Stimp 14), 12 m across a gentle slope |
+| 32 | 0 STOPPED | no | 431 | bowl: the ball swings back through the hole line |

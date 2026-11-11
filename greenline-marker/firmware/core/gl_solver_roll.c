@@ -20,7 +20,8 @@
  *
  * Bounded: the main loop either leaves or counts a step in every pass, and
  * the step count is capped (see `n_budget`); the Newton loops have fixed
- * counts.  Stack: about 350 bytes in single precision (-fstack-usage, -Os).
+ * counts.  Stack: 304 bytes in single precision (arm-none-eabi-gcc -Os,
+ * -fstack-usage).
  */
 #include "gl_solver_priv.h"
 
@@ -515,6 +516,12 @@ gl_status_t gl_solver_roll(const gl_quad_surface_t *surface, gl_rvec2_t start, g
     gls_roll(&in, start.x, start.y, v0_mps * GLS_COS(ang), v0_mps * GLS_SIN(ang), &o);
 
     dist = gls_hypot(hole.x - start.x, hole.y - start.y);
+    if (!gls_finite(o.t) || !gls_finite(o.x) || !gls_finite(o.y) || !gls_finite(o.dmin) ||
+        !gls_finite(o.smin) || !gls_finite(o.path) || !gls_finite(o.xprog) || !gls_finite(o.yprog) ||
+        !gls_finite(dist) || (o.crossed && (!gls_finite(o.yline) || !gls_finite(o.sline)))) {
+        /* absurd but finite inputs: the arithmetic left the finite range */
+        return GL_ERR_RANGE;
+    }
     out->status = o.status;
     out->t_end_s = o.t;
     out->stop_x = o.x;

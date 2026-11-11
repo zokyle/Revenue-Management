@@ -13,10 +13,31 @@ EXTCOMIN and the OPAMP1 pins.  Those rows are marked SPEC below, and this
 script PARSES THE SPEC TEXT and refuses to generate if a SPEC row disagrees
 with it, so the header cannot drift from the specification.
 
-DESIGN_SPEC does not assign the remaining signals (no netlist exists yet).
-Those rows are marked PROPOSED: they are this firmware's proposal for the
-schematic, chosen from the free pads and from the candidate pins that the
-BOM verification lists (SPI1 SCK/MOSI, SPI2, wake-capable pins).  For a
+DESIGN_SPEC does not assign the remaining signals (the netlist is being
+designed separately and will export the final map; until then THIS TABLE IS
+THE SINGLE PLACE WHERE PINS ARE LISTED).  Those rows are marked PROPOSED:
+they are this firmware's proposal for the schematic, chosen from the free
+pads and from the candidate pins that the BOM verification lists (SPI1
+SCK/MOSI, SPI2, wake-capable pins).
+
+Rev C2 of DESIGN_SPEC section 4 adds three signals (CHG_INHIBIT in place of
+the PROG enable, NTC_BIAS, NTC_SENSE) and three rules that this script reads
+from the spec text and enforces:
+  * each PWDN line "must not use a pin that the ROM bootloader drives as an
+    output (the USART transmit pins PA9, PA2 and PC10 ...)";
+  * EXTCOMIN divides 32768 by 547 (exported as GL_PINS_EXTCOMIN_LSE_TICKS);
+  * the pull resistors that define the chip selects during reset (exported
+    as GL_PINS_RESET_TABLE, the level each such pin has while the MCU does
+    not drive it).
+
+PIN BUDGET.  The LQFP-64 package has 46 I/O pads besides SWD, the 32 kHz
+crystal and BOOT0; rev C2 needs 47 signals.  The proposal therefore uses
+PH3-BOOT0 (an ordinary I/O after reset, with its 10 kohm pull-down) for
+NTC_BIAS, the one signal that is only ever driven HIGH for a millisecond and
+whose load (the divider to ground) pulls the same way as the BOOT0 resistor.
+NTC_SENSE needs an ADC input and all 16 were taken: GRAIN_CP4 (a plain GPIO)
+moves from PC4 to PC10 to free one.  Both are for the netlist owner to
+confirm or replace.  For a
 PROPOSED row the pad number is either in that verified list or comes from
 the standard LQFP-64 pinout as remembered (it agrees with all verified pads),
 and an alternate-function number that is not in the verified list is marked
@@ -74,26 +95,47 @@ PINS = [
     ("GL_PIN_GRAIN_CP1",    "C", 1,  9,  GPIO,   0,  "PROPOSED", "68 ohm"),
     ("GL_PIN_GRAIN_CP2",    "C", 2,  10, GPIO,   0,  "PROPOSED", "68 ohm"),
     ("GL_PIN_GRAIN_CP3",    "C", 3,  11, GPIO,   0,  "PROPOSED", "68 ohm"),
-    ("GL_PIN_GRAIN_CP4",    "C", 4,  24, GPIO,   0,  "PROPOSED", "68 ohm"),
+    ("GL_PIN_GRAIN_CP4",    "C", 10, 51, GPIO,   0,  "PROPOSED", "68 ohm; moved from PC4 (now NTC_SENSE). PC10 is the ROM bootloader's USART3_TX: harmless here, no LED conducts with the other four pins high-Z"),
     ("GL_PIN_OPAMP_VINP",   "A", 0,  14, ANALOG, 0,  "SPEC",     "OPAMP1_VINP: mid-rail bias"),
     ("GL_PIN_OPAMP_VINM",   "A", 1,  15, ANALOG, 0,  "SPEC",     "OPAMP1_VINM: photodiode cathode"),
     ("GL_PIN_OPAMP_VOUT",   "A", 3,  17, ANALOG, 0,  "SPEC",     "OPAMP1_VOUT = ADC1_IN8"),
     ("GL_PIN_VBAT_SENSE",   "A", 2,  16, ANALOG, 0,  "PROPOSED", "ADC1_IN7 (channel number from memory)"),
     ("GL_PIN_CHG_STAT",     "B", 0,  26, EXTI,   0,  "PROPOSED", "EXTI0, both edges, pull-up; STAT must be open drain: see the notes"),
-    ("GL_PIN_CHG_PROG_EN",  "H", 1,  6,  GPIO,   0,  "PROPOSED", "open drain; PH1 is free (no HSE crystal)"),
+    ("GL_PIN_CHG_INHIBIT",  "H", 1,  6,  GPIO,   0,  "PROPOSED", "open drain, LOW = stop charging; gate of the PROG MOSFET. MUST be a pin with no diode to VDD (FT; PH1 is, from memory) and not a ROM bootloader pin"),
     ("GL_PIN_VBUS_SENSE",   "A", 9,  42, EXTI,   0,  "PROPOSED", "EXTI9, both edges, from the VBUS divider"),
     ("GL_PIN_USB_DM",       "A", 11, 44, AF,     10, "SPEC",     "USB D-"),
     ("GL_PIN_USB_DP",       "A", 12, 45, AF,     10, "SPEC",     "USB D+"),
+    ("GL_PIN_NTC_BIAS",     "H", 3,  60, GPIO,   0,  "PROPOSED", "PH3-BOOT0 (10k pull-down stays): push-pull HIGH only during a conversion; see PIN BUDGET"),
+    ("GL_PIN_NTC_SENSE",    "C", 4,  24, ANALOG, 0,  "PROPOSED", "ADC1_IN13 (channel number from memory)"),
 ]
+
+# Board pull resistors that define a pin while the MCU does not drive it
+# (reset, ROM bootloader, unpowered MCU): (logical name, level, the spec's
+# words).  check() looks for the words in DESIGN_SPEC section 4.
+RESET_LEVELS = [
+    ("GL_PIN_LCD_SCS",     0, "100 kohm pull-down on the LCD chip select"),
+    ("GL_PIN_LCD_DISP",    0, "and on DISP"),
+    ("GL_PIN_FLASH_CS",    1, "100 kohm pull-ups to V2V8 on the flash and IMU chip selects"),
+    ("GL_PIN_IMU_CS",      1, "100 kohm pull-ups to V2V8 on the flash and IMU chip selects"),
+    ("GL_PIN_CAM_PWR_EN",  0, "EN from MCU with 100k pull-down"),
+]
+
+# Signals of the charger / temperature circuit that the ROM bootloader must
+# not be able to move: an output there would start or stop the charger, or
+# feed the NTC divider for as long as a firmware update lasts.
+NOT_ON_BOOTLOADER_PINS = ["GL_PIN_CHG_INHIBIT", "GL_PIN_NTC_BIAS", "GL_PIN_NTC_SENSE"]
+PWDN_PINS = ["GL_PIN_CAM_L_PWDN", "GL_PIN_CAM_R_PWDN"]
 
 # Pads that are not GPIO signals of this table (supplies, debug, crystal).
 FIXED = [
     ("VBAT", 1), ("PC14-OSC32_IN", 3), ("PC15-OSC32_OUT", 4), ("NRST", 7),
     ("VSSA", 12), ("VDDA", 13), ("VSS", 18), ("VDD", 19), ("VCAP", 30), ("VSS", 31), ("VDD", 32),
     ("PA13-SWDIO", 46), ("VSS", 47), ("VDDUSB", 48), ("PA14-SWCLK", 49),
-    ("PC10 (spare: keep off the camera nets, ROM bootloader USART3_TX)", 51), ("PH3-BOOT0", 60),
     ("VSS", 63), ("VDD", 64),
 ]
+# I/O pads of the LQFP-64 package that a signal may use: 46 plus PH3-BOOT0.
+IO_PADS_TOTAL = 46
+BOOT0_PAD = 60
 
 # Pins that the ROM bootloader of the STM32U575/585 initialises (AN2606, FROM
 # MEMORY - the document could not be opened here; verify before the netlist).
@@ -138,10 +180,27 @@ def spec_facts(text):
     return facts
 
 
+def spec_pwdn_forbidden(text):
+    """The pins DESIGN_SPEC forbids for a PWDN line, e.g. [("A", 9), ("A", 2), ("C", 10)]."""
+    m = re.search(r"PWDN line has a 1 kohm series resistor and must not use a pin that the ROM "
+                  r"bootloader drives as an output \(the USART transmit pins ([^,)]*(?:,| and)[^)]*?)(?:,|\))",
+                  text)
+    if not m:
+        return None
+    return [(p, int(n)) for p, n in re.findall(r"\bP([A-H])(\d+)", m.group(1))]
+
+
+def spec_extcomin_ticks(text):
+    """The EXTCOMIN divider of the spec: "(32768 / 547; ..." -> 547."""
+    m = re.search(r"\(32768 / (\d+);", text)
+    return int(m.group(1)) if m else None
+
+
 def check(spec_text):
     facts = spec_facts(spec_text)
     errors = []
     seen_pads, seen_pins, seen_exti = {}, {}, {}
+    by_name = {p[0]: p for p in PINS}
     for name, port, pin, pad, kind, af, source, _note in PINS:
         if pad in seen_pads:
             errors.append("%s and %s share pad %d" % (name, seen_pads[pad], pad))
@@ -187,11 +246,42 @@ def check(spec_text):
             errors.append("DESIGN_SPEC no longer states P%s%d: the parser needs updating" % key)
         if key not in seen_pins:
             errors.append("P%s%d of DESIGN_SPEC is missing from the table" % key)
+    # rev C2: PWDN lines off the pins the spec names
+    forbidden = spec_pwdn_forbidden(spec_text)
+    if not forbidden or len(forbidden) != 3:
+        errors.append("DESIGN_SPEC no longer names the three pins a PWDN line must avoid: "
+                      "the parser needs updating (got %r)" % (forbidden,))
+    else:
+        for name in PWDN_PINS:
+            port, pin = by_name[name][1], by_name[name][2]
+            if (port, pin) in forbidden:
+                errors.append("%s is on P%s%d, which DESIGN_SPEC forbids for a PWDN line" %
+                              (name, port, pin))
+    # rev C2: the charger / temperature signals are on no ROM bootloader pin at all
+    boot_any = {(port, pin): fn for port, pin, fn, _out in BOOTLOADER_PINS}
+    for name in NOT_ON_BOOTLOADER_PINS:
+        port, pin = by_name[name][1], by_name[name][2]
+        if (port, pin) in boot_any:
+            errors.append("%s is on P%s%d, a ROM bootloader pin (%s)" %
+                          (name, port, pin, boot_any[(port, pin)]))
+    # rev C2: EXTCOMIN divider and the pull resistors of the reset state
+    if spec_extcomin_ticks(spec_text) is None:
+        errors.append("DESIGN_SPEC no longer states the EXTCOMIN divider as '(32768 / N;'")
+    flat = " ".join(spec_text.split())
+    for name, _level, words in RESET_LEVELS:
+        if name not in by_name:
+            errors.append("%s of RESET_LEVELS is not in the table" % name)
+        if words not in flat:
+            errors.append("DESIGN_SPEC no longer says %r (reset level of %s)" % (words, name))
+    # the pin budget of the package
+    used_io = len([p for p in PINS if p[3] != BOOT0_PAD])
+    if used_io > IO_PADS_TOTAL:
+        errors.append("%d signals on %d I/O pads" % (used_io, IO_PADS_TOTAL))
     if errors:
         raise SystemExit("gen_pins: " + "\n          ".join(errors))
 
 
-def generate():
+def generate(spec_text):
     out = []
     w = out.append
     w("/*")
@@ -262,9 +352,19 @@ def generate():
     for (port, pin), what in sorted(BOOTLOADER_CONFLICTS_ACCEPTED.items()):
         w(" *   P%s%d  %s  - RELEASE GATE: series resistor, or accept and document" % (port, pin, what))
     w(" * Also on bootloader pins, without the rail problem: PB10 (I2C2_SCL, open")
-    w(" * drain) is the active-HIGH LCD chip select - give it a pull-down so that the")
-    w(" * panel is not selected during an update; PA9 (USART1_TX) is VBUS_SENSE and")
-    w(" * PA2 (USART2_TX) is VBAT_SENSE: both drive into high-value dividers.")
+    w(" * drain) is the active-HIGH LCD chip select - its 100 kohm pull-down keeps the")
+    w(" * panel unselected during an update; PA9 (USART1_TX) is VBUS_SENSE and")
+    w(" * PA2 (USART2_TX) is VBAT_SENSE: both drive into high-value dividers; PC10")
+    w(" * (USART3_TX) is GRAIN_CP4: no LED conducts while the other four charlieplex")
+    w(" * pins are high-Z.")
+    w(" * Rev C2: each PWDN line must avoid the bootloader's USART transmit pins")
+    forb = spec_pwdn_forbidden(spec_text)
+    w(" * %s (read from DESIGN_SPEC); they are on %s." %
+      (", ".join("P%s%d" % f for f in forb),
+       " and ".join("P%s%d" % (p[1], p[2]) for p in PINS if p[0] in PWDN_PINS)))
+    w(" * CHG_INHIBIT, NTC_BIAS and NTC_SENSE are on no bootloader pin at all: in the")
+    w(" * ROM bootloader the charger keeps its hardware default (ON) and nothing")
+    w(" * supervises the cell temperature - see the README state table.")
     w(" */")
     w("#define GL_PINS_BOOTLOADER_TABLE(X) \\")
     for i, (port, pin, fn, drives) in enumerate(BOOTLOADER_PINS):
@@ -284,10 +384,44 @@ def generate():
     w(" * VBUS on a wake-up pin (PA2 = WKUP4 as remembered).")
     w(" */")
     w("")
-    w("/* Analog channels (ADC1).  PA3 = ADC1_IN8 is verified; PA2 = ADC1_IN7 is from")
-    w(" * memory of the same numbering. */")
+    w("/* Analog channels (ADC1).  PA3 = ADC1_IN8 is verified; PA2 = ADC1_IN7 and")
+    w(" * PC4 = ADC1_IN13 are from memory of the same numbering. */")
     w("#define GL_PINS_ADC_CH_GRAIN_TIA 8")
     w("#define GL_PINS_ADC_CH_VBAT_DIV  7")
+    w("#define GL_PINS_ADC_CH_CELL_NTC  13")
+    w("")
+    w("/*")
+    w(" * RESET STATE (DESIGN_SPEC section 4, rev C2).  X(logical pin, level): the")
+    w(" * level the board's pull resistor gives the pin while the MCU does not drive")
+    w(" * it - in reset, in the ROM bootloader, unpowered.  gl_hal_init() must make")
+    w(" * each of these pins an output AT THIS LEVEL (latch first, then the mode), and")
+    w(" * no internal pull may be enabled against it.")
+    w(" */")
+    w("#define GL_PINS_RESET_TABLE(X) \\")
+    for i, (name, level, _words) in enumerate(RESET_LEVELS):
+        w("    X(%-18s %d)%s" % (name + ",", level, " \\" if i + 1 < len(RESET_LEVELS) else ""))
+    w("")
+    w("/*")
+    w(" * CHG_INHIBIT (PH1, open drain, LOW = stop charging).  The pin hangs on the")
+    w(" * gate of the PROG MOSFET, which a 1 Mohm / 1 Mohm divider on the charger")
+    w(" * supply holds at about 2.4 V whenever VBUS is present.  It must be a pin")
+    w(" * WITHOUT a protection diode to VDD (an \"FT\" pin): with the MCU unpowered a")
+    w(" * diode would clamp the gate to one diode drop and switch the charger OFF,")
+    w(" * which is exactly the case (cell at its protection cut-off) the default-on")
+    w(" * circuit exists for.  PH0 / PH1 are FT pins as remembered: RELEASE GATE,")
+    w(" * check the pin definition table of the datasheet.  Not verifiable here.")
+    w(" *")
+    w(" * NTC_BIAS (PH3-BOOT0).  All 46 other I/O pads are taken, so the bias of")
+    w(" * the cell-temperature divider is proposed on the BOOT0 pin, which is an")
+    w(" * ordinary I/O once the MCU has started.  It is driven push-pull HIGH for")
+    w(" * about 0.7 ms per measurement and is high-Z otherwise; its 10 kohm BOOT0")
+    w(" * pull-down and the divider (10.0 kohm + NTC to ground) both pull it LOW, so")
+    w(" * the pin reads 0 at every reset.  RELEASE GATE for the netlist: confirm, or")
+    w(" * free another pad.")
+    w(" */")
+    w("")
+    w("/* EXTCOMIN: LSE ticks per period, read from DESIGN_SPEC (\"32768 / N\"). */")
+    w("#define GL_PINS_EXTCOMIN_LSE_TICKS %d" % spec_extcomin_ticks(spec_text))
     w("")
     w("#endif /* GL_PINS_H */")
     return "\n".join(out) + "\n"
@@ -301,7 +435,7 @@ def main(argv):
     with open(args[0], "r", encoding="utf-8") as fh:
         spec = fh.read()
     check(spec)
-    text = generate()
+    text = generate(spec)
     if check_only:
         try:
             with open(args[1], "r", encoding="utf-8") as fh:

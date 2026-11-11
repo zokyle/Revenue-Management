@@ -56,7 +56,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from . import coords, geometry, kicad_cli
-from .model import Design, Via, BOTTOM, TOP
+from .model import Design, Via, BOTTOM, TOP, VIA_TENTING
 
 #: non-copper layers of the fabrication set (the board's copper layers are
 #: added in front, top to bottom)
@@ -193,6 +193,21 @@ class GerberData:
     draws: int = 0
     regions: int = 0
     bounds: Optional[Tuple[float, float, float, float]] = None
+    #: diameter of the round apertures, by D code
+    apertures: Dict[int, float] = field(default_factory=dict)
+    #: every arc drawn with a round aperture: (centre x, centre y, radius of
+    #: the arc + half the aperture) - a filled circle is plotted as such arcs
+    arcs: List[Tuple[float, float, float]] = field(default_factory=list)
+
+    def discs(self) -> Dict[Tuple[int, int], float]:
+        """Filled circles drawn as arcs: centre (in um, see ``_key``) -> outer
+        radius.  KiCad plots a filled circle graphic (the via mask openings)
+        as two half arcs with a pen as wide as the radius."""
+        out: Dict[Tuple[int, int], float] = {}
+        for cx, cy, radius in self.arcs:
+            key = _key(cx, cy)
+            out[key] = max(out.get(key, 0.0), radius)
+        return out
 
     def _grow(self, x: float, y: float) -> None:
         if self.bounds is None:
@@ -237,9 +252,13 @@ def read_gerber(path: str) -> GerberData:
     scale = 10.0 ** int(m.group(2))
     if "%MOMM*%" not in text:
         raise OutputError("%s: not in millimetres" % os.path.basename(path))
+    for am in re.finditer(r"%ADD(\d+)C,([0-9.]+)(?:X[0-9.]+)?\*%", text):
+        data.apertures[int(am.group(1))] = float(am.group(2))
     body = re.sub(r"%[^%]*%", "", text)
     x = y = 0.0
     mode = "G01"
+    aperture: Optional[int] = None
+    select = re.compile(r"^(?:G54)?D(\d{2,})$")
     op = re.compile(r"^(?:(G0?[123]))?(?:X(-?\d+))?(?:Y(-?\d+))?(?:I(-?\d+))?(?:J(-?\d+))?"
                     r"(?:D0?([123]))?$")
     last_d = None
@@ -249,6 +268,10 @@ def read_gerber(path: str) -> GerberData:
             continue
         if stmt == "G36":
             data.regions += 1
+            continue
+        sel = select.match(stmt)
+        if sel:
+            aperture = int(sel.group(1))
             continue
         m = op.match(stmt)
         if not m or not any(m.groups()):
@@ -273,6 +296,9 @@ def read_gerber(path: str) -> GerberData:
                 j = int(m.group(5) or 0) / scale
                 for px, py in _arc_extents(x, y, nx, ny, x + i, y + j, mode == "G02"):
                     data._grow(px, py)
+                if aperture in data.apertures:
+                    data.arcs.append((x + i, y + j,
+                                      math.hypot(i, j) + data.apertures[aperture] / 2.0))
             else:
                 data._grow(nx, ny)
         x, y = nx, ny
@@ -345,7 +371,12 @@ def read_excellon(path: str) -> DrillData:
 # pick and place, BOM, netlist, mechanical data
 # --------------------------------------------------------------------------
 
-POS_COLUMNS = ("Ref", "Val", "Package", "PosX", "PosY", "Rot", "Side", "MPN")
+POS_COLUMNS = ("Ref", "Val", "Package", "PosX", "PosY", "Rot", "Side", "MPN", "BodyX",
+               "BodyY")
+
+#: a part whose footprint anchor is further than this from the centre of its
+#: body is pointed out to the assembler (mm)
+ANCHOR_OFFSET_NOTE = 0.05
 
 
 def placed_refs(design: Design) -> List[str]:
@@ -357,10 +388,17 @@ def export_positions(design: Design, pcb_path: str, csv_path: str) -> List[Dict[
     """Pick-and-place file for both sides.
 
     The rows come from ``kicad-cli pcb export pos`` (so they are what KiCad
-    reads in the board file), sorted by reference, with the MPN added as the
-    last column.  Coordinates: mm, origin board centre, +y up, seen from the
+    reads in the board file), sorted by reference, with the MPN and the body
+    centre added.  Coordinates: mm, origin board centre, +y up, seen from the
     top for BOTH sides (bottom X is not mirrored); ``Rot`` is the footprint
-    rotation in degrees counter-clockwise seen from the top.  Raises
+    rotation in degrees counter-clockwise seen from the top.
+
+    ``PosX`` / ``PosY`` are the footprint ANCHOR (what KiCad exports).  For
+    most land patterns that is the centre of the component; where it is not
+    (an FPC connector whose anchor sits on the pad row, say) the pick point a
+    machine wants is the body centre, so ``BodyX`` / ``BodyY`` give the centre
+    of the body outline (:func:`gleda.geometry.part_body`) for every part and
+    :func:`anchor_offsets` lists the parts where the two differ.  Raises
     :class:`OutputError` if any row disagrees with the design model."""
     os.makedirs(os.path.dirname(os.path.abspath(csv_path)), exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="gleda_pos_") as tmp:
@@ -374,10 +412,15 @@ def export_positions(design: Design, pcb_path: str, csv_path: str) -> List[Dict[
     rows = []
     for r in raw_rows:
         ref = r["Ref"]
-        rows.append({"Ref": ref, "Val": r["Val"], "Package": r["Package"],
-                     "PosX": float(r["PosX"]), "PosY": float(r["PosY"]),
-                     "Rot": coords.normalize_angle(float(r["Rot"])), "Side": r["Side"],
-                     "MPN": parts[ref].mpn if ref in parts else ""})
+        row = {"Ref": ref, "Val": r["Val"], "Package": r["Package"],
+               "PosX": float(r["PosX"]), "PosY": float(r["PosY"]),
+               "Rot": coords.normalize_angle(float(r["Rot"])), "Side": r["Side"],
+               "MPN": parts[ref].mpn if ref in parts else "",
+               "BodyX": float(r["PosX"]), "BodyY": float(r["PosY"])}
+        if ref in parts and parts[ref].placed:
+            body = geometry.part_body(parts[ref])
+            row["BodyX"], row["BodyY"] = body["cx"], body["cy"]
+        rows.append(row)
     rows.sort(key=lambda r: natural_key(r["Ref"]))
     problems = check_positions(design, rows)
     if problems:
@@ -388,8 +431,95 @@ def export_positions(design: Design, pcb_path: str, csv_path: str) -> List[Dict[
         w.writerow(POS_COLUMNS)
         for r in rows:
             w.writerow([r["Ref"], r["Val"], r["Package"], "%.4f" % r["PosX"], "%.4f" % r["PosY"],
-                        "%.2f" % r["Rot"], r["Side"], r["MPN"]])
+                        "%.2f" % r["Rot"], r["Side"], r["MPN"], "%.4f" % r["BodyX"],
+                        "%.4f" % r["BodyY"]])
     return rows
+
+
+def anchor_offsets(design: Design, threshold: float = ANCHOR_OFFSET_NOTE
+                   ) -> List[Dict[str, Any]]:
+    """Machine-placed parts whose footprint anchor (the PosX / PosY of the
+    position file) is more than ``threshold`` mm away from the centre of
+    their body outline: ``[{"ref", "anchor", "body_centre", "offset"}]``."""
+    out = []
+    parts = design.parts_by_ref
+    for ref in sorted(placed_refs(design), key=natural_key):
+        part = parts[ref]
+        if not part.placed:
+            continue
+        body = geometry.part_body(part)
+        off = math.hypot(body["cx"] - part.x, body["cy"] - part.y)
+        if off > threshold:
+            out.append({"ref": ref, "anchor": [round(part.x, 4), round(part.y, 4)],
+                        "body_centre": [body["cx"], body["cy"]], "offset": round(off, 4)})
+    return out
+
+
+def assembly_readme(design: Design, rows: Sequence[Dict[str, Any]],
+                    groups: Sequence[Dict[str, Any]]) -> str:
+    """Text of ``assembly/README.txt``: what the assembler has to know to read
+    the position file and the BOM without asking."""
+    from . import checks
+    name = design.name
+    title = "%s - assembly data" % design.title
+    out = [title, "=" * len(title), "",
+           "Design: %s    revision %s" % (name, design.revision), "",
+           "FILES", "-----",
+           "%s-pos.csv   pick-and-place, both sides, one row per placed part" % name,
+           "%s-bom.csv   grouped bill of materials (DNP parts on their own lines)" % name, "",
+           "POSITION FILE", "-------------",
+           "Columns:  %s" % ", ".join(POS_COLUMNS),
+           "Units:    millimetres, degrees.",
+           "Origin:   the centre of the board - the same origin as the Gerber and drill "
+           "files.",
+           "Axes:     X to the right, Y up, seen from the TOP side, for both sides.",
+           "Bottom:   X is NOT mirrored: a bottom-side part at PosX = +5 lies under the "
+           "top-side point X = +5.",
+           "Rot:      footprint rotation counter-clockwise seen from the TOP side, for both "
+           "sides (KiCad's convention); 0 = the orientation of the footprint in the library, "
+           "for a bottom-side part after flipping it about its X axis.",
+           "PosX/Y:   the footprint anchor (origin of the land pattern).",
+           "BodyX/Y:  the centre of the component body outline.  Use it as the pick point "
+           "where it differs from PosX/Y:"]
+    offs = anchor_offsets(design)
+    for o in offs:
+        out.append("            %-6s anchor (%.3f, %.3f), body centre (%.3f, %.3f), %.3f mm "
+                   "apart" % (o["ref"], o["anchor"][0], o["anchor"][1], o["body_centre"][0],
+                              o["body_centre"][1], o["offset"]))
+    if not offs:
+        out.append("            (no part: anchor and body centre agree within %.2f mm "
+                   "everywhere)" % ANCHOR_OFFSET_NOTE)
+    out.append("")
+    out += ["PARTS", "-----"]
+    for side in (TOP, BOTTOM):
+        out.append("%-7s %d placed part(s)" % (side + ":", sum(1 for r in rows
+                                                               if r["Side"] == side)))
+    dnp = sorted((p.ref for p in design.parts if p.in_bom and p.dnp), key=natural_key)
+    out.append("DNP (do not place): %s" % (", ".join(dnp) if dnp else "none"))
+    bare = sorted((p.ref for p in design.parts if not p.in_bom and not p.board_only),
+                  key=natural_key)
+    if bare:
+        out.append("Bare pads, not parts (no placement, no paste): %s" % ", ".join(bare))
+    out.append("")
+    out += ["FIDUCIALS", "---------"]
+    marks = [p for p in design.parts if checks.is_fiducial(p) and p.placed]
+    for side in (TOP, BOTTOM):
+        pts = ["(%.3f, %.3f)" % (p.x, p.y) for p in marks if p.side == side]
+        out.append("%-7s %s" % (side + ":", ", ".join(pts) if pts else "none"))
+    if marks:
+        spec = marks[0].footprint
+        pad = getattr(spec, "pads", [None])[0]
+        if pad is not None:
+            out.append("         %.2f mm bare copper in a %.2f mm solder-mask opening, same "
+                       "coordinates as the position file" % (
+                           pad.w, pad.w + 2.0 * (pad.mask_margin or 0.0)))
+    out.append("")
+    totals = bom_totals(groups)
+    out += ["BOM", "---",
+            "%d line(s), %d part(s) to fit, %d DNP." % (totals["lines"], totals["parts_fitted"],
+                                                       totals["parts_dnp"]),
+            "Prices are single-unit list prices from the design script.", ""]
+    return "\n".join(out)
 
 
 def check_positions(design: Design, rows: Sequence[Dict[str, Any]]) -> List[str]:
@@ -409,6 +539,13 @@ def check_positions(design: Design, rows: Sequence[Dict[str, Any]]) -> List[str]
         part = parts.get(r["Ref"])
         if part is None or r["Ref"] not in want:
             continue
+        if "BodyX" in r:
+            body = geometry.part_body(part)
+            if abs(r["BodyX"] - body["cx"]) > POSITION_TOLERANCE or \
+                    abs(r["BodyY"] - body["cy"]) > POSITION_TOLERANCE:
+                problems.append("%s body centre (%.4f, %.4f) in the position file, (%.4f, "
+                                "%.4f) in the design" % (part.ref, r["BodyX"], r["BodyY"],
+                                                         body["cx"], body["cy"]))
         if abs(r["PosX"] - part.x) > POSITION_TOLERANCE or \
                 abs(r["PosY"] - part.y) > POSITION_TOLERANCE:
             problems.append("%s at (%.4f, %.4f) in the position file, (%.4f, %.4f) in the "
@@ -823,9 +960,202 @@ def _mil(mm: float) -> float:
     return mm / 0.0254
 
 
+def fine_pitch_fields(design: Design) -> List[Tuple[str, Any]]:
+    """The pad fields of the fine-pitch arrays (nine or more round pads at
+    0.65 mm pitch or less - BGA / CSP): ``(ref, shapely box of the pad copper)``."""
+    from shapely.geometry import box
+    by_ref: Dict[str, List[Any]] = {}
+    for pad in geometry.placed_pads(design):
+        if pad.polygon is not None and pad.shape == "circle" and pad.kind != "th":
+            by_ref.setdefault(pad.ref, []).append(pad)
+    out = []
+    for ref in sorted(by_ref, key=natural_key):
+        pads = by_ref[ref]
+        if len(pads) < 9:
+            continue
+        pitch = min(math.hypot(a.x - b.x, a.y - b.y) for a in pads[:4] for b in pads
+                    if b is not a)
+        if pitch <= 0.65 + 1e-9:
+            boxes = [p.polygon.bounds for p in pads]
+            out.append((ref, box(min(b[0] for b in boxes), min(b[1] for b in boxes),
+                                 max(b[2] for b in boxes), max(b[3] for b in boxes))))
+    return out
+
+
+def copper_report(design: Design, tracks: Sequence[Any], vias: Sequence[Via]
+                  ) -> Dict[str, Any]:
+    """Measured facts about the routed copper - what the fab README may claim.
+
+    * ``length_by_width``: track length per width and layer;
+    * the tracks narrower than the rule set's standard width
+      (``Rules.default_track``): total length, nets, how much of it lies
+      completely inside a fine area (:meth:`gleda.model.Design.add_fine_area`)
+      and how much does not (None for a design without fine areas), and how
+      far the farthest such track is from the nearest fine-pitch pad field
+      (:func:`fine_pitch_fields`);
+    * ``confined``: the design has fine areas and no sub-standard track lies
+      outside them (``offenders`` lists the ones that do);
+    * the smallest gap between a via and an SMD pad of its own net, per side.
+
+    Everything is computed from the tracks and vias given (read them back
+    from the board file), never assumed."""
+    from shapely.geometry import Point
+    r = design.rules
+    std = r.default_track
+    areas = geometry.FineAreas(design)
+    fields = fine_pitch_fields(design)
+    by_width: Dict[str, Dict[str, float]] = {}
+    narrow_len = inside_len = 0.0
+    narrow_nets: Set[str] = set()
+    farthest: Optional[Dict[str, Any]] = None
+    offenders: List[Dict[str, Any]] = []
+    for t in tracks:
+        row = by_width.setdefault("%.3f" % t.width, {})
+        row[t.layer] = row.get(t.layer, 0.0) + t.length
+        if t.width >= std - 1e-9:
+            continue
+        narrow_len += t.length
+        narrow_nets.add(t.net)
+        if not areas:
+            pass                                   # nothing declared: nothing to offend
+        elif areas.track_inside(t):
+            inside_len += t.length
+        elif len(offenders) < 10000:
+            offenders.append({"net": t.net, "layer": t.layer, "width": t.width,
+                              "from": [round(t.x1, 4), round(t.y1, 4)],
+                              "to": [round(t.x2, 4), round(t.y2, 4)]})
+        if fields:
+            # distance of the far end of this track to the NEAREST pad field
+            ends = (Point(t.x1, t.y1), Point(t.x2, t.y2))
+            best = None
+            for e in ends:
+                near = min((e.distance(f), rf) for rf, f in fields)
+                if best is None or near[0] > best[0]:
+                    best = (near[0], near[1], e)
+            if farthest is None or best[0] > farthest["distance_mm"]:
+                farthest = {"net": t.net, "layer": t.layer, "x": round(best[2].x, 4),
+                            "y": round(best[2].y, 4), "distance_mm": round(best[0], 3),
+                            "nearest_array": best[1]}
+    table = {}
+    for width in sorted(by_width):
+        row = {layer: round(v, 3) for layer, v in sorted(by_width[width].items())}
+        row["total"] = round(sum(by_width[width].values()), 3)
+        table[width] = row
+    # smallest web between a via and an SMD pad of its own net, per side
+    pads = [p for p in geometry.placed_pads(design)
+            if p.polygon is not None and p.kind != "th" and p.net]
+    gaps: Dict[str, Optional[float]] = {TOP: None, BOTTOM: None}
+    by_net: Dict[str, List[Any]] = {}
+    for p in pads:
+        by_net.setdefault(p.net, []).append(p)
+    for v in vias:
+        pt = Point(v.x, v.y)
+        for p in by_net.get(v.net, ()):
+            if abs(p.x - v.x) > 3.0 + p.w + p.h or abs(p.y - v.y) > 3.0 + p.w + p.h:
+                continue
+            gap = p.polygon.distance(pt) - v.diameter / 2.0
+            if gaps[p.side] is None or gap < gaps[p.side]:
+                gaps[p.side] = gap
+    return {
+        "standard_track": std,
+        "length_by_width": table,
+        "narrow_length_mm": round(narrow_len, 3),
+        "narrow_nets": sorted(narrow_nets),
+        "narrow_in_fine_areas_mm": round(inside_len, 3),
+        "narrow_outside_fine_areas_mm": round(narrow_len - inside_len, 3) if areas else None,
+        "narrow_farthest": farthest,
+        "fine_areas": [a.name for a in design.fine_areas],
+        "fine_pitch_arrays": [ref for ref, _f in fields],
+        "confined": bool(design.fine_areas) and not offenders,
+        "offenders": offenders[:20],
+        "offender_count": len(offenders),
+        "tracks": len(tracks), "vias": len(vias),
+        "min_via_to_own_pad_gap": {side: (None if g is None else round(g, 4))
+                                   for side, g in gaps.items()},
+    }
+
+
+def _fine_lines(design: Design, m: Dict[str, Any], copper: Optional[Dict[str, Any]]
+                ) -> List[str]:
+    """The README paragraph about fine geometry - measured, or saying that
+    nothing was measured."""
+    r = design.rules
+    fine = [n for n, nc in m["net_classes"].items()
+            if nc["nets"] and (nc["min_track_width"] < r.default_track - 1e-9
+                               or nc["clearance"] < r.default_clearance - 1e-9)]
+    out: List[str] = []
+    if copper is not None:
+        layers = [l for l in design.copper_layers
+                  if any(l in row for row in copper["length_by_width"].values())]
+        out += ["TRACKS AS ROUTED (measured on the board these files were plotted from)",
+                "----------------------------------------------------------------------",
+                "%-9s " % "width" + " ".join("%9s" % l for l in layers) + " %9s" % "total"]
+        for width, row in copper["length_by_width"].items():
+            out.append("%6s mm " % width + " ".join("%6.1f mm" % row.get(l, 0.0)
+                                                     for l in layers)
+                       + " %6.1f mm" % row["total"])
+        if not copper["length_by_width"]:
+            out.append("(no tracks)")
+    if not fine and (copper is None or copper["narrow_length_mm"] <= 0):
+        if copper is not None:
+            out.append("")
+        return out
+    std = "%.3f / %.3f mm" % (r.default_track, r.default_clearance)
+    if copper is None:
+        out.append("Classes below the standard %s: %s.  Where their fine geometry is on "
+                   "the board was not measured for this README." % (std, ", ".join(sorted(fine))))
+        return out
+    narrow = copper["narrow_length_mm"]
+    if fine:
+        out.append("Net classes below the standard %s: %s." % (std, ", ".join(sorted(fine))))
+    out.append("Tracks narrower than %.3f mm: %.1f mm on %d net(s)." % (
+        r.default_track, narrow, len(copper["narrow_nets"])))
+    far = copper["narrow_farthest"]
+    if design.fine_areas:
+        boxes = []
+        board_poly = geometry.outline_polygon(design.outline)
+        total = 0.0
+        for area in design.fine_areas:
+            on_board = geometry.fine_area_polygon(area).intersection(board_poly)
+            if on_board.is_empty:
+                continue
+            x0, y0, x1, y1 = on_board.bounds
+            total += on_board.area
+            boxes.append("%s x %.2f..%.2f, y %.2f..%.2f" % (area.name, x0, x1, y0, y1))
+        out.append("Fine areas (rule areas in the board file, as far as they lie on the "
+                   "board): %s - %.0f mm2, %.0f %% of the board." % (
+                       "; ".join(boxes), total, 100.0 * total / board_poly.area))
+        if copper["confined"]:
+            out.append("Every one of these tracks lies completely inside a fine area%s.  "
+                       "Outside the fine areas all tracks are at least %.3f mm wide and the "
+                       "design rules ask for %.3f mm clearance; KiCad's DRC checked both." % (
+                           "; the farthest reaches %.1f mm from the pad field of %s" % (
+                               far["distance_mm"], far["nearest_array"]) if far else "",
+                           r.default_track, r.default_clearance))
+        else:
+            out.append("*** %.1f mm of them (%d track piece(s)) lie OUTSIDE the fine areas, "
+                       "e.g. %s on %s at (%.2f, %.2f). ***" % (
+                           copper["narrow_outside_fine_areas_mm"], copper["offender_count"],
+                           copper["offenders"][0]["net"], copper["offenders"][0]["layer"],
+                           copper["offenders"][0]["from"][0], copper["offenders"][0]["from"][1]))
+    elif narrow > 0:
+        out.append("The design declares no fine areas: these tracks may run anywhere along "
+                   "their nets%s.  Quote the whole board at the board-level minimums." % (
+                       "; the farthest is %s on %s at (%.2f, %.2f), %.1f mm from the nearest "
+                       "fine-pitch array (%s)" % (far["net"], far["layer"], far["x"], far["y"],
+                                                  far["distance_mm"], far["nearest_array"])
+                       if far else ""))
+    out.append("")
+    return out
+
+
 def fab_readme(design: Design, drill_tables: Dict[str, List[Tuple[float, int]]],
-               files: Sequence[Tuple[str, str]], drc_line: str, clean: bool) -> str:
-    """Text of ``fab/README.txt``: what the fab needs to quote and build."""
+               files: Sequence[Tuple[str, str]], drc_line: str, clean: bool,
+               copper: Optional[Dict[str, Any]] = None) -> str:
+    """Text of ``fab/README.txt``: what the fab needs to quote and build.
+
+    ``copper`` is the :func:`copper_report` of the routed board; statements
+    about where the fine geometry is are made from it and only from it."""
     r = design.rules
     m = design.board_minimums()
     xmin, ymin, xmax, ymax = edge_bounds(design)
@@ -854,8 +1184,24 @@ def fab_readme(design: Design, drill_tables: Dict[str, List[Tuple[float, int]]],
                 "both": "tented (covered by solder mask) on both sides",
                 "bottom": "tented on the BOTTOM side; open (mask opening) on the top side",
                 "top": "tented on the TOP side; open (mask opening) on the bottom side",
-                "none": "not tented: mask openings on both sides"}[design.via_tenting],
-            ""]
+                "none": "not tented: mask openings on both sides"}[design.via_tenting]]
+    if design.via_protection:
+        out.append("Via protection:      %s" % design.via_protection)
+    open_sides = [s for s, layer in ((TOP, "F.Mask"), (BOTTOM, "B.Mask"))
+                  if layer in VIA_TENTING[design.via_tenting]]
+    gaps = (copper or {}).get("min_via_to_own_pad_gap", {})
+    for side in (TOP, BOTTOM):
+        rule = r.via_pad_gap_open if side in open_sides else r.via_pad_gap_tented
+        line = "Via to pad, %-7s  design rule %.3f mm copper to copper between a via and an " \
+               "SMD pad of its own net (%s)" % (
+                   side + ":", rule, "vias open: this is the solder-mask web" if
+                   side in open_sides else "vias tented")
+        if gaps.get(side) is not None:
+            line += "; smallest on this board %.3f mm" % gaps[side]
+        out.append(line)
+    out.append("")
+    if design.fab_notes:
+        out += ["FAB NOTES", "---------"] + ["- %s" % note for note in design.fab_notes] + [""]
     out += ["STACK-UP (top to bottom)", "------------------------",
             "%-16s %-9s %10s  %s" % ("layer", "type", "thickness", "material")]
     for layer in design.stackup.layers:
@@ -891,14 +1237,8 @@ def fab_readme(design: Design, drill_tables: Dict[str, List[Tuple[float, int]]],
         nc = m["net_classes"][name]
         out.append("%-12s %6.3f mm %6.3f mm %6.3f mm  %d" % (
             name, nc["track_width"], nc["min_track_width"], nc["clearance"], len(nc["nets"])))
-    fine = [n for n, nc in m["net_classes"].items()
-            if nc["nets"] and (nc["min_track_width"] < r.default_track - 1e-9
-                               or nc["clearance"] < r.default_clearance - 1e-9)]
-    if fine:
-        out.append("Classes below the standard %.3f / %.3f mm (%s) are used only where a "
-                   "fine-pitch package needs them." % (r.default_track, r.default_clearance,
-                                                       ", ".join(sorted(fine))))
     out.append("")
+    out += _fine_lines(design, m, copper)
     out += ["PLANES", "------"]
     for plane in design.planes:
         out.append("%-8s %s%s" % (plane.layer, plane.net,
@@ -998,6 +1338,20 @@ def expected_drills(design: Design, vias: Sequence[Via]
     return plated, npth
 
 
+def expected_slots(design: Design
+                   ) -> Tuple[List[Tuple[float, float, float, float, float]],
+                              List[Tuple[float, float, float, float, float]]]:
+    """(plated, non-plated) oblong holes of the footprints: ``(width, x1, y1,
+    x2, y2)`` - the tool diameter and the two ends of the slot's centre line,
+    as an Excellon ``G85`` slot gives them."""
+    plated, npth = [], []
+    for pad in geometry.placed_pads(design):
+        if pad.slot is None or pad.drill <= 0:
+            continue
+        (npth if pad.kind == "npth" else plated).append((pad.drill,) + tuple(pad.slot))
+    return plated, npth
+
+
 def _compare_holes(name: str, want: Sequence[Tuple[float, float, float]],
                    got: Sequence[Tuple[float, float, float]]) -> List[str]:
     problems: List[str] = []
@@ -1019,9 +1373,134 @@ def _compare_holes(name: str, want: Sequence[Tuple[float, float, float]],
     return problems
 
 
+def check_mask_paste(design: Design, gerbers: Dict[str, GerberData],
+                     vias: Sequence[Via]) -> List[str]:
+    """Compare the solder-mask and paste Gerbers with the model.
+
+    * every pad that opens the mask on a side (``PlacedPad.tech``) is a flash
+      at its position in that side's mask Gerber, and so is every non-plated
+      hole of the outline; a mask flash anywhere else is reported;
+    * the paste Gerber has a flash exactly for the pads (and copper-less
+      paste apertures of footprints) that carry paste: none on bare contact
+      pads, test pads, fiducials or holes;
+    * via tenting: on a side ``Design.via_tenting`` leaves open EVERY via has
+      its mask opening (a disc of the via pad size), on a tented side NONE
+      has, and no such disc is drawn where there is no via.
+
+    Pads with a custom (polygon) shape are plotted as regions, not flashes,
+    and are not checked."""
+    problems: List[str] = []
+    pads = geometry.placed_pads(design)
+    apertures = geometry.placed_apertures(design)
+    open_layers = VIA_TENTING.get(design.via_tenting, ())
+    expansion = design.rules.mask_expansion
+
+    def report(items: List[str], what: str) -> None:
+        problems.extend(items[:10])
+        if len(items) > 10:
+            problems.append("%s: %d more" % (what, len(items) - 10))
+
+    for layer in ("F.Mask", "B.Mask", "F.Paste", "B.Paste"):
+        g = gerbers.get(layer)
+        if g is None:
+            continue
+        kind = "mask opening" if layer.endswith("Mask") else "paste"
+        flashes = {_key(x, y) for x, y in g.flashes}
+        want: Set[Tuple[int, int]] = set()
+        missing: List[str] = []
+        for p in pads:
+            if layer not in p.tech:
+                continue
+            want.add(_key(p.x, p.y))
+            if p.shape == "custom":
+                continue
+            if not _near(flashes, p.x, p.y):
+                missing.append("%s: pad %s at (%.3f, %.3f) has no %s in the Gerber" % (
+                    layer, p.key, p.x, p.y, kind))
+        for ref, x, y, layers in apertures:
+            if layer in layers:
+                want.add(_key(x, y))
+                if not _near(flashes, x, y):
+                    missing.append("%s: the %s aperture of %s at (%.3f, %.3f) is not in the "
+                                   "Gerber" % (layer, kind, ref, x, y))
+        if layer.endswith("Mask"):
+            for h in design.outline.holes:
+                want.add(_key(h.x, h.y))
+                if not _near(flashes, h.x, h.y):
+                    missing.append("%s: the hole at (%.3f, %.3f) has no mask opening" % (
+                        layer, h.x, h.y))
+        report(missing, "%s: missing %ss" % (layer, kind))
+        extra = []
+        for x, y in g.flashes:
+            if not _near(want, x, y):
+                owner = [p.key for p in pads if abs(p.x - x) < 0.002 and abs(p.y - y) < 0.002]
+                extra.append("%s: unexpected %s at (%.3f, %.3f)%s" % (
+                    layer, kind, x, y,
+                    " - pad %s must not have one" % owner[0] if owner else ""))
+        report(extra, "%s: unexpected %ss" % (layer, kind))
+        if not layer.endswith("Mask"):
+            continue
+        # via tenting
+        side = "top" if layer == "F.Mask" else "bottom"
+        discs = g.discs()
+        via_keys = {_key(v.x, v.y): v for v in vias}
+        items: List[str] = []
+        if layer in open_layers:
+            for key, v in via_keys.items():
+                hit = [k for k in ((key[0] + dx, key[1] + dy) for dx in (-1, 0, 1)
+                                   for dy in (-1, 0, 1)) if k in discs]
+                if not hit:
+                    items.append("%s: the via at (%.3f, %.3f) has no mask opening although "
+                                 "vias are not tented on the %s side (via_tenting = %r)" % (
+                                     layer, v.x, v.y, side, design.via_tenting))
+                elif abs(discs[hit[0]] - (v.diameter / 2.0 + expansion)) > 0.003:
+                    items.append("%s: the mask opening of the via at (%.3f, %.3f) has radius "
+                                 "%.3f mm, expected %.3f" % (
+                                     layer, v.x, v.y, discs[hit[0]],
+                                     v.diameter / 2.0 + expansion))
+        for key in sorted(discs):
+            at_via = any((key[0] + dx, key[1] + dy) in via_keys for dx in (-1, 0, 1)
+                         for dy in (-1, 0, 1))
+            if layer not in open_layers:
+                items.append("%s: a round mask opening at (%.3f, %.3f) although vias are "
+                             "tented on the %s side (via_tenting = %r)" % (
+                                 layer, key[0] / 1000.0, key[1] / 1000.0, side,
+                                 design.via_tenting))
+            elif not at_via:
+                items.append("%s: a via mask opening at (%.3f, %.3f) where the design has no "
+                             "via" % (layer, key[0] / 1000.0, key[1] / 1000.0))
+        report(items, "%s: via tenting" % layer)
+    return problems
+
+
+def check_fine_geometry(design: Design, tracks: Sequence[Any]) -> List[str]:
+    """Tracks narrower than their net allows outside the fine areas
+    (:meth:`gleda.model.Design.min_track_width` with ``outside=True``) - the
+    thing the fab README promises not to exist when the design declares fine
+    areas.  Empty for a design without fine areas."""
+    if not design.fine_areas:
+        return []
+    areas = geometry.FineAreas(design)
+    out: List[str] = []
+    count = 0
+    for t in tracks:
+        need = design.min_track_width(t.net, outside=True)
+        if t.width >= need - 1e-9 or areas.track_inside(t):
+            continue
+        count += 1
+        if len(out) < 10:
+            out.append("%s track of %s, %.3f mm wide, at (%.3f, %.3f)-(%.3f, %.3f) is not "
+                       "completely inside a fine area (%.3f mm needed there)" % (
+                           t.layer, t.net, t.width, t.x1, t.y1, t.x2, t.y2, need))
+    if count > len(out):
+        out.append("%d more fine tracks outside the fine areas" % (count - len(out)))
+    return out
+
+
 def verify_outputs(design: Design, fab_dir: str, vias: Sequence[Via],
                    pos_rows: Optional[Sequence[Dict[str, Any]]] = None,
-                   groups: Optional[Sequence[Dict[str, Any]]] = None) -> List[str]:
+                   groups: Optional[Sequence[Dict[str, Any]]] = None,
+                   tracks: Optional[Sequence[Any]] = None) -> List[str]:
     """Check the written fabrication data against the design model.
 
     * every layer of the fabrication set has a non-empty Gerber with the
@@ -1034,6 +1513,14 @@ def verify_outputs(design: Design, fab_dir: str, vias: Sequence[Via],
       that layer's Gerber (proves placement, rotation and bottom mirroring);
     * the drill files contain exactly the model's holes: vias and
       through-hole pads plated, outline holes and NPTH pads non-plated;
+      oblong holes as slots of the right width, length and direction;
+    * solder mask, paste and via tenting (:func:`check_mask_paste`): a mask
+      opening for every pad that has one in the model, paste exactly on the
+      pads that carry paste, a mask opening on every via on the untented
+      side(s) and on none on the tented side(s);
+    * with ``tracks`` (the routed copper, read back from the board): no track
+      of a fine class narrower than the standard width outside the design's
+      fine areas (:func:`check_fine_geometry`);
     * pick-and-place rows and BOM quantities agree with the model.
 
     Returns a list of problems (empty = everything agrees)."""
@@ -1103,8 +1590,13 @@ def verify_outputs(design: Design, fab_dir: str, vias: Sequence[Via],
                 layer, p.key, p.x, p.y))
         if len(missing) > 10:
             problems.append("%s: %d more pads are not flashed" % (layer, len(missing) - 10))
+    problems += check_mask_paste(design, gerbers, vias)
+    if tracks is not None:
+        problems += check_fine_geometry(design, tracks)
     want_pth, want_npth = expected_drills(design, vias)
-    for suffix, want in (("-PTH.drl", want_pth), ("-NPTH.drl", want_npth)):
+    slots_pth, slots_npth = expected_slots(design)
+    for suffix, want, want_slots in (("-PTH.drl", want_pth, slots_pth),
+                                     ("-NPTH.drl", want_npth, slots_npth)):
         path = os.path.join(fab_dir, name + suffix)
         if not os.path.exists(path):
             if want:
@@ -1117,18 +1609,36 @@ def verify_outputs(design: Design, fab_dir: str, vias: Sequence[Via],
             continue
         if drill.plated is not (suffix == "-PTH.drl"):
             problems.append("%s: wrong plating attribute" % os.path.basename(path))
-        # a drilled slot (oval pad hole) must sit on a hole of the model; the
-        # model knows one diameter per pad, so only the position is compared
-        want = list(want)
-        for _dia, x1, y1, x2, y2 in drill.slots:
+        # oblong holes: the slot in the file must be the slot of the model -
+        # same tool, same two ends (in either order)
+        base = os.path.basename(path)
+        want = [h for h in want
+                if not any(abs(h[1] - (s[1] + s[3]) / 2.0) < 0.002
+                           and abs(h[2] - (s[2] + s[4]) / 2.0) < 0.002 for s in want_slots)]
+        left = list(want_slots)
+        for dia, x1, y1, x2, y2 in drill.slots:
             cx, cy = (x1 + x2) / 2.0, (y1 + y2) / 2.0
-            at = [h for h in want if abs(h[1] - cx) < 0.002 and abs(h[2] - cy) < 0.002]
-            if not at:
+            match = None
+            for s in left:
+                same = all(abs(a - b) < 0.002 for a, b in zip((x1, y1, x2, y2), s[1:]))
+                swapped = all(abs(a - b) < 0.002 for a, b in zip((x2, y2, x1, y1), s[1:]))
+                if abs(dia - s[0]) < 0.0015 and (same or swapped):
+                    match = s
+                    break
+            if match is not None:
+                left.remove(match)
+            elif any(abs(h[1] - cx) < 0.002 and abs(h[2] - cy) < 0.002
+                     for h in list(want) + list(want_slots)):
+                problems.append("%s: the drilled slot at (%.3f, %.3f) (%.3f mm tool, %.3f mm "
+                                "long) is not the hole the design has there" % (
+                                    base, cx, cy, dia, math.hypot(x2 - x1, y2 - y1) + dia))
+            else:
                 problems.append("%s: drilled slot at (%.3f, %.3f) where the design has no "
-                                "hole" % (os.path.basename(path), cx, cy))
-            for h in at:
-                want.remove(h)
-        problems += _compare_holes(os.path.basename(path), want, drill.hits)
+                                "hole" % (base, cx, cy))
+        for s in left:
+            problems.append("%s: no %.3f mm slot from (%.3f, %.3f) to (%.3f, %.3f)" % (
+                (base,) + tuple(s)))
+        problems += _compare_holes(base, want, drill.hits)
         for dia, _x, _y in drill.hits:
             if dia < design.rules.min_drill - 1e-9:
                 problems.append("%s: %.3f mm hole is below the minimum drill %.3f mm" % (
@@ -1164,6 +1674,10 @@ class OutputSet:
     bom: Dict[str, Any]
     renders: Dict[str, Dict[str, Any]]
     position_rows: int
+    #: :func:`copper_report` of the board the files were plotted from
+    copper: Dict[str, Any] = field(default_factory=dict)
+    #: :func:`anchor_offsets`: parts whose anchor is not their body centre
+    anchor_offsets: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -1175,7 +1689,8 @@ class OutputSet:
                 "drill_tables": {k: [[d, n] for d, n in v]
                                  for k, v in self.drill_tables.items()},
                 "bom": dict(self.bom), "position_rows": self.position_rows,
-                "renders": self.renders}
+                "renders": self.renders, "copper": dict(self.copper),
+                "anchor_offsets": list(self.anchor_offsets)}
 
 
 def _zones_unfilled(pcb_path: str) -> List[str]:
@@ -1229,6 +1744,10 @@ def generate_outputs(design: Design, pcb_path: str, out_dir: str, *, drc_result=
         if os.path.isdir(stale):
             shutil.rmtree(stale)
     written: List[str] = []
+    # the copper as it is in the board file: what the README says about it is
+    # measured on exactly what is plotted
+    board_tracks, board_vias = board.read_routing(pcb_path)
+    copper = copper_report(design, board_tracks, board_vias)
     gerbers = export_gerbers(pcb_path, fab_dir, fab_layers(design))
     drills = export_drill(pcb_path, fab_dir)
     written += gerbers + drills
@@ -1260,7 +1779,7 @@ def generate_outputs(design: Design, pcb_path: str, out_dir: str, *, drc_result=
     listing.append(("README.txt", "this file"))
     readme = os.path.join(fab_dir, "README.txt")
     with open(readme, "w", encoding="utf-8") as fh:
-        fh.write(fab_readme(design, drill_tables, listing, drc_line, clean))
+        fh.write(fab_readme(design, drill_tables, listing, drc_line, clean, copper))
     written.append(readme)
     fab_zip = write_zip(fab_dir, os.path.join(out_dir, design.name + "-fab.zip"))
     written.append(fab_zip)
@@ -1269,7 +1788,11 @@ def generate_outputs(design: Design, pcb_path: str, out_dir: str, *, drc_result=
     pos_rows = export_positions(design, pcb_path, pos_path)
     bom_path = os.path.join(asm_dir, design.name + "-bom.csv")
     groups = write_bom(design, bom_path)
-    written += [pos_path, bom_path]
+    asm_readme = os.path.join(asm_dir, "README.txt")
+    with open(asm_readme, "w", encoding="utf-8") as fh:
+        fh.write(assembly_readme(design, pos_rows, groups))
+    written += [pos_path, bom_path, asm_readme]
+    written.append(write_zip(asm_dir, os.path.join(out_dir, design.name + "-assembly.zip")))
     written.append(_dump_json(netlist_data(design),
                               os.path.join(out_dir, design.name + "-netlist.json")))
     written.append(_dump_json(mechanical_data(design),
@@ -1282,8 +1805,8 @@ def generate_outputs(design: Design, pcb_path: str, out_dir: str, *, drc_result=
         render_info = render_board(design, pcb_path, rdir, dpi=dpi)
         written += [os.path.join(rdir, fn) for fn in sorted(os.listdir(rdir))]
     if vias is None:
-        _tracks, vias = board.read_routing(pcb_path)
-    problems = verify_outputs(design, fab_dir, vias, pos_rows, groups)
+        vias = board_vias
+    problems = verify_outputs(design, fab_dir, vias, pos_rows, groups, tracks=board_tracks)
     if step:
         step_path = export_board_step(pcb_path,
                                       os.path.join(out_dir, design.name + "-board.step"))
@@ -1291,7 +1814,7 @@ def generate_outputs(design: Design, pcb_path: str, out_dir: str, *, drc_result=
         problems += check_step(design, step_path)
     result = OutputSet(out_dir, fab_dir, fab_zip, file_manifest(out_dir, written), problems,
                        clean, drc_line, drill_tables, bom_totals(groups), render_info,
-                       len(pos_rows))
+                       len(pos_rows), copper, anchor_offsets(design))
     _dump_json(result.to_dict(), os.path.join(out_dir, "outputs.json"))
     return result
 
@@ -1327,14 +1850,28 @@ def build_demo_stage(design: Design, out_dir: str, ctx: Dict[str, Any]
         % result.bom + ("" if not result.bom["unpriced_refs"] else
                         " (%d parts without a price)" % len(result.bom["unpriced_refs"])))
     say("pick-and-place: %d rows agree with the design" % result.position_rows)
+    for off in result.anchor_offsets:
+        say("pick-and-place: %s anchor is %.2f mm from its body centre (both are in the "
+            "position file, see assembly/README.txt)" % (off["ref"], off["offset"]))
+    copper = result.copper
+    if copper.get("narrow_length_mm"):
+        far = copper.get("narrow_farthest") or {}
+        where = ("%.1f mm of it outside the fine areas" % copper["narrow_outside_fine_areas_mm"]
+                 if copper.get("fine_areas") else "the design declares no fine areas")
+        say("tracks below %.3f mm: %.1f mm, %s%s" % (
+            copper["standard_track"], copper["narrow_length_mm"], where,
+            "; farthest %.1f mm from %s" % (far["distance_mm"], far["nearest_array"])
+            if far else ""))
     for problem in result.problems[:20]:
         say("PROBLEM " + problem)
     if not result.problems:
         say("outputs verified against the design model: outline extents, pad flashes on "
-            "both sides, every drill hit")
+            "both sides, mask, paste and via tenting, every drill hit")
     info = {"files": len(result.files), "problems": list(result.problems),
             "drc_clean": result.drc_clean, "bom": dict(result.bom),
             "position_rows": result.position_rows,
+            "anchor_offsets": list(result.anchor_offsets),
+            "copper": {k: v for k, v in copper.items() if k != "offenders"},
             "drill_tables": {k: [[d, n] for d, n in v]
                              for k, v in result.drill_tables.items()},
             "fab_zip": os.path.basename(result.fab_zip),
@@ -1347,7 +1884,9 @@ __all__ = [
     "export_gerbers", "export_drill", "export_positions", "check_positions", "bom_groups",
     "bom_totals", "write_bom", "netlist_data", "mechanical_data", "render_view",
     "render_board", "fab_readme", "write_zip", "file_manifest", "read_gerber",
-    "read_excellon", "expected_drills", "verify_outputs", "strip_dates", "gerber_name",
+    "read_excellon", "expected_drills", "expected_slots", "verify_outputs", "strip_dates",
+    "gerber_name", "check_mask_paste", "check_fine_geometry", "copper_report",
+    "fine_pitch_fields", "anchor_offsets", "assembly_readme",
     "export_board_step", "step_extents", "check_step",
     "fab_layers", "placed_refs", "edge_bounds", "edge_contours", "build_demo_stage",
     "FAB_TECH_LAYERS", "POS_COLUMNS",

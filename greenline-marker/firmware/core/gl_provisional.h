@@ -1,7 +1,7 @@
 /*
  * gl_provisional.h - every PROVISIONAL hardware fact the firmware depends on.
  *
- * DESIGN_SPEC.md (rev C) marks facts as VERIFIED or PROVISIONAL.  Anything
+ * DESIGN_SPEC.md (rev C2 / D) marks facts as VERIFIED or PROVISIONAL.  Anything
  * provisional that changes what the firmware does is a named constant HERE
  * and nowhere else, with the reason and what to check.  When a release gate
  * is closed, change the value (if needed), move the constant to its module
@@ -101,12 +101,13 @@
 #define GL_PROV_LCD_FPC_PIN_VSS 9
 #define GL_PROV_LCD_FPC_PIN_VSSA 10
 
-/** EXTCOMIN: 32768 / 547 = 59.905 Hz.  Sharp publishes two ranges (54-65 Hz
- *  and 1-60 Hz); which is current is unconfirmed.  547 ticks is inside both
- *  with any crystal tolerance.  (DESIGN_SPEC section 4 says 32768 / 546 and
- *  calls that 60 Hz; it is 60.015 Hz, ABOVE the 1-60 Hz range.  The spec
- *  sentence needs correcting; this file cannot do that.)
- *  Also unconfirmed: the order of DISP and EXTCOMIN at switch-on.  The
+/** EXTCOMIN: 32768 / 547 = 59.905 Hz, the divider DESIGN_SPEC section 4 now
+ *  states (rev C2; 546 would be 60.015 Hz, just outside the 1-60 Hz range).
+ *  Sharp publishes two ranges (54-65 Hz and 1-60 Hz); which is current is
+ *  unconfirmed, and 547 ticks is inside both with any crystal tolerance.
+ *  tools/gen_pins.py reads the divider from the spec text and exports it as
+ *  GL_PINS_EXTCOMIN_LSE_TICKS; tests/test_pins.c fails if the two differ.
+ *  Still unconfirmed: the order of DISP and EXTCOMIN at switch-on.  The
  *  driver starts EXTCOMIN before raising DISP; a reviewer remembers the
  *  Sharp sequence as DISP first.  Check against the datasheet. */
 #define GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS 547u
@@ -335,11 +336,13 @@
 
 /** Absolute accuracy of the IMU's temperature sensor: NOT KNOWN here (the
  *  datasheet was not available; sister parts specify an offset of up to
- *  +-15 K, from memory).  The charge gate therefore never trusts it alone:
- *  the MCU's own die-temperature sensor must agree with it within this
- *  many kelvin, and BOTH must be inside the charging window.  A factory
- *  one-point offset is the proper fix if the datasheet confirms a large
- *  offset (release gate). */
+ *  +-15 K, from memory).  Since rev C2 the CELL NTC is the charge-temperature
+ *  input and the two die sensors (IMU, MCU) are plausibility checks only:
+ *  the NTC reading must lie within this many kelvin of AT LEAST ONE die
+ *  sensor that is alive, or it is not believed and charging stops.  (One,
+ *  not both: a die sensor of unknown accuracy must not be able to veto a
+ *  healthy NTC; an NTC that has come off the cell or reads a fixed value
+ *  disagrees with both.) */
 #define GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C 10.0f
 
 /* ---- grain front end -------------------------------------------------------- */
@@ -367,31 +370,64 @@
 
 /** Battery divider ratio (2 x 1 Mohm, 1 % parts assumed): V_bat = ratio * V_pin. */
 #define GL_PROV_BATT_DIVIDER_RATIO 2.0f
-/** Charging is allowed between these IMU temperatures (DESIGN_SPEC: 0-45 C)
- *  and re-enabled only this far inside the window (hysteresis, our choice). */
+/** Charging is allowed while the CELL temperature (NTC) is between these
+ *  limits (DESIGN_SPEC section 4: 0-45 C) ... */
 #define GL_PROV_CHARGE_TEMP_MIN_C 0.0f
 #define GL_PROV_CHARGE_TEMP_MAX_C 45.0f
+/** ... measured with this much margin, because the firmware must stop
+ *  before the TRUE temperature leaves the window: charging stops when the
+ *  reading is below MIN + GUARD or above MAX - GUARD.  The divider's worst
+ *  case is 1.09 K at 45 C and 0.90 K at 0 C (all eight corners of NTC 1 % at
+ *  25 C, B 1 %, series resistor 1 %, with an ADC error of 0.2 % of full
+ *  scale; computed again by tests/test_drv_power.c, which fails if it
+ *  exceeds the guard).  1.5 K leaves 0.4 K for what is NOT in that sum: the
+ *  part's real R-T curve against the B equation, and a temperature
+ *  difference between the cell and the NTC beside it (unmeasured: release
+ *  gate). */
+#define GL_PROV_CHARGE_TEMP_GUARD_C 1.5f
+/** ... and resumes only this far inside the guarded window (hysteresis,
+ *  our choice). */
 #define GL_PROV_CHARGE_TEMP_HYST_C 2.0f
 
-/** Polarity of the charger's PROG enable pin (open-drain MCU output).
- *  1 = the rev C circuit: the PROG resistor goes to ground THROUGH the MCU
- *  pin, so LOW allows charging and a released pin stops it.
- *  CONSEQUENCE THAT NEEDS A HARDWARE DECISION: with this circuit the
- *  charger is OFF whenever the MCU is unpowered, so a cell that has reached
- *  its protection cut-off can never be recharged by the cradle (the MCU is
- *  fed from the cell).  The proposed fix is a PROG resistor to ground
- *  through an N-MOSFET whose gate is pulled up from VBUS, the MCU pulling
- *  the gate low to INHIBIT: charging then defaults to ON.  For that circuit
- *  set this to 0 (LOW = inhibit, released = charging allowed); nothing else
- *  in the firmware changes. */
-#define GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE 1
+/* ---- cell NTC (rev C2) ---------------------------------------------------------- */
+
+/** Murata NCP15XH103F03RC (PROVISIONAL stock): 10 kohm at 25 C, B(25/50) =
+ *  3380 K, both 1 %; divider with 10.0 kohm 1 % from the GPIO NTC_BIAS to
+ *  the ADC pin NTC_SENSE, the NTC from there to ground.  The firmware uses
+ *  the B-parameter equation T = 1 / (1 / T25 + ln(R / R25) / B); the part's
+ *  resistance table deviates from it by a fraction of a kelvin between 0 and
+ *  50 C (NOT VERIFIED here: no datasheet table was available; replace the
+ *  equation by the table if the difference matters). */
+#define GL_PROV_NTC_R25_OHM 10000.0f
+#define GL_PROV_NTC_B_K 3380.0f
+#define GL_PROV_NTC_SERIES_OHM 10000.0f
+/** Time from NTC_BIAS high to the conversion: the divider's 5 kohm source
+ *  resistance into the pin and any filter capacitor the schematic adds
+ *  (assumed <= 10 nF: 50 us time constant).  Guess until the netlist exists. */
+#define GL_PROV_NTC_SETTLE_US 500u
+/** ADC samples averaged and sampling time per sample (5 kohm source). */
+#define GL_PROV_NTC_ADC_AVG 8u
+#define GL_PROV_NTC_ADC_SAMPLE_US 20u
+/** Open / short detection, as a fraction of full scale.  Above OPEN the NTC
+ *  would be more than 49 times the series resistor (colder than -50 C, or
+ *  broken off: the pin then sits at the bias level); below SHORT it would be
+ *  under 2 % of it (hotter than 150 C, or shorted to ground, or NTC_BIAS not
+ *  reaching the divider). */
+#define GL_PROV_NTC_OPEN_FRACTION 0.98f
+#define GL_PROV_NTC_SHORT_FRACTION 0.02f
+/** With NTC_BIAS released the NTC pulls the sense pin to ground.  A reading
+ *  above this fraction of full scale before the bias is switched on means
+ *  the pin is held up by something else (a solder bridge to a rail): the
+ *  measurement is not trusted. */
+#define GL_PROV_NTC_IDLE_MAX_FRACTION 0.05f
 
 /** Below this cell voltage, with no VBUS, the firmware stops everything it
  *  can (IMU powered down: no wake-on-motion; only the cradle wakes the
  *  device) so that the sleep drain does not take the cell down to its
- *  protection cut-off, from which the rev C charger circuit cannot recover
- *  it (see GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE).  Engineering guess, no
- *  cell datasheet. */
+ *  protection cut-off.  (Since rev C2 the charger is on by default in
+ *  hardware, so a cell at its cut-off CAN be recharged; storage mode still
+ *  spares the cell the deep discharge.)  Engineering guess, no cell
+ *  datasheet. */
 #define GL_PROV_BATT_STORAGE_MV 3250u
 
 /* ---- MX25R6435F: timing --------------------------------------------------------- */
@@ -410,11 +446,12 @@
 /* ======================================================================= */
 
 /* DESIGN_SPEC section 4 fixes 19 MCU pins (DCMI, MCO, SPI1 MISO, USB,
- * LPTIM1_CH1, OPAMP1).  The other 26 signals have NO assignment yet (no
- * netlist exists): hal/stm32u5/gl_pins.h carries this firmware's PROPOSED
- * assignment for them, each row marked GL_PINSRC_PROPOSED, generated and
- * cross-checked against the spec text by tools/gen_pins.py.  The pin map is
- * data of the STM32 backend only; nothing in core, drivers or app depends
- * on which pad a signal is on. */
+ * LPTIM1_CH1, OPAMP1).  The other 28 signals have NO assignment yet (the
+ * netlist is being designed and will export the final map):
+ * hal/stm32u5/gl_pins.h carries this firmware's PROPOSED assignment for
+ * them, each row marked GL_PINSRC_PROPOSED, generated and cross-checked
+ * against the spec text by tools/gen_pins.py, which is the single place
+ * where pins are listed.  The pin map is data of the STM32 backend only;
+ * nothing in core, drivers or app depends on which pad a signal is on. */
 
 #endif /* GL_PROVISIONAL_H */

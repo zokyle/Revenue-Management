@@ -309,6 +309,12 @@ static gl_status_t h_reboot(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr_t 
     if (memcmp(in, "DFU!", 4) == 0 && !p->unlocked) {
         return GL_ERR_STATE;
     }
+    /* The application may have a reason of its own to refuse the ROM
+     * bootloader right now (rev C2: nothing supervises the charge there). */
+    if (memcmp(in, "DFU!", 4) == 0 && p->ops->dfu_allowed != NULL &&
+        !p->ops->dfu_allowed(p->ops->ctx)) {
+        return GL_ERR_STATE;
+    }
     return GL_OK; /* the reboot itself happens after the response is sent */
 }
 

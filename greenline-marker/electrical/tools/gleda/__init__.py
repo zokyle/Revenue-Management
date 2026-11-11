@@ -19,8 +19,8 @@ schematic   KiCad 7 schematic generator, PDF export, netlist round trip
 """
 from .model import (  # noqa: F401
     Design, Part, Pin, Net, NetClass, Rules, US_4L_STD, US_4L_FINE, Outline, Circle,
-    RoundedPolygon, Slot, PathShape, Hole, Keepout, HeightLimit, Plane, Stackup, Track, Via,
-    two_pin, n_pin, TOP, BOTTOM, ALL_LAYERS, VIA_TENTING,
+    RoundedPolygon, Slot, PathShape, Hole, Keepout, HeightLimit, Plane, FineArea, Stackup,
+    Track, Via, two_pin, n_pin, TOP, BOTTOM, ALL_LAYERS, VIA_TENTING,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

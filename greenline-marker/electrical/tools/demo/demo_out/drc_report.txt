@@ -1,18 +1,15 @@
 ** Drc report for greenline_demo.kicad_pcb **
 
-** Found 35 DRC violations **
+** Found 39 DRC violations **
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(116.1464 mm, 91.1800 mm): Line on F.Silkscreen
+    @(116.1464 mm, 89.9800 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(89.7922 mm, 91.1400 mm): Line on F.Silkscreen
+    @(87.6464 mm, 88.8200 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(116.1464 mm, 91.6200 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(116.1464 mm, 92.3800 mm): Line on F.Silkscreen
+    @(87.6464 mm, 89.5800 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
     @(108.5000 mm, 96.2100 mm): Line on F.Silkscreen
@@ -21,28 +18,19 @@
     @(108.5100 mm, 90.9900 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(85.6922 mm, 86.7400 mm): Line on F.Silkscreen
+    @(89.7464 mm, 89.5800 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(110.1000 mm, 115.1600 mm): Line on F.Silkscreen
+    @(-1.3000 mm, -1.5100 mm): Polygon on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(110.1000 mm, 115.1600 mm): Line on F.Silkscreen
+    @(105.1464 mm, 84.0800 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(90.1500 mm, 112.0400 mm): Line on F.Silkscreen
+    @(106.6400 mm, 114.7078 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(86.0000 mm, 113.4600 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(116.1464 mm, 92.8200 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(107.6300 mm, 93.2536 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(96.6922 mm, 84.0600 mm): Line on F.Silkscreen
+    @(81.4900 mm, 97.1100 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
     @(86.7100 mm, 97.1100 mm): Line on F.Silkscreen
@@ -54,16 +42,58 @@
     @(86.7100 mm, 91.8900 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
+    @(86.0000 mm, 113.4600 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(111.8450 mm, 85.9850 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(89.7464 mm, 89.9700 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(116.1464 mm, 94.0200 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(87.6464 mm, 89.9700 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(94.8900 mm, 87.9900 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(105.1100 mm, 98.2100 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(-5.7250 mm, -4.1600 mm): Polygon on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(-1.1625 mm, -1.5100 mm): Polygon on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(117.2464 mm, 96.5200 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(117.2464 mm, 97.2800 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(116.1464 mm, 90.4200 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(93.1100 mm, 98.2078 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(108.2250 mm, 87.9250 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(100.0000 mm, 86.1100 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(89.7464 mm, 110.5200 mm): Line on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
     @(88.1550 mm, 85.9850 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
     @(91.8450 mm, 85.9850 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(87.3900 mm, 95.3600 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(88.0650 mm, 92.6400 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
     @(88.0650 mm, 95.3600 mm): Line on F.Silkscreen
@@ -75,34 +105,16 @@
     @(89.9350 mm, 95.3600 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(90.6100 mm, 95.3600 mm): Line on F.Silkscreen
+    @(-1.6100 mm, -1.3600 mm): Polygon on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(108.1550 mm, 85.9850 mm): Line on F.Silkscreen
+    @(92.3900 mm, 90.7078 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(111.8450 mm, 85.9850 mm): Line on F.Silkscreen
+    @(102.6600 mm, 112.6000 mm): Line on F.Silkscreen
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; Severity: warning
-    @(111.9922 mm, 86.7400 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(89.7464 mm, 90.7300 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(94.8900 mm, 87.9900 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(105.1100 mm, 88.9400 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(94.8900 mm, 97.2600 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(105.1100 mm, 98.2100 mm): Line on F.Silkscreen
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; Severity: warning
-    @(-5.7250 mm, -4.1600 mm): Polygon on F.Silkscreen
+    @(116.1464 mm, 93.5800 mm): Line on F.Silkscreen
 [silk_edge_clearance]: Silkscreen clipped by board edge
     Rule: board setup constraints silk; Severity: warning
     @(112.0797 mm, 82.7000 mm): Line on Edge.Cuts

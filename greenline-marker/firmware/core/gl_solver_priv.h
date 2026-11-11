@@ -41,6 +41,7 @@
 #define GLS_LOG(x) log(x)
 #define GLS_ERF(x) erf(x)
 #define GLS_POW(x, y) pow((x), (y))
+#define GLS_HYPOT(x, y) hypot((x), (y))
 #define GLS_NAME(n) gls64_##n
 /* the reference's own literals */
 #define GLS_W_TOL 1e-13          /* step fraction of a closest approach */
@@ -56,6 +57,7 @@
 #define GLS_LOG(x) logf(x)
 #define GLS_ERF(x) erff(x)
 #define GLS_POW(x, y) powf((x), (y))
+#define GLS_HYPOT(x, y) hypotf((x), (y))
 #define GLS_NAME(n) gls_##n
 /* the same multiples of the machine epsilon as the reference's literals
  * are of the double epsilon (450, 18 and 4.5) */
@@ -136,11 +138,13 @@
 
 /* ---- small helpers ---------------------------------------------------------- */
 
-/** sqrt(x^2 + y^2).  (The reference uses math.hypot; the operands here are
- *  far from overflow, so the plain form differs from it by rounding only.) */
+/** sqrt(x^2 + y^2) as the reference computes it (math.hypot): the libm
+ *  function of the real type, which neither overflows nor loses the last
+ *  bit for operands of any size.  Called a few times per estimate, never
+ *  in the roll kernel. */
 static inline gl_real_t gls_hypot(gl_real_t x, gl_real_t y)
 {
-    return GLS_SQRT(x * x + y * y);
+    return GLS_HYPOT(x, y);
 }
 
 static inline bool gls_finite(gl_real_t x)

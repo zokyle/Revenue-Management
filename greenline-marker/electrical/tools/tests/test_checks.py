@@ -246,3 +246,116 @@ def test_net_names_differing_only_in_case(mini):
     r = checks.run_checks(mini, footprints=False)
     assert [f.net for f in r.find("net_name_case")] == ["sck"]
     assert r.find("net_name_case")[0].severity == "warning"
+
+
+# -- pours, fine areas, fiducials (review findings) ----------------------------
+
+def test_pours_with_a_shape_are_pointed_out_and_overlaps_refused(mini):
+    island = RoundedPolygon.rect(0.0, 6.0, 4.0, 3.0)
+    mini.add_plane("+3V0", "In2.Cu", shape=island, priority=1)
+    report = checks.run_checks(mini)
+    assert report.ok
+    msgs = [f.message for f in report.find("plane_partial")]
+    assert len(msgs) == 1 and "the router connects pads to whole-board planes only" in msgs[0]
+    # the same island at the priority of the plane it sits in: KiCad's zones_intersect
+    from mini_design import mini_design
+    bad = mini_design()
+    whole = [p for p in bad.planes if p.shape is None]
+    layer = whole[0].layer
+    other = [n for n in bad.nets if n != whole[0].net][0]
+    bad.add_plane(other, layer, shape=island, priority=whole[0].priority)
+    report = checks.run_checks(bad)
+    assert "plane_overlap" in codes(report, "error")
+    assert "higher priority" in report.find("plane_overlap")[0].message
+
+
+def _fine_class_design(areas=True, **kw):
+    from gleda.model import US_4L_FINE
+    from gleda import footprints as F
+    d = Design("finechk", RoundedPolygon.rect(0.0, 0.0, 20.0, 12.0), rules=US_4L_FINE, **kw)
+    d.add_netclass("Fine", track_width=0.09, clearance=0.09)
+    fp = F.bga("ChkBGA9", 3, 3, pitch=0.5, pad_d=0.23, pad_clearance=0.09, height=1.0)
+    balls = ["%s%d" % (r, c) for r in "ABC" for c in (1, 2, 3)]
+    d.add(Part("U1", "bga", fp, pins={b: (b, "bidir") for b in balls}, mpn="x", x=-4.0, y=0.0,
+               height_mm=1.0, is_ic=False))
+    d.add(Part("R1", "1k", R0402, mpn="x", x=6.0, y=0.0, height_mm=0.4))
+    d.net("SIG", "U1.B2", "R1.1", netclass="Fine")
+    d.net("RET", "U1.B3", "R1.2")
+    d.no_connect(*["U1.%s" % b for b in balls if b not in ("B2", "B3")])
+    if areas:
+        d.add_fine_area("U1", margin=3.0)
+    return d
+
+
+def test_fine_class_without_a_fine_area_is_a_warning():
+    report = checks.run_checks(_fine_class_design(areas=False), bom=False)
+    assert report.ok and "fine_unconfined" in codes(report, "warning")
+    assert "may use the fine geometry anywhere on the board" in \
+        report.find("fine_unconfined")[0].message
+    confined = _fine_class_design()
+    assert "fine_unconfined" not in codes(checks.run_checks(confined, bom=False))
+    assert confined.fine_areas[0].name == "fine_U1" and confined.fine_areas[0].ref == "U1"
+
+
+def test_fine_area_mistakes_are_errors():
+    d = _fine_class_design()
+    d.enforce_track_widths = False                 # nothing would check the confinement
+    report = checks.run_checks(d, bom=False)
+    assert "fine_area_invalid" in codes(report, "error")
+    assert "enforce_track_widths" in report.find("fine_area_invalid")[0].message
+    d = _fine_class_design()
+    d.add_fine_area(RoundedPolygon.rect(40.0, 0.0, 2.0, 2.0), name="lost")
+    assert "fine area lost lies outside the board" in " ".join(
+        f.message for f in checks.run_checks(d, bom=False).find("fine_area_invalid"))
+    with pytest.raises(ValueError):
+        d.add_fine_area(RoundedPolygon.rect(0.0, 0.0, 2.0, 2.0), name="lost")
+    d = _fine_class_design()
+    d.add_fine_area(RoundedPolygon.rect(0.0, 0.0, 2.0, 2.0), name="it's")
+    assert "cannot be used in a DRC rule" in " ".join(
+        f.message for f in checks.run_checks(d, bom=False).find("fine_area_invalid"))
+
+
+def test_fine_pitch_side_without_fiducials_is_a_warning():
+    d = _fine_class_design()
+    report = checks.run_checks(d, bom=False)
+    found = report.find("no_fiducials")
+    assert report.ok and len(found) == 1
+    assert "the top side has fine-pitch parts (U1) but 0 fiducial(s)" in found[0].message
+    d.add_fiducial(-8.5, 4.5)
+    d.add_fiducial(8.5, 4.5)
+    assert "2 fiducial(s)" in checks.run_checks(d, bom=False).find("no_fiducials")[0].message
+    fid = d.add_fiducial(8.5, -4.5)
+    report = checks.run_checks(d)
+    assert report.find("no_fiducials") == [] and report.ok, report.text()
+    # a fiducial is a board-only part: no pins, no MPN, no symbol, not on the BOM
+    assert fid.ref == "FID3" and fid.board_only and not fid.in_bom and fid.pins == {}
+    assert checks.is_fiducial(fid) and fid not in d.schematic_parts and "board" not in d.groups
+    # fiducials on the other side do not count; a 0402-only side needs none
+    d.add(Part("R2", "1k", R0402, mpn="x", x=0.0, y=-4.0, side=BOTTOM, height_mm=0.4))
+    d.net("SIG", "R2.1")
+    d.net("RET", "R2.2")
+    assert checks.run_checks(d).find("no_fiducials") == []
+    # a fiducial in the way of a part is an ordinary courtyard overlap
+    d.add_fiducial(6.0, 0.3, ref="FIDX")
+    assert "courtyard_overlap" in codes(checks.run_checks(d), "error")
+
+
+def test_pads_too_close_to_a_footprint_slot_are_an_error():
+    """KiCad's Harwin Gecko footprint has pads 0.275 mm from its own
+    non-plated slots: legal with a 0.25 mm edge rule, a DRC error (reported
+    here first) with the standard 0.30 mm."""
+    harwin = "Connector_Harwin:Harwin_Gecko-G125-MVX0605L1X_2x03_P1.25mm_Vertical"
+
+    def design(rules):
+        d = Design("slotpads", RoundedPolygon.rect(0.0, 0.0, 16.0, 10.0), rules=rules)
+        d.add(Part("J1", "hdr", harwin, pins={str(i): str(i) for i in range(1, 7)},
+                   mpn="x", x=0.0, y=0.0, height_mm=4.0))
+        d.no_connect(*["J1.%d" % i for i in range(1, 7)])
+        return d
+
+    report = checks.run_checks(design(US_4L_STD), bom=False)
+    found = report.find("hole_collision")
+    assert len(found) == 4 and all("non-plated hole of J1 (min 0.30" in f.message for f in found)
+    assert "0.275 mm" in found[0].message
+    relaxed = dataclasses.replace(US_4L_STD, name="EDGE025", copper_to_edge=0.25)
+    assert checks.run_checks(design(relaxed), bom=False).find("hole_collision") == []

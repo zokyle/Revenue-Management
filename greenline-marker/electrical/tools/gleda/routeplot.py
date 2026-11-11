@@ -5,8 +5,9 @@ for the router (the real renders come from KiCad via :mod:`gleda.outputs`).
     routeplot.plot(design, result.tracks, result.vias, "routing.png")
 
 Top copper is red, bottom copper blue, inner layers green / orange; pads are
-drawn filled (top) or hatched outlines (bottom).  The view is from the top,
-+y up, exactly the design coordinate system.
+drawn filled (top) or hatched outlines (bottom); holes are drawn as they are
+(oblong ones as stadiums), fine areas as a yellow tint.  The view is from the
+top, +y up, exactly the design coordinate system.
 """
 from __future__ import annotations
 
@@ -50,9 +51,27 @@ def plot(design: Design, tracks: Sequence[Track] = (), vias: Sequence[Via] = (),
         poly = geometry.keepout_polygon(ko)
         xs, ys = poly.exterior.xy
         ax.plot(xs, ys, color="#888888", linewidth=0.5, linestyle="--")
+    for hole in design.outline.holes:                    # drilled non-plated holes
+        ax.add_patch(MplCircle((hole.x, hole.y), hole.drill / 2.0, fill=False, color="black",
+                               linewidth=0.8))
+    for area in design.fine_areas:                       # where fine classes may be fine
+        poly = geometry.fine_area_polygon(area).intersection(outline)
+        for part in getattr(poly, "geoms", [poly]):
+            if part.is_empty or part.geom_type != "Polygon":
+                continue
+            xs, ys = part.exterior.xy
+            ax.fill(xs, ys, color="#f0e060", alpha=0.18, linewidth=0)
+            ax.plot(xs, ys, color="#b0a020", linewidth=0.5, linestyle=":")
     for pad in geometry.placed_pads(design):
         if pad.polygon is None:
-            ax.add_patch(MplCircle((pad.x, pad.y), pad.drill / 2.0, fill=False, color="black"))
+            if pad.drill > 0:
+                # a hole: a circle, or the stadium of an oblong hole
+                hole = pad.hole_geometry().buffer(pad.drill / 2.0)
+                xs, ys = hole.exterior.xy
+                ax.plot(xs, ys, color="black", linewidth=0.8)
+            if pad.ring is not None:
+                xs, ys = pad.ring.exterior.xy
+                ax.plot(xs, ys, color="#c83232", linewidth=0.4)
             continue
         top = "F.Cu" in pad.layers
         colour = LAYER_COLOURS["F.Cu" if top else "B.Cu"]

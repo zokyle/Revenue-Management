@@ -288,9 +288,24 @@ static gl_status_t set_time_(void *ctx, uint32_t rtc_s)
     return GL_OK;
 }
 
+/* In the ROM bootloader CHG_INHIBIT is high-Z: the charger runs on its
+ * hardware default and NOTHING supervises the cell temperature, for as long
+ * as the host keeps the device there.  The firmware cannot change that; what
+ * it can do is refuse to go there unless the charge gate is satisfied right
+ * now (VBUS present, temperature known, plausible and well inside the
+ * window). */
+static bool dfu_allowed_(void *ctx)
+{
+    const gl_app_t *app = (const gl_app_t *)ctx;
+    return app->power.vbus && app->power.temp_ok;
+}
+
 static gl_status_t reboot_(void *ctx, bool rom_dfu)
 {
     gl_app_t *app = (gl_app_t *)ctx;
+    if (rom_dfu && !dfu_allowed_(ctx)) {
+        return GL_ERR_STATE; /* (already refused by the protocol layer) */
+    }
     /* carried out from the main loop, after the response has had time to
      * leave the transmit buffer */
     app->reboot_pending = true;
@@ -316,6 +331,7 @@ void gl_usb_bind(gl_app_t *app)
     app->ops.stream = stream_;
     app->ops.set_time = set_time_;
     app->ops.reboot = reboot_;
+    app->ops.dfu_allowed = dfu_allowed_;
     gl_proto_init(&app->proto, &app->ops);
 }
 

@@ -22,7 +22,7 @@
  * app/gl_main.c; the host tests allocate their own).  Nothing is allocated
  * dynamically.
  *
- * RAM: sizeof(gl_app_t) is about 184.5 kB, of which 173 kB are the image
+ * RAM: sizeof(gl_app_t) is about 313 kB, of which 293 kB are the image
  * buffers and vision work areas of gl_read_t (see gl_read.h).  The exact
  * figure is in the `make cross` size table (bss of gl_main); gl_app.c and
  * gl_usb.c add 1.8 kB of static scratch (one raw-strip log record, two raw
@@ -73,18 +73,22 @@ typedef struct {
     float temp_c;
     bool precision;           /**< slope is the combination of two reads 180 degrees apart */
     float view_yaw_rad;
-    bool flag_found;
-    bool bearing_valid;       /**< bearing_rad was measured in this read (also when the flag
-                                   counts as not found for lack of a range) */
-    bool manual_range;        /**< the distance is the dialled one (flag-out fallback) */
+    bool flag_found;          /**< the left camera measured the flagstick (with or without
+                                   a disparity) */
+    bool bearing_valid;       /**< bearing_rad was measured in this read */
+    bool stored;              /**< this read is the newest drop of the Survey */
+    uint8_t tier;             /**< gl_read_tier_t of the camera read */
+    bool ambiguous;           /**< another line in view also passed as a flagstick */
     float bearing_rad;        /**< flagstick bearing from the left camera */
     float base_elev_rad, top_elev_rad;
     bool top_valid;
     uint8_t base;             /**< gl_vis_base_t */
     float disparity_px, disparity_sigma_px;
+    /* DIAGNOSTICS, not on the way to the aim: the application's own range
+     * fusion (core/gl_range), which learns the stick height.  The distance
+     * shown and solved with is gl_estimate_t.distance_m. */
     bool range_valid;
     gl_range_result_t range;  /**< horizontal distance stereo head -> stick */
-    gl_ball_target_t target;  /**< ball centre -> flagstick (bearing in the read frame) */
 } gl_app_read_t;
 
 /** Zeroing procedure (GL_UI_CAL_ZERO): read, turn 180 degrees, read. */
@@ -152,6 +156,11 @@ typedef struct {
     bool temp_valid;          /**< that read was the most recent attempt and succeeded */
     uint32_t temp_ms;         /**< when it was taken */
     uint32_t mcu_temp_ms;     /**< when power.mcu_temp_c was taken */
+    bool cell_seen;           /**< the cell temperature has been measured since boot */
+    uint32_t cell_temp_ms;    /**< when power.cell_temp_c was taken */
+    uint32_t next_chg_ms;     /**< next charge-temperature check while VBUS is present */
+    bool clock_fast;          /**< the 160 MHz clock is on (capture and solve only) */
+    uint16_t clock_fails;     /**< switches to the fast clock that failed (diagnostics) */
     bool vbus_pending;        /**< a VBUS edge is being debounced */
     uint32_t vbus_settle_ms;
     bool storage_mode;        /**< cell nearly empty: IMU off, only the cradle wakes the device */
@@ -172,7 +181,12 @@ typedef struct {
     bool grain_valid;
     float grain_modulation, grain_azimuth_rad;
     gl_estimate_t est;
+    gl_solver_work_t solver_work; /**< work area of the fit; .fit = fit record of `est` */
     gl_status_t solver_status; /**< what the solver returned for the shown read */
+    gl_solver_options_t solve_opt; /**< the options of that call */
+    uint8_t solve_drops;      /**< placements handed to it: 1 = meas_cur, else meas[0..n-1] */
+    uint8_t solve_ball;       /**< Survey: index of the drop taken as the ball */
+    bool line_here;           /**< the marker lies at the ball: the aim line applies here */
     gl_app_zero_t zero;
     gl_app_six_face_t six;
     /* ---- USB ---- */
@@ -207,6 +221,15 @@ void gl_app_run_once(gl_app_t *app);
 
 /** Post a UI event from outside the loop (tests, future ISRs via a lock). */
 void gl_app_post(gl_app_t *app, gl_ui_event_t ev, int32_t arg);
+
+/**
+ * Compose the result view again from app->est and the current read, exactly
+ * as after a solve (shown confidence, the message, solid or tentative line).
+ * For the host tests: the mapping of estimates that no read sequence
+ * produces (aim_source 3, a fit that did not converge, a poor horizon) is
+ * checked by putting such an estimate into app->est and calling this.
+ */
+void gl_app_recompose_view(gl_app_t *app);
 
 /* ---- used by app/gl_usb.c --------------------------------------------------- */
 

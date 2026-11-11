@@ -29,6 +29,8 @@ static struct {
     uint32_t time_s;
     int reboot_calls;
     bool reboot_dfu;
+    bool dfu_refused;        /* the application's own veto of the ROM bootloader */
+    int dfu_asked;
     int reboot_tx_frames_at_call;
 } app;
 
@@ -162,9 +164,16 @@ static gl_status_t m_reboot(void *ctx, bool dfu)
     return GL_OK;
 }
 
+static bool m_dfu_allowed(void *ctx)
+{
+    (void)ctx;
+    app.dfu_asked++;
+    return !app.dfu_refused;
+}
+
 static const gl_proto_ops_t ops = {
     NULL, m_tx, m_get_info, m_get_status, m_get_settings, m_set_settings, m_get_cal, m_set_cal,
-    m_start_cal, m_log_info, m_log_read, m_log_erase, m_stream, m_set_time, m_reboot
+    m_start_cal, m_log_info, m_log_read, m_log_erase, m_stream, m_set_time, m_reboot, m_dfu_allowed
 };
 
 static gl_proto_t proto;
@@ -533,16 +542,29 @@ GL_TEST(test_locked_commands_and_reboot)
     GL_CHECK_EQ(app.reboot_calls, 0);
     request(3, GL_CMD_UNLOCK, "GLFC", 4);
     GL_CHECK_EQ(response(2, &seq, &cmd, &pl), 1);
+    GL_CHECK_EQ(app.dfu_asked, 0); /* a locked session is refused before the application is asked */
+    /* rev C2: the application may refuse the ROM bootloader for a reason of
+     * its own (nothing supervises the charge there): asked BEFORE the
+     * answer, and a refusal is GL_ERR_STATE with no reboot */
+    app.dfu_refused = true;
     request(4, GL_CMD_REBOOT, "DFU!", 4);
     GL_CHECK_EQ(response(3, &seq, &cmd, &pl), 1);
+    GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+    GL_CHECK_EQ(app.dfu_asked, 1);
+    GL_CHECK_EQ(app.reboot_calls, 0);
+    app.dfu_refused = false;
+    request(5, GL_CMD_REBOOT, "DFU!", 4);
+    GL_CHECK_EQ(response(4, &seq, &cmd, &pl), 1);
     GL_CHECK_EQ(pl[0], GL_OK);
     GL_CHECK_EQ(app.reboot_calls, 1);
     GL_CHECK(app.reboot_dfu);
-    GL_CHECK_EQ(app.reboot_tx_frames_at_call, 4); /* response already sent */
+    GL_CHECK_EQ(app.reboot_tx_frames_at_call, 5); /* response already sent */
     gl_proto_disconnect(&proto); /* locked again */
-    request(5, GL_CMD_REBOOT, "BOOT", 4);
+    app.dfu_refused = true; /* a plain reset is nobody's business */
+    request(6, GL_CMD_REBOOT, "BOOT", 4);
     GL_CHECK_EQ(app.reboot_calls, 2);
     GL_CHECK(!app.reboot_dfu);
+    GL_CHECK_EQ(app.dfu_asked, 2);
 }
 
 GL_TEST(test_null_ops_are_unsupported)

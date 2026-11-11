@@ -80,7 +80,7 @@
     (instances (project "greenline_demo" (path "/e1a9dcd7-d458-582c-b541-223cfa52db09" (page "8"))))
   )
   (text "1 parts: J2" (at 62.23 53.975 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid ce762154-f875-5d6e-93d7-57a0ec0abf96))
-  (text "94 parts (91 on the BOM), 72 nets, 4 copper layers, 0.80 mm, rule set US_4L_FINE" (at 15.24 73.66 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid 1dc0a3b0-bc93-5871-9c12-92dba985a966))
+  (text "94 parts (91 on the BOM; plus 6 board-only item(s) such as fiducials), 72 nets, 4 copper layers, 0.80 mm, rule set US_4L_FINE" (at 15.24 73.66 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid 1dc0a3b0-bc93-5871-9c12-92dba985a966))
   (text "Net classes (track / clearance, mm):" (at 15.24 76.2 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid 96b1fdc2-fd9e-5fdc-b585-d49cb31fa27b))
   (text "    Default    0.150 / 0.127    45 nets" (at 15.24 78.74 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid 58a163a3-74d1-5c2d-8612-cac82e9c758d))
   (text "    CamPower   0.150 / 0.090    3 nets" (at 15.24 81.28 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid a1dcffd9-16ec-5ee5-95f3-bbd61254ab19))

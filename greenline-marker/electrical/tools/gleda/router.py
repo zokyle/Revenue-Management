@@ -73,17 +73,29 @@ KiCad makes it; a pad whose via ends up in a cut-off piece gets a real track
 to the main part.
 
 *Improvement and cleanup.*  With the history forgotten every unit is ripped
-once and routed again along the plain shortest path (kept if better).  Then
-every net's tracks are dissolved into unit grid edges and rebuilt: duplicates
-vanish, dangling stubs are pruned, loops are opened, collinear pieces are
-merged and segments are split at junctions so that every connection is
-end-to-end.
+once and routed again along the plain shortest path (kept if better); nets
+with long detours or many vias are taken off as a whole and routed again;
+nets of a fine class that is not confined to fine areas are laid again at
+the standard width where they find room.  Then every net's tracks are
+dissolved into unit grid edges and rebuilt: duplicates vanish, dangling stubs
+are pruned, loops are opened, a narrow piece on a wider track of its net
+goes, collinear pieces are merged and segments are split at junctions so
+that every connection is end-to-end; one-step staircases become diagonals
+where an exact check allows it.
+
+*Fine areas.*  In a design with fine areas
+(:meth:`gleda.model.Design.add_fine_area`) a net of a fine class uses its
+fine width and clearance only between grid nodes inside an area and the
+standard values everywhere else; the search joins the two obstacle maps along
+the area boundary and the track changes width there.
 
 *Audit.*  :func:`audit` re-checks the final geometry with exact shapely
-distances (clearance, edge, holes, keep-outs, widths) and computes the
-connectivity from the copper alone, planes by their predicted fill.
+distances (clearance, edge, holes round and oblong, keep-outs, widths, fine
+areas, the gap between a via and a pad of its own net) and computes the
+connectivity from the copper alone, planes and pours by their predicted fill.
 ``RouteResult.unrouted`` comes from this audit, not from the router's
-book-keeping.  KiCad's DRC remains the judge.
+book-keeping.  :func:`net_quality` compares every net with its spanning tree
+(``RouteResult.warnings``).  KiCad's DRC remains the judge.
 
 Per-net options (set on :class:`gleda.model.Net`): ``width``, ``max_vias``,
 ``layers``, ``no_route``, ``priority``; clearance, default width and the
@@ -106,11 +118,11 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 import numpy as np
 import shapely
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, Polygon
 from shapely.strtree import STRtree
 
 from . import _astar, geometry
-from .model import Design, Track, Via
+from .model import Design, Track, Via, VIA_TENTING
 from .raster import (EPS, Grid, move_margin, point_segment_distance,
                      segment_segment_distance)
 
@@ -181,10 +193,32 @@ class RouterOptions:
     ``time_limit``       seconds after which no more rip-up is started;
                          whatever is unrouted then is reported as unrouted
     ``improve_passes``   reroute-everything-once passes after completion
+    ``improve_nets``     after those: every net whose track is longer than this
+                         many times its spanning tree (or has more vias than
+                         pads) is taken off the board as a whole and routed
+                         again, shortest connections first; kept if cheaper.
+                         0 switches it off
+    ``straighten``       final cleanup: replace one-step staircases and jogs by
+                         a diagonal where an exact check allows it
+    ``widen``            a net of a fine class that is NOT confined to fine
+                         areas (the design declares none) is laid again, once
+                         the board is complete, with the standard width and
+                         clearance wherever a connection finds room for it;
+                         kept if that removes fine track without making the
+                         net much longer.  Best effort: nothing guarantees
+                         where the remaining fine track is - fine areas do
+    ``widen_reach``      for that pass the fine geometry is wanted only within
+                         this distance of the pad field of a fine-pitch array;
+                         a connection that cannot be made that way keeps its
+                         fine track
     ``search_margin``    window around a connection searched first
     ``edge_slack``       extra distance to the board edge and keep-outs
-    ``via_pad_gap``      copper gap between a via and a pad of its own net
-                         (vias are never placed in pads)
+    ``via_pad_gap``      copper gap between a via and an SMD pad of its own net
+                         (vias are never placed in pads).  None (default): from
+                         the rule set - ``Rules.via_pad_gap_open`` where the via
+                         is not tented on the pad's side
+                         (``Design.via_tenting``), ``via_pad_gap_tented``
+                         where it is
     ``array_via_keepout``  no via closer than this to the pad field of a
                          fine-pitch array (BGA / CSP): the escape tracks of
                          all its pads need the lanes around it, a via there
@@ -207,6 +241,14 @@ class RouterOptions:
                          the rim (pads there must stay reachable from outside)
     ``escape_grow``      a side of the escape window that would cut through a
                          part's pads moves outward past them by at most this
+    ``escape_exit``      an escape may only end on a rim cell from which the
+                         track can go on: this far straight beyond the rim
+                         everything must be free for its net (no hole, pad,
+                         edge or keep-out right behind the rim).  0 = any cell
+    ``fine_transition``  an array whose nets are confined to a fine area keeps
+                         its escape window this far inside that area: the room
+                         in which the fan-out spreads from the fine to the
+                         standard pitch
     ``escape_direction``  how strongly an escape is pulled toward the rest of
                          its net (0 = leave wherever it is shortest)
     ``escape_improve``   reroute-each-once passes that straighten the fan-out
@@ -275,9 +317,13 @@ class RouterOptions:
     smooth: bool = True
     time_limit: Optional[float] = None
     improve_passes: int = 1
+    improve_nets: float = 1.3
+    straighten: bool = True
+    widen: bool = True
+    widen_reach: float = 5.0
     search_margin: float = 3.0
     edge_slack: float = geometry.DRC_SLACK
-    via_pad_gap: float = 0.1
+    via_pad_gap: Optional[float] = None
     array_via_keepout: float = 0.75
     array_pitch: float = 0.65
     array_escape: bool = True
@@ -287,6 +333,8 @@ class RouterOptions:
     escape_reach: float = 3.0
     escape_pad_gap: float = 0.6
     escape_grow: float = 1.0
+    escape_exit: float = 0.4
+    fine_transition: float = 1.0
     escape_direction: float = 1.0
     escape_improve: int = 4
     escape_freeze: bool = True
@@ -380,6 +428,17 @@ class RouteResult:
         """Every connection made and the internal audit found no violation."""
         return self.audit.ok
 
+    @property
+    def quality(self) -> Dict[str, Any]:
+        """Per-net length against the spanning tree, via counts and the
+        warnings derived from them (see :func:`net_quality`)."""
+        return self.stats.get("quality", {})
+
+    @property
+    def warnings(self) -> List[str]:
+        """Nets a layout engineer should look at: long detours, many vias."""
+        return list(self.quality.get("warnings", []))
+
     def summary(self) -> str:
         s = self.stats
         return ("routed %d/%d connections (%.1f %%) of %d nets, %d tracks, %d vias, "
@@ -413,7 +472,7 @@ class _Pad:
     """A placed pad as terminal and as obstacle."""
     __slots__ = ("idx", "key", "net", "x", "y", "cu", "lay", "circle", "R", "poly", "geom",
                  "georad", "local_clr", "cls_clr", "drill", "smd", "exact", "nodes",
-                 "nodeset", "nodelist", "center", "bbox")
+                 "nodeset", "nodelist", "center", "bbox", "hole", "via_gap")
 
 
 class _Seg:
@@ -463,7 +522,8 @@ class _RC:
 
 class _NetCtx:
     __slots__ = ("name", "cls_clr", "width", "hw", "via_d", "via_drill", "rct", "rcv",
-                 "rct_alt", "pads", "allowed", "max_vias", "plane", "priority", "th_nodes")
+                 "rct_alt", "pads", "allowed", "max_vias", "plane", "priority", "th_nodes",
+                 "rct_out", "out_hw", "out_clr", "via_clr", "rct_wide")
 
 
 class _Unit:
@@ -479,7 +539,7 @@ class _Unit:
     __slots__ = ("uid", "kind", "ctx", "pads", "phase", "length", "items", "rips", "weight",
                  "failed", "reason", "routed", "deps", "dependents", "attempts", "order",
                  "touch", "cells", "hw", "trivial", "win", "rim", "targets", "array",
-                 "narrow", "frozen", "at_rim", "rimset")
+                 "narrow", "frozen", "at_rim", "rimset", "wide")
 
     def __init__(self, uid, kind, ctx, pads):
         self.uid = uid
@@ -510,6 +570,7 @@ class _Unit:
         self.frozen = False                                # its copper is there to stay
         self.at_rim = False                                # escape: ends on the window rim
         self.rimset = None                                 # escape: the rim cells as a set
+        self.wide = False                                  # conn: use the standard width
 
     @property
     def name(self) -> str:
@@ -662,12 +723,15 @@ class Router:
         self._force_left = 0
         self._copper_tree: Any = None
         self._inner: Dict[float, Any] = {}
+        #: frozen connections found broken by the last _unsatisfied() call
+        self._frozen_broken: List[_Unit] = []
         self.stats: Dict[str, Any] = {"searches": 0, "expansions": 0, "ripups": 0,
                                       "reroutes": 0}
         self.units: List[_Unit] = []
         self.order: List[_Unit] = []
         self.conf: Dict[int, Set[int]] = {}
         self.failed: Dict[str, str] = {}
+        self._failed_net: Dict[str, str] = {}
         self._setup_costs()
         self._setup_pads()
         self._setup_nets()
@@ -713,12 +777,19 @@ class Router:
     def _setup_pads(self) -> None:
         d, g = self.design, self.grid
         self.pads: List[_Pad] = []
-        self.npth: List[Tuple[float, float, float]] = [
-            (h.x, h.y, h.drill) for h in d.outline.holes]
+        #: non-plated holes: (centre line (x1, y1, x2, y2), width) - round
+        #: holes have a centre line of length 0 - and the netless copper rings
+        #: of NPTH pads that are larger than their hole
+        self.npth: List[Tuple[Tuple[float, float, float, float], float]] = []
+        self.rings: List[Any] = []
+        for seg, width, ring, _name in geometry.npth_holes(d):
+            self.npth.append((seg, width))
+            if ring is not None:
+                self.rings.append(ring)
+        open_sides = VIA_TENTING.get(d.via_tenting, ())
+        o_gap = self.opt.via_pad_gap
         for pp in geometry.placed_pads(d):
             if pp.kind == "npth" or pp.polygon is None or not pp.layers:
-                if pp.drill > 0:
-                    self.npth.append((pp.x, pp.y, pp.drill))
                 continue
             p = _Pad()
             p.idx = len(self.pads)
@@ -737,7 +808,16 @@ class Router:
             p.local_clr = pp.clearance
             p.cls_clr = d.netclass_of(p.net).clearance
             p.drill = pp.drill if pp.kind == "th" else 0.0
+            p.hole = pp.hole_segment
             p.smd = pp.kind != "th"
+            # gap between the pad and a via of its own net: wider where the via
+            # is not covered by solder mask on the pad's side
+            if o_gap is not None:
+                p.via_gap = o_gap
+            else:
+                mask = "F.Mask" if pp.side == "top" else "B.Mask"
+                p.via_gap = self.rules.via_pad_gap_open if mask in open_sides \
+                    else self.rules.via_pad_gap_tented
             p.exact = p.circle and g.is_node(pp.x, pp.y)
             xmin, ymin, xmax, ymax = pp.polygon.bounds
             p.bbox = (xmin, ymin, xmax, ymax)
@@ -828,7 +908,15 @@ class Router:
                 c.allowed = tuple(self.lidx[l] for l in net.layers if l in self.lidx)
             else:
                 c.allowed = tuple(range(self.L))
-            c.rct = c.rcv = c.rct_alt = None
+            c.rct = c.rcv = c.rct_alt = c.rct_out = c.rct_wide = None
+            c.out_hw, c.out_clr = c.hw, c.cls_clr
+            if d.is_confined(name):
+                # fine class in a design with fine areas: fine geometry inside
+                # them, the standard width and clearance everywhere else
+                ow, oc = d.outside_values(name)
+                c.out_hw, c.out_clr = ow / 2.0, max(oc, self.floor)
+            # vias keep the wider clearance everywhere (they never sit between balls)
+            c.via_clr = c.out_clr
             c.th_nodes = set()
             for p in pads:
                 if len(p.lay) > 1:                      # plated through: free layer change
@@ -843,14 +931,26 @@ class Router:
             c.rct = self._rc(("t", round(c.hw, 6), round(c.cls_clr, 6)), c.hw, 0.0,
                              c.cls_clr, False)
             c.rcv = self._rc(("v", round(c.via_d / 2.0, 6), round(c.via_drill / 2.0, 6),
-                              round(c.cls_clr, 6)), c.via_d / 2.0, c.via_drill / 2.0,
-                             c.cls_clr, True)
-            if self.opt.neckdown and d.netclass_of(name).min_track_width is not None \
+                              round(c.via_clr, 6)), c.via_d / 2.0, c.via_drill / 2.0,
+                             c.via_clr, True)
+            if d.is_confined(name):
+                c.rct_out = self._rc(("t", round(c.out_hw, 6), round(c.out_clr, 6)), c.out_hw,
+                                     0.0, c.out_clr, False)
+            elif self.opt.neckdown and d.netclass_of(name).min_track_width is not None \
                     and net.width is None:
                 wmin = d.min_track_width(name)
                 if wmin < c.width - 1e-9:
                     c.rct_alt = self._rc(("t", round(wmin / 2.0, 6), round(c.cls_clr, 6)),
                                          wmin / 2.0, 0.0, c.cls_clr, False)
+            if self.opt.widen and not d.is_confined(name) and net.width is None \
+                    and d.is_fine_class(d.netclass_of(name)):
+                # an unconfined fine class: the standard width and clearance
+                # are tried for its connections once the board is complete
+                whw = max(c.width, self.rules.default_track) / 2.0
+                wclr = max(c.cls_clr, self.rules.default_clearance, self.floor)
+                if whw > c.hw + 1e-9 or wclr > c.cls_clr + 1e-9:
+                    c.rct_wide = self._rc(("t", round(whw, 6), round(wclr, 6)), whw, 0.0,
+                                          wclr, False)
 
     def _rc(self, key, hw, hole_r, clr, is_via) -> _RC:
         rc = self.rcs.get(key)
@@ -890,17 +990,67 @@ class Router:
 
     def _setup_maps(self) -> None:
         d, g, r, o = self.design, self.grid, self.rules, self.opt
+        default_clr = max(d.netclasses["Default"].clearance, self.floor)
+        # Nodes inside the fine areas: a confined net may join two of them with
+        # a fine track.  Its search uses the fine obstacle maps only at the nodes
+        # whose eight neighbours are fine nodes too (``fine_core``): a node on
+        # the rim can be the end of a standard-width piece that leaves the area.
+        region = geometry.fine_region(d)
+        #: no fine areas declared, but fine-pitch arrays and the widening pass:
+        #: the surroundings of the arrays serve as stand-in fine areas for that
+        #: pass ("fine near the arrays, standard width beyond" - not enforced)
+        self.virtual_fine = False
+        if region is None and o.widen and o.widen_reach > 0 and self.arrays \
+                and any(c.rct_wide is not None for c in self.routable):
+            boxes = [shapely.box(a["bbox"][0] - o.widen_reach, a["bbox"][1] - o.widen_reach,
+                                 a["bbox"][2] + o.widen_reach, a["bbox"][3] + o.widen_reach)
+                     for a in self.arrays]
+            region = shapely.unary_union(boxes)
+            shapely.prepare(region)
+            self.virtual_fine = True
+        self.fine_region = region
+        self.fine_mask = g.contained_mask(region) if region is not None \
+            else np.zeros(self.shape, dtype=bool)
+        core = self.fine_mask.copy()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dx or dy:
+                    shifted = np.zeros_like(core)
+                    ys = slice(max(0, dy), self.shape[0] + min(0, dy))
+                    yd = slice(max(0, -dy), self.shape[0] + min(0, -dy))
+                    xs = slice(max(0, dx), self.shape[1] + min(0, dx))
+                    xd = slice(max(0, -dx), self.shape[1] + min(0, -dx))
+                    shifted[yd, xd] = self.fine_mask[ys, xs]
+                    core &= shifted
+        self.fine_core = core
+        # nodes at which a via of a plane net really reaches its plane: inside
+        # the plane's static area (not in a copper keep-out of the plane layer,
+        # not in a higher-priority pour of another net, not at the edge)
+        self.plane_ok: Dict[str, np.ndarray] = {}
+        for net, layer in sorted(self.plane_of.items()):
+            area = plane_static_area(d, layer, net)
+            ok = g.contained_mask(area.buffer(-(r.zone_min_width / 2.0 + 0.03)))
+            self.plane_ok[net] = ok
         for rc in self.rcs.values():
             # board edge and cutouts
             inset = r.copper_to_edge + rc.hw + o.edge_slack
             allowed = self.board_poly.buffer(-inset)
             rc.static[:] = ~g.contained_mask(allowed)[None, :, :]
-            # drilled holes without copper
-            for (hx, hy, drill) in self.npth:
+            # drilled holes without copper: round or oblong (a stadium)
+            for (hseg, width) in self.npth:
                 reach = max(r.hole_clearance, r.copper_to_edge) + rc.hw + o.edge_slack
                 if rc.is_via:
                     reach = max(reach, r.hole_to_hole + rc.hole_r)
-                m = g.disc_mask(hx, hy, drill / 2.0 + reach + move_margin(reach, g.pitch))
+                m = g.stadium_mask(hseg[0], hseg[1], hseg[2], hseg[3],
+                                   width / 2.0 + reach + move_margin(reach, g.pitch))
+                if m:
+                    win, mask = m
+                    rc.static[:, win[0]:win[1], win[2]:win[3]] |= mask[None, :, :]
+            # ... and the netless copper around a non-plated hole (every layer)
+            for ring in self.rings:
+                reach = self._reach(rc, default_clr)
+                m = g.polygon_mask(ring, reach + move_margin(reach, g.pitch)
+                                   + geometry.PAD_POLYGON_TOLERANCE)
                 if m:
                     win, mask = m
                     rc.static[:, win[0]:win[1], win[2]:win[3]] |= mask[None, :, :]
@@ -942,7 +1092,8 @@ class Router:
                         reach = max(reach, r.hole_to_hole + rc.hole_r)
                     else:
                         reach += move_margin(reach, g.pitch)
-                    m = g.disc_mask(p.x, p.y, p.drill / 2.0 + reach)
+                    m = g.stadium_mask(p.hole[0], p.hole[1], p.hole[2], p.hole[3],
+                                       p.drill / 2.0 + reach)
                     if m and rc.is_via:
                         # hole-to-hole applies to the pad's own net as well
                         win, mask = m
@@ -992,16 +1143,37 @@ class Router:
                         link[k] = j
         return edges
 
-    def _escape_window(self, bbox) -> Tuple[float, float, float, float]:
+    def _escape_window(self, bbox, confined: bool = False
+                       ) -> Tuple[float, float, float, float]:
         """The escape window of an array: its pad field grown by
         ``escape_reach``; a side that would cut through a part's pads is moved
         outward past them (by at most ``escape_grow``), so that the part is
-        fanned out with the array instead of sitting on the rim."""
+        fanned out with the array instead of sitting on the rim.
+
+        ``confined``: nets of the array may be fine only inside a fine area.
+        The window then stays ``fine_transition`` inside the fine area around
+        the array, so that the fanned-out tracks - which leave the window at
+        the fine pitch - have that much room to spread to the standard pitch
+        before the area ends."""
         o = self.opt
         e = max(o.escape_reach, o.array_via_keepout + 1.0)
         gap = o.escape_pad_gap
         x0, y0, x1, y1 = bbox[0] - e, bbox[1] - e, bbox[2] + e, bbox[3] + e
         lim = (x0 - o.escape_grow, y0 - o.escape_grow, x1 + o.escape_grow, y1 + o.escape_grow)
+        if confined and self.fine_region is not None:
+            cx, cy = (bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0
+            for poly in getattr(self.fine_region, "geoms", [self.fine_region]):
+                if poly.contains(Point(cx, cy)):
+                    fx0, fy0, fx1, fy1 = poly.bounds
+                    t = max(0.0, o.fine_transition)
+                    keep = o.array_via_keepout + 0.5      # ... but never tighter than this
+                    inner = (min(fx0 + t, bbox[0] - keep), min(fy0 + t, bbox[1] - keep),
+                             max(fx1 - t, bbox[2] + keep), max(fy1 - t, bbox[3] + keep))
+                    x0, y0 = max(x0, inner[0]), max(y0, inner[1])
+                    x1, y1 = min(x1, inner[2]), min(y1, inner[3])
+                    lim = (max(lim[0], inner[0]), max(lim[1], inner[1]),
+                           min(lim[2], inner[2]), min(lim[3], inner[3]))
+                    break
         step = self.grid.pitch
         for _round in range(8):
             changed = False
@@ -1052,7 +1224,9 @@ class Router:
             pads = arr["pads"]
             cx = sum(p.x for p in pads) / len(pads)
             cy = sum(p.y for p in pads) / len(pads)
-            win = self.grid.window(*self._escape_window(arr["bbox"]))
+            confined = any(self.ctx[n].rct_out is not None for n in arr["nets"]
+                           if n in self.ctx)
+            win = self.grid.window(*self._escape_window(arr["bbox"], confined))
             iy0, iy1, ix0, ix1 = win
             border = [(ix, iy) for ix in range(ix0, ix1) for iy in (iy0, iy1 - 1)]
             border += [(ix, iy) for iy in range(iy0 + 1, iy1 - 1) for ix in (ix0, ix1 - 1)]
@@ -1456,6 +1630,16 @@ class Router:
             inner = self._inner[edge] = self.board_poly.buffer(-edge)
         if not inner.contains(line):
             return False
+        need = max(self.rules.hole_clearance, self.rules.copper_to_edge) + seg.hw \
+            + self.opt.edge_slack
+        for hseg, width in self.npth:
+            if segment_segment_distance((seg.x1, seg.y1, seg.x2, seg.y2), hseg) \
+                    - width / 2.0 < need - EPS:
+                return False
+        for ring in self.rings:
+            clr = max(seg.cls_clr, self.design.netclasses["Default"].clearance, self.floor)
+            if line.distance(ring) - geometry.PAD_POLYGON_TOLERANCE - seg.hw < clr - EPS:
+                return False
         for ko in self.design.keepouts:
             if ko.tracks and layer in ko.layer_names(self.design.copper_layers):
                 if line.distance(geometry.keepout_polygon(ko)) < seg.hw + self.opt.edge_slack:
@@ -1477,10 +1661,32 @@ class Router:
                 max(0, min(xs) - m), min(g.nx, max(xs) + m + 1))
 
     def _local(self, ctx: _NetCtx, rc: _RC, win, soft: bool, att: _Attempt,
-               vias_left: Optional[int], ban: Sequence[Any] = ()):
+               vias_left: Optional[int], ban: Sequence[Any] = (), plane_sites: bool = False):
         """Cost array and via map of ``win`` for one search of net ``ctx`` with
         track class ``rc``.  With ``soft`` other nets' routed copper may be
-        crossed at a price."""
+        crossed at a price.  ``plane_sites``: vias only where they reach the
+        net's plane (fan-outs).
+
+        A confined net (fine class in a design with fine areas) searches with
+        its fine class inside the fine areas and with the standard width and
+        clearance outside (and on the rim nodes, see ``fine_core``): the two
+        maps are joined along the area boundary."""
+        cost, vmap, softl, softv = self._local_rc(ctx, rc, win, soft, att, vias_left, ban,
+                                                  plane_sites)
+        if ctx.rct_out is None or rc is not ctx.rct:
+            return cost, vmap, softl, softv
+        cost_o, _vmap, softl_o, _softv = self._local_rc(ctx, ctx.rct_out, win, soft, att,
+                                                        vias_left, ban, plane_sites)
+        iy0, iy1, ix0, ix1 = win
+        fm = self.fine_core[None, iy0:iy1, ix0:ix1]
+        cost = np.ascontiguousarray(np.where(fm, cost, cost_o).astype(np.int32))
+        softl = np.where(fm, softl, softl_o)
+        return cost, vmap, softl, softv
+
+    def _local_rc(self, ctx: _NetCtx, rc: _RC, win, soft: bool, att: _Attempt,
+                  vias_left: Optional[int], ban: Sequence[Any] = (),
+                  plane_sites: bool = False):
+        """:meth:`_local` for one route class."""
         g, r = self.grid, self.rules
         iy0, iy1, ix0, ix1 = win
         rcv = ctx.rcv
@@ -1499,7 +1705,7 @@ class Router:
             if p.smd:
                 key = (p.idx, vp_key)
                 if key not in self.pad_masks:
-                    reach = rcv.hw + self.opt.via_pad_gap
+                    reach = rcv.hw + p.via_gap
                     if p.circle:
                         self.pad_masks[key] = g.disc_mask(p.x, p.y, p.R + reach)
                     else:
@@ -1561,6 +1767,8 @@ class Router:
 
         vblocked = rcv.static[0, iy0:iy1, ix0:ix1] | (padv > 0) | (ownblock > 0) \
             | (rcv.vhard[iy0:iy1, ix0:ix1] > 0)
+        if plane_sites and ctx.name in self.plane_ok:
+            vblocked |= ~self.plane_ok[ctx.name][iy0:iy1, ix0:ix1]
         hreach = r.hole_to_hole + rcv.hole_r
         tmp = np.zeros(padv.shape, dtype=np.int16)
         for v in att.vias:                                   # this attempt's own new vias
@@ -1658,7 +1866,8 @@ class Router:
         x = rem - y * w
         return [(int(a), int(b) + ix0, int(c) + iy0) for a, b, c in zip(l, x, y)]
 
-    def _make_seg(self, ctx: _NetCtx, layer: int, a, b, hw: float) -> _Seg:
+    def _make_seg(self, ctx: _NetCtx, layer: int, a, b, hw: float,
+                  clr: Optional[float] = None) -> _Seg:
         g = self.grid
         s = _Seg()
         a = (int(a[0]), int(a[1]))
@@ -1666,43 +1875,79 @@ class Router:
         s.net, s.layer, s.a, s.b = ctx.name, int(layer), a, b
         s.x1, s.y1 = g.xy(*a)
         s.x2, s.y2 = g.xy(*b)
-        s.hw, s.cls_clr = hw, ctx.cls_clr
+        s.hw, s.cls_clr = hw, ctx.cls_clr if clr is None else clr
         s.exact = True
         s.unit, s.masks, s.alive = -1, None, False
         return s
 
-    def _make_stub(self, ctx: _NetCtx, layer: int, a, x: float, y: float, hw: float) -> _Seg:
+    def _make_stub(self, ctx: _NetCtx, layer: int, a, x: float, y: float, hw: float,
+                   clr: Optional[float] = None) -> _Seg:
         g = self.grid
         s = _Seg()
         a = (int(a[0]), int(a[1]))
         s.net, s.layer, s.a, s.b = ctx.name, int(layer), a, None
         s.x1, s.y1 = g.xy(*a)
         s.x2, s.y2 = x, y
-        s.hw, s.cls_clr = hw, ctx.cls_clr
+        s.hw, s.cls_clr = hw, ctx.cls_clr if clr is None else clr
         s.exact = False
         s.unit, s.masks, s.alive = -1, None, False
         return s
+
+    def _is_fine(self, node) -> bool:
+        """True if the grid node lies inside a fine area."""
+        ix, iy = int(node[0]), int(node[1])
+        return 0 <= ix < self.grid.nx and 0 <= iy < self.grid.ny \
+            and bool(self.fine_mask[iy, ix])
+
+    def _edge_class(self, ctx: _NetCtx, rc: _RC, a, b) -> Tuple[float, float]:
+        """(half-width, class clearance) of the track piece between the grid
+        nodes ``a`` and ``b`` of a net routed with class ``rc``.  For a confined
+        net a piece is fine only if BOTH its ends are fine nodes - it then lies
+        completely inside the area, which is what KiCad's rule asks for."""
+        if ctx.rct_out is None or rc is not ctx.rct:
+            return rc.hw, (rc.clr if rc is ctx.rct_wide else ctx.cls_clr)
+        if self._is_fine(a) and self._is_fine(b):
+            return ctx.hw, ctx.cls_clr
+        return ctx.out_hw, ctx.out_clr
 
     def _make_via(self, ctx: _NetCtx, node) -> _ViaItem:
         v = _ViaItem()
         node = (int(node[0]), int(node[1]))
         v.net, v.a = ctx.name, node
         v.x, v.y = self.grid.xy(*node)
-        v.R, v.drill, v.cls_clr = ctx.via_d / 2.0, ctx.via_drill, ctx.cls_clr
+        v.R, v.drill, v.cls_clr = ctx.via_d / 2.0, ctx.via_drill, ctx.via_clr
         v.unit, v.masks, v.alive = -1, None, False
         return v
 
     def _path_items(self, ctx: _NetCtx, cells: List[Tuple[int, int, int]],
-                    free: Set[Tuple[int, int]], hw: float):
+                    free: Set[Tuple[int, int]], rc: _RC):
         """Turn a cell path into segments and new vias."""
         segs: List[_Seg] = []
         vias: List[_ViaItem] = []
         run: List[Tuple[int, int]] = [(cells[0][1], cells[0][2])]
         layer = cells[0][0]
+
+        def flush(nodes, lay):
+            if ctx.rct_out is None or rc is not ctx.rct:
+                clr = rc.clr if rc is ctx.rct_wide else None
+                for a, b in _collinear_runs(nodes):
+                    segs.append(self._make_seg(ctx, lay, a, b, rc.hw, clr))
+                return
+            # confined net: the width follows the fine areas, piece by piece
+            start, prev, key = nodes[0], nodes[0], None
+            for cur in nodes[1:]:
+                k = ((cur[0] - prev[0], cur[1] - prev[1]),) + self._edge_class(ctx, rc, prev, cur)
+                if key is not None and k != key:
+                    segs.append(self._make_seg(ctx, lay, start, prev, key[1], key[2]))
+                    start = prev
+                key = k
+                prev = cur
+            if key is not None:
+                segs.append(self._make_seg(ctx, lay, start, prev, key[1], key[2]))
+
         for cur in cells[1:]:
             if cur[0] != layer:
-                for a, b in _collinear_runs(run):
-                    segs.append(self._make_seg(ctx, layer, a, b, hw))
+                flush(run, layer)
                 node = (cur[1], cur[2])
                 if node not in free:
                     vias.append(self._make_via(ctx, node))
@@ -1710,11 +1955,10 @@ class Router:
                 run = [node]
             else:
                 run.append((cur[1], cur[2]))
-        for a, b in _collinear_runs(run):
-            segs.append(self._make_seg(ctx, layer, a, b, hw))
+        flush(run, layer)
         return segs, vias
 
-    def _stub_for(self, ctx: _NetCtx, p: _Pad, cell, att: _Attempt, hw: float
+    def _stub_for(self, ctx: _NetCtx, p: _Pad, cell, att: _Attempt, rc: _RC
                   ) -> Optional[_Seg]:
         """Stub from a path end inside pad ``p`` to the pad centre, if wanted
         and legal."""
@@ -1731,7 +1975,11 @@ class Router:
         x, y = self.grid.xy(ix, iy)
         if math.hypot(x - p.x, y - p.y) < 1e-6:
             return None
-        stub = self._make_stub(ctx, l, (ix, iy), p.x, p.y, hw)
+        hw, clr = self._edge_class(ctx, rc, (ix, iy), (ix, iy))
+        if ctx.rct_out is not None and hw < ctx.out_hw - 1e-9 and \
+                not self.fine_region.contains(Point(p.x, p.y)):
+            hw, clr = ctx.out_hw, ctx.out_clr            # the stub would leave the area
+        stub = self._make_stub(ctx, l, (ix, iy), p.x, p.y, hw, clr)
         if not self._pad_clear(stub, ctx.name) or self._victims([stub]):
             return None
         att.stubbed.add(key)
@@ -1741,7 +1989,8 @@ class Router:
     def _search_path(self, ctx: _NetCtx, att: _Attempt, src: np.ndarray, dst: np.ndarray,
                      soft: bool, rc: _RC, win, *, tlayers: int = 0,
                      via_cost: Optional[int] = None, dst_bias: Optional[np.ndarray] = None,
-                     heuristic: bool = True, vias_left: Optional[int] = None):
+                     heuristic: bool = True, vias_left: Optional[int] = None,
+                     plane_sites: bool = False):
         """Cheapest path inside window ``win`` from the cells ``src`` to the
         cells ``dst`` (or to any cell of the layers ``tlayers``) for a track
         of class ``rc``.  ``dst_bias`` is an extra cost per destination cell.
@@ -1764,7 +2013,8 @@ class Router:
             via_cost = self.via_cost
         ban: List[Any] = []
         for _round in range(6):
-            cost, vmap, softl, softv = self._local(ctx, rc, win, soft, att, vias_left, ban)
+            cost, vmap, softl, softv = self._local(ctx, rc, win, soft, att, vias_left, ban,
+                                                   plane_sites)
             if dst_bias is not None:
                 # entering a destination cell costs extra (escape: distance from
                 # that rim cell to where the net has to go)
@@ -1783,7 +2033,7 @@ class Router:
             cells = self._decode(path, win)
             marks = np.argwhere(vmap == FREE_VIA)
             free = {(int(x) + win[2], int(y) + win[0]) for y, x in marks}
-            segs, vias = self._path_items(ctx, cells, free, rc.hw)
+            segs, vias = self._path_items(ctx, cells, free, rc)
             clash = None
             for i, a in enumerate(vias):
                 for b in vias[i + 1:]:
@@ -1897,14 +2147,14 @@ class Router:
                     keys.add(k)
         return ({k[1] for k in keys if k[0] == "p"}, {k[1] for k in keys if k[0] == "u"})
 
-    def _end_stubs(self, ctx: _NetCtx, st: _NetState, cells, att: _Attempt, hw: float
+    def _end_stubs(self, ctx: _NetCtx, st: _NetState, cells, att: _Attempt, rc: _RC
                    ) -> List[_Seg]:
         """Stubs to off-grid pad centres at both ends of a path."""
         out = []
         for cell in (cells[0], cells[-1]):
             k = st.owner.get(cell)
             if k is not None and k[0] == "p":
-                stub = self._stub_for(ctx, self.pads[k[1]], cell, att, hw)
+                stub = self._stub_for(ctx, self.pads[k[1]], cell, att, rc)
                 if stub is not None:
                     out.append(stub)
         return out
@@ -1927,7 +2177,9 @@ class Router:
         # width at all, in a strict search only once the end game has given up
         # on the full width (unit.narrow)
         rcs = [ctx.rct]
-        if ctx.rct_alt is not None and (soft or unit.narrow):
+        if unit.wide and ctx.rct_wide is not None:
+            rcs = [ctx.rct_wide]                     # the widening pass: standard width or nothing
+        elif ctx.rct_alt is not None and (soft or unit.narrow):
             rcs.append(ctx.rct_alt)
         m = int(math.ceil(self.opt.search_margin / g.pitch))
         na, nb = g.nearest(a.x, a.y), g.nearest(b.x, b.y)
@@ -1959,7 +2211,7 @@ class Router:
             return None
         cells, segs, vias = res
         att.touch, att.deps = self._touched(st, cells, vias)
-        att.items = list(segs) + list(vias) + self._end_stubs(ctx, st, cells, att, rc.hw)
+        att.items = list(segs) + list(vias) + self._end_stubs(ctx, st, cells, att, rc)
         att.vias = list(vias)
         att.cells = list(cells)
         att.hw = rc.hw
@@ -1978,12 +2230,15 @@ class Router:
             if l not in p.lay and l in ctx.allowed:
                 tl |= 1 << l
         # existing vias of the net close to the pad may be shared
+        ok_sites = self.plane_ok.get(ctx.name)
         share = []
         via_units: Dict[Tuple[int, int], int] = {}
         for it in self.net_items.get(ctx.name, ()):
             if not it.is_via or it.unit == unit.uid:
                 continue
             via_units[it.a] = it.unit
+            if ok_sites is not None and not ok_sites[it.a[1], it.a[0]]:
+                continue                                 # that via is not on the plane
             if math.hypot(it.x - p.x, it.y - p.y) <= self.opt.plane_share_radius:
                 for l in p.lay:
                     share.append((l, it.a[0], it.a[1]))
@@ -2005,7 +2260,7 @@ class Router:
             for rc in rcs:
                 res = self._search_path(ctx, att, src, share_arr, soft, rc, win, tlayers=tl,
                                         via_cost=self.plane_via_cost, heuristic=False,
-                                        vias_left=self._vias_left(ctx))
+                                        vias_left=self._vias_left(ctx), plane_sites=True)
                 if res is not None:
                     break
             if res is not None:
@@ -2027,7 +2282,7 @@ class Router:
             if not found:
                 unit.reason = "fan-out of %s found no via" % p.key
                 return None
-        stub = self._stub_for(ctx, p, cells[0], att, rc.hw)
+        stub = self._stub_for(ctx, p, cells[0], att, rc)
         if stub is not None:
             items.append(stub)
         att.items = items
@@ -2087,7 +2342,11 @@ class Router:
             return None
         dst = np.concatenate(cells, axis=0)
         dbias = np.concatenate(extra, axis=0)
-        src = self._comp_cells(ctx, st, root, False)          # the pad and what hangs on it
+        # The escape starts at ITS pad.  (It used to start anywhere on the copper
+        # joined to the pad - also on another pad of the net that some other
+        # unit had connected to this one.  When that unit was rerouted later,
+        # the pad was left without copper while this unit still claimed it.)
+        src = self._pad_cells(p, False)
         rcs = [ctx.rct]
         if ctx.rct_alt is not None:
             dim = min(p.bbox[2] - p.bbox[0], p.bbox[3] - p.bbox[1])
@@ -2106,7 +2365,7 @@ class Router:
         path, segs, vias = res
         att.touch, att.deps = self._touched(st, path, vias)
         att.touch.add(p.idx)
-        att.items = list(segs) + list(vias) + self._end_stubs(ctx, st, path, att, rc.hw)
+        att.items = list(segs) + list(vias) + self._end_stubs(ctx, st, path, att, rc)
         att.vias = list(vias)
         att.cells = list(path)
         att.hw = rc.hw
@@ -2127,7 +2386,7 @@ class Router:
         p = unit.pads[0]
         iy0, iy1, ix0, ix1 = unit.win
         others = [q for q in ctx.pads if q is not p]
-        rim = unit.rim
+        rim = self._open_rim(unit)
         bias = np.zeros(len(rim), dtype=np.int64)
         w = max(0.0, self.opt.escape_direction)
         outside = [q for q in others
@@ -2143,6 +2402,52 @@ class Router:
                 dist = dq if dist is None else np.minimum(dist, dq)
             bias = np.round(w * dist / g.pitch * STEP).astype(np.int64)
         return rim, bias, inside, bool(outside)
+
+    def _open_rim(self, unit: _Unit) -> np.ndarray:
+        """The rim cells of an escape window that are exits for this unit's
+        net: the track can go on from there.  A rim cell is dropped when the
+        ``escape_exit`` just beyond it, straight outward, is not all free for
+        the net (a hole's exclusion zone, a pad of another net, the board
+        edge, a keep-out, the frozen fan-out of another array) - an escape
+        that ended there would be a dead end, and it is frozen once placed."""
+        rim = unit.rim
+        n = int(round(max(0.0, self.opt.escape_exit) / self.grid.pitch))
+        if n <= 0 or len(rim) == 0:
+            return rim
+        g = self.grid
+        ctx = unit.ctx
+        iy0, iy1, ix0, ix1 = unit.win
+        ext = (max(0, iy0 - n), min(g.ny, iy1 + n), max(0, ix0 - n), min(g.nx, ix1 + n))
+        rc = ctx.rct_out if ctx.rct_out is not None else ctx.rct
+        cost, _vmap, _softl, _softv = self._local_rc(ctx, rc, ext, True, _Attempt(), None)
+        free = cost > 0
+        keep = np.zeros(len(rim), dtype=bool)
+        for i, (l, ix, iy) in enumerate(rim):
+            l, ix, iy = int(l), int(ix), int(iy)
+            dirs = []
+            if ix == ix0:
+                dirs.append((-1, 0))
+            if ix == ix1 - 1:
+                dirs.append((1, 0))
+            if iy == iy0:
+                dirs.append((0, -1))
+            if iy == iy1 - 1:
+                dirs.append((0, 1))
+            for dx, dy in dirs:
+                ok = True
+                for k in range(1, n + 1):
+                    x, y = ix + dx * k, iy + dy * k
+                    if not (ext[2] <= x < ext[3] and ext[0] <= y < ext[1]) \
+                            or not free[l, y - ext[0], x - ext[2]]:
+                        ok = False
+                        break
+                if ok:
+                    keep[i] = True
+                    break
+        if not keep.any():
+            return rim                               # nowhere is good: no worse than before
+        unit.rimset = set((int(a), int(b), int(c)) for a, b, c in rim[keep])
+        return rim[keep]
 
     def _escape_sweep(self, units: Sequence[_Unit]) -> None:
         """Stage A book-keeping: a group of pads of one net inside the window
@@ -2233,21 +2538,53 @@ class Router:
                 by_net.setdefault(u.ctx.name, []).append(u)
             elif not u.routed and (u.kind == "fanout" or not optional_escapes):
                 out.append(u)
+        self._frozen_broken = []
         for name, conns in by_net.items():
             ctx = self.ctx[name]
+            stuck: Set[int] = set()
             while True:
                 st = self._net_state(ctx, cells=False)
                 broken = None
                 for u in conns:
-                    if u.routed and st.find(("p", u.pads[0].idx)) != st.find(("p", u.pads[1].idx)):
+                    if u.routed and u.uid not in stuck and \
+                            st.find(("p", u.pads[0].idx)) != st.find(("p", u.pads[1].idx)):
                         broken = u
                         break
                 if broken is None:
                     break
-                self._rip(broken)
+                if self._rip(broken):
+                    continue
+                # A frozen unit is not ripped by _rip().  One without copper (a
+                # connection that only counted as made through other copper)
+                # simply stops counting as routed; one with copper stays where it
+                # is until it is unfrozen and is remembered in _frozen_broken.
+                # Either way the loop moves on - it must never spin on a unit it
+                # cannot change.
+                if not broken.items:
+                    self._drop_trivial(broken)
+                else:
+                    stuck.add(broken.uid)
+                    self._frozen_broken.append(broken)
             out.extend(u for u in conns if not u.routed)
         out.sort(key=lambda u: (u.order, u.uid))
         return out
+
+    def _drop_trivial(self, unit: _Unit) -> None:
+        """Mark a connection that holds no copper (``trivial``: its pads were
+        joined by other copper of the net) as not routed, frozen or not."""
+        if unit.items:
+            raise RoutingError("internal: %s holds copper" % unit.name)
+        unit.frozen = False
+        unit.routed = False
+        unit.trivial = False
+        unit.touch = set()
+        unit.cells = []
+        for dep in unit.deps:
+            self.units[dep].dependents.discard(unit.uid)
+        unit.deps = set()
+        for other in self.conf.get(unit.uid, ()):
+            self.conf[other].discard(unit.uid)
+        self.conf[unit.uid] = set()
 
     def _negotiate(self, units: Sequence[_Unit], max_iterations: int, patience: int,
                    label: str = "", optional_escapes: bool = True,
@@ -2377,7 +2714,10 @@ class Router:
                            "plane_repairs": 0, "waves": 0})
         best = None                              # (open units, snapshot, reasons)
         stale = 0
-        for wave in range(max(1, o.waves)):
+        waves = max(1, o.waves)
+        wave = -1
+        while wave + 1 < waves:
+            wave += 1
             # ---- negotiation; later waves start from the board as it is, with
             # the history forgotten and the price of sharing back at a moderate
             # level, so that the units still open push their way in ----
@@ -2404,7 +2744,13 @@ class Router:
             if n_open == 0 or self._time_up() or stale >= 2:
                 break
             if all(u.uid in failed for u in still_open):
-                break                            # walled in by pads, edge or keep-outs: no use
+                # No path even across other nets' copper.  If the frozen fan-out
+                # of an array is what walls them in, it is made negotiable again
+                # (once) and gets one more wave; pads, edge and keep-outs stay.
+                if self._thaw_arrays(still_open):
+                    waves = max(waves, wave + 2)
+                else:
+                    break
             self.hist[:] = 0
         if best is not None and len(self._unsatisfied(self.order)) > best[0]:
             self.log("back to the best state (%d open)" % best[0])
@@ -2425,14 +2771,43 @@ class Router:
             self.log("improve pass %d: %.1f mm / %d via(s) saved" % (i + 1, gain[0], gain[1]))
             if gain[0] < 0.05 and gain[1] == 0:
                 break
+        if o.improve_nets > 0 and not self._time_up():
+            gain = self._improve_nets(o.improve_nets)
+            self.log("net improvement: %d net(s) rerouted, %.1f mm / %d via(s) saved" % gain)
+        if o.widen and not self._time_up():
+            nets, mm = self._widen()
+            if nets:
+                self.log("widening: %d net(s) of fine classes, %.1f mm of fine track laid again "
+                         "at the standard width" % (nets, mm))
         self._settle()
         self._mend_planes(reasons)
         if len(self._unsatisfied(self.order)) > open_before:
             self.log("improvement undone: it left more open than before")
             self._restore(snap)
-        self.failed = {u.name: reasons.get(u.uid) or u.reason or "not routed"
-                       for u in self._unsatisfied(self.order)}
+        still = self._unsatisfied(self.order)
+        self.failed = {u.name: reasons.get(u.uid) or u.reason or "not routed" for u in still}
+        self._failed_net = {u.name: u.ctx.name for u in still}
         return self._finish()
+
+    def _thaw_arrays(self, open_units: Sequence[_Unit]) -> bool:
+        """Unfreeze the fan-out of stage A (see ``escape_freeze``) when units
+        are still open that have no path at all: frozen copper is a hard
+        obstacle, and a fan-out can - rarely - wall in a neighbouring pad.
+        Thawed copper takes part in the negotiation again, only more expensive
+        to run over.  Done at most once; returns True if anything was thawed."""
+        if getattr(self, "_thawed", False):
+            return False
+        frozen = [u for u in self.units if u.frozen]
+        if not frozen:
+            return False
+        self._thawed = True
+        for u in frozen:
+            self._unfreeze(u)
+        self.stats["thawed"] = len(frozen)
+        self.log("%d unit(s) have no path at all (%s): the frozen fan-out of the arrays (%d "
+                 "unit(s)) is made negotiable again" % (
+                     len(open_units), ", ".join(u.name for u in open_units[:3]), len(frozen)))
+        return True
 
     def _renegotiate_regions(self, reasons: Dict[int, str]) -> None:
         """Last resort for the units that are still open: for each of them,
@@ -2440,10 +2815,20 @@ class Router:
         again as one small puzzle against the rest of the board, which is
         frozen meanwhile.  Kept only if fewer units are open afterwards."""
         o = self.opt
+        hopeless: Set[int] = set()
         for margin in o.region_margins:
             pending = [u for u in self._unsatisfied(self.order) if u.kind != "escape"]
             for unit in pending[:max(0, o.region_tries)]:
-                if unit.routed or self._time_up():
+                if unit.routed or self._time_up() or unit.uid in hopeless:
+                    continue
+                # Moving other nets' copper only helps a unit that has a way
+                # over that copper.  One that has none even then is walled in by
+                # pads, edge, keep-outs or frozen copper: no puzzle to solve.
+                if self._route_unit(unit, soft=True) is None:
+                    hopeless.add(unit.uid)
+                    self.log("region around %s skipped: no path even across other nets' "
+                             "copper (%s)" % (unit.name, unit.reason or "blocked"))
+                    reasons[unit.uid] = unit.reason or reasons.get(unit.uid, "no path")
                     continue
                 if self._renegotiate_region(unit, margin):
                     reasons.pop(unit.uid, None)
@@ -2470,9 +2855,21 @@ class Router:
                 if d not in region and not self.units[d].frozen:
                     region.add(d)
                     stack.append(d)
+        # Connections that hold no copper of their own ("trivial": their pads are
+        # joined by other copper of the net) depend on that copper without being
+        # recorded as dependents.  Those of the nets the region touches belong
+        # to the puzzle: they are reopened with it and routed again.
+        nets = {self.units[uid].ctx.name for uid in region}
+        for u in self.units:
+            if u.routed and not u.frozen and not u.items and u.kind == "conn" \
+                    and u.ctx.name in nets:
+                region.add(u.uid)
         open_before = self._unsatisfied(self.order)
         snap = self._snapshot()
-        outside = [u for u in self.units if u.routed and not u.frozen and u.uid not in region]
+        # only copper can be frozen: a unit without items has nothing to protect,
+        # and a frozen unit cannot be reopened when what it relied on has moved
+        outside = [u for u in self.units
+                   if u.routed and not u.frozen and u.items and u.uid not in region]
         for u in outside:
             self._freeze(u)
         for uid in sorted(region):
@@ -2493,7 +2890,10 @@ class Router:
                 att = self._route_unit(u, soft=False)
                 if att is not None and not att.victims:
                     self._commit(u, att)
-        better = len(self._unsatisfied(self.order)) < len(open_before)
+        # frozen connections that no longer join their pads count as open too
+        # (they cannot be ripped while frozen, see _unsatisfied)
+        open_after = len(self._unsatisfied(self.order)) + len(self._frozen_broken)
+        better = open_after < len(open_before)
         if not better:
             self._restore(snap)                              # (frozen units stay as they are)
         for u in outside:
@@ -2757,6 +3157,147 @@ class Router:
                 self._commit(unit, before)
         return saved_len, saved_vias
 
+    def _improve_nets(self, ratio: float) -> Tuple[int, float, int]:
+        """Take a whole net off the board and route it again, connection by
+        connection, with everything else in place: the detours a net made
+        while the board was being negotiated are often not needed any more,
+        and :meth:`_improve` cannot touch a connection other copper of the net
+        hangs on.  Tried for every net whose track is longer than ``ratio``
+        times its spanning tree or that has more vias than pads, worst first;
+        kept only if every connection is made again and the net got cheaper.
+        Returns (nets rerouted, mm saved, vias saved)."""
+        cands = []
+        for ctx in self.routable:
+            if ctx.plane:
+                continue
+            units = [u for u in self.net_units.get(ctx.name, ()) if u.kind == "conn"]
+            if not units or any(u.frozen or not u.routed for u in units):
+                continue
+            items = [it for u in units for it in u.items]
+            length, nvias = self._unit_cost(items)
+            tree = sum(u.length for u in units)
+            if tree < 0.5:
+                continue
+            if length > ratio * tree + 1.0 or nvias > len(ctx.pads):
+                cands.append((-(length + self.opt.via_cost * nvias - tree), ctx.name, ctx, units,
+                              length, nvias))
+        done, saved_len, saved_vias = 0, 0.0, 0
+        for _key, _name, ctx, units, length, nvias in sorted(cands, key=lambda c: c[:2]):
+            if self._time_up():
+                break
+            if any(not u.routed for u in units):
+                continue
+            # units of other kinds that hang on these connections would be ripped
+            # with them: leave such a net alone
+            mine = {u.uid for u in units}
+            if any(d not in mine for u in units for d in u.dependents):
+                continue
+            before = [(u, self._as_attempt(u)) for u in units]
+            old = length + self.opt.via_cost * nvias
+            for u in units:
+                if u.routed:
+                    self._rip(u)
+            ok = True
+            for u in sorted(units, key=lambda v: (v.length, v.uid)):
+                att = self._route_unit(u, soft=False)
+                if att is None or att.victims:
+                    ok = False
+                    break
+                self._commit(u, att)
+            new_len, new_vias = self._unit_cost([it for u in units for it in u.items])
+            if ok and new_len + self.opt.via_cost * new_vias < old - 0.05:
+                done += 1
+                saved_len += length - new_len
+                saved_vias += nvias - new_vias
+                continue
+            for u in units:                            # put the old copper back
+                if u.routed:
+                    self._rip(u)
+            for u, att in before:
+                self._commit(u, att)
+        return done, saved_len, saved_vias
+
+    def _widen(self, passes: int = 3) -> Tuple[int, float]:
+        """Lay the connections of unconfined fine-class nets again at the
+        standard width and clearance wherever they find room (see the
+        ``widen`` option).  Net by net: all its connections are taken off,
+        each is routed with the standard class first and with its fine class
+        only if that fails; the result is kept if every connection is made
+        again, fine track became less, and the net did not get much longer or
+        via-heavier.  Repeated (a net that has moved out of a bundle makes
+        room for its neighbours) until a pass changes nothing.  Returns (nets
+        changed, mm of fine track removed)."""
+        changed: Set[str] = set()
+        saved = 0.0
+
+        def fine_len(units, ctx):
+            return sum(it.length for u in units for it in u.items
+                       if not it.is_via and it.hw < ctx.rct_wide.hw - 1e-9)
+
+        for _pass in range(max(1, passes)):
+            progress = False
+            for ctx in self.routable:
+                if ctx.rct_wide is None or ctx.plane:
+                    continue
+                if self._time_up():
+                    break
+                units = [u for u in self.net_units.get(ctx.name, ()) if u.kind == "conn"]
+                if not units or any(u.frozen or not u.routed for u in units):
+                    continue
+                mine = {u.uid for u in units}
+                if any(d not in mine for u in units for d in u.dependents):
+                    continue
+                old_fine = fine_len(units, ctx)
+                if old_fine < 0.5:
+                    continue
+                before = [(u, self._as_attempt(u)) for u in units]
+                length, nvias = self._unit_cost([it for u in units for it in u.items])
+                old_cost = length + self.opt.via_cost * nvias
+                for u in units:
+                    if u.routed:
+                        self._rip(u)
+                ok = True
+                for u in sorted(units, key=lambda v: (v.length, v.uid)):
+                    if self.virtual_fine:
+                        # fine near the arrays, the standard class beyond: the
+                        # net is routed like a confined one for this attempt
+                        ctx.rct_out = ctx.rct_wide
+                        ctx.out_hw, ctx.out_clr = ctx.rct_wide.hw, ctx.rct_wide.clr
+                        try:
+                            att = self._route_unit(u, soft=False)
+                        finally:
+                            ctx.rct_out = None
+                            ctx.out_hw, ctx.out_clr = ctx.hw, ctx.cls_clr
+                    else:
+                        u.wide = True                  # no array: all of it or nothing
+                        att = self._route_unit(u, soft=False)
+                        u.wide = False
+                    if att is None or att.victims:
+                        att = self._route_unit(u, soft=False)   # its own (fine) class
+                    if att is None or att.victims:
+                        ok = False
+                        break
+                    self._commit(u, att)
+                new_len, new_vias = self._unit_cost([it for u in units for it in u.items])
+                new_cost = new_len + self.opt.via_cost * new_vias
+                new_fine = fine_len(units, ctx)
+                if ok and new_fine < old_fine - 0.5 and new_cost <= 1.3 * old_cost + 2.0:
+                    changed.add(ctx.name)
+                    saved += old_fine - new_fine
+                    progress = True
+                    continue
+                for u in units:                        # put the old copper back
+                    if u.routed:
+                        self._rip(u)
+                for u, att in before:
+                    self._commit(u, att)
+            if not progress or self._time_up():
+                break
+        if changed:
+            self.stats["widened_nets"] = len(changed)
+            self.stats["widened_mm"] = round(saved, 3)
+        return len(changed), saved
+
     def _unit_cost(self, items: Sequence[Any]) -> Tuple[float, int]:
         length = sum(it.length for it in items if not it.is_via)
         vias = sum(1 for it in items if it.is_via)
@@ -2766,6 +3307,35 @@ class Router:
     def _finish(self) -> "RouteResult":
         tracks, vias = self._emit()
         aud = audit(self.design, tracks, vias)
+        if self.opt.straighten and self.stats.get("corners_cut") and not aud.ok:
+            # the diagonals are checked one by one, but the audit has the last
+            # word: if the straightened copper is not clean, the plain one is used
+            plain = self._emit(straighten=False)
+            aud_plain = audit(self.design, plain[0], plain[1])
+            if len(aud_plain.violations) < len(aud.violations) or \
+                    aud_plain.missing < aud.missing:
+                self.log("straightening undone: the audit prefers the plain copper")
+                tracks, vias, aud = plain[0], plain[1], aud_plain
+                self.stats["corners_cut"] = 0
+        # a unit that stayed open although its net is connected (a fan-out that
+        # a track replaced, say) is no failure
+        open_nets = {u.net for u in aud.unrouted}
+        self.failed = {name: reason for name, reason in self.failed.items()
+                       if self._failed_net.get(name) in open_nets}
+        # every open net carries the reasons of its units, so that
+        # ``for u in result.unrouted: print(u.net, u.pieces, u.reason)`` says why
+        why: Dict[str, List[str]] = {}
+        for name, reason in sorted(self.failed.items()):
+            reasons = why.setdefault(self._failed_net.get(name, ""), [])
+            if reason not in reasons:
+                reasons.append(reason)
+        for u in aud.unrouted:
+            if not u.reason:
+                u.reason = "; ".join(why.get(u.net, [])) or \
+                    "not connected by the final copper (no unit reported a failure)"
+        quality = net_quality(self.design, tracks, vias)
+        for line in quality["warnings"]:
+            self.log("look at " + line)
         length: Dict[str, float] = {}
         for t in tracks:
             length[t.layer] = length.get(t.layer, 0.0) + t.length
@@ -2780,29 +3350,44 @@ class Router:
             "track_length_mm": round(sum(length.values()), 3),
             "track_length_by_layer_mm": {k: round(v, 3) for k, v in sorted(length.items())},
             "tracks": len(tracks), "vias": len(vias),
+            "quality": quality,
             "runtime_s": round(time.time() - self.t0, 2),
         })
         res = RouteResult(tracks, vias, aud, dict(self.stats), dict(getattr(self, "failed", {})))
         self.log(res.summary())
         return res
 
-    def _emit(self) -> Tuple[List[Track], List[Via]]:
+    def _emit(self, straighten: Optional[bool] = None) -> Tuple[List[Track], List[Via]]:
         """Final cleanup and conversion to model primitives.
 
         Per net: duplicate, dangling and looping track pieces go
-        (:func:`cleanup_segments`), and so does a via that no longer joins
-        two things (an escape via whose way on was never used, say) - then
-        the cleanup runs again, because the track into that via now dangles."""
+        (:func:`cleanup_segments`); a narrow piece that lies on a wider track
+        of the net goes; two units' stubs into the same pad become one; and so
+        does a via that no longer joins two things (an escape via whose way on
+        was never used, a plane via outside its plane) - then the cleanup runs
+        again, because the track into that via now dangles.  With
+        ``straighten`` (default: the option of that name) one-step staircases
+        become diagonals where an exact check allows it (:meth:`_straighten`)."""
         g = self.grid
-        tracks: List[Track] = []
-        vias: List[Via] = []
+        if straighten is None:
+            straighten = self.opt.straighten
+        per_net: List[Tuple[str, Dict[float, List[Any]], List[Any], List[Tuple[int, int]]]] = []
         for name in self.design.nets:
             items = self.net_items.get(name, [])
             if not items:
                 continue
             ctx = self.ctx[name]
-            stubs = [it for it in items if not it.is_via and it.b is None]
+            # one stub per (layer, node, pad centre): the widest of its copies
+            stub_map: Dict[Any, _Seg] = {}
+            for it in items:
+                if not it.is_via and it.b is None:
+                    key = (it.layer, it.a, round(it.x2, 6), round(it.y2, 6))
+                    old = stub_map.get(key)
+                    if old is None or it.hw > old.hw + 1e-9:
+                        stub_map[key] = it
+            stubs = [stub_map[k] for k in sorted(stub_map)]
             vset = {it.a for it in items if it.is_via}
+            plane_ok = self.plane_ok.get(name) if ctx.plane else None
             base: Set[Tuple[int, int, int]] = set()
             pad_layers: Dict[Tuple[int, int], Set[int]] = {}
             for p in ctx.pads:
@@ -2810,25 +3395,33 @@ class Router:
                     pad_layers.setdefault(n, set()).update(p.lay)
                     for l in p.lay:
                         base.add((l, n[0], n[1]))
-            for s in stubs:
-                base.add((s.layer, s.a[0], s.a[1]))
-            groups: Dict[float, List[Any]] = {}
+            for st in stubs:
+                base.add((st.layer, st.a[0], st.a[1]))
+            # unit edges per width; an edge two units laid at different widths
+            # keeps the wider one only
+            edge_w: Dict[Tuple[int, Tuple[int, int], Tuple[int, int]], float] = {}
             for it in items:
-                if not it.is_via and it.b is not None:
-                    groups.setdefault(round(2.0 * it.hw, 6), []).append((it.layer, it.a, it.b))
+                if it.is_via or it.b is None:
+                    continue
+                width = round(2.0 * it.hw, 6)
+                nodes = self._seg_nodes(it)
+                for a, b in zip(nodes, nodes[1:]):
+                    key = (it.layer, a, b) if a < b else (it.layer, b, a)
+                    if edge_w.get(key, 0.0) < width:
+                        edge_w[key] = width
+            groups: Dict[float, List[Any]] = {}
+            for (layer, a, b), width in edge_w.items():
+                groups.setdefault(width, []).append((layer, a, b))
             covered: Dict[float, Set[Tuple[int, int, int]]] = {}
             if len(groups) > 1:
                 # tracks of different width are cleaned up separately: where one
                 # ends on another (end to end or in a T) both keep that node
                 for width, segs in groups.items():
-                    nodes: Set[Tuple[int, int, int]] = set()
+                    nodes_w: Set[Tuple[int, int, int]] = set()
                     for layer, a, b in segs:
-                        n = max(abs(b[0] - a[0]), abs(b[1] - a[1]))
-                        sx = (b[0] - a[0]) // n if n else 0
-                        sy = (b[1] - a[1]) // n if n else 0
-                        for i in range(n + 1):
-                            nodes.add((layer, a[0] + sx * i, a[1] + sy * i))
-                    covered[width] = nodes
+                        nodes_w.add((layer, a[0], a[1]))
+                        nodes_w.add((layer, b[0], b[1]))
+                    covered[width] = nodes_w
             cleaned: Dict[float, List[Any]] = {}
             for _pass in range(6):
                 anchors = set(base)
@@ -2838,9 +3431,9 @@ class Router:
                 cleaned = {}
                 for width in sorted(groups):
                     other: Set[Tuple[int, int, int]] = set()
-                    for w2, nodes in covered.items():
+                    for w2, nodes_w in covered.items():
                         if w2 != width:
-                            other |= nodes
+                            other |= nodes_w
                     joints = (covered.get(width, set()) & other) if other else set()
                     cleaned[width] = cleanup_segments(groups[width], anchors | joints,
                                                       set(vset), self.L, breaks=joints)
@@ -2856,12 +3449,19 @@ class Router:
                         joined[st.a].add(st.layer)
                 for v in vset:
                     joined[v].update(pad_layers.get(v, ()))
-                    if ctx.plane:
-                        joined[v].add("plane")
+                    if plane_ok is not None and plane_ok[v[1], v[0]]:
+                        joined[v].add("plane")       # (a via outside the plane joins nothing)
                 dead = [v for v in vset if len(joined[v]) < 2]
                 if not dead:
                     break
                 vset -= set(dead)
+            per_net.append((name, cleaned, stubs, sorted(vset)))
+        if straighten:
+            self._straighten(per_net)
+        tracks: List[Track] = []
+        vias: List[Via] = []
+        for name, cleaned, stubs, vlist in per_net:
+            ctx = self.ctx[name]
             for width in sorted(cleaned):
                 for layer, a, b in cleaned[width]:
                     x1, y1 = g.xy(*a)
@@ -2871,10 +3471,191 @@ class Router:
                 tracks.append(Track(name, self.layers[st.layer], round(st.x1, 6),
                                     round(st.y1, 6), round(st.x2, 6), round(st.y2, 6),
                                     round(2.0 * st.hw, 6)))
-            for v in sorted(vset):
+            for v in vlist:
                 x, y = g.xy(*v)
                 vias.append(Via(name, x, y, ctx.via_d, ctx.via_drill))
         return tracks, vias
+
+    def _straighten(self, per_net) -> int:
+        """Replace one-step staircases and jogs by diagonals.
+
+        The search may not cut corners (a diagonal move needs all four nodes
+        of its unit square free), so a track that runs diagonally at the limit
+        distance to something becomes a chain of alternating one-step
+        horizontal and vertical pieces.  Here every corner between two
+        perpendicular grid steps of one width - at least one of them a single
+        step, the corner node carrying nothing else - is cut by the diagonal
+        if an EXACT check of that diagonal against all other copper, pads,
+        holes, edge and keep-outs passes.  ``per_net`` (name, {width:
+        segments}, stubs, vias) is rewritten in place; returns the number of
+        corners cut."""
+        g = self.grid
+        r = self.rules
+        index = _Index(0.5)
+
+        class _Rec:                                    # a final track piece / via of some net
+            __slots__ = ("net", "layer", "x1", "y1", "x2", "y2", "hw", "clr", "alive", "via",
+                         "R", "drill")
+
+            def bbox(self):
+                e = max(self.hw, self.R)
+                return (min(self.x1, self.x2) - e, min(self.y1, self.y2) - e,
+                        max(self.x1, self.x2) + e, max(self.y1, self.y2) + e)
+
+        def record(net, layer, x1, y1, x2, y2, hw, clr, via=False, R=0.0, drill=0.0):
+            t = _Rec()
+            t.net, t.layer, t.x1, t.y1, t.x2, t.y2 = net, layer, x1, y1, x2, y2
+            t.hw, t.clr, t.via, t.R, t.drill = hw, clr, via, R, drill
+            index.add(t)
+            return t
+
+        def piece_clr(ctx, width):
+            """Clearance class of a track piece of this width (the wider one
+            for the standard-width pieces of a confined net: safe wherever
+            they are)."""
+            if ctx.rct_out is not None and width / 2.0 >= ctx.out_hw - 1e-9:
+                return ctx.out_clr
+            return ctx.cls_clr
+
+        def add_records(name, cleaned):
+            ctx = self.ctx[name]
+            out = []
+            for width, segs in cleaned.items():
+                clr = piece_clr(ctx, width)
+                for layer, a, b in segs:
+                    x1, y1 = g.xy(*a)
+                    x2, y2 = g.xy(*b)
+                    out.append(record(name, layer, x1, y1, x2, y2, width / 2.0, clr))
+            return out
+
+        track_recs: Dict[str, List[Any]] = {}
+        for name, cleaned, stubs, vlist in per_net:
+            ctx = self.ctx[name]
+            track_recs[name] = add_records(name, cleaned)
+            for st in stubs:
+                record(name, st.layer, st.x1, st.y1, st.x2, st.y2, st.hw, st.cls_clr)
+            for v in vlist:
+                x, y = g.xy(*v)
+                record(name, -1, x, y, x, y, 0.0, ctx.via_clr, True, ctx.via_d / 2.0,
+                       ctx.via_drill)
+
+        def clear(name, layer, a, c, hw, clr) -> bool:
+            x1, y1 = g.xy(*a)
+            x2, y2 = g.xy(*c)
+            probe = _Seg()
+            probe.net, probe.layer, probe.a, probe.b = name, layer, a, c
+            probe.x1, probe.y1, probe.x2, probe.y2 = x1, y1, x2, y2
+            probe.hw, probe.cls_clr, probe.exact = hw, clr, True
+            if not self._pad_clear(probe, name):       # pads, edge, keep-outs, holes
+                return False
+            seg = (x1, y1, x2, y2)
+            for o in index.query(probe.bbox(), 1.0):
+                if o.net == name:
+                    continue
+                need = max(clr, o.clr, self.floor)
+                if o.via:
+                    d = point_segment_distance(o.x1, o.y1, x1, y1, x2, y2)
+                    if d - hw - o.R < need - EPS or \
+                            d - hw - o.drill / 2.0 < r.hole_clearance - EPS:
+                        return False
+                elif o.layer == layer:
+                    if segment_segment_distance(seg, (o.x1, o.y1, o.x2, o.y2)) - hw - o.hw \
+                            < need - EPS:
+                        return False
+            return True
+
+        total = 0
+        for name, cleaned, stubs, vlist in per_net:
+            ctx = self.ctx[name]
+            vset = set(vlist)
+            fixed: Set[Tuple[int, int, int]] = set()   # nodes that keep their corner
+            for p in ctx.pads:
+                for n in p.nodelist:
+                    for l in p.lay:
+                        fixed.add((l, n[0], n[1]))
+            for st in stubs:
+                fixed.add((st.layer, st.a[0], st.a[1]))
+            # the net as unit edges: (layer, node) -> {neighbour node: width}
+            adj: Dict[Tuple[int, int, int], Dict[Tuple[int, int], float]] = {}
+            for width, segs in cleaned.items():
+                for layer, a, b in segs:
+                    n = max(abs(b[0] - a[0]), abs(b[1] - a[1]))
+                    if n == 0:
+                        continue
+                    sx, sy = (b[0] - a[0]) // n, (b[1] - a[1]) // n
+                    for i in range(n):
+                        u = (a[0] + sx * i, a[1] + sy * i)
+                        v = (u[0] + sx, u[1] + sy)
+                        adj.setdefault((layer,) + u, {})[v] = width
+                        adj.setdefault((layer,) + v, {})[u] = width
+            cut = 0
+            for key in sorted(adj):
+                nb = adj.get(key)
+                if nb is None or len(nb) != 2 or key in fixed or key[1:] in vset:
+                    continue
+                layer, b = key[0], key[1:]
+                (p1, w1), (p2, w2) = sorted(nb.items())
+                if abs(w1 - w2) > 1e-9:
+                    continue
+                d1 = (p1[0] - b[0], p1[1] - b[1])
+                d2 = (p2[0] - b[0], p2[1] - b[1])
+                if d1[0] * d1[1] != 0 or d2[0] * d2[1] != 0 \
+                        or d1[0] * d2[0] + d1[1] * d2[1] != 0:
+                    continue                           # not two perpendicular grid steps
+                # a corner between two long straight runs stays; a staircase step or
+                # a one-step jog goes
+                single1 = (p1[0] + d1[0], p1[1] + d1[1]) not in adj.get((layer,) + p1, {})
+                single2 = (p2[0] + d2[0], p2[1] + d2[1]) not in adj.get((layer,) + p2, {})
+                if not (single1 or single2):
+                    continue
+                if p2 in adj.get((layer,) + p1, {}):
+                    continue
+                hw = w1 / 2.0
+                if ctx.rct_out is not None and hw < ctx.out_hw - 1e-9 \
+                        and not (self._is_fine(p1) and self._is_fine(p2)):
+                    continue                           # a fine piece must stay in a fine area
+                if not clear(name, layer, p1, p2, hw, piece_clr(ctx, w1)):
+                    continue
+                del adj[key]
+                del adj[(layer,) + p1][b]
+                del adj[(layer,) + p2][b]
+                adj[(layer,) + p1][p2] = w1
+                adj[(layer,) + p2][p1] = w1
+                cut += 1
+            if not cut:
+                continue
+            total += cut
+            groups: Dict[float, List[Any]] = {}
+            for (layer, ux, uy), nb in adj.items():
+                for v, width in nb.items():
+                    if (ux, uy) < v:
+                        groups.setdefault(width, []).append((layer, (ux, uy), v))
+            anchors = set(fixed)
+            for v in vset:
+                for l in range(self.L):
+                    anchors.add((l, v[0], v[1]))
+            nodes_w: Dict[float, Set[Tuple[int, int, int]]] = {}
+            for width, segs in groups.items():
+                ns: Set[Tuple[int, int, int]] = set()
+                for layer, a, b in segs:
+                    ns.add((layer,) + a)
+                    ns.add((layer,) + b)
+                nodes_w[width] = ns
+            cleaned.clear()
+            for width in sorted(groups):
+                other: Set[Tuple[int, int, int]] = set()
+                for w2, ns in nodes_w.items():
+                    if w2 != width:
+                        other |= ns
+                joints = nodes_w[width] & other
+                cleaned[width] = cleanup_segments(groups[width], anchors | joints, vset,
+                                                  self.L, breaks=joints)
+            for rec in track_recs[name]:               # the others now see the new shape
+                index.remove(rec)
+            track_recs[name] = add_records(name, cleaned)
+        if total:
+            self.stats["corners_cut"] = total
+        return total
 
 # --------------------------------------------------------------------------
 # cleanup
@@ -3000,32 +3781,83 @@ def cleanup_segments(segs: Iterable[Tuple[int, Tuple[int, int], Tuple[int, int]]
 # planes
 # --------------------------------------------------------------------------
 
+def _zone_values(design: Design, layer: str, net: str) -> Tuple[List[Any], float, float]:
+    """(planes of ``net`` on ``layer``, zone clearance, zone minimum width)."""
+    r = design.rules
+    mine = [pl for pl in design.planes if pl.layer == layer and pl.net == net]
+    zc = max(r.zone_clearance, design.netclass_of(net).clearance)
+    mw = r.zone_min_width
+    for pl in mine:
+        if pl.clearance is not None:
+            zc = pl.clearance
+        if pl.min_width is not None:
+            mw = pl.min_width
+    return mine, zc, mw
+
+
+def plane_static_area(design: Design, layer: str, net: str, margin: float = 0.02):
+    """Where the plane(s) of ``net`` on ``layer`` can have copper at all,
+    whatever is routed later: the planes' own outlines (the whole board for a
+    plane without a shape) inside the copper-to-edge distance, minus
+
+    * copper keep-outs of that layer,
+    * the outline of every plane of ANOTHER net on the layer that KiCad fills
+      first (higher ``priority``; equal priorities are reported by the checks),
+      grown by the zone clearance - an island cuts a hole into the big plane,
+    * non-plated holes.
+
+    A shapely geometry (possibly empty).  The router lets a fan-out via land
+    only here; :func:`plane_regions` starts from it."""
+    r = design.rules
+    mine, zc, _mw = _zone_values(design, layer, net)
+    board_poly = geometry.outline_polygon(design.outline, r.max_arc_error)
+    area = board_poly.buffer(-(max(r.copper_to_edge, zc) + margin))
+    if not mine:
+        return Polygon()
+    if all(pl.shape is not None for pl in mine):
+        own = shapely.unary_union([geometry.shape_polygon(pl.shape, r.max_arc_error)
+                                   for pl in mine])
+        area = area.intersection(own)
+    prio = max(pl.priority for pl in mine)
+    cuts: List[Any] = []
+    for other in design.planes:
+        if other.layer != layer or other.net == net or other.priority <= prio:
+            continue
+        ozc = other.clearance if other.clearance is not None else max(
+            r.zone_clearance, design.netclass_of(other.net).clearance)
+        if other.shape is None:
+            return Polygon()                         # a whole-board plane is filled first
+        cuts.append(geometry.shape_polygon(other.shape, r.max_arc_error, "circumscribed")
+                    .buffer(max(zc, ozc) + margin))
+    for ko in design.keepouts:
+        if ko.copper and layer in ko.layer_names(design.copper_layers):
+            cuts.append(geometry.keepout_polygon(ko).buffer(margin))
+    for seg, width, _ring, _name in geometry.npth_holes(design):
+        cuts.append(LineString([seg[:2], seg[2:]]).buffer(
+            width / 2.0 + max(r.hole_clearance, r.copper_to_edge, zc) + margin)
+            if seg[:2] != seg[2:] else Point(seg[0], seg[1]).buffer(
+                width / 2.0 + max(r.hole_clearance, r.copper_to_edge, zc) + margin))
+    if cuts:
+        area = area.difference(shapely.unary_union(cuts))
+    return area
+
+
 def plane_regions(design: Design, layer: str, net: str, tracks: Sequence[Track],
                   vias: Sequence[Via], margin: float = 0.02) -> List[Any]:
-    """Connected pieces of the filled whole-board plane of ``net`` on
-    ``layer``, predicted the way KiCad fills a zone - a little on the safe
-    side (``margin``): the board area inside the copper-to-edge distance,
-    minus everything foreign on that layer grown by the zone clearance (tracks,
-    via pads, pads, drilled holes, copper keep-outs), with necks narrower than
-    the zone's minimum width removed.
+    """Connected pieces of the filled plane(s) of ``net`` on ``layer``,
+    predicted the way KiCad fills a zone - a little on the safe side
+    (``margin``): :func:`plane_static_area` (outline, board edge, copper
+    keep-outs, pours of other nets that are filled first, non-plated holes)
+    minus everything foreign on that layer grown by the zone clearance
+    (tracks, via pads, pads, drilled holes), with necks narrower than the
+    zone's minimum width removed.
 
     Returns shapely polygons, largest first.  A via or plated pad of the net
     is connected to the piece its centre lies in; pieces do not connect to
     each other on this layer.  One piece = the plane is whole."""
     r = design.rules
-    plane = None
-    for pl in design.planes:
-        if pl.layer == layer and pl.net == net and pl.shape is None:
-            plane = pl
-            break
-    zc = r.zone_clearance
-    mw = r.zone_min_width
-    if plane is not None:
-        zc = plane.clearance if plane.clearance is not None else max(
-            r.zone_clearance, design.netclass_of(net).clearance)
-        mw = plane.min_width if plane.min_width is not None else r.zone_min_width
-    board_poly = geometry.outline_polygon(design.outline, r.max_arc_error)
-    area = board_poly.buffer(-(max(r.copper_to_edge, zc) + margin))
+    _mine, zc, mw = _zone_values(design, layer, net)
+    area = plane_static_area(design, layer, net, margin)
     holes: List[Any] = []
 
     def clr(other: Optional[str], local: Optional[float] = None) -> float:
@@ -3042,21 +3874,14 @@ def plane_regions(design: Design, layer: str, net: str, tracks: Sequence[Track],
                 v.diameter / 2.0 + clr(v.net), v.drill / 2.0 + r.hole_clearance + margin)))
     for p in geometry.placed_pads(design):
         if p.kind == "npth" or p.polygon is None:
-            if p.drill > 0:
-                holes.append(Point(p.x, p.y).buffer(
-                    p.drill / 2.0 + max(r.hole_clearance, r.copper_to_edge, zc) + margin))
+            if p.ring is not None:
+                holes.append(p.ring.buffer(clr(None) + geometry.PAD_POLYGON_TOLERANCE))
             continue
         if layer in p.layers and p.net != net:
             holes.append(p.polygon.buffer(clr(p.net, p.clearance)
                                           + geometry.PAD_POLYGON_TOLERANCE))
         if p.kind == "th" and p.drill > 0 and p.net != net:
-            holes.append(Point(p.x, p.y).buffer(p.drill / 2.0 + r.hole_clearance + margin))
-    for h in design.outline.holes:
-        holes.append(Point(h.x, h.y).buffer(
-            h.drill / 2.0 + max(r.hole_clearance, r.copper_to_edge, zc) + margin))
-    for ko in design.keepouts:
-        if ko.copper and layer in ko.layer_names(design.copper_layers):
-            holes.append(geometry.keepout_polygon(ko).buffer(margin))
+            holes.append(p.hole_geometry().buffer(p.drill / 2.0 + r.hole_clearance + margin))
     region = area.difference(shapely.unary_union(holes)) if holes else area
     half = mw / 2.0 + margin / 2.0
     region = region.buffer(-half).buffer(mw / 2.0)
@@ -3090,9 +3915,17 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
       (:meth:`gleda.model.Design.clearance`, pad overrides included), hole to
       copper and hole to hole (same net included), copper to board edge, track
       and via keep-outs;
+    * non-plated holes of the outline AND of footprints, round or oblong, and
+      the netless copper ring around them;
+    * track widths per net class - and, in a design with fine areas, that a
+      fine class is fine only for copper completely inside an area: elsewhere
+      the standard width and clearance apply (``Design.outside_values``);
+    * the gap between a via and an SMD pad of its own net
+      (``Rules.via_pad_gap_open`` where the via is not tented on the pad's
+      side, ``via_pad_gap_tented`` where it is) - not a KiCad rule;
     * connectivity computed from the copper: pads, tracks and vias that touch
-      are joined, and every via or pad of a net that owns a whole-board plane
-      is joined to the piece of that plane's fill its centre lies in
+      are joined, and every via or pad of a net that owns a plane or pour is
+      joined to the piece of that fill its centre lies in
       (:func:`plane_regions` - a prediction of KiCad's zone fill; KiCad's own
       fill and DRC have the last word).
 
@@ -3100,7 +3933,8 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
     connected."""
     r = design.rules
     res = AuditResult()
-    pads = [p for p in geometry.placed_pads(design) if p.polygon is not None and p.layers]
+    all_pads = geometry.placed_pads(design)
+    pads = [p for p in all_pads if p.polygon is not None and p.layers]
     floor = r.min_clearance
     board_poly = geometry.outline_polygon(design.outline, r.max_arc_error)
     boundary = board_poly.boundary
@@ -3131,23 +3965,33 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
             return []
         return [int(i) for i in tree.query(geom.buffer(reach))]
 
+    # ---- fine areas: which tracks / vias are not completely inside one ---------
+    areas = geometry.FineAreas(design)
+    confined = {name for name in design.nets if design.is_confined(name)}
+    t_out = [t.net in confined and not areas.encloses(t_geoms[i], t.width / 2.0)
+             for i, t in enumerate(tracks)]
+    v_out = [v.net in confined and not areas.encloses(v_geoms[i], v.diameter / 2.0)
+             for i, v in enumerate(vias)]
+    open_sides = VIA_TENTING.get(design.via_tenting, ())
+
     # ---- clearances --------------------------------------------------------
     for i, t in enumerate(tracks):
         gt = t_geoms[i]
         hw = t.width / 2.0
-        if t.width < design.min_track_width(t.net) - tol:
-            viol("track_width", t.net, t.x1, t.y1, "width %.4f" % t.width)
+        if t.width < design.min_track_width(t.net, outside=t_out[i]) - tol:
+            viol("track_width", t.net, t.x1, t.y1, "width %.4f%s" % (
+                t.width, " outside the fine areas" if t_out[i] else ""))
         for j in near(pad_tree, gt):
             p = pads[j]
             if p.net == t.net or t.layer not in p.layers:
                 continue
-            need = design.clearance(t.net, p.net, local_b=p.clearance)
+            need = design.clearance(t.net, p.net, local_b=p.clearance, outside_a=t_out[i])
             gap = gt.distance(pad_geoms[j]) - pad_rad[j] - hw
             if gap < need - tol:
                 viol("clearance", t.net, t.x1, t.y1,
                      "track to pad %s: %.4f < %.4f" % (p.key, gap, need))
             if p.kind == "th" and p.drill > 0:
-                hole_gap = gt.distance(Point(p.x, p.y)) - p.drill / 2.0 - hw
+                hole_gap = gt.distance(p.hole_geometry()) - p.drill / 2.0 - hw
                 if hole_gap < r.hole_clearance - tol:
                     viol("hole_clearance", t.net, t.x1, t.y1,
                          "track to hole of %s: %.4f" % (p.key, hole_gap))
@@ -3157,7 +4001,8 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
             o = tracks[j]
             if o.net == t.net or o.layer != t.layer:
                 continue
-            need = max(design.clearance(t.net, o.net), floor)
+            need = max(design.clearance(t.net, o.net, outside_a=t_out[i],
+                                        outside_b=t_out[j]), floor)
             gap = gt.distance(t_geoms[j]) - hw - o.width / 2.0
             if gap < need - tol:
                 viol("clearance", t.net, t.x1, t.y1,
@@ -3166,7 +4011,7 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
             v = vias[j]
             if v.net == t.net:
                 continue
-            need = design.clearance(t.net, v.net)
+            need = design.clearance(t.net, v.net, outside_a=t_out[i], outside_b=v_out[j])
             dist = gt.distance(v_geoms[j])
             if dist - hw - v.diameter / 2.0 < need - tol:
                 viol("clearance", t.net, v.x, v.y,
@@ -3186,14 +4031,23 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
             p = pads[j]
             dist = gv.distance(pad_geoms[j]) - pad_rad[j]
             if p.net != v.net:
-                need = design.clearance(v.net, p.net, local_b=p.clearance)
+                need = design.clearance(v.net, p.net, local_b=p.clearance, outside_a=v_out[i])
                 if dist - rad < need - tol:
                     viol("clearance", v.net, v.x, v.y,
                          "via to pad %s: %.4f < %.4f" % (p.key, dist - rad, need))
                 if dist - v.drill / 2.0 < r.hole_clearance - tol:
                     viol("hole_clearance", v.net, v.x, v.y, "via hole to pad %s" % p.key)
+            elif p.kind != "th":
+                # own pad: the via must not sit in or right next to it
+                mask = "F.Mask" if p.side == "top" else "B.Mask"
+                need = r.via_pad_gap_open if mask in open_sides else r.via_pad_gap_tented
+                if dist - rad < need - tol - geometry.PAD_POLYGON_TOLERANCE:
+                    viol("via_pad_gap", v.net, v.x, v.y,
+                         "via %.4f mm from pad %s of its own net, %.3f wanted%s" % (
+                             dist - rad, p.key, need,
+                             " (via not tented on that side)" if mask in open_sides else ""))
             if p.kind == "th" and p.drill > 0:
-                hh = math.hypot(v.x - p.x, v.y - p.y) - v.drill / 2.0 - p.drill / 2.0
+                hh = gv.distance(p.hole_geometry()) - v.drill / 2.0 - p.drill / 2.0
                 if hh < r.hole_to_hole - tol:
                     viol("hole_near_hole", v.net, v.x, v.y, "via to hole of %s" % p.key)
         for j in near(v_tree, gv):
@@ -3205,22 +4059,43 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
                 viol("hole_near_hole", v.net, v.x, v.y,
                      "via to via of %s: %.4f" % (o.net, dist - v.drill / 2.0 - o.drill / 2.0))
             if o.net != v.net:
-                need = design.clearance(v.net, o.net)
+                need = design.clearance(v.net, o.net, outside_a=v_out[i], outside_b=v_out[j])
                 if dist - rad - o.diameter / 2.0 < need - tol:
                     viol("clearance", v.net, v.x, v.y, "via to via of %s" % o.net)
         edge_gap = gv.distance(boundary) - rad
         if edge_gap < r.copper_to_edge - tol or not board_poly.contains(gv):
             viol("copper_edge_clearance", v.net, v.x, v.y, "via to edge %.4f" % edge_gap)
-        for h in design.outline.holes:
-            hh = math.hypot(v.x - h.x, v.y - h.y) - v.drill / 2.0 - h.drill / 2.0
-            if hh < r.hole_to_hole - tol:
-                viol("hole_near_hole", v.net, v.x, v.y, "via to NPTH hole")
-    for h in design.outline.holes:
-        hp = Point(h.x, h.y)
-        for i in near(t_tree, hp):
+    # ---- non-plated holes (outline and footprints; round or oblong) ---------------
+    hole_need = max(r.hole_clearance, r.copper_to_edge)
+    for seg, width, ring, name in geometry.npth_holes(design):
+        hg = LineString([seg[:2], seg[2:]]) if seg[:2] != seg[2:] else Point(seg[0], seg[1])
+        for i in near(t_tree, hg):
             t = tracks[i]
-            if t_geoms[i].distance(hp) - h.drill / 2.0 - t.width / 2.0 < r.hole_clearance - tol:
-                viol("hole_clearance", t.net, h.x, h.y, "track to NPTH hole")
+            gap = t_geoms[i].distance(hg) - width / 2.0 - t.width / 2.0
+            if gap < hole_need - tol:
+                viol("hole_clearance", t.net, t.x1, t.y1,
+                     "track to NPTH hole %s: %.4f < %.4f" % (name, gap, hole_need))
+            elif ring is not None:
+                need = design.clearance(t.net, None, outside_a=t_out[i])
+                gap = t_geoms[i].distance(ring) - t.width / 2.0
+                if gap < need - tol - geometry.PAD_POLYGON_TOLERANCE:
+                    viol("clearance", t.net, t.x1, t.y1,
+                         "track to the copper of NPTH hole %s: %.4f < %.4f" % (name, gap, need))
+        for i in near(v_tree, hg):
+            v = vias[i]
+            dist = v_geoms[i].distance(hg) - width / 2.0
+            if dist - v.drill / 2.0 < r.hole_to_hole - tol:
+                viol("hole_near_hole", v.net, v.x, v.y, "via to NPTH hole %s" % name)
+            elif dist - v.diameter / 2.0 < hole_need - tol:
+                viol("hole_clearance", v.net, v.x, v.y,
+                     "via to NPTH hole %s: %.4f < %.4f" % (name, dist - v.diameter / 2.0,
+                                                           hole_need))
+            elif ring is not None:
+                need = design.clearance(v.net, None, outside_a=v_out[i])
+                gap = v_geoms[i].distance(ring) - v.diameter / 2.0
+                if gap < need - tol - geometry.PAD_POLYGON_TOLERANCE:
+                    viol("clearance", v.net, v.x, v.y,
+                         "via to the copper of NPTH hole %s" % name)
     for ko in design.keepouts:
         poly = geometry.shape_polygon(ko.shape, r.max_arc_error, "inscribed")
         names = ko.layer_names(design.copper_layers)
@@ -3273,8 +4148,8 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
             p = pads[j]
             if p.net == v.net and v_geoms[i].distance(pad_geoms[j]) - pad_rad[j] <= touch:
                 union(("v", i), ("p", j))
-    # planes: a via or pad is on the piece of the fill its centre lies in
-    for layer, net in sorted(design.full_plane_layers().items()):
+    # planes and pours: a via or pad is on the piece of the fill its centre lies in
+    for layer, net in plane_pairs(design):
         regions = plane_regions(design, layer, net, tracks, vias)
         res.plane_pieces["%s/%s" % (net, layer)] = len(regions)
         for i, v in enumerate(vias):
@@ -3304,6 +4179,90 @@ def audit(design: Design, tracks: Sequence[Track], vias: Sequence[Via],
                             key=lambda g: (-len(g), g))
             res.unrouted.append(Unrouted(name, pieces))
     return res
+
+
+def plane_pairs(design: Design) -> List[Tuple[str, str]]:
+    """Distinct (layer, net) pairs that have a plane or pour, sorted."""
+    return sorted({(pl.layer, pl.net) for pl in design.planes if pl.net in design.nets})
+
+
+# --------------------------------------------------------------------------
+# quality of a routing result
+# --------------------------------------------------------------------------
+
+def _octile(ax: float, ay: float, bx: float, by: float) -> float:
+    dx, dy = abs(ax - bx), abs(ay - by)
+    return max(dx, dy) + (math.sqrt(2.0) - 1.0) * min(dx, dy)
+
+
+def net_quality(design: Design, tracks: Sequence[Track], vias: Sequence[Via], *,
+                detour_warn: float = 2.5, same_side_vias_warn: int = 4) -> Dict[str, Any]:
+    """How good is the copper, net by net - for the eyes of a layout engineer.
+
+    For every routed net without a whole-board plane: track length, the
+    length of the octile (0 / 45 / 90 degree) minimum spanning tree over its
+    pad centres, their ratio, the number of vias, the number of pads and
+    whether all pads are on one side.  ``warnings`` names the nets whose
+    track is more than ``detour_warn`` times the spanning tree (and at least
+    10 mm longer) and the nets with all pads on one side that use more than
+    ``same_side_vias_warn`` vias per connection.  Nothing here is a rule
+    violation; KiCad's DRC does not see any of it."""
+    pads = [p for p in geometry.placed_pads(design) if p.polygon is not None and p.layers]
+    by_net: Dict[str, List[Any]] = {}
+    for p in pads:
+        if p.net:
+            by_net.setdefault(p.net, []).append(p)
+    plane_nets = set(design.full_plane_layers().values())
+    length: Dict[str, float] = {}
+    n_vias: Dict[str, int] = {}
+    for t in tracks:
+        length[t.net] = length.get(t.net, 0.0) + t.length
+    for v in vias:
+        n_vias[v.net] = n_vias.get(v.net, 0) + 1
+    nets: List[Dict[str, Any]] = []
+    warnings: List[str] = []
+    total_len = total_mst = 0.0
+    for name, net in design.nets.items():
+        ps = by_net.get(name, [])
+        if net.no_route or len(ps) < 2 or name in plane_nets:
+            continue
+        pts = [(p.x, p.y) for p in ps]
+        inn = {0}
+        mst = 0.0
+        best = {j: _octile(pts[0][0], pts[0][1], pts[j][0], pts[j][1])
+                for j in range(1, len(pts))}
+        while best:
+            j = min(best, key=lambda k: (best[k], k))
+            mst += best.pop(j)
+            inn.add(j)
+            for k in best:
+                d = _octile(pts[j][0], pts[j][1], pts[k][0], pts[k][1])
+                if d < best[k]:
+                    best[k] = d
+        ln = length.get(name, 0.0)
+        nv = n_vias.get(name, 0)
+        sides = sorted({p.side for p in ps})
+        ratio = round(ln / mst, 2) if mst > 0.2 else None
+        nets.append({"net": name, "pads": len(ps), "length_mm": round(ln, 3),
+                     "tree_mm": round(mst, 3), "ratio": ratio, "vias": nv, "sides": sides})
+        total_len += ln
+        total_mst += mst
+        if ratio is not None and ratio > detour_warn and ln - mst > 10.0:
+            warnings.append("%s: %.1f mm of track for a %.1f mm spanning tree (x%.1f), "
+                            "%d via(s)" % (name, ln, mst, ratio, nv))
+        elif len(sides) == 1 and nv > same_side_vias_warn * (len(ps) - 1):
+            warnings.append("%s: %d vias although its %d pads are all on the %s side" % (
+                name, nv, len(ps), sides[0]))
+    nets.sort(key=lambda n: (-(n["ratio"] or 0.0), n["net"]))
+    return {
+        "signal_length_mm": round(total_len, 3),
+        "signal_tree_mm": round(total_mst, 3),
+        "signal_ratio": round(total_len / total_mst, 3) if total_mst > 0 else None,
+        "nets_over_1_5": sum(1 for n in nets if n["ratio"] and n["ratio"] > 1.5),
+        "worst": nets[:10],
+        "warnings": warnings,
+        "nets": {n["net"]: {k: v for k, v in n.items() if k != "net"} for n in nets},
+    }
 
 
 # --------------------------------------------------------------------------
@@ -3414,8 +4373,9 @@ def load_routing(path: str, design: Optional[Design] = None,
 
 
 #: bumped whenever the router's output for a given design can change
-ROUTER_VERSION = "2"
+ROUTER_VERSION = "3"
 
 __all__ = ["RouterOptions", "RouteResult", "AuditResult", "Unrouted", "RoutingError",
            "Router", "route", "route_board", "audit", "cleanup_segments", "plane_regions",
+           "plane_static_area", "plane_pairs", "net_quality",
            "fingerprint", "save_routing", "load_routing", "ROUTER_VERSION"]

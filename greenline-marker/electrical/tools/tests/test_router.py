@@ -603,6 +603,9 @@ def test_unroutable_connection_is_reported_not_faked(tmp_path):
     assert res.routed_fraction == 0.5
     assert [u.net for u in res.unrouted] == ["A"]
     assert any(name.startswith("A:") for name in res.failures)
+    # the open net itself says why (the reasons of its units), not only the dict
+    assert res.unrouted[0].reason and "no path" in res.unrouted[0].reason
+    assert res.unrouted[0].to_dict()["reason"] == res.unrouted[0].reason
     assert "50.0 %" in res.summary()
     files = board.build_board(d, str(tmp_path))
     result, out = router.route_board(d, files.pcb)
@@ -757,7 +760,12 @@ def test_bga_escape(tmp_path, fine, pad_d, rules):
     # stage A fans the balls out; one that loses there is routed in the main stage
     assert res.stats["escapes"] >= 22 and res.stats["escapes"] + res.stats["escape_failed"] == 24
     assert res.connections_total == 20 + 3
-    assert {t.width for t in res.tracks if t.net.startswith("S_")} == {fine}
+    # between the balls the tracks are fine; further out the widening pass has
+    # laid them again at the standard width where it found room
+    widths = {round(t.width, 3) for t in res.tracks if t.net.startswith("S_")}
+    assert fine in widths and widths <= {fine, 0.15}
+    assert all(round(t.width, 3) == fine for t in res.tracks if t.net.startswith("S_")
+               and max(abs(t.x1), abs(t.y1), abs(t.x2), abs(t.y2)) <= 1.2)
     # no via closer than the keep-away distance to the ball field
     for v in res.vias:
         assert max(abs(v.x), abs(v.y)) >= 1.0 + pad_d / 2.0 + 0.75 + 0.25 - 1e-6
@@ -841,3 +849,598 @@ def test_escape_window_grows_past_parts_on_its_rim():
     gx0, gy0, gx1, gy1 = r._escape_window(r.arrays[0]["bbox"])
     assert gx1 > 4.1 + 0.4 + 0.6 and gx1 <= x1 + 1.0 + 1e-9  # past the pad, within the limit
     assert (gx0, gy0, gy1) == pytest.approx((x0, y0, y1))
+
+
+# --------------------------------------------------------------------------
+# regression tests for the review findings
+# --------------------------------------------------------------------------
+
+HARWIN = "Connector_Harwin:Harwin_Gecko-G125-MVX0605L1X_2x03_P1.25mm_Vertical"
+
+
+def _with_timeout(seconds, fn, *args):
+    """Run ``fn`` and fail (instead of hanging the test run) if it does not
+    return in time."""
+    import signal
+
+    def on_alarm(_sig, _frame):
+        raise AssertionError("did not return within %d s" % seconds)
+
+    old = signal.signal(signal.SIGALRM, on_alarm)
+    signal.alarm(seconds)
+    try:
+        return fn(*args)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def _two_nets_router():
+    d = make_board("frozen")
+    tp(d, "A1", -4.0, 2.0)
+    tp(d, "A2", 4.0, 2.0)
+    tp(d, "B1", -4.0, -2.0)
+    tp(d, "B2", 4.0, -2.0)
+    d.net("A", "A1.1", "A2.1")
+    d.net("B", "B1.1", "B2.1")
+    r = router.Router(d, RouterOptions(layers=OUTER))
+    res = r.run()
+    assert res.complete
+    return r
+
+
+def test_unsatisfied_terminates_on_a_frozen_connection_without_copper():
+    """The endless loop of the review: a connection that only counted as made
+    through other copper ("trivial", no items) was frozen during a region
+    renegotiation, the copper it relied on was ripped, and _unsatisfied()
+    'ripped' the frozen unit for ever."""
+    r = _two_nets_router()
+    real = [u for u in r.units if u.kind == "conn" and u.ctx.name == "A"][0]
+    ghost = r._new_unit("conn", real.ctx, list(real.pads))    # joined by the copper of `real`
+    ghost.routed, ghost.trivial, ghost.frozen = True, True, True
+    r.order.append(ghost)
+    assert _with_timeout(20, r._unsatisfied, r.order) == []
+    r._rip(real)                                               # what the ghost relied on is gone
+    open_units = _with_timeout(20, r._unsatisfied, r.order)
+    assert {u.uid for u in open_units} == {real.uid, ghost.uid}
+    assert not ghost.routed and not ghost.frozen and not ghost.trivial
+    assert r._frozen_broken == []
+
+
+def test_unsatisfied_skips_a_frozen_connection_with_copper_and_reports_it():
+    r = _two_nets_router()
+    a = [u for u in r.units if u.kind == "conn" and u.ctx.name == "A"][0]
+    # a second connection of net A that owns the copper; the first one pretends
+    # to rely on it, is frozen WITH items of its own and then loses its partner
+    twin = r._new_unit("conn", a.ctx, list(a.pads))
+    r.order.append(twin)
+    att = r._as_attempt(a)
+    r._rip(a)
+    r._commit(twin, att)                                       # twin now holds the track
+    stub = r._make_seg(a.ctx, 0, (10, 10), (11, 10), a.ctx.hw)  # some copper for `a`
+    fake = router._Attempt()
+    fake.items = [stub]
+    r._commit(a, fake)
+    r._freeze(a)
+    r._rip(twin)                                               # a's pads are no longer joined
+    open_units = _with_timeout(20, r._unsatisfied, r.order)
+    assert twin in open_units and a not in open_units          # a cannot be reopened while frozen
+    assert r._frozen_broken == [a] and a.routed and a.frozen
+    r._unfreeze(a)
+    assert a in _with_timeout(20, r._unsatisfied, r.order)     # ... but is once it is unfrozen
+
+
+def test_region_renegotiation_does_not_freeze_units_without_copper():
+    r = _two_nets_router()
+    real = [u for u in r.units if u.kind == "conn" and u.ctx.name == "A"][0]
+    ghost = r._new_unit("conn", real.ctx, list(real.pads))
+    ghost.routed, ghost.trivial = True, True
+    r.order.append(ghost)
+    other = [u for u in r.units if u.kind == "conn" and u.ctx.name == "B"][0]
+    r._rip(other)                                              # an open unit to work on
+    kept = _with_timeout(60, r._renegotiate_region, other, 30.0)
+    assert kept and other.routed
+    assert not any(u.frozen for u in r.units)
+    assert _with_timeout(20, r._unsatisfied, r.order) == []
+    assert router.audit(r.design, *r._emit()).ok
+
+
+def test_region_renegotiation_is_skipped_for_a_walled_in_pad():
+    d = make_board("caged")
+    tp(d, "A1", -4.0, 0.0)
+    tp(d, "A2", 4.0, 0.0)
+    tp(d, "B1", -4.0, 3.0)
+    tp(d, "B2", 4.0, 3.0)
+    d.net("A", "A1.1", "A2.1")
+    d.net("B", "B1.1", "B2.1")
+    d.add_keepout(RoundedPolygon.rect(4.0, 0.0, 3.0, 3.0), name="cage")
+    log = []
+    res = route(d, RouterOptions(progress=log.append))
+    assert not res.complete and [u.net for u in res.unrouted] == ["A"]
+    text = "\n".join(log)
+    assert "skipped: no path even across other nets' copper" in text
+    assert "unit(s) renegotiated" not in text                  # no time wasted on it
+
+
+def test_oblong_npth_holes_are_modelled_as_slots(tmp_path):
+    """Library footprint with two non-plated slots, 1.0 x 1.9 mm, long axis
+    along y: the hole reaches 0.45 mm further than a circle of its width."""
+    rules = replace(US_4L_STD, name="EDGE025", copper_to_edge=0.25)
+    d = Design("slots", Outline(RoundedPolygon.rect(0.0, 0.0, 16.0, 10.0)), rules=rules)
+    pins = {str(i): (str(i), "passive") for i in range(1, 7)}
+    d.add(Part("J1", "hdr", HARWIN, pins=pins, x=0.0, y=0.0, in_bom=False, height_mm=4.0))
+    slots = [p for p in geometry.placed_pads(d) if p.kind == "npth"]
+    assert len(slots) == 2
+    s = [p for p in slots if p.x > 0][0]
+    assert s.drill == pytest.approx(1.0) and s.slot == pytest.approx((3.75, 0.175, 3.75, 1.075))
+    assert s.ring is not None and s.ring.bounds == pytest.approx((3.2, -0.375, 4.3, 1.625),
+                                                                 abs=6e-3)
+    # two pads whose shortest grid route runs along y = 1.6, straight across the
+    # upper end of that slot (which a circle of the slot's width would not reach)
+    tp(d, "A0", 5.5, 1.6, dia=0.5)
+    tp(d, "B0", 2.9, 2.15, dia=0.5)
+    d.net("W0", "A0.1", "B0.1", layers=("F.Cu",))
+    for i in range(1, 7):
+        d.no_connect("J1.%d" % i)
+    res = route(d)
+    assert res.complete
+    hole = LineString([s.slot[:2], s.slot[2:]])
+    for t in res.tracks:
+        gap = LineString([(t.x1, t.y1), (t.x2, t.y2)]).distance(hole) - 0.5 - t.width / 2.0
+        assert gap >= 0.25 - 1e-9
+    kicad_judge(d, res, tmp_path)
+    # the audit sees a track that runs through the slot end
+    bad = [Track("W0", "F.Cu", 5.5, 1.6, 3.4, 1.6, 0.15),
+           Track("W0", "F.Cu", 3.4, 1.6, 2.9, 2.15, 0.15)]
+    round_hole = LineString([(5.5, 1.6), (3.4, 1.6)]).distance(Point(3.75, 0.625)) - 0.5 - 0.075
+    assert round_hole > 0.3                                    # a round hole would be far away
+    kinds = {v["type"] for v in audit(d, bad, []).violations}
+    assert kinds == {"hole_clearance"}
+    files = board.build_board(d, str(tmp_path / "bad"))
+    board.apply_routing(files.pcb, bad, [])
+    assert drc.run_drc(files.pcb).errors_by_type.get("hole_clearance")
+
+
+def _island_design():
+    d = make_board("island", 24.0, 14.0)
+    island = RoundedPolygon.rect(5.0, 0.0, 9.0, 9.0)
+    for i, (x, y) in enumerate(((-9.0, 4.0), (-9.0, -4.0), (4.0, 1.5), (6.0, -1.5))):
+        tp(d, "A%d" % i, x, y, dia=0.8)
+    d.net("+3V0", *["A%d.1" % i for i in range(4)], netclass="Power")
+    for i, (x, y) in enumerate(((3.0, -3.0), (7.5, 3.0), (-4.0, 0.0))):
+        tp(d, "B%d" % i, x, y, dia=0.8)
+    d.net("+1V8", *["B%d.1" % i for i in range(3)], netclass="Power")
+    d.add_plane("+3V0", "In2.Cu")
+    d.add_plane("+1V8", "In2.Cu", shape=island, priority=1)
+    return d, island
+
+
+def test_island_of_another_net_cuts_the_plane(tmp_path):
+    """Split power plane: +3V0 on all of In2.Cu with a +1V8 island of higher
+    priority in it.  Vias of +3V0 must not be dropped into the island."""
+    d, island = _island_design()
+    poly = geometry.shape_polygon(island)
+    area = router.plane_static_area(d, "In2.Cu", "+3V0")
+    assert not area.intersects(poly) and area.distance(poly) >= 0.2
+    assert router.plane_static_area(d, "In2.Cu", "+1V8").within(poly)
+    res = route(d)
+    assert res.complete
+    for v in res.vias:
+        if v.net == "+3V0":
+            assert Point(v.x, v.y).distance(poly) >= 0.3      # its centre is in the +3V0 fill
+    out = kicad_judge(d, res, tmp_path)
+    assert out.unconnected_count == 0
+    # what the old router did: a via straight under a pad that sits over the island
+    bad_vias = [Via("+3V0", 4.75, 1.5, 0.5, 0.25)]
+    bad_tracks = [Track("+3V0", "F.Cu", 4.0, 1.5, 4.75, 1.5, 0.3)]
+    a = audit(d, bad_tracks, bad_vias)
+    assert "+3V0" in [u.net for u in a.unrouted]
+    regions = plane_regions(d, "In2.Cu", "+3V0", bad_tracks, bad_vias)
+    assert all(not g.contains(Point(4.75, 1.5)) for g in regions)
+
+
+def test_no_fanout_via_into_a_void_of_the_plane(tmp_path):
+    """A GND pad in the middle of a copper keep-out of the plane layer: its
+    via must land where the plane is, not in the void (where it would join
+    nothing and only look connected)."""
+    d = make_board("void", 20.0, 12.0)
+    void = RoundedPolygon.rect(0.0, 0.0, 8.0, 8.0)
+    d.add_keepout(void, layers=("In1.Cu",), tracks=False, vias=False, copper=True,
+                  name="plane_void")
+    for i, (x, y) in enumerate(((-8.0, 3.0), (0.0, 0.0), (1.5, -1.5), (8.0, -3.0))):
+        tp(d, "G%d" % i, x, y, side="top" if i % 2 == 0 else BOTTOM, dia=0.8)
+    d.net("GND", *["G%d.1" % i for i in range(4)])
+    d.add_plane("GND", "In1.Cu")
+    res = route(d)
+    assert res.complete
+    poly = geometry.shape_polygon(void)
+    assert res.vias and all(not poly.contains(Point(v.x, v.y)) for v in res.vias)
+    out = kicad_judge(d, res, tmp_path)
+    assert "via_dangling" not in out.warnings_by_type
+
+
+def test_emit_drops_duplicate_stubs_and_narrow_copper_on_wider_tracks():
+    d = make_board("dups")
+    tp(d, "A1", -4.02, 0.03)                                   # off the grid: stubs to the centre
+    tp(d, "A2", 4.02, 0.03)
+    d.net("A", "A1.1", "A2.1")
+    r = router.Router(d, RouterOptions(layers=OUTER))
+    assert r.run().complete
+    unit = [u for u in r.units if u.kind == "conn"][0]
+    before_t, _ = r._emit()
+    stubs = [it for it in unit.items if not it.is_via and it.b is None]
+    segs = [it for it in unit.items if not it.is_via and it.b is not None]
+    assert stubs and segs
+    # a second unit lays the same stub again and a narrower track on top of the first
+    twin = r._new_unit("conn", unit.ctx, list(unit.pads))
+    att = router._Attempt()
+    att.items = [r._make_stub(unit.ctx, s.layer, s.a, s.x2, s.y2, s.hw) for s in stubs]
+    att.items += [r._make_seg(unit.ctx, s.layer, s.a, s.b, s.hw / 2.0) for s in segs]
+    r._commit(twin, att)
+    tracks, _vias = r._emit()
+    keys = [(t.layer, round(t.x1, 6), round(t.y1, 6), round(t.x2, 6), round(t.y2, 6))
+            for t in tracks]
+    assert len(keys) == len(set(keys))                         # no exact duplicates
+    assert {t.width for t in tracks} == {t.width for t in before_t}   # the narrow copy is gone
+    assert sorted(keys) == sorted((t.layer, round(t.x1, 6), round(t.y1, 6), round(t.x2, 6),
+                                   round(t.y2, 6)) for t in before_t)
+
+
+def _staircase_router(with_neighbour):
+    """Net A: 2 mm straight, a staircase of five one-step pairs, straight on.
+    ``with_neighbour``: a stub of net B ends at a point that keeps the
+    clearance to every node of the staircase - but not to the diagonal
+    between two of them (the 1 um case the exact check is there for)."""
+    d = make_board("stairs", 10.0, 8.0)
+    tp(d, "A1", -3.0, -1.0, dia=0.4)
+    tp(d, "A2", 0.0, -0.75, dia=0.4)
+    d.net("A", "A1.1", "A2.1")
+    tp(d, "B1", -3.0, 2.5, dia=0.4)
+    tp(d, "B2", 3.0, 2.5, dia=0.4)
+    d.net("B", "B1.1", "B2.1")
+    r = router.Router(d, RouterOptions(layers=OUTER))
+    r._setup_units()
+    g = r.grid
+    a = [u for u in r.order if u.ctx.name == "A"][0]
+    b = [u for u in r.order if u.ctx.name == "B"][0]
+    n0 = g.nearest(-3.0, -1.0)
+    nodes = [n0, (n0[0] + 40, n0[1])]
+    x, y = nodes[-1]
+    for _ in range(5):
+        x += 1
+        nodes.append((x, y))
+        y += 1
+        nodes.append((x, y))
+    nodes.append((x + 15, y))
+    assert g.xy(*nodes[-1]) == (0.0, -0.75)
+    att = router._Attempt()
+    att.items = [r._make_seg(a.ctx, 0, p, q, a.ctx.hw) for p, q in zip(nodes, nodes[1:])]
+    r._commit(a, att)
+    if with_neighbour:
+        sx, sy = nodes[1]
+        mx, my = g.xy(sx + 2, sy + 2)
+        mx, my = mx + 0.025, my + 0.025                    # middle of the third diagonal
+        need = 0.127 + 0.075 + 0.075                       # clearance + two half widths
+        dist = need - 0.0015                               # the nodes are 0.8 um further away
+        px, py = mx - dist / math.sqrt(2.0), my + dist / math.sqrt(2.0)
+        assert math.hypot(px - g.xy(sx + 2, sy + 2)[0], py - g.xy(sx + 2, sy + 2)[1]) > need
+        att = router._Attempt()
+        att.items = [r._make_stub(b.ctx, 0, (sx - 8, sy + 14), px, py, b.ctx.hw)]
+        r._commit(b, att)
+    return r, nodes
+
+
+def test_staircase_becomes_a_diagonal_only_where_the_exact_check_allows_it():
+    r, nodes = _staircase_router(with_neighbour=False)
+    plain, _ = r._emit(straighten=False)
+    tracks, _ = r._emit(straighten=True)
+    a_plain = [t for t in plain if t.net == "A"]
+    a = [t for t in tracks if t.net == "A"]
+    assert len(a_plain) == 11 and len(a) == 3                  # straight, one diagonal, straight
+    diag = [t for t in a if abs(t.x2 - t.x1) > 1e-9 and abs(t.y2 - t.y1) > 1e-9]
+    assert len(diag) == 1 and diag[0].length == pytest.approx(5 * 0.05 * math.sqrt(2.0))
+    assert r.stats["corners_cut"] == 5
+    assert audit(r.design, tracks, []).violations == []
+    # a diagonal that would come 1.5 um too close to other copper is not taken:
+    # the step next to it is cut on its other side instead
+    r, nodes = _staircase_router(with_neighbour=True)
+    plain, _ = r._emit(straighten=False)
+    assert audit(r.design, plain, []).violations == []
+    tracks, _ = r._emit(straighten=True)
+    assert audit(r.design, tracks, []).violations == []
+    a = [t for t in tracks if t.net == "A"]
+    assert len(a) == 5                                         # diagonal, one step, diagonal
+    sx, sy = nodes[1]
+    p, q = r.grid.xy(sx + 2, sy + 2), r.grid.xy(sx + 3, sy + 3)
+    line = LineString([p, q])
+    assert all(LineString([(t.x1, t.y1), (t.x2, t.y2)]).intersection(line).length < 1e-9
+               for t in a)
+    # forcing it is exactly what the audit (and KiCad) would reject
+    forced = list(tracks) + [Track("A", "F.Cu", p[0], p[1], q[0], q[1], 0.15)]
+    assert [v["type"] for v in audit(r.design, forced, []).violations] == ["clearance"]
+
+
+def test_via_keeps_a_wider_gap_to_its_pad_where_it_is_not_tented(tmp_path):
+    def gap(tenting):
+        d = make_board("gap_%s" % tenting, 8.0, 6.0)
+        d.add(Part("C1", "100n", "Capacitor_SMD:C_0402_1005Metric", x=0.0, y=0.0,
+                   in_bom=False, height_mm=0.5))
+        tp(d, "T1", -3.0, 0.0)
+        d.net("GND", "C1.2", netclass="Power")
+        d.net("SIG", "C1.1", "T1.1")
+        tp(d, "G1", 3.0, 2.0)
+        d.net("GND", "G1.1")
+        d.add_plane("GND", "In1.Cu")
+        d.via_tenting = tenting
+        res = route(d)
+        assert res.complete
+        pad = [p for p in geometry.placed_pads(d) if p.key == "C1.2"][0]
+        via = min((v for v in res.vias if v.net == "GND"),
+                  key=lambda v: math.hypot(v.x - pad.x, v.y - pad.y))
+        return d, res, pad.polygon.distance(Point(via.x, via.y)) - via.diameter / 2.0, via
+
+    d, res, g_open, via = gap("bottom")                       # top side open: C1 is on top
+    assert g_open >= US_4L_STD.via_pad_gap_open - 1e-6
+    kicad_judge(d, res, tmp_path)
+    d2, res2, g_tented, via2 = gap("both")
+    assert US_4L_STD.via_pad_gap_tented - 1e-6 <= g_tented < US_4L_STD.via_pad_gap_open
+    # the copper that is fine with tented vias is flagged where they are open
+    assert audit(d2, res2.tracks, res2.vias).violations == []
+    d2.via_tenting = "bottom"
+    kinds = [v["type"] for v in audit(d2, res2.tracks, res2.vias).violations]
+    assert kinds and set(kinds) == {"via_pad_gap"}
+    # RouterOptions.via_pad_gap overrides the rule set
+    d3 = make_board("gap_opt", 8.0, 6.0)
+    d3.add(Part("C1", "100n", "Capacitor_SMD:C_0402_1005Metric", x=0.0, y=0.0,
+                in_bom=False, height_mm=0.5))
+    tp(d3, "G1", 3.0, 2.0)
+    d3.net("GND", "C1.2", "G1.1")
+    d3.no_connect("C1.1")
+    d3.add_plane("GND", "In1.Cu")
+    res3 = route(d3, RouterOptions(via_pad_gap=0.4))
+    pad = [p for p in geometry.placed_pads(d3) if p.key == "C1.2"][0]
+    assert min(pad.polygon.distance(Point(v.x, v.y)) - v.diameter / 2.0
+               for v in res3.vias) >= 0.4 - 1e-6
+
+
+def _fine_board(confine=True):
+    d = Design("fine_area", Outline(RoundedPolygon.rect(0.0, 0.0, 24.0, 14.0)), layers=4,
+               rules=US_4L_FINE)
+    d.add_netclass("Fine", track_width=0.09, clearance=0.09)
+    fp = F.bga("FBGA16", 4, 4, pitch=0.5, pad_d=0.23, pad_clearance=0.09, height=1.0)
+    balls = ["%s%d" % (row, col) for row in "ABCD" for col in range(1, 5)]
+    d.add(Part("U1", "bga", fp, pins={b: (b, "bidir") for b in balls}, x=-6.0, y=0.0,
+               in_bom=False, height_mm=1.0))
+    used = ["A2", "A4", "B2", "B3", "C2", "C3", "D1", "D3"]     # two rings deep
+    for i, b in enumerate(used):
+        tp(d, "T%d" % i, 2.0 + 2.5 * (i % 4), -3.0 + 6.0 * (i // 4), dia=0.6)
+        d.net("N%d" % i, "U1.%s" % b, "T%d.1" % i, netclass="Fine")
+    d.no_connect(*["U1.%s" % b for b in balls if b not in used])
+    if confine:
+        d.add_fine_area("U1", margin=4.0)
+    return d
+
+
+def test_fine_classes_are_confined_to_the_fine_areas(tmp_path):
+    d = _fine_board()
+    assert d.is_confined("N0") and d.outside_values("N0") == (0.15, 0.127)
+    assert d.clearance("N0", "N1") == 0.09
+    assert d.clearance("N0", "N1", outside_a=True) == 0.127
+    assert d.min_track_width("N0") == 0.09 and d.min_track_width("N0", outside=True) == 0.15
+    res = route(d)
+    assert res.complete, res.unrouted
+    region = geometry.fine_region(d)
+    narrow = [t for t in res.tracks if t.width < 0.15 - 1e-9]
+    wide = [t for t in res.tracks if t.width >= 0.15 - 1e-9]
+    assert narrow and wide
+    for t in narrow:                                           # every fine piece touches the area
+        assert region.intersects(LineString([(t.x1, t.y1), (t.x2, t.y2)]))
+    area = geometry.fine_area_polygon(d.fine_areas[0])
+    far = max(max(Point(t.x1, t.y1).distance(area), Point(t.x2, t.y2).distance(area))
+              for t in narrow)
+    assert far <= 0.071 + 1e-6                                 # at most one grid step outside
+    assert max(max(t.x1, t.x2) for t in wide) > 6.0            # the long runs are 0.15 mm
+    out = kicad_judge(d, res, tmp_path)
+    assert "gleda fine class Fine outside the fine areas" in out.custom_rules
+    # a fine track outside the area: the audit and KiCad both object
+    t0 = [t for t in wide if t.length > 1.0 and
+          area.distance(LineString([(t.x1, t.y1), (t.x2, t.y2)])) > 0.5][0]
+    bad = [Track(t.net, t.layer, t.x1, t.y1, t.x2, t.y2, 0.09) if t is t0 else t
+           for t in res.tracks]
+    viol = audit(d, bad, res.vias).violations
+    assert [v["type"] for v in viol] == ["track_width"] and "outside" in viol[0]["detail"]
+    files = board.build_board(d, str(tmp_path / "bad"))
+    board.apply_routing(files.pcb, bad, res.vias)
+    assert drc.run_drc(files.pcb).errors_by_type == {"track_width": 1}
+
+
+def test_without_fine_areas_fine_nets_are_widened_where_there_is_room(tmp_path):
+    """No fine area declared: the fine class may be fine anywhere on its net.
+    Once the board is complete the router lays such nets again - fine within
+    ``widen_reach`` of the array, standard width beyond - and keeps what
+    works (best effort, nothing is enforced)."""
+    d = _fine_board(confine=False)
+    assert not d.is_confined("N0") and d.min_track_width("N0", outside=True) == 0.09
+    plain = route(d, RouterOptions(widen=False))
+    assert plain.complete
+    assert {round(t.width, 3) for t in plain.tracks} == {0.09}       # the old behaviour
+    res = route(d)
+    assert res.complete
+    fine = [t for t in res.tracks if t.width < 0.15 - 1e-9]
+    total = sum(t.length for t in res.tracks)
+    assert {round(t.width, 3) for t in res.tracks} == {0.09, 0.15}
+    assert res.stats["widened_nets"] == 8
+    assert sum(t.length for t in fine) < 0.55 * total
+    # what stays fine lies within 5 mm of the ball field (centre -6, 0; field +- 0.865)
+    for t in fine:
+        assert max(abs(t.x1 + 6.0), abs(t.x2 + 6.0)) <= 5.865 + 1e-6
+        assert max(abs(t.y1), abs(t.y2)) <= 5.865 + 1e-6
+    # the audit and KiCad have nothing against it (the class allows 0.09 anywhere)
+    kicad_judge(d, res, tmp_path)
+    # without stand-in areas a connection is widened as a whole or not at all:
+    # fewer nets make it (those in the middle of the fine-pitch bundle cannot)
+    whole = route(d, RouterOptions(widen_reach=0.0))
+    assert whole.complete and 0 < whole.stats["widened_nets"] < 8
+
+
+def test_net_quality_reports_detours_and_vias():
+    d = make_board("quality", 30.0, 20.0)
+    tp(d, "A1", -5.0, 0.0)
+    tp(d, "A2", 5.0, 0.0)
+    tp(d, "B1", -5.0, 4.0)
+    tp(d, "B2", 5.0, 4.0)
+    d.net("A", "A1.1", "A2.1")
+    d.net("B", "B1.1", "B2.1")
+    tracks = [Track("A", "F.Cu", -5.0, 0.0, 5.0, 0.0, 0.15),
+              # B goes a long way round: 4 + 8 + 10 + 8 + ... mm
+              Track("B", "F.Cu", -5.0, 4.0, -5.0, 9.0, 0.15),
+              Track("B", "F.Cu", -5.0, 9.0, 12.0, 9.0, 0.15),
+              Track("B", "F.Cu", 12.0, 9.0, 12.0, 4.0, 0.15),
+              Track("B", "F.Cu", 12.0, 4.0, 5.0, 4.0, 0.15)]
+    vias = [Via("A", x, 0.0, 0.5, 0.25) for x in (-3.0, -1.0, 0.0, 1.0, 3.0)]
+    q = router.net_quality(d, tracks, vias)
+    assert q["nets"]["A"] == {"pads": 2, "length_mm": 10.0, "tree_mm": 10.0, "ratio": 1.0,
+                              "vias": 5, "sides": ["top"]}
+    assert q["nets"]["B"]["ratio"] == 3.4 and q["worst"][0]["net"] == "B"
+    assert q["signal_length_mm"] == 44.0 and q["signal_tree_mm"] == 20.0
+    assert len(q["warnings"]) == 2
+    assert any(w.startswith("B: 34.0 mm of track for a 10.0 mm spanning tree") for w in q["warnings"])
+    assert any(w.startswith("A: 5 vias although its 2 pads are all on the top side")
+               for w in q["warnings"])
+    res = route(d)
+    assert res.quality["nets"]["A"]["ratio"] == 1.0 and res.warnings == []
+    assert res.to_dict()["stats"]["quality"]["signal_ratio"] == 1.0
+
+
+def test_whole_net_improvement_removes_a_needless_detour():
+    d = make_board("detour", 16.0, 10.0)
+    tp(d, "A1", -5.0, 0.0)
+    tp(d, "A2", 0.0, 0.0)
+    tp(d, "A3", 5.0, 0.0)
+    d.net("A", "A1.1", "A2.1", "A3.1")
+    r = router.Router(d, RouterOptions(layers=OUTER, improve_nets=0))
+    assert r.run().complete
+    conns = sorted((u for u in r.units if u.kind == "conn"), key=lambda u: u.uid)
+    first = conns[0]
+    # replace the first connection by a long way round; the second one hangs on it
+    g = r.grid
+    a, b = first.pads
+    na, nb = g.nearest(a.x, a.y), g.nearest(b.x, b.y)
+    for u in conns:
+        r._rip(u)
+    up = 60
+    att = router._Attempt()
+    att.items = [r._make_seg(first.ctx, 0, na, (na[0], na[1] + up), first.ctx.hw),
+                 r._make_seg(first.ctx, 0, (na[0], na[1] + up), (nb[0], nb[1] + up),
+                             first.ctx.hw),
+                 r._make_seg(first.ctx, 0, (nb[0], nb[1] + up), nb, first.ctx.hw)]
+    att.touch = {a.idx, b.idx}
+    att.cells = [(0,) + n for it in att.items for n in r._seg_nodes(it)]
+    r._commit(first, att)
+    for u in conns[1:]:
+        r._commit(u, r._route_unit(u, soft=False))
+    before = sum(t.length for t in r._emit()[0])
+    done, saved, _vias = r._improve_nets(1.3)
+    after = sum(t.length for t in r._emit()[0])
+    assert done == 1 and saved > 5.0 and after < before - 5.0
+    assert audit(d, *r._emit()).ok
+
+
+def _bga_next_to_a_hole():
+    d = Design("exits", Outline(RoundedPolygon.rect(0.0, 0.0, 26.0, 16.0)), layers=4,
+               rules=US_4L_FINE)
+    d.add_netclass("Fine", track_width=0.09, clearance=0.09)
+    fp = F.bga("ExitBGA9", 3, 3, pitch=0.5, pad_d=0.23, pad_clearance=0.09, height=1.0)
+    balls = ["%s%d" % (r, c) for r in "ABC" for c in (1, 2, 3)]
+    d.add(Part("U1", "bga", fp, pins={b: (b, "bidir") for b in balls}, x=0.0, y=0.0,
+               in_bom=False, height_mm=1.0))
+    for i, b in enumerate(("A3", "B3", "C3", "B2")):
+        tp(d, "T%d" % i, 10.0, 4.5 - 3.0 * i, dia=0.6)        # all of them to the right
+        d.net("N%d" % i, "U1.%s" % b, "T%d.1" % i, netclass="Fine")
+    d.no_connect(*["U1.%s" % b for b in balls if b not in ("A3", "B3", "C3", "B2")])
+    # a locating hole right behind the right-hand rim of the escape window
+    # (ball field +- 0.615, window = +- 3.615): its exclusion zone touches the rim
+    d.outline.add_hole(4.6, 0.0, 1.2)
+    return d
+
+
+def test_an_escape_does_not_end_in_front_of_a_hole(tmp_path):
+    """Stage A used to end escapes on any rim cell - also one with a hole's
+    exclusion zone right behind it.  Frozen there, the connection that had to
+    go on from it had no path at all (found on the demo board)."""
+    d = _bga_next_to_a_hole()
+    r = router.Router(d)
+    r._escape_arrays()
+    g = r.grid
+    escapes = [u for u in r.units if u.kind == "escape"]
+    assert len(escapes) == 4 and all(u.routed and u.frozen and u.at_rim for u in escapes)
+    for u in escapes:
+        end = u.cells[-1]
+        x, y = g.xy(end[1], end[2])
+        # not in the dead end between the rim and the hole (whose exclusion zone
+        # begins less than 0.4 mm behind the rim for |y| <= 0.7)
+        assert not (x > 3.5 and abs(y) <= 0.7 + 1e-9), (u.name, x, y)
+        assert tuple(end) in u.rimset and len(u.rimset) < len(u.rim)
+    # with the exit test off the nearest rim cell is taken, hole or not
+    r0 = router.Router(d, RouterOptions(escape_exit=0.0))
+    r0._escape_arrays()
+    ends = [g.xy(u.cells[-1][1], u.cells[-1][2]) for u in r0.units if u.kind == "escape"]
+    assert any(x > 3.5 and abs(y) <= 0.7 + 1e-9 for x, y in ends)
+    res = route(d)
+    assert res.complete, res.failures
+    kicad_judge(d, res, tmp_path)
+
+
+def test_frozen_fanout_is_thawed_once_for_units_without_any_path():
+    d = _bga_next_to_a_hole()
+    r = router.Router(d)
+    r._escape_arrays()
+    r._setup_units()
+    frozen = [u for u in r.units if u.frozen]
+    assert frozen
+    open_units = [u for u in r.order if not u.routed]
+    assert r._thaw_arrays(open_units) is True
+    assert not any(u.frozen for u in r.units) and r.stats["thawed"] == len(frozen)
+    assert all(u.routed for u in frozen)                       # the copper stays, negotiable
+    assert r._thaw_arrays(open_units) is False                 # only once
+    assert any("made negotiable again" in line for line in r.log_lines)
+
+
+def test_an_escape_starts_at_its_own_pad():
+    """Found on the demo board: the escape of pad P started on copper that
+    another unit had laid from pad Q to P - at Q.  It claimed P without
+    touching it; when the Q-P copper was rerouted, P was left with no copper
+    at all while the router still counted it as connected."""
+    d = _bga_next_to_a_hole()
+    tp(d, "P", -1.5, 2.6, dia=0.5)
+    tp(d, "Q", -2.6, 2.6, dia=0.5)                             # closer to the left rim
+    tp(d, "T", -10.0, 2.6, dia=0.6)
+    d.net("N", "P.1", "Q.1", "T.1")
+    r = router.Router(d)
+    r._escape_arrays()
+    esc = {u.pads[0].key: u for u in r.units if u.kind == "escape" and u.ctx.name == "N"}
+    assert set(esc) == {"P.1", "Q.1"}
+    for u in esc.values():
+        r._unfreeze(u)
+    for u in esc.values():
+        if u.routed:
+            r._rip(u)
+    # Q's unit: a track from Q to P (it touches both pads, it is not on the rim)
+    g = r.grid
+    q, p = esc["Q.1"].pads[0], esc["P.1"].pads[0]
+    nq, np_ = g.nearest(q.x, q.y), g.nearest(p.x, p.y)
+    att = router._Attempt()
+    att.items = [r._make_seg(esc["Q.1"].ctx, 0, nq, np_, esc["Q.1"].ctx.hw)]
+    att.cells = [(0,) + n for n in r._seg_nodes(att.items[0])]
+    att.touch = {q.idx, p.idx}
+    r._commit(esc["Q.1"], att)
+    out = r._route_escape(esc["P.1"], soft=False)
+    assert out is not None and not out.trivial and out.at_rim
+    first = out.cells[0]
+    assert (first[1], first[2]) in p.nodeset and (first[1], first[2]) not in q.nodeset
+    # and in a complete run every escape that holds copper starts inside its pad
+    r2 = router.Router(d)
+    assert r2.run().complete
+    for u in r2.units:
+        if u.kind == "escape" and u.items:
+            assert (u.cells[0][1], u.cells[0][2]) in u.pads[0].nodeset, u.name

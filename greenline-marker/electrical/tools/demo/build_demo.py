@@ -2,9 +2,9 @@
 """Build the GreenLine DEMO board end to end and say honestly whether it passed.
 
     cd electrical/tools
-    /usr/bin/python3 demo/build_demo.py                  # everything, about 8 minutes
+    /usr/bin/python3 demo/build_demo.py                  # everything, about 4 minutes
     /usr/bin/python3 demo/build_demo.py --reuse-routing  # skip the router if the design
-                                                         # is unchanged (about 15 s)
+                                                         # is unchanged (about 20 s)
 
 Stages (each one is recorded in ``demo_out/build_summary.json``):
 
@@ -115,9 +115,17 @@ def stage_route(design, out, ctx):
                    dpi=150)
     say("  " + result.summary())
     for u in result.unrouted:
-        say("  UNROUTED %s: %s" % (u.net, " | ".join(",".join(p[:6]) for p in u.pieces)))
+        say("  UNROUTED %s: %s%s" % (u.net, " | ".join(",".join(p[:6]) for p in u.pieces),
+                                   "  [%s]" % u.reason if u.reason else ""))
     for v in result.audit.violations[:10]:
         say("  AUDIT %s" % (v,))
+    quality = result.quality or router.net_quality(design, result.tracks, result.vias)
+    if quality.get("signal_tree_mm"):
+        say("  signal track %.0f mm for %.0f mm of spanning trees (x%.2f), %d net(s) over x1.5"
+            % (quality["signal_length_mm"], quality["signal_tree_mm"],
+               quality["signal_ratio"], quality["nets_over_1_5"]))
+    for line in quality.get("warnings", []):
+        say("  LOOK AT %s" % line)
     stats = result.stats
     ctx["run"]["routing_reused"] = reused
     ctx["run"]["router_seconds"] = stats.get("runtime_s")
@@ -133,6 +141,15 @@ def stage_route(design, out, ctx):
         "audit_violations": len(result.audit.violations),
         "plane_pieces": dict(result.audit.plane_pieces),
         "unrouted": [u.to_dict() for u in result.unrouted],
+        # not a pass criterion: how the copper compares with the shortest
+        # possible trees, and the nets a layout engineer should look at
+        "quality": {"signal_length_mm": quality.get("signal_length_mm"),
+                    "signal_tree_mm": quality.get("signal_tree_mm"),
+                    "signal_ratio": quality.get("signal_ratio"),
+                    "nets_over_1_5": quality.get("nets_over_1_5"),
+                    "worst": quality.get("worst", [])[:5],
+                    "warnings": list(quality.get("warnings", []))},
+        "corners_cut": stats.get("corners_cut", 0),
     }
     return result.complete, info
 

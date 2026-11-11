@@ -139,18 +139,49 @@ GL_TEST(test_complete_quick_read)
     GL_CHECK_NEAR(app.cur.range.range_m, true_range, 0.03 * true_range);
     GL_CHECK(app.cur.top_valid); /* at 6 m the top of a 1.96 m stick is in the frame */
     GL_CHECK(app.cur.range.sources & GL_RANGE_SRC_STEREO);
-    GL_CHECK_NEAR(app.cur.target.distance_m, ball_dist, 0.03 * ball_dist);
-    GL_CHECK_NEAR(app.cur.target.bearing_rad, ball_bearing, 0.001);
+    (void)ball_dist; /* the estimator's distance is the cameras': checked below */
 
-    /* ---- solver stub -> tilt-and-bearing screen ---- */
-    GL_CHECK_EQ(app.solver_status, GL_ERR_NOT_IMPLEMENTED);
-    GL_CHECK(app.view.have_result && !app.view.solved && app.view.flag_found);
-    GL_CHECK_NEAR(app.view.aim_rad, ball_bearing, 0.001);
+    /* ---- the putt estimate (method B1) -> result screen ---- */
+    GL_CHECK_EQ(app.solver_status, GL_OK);
+    GL_CHECK(app.view.have_result && app.view.solved && app.view.flag_found);
+    GL_CHECK_EQ(app.est.aim_source, GL_AIM_FROM_PATCH);
+    GL_CHECK_EQ(app.est.solve_status, GL_SOLVE_OK);
+    GL_CHECK(app.est.fit_converged && !app.est.flag_missing && !app.est.range_missing);
+    GL_CHECK_EQ(app.solver_work.fit.n_starts, 1); /* B1: one convex fit, no horizon stage */
+    GL_CHECK(!app.solver_work.fit.used_horizon);
+    printf("    estimate: aim %.2f mrad from the line to the hole (%.2f cups), launch %.3f m/s, "
+           "distance %.3f m, hole %.1f mm above the ball, confidence %.2f; %u trial rolls, %lu RK4 "
+           "steps, %u fit iterations\n", 1000.0 * (double)app.est.phi_rad, (double)app.est.break_cups,
+           (double)app.est.v0_mps, (double)app.est.distance_m, 1000.0 * (double)app.est.dz_hole_m,
+           (double)app.est.confidence, (unsigned)app.est.n_rolls, (unsigned long)app.est.n_steps,
+           (unsigned)app.solver_work.fit.n_iter);
+    /* the hole as the estimator was given it: bearing referred to the ball,
+     * distance from its own range fusion (stereo and angular height) */
+    GL_CHECK_NEAR(app.meas_cur.flag_bearing_rad, ball_bearing, 0.001);
+    GL_CHECK(fabs((double)app.meas_cur.flag_bearing_rad - (double)app.cur.bearing_rad) > 0.001);
+    GL_CHECK_NEAR(app.est.bearing_rad, ball_bearing, 0.001);
+    GL_CHECK_NEAR(app.est.distance_m, true_range, 0.03 * true_range);
+    GL_CHECK(!isnan(app.est.distance_sigma_m) && app.est.distance_sigma_m > 0.0f);
+    /* the disparity handed over is f B / DISTANCE, not a synthesised value */
+    GL_CHECK_NEAR(app.meas_cur.flag_disparity_px,
+                  (double)app.cur.disparity_px * cos((double)app.cur.bearing_rad), 1e-5);
+    /* The green falls 2.0 % toward the hole and rises 1.2 % to the right:
+     * the ball breaks left, so the aim is RIGHT of the hole (phi < 0).
+     * Small-slope theory with the downhill pace gives about -80 mrad; a
+     * downhill putt needs less than the flat-green launch speed of 2.63 m/s. */
+    GL_CHECK(app.est.phi_rad < -0.060f && app.est.phi_rad > -0.100f);
+    GL_CHECK(app.est.v0_mps > 2.0f && app.est.v0_mps < 2.63f);
+    GL_CHECK_NEAR(app.est.break_cups, (double)app.est.distance_m * tan((double)app.est.phi_rad) / 0.10795,
+                  1e-3);
+    GL_CHECK_NEAR(app.view.aim_rad, ball_bearing + (double)app.est.phi_rad, 0.001);
     GL_CHECK_NEAR(app.view.ball_az_rad, 0.0, 1e-6);
     GL_CHECK_NEAR(app.view.slope_pct, 100.0 * sqrt(W.slope_x * W.slope_x + W.slope_y * W.slope_y),
                   0.05);
-    GL_CHECK(app.view.confidence > 0.1f && app.view.confidence <= 0.5f);
-    GL_CHECK_NEAR(app.meas_cur.flag_bearing_rad, app.cur.bearing_rad, 1e-6);
+    GL_CHECK_NEAR(app.view.break_cups, app.est.break_cups, 1e-6);
+    GL_CHECK_NEAR(app.view.distance_m, app.est.distance_m, 1e-6);
+    /* the estimator's confidence: one placement at 6 m is a weak read */
+    GL_CHECK_NEAR(app.view.confidence, app.est.confidence, 1e-6);
+    GL_CHECK(app.view.confidence > 0.05f && app.view.confidence < 0.5f);
     GL_CHECK(app.meas_cur.flag_found && app.meas_cur.n_horizon > 20u);
     GL_CHECK_NEAR(app.meas_cur.tilt_x, W.slope_y, 0.0004); /* device +x = marker +y */
     GL_CHECK_NEAR(app.meas_cur.tilt_y, -W.slope_x, 0.0004);
@@ -167,7 +198,7 @@ GL_TEST(test_complete_quick_read)
         unsigned on_line = 0, rows = 0;
         for (int y = 40; y <= 70; y += 5) {
             const double x = 63.5 + ((double)y - 63.5 + (double)GL_CFG_BALL_CENTRE_Y_PX) *
-                                        tan(ball_bearing);
+                                        tan(ball_bearing + (double)app.est.phi_rad);
             rows++;
             if (panel_black_((int)(x + 0.5), y)) {
                 on_line++;
@@ -218,7 +249,7 @@ GL_TEST(test_complete_quick_read)
         gl_log_rec_t rec;
         gl_log_read_t rd;
         uint8_t buf[128];
-        unsigned reads = 0, events = 0;
+        unsigned reads = 0, events = 0, est_events = 0;
         gl_log_iter_begin(&app.log, &it);
         while (gl_log_iter_next(&app.log, &it, &rec, buf, sizeof(buf)) == GL_OK) {
             if (rec.type == GL_LOG_REC_READ) {
@@ -227,20 +258,44 @@ GL_TEST(test_complete_quick_read)
                 GL_CHECK(rd.flags & GL_LOG_READ_FLAG_STICK_FOUND);
                 GL_CHECK(rd.flags & GL_LOG_READ_FLAG_TOP_VISIBLE);
                 GL_CHECK(!(rd.flags & GL_LOG_READ_FLAG_PRECISION));
-                GL_CHECK_NEAR(rd.range_m, app.cur.range.range_m, 1e-6);
+                /* the distance logged is the one solved with and shown */
+                GL_CHECK_NEAR(rd.range_m, app.est.distance_m, 1e-6);
+                GL_CHECK_NEAR(rd.range_sigma_m, app.est.distance_sigma_m, 1e-6);
                 GL_CHECK_NEAR(rd.slope_x, app.cur.slope.x, 1e-9);
                 GL_CHECK_NEAR(rd.disparity_px, app.cur.disparity_px, 1e-9);
-                GL_CHECK_EQ(rd.solver_status, GL_SOLVE_NOT_RUN);
+                GL_CHECK_EQ(rd.solver_status, GL_SOLVE_OK);
+                GL_CHECK_NEAR(rd.v0_mps, app.est.v0_mps, 1e-6);
+                GL_CHECK_NEAR(rd.aim_offset_m, app.est.break_m, 1e-6);
+                GL_CHECK_NEAR(rd.aim_rad, app.view.aim_rad, 1e-6);
                 GL_CHECK_EQ(rd.n_repeats, GL_APP_LRRL_REPEATS);
                 GL_CHECK_EQ(rd.stimp_x2, 20);
                 GL_CHECK_NEAR(rd.batt_mv, 3900.0, 5.0);
                 GL_CHECK_NEAR(rd.temp_c_x100, 2200.0, 2.0);
             } else if (rec.type == GL_LOG_REC_EVENT) {
+                gl_log_event_t ev;
                 events++;
+                GL_CHECK_EQ(gl_log_event_decode(buf, rec.len, &ev), GL_OK);
+                if (ev.code == GL_APP_LOGEV_ESTIMATE) {
+                    /* what the estimator said about the read: solved on the
+                     * patch, status OK, fit converged, method B1, a stereo
+                     * read, the line applies where the marker lies */
+                    const uint32_t a = (uint32_t)ev.arg;
+                    est_events++;
+                    GL_CHECK_EQ(a & GL_APP_ESTFLAG_SOURCE_MASK, (unsigned)GL_AIM_FROM_PATCH);
+                    GL_CHECK_EQ((a >> GL_APP_ESTFLAG_STATUS_SHIFT) & 7u, (unsigned)GL_SOLVE_OK);
+                    GL_CHECK((a & GL_APP_ESTFLAG_FIT_CONVERGED) != 0u);
+                    GL_CHECK_EQ((a & GL_APP_ESTFLAG_BASE_HIDDEN) != 0u, app.est.base_hidden);
+                    GL_CHECK((a & (GL_APP_ESTFLAG_FLAG_MISSING | GL_APP_ESTFLAG_RANGE_MISSING)) == 0u);
+                    GL_CHECK_EQ((a >> GL_APP_ESTFLAG_METHOD_SHIFT) & 3u, (unsigned)GL_SOLVER_METHOD_B1);
+                    GL_CHECK_EQ((a >> GL_APP_ESTFLAG_TIER_SHIFT) & 3u, (unsigned)GL_READ_TIER_STEREO);
+                    GL_CHECK((a & GL_APP_ESTFLAG_LINE_HERE) != 0u);
+                    GL_CHECK_EQ(a >> GL_APP_ESTFLAG_ROLLS_SHIFT, (unsigned)app.est.n_rolls);
+                }
             }
         }
         GL_CHECK_EQ(reads, 1u);
-        GL_CHECK_EQ(events, 1u); /* the boot record */
+        GL_CHECK_EQ(events, 2u); /* the boot record and the estimator's flags of the read */
+        GL_CHECK_EQ(est_events, 1u);
         (void)gl_mx25r_sleep(&app.flash);
     }
     /* the stick height was learned from this read (stereo range inside 4-7 m,
@@ -424,7 +479,7 @@ GL_TEST(test_raw_strip_logging)
     GL_CHECK_EQ(chunks[0], 48u);
     GL_CHECK_EQ(chunks[1], 48u);
     GL_CHECK_EQ(reads, 1u);
-    GL_CHECK_EQ(other, 1u); /* the boot event */
+    GL_CHECK_EQ(other, 2u); /* the boot event and the estimator's flags of the read */
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 
     /* level ALL: the band and all 32 strips; the read outlasts the 8 s
@@ -503,10 +558,22 @@ GL_TEST(test_no_flagstick_falls_back)
     }
     watch_reset_();
     GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 9000));
-    GL_CHECK(app.view.have_result && !app.view.flag_found && !app.view.solved);
+    /* the estimator's flag-out fallback: a tilt-only plane along the visor
+     * axis at the dialled distance, flagged, with low confidence */
+    GL_CHECK_EQ(app.solver_status, GL_OK);
+    GL_CHECK(app.view.have_result && !app.view.flag_found && app.view.solved);
+    GL_CHECK(app.est.flag_missing && !app.est.range_missing);
+    GL_CHECK_EQ(app.est.aim_source, GL_AIM_FROM_PATCH);
+    GL_CHECK_EQ(app.solver_work.fit.n_starts, 0); /* no fit: the tilt plane itself */
     GL_CHECK_NEAR(app.view.distance_m, 4.5, 1e-4);
-    GL_CHECK_NEAR(app.view.aim_rad, 0.0, 1e-6); /* along the visor axis */
-    GL_CHECK(app.view.confidence <= 0.4f);
+    GL_CHECK_NEAR(app.est.bearing_rad, 0.0, 0.0); /* along the visor axis */
+    GL_CHECK(isnan(app.est.distance_sigma_m));    /* a dialled distance has no sigma */
+    /* same green as before: aim right of the axis */
+    GL_CHECK(app.est.phi_rad < -0.050f && app.est.phi_rad > -0.110f);
+    GL_CHECK_NEAR(app.view.aim_rad, app.est.phi_rad, 1e-6);
+    printf("    dialled 4.5 m, no flag: aim %.1f mrad from the visor axis, confidence %.2f\n",
+           1000.0 * (double)app.est.phi_rad, (double)app.est.confidence);
+    GL_CHECK(app.view.confidence > 0.0f && app.view.confidence <= 0.4f);
     GL_CHECK(isnan(app.meas_cur.flag_bearing_rad) && !app.meas_cur.flag_found);
     GL_CHECK_NEAR(app.meas_cur.user_distance_m, 4.5, 1e-4);
     GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
@@ -601,8 +668,12 @@ GL_TEST(test_precision_read_spin_and_reread)
     /* the marker now faces away from the hole: the ball position is behind
      * it and the line is drawn through that point */
     GL_CHECK_NEAR(fabs((double)app.view.ball_az_rad), 176.0 * PI_D / 180.0, 0.02);
-    GL_CHECK_NEAR(gl_wrap_pi(app.view.aim_rad - app.view.ball_az_rad), app.cur.target.bearing_rad,
-                  1e-4);
+    GL_CHECK_EQ(app.solver_status, GL_OK);
+    GL_CHECK_NEAR(app.est.bearing_rad, app.meas_cur.flag_bearing_rad, 1e-6);
+    GL_CHECK_EQ(app.meas_cur.tilt_reads, 2); /* the estimator is told it is a Precision Read */
+    GL_CHECK(app.est.phi_rad < -0.060f && app.est.phi_rad > -0.100f);
+    GL_CHECK_NEAR(gl_wrap_pi(app.view.aim_rad - app.view.ball_az_rad),
+                  (double)app.est.bearing_rad + (double)app.est.phi_rad, 1e-4);
     GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
     {
         gl_gfx_aim_info_t info;
@@ -660,10 +731,31 @@ GL_TEST(test_survey_second_drop)
     GL_CHECK_NEAR(app.meas[1].tilt_x, -0.015, 0.0005); /* device +x = marker +y */
     GL_CHECK_NEAR(app.meas[0].tilt_x, -0.020, 0.0005);
     GL_CHECK_EQ(gl_survey_farthest(&app.survey), 0);   /* drop 1 is the ball end */
-    /* the survey estimator is phase 2: the stub answered, the screen shows
-     * this drop's tilt and bearing */
-    GL_CHECK_EQ(app.solver_status, GL_ERR_NOT_IMPLEMENTED);
-    GL_CHECK(app.view.have_result && !app.view.solved);
+    /* ... and the estimator was told so: the putt starts at drop 1, and the
+     * marker, which now lies 3 m short of the hole, is NOT at the ball: the
+     * numbers are shown, no aim line (the full Survey flows, with the line
+     * measured from the pixels, are in tests/test_e2e_putt.c) */
+    GL_CHECK_EQ(app.solve_drops, 2);
+    GL_CHECK_EQ(app.solve_ball, 0);
+    GL_CHECK(!app.line_here && !app.view.line_here);
+    GL_CHECK_EQ(app.view.drop, 2);
+    GL_CHECK_NEAR(app.view.distance_m, app.est.distance_m, 1e-6);
+    GL_CHECK_NEAR(app.est.distance_m, 6.0, 0.15); /* from the BALL, not from where it lies */
+    /* the Survey estimate: both drops located on the line, the second one
+     * about 3 m along it; the slope toward the hole eases from -2.0 % to
+     * -1.5 % (curvature c > 0) and the cross slope changes sign (twist) */
+    GL_CHECK_EQ(app.solver_status, GL_OK);
+    GL_CHECK(app.view.have_result && app.view.solved);
+    GL_CHECK_EQ(app.solver_work.fit.n_drops, 2);
+    GL_CHECK_NEAR(app.solver_work.fit.stations_m[0], 0.0, 0.0);
+    GL_CHECK_NEAR(app.solver_work.fit.stations_m[1], 3.0, 0.15);
+    GL_CHECK(app.est.fit_converged && !app.est.flag_missing && !app.est.range_missing);
+    GL_CHECK(app.est.patch[2] > 0.0005f && app.est.patch[2] < 0.003f);
+    GL_CHECK(app.est.patch[3] > 0.001f);
+    printf("    Survey estimate from 2 drops: patch a %.4f b %.4f c %.5f d %.5f, aim %.1f mrad, "
+           "status %u, aim source %u\n", (double)app.est.patch[0], (double)app.est.patch[1],
+           (double)app.est.patch[2], (double)app.est.patch[3], 1000.0 * (double)app.est.phi_rad,
+           (unsigned)app.est.solve_status, (unsigned)app.est.aim_source);
     GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 2u);
     GL_CHECK_EQ(seen.rail_outside_capture, 0u);
     /* double tap ends the survey */
@@ -684,7 +776,7 @@ GL_TEST(test_survey_second_drop)
 static void start_zeroing_(void)
 {
     gl_app_post(&app, GL_EV_UPRIGHT, 0);
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < (int)GL_UI_ITEM_ZERO; i++) {
         gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
     }
     gl_app_post(&app, GL_EV_DIAL_STEP, 1);
@@ -815,9 +907,15 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
     run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 200u);
     GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
     GL_CHECK(app.usb_on && gl_hal_usb_connected());
-    /* charging allowed: 22 C is inside 0..45 C -> PROG enable pulled LOW */
-    GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
-    GL_CHECK(app.power.charge_enabled);
+    /* charging allowed: the cell NTC reads 22 C, inside the window, and the
+     * die sensors vouch for it -> CHG_INHIBIT stays released (the charger of
+     * rev C2 runs by default; the firmware can only stop it) */
+    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(gl_sim_charger_on());
+    GL_CHECK(app.power.charge_enabled && !app.power.inhibit);
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_ALLOWED);
+    GL_CHECK(app.power.cell_temp_valid);
+    GL_CHECK_NEAR(app.power.cell_temp_c, 22.0, 0.1);
 
     /* PING */
     host_send_(1, GL_CMD_PING, "hello", 5);
@@ -825,13 +923,14 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
     GL_CHECK_EQ(n, 6);
     GL_CHECK_EQ(seq, 1);
     GL_CHECK(pl[0] == GL_OK && memcmp(&pl[1], "hello", 5) == 0);
-    /* GET_INFO: protocol 1, hardware rev C, solver version 0 = stub */
+    /* GET_INFO: protocol 1, hardware rev C, the version of the ported solver */
     host_send_(2, GL_CMD_GET_INFO, NULL, 0);
     n = host_get_(GL_CMD_GET_INFO | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
     GL_CHECK_EQ(n, 1 + (int)GL_PROTO_INFO_LEN);
     GL_CHECK_EQ(pl[1], GL_PROTO_VERSION);
     GL_CHECK_EQ(pl[2], GL_APP_HW_REV);
-    GL_CHECK_EQ(gl_get_u32(&pl[9]), 0u);
+    GL_CHECK_EQ(gl_get_u32(&pl[9]), GL_SOLVER_VERSION);
+    GL_CHECK(GL_SOLVER_VERSION != 0u);
     /* GET_STATUS */
     host_send_(3, GL_CMD_GET_STATUS, NULL, 0);
     n = host_get_(GL_CMD_GET_STATUS | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
@@ -904,14 +1003,16 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
                 reads++;
                 GL_CHECK_EQ(len, GL_LOG_READ_LEN);
                 GL_CHECK_EQ(gl_log_read_decode(&pl[pos + 8u], len, &rd), GL_OK);
-                GL_CHECK_NEAR(rd.range_m, app.cur.range.range_m, 1e-6);
+                GL_CHECK_NEAR(rd.range_m, app.est.distance_m, 1e-6);
             } else if (pl[pos] == GL_LOG_REC_EVENT) {
                 events++;
             }
             pos += 8u + len;
         }
         GL_CHECK_EQ(reads, 1u);
-        GL_CHECK_EQ(events, 1u);
+        /* boot, the estimator's flags of the read, and the charge gate
+         * changing its mind when the marker met the cradle */
+        GL_CHECK_EQ(events, 3u);
     }
     /* live stream for the factory: IMU and power every 20 ms */
     {
@@ -931,14 +1032,33 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
         host_send_(10, GL_CMD_STREAM, off, 4);
         (void)host_get_(GL_CMD_STREAM | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
     }
-    /* too hot to charge: the gate opens the PROG path at the next check */
-    gl_sim_imu_set_temperature(47.0f);
-    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_BATT_PERIOD_MS + 500u);
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
-    GL_CHECK(!app.power.charge_enabled);
-    gl_sim_imu_set_temperature(30.0f);
-    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_BATT_PERIOD_MS + 500u);
-    GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+    /* too hot to charge: the board (cell, IMU, MCU) goes to 47 C; the gate
+     * pulls CHG_INHIBIT low at its next check, within the supervision period */
+    {
+        const uint64_t out0 = gl_sim_stats()->chg_outside_us;
+        gl_sim_imu_set_temperature(47.0f);
+        run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_CHG_TEMP_PERIOD_MS + 200u);
+        GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+        GL_CHECK(!gl_sim_charger_on());
+        GL_CHECK(!app.power.charge_enabled && app.power.inhibit);
+        GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TOO_HOT);
+        GL_CHECK_EQ(app.view.chg_blocked, 2);
+        printf("    cradle at 47 C: the charger ran for %.2f s before the firmware stopped it "
+               "(supervision period %.0f s)\n",
+               (double)(gl_sim_stats()->chg_outside_us - out0) / 1e6,
+               (double)GL_APP_CHG_TEMP_PERIOD_MS / 1000.0);
+        GL_CHECK(gl_sim_stats()->chg_outside_us - out0 <= (uint64_t)GL_APP_CHG_TEMP_PERIOD_MS * 1000u + 50000u);
+        /* and it stays stopped for as long as it is hot */
+        run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 60000u);
+        GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+        GL_CHECK(gl_sim_stats()->chg_outside_us - out0 <= (uint64_t)GL_APP_CHG_TEMP_PERIOD_MS * 1000u + 50000u);
+        /* back to 30 C: released again */
+        gl_sim_imu_set_temperature(30.0f);
+        run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_CHG_TEMP_PERIOD_MS + 200u);
+        GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+        GL_CHECK(gl_sim_charger_on());
+        GL_CHECK_EQ(app.power.chg_reason, GL_CHG_ALLOWED);
+    }
 
     /* on USB the MCU never enters Stop mode (the simulator would count it) */
     GL_CHECK_EQ(gl_sim_violations()->stop_mode, 0u);
@@ -970,7 +1090,8 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
     run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 300u);
     GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP);
     GL_CHECK(!app.usb_on && !gl_hal_usb_connected());
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
     GL_CHECK(!gl_sim_lcd()->disp);
     if (gl_sim_violation_total() != 0u) {
         printf("    first violation: %s\n", gl_sim_violations()->first);
@@ -999,9 +1120,15 @@ GL_TEST(test_missing_devices_are_reported_not_fatal)
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 200u);
     GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
-    /* temperature unknown -> no charging */
+    /* The IMU is missing, but since rev C2 the IMU's die sensor is only a
+     * plausibility check: the cell NTC reads 22 C and the MCU's own sensor
+     * vouches for it, so the charger keeps running (phase 1, whose gate
+     * needed the IMU, stopped the charge here) */
     run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 2000u);
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(gl_sim_charger_on());
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_ALLOWED);
+    GL_CHECK(!app.temp_valid && app.power.mcu_temp_valid && app.power.cell_temp_valid);
     GL_CHECK(!gl_sim_cam_rail_on() && cam_pins_parked_());
 
     /* a camera that does not answer: CAPTURE fails, the rail is off again */
@@ -1049,7 +1176,8 @@ GL_TEST(test_low_and_critical_battery)
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 500u);
     GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
-    GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN));
+    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(gl_sim_charger_on() && app.power.charge_enabled);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }
 

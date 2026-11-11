@@ -51,6 +51,42 @@ def test_demo_net_classes_and_planes(demo):
         assert refs & {"U2", "U3"}, name
     assert demo.full_plane_layers() == {"In1.Cu": "GND", "In2.Cu": "V2V8"}
     assert demo.signal_layers() == ("F.Cu", "In2.Cu", "B.Cu")
+    # The demo does not confine its fine classes (see FINE_AREAS in the design
+    # script for why): the checks say so, and so does the fab README.
+    assert demo.fine_areas == [] and minimums["fine_classes"] == ["CamPower", "Fine"]
+    assert not any(demo.is_confined(name) for name in fine)
+    report = checks.run_checks(demo)
+    assert [f.code for f in report.findings] == ["fine_unconfined"]
+    # ... while the same design with fine areas is a valid, confined design
+    import demo_design as module
+    old = module.FINE_AREAS
+    try:
+        module.FINE_AREAS = (("U2", 5.0), ("U3", 5.0))
+        confined = module.demo_design()
+    finally:
+        module.FINE_AREAS = old
+    assert [a.name for a in confined.fine_areas] == ["fine_U2", "fine_U3"]
+    assert all(confined.is_confined(name) for name in fine)
+    assert confined.outside_values("CAM_D0") == (0.15, 0.127)
+    assert confined.clearance("CAM_D0", "CAM_D1", outside_a=True) == 0.127
+    assert checks.run_checks(confined).findings == []
+
+
+def test_demo_fab_and_assembly_details(demo):
+    """Fiducials, via protection and fab notes of the design spec are in the
+    demo (review findings)."""
+    marks = [p for p in demo.parts if checks.is_fiducial(p)]
+    assert sorted(p.side for p in marks) == ["bottom"] * 3 + ["top"] * 3
+    assert all(p.board_only and not p.in_bom for p in marks)
+    for side in ("top", "bottom"):
+        pts = [(p.x, p.y) for p in marks if p.side == side]
+        (ax, ay), (bx, by), (cx, cy) = pts
+        area = abs((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) / 2.0
+        assert area > 50.0                          # far apart and not in line
+    assert not checks.run_checks(demo).find("no_fiducials")
+    assert demo.via_tenting == "bottom"
+    assert "plugged" in demo.via_protection and "BOTTOM" in demo.via_protection
+    assert any("wetted" in note for note in demo.fab_notes)
 
 
 def test_demo_exercises_the_rev_c_mechanics():
@@ -141,12 +177,41 @@ def _check_complete_build(out, summary):
     assert "Routed non-plated slot on Edge.Cuts: 1.150 x 1.650 mm" in readme
     assert "Non-plated hole H1: 1.150 mm at (-4.200, 14.550)" in readme
     assert "tented on the BOTTOM side" in readme
+    # review findings: plugging, fab notes, the measured account of the fine tracks
+    assert "Via protection:      plugged with solder mask from the BOTTOM side" in readme
+    assert "FAB NOTES" in readme and "wetted surface" in readme
+    assert "Via to pad, top:     design rule 0.200 mm" in readme
+    assert "TRACKS AS ROUTED (measured on the board these files were plotted from)" in readme
+    assert "only where a fine-pitch package needs them" not in readme
+    # the fine classes are not confined on the demo: the README says where the
+    # fine tracks really are instead of reassuring anybody
+    copper = stages["outputs"]["copper"]
+    assert copper["confined"] is False and copper["fine_areas"] == []
+    assert copper["narrow_length_mm"] > 20.0 and copper["fine_pitch_arrays"] == ["U2", "U3"]
+    far = copper["narrow_farthest"]
+    assert "Net classes below the standard 0.150 / 0.127 mm: CamPower, Fine." in readme
+    assert "Tracks narrower than 0.150 mm: %.1f mm on %d net(s)." % (
+        copper["narrow_length_mm"], len(copper["narrow_nets"])) in readme
+    assert "The design declares no fine areas: these tracks may run anywhere along their " \
+           "nets; the farthest is %s on %s" % (far["net"], far["layer"]) in readme
+    assert "Quote the whole board at the board-level minimums." in readme
+    table = copper["length_by_width"]
+    assert abs(sum(row["total"] for row in table.values())
+               - stages["route"]["track_length_mm"]) < 0.5
+    assert copper["min_via_to_own_pad_gap"]["top"] >= 0.2 - 1e-6
+    assert [o["ref"] for o in stages["outputs"]["anchor_offsets"]] == ["J1"]
+    asm = open(os.path.join(out, "assembly", "README.txt")).read()
+    assert "Origin:   the centre of the board" in asm and "J1     anchor" in asm
+    assert "top:    (-19.300, -0.800), (19.000, -3.000), (-16.500, 9.900)" in asm
+    assert os.path.getsize(os.path.join(out, "%s-assembly.zip" % name)) > 1000
+    quality = stages["route"]["quality"]
+    assert quality["signal_ratio"] >= 1.0 and isinstance(quality["warnings"], list)
     mech = json.load(open(os.path.join(out, "%s-mechanical.json" % name)))
     assert mech["board"]["bounds"] == [-21.1, -21.1, 21.1, 17.3]
     assert [h["diameter"] for h in mech["board"]["npth_holes"]] == [1.15]
     assert len(mech["height_limits"]) == 2 and mech["height_limits"][0]["max_height"] == 0.95
     assert sum(1 for k in mech["keepouts"] if k["no_footprints"]) >= 8      # post feet
-    assert len(mech["components"]) == 94
+    assert len(mech["components"]) == 100          # 94 parts and six fiducials
     # the project file still carries the board rules DRC ran with, and KiCad
     # still calls the final board clean
     pro = json.load(open(os.path.join(out, "%s.kicad_pro" % name)))
@@ -225,6 +290,53 @@ def test_criteria_cannot_be_overridden_by_a_stage_flag():
     assert build_demo.criteria({}) == {
         "checks_0_errors": None, "routed_100_percent": None,
         "kicad_drc_0_errors_0_unconnected": None, "schematic_round_trip_matches": None}
+
+
+def test_quickstart_board_passes_the_whole_flow(tmp_path):
+    """``demo/quickstart_board.py`` is the example the README's quick start
+    quotes.  It must run as written: checks without a finding, every
+    connection routed with the fine class confined to its fine area, KiCad DRC
+    clean, outputs equal to the model, schematic round trip."""
+    import quickstart_board
+    d = quickstart_board.quickstart_design()
+    report = checks.run_checks(d)
+    assert report.ok and not report.findings, report.text()
+    assert d.is_confined("D0") and not d.is_confined("SCL")
+    assert d.outside_values("D0") == (0.15, 0.127)
+    lines = []
+    assert quickstart_board.build(d, str(tmp_path), say=lines.append) == 0, "\n".join(lines)
+    text = "\n".join(lines)
+    assert "routed 16/16 connections (100.0 %)" in text
+    assert "KiCad DRC: 0 error(s), 0 unconnected" in text
+    assert "0 problem(s) against the model" in text
+    assert "netlist round trip matches: 10 nets, 26 pads, 4 components" in text
+    assert "OPEN" not in text
+    with open(os.path.join(str(tmp_path), "fab", "README.txt")) as f:
+        readme = f.read()
+    assert "Every one of these tracks lies completely inside a fine area" in readme
+    assert "plugged from the bottom side" in readme
+    with open(os.path.join(str(tmp_path), "assembly", "README.txt")) as f:
+        assembly = f.read()
+    assert "(-9.500, 4.000)" in assembly and "(9.000, -4.500)" in assembly   # fiducials
+    for fn in ("quickstart-fab.zip", "quickstart-assembly.zip", "quickstart-netlist.json",
+               "quickstart-mechanical.json", "schematic.pdf", "quickstart.net"):
+        assert os.path.getsize(os.path.join(str(tmp_path), fn)) > 0, fn
+
+
+def test_quickstart_pitfall_is_reported_with_its_reason(tmp_path):
+    """The mistake a first design makes: an inner ball of the 0.5 mm BGA on a
+    class too wide to pass between the balls.  The router must not hang and
+    must not pretend: the connection is open, the net says why, the build
+    function returns failure and nothing is plotted."""
+    import quickstart_board
+    d = quickstart_board.quickstart_design()
+    d.nets["D0"].netclass = "Power"                    # 0.30 mm: cannot leave ball B2
+    lines = []
+    assert quickstart_board.build(d, str(tmp_path), say=lines.append) == 1
+    text = "\n".join(lines)
+    assert "routed 15/16 connections" in text
+    assert "OPEN D0" in text and "no path from U1.B2 to J1.3" in text
+    assert not os.path.exists(os.path.join(str(tmp_path), "fab"))
 
 
 @pytest.mark.slow
