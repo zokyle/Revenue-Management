@@ -29,6 +29,7 @@ rule_violation         error     rule set / net class / net option inconsistent
                                  minimum, bad via, unknown layer, bad
                                  ``via_tenting``, name unusable in a DRC rule)
 plane_invalid          error     plane on an unknown net or non-copper layer
+net_name_case          warning   two net names differ only in upper / lower case
 =====================  ========  ==============================================
 
 Footprint (needs pcbnew to read the footprint):
@@ -271,6 +272,14 @@ def check_electrical(design: Design, report: CheckReport) -> None:
             ref, pin = next((r, p) for r, p in net.nodes if r in parts and p in parts[r].pins)
             report.error("single_pin_net", "net %s has only one pin (%s.%s)"
                          % (net.name, ref, pin), [ref], net.name)
+
+    by_lower: Dict[str, str] = {}
+    for name in design.nets:
+        other = by_lower.setdefault(name.lower(), name)
+        if other != name:
+            report.warning("net_name_case", "nets %s and %s differ only in case; KiCad's "
+                           "DRC rule conditions may not tell them apart" % (other, name),
+                           net=name)
 
     for ref, pin in sorted(design.no_connects):
         if ref not in parts or pin not in parts[ref].pins:

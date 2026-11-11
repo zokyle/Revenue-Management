@@ -281,6 +281,12 @@ class Green:
         Length scale of the onset of the surround slope beyond the collar.
     flagstick_height : float [m]
         True visible height of the flagstick above the hole lip.
+    surround_mounds : (k, 4) array or None
+        Optional mounds and hollows of the surrounds, independent of the
+        putting surface: rows ``(amplitude [m], kx [rad/m], ky [rad/m],
+        phase [rad])`` of plane waves ``amplitude * cos(kx x + ky y + phase)``
+        that set in beyond the collar.  None (the default) for generated
+        greens; see :meth:`with_mounded_surrounds`.
     """
 
     green_class: str
@@ -304,6 +310,7 @@ class Green:
     surround_phase: np.ndarray = field(default_factory=lambda: np.zeros(2))
     surround_onset: float = 1.5
     flagstick_height: float = DEFAULT_FLAGSTICK_HEIGHT
+    surround_mounds: Optional[np.ndarray] = None
 
     # ---- speed / grain ----------------------------------------------------
 
@@ -419,13 +426,30 @@ class Green:
         and ``s`` the surround slope at that azimuth,
         ``dz = s * rho^3 / (rho^2 + surround_onset^2)``: a C2 onset at the
         collar edge that tends to the radial slope ``s`` (its steepest point,
-        ``1.125 s``, is at ``rho = sqrt(3) * surround_onset``).
+        ``1.125 s``, is at ``rho = sqrt(3) * surround_onset``).  Optional
+        mounds (:attr:`surround_mounds`) are added on top with the onset
+        ramp ``rho^2 / (rho^2 + surround_onset^2)``.
         """
         x = np.asarray(x, dtype=float)
         y = np.asarray(y, dtype=float)
         theta = np.arctan2(y, x)
         rho = np.maximum(np.hypot(x, y) - (np.asarray(self.edge_radius(theta)) + self.collar_width), 0.0)
         out = np.asarray(self.surround_slope_at(theta)) * rho**3 / (rho * rho + self.surround_onset**2)
+        if self.surround_mounds is not None:
+            # mounds set in with a C1 ramp rho^2 / (rho^2 + onset^2) beyond the collar
+            out = out + np.asarray(self.mound_field(x, y)) * rho * rho / (rho * rho + self.surround_onset**2)
+        return float(out) if out.ndim == 0 else out
+
+    def mound_field(self, x, y):
+        """Raw height of the surround mounds [m] at ``(x, y)`` before the
+        onset ramp: ``sum_k amplitude_k cos(kx_k x + ky_k y + phase_k)``
+        (zero if the green has no mounds)."""
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        out = np.zeros(np.broadcast(x, y).shape)
+        if self.surround_mounds is not None:
+            for amp, kx, ky, phase in self.surround_mounds:
+                out = out + amp * np.cos(kx * x + ky * y + phase)
         return float(out) if out.ndim == 0 else out
 
     def terrain_z(self, x, y):
@@ -460,6 +484,7 @@ class Green:
             or self.rough_step != 0.0
             or self.surround_slope != 0.0
             or np.any(np.asarray(self.surround_amp) != 0.0)
+            or self.surround_mounds is not None
         )
 
     def without_surrounds(self) -> "Green":
@@ -467,7 +492,9 @@ class Green:
         the putting surface (``terrain_z == z``); the collar and rough canopy
         steps are kept.  Intermediate case between the realistic green and
         :meth:`without_fringe`.  Same rolling surface object."""
-        return replace(self, surround_slope=0.0, surround_amp=np.zeros(2), surround_phase=np.zeros(2))
+        return replace(
+            self, surround_slope=0.0, surround_amp=np.zeros(2), surround_phase=np.zeros(2), surround_mounds=None
+        )
 
     def without_fringe(self) -> "Green":
         """Optimistic "no-fringe" twin of this green.
@@ -485,7 +512,39 @@ class Green:
             surround_slope=0.0,
             surround_amp=np.zeros(2),
             surround_phase=np.zeros(2),
+            surround_mounds=None,
         )
+
+    def with_mounded_surrounds(
+        self,
+        seed: int,
+        height_rms: float = 0.20,
+        wavelength_range: Tuple[float, float] = (5.0, 15.0),
+        n_modes: int = 12,
+    ) -> "Green":
+        """Stress-test twin whose surrounds carry mounds and hollows that are
+        independent of the putting surface (greenside mounds, bunker faces, a
+        broken backdrop).
+
+        Beyond the collar a random field of ``n_modes`` plane waves with RMS
+        height ``height_rms`` [m] and wavelengths drawn from
+        ``wavelength_range`` [m] is added to the terrain a camera sees.  The
+        putting surface, the collar, the canopy steps and the mean surround
+        slope are unchanged, and the ball still rolls on the same surface
+        object.  The default magnitudes are an ASSUMPTION for testing how
+        much a grazing camera's turf horizon depends on the surrounds; they
+        are not survey data.  Reproducible from ``seed``.
+        """
+        if not (height_rms >= 0.0 and n_modes >= 1 and wavelength_range[1] >= wavelength_range[0] > 0.0):
+            raise ValueError("need height_rms >= 0, n_modes >= 1 and a positive wavelength range")
+        rng = np.random.default_rng(np.random.SeedSequence([int(seed), 7919]))
+        wavelength = rng.uniform(wavelength_range[0], wavelength_range[1], size=n_modes)
+        azimuth = rng.uniform(0.0, 2.0 * math.pi, size=n_modes)
+        phase = rng.uniform(0.0, 2.0 * math.pi, size=n_modes)
+        k = 2.0 * math.pi / wavelength
+        amp = np.full(n_modes, height_rms * math.sqrt(2.0 / n_modes))
+        mounds = np.column_stack([amp, k * np.cos(azimuth), k * np.sin(azimuth), phase])
+        return replace(self, surround_mounds=mounds)
 
 
 @dataclass

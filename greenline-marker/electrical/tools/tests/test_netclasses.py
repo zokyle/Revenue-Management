@@ -327,3 +327,29 @@ def test_bga_escape_between_default_class_balls_needs_the_pad_override(tmp_path)
     assert all("board minimum clearance 0.0900 mm; actual 0.0800 mm" in v.description
                for v in errs)
     assert checks.run_checks(d).has("pad_clearance_override")
+
+
+def test_broken_rules_file_fails_loudly(tmp_path):
+    """A custom rules file KiCad cannot parse must never look like a pass."""
+    d = _fine_design("broken")
+    _two_resistor_nets(d, NETS[:1])
+    files = board.build_board(d, str(tmp_path))
+    with open(files.dru, "a") as fh:
+        fh.write('(rule "oops" (condition "A.NetClass ==") (constraint nonsense))\n')
+    with pytest.raises(drc.DrcError):
+        drc.run_drc(files.pcb)
+
+
+def test_project_merge_keeps_foreign_text_variables(tmp_path):
+    d = _fine_design("merge")
+    d.via_tenting = "bottom"
+    path = str(tmp_path / "merge.kicad_pro")
+    with open(path, "w") as fh:
+        json.dump({"text_variables": {"REV": "A", board.TENTING_VARIABLE: "none"},
+                   "schematic": {"x": 1}}, fh)
+    board.write_project(d, path)
+    pro = json.load(open(path))
+    assert pro["text_variables"] == {"REV": "A", board.TENTING_VARIABLE: "bottom"}
+    assert pro["schematic"] == {"x": 1}
+    assert board.project_via_tenting(str(tmp_path / "merge.kicad_pcb")) == "bottom"
+    assert board.project_via_tenting(str(tmp_path / "nope.kicad_pcb")) == "both"

@@ -1,0 +1,65 @@
+{
+ "all_defects_caught": true,
+ "cases": [
+  {
+   "defect": "prism R raised 0.30 mm into the roof",
+   "check": "1 interference",
+   "caught": true,
+   "message": "1 failing pairs: [('tub', 'prism_R', '0.0121 mm3')]"
+  },
+  {
+   "defect": "LCD glass shifted 0.20 mm toward the cameras",
+   "check": "2 clearances",
+   "caught": true,
+   "message": "FAILED: ['LCD glass to tub, lateral (ribs, posts E, hood rear walls)', 'LCD glass to roof bonding plane (adhesive frame)']"
+  },
+  {
+   "defect": "battery raised 0.25 mm (eats the swell allowance)",
+   "check": "2 clearances",
+   "caught": true,
+   "message": "FAILED: ['Battery to foam pad', 'Battery to LCD glass']"
+  },
+  {
+   "defect": "0.4 mm bar across the camera R opening",
+   "check": "3 field of view",
+   "caught": true,
+   "message": "FAILED: camera R chief rays hits tub: 0.39602 mm3; camera R full beam hits tub: 0.45659 mm3; camera R chief ray blocked at 0.00 deg left (< 26.0); camera R chie"
+  },
+  {
+   "defect": "0.4 mm bar across the camera R opening",
+   "check": "4 fold geometry",
+   "caught": true,
+   "message": "FAILED: camera R axis: chief ray clipped at the visor opening; camera R left edge: chief ray clipped at the visor opening; camera R right edge: chief ray clippe"
+  },
+  {
+   "defect": "2 x 2 mm pocket leaving a 0.30 mm roof",
+   "check": "5 wall thickness",
+   "caught": true,
+   "message": "FAILED: tub: undocumented region, min 0.3 mm at (-17.99, -6.0, 7.3)..(-16.0, -4.0, 7.6)"
+  },
+  {
+   "defect": "closed 4 mm void inside the cradle body",
+   "check": "6 trapped volume",
+   "caught": true,
+   "message": "FAILED: cradle: 1 closed void(s), 64.00 mm3; cradle: cavity near [22.9 20.8 -7.1]..[25.1 23.  -4.9] has no 2.0 mm escape path; cradle: B-rep has 2 shells (an in"
+  },
+  {
+   "defect": "4 mm cavity in the cradle with only a dia 1.0 exit",
+   "check": "6 trapped volume",
+   "caught": true,
+   "message": "FAILED: cradle: cavity near [22.9 20.8 -7.1]..[25.1 23.  -4.9] has no 2.0 mm escape path"
+  },
+  {
+   "defect": "dia 2.2 hole in the base under a pin at 180 deg",
+   "check": "7 cradle pins",
+   "caught": true,
+   "message": "FAILED: pin 4"
+  },
+  {
+   "defect": "support post A+ shortened by 0.5 mm",
+   "check": "10 support posts",
+   "caught": true,
+   "message": "post placement problem"
+  }
+ ]
+}

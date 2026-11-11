@@ -1,9 +1,9 @@
 # GreenLine simulation (`greenline_sim`)
 
 Python reference for the GreenLine electronic ball marker: the putt physics,
-the synthetic greens it is evaluated on, and (in the modules listed under
-"Status") the sensor models, the estimator the firmware is ported from, and a
-Monte-Carlo evaluation.
+the synthetic greens it is evaluated on, the sensor models, the estimator the
+firmware is ported from, and a Monte-Carlo evaluation that predicts how well
+the device would read putts.
 
 Everything is SI (metres, seconds, radians, slopes as rise/run) unless a name
 says otherwise (`stimp_ft`).
@@ -13,26 +13,77 @@ says otherwise (`stimp_ft`).
 | Path | Content |
 | --- | --- |
 | `greenline_sim/physics.py` | rolling-ball model, surfaces, `simulate_putt`, `roll_batch`, `solve_aim` and its batch forms |
-| `greenline_sim/greens.py` | seeded synthetic greens (surface, boundary, collar/rough canopy, surround terrain, speed, grain, flagstick) and putt scenarios |
+| `greenline_sim/greens.py` | seeded synthetic greens (surface, boundary, collar/rough canopy, surround terrain, speed, grain, flagstick) and putt scenarios: the TRUTH |
+| `greenline_sim/measurements.py` | the `Measurements` record: everything the estimator may see (imports nothing from the truth side) |
+| `greenline_sim/sensors.py` | sensor forward models: true green and marker pose -> `Measurements` (tilt, flagstick, turf horizon, grain, entered Stimp), with every noise term a named parameter of `SensorParams` |
+| `greenline_sim/estimator.py` | the firmware reference: `Measurements` -> fitted patch, aim line, launch speed, plays-like distance, break, confidence. Imports only `measurements` and `physics` |
+| `greenline_sim/montecarlo.py` | Monte-Carlo evaluation, `python -m greenline_sim.montecarlo` |
+| `greenline_sim/report.py` | `REPORT.md` and the plots from `results/summary.json` |
+| `greenline_sim/refvectors.py` | reference vectors for the C port |
 | `greenline_sim/bench.py` | timing and closed-form checks (`python -m greenline_sim.bench`) |
 | `greenline_sim/_jit.py` | optional numba acceleration with a pure-Python fallback |
 | `tests/` | pytest suite |
-| `results/` | outputs of the Monte Carlo |
+| `results/` | outputs: `REPORT.md`, `summary.json`, `fig*.png`, `reference_vectors.json`, `REFERENCE_VECTORS.md` |
 
 ## Running
 
 ```
 cd sim
-python -m pytest -q            # tests (about 15 s with numba)
-python -m greenline_sim.bench  # solver timing + closed-form table
+python -m pytest -q                 # tests (about 25 s with numba)
+python -m greenline_sim.montecarlo  # full evaluation: results/REPORT.md, summary.json, plots, reference vectors (about 6 min on 4 cores)
+python -m greenline_sim.report      # rebuild REPORT.md and the plots from an existing summary.json
+python -m greenline_sim.refvectors  # regenerate the reference vectors only
+python -m greenline_sim.bench       # solver timing + closed-form table
 ```
+
+`python -m greenline_sim.montecarlo --n-seeds 150 --n-seeds-sweep 60` are the
+defaults (150 greens per class, i.e. 150 putts per length x class cell; the
+sweeps use the first 60). The run is deterministic for a given `--seed`.
 
 numba is used when it is importable. `GREENLINE_SIM_NO_NUMBA=1` forces the
 pure-Python kernels: the same algorithm, about 50x slower for `solve_aim` on
 a quadratic patch (about 20 ms per solve) and about 1000x slower for rolls on
 a grid surface, so it is a correctness fallback, not a way to run the Monte
-Carlo. The test suite then takes about 1.5 minutes; `tests/test_fallback.py`
-checks that both paths give the same numbers.
+Carlo. `tests/test_fallback.py` checks that both paths give the same numbers;
+the tests that run the whole Monte-Carlo pipeline are skipped without numba.
+
+## What the device measures, and what it does not
+
+From about 5 mm above the turf the device has: the puck's tilt (the local
+slope, corrupted by how the puck seats on the grass); the flagstick's bearing,
+stereo range, the elevation of its lowest visible point and, beyond about
+6.7 m, of its top; the turf horizon (the silhouette of the grass at each
+azimuth); a coarse grain reading; and the green speed the golfer enters. It
+cannot see the surface between ball and hole in a range-resolved way: at lens
+height `h` the ground at distance `d` spans only `h / d^2` rad per metre.
+Nothing in `sensors.py` or `estimator.py` pretends otherwise.
+
+## The estimator in one paragraph
+
+In the putt frame (origin at the marker, +x toward the hole along the measured
+flag bearing) the green is modelled as the quadratic patch
+`z = a x + b y + 0.5 (c x^2 + 2 d x y + e y^2)`. Its coefficients are the MAP
+estimate (Levenberg-Marquardt, Huber loss) from the tilt, the hole height
+seen at the base of the flagstick (a one-sided bound when a crest hides the
+base), optionally the turf horizon through the exact forward model of a
+quadratic seen from lens height, and Gaussian priors on the curvatures. The
+putt is then solved on the patch with the entered Stimp and the measured
+grain. Methods: `STRAIGHT`, `B0` (tilt-only plane), `B1` (Quick Read, the
+default), `B2` (B1 + horizon); a spin-and-reread measurement makes B1 the
+Precision Read, and `estimate_survey` fits several drops along the line.
+
+```python
+from greenline_sim import greens as gr, sensors as se, estimator as es
+
+sc = gr.make_scenario("gentle", 4.5, seed=7)
+meas, truth = se.measure(sc.green, sc.ball_xy, sc.hole_xy, se.SensorParams(), rng=1)
+est = es.estimate(meas)              # takes the Measurements only; `truth` is for evaluation
+print(est.aim_azimuth_device, est.v0, est.plays_like, est.break_cups, est.slope_pct, est.confidence)
+```
+
+The headline results, the test of the turf-horizon hypothesis, the
+seating-noise sensitivity and a list of what did not work as hoped are in
+`results/REPORT.md`.
 
 ## Physics in one paragraph
 
@@ -112,5 +163,6 @@ print(g.canopy_z(0.0, 20.0), g.without_fringe().canopy_z(0.0, 20.0))
 
 ## Status
 
-`physics.py` and `greens.py` are complete and tested. `sensors.py`,
-`estimator.py` and `montecarlo.py` build on them.
+All modules are complete and tested (`python -m pytest -q`). The numbers in
+`results/` were produced by `python -m greenline_sim.montecarlo` with the
+default seed.

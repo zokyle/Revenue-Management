@@ -1,0 +1,890 @@
+[
+ {
+  "name": "tub",
+  "group": "puck",
+  "kind": "printed",
+  "material": "MJF PA12, dyed black, vapor smoothed",
+  "valid": true,
+  "volume_mm3": 2494.819,
+  "mass_g": 2.5198,
+  "bbox_min": [
+   -23.0,
+   -23.0,
+   -0.0
+  ],
+  "bbox_max": [
+   23.0,
+   18.4,
+   7.6
+  ],
+  "size": [
+   46.0,
+   41.4,
+   7.6
+  ]
+ },
+ {
+  "name": "base_plate",
+  "group": "puck",
+  "kind": "printed",
+  "material": "MJF PA12, dyed black, vapor smoothed",
+  "valid": true,
+  "volume_mm3": 1275.916,
+  "mass_g": 1.2887,
+  "bbox_min": [
+   -21.75,
+   -21.75,
+   0.0
+  ],
+  "bbox_max": [
+   21.75,
+   18.25,
+   1.0
+  ],
+  "size": [
+   43.5,
+   40.0,
+   1.0
+  ]
+ },
+ {
+  "name": "main_pcb",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "FR-4 + parts (envelope)",
+  "valid": true,
+  "volume_mm3": 1523.11,
+  "mass_g": 3.3508,
+  "bbox_min": [
+   -21.2,
+   -21.2,
+   0.52
+  ],
+  "bbox_max": [
+   21.2,
+   17.3,
+   3.8
+  ],
+  "size": [
+   42.4,
+   38.5,
+   3.28
+  ]
+ },
+ {
+  "name": "pcb_adhesive",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "PSA sheet 0.13 (e.g. 3M 468MP) PROVISIONAL",
+  "valid": true,
+  "volume_mm3": 156.048,
+  "mass_g": 0.156,
+  "bbox_min": [
+   -21.2,
+   -21.2,
+   1.0
+  ],
+  "bbox_max": [
+   21.2,
+   17.3,
+   1.13
+  ],
+  "size": [
+   42.4,
+   38.5,
+   0.13
+  ]
+ },
+ {
+  "name": "seal_bead",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "dispensed adhesive bead 0.2",
+  "valid": true,
+  "volume_mm3": 11.471,
+  "mass_g": 0.0126,
+  "bbox_min": [
+   -21.75,
+   -21.75,
+   1.0
+  ],
+  "bbox_max": [
+   21.75,
+   18.25,
+   1.2
+  ],
+  "size": [
+   43.5,
+   40.0,
+   0.2
+  ]
+ },
+ {
+  "name": "camera_L",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "OVM7692-RYAA cube",
+  "valid": true,
+  "volume_mm3": 28.253,
+  "mass_g": 0.0706,
+  "bbox_min": [
+   -11.935,
+   14.125,
+   1.8
+  ],
+  "bbox_max": [
+   -8.465,
+   17.075,
+   4.56
+  ],
+  "size": [
+   3.47,
+   2.95,
+   2.76
+  ]
+ },
+ {
+  "name": "prism_L",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "N-BK7 prism, Edmund 32-526",
+  "valid": true,
+  "volume_mm3": 4.0,
+  "mass_g": 0.01,
+  "bbox_min": [
+   -11.2,
+   14.6,
+   4.61
+  ],
+  "bbox_max": [
+   -9.2,
+   16.6,
+   6.61
+  ],
+  "size": [
+   2.0,
+   2.0,
+   2.0
+  ]
+ },
+ {
+  "name": "visor_window_L",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "EVT: cast acrylic 0.5",
+  "valid": true,
+  "volume_mm3": 7.31,
+  "mass_g": 0.0087,
+  "bbox_min": [
+   -12.35,
+   17.9,
+   4.2
+  ],
+  "bbox_max": [
+   -8.05,
+   18.4,
+   7.6
+  ],
+  "size": [
+   4.3,
+   0.5,
+   3.4
+  ]
+ },
+ {
+  "name": "camera_R",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "OVM7692-RYAA cube",
+  "valid": true,
+  "volume_mm3": 28.253,
+  "mass_g": 0.0706,
+  "bbox_min": [
+   8.465,
+   14.125,
+   1.8
+  ],
+  "bbox_max": [
+   11.935,
+   17.075,
+   4.56
+  ],
+  "size": [
+   3.47,
+   2.95,
+   2.76
+  ]
+ },
+ {
+  "name": "prism_R",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "N-BK7 prism, Edmund 32-526",
+  "valid": true,
+  "volume_mm3": 4.0,
+  "mass_g": 0.01,
+  "bbox_min": [
+   9.2,
+   14.6,
+   4.61
+  ],
+  "bbox_max": [
+   11.2,
+   16.6,
+   6.61
+  ],
+  "size": [
+   2.0,
+   2.0,
+   2.0
+  ]
+ },
+ {
+  "name": "visor_window_R",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "EVT: cast acrylic 0.5",
+  "valid": true,
+  "volume_mm3": 7.31,
+  "mass_g": 0.0087,
+  "bbox_min": [
+   8.05,
+   17.9,
+   4.2
+  ],
+  "bbox_max": [
+   12.35,
+   18.4,
+   7.6
+  ],
+  "size": [
+   4.3,
+   0.5,
+   3.4
+  ]
+ },
+ {
+  "name": "lcd_glass",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "Sharp LS013B7DH03 glass",
+  "valid": true,
+  "volume_mm3": 604.485,
+  "mass_g": 1.5112,
+  "bbox_min": [
+   -13.3,
+   -16.8,
+   4.65
+  ],
+  "bbox_max": [
+   13.3,
+   13.5,
+   5.4
+  ],
+  "size": [
+   26.6,
+   30.3,
+   0.75
+  ]
+ },
+ {
+  "name": "lcd_flex",
+  "group": "puck",
+  "kind": "reference",
+  "material": "polyimide FPC (PROVISIONAL shape)",
+  "valid": true,
+  "volume_mm3": 4.439,
+  "mass_g": 0.0071,
+  "bbox_min": [
+   -3.0,
+   -17.65,
+   3.85
+  ],
+  "bbox_max": [
+   3.0,
+   -13.9,
+   4.85
+  ],
+  "size": [
+   6.0,
+   3.75,
+   1.0
+  ]
+ },
+ {
+  "name": "lcd_adhesive",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "PSA frame 0.15",
+  "valid": true,
+  "volume_mm3": 58.576,
+  "mass_g": 0.0586,
+  "bbox_min": [
+   -13.3,
+   -16.8,
+   5.4
+  ],
+  "bbox_max": [
+   13.3,
+   13.5,
+   5.55
+  ],
+  "size": [
+   26.6,
+   30.3,
+   0.15
+  ]
+ },
+ {
+  "name": "cover_glass",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "mineral glass crystal 28.0 x 1.0",
+  "valid": true,
+  "volume_mm3": 615.752,
+  "mass_g": 1.5394,
+  "bbox_min": [
+   -14.0,
+   -14.0,
+   6.55
+  ],
+  "bbox_max": [
+   14.0,
+   14.0,
+   7.55
+  ],
+  "size": [
+   28.0,
+   28.0,
+   1.0
+  ]
+ },
+ {
+  "name": "cover_tape",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "3M VHB 5907 ring 0.2",
+  "valid": true,
+  "volume_mm3": 40.055,
+  "mass_g": 0.0288,
+  "bbox_min": [
+   -14.0,
+   -14.0,
+   6.35
+  ],
+  "bbox_max": [
+   14.0,
+   14.0,
+   6.55
+  ],
+  "size": [
+   28.0,
+   28.0,
+   0.2
+  ]
+ },
+ {
+  "name": "battery",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "LiPo GM201030-PCB",
+  "valid": true,
+  "volume_mm3": 680.0,
+  "mass_g": 1.428,
+  "bbox_min": [
+   -17.0,
+   -10.2,
+   1.8
+  ],
+  "bbox_max": [
+   17.0,
+   -0.2,
+   3.8
+  ],
+  "size": [
+   34.0,
+   10.0,
+   2.0
+  ]
+ },
+ {
+  "name": "foam_pad",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "PU foam 0.3 (e.g. Poron) PROVISIONAL",
+  "valid": true,
+  "volume_mm3": 79.8,
+  "mass_g": 0.0255,
+  "bbox_min": [
+   -13.3,
+   -10.2,
+   4.35
+  ],
+  "bbox_max": [
+   13.3,
+   -0.2,
+   4.65
+  ],
+  "size": [
+   26.6,
+   10.0,
+   0.3
+  ]
+ },
+ {
+  "name": "ball_1",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "stainless ball 1.0 mm",
+  "valid": true,
+  "volume_mm3": 0.524,
+  "mass_g": 0.0041,
+  "bbox_min": [
+   -0.5,
+   14.5,
+   -0.1
+  ],
+  "bbox_max": [
+   0.5,
+   15.5,
+   0.9
+  ],
+  "size": [
+   1.0,
+   1.0,
+   1.0
+  ]
+ },
+ {
+  "name": "ball_2",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "stainless ball 1.0 mm",
+  "valid": true,
+  "volume_mm3": 0.524,
+  "mass_g": 0.0041,
+  "bbox_min": [
+   -17.0,
+   -10.0,
+   -0.1
+  ],
+  "bbox_max": [
+   -16.0,
+   -9.0,
+   0.9
+  ],
+  "size": [
+   1.0,
+   1.0,
+   1.0
+  ]
+ },
+ {
+  "name": "ball_3",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "stainless ball 1.0 mm",
+  "valid": true,
+  "volume_mm3": 0.524,
+  "mass_g": 0.0041,
+  "bbox_min": [
+   16.0,
+   -10.0,
+   -0.1
+  ],
+  "bbox_max": [
+   17.0,
+   -9.0,
+   0.9
+  ],
+  "size": [
+   1.0,
+   1.0,
+   1.0
+  ]
+ },
+ {
+  "name": "vent",
+  "group": "puck",
+  "kind": "purchased",
+  "material": "Gore VE80205 ePTFE vent (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 5.105,
+  "mass_g": 0.0046,
+  "bbox_min": [
+   15.4,
+   -5.5,
+   6.34
+  ],
+  "bbox_max": [
+   20.4,
+   -0.5,
+   6.6
+  ],
+  "size": [
+   5.0,
+   5.0,
+   0.26
+  ]
+ },
+ {
+  "name": "cradle",
+  "group": "cradle",
+  "kind": "printed",
+  "material": "MJF PA12 or SLA",
+  "valid": true,
+  "volume_mm3": 28664.371,
+  "mass_g": 28.951,
+  "bbox_min": [
+   -30.0,
+   -32.3,
+   -11.0
+  ],
+  "bbox_max": [
+   30.0,
+   27.7,
+   3.0
+  ],
+  "size": [
+   60.0,
+   60.0,
+   14.0
+  ]
+ },
+ {
+  "name": "cradle_plate",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "304 stainless 1.5 mm, laser cut",
+  "valid": true,
+  "volume_mm3": 2517.261,
+  "mass_g": 20.1381,
+  "bbox_min": [
+   -23.0,
+   -23.0,
+   -1.6
+  ],
+  "bbox_max": [
+   23.0,
+   18.4,
+   -0.1
+  ],
+  "size": [
+   46.0,
+   41.4,
+   1.5
+  ]
+ },
+ {
+  "name": "cradle_pcb",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "FR-4 1.6",
+  "valid": true,
+  "volume_mm3": 1024.546,
+  "mass_g": 1.8954,
+  "bbox_min": [
+   -11.0,
+   -30.5,
+   -6.29
+  ],
+  "bbox_max": [
+   11.0,
+   -0.5,
+   -4.69
+  ],
+  "size": [
+   22.0,
+   30.0,
+   1.6
+  ]
+ },
+ {
+  "name": "usb_receptacle",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "GCT USB4105 (PROVISIONAL envelope)",
+  "valid": true,
+  "volume_mm3": 214.211,
+  "mass_g": 0.4284,
+  "bbox_min": [
+   -4.47,
+   -31.8,
+   -4.69
+  ],
+  "bbox_max": [
+   4.47,
+   -24.45,
+   -1.43
+  ],
+  "size": [
+   8.94,
+   7.35,
+   3.26
+  ]
+ },
+ {
+  "name": "spring_pin_1",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 10.958,
+  "mass_g": 0.0931,
+  "bbox_min": [
+   -8.535,
+   -17.915,
+   -6.99
+  ],
+  "bbox_max": [
+   -6.705,
+   -16.085,
+   0.965
+  ],
+  "size": [
+   1.83,
+   1.83,
+   7.955
+  ]
+ },
+ {
+  "name": "spring_pin_2",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 10.958,
+  "mass_g": 0.0931,
+  "bbox_min": [
+   -5.995,
+   -17.915,
+   -6.99
+  ],
+  "bbox_max": [
+   -4.165,
+   -16.085,
+   0.965
+  ],
+  "size": [
+   1.83,
+   1.83,
+   7.955
+  ]
+ },
+ {
+  "name": "spring_pin_3",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 10.958,
+  "mass_g": 0.0931,
+  "bbox_min": [
+   -3.455,
+   -17.915,
+   -6.99
+  ],
+  "bbox_max": [
+   -1.625,
+   -16.085,
+   0.965
+  ],
+  "size": [
+   1.83,
+   1.83,
+   7.955
+  ]
+ },
+ {
+  "name": "spring_pin_4",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 10.958,
+  "mass_g": 0.0931,
+  "bbox_min": [
+   -0.915,
+   -17.915,
+   -6.99
+  ],
+  "bbox_max": [
+   0.915,
+   -16.085,
+   0.965
+  ],
+  "size": [
+   1.83,
+   1.83,
+   7.955
+  ]
+ },
+ {
+  "name": "spring_pin_5",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 10.958,
+  "mass_g": 0.0931,
+  "bbox_min": [
+   1.625,
+   -17.915,
+   -6.99
+  ],
+  "bbox_max": [
+   3.455,
+   -16.085,
+   0.965
+  ],
+  "size": [
+   1.83,
+   1.83,
+   7.955
+  ]
+ },
+ {
+  "name": "spring_pin_6",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 10.958,
+  "mass_g": 0.0931,
+  "bbox_min": [
+   4.165,
+   -17.915,
+   -6.99
+  ],
+  "bbox_max": [
+   5.995,
+   -16.085,
+   0.965
+  ],
+  "size": [
+   1.83,
+   1.83,
+   7.955
+  ]
+ },
+ {
+  "name": "spring_pin_7",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 10.958,
+  "mass_g": 0.0931,
+  "bbox_min": [
+   6.705,
+   -17.915,
+   -6.99
+  ],
+  "bbox_max": [
+   8.535,
+   -16.085,
+   0.965
+  ],
+  "size": [
+   1.83,
+   1.83,
+   7.955
+  ]
+ },
+ {
+  "name": "cradle_foot_1",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "adhesive bumper foot dia 8 x 3 (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 150.796,
+  "mass_g": 0.1659,
+  "bbox_min": [
+   19.5,
+   17.2,
+   -13.0
+  ],
+  "bbox_max": [
+   27.5,
+   25.2,
+   -10.0
+  ],
+  "size": [
+   8.0,
+   8.0,
+   3.0
+  ]
+ },
+ {
+  "name": "cradle_foot_2",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "adhesive bumper foot dia 8 x 3 (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 150.796,
+  "mass_g": 0.1659,
+  "bbox_min": [
+   19.5,
+   -29.8,
+   -13.0
+  ],
+  "bbox_max": [
+   27.5,
+   -21.8,
+   -10.0
+  ],
+  "size": [
+   8.0,
+   8.0,
+   3.0
+  ]
+ },
+ {
+  "name": "cradle_foot_3",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "adhesive bumper foot dia 8 x 3 (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 150.796,
+  "mass_g": 0.1659,
+  "bbox_min": [
+   -27.5,
+   17.2,
+   -13.0
+  ],
+  "bbox_max": [
+   -19.5,
+   25.2,
+   -10.0
+  ],
+  "size": [
+   8.0,
+   8.0,
+   3.0
+  ]
+ },
+ {
+  "name": "cradle_foot_4",
+  "group": "cradle",
+  "kind": "purchased",
+  "material": "adhesive bumper foot dia 8 x 3 (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 150.796,
+  "mass_g": 0.1659,
+  "bbox_min": [
+   -27.5,
+   -29.8,
+   -13.0
+  ],
+  "bbox_max": [
+   -19.5,
+   -21.8,
+   -10.0
+  ],
+  "size": [
+   8.0,
+   8.0,
+   3.0
+  ]
+ }
+]

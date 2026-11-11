@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "greenline-sim"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python reference for the GreenLine ball-marker putt physics, estimator and Monte-Carlo evaluation"
 requires-python = ">=3.10"
 dependencies = ["numpy", "scipy", "matplotlib"]
@@ -19,3 +19,7 @@ packages = ["greenline_sim"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+    # environment quirk of some matplotlib installs; the report uses 2-D plots only
+    "ignore:Unable to import Axes3D:UserWarning",
+]

@@ -44,9 +44,9 @@ No GUI is ever started and nothing is downloaded.
 
 ## Conventions (read this first)
 
-* Units are millimetres.  The design origin is the **board centre**, **+x is
-  right, +y is up** as seen from the top of the board; rotation is
-  counter-clockwise positive.
+* Units are millimetres.  The design origin is the **board centre** (for the
+  D-shaped board: the centre of the circle), **+x is right, +y is up** as seen
+  from the top of the board; rotation is counter-clockwise positive.
 * KiCad's y axis points down.  The conversion happens in exactly one module,
   `gleda/coords.py` (`to_kicad_mm`, `from_kicad_mm`, ...).  The board centre is
   placed at (100, 100) mm on the KiCad page and the board's auxiliary
@@ -329,6 +329,51 @@ Pass/fail policy (the "honesty" rules):
 * A short between two nets that both hang on pads is reported by KiCad as a
   `clearance` violation with `actual 0.0000 mm` (often together with
   `solder_mask_bridge`), not as `shorting_items`.
+
+## What a router can rely on (all verified against KiCad 7.0.11 DRC)
+
+Inputs from the model:
+
+```python
+from gleda import geometry
+pads = geometry.placed_pads(design)        # PlacedPad: ref, number, net, x, y, layers,
+                                           # polygon (shapely, board mm), shape, w, h,
+                                           # rotation, kind, drill, side, clearance
+by_net = geometry.pads_by_net(design)      # net -> pads to connect
+board_poly = geometry.outline_polygon(design.outline)   # conservative board area
+holes = geometry.hole_polygons(design.outline)           # NPTH holes (also design.outline.holes)
+for ko in design.keepouts:
+    ko.layer_names(design.copper_layers), ko.tracks, ko.vias, geometry.keepout_polygon(ko)
+design.signal_layers()                     # copper layers without a whole-board plane
+design.plane_layers("GND")                 # layers where the net has a plane -> stub + via
+design.track_width(net), design.min_track_width(net), design.via_size(net)
+design.clearance(net_a, net_b, local_a=pad.clearance)    # what KiCad will require
+r = design.rules                           # copper_to_edge, hole_clearance, hole_to_hole, ...
+```
+
+Rules of the judge:
+
+* Track / via / pad clearance is `Design.clearance(...)`; distances between
+  straight tracks and round or rectangular pads are evaluated exactly (a
+  0.09 mm track exactly 0.09 mm from a round pad passes).
+* Copper to board edge is measured to the centre line of the 0.05 mm
+  Edge.Cuts graphics.  KiCad polygonises arcs (5 um per shape), so round copper
+  next to a curved edge loses a few micrometres: generate with
+  `geometry.DRC_SLACK` (0.01 mm) of extra distance.  `outline_polygon` is
+  already conservative by `tol` (5 um).
+* Pad polygons from KiCad lie up to ~5 um inside round copper; use the pad's
+  `shape` / `w` / `h` for exact maths or `PlacedPad.inflated(distance)`.
+* Through vias: 0.50 / 0.25 mm; hole to hole 0.25 mm also applies to vias of
+  the SAME net; hole wall to foreign copper 0.20 mm; a via keep-out on any
+  layer blocks through vias; a via inside a whole-board plane of another net
+  is isolated by the zone fill, a via of the plane's net connects solidly.
+* Tracks of different nets that touch get their nets silently merged by KiCad
+  when the copper cluster has no pad: `board.apply_routing` detects this and
+  raises (`strict=True`).
+* Track width below `Design.min_track_width(net)` is a DRC error through the
+  generated `.kicad_dru`.
+* Zones are not filled by `build_board` / `apply_routing`; `drc.run_drc`
+  refills and saves them before checking.
 
 ## pcbnew 7 gotchas the core works around
 

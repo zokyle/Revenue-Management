@@ -359,6 +359,37 @@ def test_d_board_build_is_deterministic(dshape, tmp_path):
     assert fresh == _md5(board.build_board(dshape_design(), str(tmp_path / "b")).pcb)
 
 
+def test_edge_clearance_is_measured_to_the_outline_centre_line(tmp_path):
+    """Facts a router needs: KiCad measures copper-to-edge distance to the
+    centre line of Edge.Cuts; exact for a track along the straight flat, but a
+    round via against the curved edge loses a few micrometres to KiCad's arc
+    approximation - hence :data:`gleda.geometry.DRC_SLACK`."""
+    rule = 0.30
+    results = {}
+    for tag, gap in (("exact", rule), ("slack", rule + g.DRC_SLACK), ("short", rule - 0.02)):
+        d = Design("edge_" + tag, Outline(PathShape.d_shape(BOARD_RADIUS, FLAT_Y)))
+        d.add(Part("R1", "1k", R0402, mpn="X", x=-3, y=0),
+              Part("R2", "1k", R0402, mpn="X", x=3, y=0))
+        d.net("A", "R1.1", "R2.1")
+        d.net("B", "R1.2", "R2.2")
+        files = board.build_board(d, str(tmp_path / tag))
+        w = 0.15
+        y = FLAT_Y - gap - w / 2
+        tracks = [Track("A", "F.Cu", -5.0, y, 5.0, y, w)]                 # along the flat
+        vias = [Via("B", -(BOARD_RADIUS - gap - 0.25), 0.0, 0.5, 0.25)]  # at the curved edge
+        board.apply_routing(files.pcb, tracks, vias)
+        r = drc.run_drc(files.pcb)
+        results[tag] = [v for v in r.violations if v.type == "copper_edge_clearance"]
+    # exactly on the rule: the straight track passes, the via at the arc does not
+    assert len(results["exact"]) == 1
+    assert "Via" in results["exact"][0].items[1].description
+    m = re.search(r"actual ([\d.]+) mm", results["exact"][0].description)
+    assert rule - 0.005 < float(m.group(1)) < rule
+    assert results["slack"] == []
+    assert len(results["short"]) == 2
+    assert any("actual 0.2800 mm" in v.description for v in results["short"])
+
+
 # -- per-layer keep-outs under sensor bodies ------------------------------------
 
 def test_body_keepout_shape_is_the_pad_free_area():

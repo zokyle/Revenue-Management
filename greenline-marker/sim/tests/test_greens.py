@@ -447,3 +447,38 @@ def test_green_from_surface_wraps_exact_surfaces():
         gr.green_from_surface(3.0)
     with pytest.raises(ValueError):
         gr.green_from_surface(quad, edge_radius=-1.0)
+
+
+# --------------------------------------------------------------------------
+# mounded surrounds (stress-test twin for the turf-horizon hypothesis)
+# --------------------------------------------------------------------------
+
+
+def test_mounded_surrounds_leave_the_green_and_collar_untouched():
+    green = gr.make_green("gentle", 4)
+    twin = green.with_mounded_surrounds(seed=9)
+    assert twin.surface is green.surface and twin.has_fringe
+    assert green.surround_mounds is None and twin.surround_mounds.shape == (12, 4)
+    rng = np.random.default_rng(0)
+    x = rng.uniform(-23.0, 23.0, 20000)
+    y = rng.uniform(-23.0, 23.0, 20000)
+    margin = np.asarray(green.radial_margin(x, y))
+    near = margin >= -green.collar_width  # putting surface and collar
+    assert np.array_equal(twin.canopy_z(x[near], y[near]), green.canopy_z(x[near], y[near]))
+    assert np.array_equal(twin.z(x, y), green.z(x, y))  # the ball rolls on the same surface everywhere
+    far = margin < -green.collar_width - 5.0
+    diff = np.asarray(twin.terrain_z(x[far], y[far])) - np.asarray(green.terrain_z(x[far], y[far]))
+    assert 0.12 < float(np.std(diff)) < 0.28  # about the requested 0.20 m RMS
+    # the onset at the edge of the collar is continuous
+    theta = 0.7
+    r_edge = green.edge_radius(theta) + green.collar_width
+    for eps in (1e-6, 1e-3):
+        xo, yo = (r_edge + eps) * math.cos(theta), (r_edge + eps) * math.sin(theta)
+        assert abs(twin.surround_dz(xo, yo) - green.surround_dz(xo, yo)) < eps
+    # reproducible, seed dependent, and removed again by the optimistic twins
+    assert np.array_equal(green.with_mounded_surrounds(9).surround_mounds, twin.surround_mounds)
+    assert not np.array_equal(green.with_mounded_surrounds(10).surround_mounds, twin.surround_mounds)
+    assert twin.without_fringe().surround_mounds is None and twin.without_surrounds().surround_mounds is None
+    assert not twin.without_fringe().has_fringe
+    with pytest.raises(ValueError):
+        green.with_mounded_surrounds(1, height_rms=-0.1)

@@ -37,6 +37,13 @@ DEFAULT_TOL = 0.005
 #: copper by up to ~5 um; :meth:`PlacedPad.inflated` adds this much on top.
 PAD_POLYGON_TOLERANCE = 0.006
 
+#: Extra distance a geometry generator (router) should add to every DRC rule.
+#: KiCad measures some distances on polygonised arcs (``Rules.max_arc_error``
+#: = 5 um per shape): a via placed exactly 0.300 mm from a curved board edge is
+#: reported as 0.2976 mm (``tests/test_dshape.py``).  Straight track against
+#: straight edge / round pad distances are exact.
+DRC_SLACK = 0.01
+
 
 # --------------------------------------------------------------------------
 # exact paths

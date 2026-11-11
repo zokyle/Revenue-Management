@@ -239,3 +239,10 @@ def test_report_structure_and_raise(mini):
     assert "ERROR   [missing_mpn]" in r.text()
     with pytest.raises(checks.CheckError):
         r.raise_if_errors()
+
+
+def test_net_names_differing_only_in_case(mini):
+    mini.net("sck", "R3.1")                       # "SCK" exists already
+    r = checks.run_checks(mini, footprints=False)
+    assert [f.net for f in r.find("net_name_case")] == ["sck"]
+    assert r.find("net_name_case")[0].severity == "warning"

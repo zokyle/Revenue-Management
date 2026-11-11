@@ -1,0 +1,847 @@
+{
+ "rev": "B-EVT1",
+ "source": "/home/user/Revenue-Management/greenline-marker/design/master_params.yaml",
+ "yaml": {
+  "rev": "B-EVT1",
+  "envelope": {
+   "outer_radius": 23.0,
+   "thickness": 7.6,
+   "wall": 1.0,
+   "min_printed_wall": 0.8,
+   "fit_clearance": 0.25,
+   "front_flat_y_outer": 18.4,
+   "front_flat_wall": 0.8
+  },
+  "base_plate": {
+   "thickness": 1.0,
+   "radius": 21.75,
+   "flat_y": 18.25,
+   "seal_land": {
+    "r_inner": 21.35,
+    "r_outer": 21.75,
+    "flat_y_inner": 17.6
+   },
+   "grain_cavity": {
+    "x": 0.0,
+    "y": -4.0,
+    "dia": 13.0
+   },
+   "pad_holes": {
+    "dia": 2.2,
+    "y": -17.0,
+    "xs": [
+     -7.62,
+     -5.08,
+     -2.54,
+     0.0,
+     2.54,
+     5.08,
+     7.62
+    ]
+   },
+   "feet": {
+    "ball_dia": 1.0,
+    "protrusion": 0.1,
+    "positions": [
+     [
+      0.0,
+      15.0
+     ],
+     [
+      -16.5,
+      -9.5
+     ],
+     [
+      16.5,
+      -9.5
+     ]
+    ]
+   }
+  },
+  "pcb": {
+   "thickness": 0.8,
+   "z_bottom": 1.0,
+   "radius": 21.2,
+   "flat_y": 17.3,
+   "component_edge_clearance": 0.2,
+   "max_top_height_under_lcd": 2.55
+  },
+  "tub_ledge": {
+   "r_inner": 21.35,
+   "z0": 1.2,
+   "z1": 2.2
+  },
+  "lcd": {
+   "mpn": "LS013B7DH03",
+   "glass": {
+    "x": 0.0,
+    "y": -1.65,
+    "dx": 26.6,
+    "dy": 30.3,
+    "z0": 4.65,
+    "z1": 5.4
+   },
+   "active": {
+    "x": 0.0,
+    "y": 0.0,
+    "dx": 23.04,
+    "dy": 23.04
+   },
+   "aperture_dia": 22.0,
+   "fpc_exit_edge": "rear",
+   "psa_thickness": 0.15
+  },
+  "cover_glass": {
+   "dia": 28.0,
+   "thickness": 1.0,
+   "recess_dia": 28.5,
+   "recess_depth": 1.25,
+   "bond": "VHB 5907 ring 0.2 mm"
+  },
+  "battery": {
+   "mpn": "GM201030-PCB",
+   "body": {
+    "x": 0.0,
+    "y": -5.2,
+    "dx": 34.0,
+    "dy": 10.0,
+    "z0": 1.8,
+    "z1": 3.8
+   },
+   "swell_allowance": 0.4,
+   "foam_above": 0.3
+  },
+  "cameras": {
+   "mpn": "OVM7692-RYAA",
+   "body_dx": 3.47,
+   "body_dy": 2.95,
+   "height": 2.76,
+   "left": {
+    "x": -10.2,
+    "y": 15.6
+   },
+   "right": {
+    "x": 10.2,
+    "y": 15.6
+   },
+   "baseline": 20.4,
+   "efl_mm": 1.15,
+   "pixel_um": 1.75,
+   "f_px": 657,
+   "fov_deg": {
+    "h": 51.9,
+    "v": 40.1
+   }
+  },
+  "prisms": {
+   "mpn": "Edmund Optics 32-526",
+   "leg": 2.0,
+   "bond_line": 0.05,
+   "exit_face_y": 16.6,
+   "optical_axis_z": 5.61
+  },
+  "roof": {
+   "underside_z": 6.8,
+   "thickness": 0.8,
+   "prism_pocket_underside_z": 6.8
+  },
+  "visor_window": {
+   "w": 4.3,
+   "h": 3.4,
+   "t": 0.5,
+   "recess_depth": 0.55,
+   "z0": 4.2,
+   "z1": 7.6,
+   "opening": {
+    "half_w": 1.65,
+    "z0": 4.6,
+    "z1": 6.8
+   },
+   "material": "EVT: 0.5 mm clear cast acrylic or cover glass; production: AR-coated borosilicate or sapphire, custom cut"
+  },
+  "vent": {
+   "type": "W. L. Gore VE80205 adhesive ePTFE vent, OD 5.0, vent dia 2.0, 0.26 thick",
+   "hole_dia": 1.0,
+   "location": "roof underside in a lateral segment, about x=17, y=-3",
+   "basis": "provisional"
+  },
+  "top_side_parts": [
+   {
+    "ref": "U1",
+    "name": "STM32U585RIT6 LQFP-64",
+    "x": 0.0,
+    "y": 7.2,
+    "dx": 12.2,
+    "dy": 12.2,
+    "h": 1.6
+   },
+   {
+    "ref": "U2",
+    "name": "OVM7692 camera L",
+    "x": -10.2,
+    "y": 15.6,
+    "dx": 3.47,
+    "dy": 2.95,
+    "h": 2.76
+   },
+   {
+    "ref": "U3",
+    "name": "OVM7692 camera R",
+    "x": 10.2,
+    "y": 15.6,
+    "dx": 3.47,
+    "dy": 2.95,
+    "h": 2.76
+   },
+   {
+    "ref": "U4",
+    "name": "LSM6DSV16X IMU LGA-14",
+    "x": -11.0,
+    "y": 6.0,
+    "dx": 3.0,
+    "dy": 2.5,
+    "h": 0.86
+   },
+   {
+    "ref": "U6",
+    "name": "MX25R6435F flash WSON-8 6x5",
+    "x": 11.5,
+    "y": 6.4,
+    "dx": 6.4,
+    "dy": 5.4,
+    "h": 0.8
+   },
+   {
+    "ref": "U8",
+    "name": "LP5907-2.8 LDO SOT-23-5",
+    "x": 0.0,
+    "y": 15.3,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.45
+   },
+   {
+    "ref": "BT1",
+    "name": "LiPo GM201030-PCB",
+    "x": 0.0,
+    "y": -5.2,
+    "dx": 34.0,
+    "dy": 10.0,
+    "h": 2.4
+   },
+   {
+    "ref": "J1",
+    "name": "LCD FPC conn FH12A-10S-0.5SH top-contact",
+    "x": 0.0,
+    "y": -13.9,
+    "dx": 8.4,
+    "dy": 5.8,
+    "h": 2.0
+   },
+   {
+    "ref": "U7",
+    "name": "MCP1700-2.8 LDO SOT-23",
+    "x": 10.5,
+    "y": -13.5,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.2
+   },
+   {
+    "ref": "U11",
+    "name": "MCP1700-3.3 LDO SOT-23 (VDDUSB)",
+    "x": 14.0,
+    "y": -12.2,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.2
+   },
+   {
+    "ref": "U9",
+    "name": "MCP73831 charger SOT-23-5",
+    "x": -10.5,
+    "y": -13.5,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.45
+   },
+   {
+    "ref": "U10",
+    "name": "USBLC6-2SC6 ESD SOT-23-6",
+    "x": -14.5,
+    "y": -12.0,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.45
+   },
+   {
+    "ref": "Y1",
+    "name": "32.768 kHz xtal 3215",
+    "x": 8.6,
+    "y": 12.2,
+    "dx": 3.4,
+    "dy": 1.7,
+    "h": 0.9
+   }
+  ],
+  "bottom_side_parts": {
+   "grain_led_ring": {
+    "x": 0.0,
+    "y": -4.0,
+    "radius": 5.2,
+    "count_pairs": 8,
+    "led_height": 0.45
+   },
+   "photodiode": {
+    "x": 0.0,
+    "y": -4.0,
+    "dx": 4.8,
+    "dy": 2.5,
+    "h": 0.48
+   },
+   "pads": "7 gold pads dia 1.8 at base_plate.pad_holes (VBUS, D-, D+, GND, SWDIO, SWCLK, NRST)"
+  }
+ },
+ "mechanical_only": {
+  "top_fillet": 0.6,
+  "bottom_chamfer": 0.3,
+  "recess_wall": 0.8,
+  "lcd_rib_t": 0.8,
+  "lcd_rib_z0": 4.75,
+  "lcd_side_ribs_y": [
+   [
+    -11.0,
+    -7.0
+   ],
+   [
+    4.0,
+    8.0
+   ]
+  ],
+  "lcd_rear_ribs_x": [
+   8.0,
+   11.0
+  ],
+  "cover_tape_id": 23.0,
+  "lcd_psa_window_dia": 23.0,
+  "posts": {
+   "A": [
+    14.6,
+    16.2,
+    1.0,
+    2.6
+   ],
+   "B": [
+    13.55,
+    15.15,
+    10.0,
+    11.6
+   ],
+   "C": [
+    5.7,
+    7.3,
+    -19.4,
+    -17.8
+   ],
+   "E": [
+    3.4,
+    5.0,
+    13.75,
+    15.35
+   ]
+  },
+  "hood_wall": 0.8,
+  "hood_skirt_z0": 3.0,
+  "hood_corner_fill_y0": 16.0,
+  "visor_land": 0.5,
+  "visor_bevel_deg": 30.0,
+  "hood_rear_chamfer_margin": 0.015,
+  "window_bond": 0.05,
+  "vent_xy": [
+   17.9,
+   -3.0
+  ],
+  "vent_pad": 5.6,
+  "vent_pad_h": 0.2,
+  "vent_od": 5.0,
+  "vent_t": 0.26,
+  "vent_area_dia": 2.0,
+  "nose_w": 1.0,
+  "nose_depth": 0.3,
+  "baffle_pd_clear": 0.25,
+  "baffle_wall": 0.8,
+  "spoke_w": 0.8,
+  "spoke_angles_deg": [
+   90.0,
+   225.0,
+   315.0
+  ],
+  "ball_seat_cone_half_angle_deg": 45.0,
+  "ball_seat_model_gap": 0.01,
+  "key_w": 1.2,
+  "key_x": 9.25,
+  "pad_dia": 1.8,
+  "pad_t": 0.035,
+  "led_body": [
+   1.0,
+   0.5
+  ],
+  "led_pair_offset": 0.45,
+  "pcb_psa_t": 0.13,
+  "flex_w": 6.0,
+  "flex_t": 0.15,
+  "flex_z_top_run": 4.775,
+  "flex_z_bottom_run": 3.925,
+  "flex_straight": 0.35,
+  "foam_dx": 26.6,
+  "pupil_below_cube_top": 0.4,
+  "pupil_dia": 0.38,
+  "n_prism": 1.517,
+  "fov_h_half_deg": 26.0,
+  "fov_up_deg": 17.6,
+  "fov_down_deg": 15.0,
+  "cradle_size": [
+   60.0,
+   60.0,
+   14.0
+  ],
+  "cradle_nest_wall_h": 3.0,
+  "cradle_corner_r": 4.0,
+  "plate_t": 1.5,
+  "plate_hole_dia": 2.0,
+  "pin_free_len": 8.3,
+  "pin_working_h": 5.82,
+  "pin_plunger_dia": 1.07,
+  "pin_body_dia": 1.83,
+  "pin_tail_dia": 0.76,
+  "pin_max_working_h": 6.96,
+  "pin_mid_stroke": 1.14,
+  "pin_full_stroke": 2.29,
+  "pin_force_working_N": 0.59,
+  "pin_body_top_below_plate": 0.3,
+  "pin_tail_below_pcb": 0.7,
+  "real_pad_height": 1.13,
+  "cradle_pcb": [
+   22.0,
+   30.0,
+   1.6
+  ],
+  "cradle_pcb_rear_y": -30.5,
+  "cradle_pcb_screw_xy": [
+   [
+    8.5,
+    -28.0
+   ],
+   [
+    8.5,
+    -3.0
+   ]
+  ],
+  "cradle_screw_pilot_dia": 1.7,
+  "cradle_screw_pilot_depth": 0.5,
+  "usb": [
+   8.94,
+   7.35,
+   3.26
+  ],
+  "usb_mouth_recess": 0.5,
+  "scallop_half_w": 8.0,
+  "lighten_x": [
+   13.75,
+   26.5
+  ],
+  "lighten_y_half": 17.0,
+  "lighten_ceiling_z": -4.1,
+  "foot_pocket_dia": 8.4,
+  "foot_pocket_depth": 1.0,
+  "foot_xy": [
+   23.5,
+   23.5
+  ],
+  "foot_h": 3.0,
+  "foot_dia": 8.0
+ },
+ "derived": {
+  "REV": "B-EVT1",
+  "R_OUT": 23.0,
+  "T": 7.6,
+  "WALL": 1.0,
+  "MIN_WALL": 0.8,
+  "CLR": 0.25,
+  "Y_VISOR": 18.4,
+  "VISOR_WALL": 0.8,
+  "R_IN": 22.0,
+  "Y_VISOR_IN": 17.599999999999998,
+  "BASE_T": 1.0,
+  "BASE_R": 21.75,
+  "BASE_FLAT": 18.25,
+  "LAND_RI": 21.35,
+  "LAND_FLAT_IN": 17.6,
+  "GRAIN_X": 0.0,
+  "GRAIN_Y": -4.0,
+  "GRAIN_D": 13.0,
+  "PAD_HOLE_D": 2.2,
+  "PAD_Y": -17.0,
+  "PAD_XS": [
+   -7.62,
+   -5.08,
+   -2.54,
+   0.0,
+   2.54,
+   5.08,
+   7.62
+  ],
+  "BALL_D": 1.0,
+  "BALL_PROT": 0.1,
+  "BALL_XY": [
+   [
+    0.0,
+    15.0
+   ],
+   [
+    -16.5,
+    -9.5
+   ],
+   [
+    16.5,
+    -9.5
+   ]
+  ],
+  "BALL_Z": 0.4,
+  "PCB_T": 0.8,
+  "PCB_Z0": 1.0,
+  "PCB_R": 21.2,
+  "PCB_FLAT": 17.3,
+  "PCB_Z1": 1.8,
+  "PCB_EDGE_CLR": 0.2,
+  "LEDGE_RI": 21.35,
+  "LEDGE_Z0": 1.2,
+  "LEDGE_Z1": 2.2,
+  "BEAD_T": 0.19999999999999996,
+  "LCD": {
+   "x": 0.0,
+   "y": -1.65,
+   "dx": 26.6,
+   "dy": 30.3,
+   "z0": 4.65,
+   "z1": 5.4
+  },
+  "LCD_X0": -13.3,
+  "LCD_X1": 13.3,
+  "LCD_Y0": -16.8,
+  "LCD_Y1": 13.5,
+  "LCD_Z0": 4.65,
+  "LCD_Z1": 5.4,
+  "LCD_PSA_T": 0.15,
+  "APERTURE_D": 22.0,
+  "BOND_Z": 5.550000000000001,
+  "CG_D": 28.0,
+  "CG_T": 1.0,
+  "RECESS_D": 28.5,
+  "RECESS_DEPTH": 1.25,
+  "CG_TAPE_T": 0.2,
+  "RECESS_FLOOR_Z": 6.35,
+  "ROOF_LEDGE_T": 0.7999999999999989,
+  "CG_Z0": 6.55,
+  "CG_Z1": 7.55,
+  "CG_BELOW_FLUSH": 0.04999999999999982,
+  "ROOF_Z": 6.8,
+  "ROOF_T": 0.8,
+  "BAT": {
+   "x": 0.0,
+   "y": -5.2,
+   "dx": 34.0,
+   "dy": 10.0,
+   "z0": 1.8,
+   "z1": 3.8
+  },
+  "BAT_SWELL": 0.4,
+  "FOAM_T": 0.3,
+  "FOAM_Z1": 4.65,
+  "FOAM_Z0": 4.3500000000000005,
+  "CAM_DX": 3.47,
+  "CAM_DY": 2.95,
+  "CAM_H": 2.76,
+  "CAM_XY": {
+   "L": [
+    -10.2,
+    15.6
+   ],
+   "R": [
+    10.2,
+    15.6
+   ]
+  },
+  "CAM_Z0": 1.8,
+  "CAM_Z1": 4.56,
+  "PRISM_LEG": 2.0,
+  "PRISM_BOND": 0.05,
+  "PRISM_EXIT_Y": 16.6,
+  "PRISM_Z0": 4.609999999999999,
+  "PRISM_Z1": 6.609999999999999,
+  "PRISM_Y0": 14.600000000000001,
+  "AXIS_Z": 5.609999999999999,
+  "PRISM_ROOF_CLR": 0.1900000000000004,
+  "WIN_W": 4.3,
+  "WIN_H": 3.4,
+  "WIN_T": 0.5,
+  "WIN_RECESS_DEPTH": 0.55,
+  "WIN_Z0": 4.2,
+  "WIN_Z1": 7.6,
+  "WIN_RECESS_W": 4.3999999999999995,
+  "OPEN_HALF_W": 1.65,
+  "OPEN_Z0": 4.6,
+  "OPEN_Z1": 6.8,
+  "WIN_RECESS_FLOOR_Y": 17.849999999999998,
+  "VENT_HOLE_D": 1.0,
+  "TOP_PARTS": [
+   {
+    "ref": "U1",
+    "name": "STM32U585RIT6 LQFP-64",
+    "x": 0.0,
+    "y": 7.2,
+    "dx": 12.2,
+    "dy": 12.2,
+    "h": 1.6
+   },
+   {
+    "ref": "U2",
+    "name": "OVM7692 camera L",
+    "x": -10.2,
+    "y": 15.6,
+    "dx": 3.47,
+    "dy": 2.95,
+    "h": 2.76
+   },
+   {
+    "ref": "U3",
+    "name": "OVM7692 camera R",
+    "x": 10.2,
+    "y": 15.6,
+    "dx": 3.47,
+    "dy": 2.95,
+    "h": 2.76
+   },
+   {
+    "ref": "U4",
+    "name": "LSM6DSV16X IMU LGA-14",
+    "x": -11.0,
+    "y": 6.0,
+    "dx": 3.0,
+    "dy": 2.5,
+    "h": 0.86
+   },
+   {
+    "ref": "U6",
+    "name": "MX25R6435F flash WSON-8 6x5",
+    "x": 11.5,
+    "y": 6.4,
+    "dx": 6.4,
+    "dy": 5.4,
+    "h": 0.8
+   },
+   {
+    "ref": "U8",
+    "name": "LP5907-2.8 LDO SOT-23-5",
+    "x": 0.0,
+    "y": 15.3,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.45
+   },
+   {
+    "ref": "BT1",
+    "name": "LiPo GM201030-PCB",
+    "x": 0.0,
+    "y": -5.2,
+    "dx": 34.0,
+    "dy": 10.0,
+    "h": 2.4
+   },
+   {
+    "ref": "J1",
+    "name": "LCD FPC conn FH12A-10S-0.5SH top-contact",
+    "x": 0.0,
+    "y": -13.9,
+    "dx": 8.4,
+    "dy": 5.8,
+    "h": 2.0
+   },
+   {
+    "ref": "U7",
+    "name": "MCP1700-2.8 LDO SOT-23",
+    "x": 10.5,
+    "y": -13.5,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.2
+   },
+   {
+    "ref": "U11",
+    "name": "MCP1700-3.3 LDO SOT-23 (VDDUSB)",
+    "x": 14.0,
+    "y": -12.2,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.2
+   },
+   {
+    "ref": "U9",
+    "name": "MCP73831 charger SOT-23-5",
+    "x": -10.5,
+    "y": -13.5,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.45
+   },
+   {
+    "ref": "U10",
+    "name": "USBLC6-2SC6 ESD SOT-23-6",
+    "x": -14.5,
+    "y": -12.0,
+    "dx": 3.0,
+    "dy": 3.0,
+    "h": 1.45
+   },
+   {
+    "ref": "Y1",
+    "name": "32.768 kHz xtal 3215",
+    "x": 8.6,
+    "y": 12.2,
+    "dx": 3.4,
+    "dy": 1.7,
+    "h": 0.9
+   }
+  ],
+  "LED_RING": {
+   "x": 0.0,
+   "y": -4.0,
+   "radius": 5.2,
+   "count_pairs": 8,
+   "led_height": 0.45
+  },
+  "PD": {
+   "x": 0.0,
+   "y": -4.0,
+   "dx": 4.8,
+   "dy": 2.5,
+   "h": 0.48
+  },
+  "LCD_POCKET_X": 13.55,
+  "LCD_POCKET_Y1": 13.75,
+  "LCD_POCKET_Y0": -17.05,
+  "THICK_RING_R": 15.05,
+  "HOOD_IN_HW": 1.985,
+  "HOOD_OUT_HW": 2.785,
+  "HOOD_Z_OVER_CUBE": 4.81,
+  "HOOD_REAR_Y0": 13.75,
+  "HOOD_REAR_Y1": 14.55,
+  "HOOD_FRONT_IN_Y": 17.049999999999997,
+  "HOOD_PAD_Y": 17.325,
+  "THIN_STRIP_T": 0.5249999999999986,
+  "BEVEL_GROW": 0.17320508075688812,
+  "OPEN_HALF_W_INSIDE": 1.823205080756888,
+  "HORN_X_OUT": 13.800000000000002,
+  "HORN_ANGLE_DEG": 53.13010235415597,
+  "HORN_X_IN": 13.200000000000003,
+  "HORN_Y_IN": 17.599999999999998,
+  "HOOD_REAR_CHAMFER": 0.11855339059327288,
+  "PRISM_HOOD_CLR": 0.2606066017177982,
+  "PD_HALF_DIAG": 2.7060118255469616,
+  "BAFFLE_RI": 2.9560118255469616,
+  "BAFFLE_RO": 3.7560118255469614,
+  "GRAIN_R": 6.5,
+  "BALL_SEAT_APEX_Z": 1.1212489168102786,
+  "BALL_SEAT_R_BOTTOM": 1.1212489168102784,
+  "BALL_SEAT_R_TOP": 0.12124891681027859,
+  "KEY_NOTCH_HW": 0.85,
+  "KEY_NOTCH_Y0": 17.349999999999998,
+  "PAD_WEB": 0.33999999999999986,
+  "PAD_Z0": 0.965,
+  "VENT_PAD_Z": 6.6,
+  "VENT_Z0": 6.34,
+  "PUPIL_Z": 4.159999999999999,
+  "VIRTUAL_PUPIL_BEHIND_EXIT": 1.7683915622940019,
+  "VIRTUAL_PUPIL_Y": 14.831608437705999,
+  "NEST_R": 23.25,
+  "NEST_FLAT": 18.65,
+  "NEST_SHIFT": 4.600000000000001,
+  "NEST_CY": -2.3000000000000007,
+  "PLATE_Z1": -0.1,
+  "PLATE_Z0": -1.6,
+  "CRADLE_TOP_Z": 3.0,
+  "CRADLE_BOT_Z": -11.0,
+  "CRADLE_X": 30.0,
+  "CRADLE_Y0": -32.3,
+  "CRADLE_Y1": 27.7,
+  "CPCB_Z1": -4.69,
+  "CPCB_Z0": -6.290000000000001,
+  "CPCB_Y0": -30.5,
+  "CPCB_Y1": -0.5,
+  "CPCB_HX": 11.0,
+  "PIN_BODY_Z1": -1.9000000000000001,
+  "CRADLE_PIN_SLOT_W": 2.33,
+  "PIN_MODEL_COMPRESSION_EXTRA": 0.16499999999999992,
+  "USB_Y0": -31.799999999999997,
+  "USB_Y1": -24.449999999999996,
+  "USB_Z1": -1.4300000000000006
+ },
+ "posts": [
+  {
+   "name": "A+",
+   "x0": 14.6,
+   "x1": 16.2,
+   "y0": 1.0,
+   "y1": 2.6
+  },
+  {
+   "name": "A-",
+   "x0": -16.2,
+   "x1": -14.6,
+   "y0": 1.0,
+   "y1": 2.6
+  },
+  {
+   "name": "B+",
+   "x0": 13.55,
+   "x1": 15.15,
+   "y0": 10.0,
+   "y1": 11.6
+  },
+  {
+   "name": "B-",
+   "x0": -15.15,
+   "x1": -13.55,
+   "y0": 10.0,
+   "y1": 11.6
+  },
+  {
+   "name": "C+",
+   "x0": 5.7,
+   "x1": 7.3,
+   "y0": -19.4,
+   "y1": -17.8
+  },
+  {
+   "name": "C-",
+   "x0": -7.3,
+   "x1": -5.7,
+   "y0": -19.4,
+   "y1": -17.8
+  },
+  {
+   "name": "E+",
+   "x0": 3.4,
+   "x1": 5.0,
+   "y0": 13.75,
+   "y1": 15.35
+  },
+  {
+   "name": "E-",
+   "x0": -5.0,
+   "x1": -3.4,
+   "y0": 13.75,
+   "y1": 15.35
+  }
+ ]
+}
