@@ -9,7 +9,7 @@
 #ifndef GL_CONFIG_H
 #define GL_CONFIG_H
 
-#define GL_CFG_PARAMS_REV "B-EVT1"
+#define GL_CFG_PARAMS_REV "C-EVT1"
 
 /* ---- envelope ---- */
 #define GL_CFG_OUTER_RADIUS_MM          23.0f
@@ -40,16 +40,16 @@
 #define GL_CFG_CAM_PIXEL_UM             1.75f
 #define GL_CFG_CAM_FOV_H_DEG            51.9f
 #define GL_CFG_CAM_FOV_V_DEG            40.1f
-#define GL_CFG_CAM_BASELINE_MM          20.4f
-#define GL_CFG_CAM_BASELINE_M           0.0204f
-#define GL_CFG_CAM_LEFT_X_MM            -10.2f
+#define GL_CFG_CAM_BASELINE_MM          20.0f
+#define GL_CFG_CAM_BASELINE_M           0.02f
+#define GL_CFG_CAM_LEFT_X_MM            -10.0f
 #define GL_CFG_CAM_LEFT_Y_MM            15.6f
-#define GL_CFG_CAM_RIGHT_X_MM           10.2f
+#define GL_CFG_CAM_RIGHT_X_MM           10.0f
 #define GL_CFG_CAM_RIGHT_Y_MM           15.6f
 #define GL_CFG_CAM_EXIT_FACE_Y_MM       16.6f
 #define GL_CFG_CAM_AXIS_HEIGHT_MM       5.61f  /* optical axis above the base plane */
 #define GL_CFG_CAM_AXIS_HEIGHT_M        0.00561f
-#define GL_CFG_STEREO_F_TIMES_B_PX_M    13.4028f  /* f_px * baseline_m: disparity_px * range_m */
+#define GL_CFG_STEREO_F_TIMES_B_PX_M    13.14f  /* f_px * baseline_m: disparity_px * range_m */
 
 /* ---- grain sensor ring (PCB underside) ---- */
 #define GL_CFG_GRAIN_CENTRE_X_MM        0.0f
