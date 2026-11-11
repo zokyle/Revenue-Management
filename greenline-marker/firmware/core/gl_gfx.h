@@ -88,6 +88,17 @@ unsigned gl_gfx_changed_rows(const gl_gfx_t *g, const uint8_t shadow[GL_GFX_BYTE
 
 /* ---- primitives -------------------------------------------------------- */
 
+/** Integer coordinates and sizes given to the primitives below are clamped
+ *  to +-GL_GFX_COORD_LIMIT pixels, text scale to 1..GL_GFX_TEXT_SCALE_MAX,
+ *  large-digit height to 9..GL_GFX_BIG_H_MAX and strings to
+ *  GL_GFX_TEXT_LEN_MAX characters.  Every value that could put ink on the
+ *  128 x 128 screen is far inside these limits; they exist so that no
+ *  argument, however extreme, can overflow an int. */
+#define GL_GFX_COORD_LIMIT 1000000
+#define GL_GFX_TEXT_SCALE_MAX 32
+#define GL_GFX_BIG_H_MAX 256
+#define GL_GFX_TEXT_LEN_MAX 64
+
 /** Horizontal run x0..x1 inclusive (any order). */
 void gl_gfx_hline(gl_gfx_t *g, int x0, int x1, int y, gl_ink_t ink);
 /** Vertical run y0..y1 inclusive (any order). */

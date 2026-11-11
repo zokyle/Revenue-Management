@@ -18,6 +18,7 @@ void gl_motion_restart(gl_motion_t *m)
     m->motion_latched = false;
     m->dial_active = false;
     m->spin_active = false;
+    m->spin_reported = false;
     m->taps_enabled = true;
     m->moving_blocks = 0;
     m->displaced_blocks = 0;
@@ -63,11 +64,13 @@ void gl_motion_spin_begin(gl_motion_t *m, gl_vec3_t up, gl_vec3_t gyro_bias_rad_
 {
     gl_spin_begin(&m->spin, up, gyro_bias_rad_s);
     m->spin_active = true;
+    m->spin_reported = false;
 }
 
 void gl_motion_spin_end(gl_motion_t *m)
 {
     m->spin_active = false;
+    m->spin_reported = false;
 }
 
 static void post_motion_(gl_motion_t *m, gl_event_queue_t *q)
@@ -122,6 +125,8 @@ unsigned gl_motion_sample(gl_motion_t *m, const gl_imu_raw_t *s, uint32_t dt_ms,
         flags |= GL_MOTION_F_BLOCK_STILL;
         m->moving_blocks = 0;
     } else {
+        /* it moved: a completed spin has to be confirmed again at the next rest */
+        m->spin_reported = false;
         if (m->moving_blocks < 255u) {
             m->moving_blocks++;
         }
@@ -154,8 +159,10 @@ unsigned gl_motion_sample(gl_motion_t *m, const gl_imu_raw_t *s, uint32_t dt_ms,
         m->have_rest = true;
         m->displaced_blocks = 0;
         m->motion_latched = false;
-        if (m->spin_active && gl_spin_is_half_turn(&m->spin)) {
-            m->spin_active = false;
+        /* the integration is NOT stopped here: the re-read that follows
+         * must be combined with the angle it was really taken at */
+        if (m->spin_active && !m->spin_reported && gl_spin_is_half_turn(&m->spin)) {
+            m->spin_reported = true;
             (void)gl_event_post(q, (uint16_t)GL_EV_SPIN_DONE, 0);
         }
         if (m->watch_still) {

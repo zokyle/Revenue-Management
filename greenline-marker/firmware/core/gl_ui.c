@@ -40,6 +40,15 @@ static const gl_ui_transition_t table_[] = {
       GL_ACT_START_SOLVE | GL_ACT_PRECISION | GL_ACT_REDRAW),
     T(GL_UI_READ_TILT, GL_EV_TILT_DONE, GL_G_ALWAYS, GL_UI_CAPTURE,
       GL_ACT_START_CAPTURE | GL_ACT_REDRAW),
+    /* A disturbed RE-READ of a Precision Read goes back to the spin prompt
+     * with the gyro integration still running: the marker has to come to
+     * rest at a half turn again before another re-read starts (it used to
+     * re-read from WAIT_STILL and combine with the angle measured BEFORE the
+     * disturbance). */
+    T(GL_UI_READ_TILT, GL_EV_TILT_FAIL, GL_G_PRECISION_REREAD, GL_UI_PRECISION_WAIT_SPIN,
+      GL_ACT_ABORT_READ | GL_ACT_REDRAW),
+    T(GL_UI_READ_TILT, GL_EV_MOTION, GL_G_PRECISION_REREAD, GL_UI_PRECISION_WAIT_SPIN,
+      GL_ACT_ABORT_READ | GL_ACT_REDRAW),
     T(GL_UI_READ_TILT, GL_EV_TILT_FAIL, GL_G_ALWAYS, GL_UI_WAIT_STILL,
       GL_ACT_ABORT_READ | GL_ACT_WATCH_STILL | GL_ACT_REDRAW),
     T(GL_UI_READ_TILT, GL_EV_MOTION, GL_G_ALWAYS, GL_UI_WAIT_STILL,
@@ -91,7 +100,8 @@ static const gl_ui_transition_t table_[] = {
       GL_ACT_SURVEY_STORE | GL_ACT_REDRAW),
     T(GL_UI_PRECISION_WAIT_SPIN, GL_EV_UPRIGHT, GL_G_ALWAYS, GL_UI_SETTINGS_DIAL,
       GL_ACT_DIAL_BEGIN | GL_ACT_REDRAW),
-    T(GL_UI_PRECISION_WAIT_SPIN, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_SHOW_RESULT, GL_ACT_REDRAW),
+    T(GL_UI_PRECISION_WAIT_SPIN, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_SHOW_RESULT,
+      GL_ACT_SPIN_ABANDON | GL_ACT_REDRAW),
 
     /* ---- SURVEY_NEXT_DROP: waiting for the marker to be moved and re-placed ---- */
     T(GL_UI_SURVEY_NEXT_DROP, GL_EV_MOTION, GL_G_ALWAYS, GL_UI_SURVEY_NEXT_DROP,
@@ -139,6 +149,9 @@ static const gl_ui_transition_t table_[] = {
     T(GL_UI_CAL_ZERO, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_ERROR, GL_ACT_CAL_ABORT | GL_ACT_REDRAW),
 
     /* ---- ERROR ---- */
+    /* in the cradle a double tap goes back to the cradle state, never to a
+     * read: the device must stay supervised (USB, charge gate) there */
+    T(GL_UI_ERROR, GL_EV_DOUBLE_TAP, GL_G_USB, GL_UI_CRADLE_USB, GL_ACT_REDRAW),
     T(GL_UI_ERROR, GL_EV_DOUBLE_TAP, GL_G_ALWAYS, GL_UI_WAIT_STILL,
       GL_ACT_WATCH_STILL | GL_ACT_NEW_READ | GL_ACT_REDRAW),
     T(GL_UI_ERROR, GL_EV_TIMEOUT, GL_G_USB, GL_UI_CRADLE_USB, GL_ACT_REDRAW),
@@ -160,6 +173,11 @@ static const gl_ui_transition_t table_[] = {
       GL_ACT_ABORT_READ | GL_ACT_SURVEY_RESET | GL_ACT_REDRAW),
     T(GL_UI_ANY, GL_EV_FAULT, GL_G_ALWAYS, GL_UI_ERROR,
       GL_ACT_ABORT_READ | GL_ACT_DISPLAY_ON | GL_ACT_REDRAW),
+    /* VBUS went away in a state that has no row for it (the application has
+     * already stopped USB itself, below the UI): leave the cradle business
+     * cleanly, whatever the state was */
+    T(GL_UI_ANY, GL_EV_USB_DETACH, GL_G_ALWAYS, GL_UI_SLEEP,
+      GL_ACT_ABORT_READ | GL_ACT_USB_STOP | GL_ACT_SURVEY_RESET | GL_ACT_ENTER_SLEEP),
 };
 
 static const uint32_t timeout_ms_[GL_UI_STATE_COUNT] = {

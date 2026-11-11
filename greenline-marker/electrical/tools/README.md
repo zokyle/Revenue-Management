@@ -4,10 +4,18 @@
 KiCad 7 board.  KiCad's own DRC is the judge; nothing is reported as passing
 unless KiCad says so.
 
-This file documents the **core** of the toolchain (design model, checks,
-footprints, board builder, DRC runner), the **router** and the **demo build**.
-The fabrication outputs and the schematic generator build on the API
-described here and are documented in their own sections / module docstrings.
+The flow, each step a module that can be used on its own:
+
+```
+design script (Python)  ->  checks  ->  board  ->  router  ->  zone fill + KiCad DRC
+                                                                     |
+                 schematic + netlist round trip   <-   outputs (Gerber, drill, BOM,
+                                                       pick-and-place, renders, JSON)
+```
+
+This file documents the design model, the checks, footprints, the board
+builder, the DRC runner, the **router**, the **outputs**, the **schematic
+generator** and the **demo build**, each with its limits.
 
 ```
 tools/
@@ -26,11 +34,14 @@ tools/
     raster.py      routing grid and exact obstacle rasterisation
     _astar.py      A* search kernel (numba-compiled when numba is installed)
     routeplot.py   quick matplotlib picture of a routed design (debug aid)
+    outputs.py     Gerbers, drill, pick-and-place, BOM, netlist / mechanical JSON,
+                   renders, fab README + zip - each checked against the model
+    schematic.py   KiCad 7 schematic (one sheet per group), PDF, netlist round trip
   demo/
     demo_design.py     the GreenLine DEMO board (stand-in for the real GL-1)
     build_demo.py      checks -> board -> route -> DRC -> outputs -> schematic
     demo_out/          everything the last demo build produced
-  tests/           pytest suite
+  tests/           pytest suite (run it from tools/)
     mini_design.py     round 30 mm fixture (castellated module, cutout, notch, slot)
     dshape_design.py   GreenLine-shaped fixture (D outline, LQFP-64, two BGAs,
                        bottom LED ring + contact row, fine net class)
@@ -44,12 +55,41 @@ KiCad 7.0.x with its Python module.  Always use the system interpreter:
 
 ```
 cd electrical/tools
-/usr/bin/python3 -m pytest -q            # test suite
+/usr/bin/python3 -m pytest -q            # test suite (about 1.5 minutes)
+/usr/bin/python3 -m pytest -q --runslow  # ... plus the demo build from nothing (+8 minutes)
+/usr/bin/python3 demo/build_demo.py      # the whole flow on the demo board, exit 0 only if
+                                         # checks, routing, KiCad DRC and round trip all pass
 /usr/bin/python3 tests/proof_core.py     # build + DRC + render both reference boards
 /usr/bin/python3 -m gleda.drc out/board.kicad_pcb [--allow-unconnected]
 ```
 
-No GUI is ever started and nothing is downloaded.
+`pdftoppm` / `pdfinfo` (poppler-utils) turn KiCad's PDF plots into PNGs; numba
+makes the router usable on real boards.  No GUI is ever started and nothing
+is downloaded.
+
+## The whole flow in one script
+
+```python
+import sys; sys.path.insert(0, "electrical/tools")
+from gleda import checks, board, router, drc, outputs, schematic
+
+design = my_design()                                    # a gleda.model.Design, see below
+
+checks.run_checks(design).raise_if_errors()             # ERC-style + placement checks
+files = board.build_board(design, "out")                # .kicad_pcb / .kicad_pro / .kicad_dru
+result = router.route(design)                           # RouteResult; .complete, .unrouted
+board.apply_routing(files.pcb, result.tracks, result.vias, via_tenting=design.via_tenting)
+res = drc.run_drc(files.pcb, json_path="out/drc.json")  # zone fill + KiCad DRC
+drc.assert_clean(res)                                   # 0 errors, 0 unconnected - or DrcError
+package = outputs.generate_outputs(design, files.pcb, "out", drc_result=res, vias=result.vias)
+assert package.ok, package.problems                     # plotted data == design model
+sch = schematic.generate_schematic(design, "out")       # <name>.kicad_sch + one sheet per group
+schematic.export_pdf(sch.root, "out/schematic.pdf")
+trip = schematic.round_trip(design, sch.root)           # KiCad's netlist vs the model
+assert trip.ok, trip.problems
+```
+
+`demo/build_demo.py` is exactly this with reporting around it.
 
 ## Conventions (read this first)
 
@@ -327,9 +367,11 @@ net-class assignment, DRC severities, tenting mode), `out/<name>.kicad_dru`
 (per-class minimum track width), `out/gleda.pretty/` and `fp-lib-table`.
 Output is byte-for-byte reproducible.
 
-The toolchain owns the project file.  Other stages (schematic generator) must
-not overwrite it: call `board.write_project(design, pro_path)`, which replaces
-only the `board` / `net_settings` sections and keeps everything else.
+The toolchain owns the project file.  `board.write_project(design, pro_path)`
+replaces only the `board` / `net_settings` sections and keeps everything else;
+the schematic generator adds only its own sections (`schematic`, `sheets`, the
+pinned symbol library) and leaves the board sections alone, so the two can run
+in either order.
 
 Routing primitives:
 
@@ -583,6 +625,193 @@ itself: `grid`, `layers`, `via_cost`, `layer_directions` (`{"F.Cu": "h",
 * Routing is reproducible but not stable: a small change of the design can
   change many tracks.
 
+## Outputs (`gleda/outputs.py`)
+
+```python
+from gleda import outputs
+package = outputs.generate_outputs(design, files.pcb, "out", drc_result=res, vias=result.vias)
+package.ok            # DRC-clean board AND every check against the model passed
+package.problems      # what disagrees with the model (empty when fine)
+package.files         # [{"path", "bytes", "sha256"}], also in out/outputs.json
+```
+
+| written to `out/` | content |
+|-------------------|---------|
+| `fab/<name>-F_Cu.gbr` ... | Gerber X2 for every copper layer, F/B mask, F/B paste, F/B silkscreen (mask subtracted) and Edge.Cuts; `<name>-job.gbrjob` |
+| `fab/<name>-PTH.drl`, `-NPTH.drl` | Excellon, mm, decimal, plated and non-plated separately; `-PTH-drl_map.gbr` / `-NPTH-drl_map.gbr` drill maps |
+| `fab/README.txt` | stack-up table, finish, size, via tenting, **board-level minimums** (0.09 / 0.09 mm when a fine class is in use), net classes, planes, drill table, NPTH holes and routed slots, coordinate origin, file list, DRC status |
+| `<name>-fab.zip` | the `fab/` directory as one archive |
+| `assembly/<name>-pos.csv` | pick-and-place for both sides: `Ref, Val, Package, PosX, PosY, Rot, Side, MPN` |
+| `assembly/<name>-bom.csv` | grouped BOM: item, qty, references, value, description, footprint, MPN, manufacturer, distributor, distributor PN, unit price, extended price, DNP |
+| `<name>-netlist.json` | nets with pins, pads, class and planes; no-connects; net classes; parts with pin -> pad -> net |
+| `<name>-mechanical.json` | for mechanical CAD: board edge as exact lines / arcs and as a polygon, thickness, NPTH holes, cut-outs and slots, keep-outs, height-limited zones, and every component: `ref, x, y, rot, side`, body `length / width / height`, body centre and corners, z range, courtyard box |
+| `<name>-board.step` | the bare board as a STEP solid in the same frame (outline, cut-outs, slot, NPTH holes; z = 0 at the bottom surface) |
+| `renders/<name>-top.svg/.png`, `-bottom`, `-In1_Cu`, `-In2_Cu` | pictures plotted by KiCad; `renders.json` maps pixels to design mm |
+| `outputs.json` | manifest and the verification result |
+
+Things worth knowing:
+
+* **One origin, one frame.**  Gerber, drill and position files all use the
+  board centre as origin, X right and Y up seen from the top - the design
+  frame.  Bottom-side parts are NOT mirrored in the position file; `Rot` is
+  the footprint rotation counter-clockwise seen from the top for both sides
+  (KiCad's convention - tell the assembler).
+* **The bottom render is mirrored** (the view from below, the way you hold the
+  board); top and inner-layer renders are seen from above.  PNGs are made
+  from KiCad's PDF plot with `pdftoppm` and show the fabrication layer (part
+  outlines, references); SVGs are copper + silkscreen + outline.
+* **Via tenting** follows `Design.via_tenting`: the untented side(s) have a
+  mask opening per via in the mask Gerbers (see "Via tenting" above).
+* **The NPTH slot** of the locating feature is a routed contour on Edge.Cuts
+  (the README says so); the round locating hole is in the NPTH drill file.
+* **BOM**: parts with `in_bom=False` (bare pads, battery tabs) are left out;
+  DNP parts are listed on their own lines with extended price 0; a part
+  without a price leaves the extended price empty and is listed in
+  `outputs.json` (`bom.unpriced_refs`).  The position file contains the BOM
+  parts that are not DNP.
+* **Determinism**: creation dates are stripped from Gerber, drill and job
+  files, the zip uses fixed time stamps; two runs give identical bytes.
+
+Honesty rules:
+
+* The package belongs to a DRC result.  `generate_outputs` takes the
+  `DrcResult` of the board file (or runs KiCad's DRC itself) and **raises
+  `OutputError` for a board that is not clean** or whose zones are not filled.
+  `require_clean=False` writes the files anyway - for looking at a board in
+  progress - and then the README starts with "NOT CLEAN - DO NOT FABRICATE"
+  and `package.ok` is False.
+* `verify_outputs` reads the written files back and compares them with the
+  *model*, not with the board file they came from: Edge.Cuts extents and
+  every vertex of the outline / cut-outs / slots, a flash at the position of
+  every pad on F.Cu and B.Cu (which proves origin, +y direction, rotation and
+  bottom-side mirroring of the plotted data), every drill hit against vias,
+  through-hole pads, NPTH pads and outline holes with their diameters, the
+  position rows and the BOM quantities.  `tests/test_outputs.py` shows that a
+  moved part, a turned bottom part, a shifted via, a different outline or a
+  moved cut-out is caught.
+
+Limits of the outputs:
+
+* No assembly drawing, no fabrication drawing with dimensions, no IPC-2581 /
+  ODB++.  The STEP file is the bare board only: no component models are
+  installed here and the generated footprints carry none, and KiCad does not
+  drill the via holes into the solid.  Component bodies for CAD come from the
+  mechanical JSON.
+* Component bodies are boxes: the footprint's fabrication-layer rectangle (or
+  `Part.body`) times `Part.height_mm`.  A part without a height has
+  `height_known: false` and a zero z range.
+* Oval (slotted) pad drills are checked for their position only (the model
+  knows one drill diameter per pad, and no footprint in use has such a hole);
+  routed slot commands (`M15` / `G00`) make the Excellon reader stop with an
+  error rather than guess.
+* The Gerber reader understands what KiCad writes (absolute coordinates, mm,
+  flashes, linear and circular interpolation, regions); it is a verification
+  aid, not a general Gerber parser.  Pads are found by their flash, so the
+  pad check covers the pad shapes KiCad flashes (rectangle, rounded rectangle,
+  circle, oval); custom polygon pads would have to be added to the reader.
+* Prices are whatever the design script says (single-unit prices in the demo);
+  there is no price break or stock lookup.
+
+## Schematic (`gleda/schematic.py`)
+
+```python
+from gleda import schematic
+sch = schematic.generate_schematic(design, "out", max_paper="A3")   # SchematicFiles
+schematic.export_pdf(sch.root, "out/schematic.pdf")                 # all sheets, kicad-cli
+schematic.pdf_to_png("out/schematic.pdf", "out/schematic", dpi=150) # schematic-1.png ...
+trip = schematic.round_trip(design, sch.root)                       # RoundTrip
+trip.ok, trip.problems, trip.summary()
+```
+
+`generate_schematic` writes a hierarchical KiCad 7 project that opens in
+eeschema: `<name>.kicad_sch` (root: one sheet symbol per page and a summary of
+parts, nets, net classes and planes), `<name>_<group>.kicad_sch` (one page per
+`Part.group`, continued on `<name>_<group>_2` ... when it does not fit
+`max_paper`), `gleda.kicad_sym` + `sym-lib-table` (the generated symbols as a
+project library; they are also embedded in every sheet) and the schematic
+sections of `<name>.kicad_pro` (the board sections are kept).
+
+What a page looks like:
+
+* ICs and connectors are generated box symbols with named and numbered pins:
+  supply pins on top, ground pins at the bottom, inputs on the left, outputs
+  (also `power_out` and open-drain) on the right, bidirectional / passive /
+  unused pins shared between left and right in natural name order; connectors
+  have all pins on the left.  One schematic pin per footprint pad: a pin
+  mapped to several pads is drawn once per pad with the same name.
+* Two-terminal parts are small horizontal symbols (resistor, capacitor,
+  inductor, crystal, diode, LED, photodiode; anode on the left), one-pad parts
+  (test pads, battery tabs) a pad symbol.  Reference and value sit above them.
+* Every pin carries a **global label** with its net name; a pin without a net
+  carries a no-connect flag.  Symbol fields hold footprint, MPN, manufacturer,
+  distributor, description, price and height; DNP and "not in BOM" are set.
+* Placement is a grid computed from the text lengths: boxes first (ICs, then
+  connectors, in reference order), then the small parts in reference order
+  in equal columns.  Every connection point is on the 1.27 mm grid.
+  `layout_overlaps(page)` checks that no symbol, label or text box of one part
+  overlaps another part's, that nothing leaves the frame or sits on the title
+  block and that no two pins share a connection point - `generate_schematic`
+  refuses to write a page that fails it.
+* Files are deterministic (UUIDs derive from the design name and the item's
+  role; the PDF gets a fixed placeholder creation date, 2000-01-01).
+
+The round trip is the proof that the drawing says what the model says:
+`round_trip` runs `kicad-cli sch export netlist` on the generated root sheet
+and `compare_netlist` requires
+
+* the same net names, each with exactly the same set of `REF.PAD` as
+  `Design.connectivity()`;
+* exactly the pads that have no net in the model to be unconnected in KiCad;
+* the same components with the same value, footprint and MPN.
+
+Every difference is listed (`tests/test_schematic.py` renames a label and
+replaces one by a no-connect flag in a generated sheet and expects the round
+trip to fail with the right message).
+
+Limits of the schematic generator:
+
+* **It is a netlist drawing, not a hand-drawn schematic.**  There are no
+  wires, no buses and no signal flow: connectivity is by global label only,
+  a decoupling capacitor is found by its net names, not next to its IC.  It
+  is complete, unambiguous, searchable and readable in a design review; it
+  is not what a human would draw.
+* Symbols are generic boxes; there are no multi-unit symbols, no alternate
+  body styles, no power symbols and no PWR_FLAGs.  The symbols in
+  `gleda.kicad_sym` are generated for THIS design (pin sides depend on which
+  nets are ground) and are not a reusable library.
+* KiCad's ERC is not run (kicad-cli 7 has no ERC command); the electrical
+  rules are checked on the model by `gleda.checks` instead.  Opened in
+  eeschema, ERC will ask for PWR_FLAGs on supply nets.
+* Text widths are estimated (calibrated against KiCad's stroke font, and
+  conservative); other fonts are not supported.
+* A single part must fit one page of `max_paper` (a 200-pin connector needs
+  A1); a group is split over pages between parts, never inside a symbol.
+* `/` in a net name is written by KiCad as `{slash}` in its netlist; the
+  round trip understands that, but a later "update PCB from schematic" in the
+  KiCad GUI would rename such a net on the board.  Avoid `/` in net names.
+* The schematic is generated from the model, never read back: edits made in
+  eeschema are lost on the next run.  Edit the design script.
+
+## Tests
+
+```
+cd electrical/tools
+/usr/bin/python3 -m pytest -q             # everything but the slow test
+/usr/bin/python3 -m pytest -q --runslow   # also the demo build from nothing (GLEDA_RUN_SLOW=1 works too)
+```
+
+| file | what it proves |
+|------|----------------|
+| `test_model.py`, `test_coords.py`, `test_geometry.py` | the design model, the one coordinate conversion, outline / pad geometry |
+| `test_checks.py` | every ERC-style and placement check, on good and broken designs |
+| `test_footprints.py` | generated footprints (BGA, castellated module, FPC, pad rows ...) against pcbnew |
+| `test_board.py`, `test_dshape.py`, `test_netclasses.py`, `test_revc.py` | board files read back with pcbnew; D outline; net classes with their own width and clearance judged by KiCad DRC; NPTH hole and slot, per-side placement keep-outs, height limits |
+| `test_drc.py`, `test_kicad_cli.py` | DRC runner, report parser, pass / fail policy, kicad-cli wrappers |
+| `test_router.py` | grid and clearance maths, A*, via, rip-up, multi-pin nets, plane nets, BGA escape - every routed board judged by KiCad DRC |
+| `test_outputs.py` | Gerber / Excellon readers, BOM, pick-and-place, mechanical JSON, STEP, zip, renders (orientation at pixel level), and that `verify_outputs` catches a moved part, a shifted via, a different outline |
+| `test_schematic.py` | symbols, overlap-free layouts for three designs, pagination, netlist parser, the round trip through kicad-cli, and that a tampered sheet fails it |
+| `test_demo.py` | the demo design; its stored routing through a fresh board and KiCad DRC; the whole `build_demo.py` flow with the stored routing; exit codes; (slow) the full build from nothing |
+
 ## Demo build (`demo/build_demo.py`)
 
 `demo/demo_design.py` is a stand-in for the real GL-1 board with the same
@@ -590,22 +819,112 @@ mechanics: D-shaped outline (r = 21.1 mm, flat at y = 17.3 mm), 4 layers,
 0.8 mm, NPTH locating hole and slot, eight post-foot placement keep-outs, a
 height-limited zone under each camera hood, LQFP-64 MCU, two 25-ball 0.5 mm
 BGAs sharing an 11-signal bus, LGA sensors, flash, regulators, 10-pin FPC,
-61 x 0402, and on the bottom a 16-LED ring (charlieplexed on 5 lines), a
+60 x 0402 passives, and on the bottom a 16-LED ring (charlieplexed on 5 lines), a
 photodiode and seven bare contact pads.  GND is a solid plane on In1.Cu;
 In2.Cu is the V2V8 plane and the third routing layer.
 
 ```
 cd electrical/tools
-/usr/bin/python3 demo/build_demo.py                   # all stages
-/usr/bin/python3 demo/build_demo.py --reuse-routing   # skip the router when the design is unchanged
+/usr/bin/python3 demo/build_demo.py                   # the whole flow, about 8 minutes
+/usr/bin/python3 demo/build_demo.py --reuse-routing   # skip the router when the design is
+                                                      # unchanged (about 15 s)
+/usr/bin/python3 demo/build_demo.py --reuse-routing some/routing.json --out /tmp/x
 /usr/bin/python3 demo/build_demo.py --stages checks,board,route,drc
 ```
 
-The script exits non-zero unless every stage passed: 0 check errors, 100 %
-of the connections routed with a clean audit, KiCad DRC with 0 errors and 0
-unconnected items (only the cosmetic silkscreen checks listed in
-`drc.COSMETIC_CHECKS` are tolerated, and they are still reported), and the
-later stages.  `demo_out/build_summary.json` records every stage,
-`routing.json` the copper (identical on every run of the same design),
-`routing_log.txt` the router's progress, `drc.json` / `drc_report.txt` what
-KiCad said.
+Stages: `checks` -> `board` -> `route` -> `drc` (tracks into the board, zone
+fill, KiCad DRC) -> `outputs` -> `schematic` (sheets, PDF, netlist round
+trip).  The script **exits non-zero unless every stage passed and the four
+criteria hold**:
+
+1. the design checks report 0 errors;
+2. 100 % of the connections are routed and the router's audit is clean;
+3. KiCad's DRC reports 0 errors and 0 unconnected items (only the cosmetic
+   silkscreen checks listed in `drc.COSMETIC_CHECKS` are tolerated, and they
+   are still reported);
+4. KiCad's netlist of the generated schematic equals the design's
+   connectivity.
+
+The criteria are evaluated again from the recorded numbers at the end, so a
+stage cannot declare itself passed with 99.6 % routed.  A stage that cannot
+run (missing board, crash) is a failure, never a skip.  With `--stages` the
+exit code covers only what ran and "DEMO BUILD PASSED" is not printed.
+A stored routing (`--reuse-routing`) is accepted only if its fingerprint
+matches the design and the router options; it is audited again from the
+copper alone and goes through the same zone fill and KiCad DRC as a fresh one.
+
+The closing summary of a full run (from nothing, router included):
+
+```
+==============================================================================
+GreenLine demo build - greenline_demo (94 parts, 72 nets)
+==============================================================================
+checks     PASS     0 errors, 0 warnings
+board      PASS     greenline_demo.kicad_pcb, greenline_demo.kicad_pro
+route      PASS     261 of 261 connections (100.0 %), 284 vias, 2277 track segments, 0 audit violations
+drc        PASS     KiCad DRC 0 errors, 0 unconnected, 35 warnings (silk_edge_clearance 1, silk_over_copper 34)
+outputs    PASS     32 files, 0 problems against the design model, BOM 31 lines / 58.06 per board, 91 pick-and-place rows
+schematic  PASS     8 sheets, PDF 8 pages, round trip matches (72 nets, 332 pads, 94 components)
+------------------------------------------------------------------------------
+design checks: 0 errors                yes
+100 % of the connections routed        yes
+KiCad DRC: 0 errors, 0 unconnected     yes
+schematic netlist round trip matches   yes
+------------------------------------------------------------------------------
+DEMO BUILD PASSED (427 s)
+```
+
+What is in `demo/demo_out/` afterwards:
+
+| file(s) | what |
+|---------|------|
+| `build_summary.json` | every stage's result and the four criteria (the same on every run); `build_run.json` has the run times |
+| `checks.txt` / `checks.json` | design check report |
+| `greenline_demo.kicad_pcb` / `.kicad_pro` / `.kicad_dru`, `gleda.pretty/`, `fp-lib-table` | the routed, zone-filled board as a KiCad project |
+| `routing.json`, `routing_log.txt`, `routing_debug.png` | the router's copper (identical on every run of the same design), its progress log, a quick picture |
+| `drc.json` / `drc_report.txt` | what KiCad's DRC said |
+| `fab/`, `greenline_demo-fab.zip` | Gerbers, drill files, drill maps, `README.txt` |
+| `assembly/greenline_demo-pos.csv`, `-bom.csv` | pick-and-place (91 rows), BOM (31 lines) |
+| `greenline_demo-netlist.json`, `-mechanical.json`, `-board.step` | netlist, mechanical hand-over, bare-board solid |
+| `renders/` | top / bottom / In1.Cu / In2.Cu as SVG and PNG, `renders.json` |
+| `greenline_demo.kicad_sch`, `greenline_demo_<group>.kicad_sch`, `gleda.kicad_sym`, `sym-lib-table` | the schematic: root + 7 sheets (mcu, camera, sensor, power, display, grain, service) |
+| `schematic/greenline_demo-schematic.pdf`, `-1.png` ... `-8.png` | all sheets plotted by KiCad, PNG previews |
+| `schematic/greenline_demo.net`, `roundtrip.json` | KiCad's netlist of the schematic and the comparison result |
+| `outputs.json` | manifest (sizes, SHA-256) and the verification result of the outputs |
+
+Result of the last full run.  Full runs from nothing give byte for byte the
+same `routing.json`, `.kicad_pcb`, `.kicad_dru` and `drc.json` (checked again
+on the last two runs against the stored result of the earlier ones); the fab
+package, assembly files, JSON files, renders, schematic sheets and the
+schematic PDF were compared between two builds in different directories and
+are identical as well (only `build_run.json`, the run times, differs):
+
+| | |
+|---|---|
+| design checks | 0 errors, 0 warnings (94 parts, 72 nets) |
+| connections | 261 of 261 routed (100 %), 0 audit violations |
+| stage A | 72 pads in the two camera windows fanned out and frozen |
+| copper | 2277 track segments, 2147.9 mm (F.Cu 907.6, In2.Cu 339.2, B.Cu 901.1), 284 vias (GND 48, V2V8 24) |
+| planes | GND on In1.Cu and V2V8 on In2.Cu connected for every pad; 13 bridging tracks were added while routing where In2.Cu tracks cut the V2V8 fill |
+| KiCad DRC | 0 errors, 0 unconnected; 35 warnings, all cosmetic (34 `silk_over_copper`: silkscreen clipped by the via mask openings on the untented top side, 1 `silk_edge_clearance`) |
+| outputs | 11 Gerber layers, 284 plated holes of 0.25 mm, 1 NPTH of 1.15 mm, the locating slot on Edge.Cuts; outline, all 354 pad flashes (313 top, 41 bottom) and all 285 drill hits agree with the model; 91 pick-and-place rows; BOM 31 lines |
+| schematic | 8 sheets (A4), 18 generated symbols; KiCad's netlist matches the model: 72 nets, 332 pads, 94 components, 21 unconnected pins |
+| run time | 427 s in total, of which the router 414 s (4-core machine, numba kernel; 443 s on another run of the same machine); everything else takes about 12 s |
+
+Things the demo taught that carry over to the real board:
+
+* **MCU pin choice decides routability.**  The pins the spec fixes (camera
+  port, USB, SWD, crystal) stay; every other signal sits on the package edge
+  that faces its destination (see `MCU_SIGNALS`).  An earlier, arbitrary
+  assignment sent a dozen signals across the whole MCU area for no reason.
+* **Keep the neighbourhood of a locating hole free.**  Copper keeps 0.3 mm
+  from holes and slots; a part in the pocket between a hole and the next part
+  has pads that can hardly be reached.
+* **The ball map of the cameras matters.**  One track fits between two balls
+  and one between the top ball row and the flat board edge; the stand-in map
+  keeps that row nearly empty.  A real map with more signals there needs the
+  cameras further from the edge or a finer rule set.
+* **The V2V8 plane shares In2.Cu with signals.**  The fill ends up in many
+  pieces; the router keeps every V2V8 pad connected (fill or track) and KiCad
+  confirms it, but for a low-impedance supply prefer fewer signals on In2.Cu
+  (raise `RouterOptions.plane_layer_cost`) once the real netlist is known.

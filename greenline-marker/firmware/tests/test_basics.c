@@ -9,10 +9,14 @@
 #include "gl_config.h"
 #include "gl_event.h"
 #include "gl_fmt.h"
+#include "gl_hal.h"
 #include "gl_provisional.h"
 #include "gl_settings.h"
+#include "gl_sim.h"
 #include "gl_solver.h"
 #include "gl_test.h"
+#include "grain_frontend.h"
+#include "ls013b7dh03.h"
 
 GL_TEST(test_math_helpers)
 {
@@ -356,7 +360,11 @@ GL_TEST(test_generated_config)
     GL_CHECK_EQ(GL_PROV_OV7692_REG0C_BIT_SET_MEANS_DRIVEN, 1);
     GL_CHECK_EQ(GL_PROV_LCD_FPC_PIN_SCLK, 1);
     GL_CHECK_EQ(GL_PROV_LCD_FPC_PIN_VSSA, 10);
-    GL_CHECK_NEAR(32768.0 / GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS, 60.0, 0.05);
+    /* EXTCOMIN inside BOTH ranges Sharp publishes (54-65 Hz and 1-60 Hz),
+     * with a 100 ppm crystal either way (546 ticks was 60.015 Hz: outside) */
+    GL_CHECK(32768.0 * 1.0001 / GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS <= 60.0);
+    GL_CHECK(32768.0 * 0.9999 / GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS >= 54.0);
+    GL_CHECK_EQ(GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS, 547);
     GL_CHECK(GL_PROV_GRAIN_MOD_THRESHOLD_DEFAULT > 0.2f); /* not the forbidden 0.10 */
     GL_CHECK_NEAR(GL_PROV_STICK_TOTAL_HEIGHT_M - GL_PROV_STICK_IN_CUP_M, 1.96, 1e-6);
 }
@@ -399,8 +407,77 @@ GL_TEST(test_solver_is_a_stub)
     GL_CHECK_NEAR(GL_SOLVER_HOLE_RADIUS_M, 0.053975, 1e-7);
 }
 
+/* Review finding: gl_roundi(gl_clampf(x, ...)) was undefined behaviour for
+ * a NaN (gl_clampf passed it through) and for values beyond the int range.
+ * Runs under -fsanitize=float-cast-overflow in `make asan`. */
+GL_TEST(test_clamp_and_round_are_defined_for_every_float)
+{
+    const float nan = (float)NAN, inf = (float)INFINITY;
+    GL_CHECK_NEAR(gl_clampf(nan, -1.0f, 2.0f), -1.0, 1e-9); /* the lower bound, never NaN */
+    GL_CHECK_NEAR(gl_clampf(inf, -1.0f, 2.0f), 2.0, 1e-9);
+    GL_CHECK_NEAR(gl_clampf(-inf, -1.0f, 2.0f), -1.0, 1e-9);
+    GL_CHECK_NEAR(gl_clampf(0.5f, -1.0f, 2.0f), 0.5, 1e-9);
+    GL_CHECK_NEAR(gl_clampf(-3.0f, -1.0f, 2.0f), -1.0, 1e-9);
+    GL_CHECK_EQ(gl_roundi(nan), 0);
+    GL_CHECK_EQ(gl_roundi(inf), GL_ROUNDI_LIMIT);
+    GL_CHECK_EQ(gl_roundi(-inf), -GL_ROUNDI_LIMIT);
+    GL_CHECK_EQ(gl_roundi(3.0e9f), GL_ROUNDI_LIMIT);
+    GL_CHECK_EQ(gl_roundi(-3.0e9f), -GL_ROUNDI_LIMIT);
+    GL_CHECK_EQ(gl_roundi(3.4e38f), GL_ROUNDI_LIMIT);
+    GL_CHECK_EQ(gl_roundi(2.5f), 3);
+    GL_CHECK_EQ(gl_roundi(-2.5f), -3);
+    GL_CHECK_EQ(gl_roundi(0.49f), 0);
+    GL_CHECK_EQ(gl_roundi(1.0e9f), 1000000000);
+    GL_CHECK_EQ(gl_roundi(gl_clampf(nan, 0.0f, 1.0f) * 5.0f), 0); /* the pattern of gl_ui.c */
+}
+
+/* Review finding (STM32 backend, found by inspection): the application
+ * calls gl_lcd_off() - and with it gl_hal_extcomin_stop() - at every boot
+ * before the timer was ever started, which on the target ran the HAL's
+ * de-initialisation on a zeroed handle (NULL Instance).  gl_hal.h now
+ * REQUIRES every stop / disable call to be safe before the matching start;
+ * this test calls each of them first, on the host backend, and then checks
+ * that the drivers' own "off" entry points do nothing else.  (The target
+ * backend carries the matching guards; it is not compiled here.) */
+GL_TEST(test_every_stop_is_safe_before_its_start)
+{
+    gl_lcd_t lcd;
+    gl_sim_reset(true);
+    GL_CHECK_EQ(gl_hal_init(), GL_OK);
+    /* straight after init, in every order */
+    for (int pass = 0; pass < 2; pass++) {
+        gl_hal_extcomin_stop();
+        gl_hal_dcmi_stop();
+        gl_hal_xvclk_stop();
+        gl_hal_usb_stop();
+        GL_CHECK_EQ(gl_hal_adc_power(false), GL_OK);
+        GL_CHECK_EQ(gl_hal_opamp_enable(false), GL_OK);
+        gl_hal_wake_timer_start(0);
+        GL_CHECK_EQ(gl_hal_dcmi_poll(NULL), GL_DCMI_IDLE);
+    }
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+    /* what the application does at boot */
+    gl_lcd_init(&lcd, NULL);
+    gl_lcd_off(&lcd);
+    gl_grain_fe_all_off();
+    GL_CHECK(!gl_sim_lcd()->extcomin && !gl_sim_lcd()->disp);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+    /* and stop after a real start still stops */
+    GL_CHECK_EQ(gl_lcd_on(&lcd), GL_OK);
+    GL_CHECK(gl_sim_lcd()->extcomin);
+    gl_lcd_off(&lcd);
+    gl_lcd_off(&lcd); /* twice */
+    GL_CHECK(!gl_sim_lcd()->extcomin);
+    GL_CHECK_EQ(gl_hal_opamp_enable(true), GL_OK);
+    GL_CHECK_EQ(gl_hal_opamp_enable(false), GL_OK);
+    GL_CHECK_EQ(gl_hal_opamp_enable(false), GL_OK);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
 int main(void)
 {
+    GL_RUN(test_clamp_and_round_are_defined_for_every_float);
+    GL_RUN(test_every_stop_is_safe_before_its_start);
     GL_RUN(test_math_helpers);
     GL_RUN(test_number_formatting);
     GL_RUN(test_event_queue);

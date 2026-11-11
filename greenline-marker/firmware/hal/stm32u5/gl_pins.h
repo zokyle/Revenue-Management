@@ -42,7 +42,7 @@
  */
 #define GL_PINS_TABLE(X) \
     X(GL_PIN_CAM_PWR_EN,   D,  2, 54, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PD2: LP5907 EN, 100k pull-down on the board */ \
-    X(GL_PIN_CAM_L_PWDN,   C, 10, 51, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PC10 */ \
+    X(GL_PIN_CAM_L_PWDN,   H,  0,  5, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PH0: PH0 is free (no HSE crystal); not PC10: ROM bootloader USART3_TX */ \
     X(GL_PIN_CAM_R_PWDN,   C, 12, 53, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PC12 */ \
     X(GL_PIN_CAM_SCCB_SDA, B,  5, 57, GL_PINFN_SCCB,    0, GL_PINSRC_PROPOSED) /* PB5: shared SCCB data, 2.2k to V2V8_CAM */ \
     X(GL_PIN_CAM_L_SCL,    B,  3, 55, GL_PINFN_SCCB,    0, GL_PINSRC_PROPOSED) /* PB3: also JTDO/SWO: SWO is given up */ \
@@ -81,7 +81,7 @@
     X(GL_PIN_OPAMP_VINM,   A,  1, 15, GL_PINFN_ANALOG,  0, GL_PINSRC_SPEC)     /* PA1: OPAMP1_VINM: photodiode cathode */ \
     X(GL_PIN_OPAMP_VOUT,   A,  3, 17, GL_PINFN_ANALOG,  0, GL_PINSRC_SPEC)     /* PA3: OPAMP1_VOUT = ADC1_IN8 */ \
     X(GL_PIN_VBAT_SENSE,   A,  2, 16, GL_PINFN_ANALOG,  0, GL_PINSRC_PROPOSED) /* PA2: ADC1_IN7 (channel number from memory) */ \
-    X(GL_PIN_CHG_STAT,     B,  0, 26, GL_PINFN_EXTI,    0, GL_PINSRC_PROPOSED) /* PB0: EXTI0, both edges, pull-up */ \
+    X(GL_PIN_CHG_STAT,     B,  0, 26, GL_PINFN_EXTI,    0, GL_PINSRC_PROPOSED) /* PB0: EXTI0, both edges, pull-up; STAT must be open drain: see the notes */ \
     X(GL_PIN_CHG_PROG_EN,  H,  1,  6, GL_PINFN_GPIO,    0, GL_PINSRC_PROPOSED) /* PH1: open drain; PH1 is free (no HSE crystal) */ \
     X(GL_PIN_VBUS_SENSE,   A,  9, 42, GL_PINFN_EXTI,    0, GL_PINSRC_PROPOSED) /* PA9: EXTI9, both edges, from the VBUS divider */ \
     X(GL_PIN_USB_DM,       A, 11, 44, GL_PINFN_AF,     10, GL_PINSRC_SPEC)     /* PA11: USB D- */ \
@@ -93,7 +93,6 @@
 /*   pad  1  VBAT */
 /*   pad  3  PC14-OSC32_IN */
 /*   pad  4  PC15-OSC32_OUT */
-/*   pad  5  PH0 (spare) */
 /*   pad  7  NRST */
 /*   pad 12  VSSA */
 /*   pad 13  VDDA */
@@ -106,9 +105,61 @@
 /*   pad 47  VSS */
 /*   pad 48  VDDUSB */
 /*   pad 49  PA14-SWCLK */
+/*   pad 51  PC10 (spare: keep off the camera nets, ROM bootloader USART3_TX) */
 /*   pad 60  PH3-BOOT0 */
 /*   pad 63  VSS */
 /*   pad 64  VDD */
+
+/*
+ * ROM BOOTLOADER PINS (AN2606 for the STM32U575/585, FROM MEMORY: verify).
+ * X(port letter, pin number, function, 1 if the bootloader drives it as a
+ * push-pull output).  "Reboot to ROM DFU" runs with the camera rail off, so
+ * no camera-facing net may sit on a pin with a 1: tools/gen_pins.py refuses
+ * to generate a PROPOSED row there and tests/test_pins.c checks the table.
+ * Two SPEC rows do sit on such pins and cannot be moved from here:
+ *   PA6  DCMI_PIXCLK (SPEC)  - RELEASE GATE: series resistor, or accept and document
+ *   PB9  DCMI_D7 (SPEC)  - RELEASE GATE: series resistor, or accept and document
+ * Also on bootloader pins, without the rail problem: PB10 (I2C2_SCL, open
+ * drain) is the active-HIGH LCD chip select - give it a pull-down so that the
+ * panel is not selected during an update; PA9 (USART1_TX) is VBUS_SENSE and
+ * PA2 (USART2_TX) is VBAT_SENSE: both drive into high-value dividers.
+ */
+#define GL_PINS_BOOTLOADER_TABLE(X) \
+    X(A,  9, USART1_TX, 1) \
+    X(A, 10, USART1_RX, 0) \
+    X(A,  2, USART2_TX, 1) \
+    X(A,  3, USART2_RX, 0) \
+    X(C, 10, USART3_TX, 1) \
+    X(C, 11, USART3_RX, 0) \
+    X(B,  6, I2C1_SCL,  0) \
+    X(B,  7, I2C1_SDA,  0) \
+    X(B, 10, I2C2_SCL,  0) \
+    X(B, 11, I2C2_SDA,  0) \
+    X(C,  0, I2C3_SCL,  0) \
+    X(C,  1, I2C3_SDA,  0) \
+    X(A,  4, SPI1_NSS,  0) \
+    X(A,  5, SPI1_SCK,  0) \
+    X(A,  6, SPI1_MISO, 1) \
+    X(A,  7, SPI1_MOSI, 0) \
+    X(B, 12, SPI2_NSS,  0) \
+    X(B, 13, SPI2_SCK,  0) \
+    X(B, 14, SPI2_MISO, 1) \
+    X(B, 15, SPI2_MOSI, 0) \
+    X(B,  8, FDCAN1_RX, 0) \
+    X(B,  9, FDCAN1_TX, 1)
+
+/*
+ * CHARGER STAT (PB0, input with pull-up): the pin must only ever be pulled
+ * LOW by the charger.  The BOM part MCP73831 has, as remembered, a tri-state
+ * STAT output that drives HIGH (to about VBUS, 5 V) when charging is complete;
+ * PB0 carries analog functions and may not be 5 V tolerant.  RELEASE GATE:
+ * fit the open-drain variant (MCP73832), or a series resistor / divider to a
+ * 5 V tolerant pin with an external pull-up to V2V8.  Not verifiable here.
+ *
+ * VBUS_SENSE (PA9) wakes the MCU from Stop 2 through its EXTI line.  It is
+ * NOT a WKUP pin: Shutdown mode, should it ever be wanted for storage, needs
+ * VBUS on a wake-up pin (PA2 = WKUP4 as remembered).
+ */
 
 /* Analog channels (ADC1).  PA3 = ADC1_IN8 is verified; PA2 = ADC1_IN7 is from
  * memory of the same numbering. */

@@ -81,6 +81,7 @@ static gl_status_t sf_erase_(void *ctx, uint32_t addr)
                 memset(&f->mem[addr], 0xFF, f->sector_size);
             }
             f->dead = true;
+            f->cut_in_erase = true;
             return GL_ERR_IO;
         }
         f->events_total++;
@@ -121,5 +122,6 @@ void gl_simflash_arm_cut(gl_simflash_t *f, long long events)
 void gl_simflash_power_on(gl_simflash_t *f)
 {
     f->dead = false;
+    f->cut_in_erase = false;
     f->events_until_cut = -1;
 }

@@ -1,0 +1,5203 @@
+{
+ "counts": {
+  "nets": 72,
+  "pads_on_nets": 332,
+  "parts": 94
+ },
+ "design": "greenline_demo",
+ "netclasses": {
+  "CamPower": {
+   "clearance": 0.09,
+   "description": "camera supply balls: 0.15 mm track that fits the escape lanes",
+   "min_track_width": null,
+   "name": "CamPower",
+   "track_width": 0.15,
+   "via_diameter": 0.5,
+   "via_drill": 0.25
+  },
+  "Default": {
+   "clearance": 0.127,
+   "description": "",
+   "min_track_width": null,
+   "name": "Default",
+   "track_width": 0.15,
+   "via_diameter": 0.5,
+   "via_drill": 0.25
+  },
+  "Fine": {
+   "clearance": 0.09,
+   "description": "signals of the 0.5 mm-pitch camera BGAs (escape between balls)",
+   "min_track_width": null,
+   "name": "Fine",
+   "track_width": 0.09,
+   "via_diameter": 0.5,
+   "via_drill": 0.25
+  },
+  "Power": {
+   "clearance": 0.127,
+   "description": "supply nets; neck-down to 0.15 mm allowed",
+   "min_track_width": 0.15,
+   "name": "Power",
+   "track_width": 0.3,
+   "via_diameter": 0.5,
+   "via_drill": 0.25
+  }
+ },
+ "nets": {
+  "BOOT0": {
+   "layers": null,
+   "max_vias": null,
+   "name": "BOOT0",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PH3",
+    "R7.1"
+   ],
+   "pads": [
+    "U1.60",
+    "R7.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_D0": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_D0",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PC6",
+    "U2.D0",
+    "U3.D0"
+   ],
+   "pads": [
+    "U1.37",
+    "U2.B2",
+    "U3.B2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_D1": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_D1",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PC7",
+    "U2.D1",
+    "U3.D1"
+   ],
+   "pads": [
+    "U1.38",
+    "U2.B3",
+    "U3.B3"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_D2": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_D2",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PC8",
+    "U2.D2",
+    "U3.D2"
+   ],
+   "pads": [
+    "U1.39",
+    "U2.B4",
+    "U3.B4"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_D3": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_D3",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PC9",
+    "U2.D3",
+    "U3.D3"
+   ],
+   "pads": [
+    "U1.40",
+    "U2.C2",
+    "U3.C2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_D4": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_D4",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PC11",
+    "U2.D4",
+    "U3.D4"
+   ],
+   "pads": [
+    "U1.52",
+    "U2.C4",
+    "U3.C4"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_D5": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_D5",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PB6",
+    "U2.D5",
+    "U3.D5"
+   ],
+   "pads": [
+    "U1.58",
+    "U2.D2",
+    "U3.D2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_D6": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_D6",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PB8",
+    "U2.D6",
+    "U3.D6"
+   ],
+   "pads": [
+    "U1.61",
+    "U2.D3",
+    "U3.D3"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_D7": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_D7",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PB9",
+    "U2.D7",
+    "U3.D7"
+   ],
+   "pads": [
+    "U1.62",
+    "U2.D4",
+    "U3.D4"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_EN": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_EN",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PC1",
+    "U8.EN",
+    "R14.1"
+   ],
+   "pads": [
+    "U1.9",
+    "U8.3",
+    "R14.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_HREF": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_HREF",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PA4",
+    "U2.HREF",
+    "U3.HREF"
+   ],
+   "pads": [
+    "U1.20",
+    "U2.E2",
+    "U3.E2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_L_DVDD": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_L_DVDD",
+   "netclass": "CamPower",
+   "no_route": false,
+   "nodes": [
+    "U2.DVDD",
+    "C15.1"
+   ],
+   "pads": [
+    "U2.E3",
+    "C15.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_PCLK": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_PCLK",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA6",
+    "R10.2",
+    "R11.2"
+   ],
+   "pads": [
+    "U1.22",
+    "R10.2",
+    "R11.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_PCLK_L": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_PCLK_L",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U2.PCLK",
+    "R10.1"
+   ],
+   "pads": [
+    "U2.C1",
+    "R10.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_PCLK_R": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_PCLK_R",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U3.PCLK",
+    "R11.1"
+   ],
+   "pads": [
+    "U3.C1",
+    "R11.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_PWDN_L": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_PWDN_L",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PC2",
+    "U2.PWDN"
+   ],
+   "pads": [
+    "U1.10",
+    "U2.E4"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_PWDN_R": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_PWDN_R",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PC13",
+    "U3.PWDN"
+   ],
+   "pads": [
+    "U1.2",
+    "U3.E4"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_R_DVDD": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_R_DVDD",
+   "netclass": "CamPower",
+   "no_route": false,
+   "nodes": [
+    "U3.DVDD",
+    "C19.1"
+   ],
+   "pads": [
+    "U3.E3",
+    "C19.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_SCL_L": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_SCL_L",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PC3",
+    "U2.SCL",
+    "R8.2"
+   ],
+   "pads": [
+    "U1.11",
+    "U2.B1",
+    "R8.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_SCL_R": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_SCL_R",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PH0",
+    "U3.SCL",
+    "R9.2"
+   ],
+   "pads": [
+    "U1.5",
+    "U3.B1",
+    "R9.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_SDA": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_SDA",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PH1",
+    "U2.SDA",
+    "U3.SDA",
+    "R12.2"
+   ],
+   "pads": [
+    "U1.6",
+    "U2.B5",
+    "U3.B5",
+    "R12.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_VSYNC": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_VSYNC",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "U1.PB7",
+    "U2.VSYNC",
+    "U3.VSYNC"
+   ],
+   "pads": [
+    "U1.59",
+    "U2.C5",
+    "U3.C5"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CAM_XVCLK": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CAM_XVCLK",
+   "netclass": "Fine",
+   "no_route": false,
+   "nodes": [
+    "R13.2",
+    "U2.XVCLK",
+    "U3.XVCLK"
+   ],
+   "pads": [
+    "R13.2",
+    "U2.A3",
+    "U3.A3"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CHG_PROG": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CHG_PROG",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U9.PROG",
+    "R20.1"
+   ],
+   "pads": [
+    "U9.5",
+    "R20.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CHG_PROG_SW": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CHG_PROG_SW",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "R20.2",
+    "U1.PA7"
+   ],
+   "pads": [
+    "R20.2",
+    "U1.23"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CHG_STAT": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CHG_STAT",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U9.STAT",
+    "U1.PA2",
+    "R25.2"
+   ],
+   "pads": [
+    "U9.1",
+    "U1.16",
+    "R25.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP1": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP1",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "R1.2",
+    "D1.A",
+    "D2.K",
+    "D9.K",
+    "D10.A",
+    "D11.A",
+    "D12.K"
+   ],
+   "pads": [
+    "R1.2",
+    "D1.2",
+    "D2.1",
+    "D9.1",
+    "D10.2",
+    "D11.2",
+    "D12.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP1_MCU": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP1_MCU",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA15",
+    "R1.1"
+   ],
+   "pads": [
+    "U1.50",
+    "R1.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP2": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP2",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "R2.2",
+    "D1.K",
+    "D2.A",
+    "D3.A",
+    "D4.K",
+    "D13.A",
+    "D14.K"
+   ],
+   "pads": [
+    "R2.2",
+    "D1.1",
+    "D2.2",
+    "D3.2",
+    "D4.1",
+    "D13.2",
+    "D14.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP2_MCU": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP2_MCU",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PC10",
+    "R2.1"
+   ],
+   "pads": [
+    "U1.51",
+    "R2.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP3": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP3",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "R3.2",
+    "D3.K",
+    "D4.A",
+    "D5.A",
+    "D6.K",
+    "D11.K",
+    "D12.A",
+    "D15.A",
+    "D16.K"
+   ],
+   "pads": [
+    "R3.2",
+    "D3.1",
+    "D4.2",
+    "D5.2",
+    "D6.1",
+    "D11.1",
+    "D12.2",
+    "D15.2",
+    "D16.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP3_MCU": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP3_MCU",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PC12",
+    "R3.1"
+   ],
+   "pads": [
+    "U1.53",
+    "R3.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP4": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP4",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "R4.2",
+    "D5.K",
+    "D6.A",
+    "D7.A",
+    "D8.K",
+    "D13.K",
+    "D14.A"
+   ],
+   "pads": [
+    "R4.2",
+    "D5.1",
+    "D6.2",
+    "D7.2",
+    "D8.1",
+    "D13.1",
+    "D14.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP4_MCU": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP4_MCU",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PD2",
+    "R4.1"
+   ],
+   "pads": [
+    "U1.54",
+    "R4.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP5": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP5",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "R5.2",
+    "D7.K",
+    "D8.A",
+    "D9.A",
+    "D10.K",
+    "D15.K",
+    "D16.A"
+   ],
+   "pads": [
+    "R5.2",
+    "D7.1",
+    "D8.2",
+    "D9.2",
+    "D10.1",
+    "D15.1",
+    "D16.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CP5_MCU": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CP5_MCU",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA9",
+    "R5.1"
+   ],
+   "pads": [
+    "U1.42",
+    "R5.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "FLASH_CS": {
+   "layers": null,
+   "max_vias": null,
+   "name": "FLASH_CS",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA10",
+    "U6.CS"
+   ],
+   "pads": [
+    "U1.43",
+    "U6.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "GND": {
+   "layers": null,
+   "max_vias": null,
+   "name": "GND",
+   "netclass": "Power",
+   "no_route": false,
+   "nodes": [
+    "U1.VSSA",
+    "U1.VSS1",
+    "U1.VSS2",
+    "U1.VSS3",
+    "U1.VSS4",
+    "U2.GND1",
+    "U2.GND2",
+    "U3.GND1",
+    "U3.GND2",
+    "U4.GND1",
+    "U4.GND2",
+    "U4.SDX",
+    "U4.SCX",
+    "U5.GND1",
+    "U5.GND2",
+    "U6.GND",
+    "U7.GND",
+    "U8.GND",
+    "U9.VSS",
+    "U10.GND",
+    "U11.GND",
+    "J1.9",
+    "J1.10",
+    "J1.MP",
+    "BT2.1",
+    "J2.4",
+    "C1.2",
+    "C2.2",
+    "C3.2",
+    "C4.2",
+    "C5.2",
+    "C6.2",
+    "C7.2",
+    "C8.2",
+    "C9.2",
+    "C10.2",
+    "C11.2",
+    "C12.2",
+    "C13.2",
+    "C14.2",
+    "C15.2",
+    "C16.2",
+    "C17.2",
+    "C18.2",
+    "C19.2",
+    "C20.2",
+    "C21.2",
+    "C22.2",
+    "C23.2",
+    "C24.2",
+    "C25.2",
+    "C27.2",
+    "C28.2",
+    "C29.2",
+    "C30.2",
+    "C31.2",
+    "C32.2",
+    "C33.2",
+    "C34.2",
+    "C35.2",
+    "C36.2",
+    "R7.2",
+    "R14.2",
+    "R18.2",
+    "R19.2",
+    "R22.2",
+    "R24.2"
+   ],
+   "pads": [
+    "U1.12",
+    "U1.18",
+    "U1.31",
+    "U1.47",
+    "U1.63",
+    "U2.E1",
+    "U2.E5",
+    "U3.E1",
+    "U3.E5",
+    "U4.6",
+    "U4.7",
+    "U4.2",
+    "U4.3",
+    "U5.3",
+    "U5.4",
+    "U6.4",
+    "U6.9",
+    "U7.1",
+    "U8.2",
+    "U9.2",
+    "U10.2",
+    "U11.1",
+    "J1.9",
+    "J1.10",
+    "J1.MP",
+    "BT2.1",
+    "J2.4",
+    "C1.2",
+    "C2.2",
+    "C3.2",
+    "C4.2",
+    "C5.2",
+    "C6.2",
+    "C7.2",
+    "C8.2",
+    "C9.2",
+    "C10.2",
+    "C11.2",
+    "C12.2",
+    "C13.2",
+    "C14.2",
+    "C15.2",
+    "C16.2",
+    "C17.2",
+    "C18.2",
+    "C19.2",
+    "C20.2",
+    "C21.2",
+    "C22.2",
+    "C23.2",
+    "C24.2",
+    "C25.2",
+    "C27.2",
+    "C28.2",
+    "C29.2",
+    "C30.2",
+    "C31.2",
+    "C32.2",
+    "C33.2",
+    "C34.2",
+    "C35.2",
+    "C36.2",
+    "R7.2",
+    "R14.2",
+    "R18.2",
+    "R19.2",
+    "R22.2",
+    "R24.2"
+   ],
+   "planes": [
+    "In1.Cu"
+   ],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "IMU_CS": {
+   "layers": null,
+   "max_vias": null,
+   "name": "IMU_CS",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB0",
+    "U4.CS"
+   ],
+   "pads": [
+    "U1.26",
+    "U4.12"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "IMU_INT1": {
+   "layers": null,
+   "max_vias": null,
+   "name": "IMU_INT1",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PC5",
+    "U4.INT1"
+   ],
+   "pads": [
+    "U1.25",
+    "U4.4"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "IMU_INT2": {
+   "layers": null,
+   "max_vias": null,
+   "name": "IMU_INT2",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PC4",
+    "U4.INT2"
+   ],
+   "pads": [
+    "U1.24",
+    "U4.9"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "INC_CS": {
+   "layers": null,
+   "max_vias": null,
+   "name": "INC_CS",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB1",
+    "U5.CS"
+   ],
+   "pads": [
+    "U1.27",
+    "U5.5"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "LCD_DISP": {
+   "layers": null,
+   "max_vias": null,
+   "name": "LCD_DISP",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB13",
+    "J1.5",
+    "R19.1"
+   ],
+   "pads": [
+    "U1.34",
+    "J1.5",
+    "R19.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "LCD_EXTCOMIN": {
+   "layers": null,
+   "max_vias": null,
+   "name": "LCD_EXTCOMIN",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB2",
+    "J1.4"
+   ],
+   "pads": [
+    "U1.28",
+    "J1.4"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "LCD_SCS": {
+   "layers": null,
+   "max_vias": null,
+   "name": "LCD_SCS",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB12",
+    "J1.3"
+   ],
+   "pads": [
+    "U1.33",
+    "J1.3"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "MCO": {
+   "layers": null,
+   "max_vias": null,
+   "name": "MCO",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA8",
+    "R13.1"
+   ],
+   "pads": [
+    "U1.41",
+    "R13.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "NRST": {
+   "layers": null,
+   "max_vias": null,
+   "name": "NRST",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.NRST",
+    "J2.7",
+    "C10.1"
+   ],
+   "pads": [
+    "U1.7",
+    "J2.7",
+    "C10.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "OPAMP_OUT": {
+   "layers": null,
+   "max_vias": null,
+   "name": "OPAMP_OUT",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA3",
+    "R16.2",
+    "C26.2"
+   ],
+   "pads": [
+    "U1.17",
+    "R16.2",
+    "C26.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "OSC32_IN": {
+   "layers": null,
+   "max_vias": null,
+   "name": "OSC32_IN",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PC14",
+    "Y1.1",
+    "C11.1"
+   ],
+   "pads": [
+    "U1.3",
+    "Y1.1",
+    "C11.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "OSC32_OUT": {
+   "layers": null,
+   "max_vias": null,
+   "name": "OSC32_OUT",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PC15",
+    "Y1.2",
+    "C12.1"
+   ],
+   "pads": [
+    "U1.4",
+    "Y1.2",
+    "C12.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "PD_K": {
+   "layers": null,
+   "max_vias": null,
+   "name": "PD_K",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA1",
+    "PD1.K",
+    "R16.1",
+    "C26.1"
+   ],
+   "pads": [
+    "U1.15",
+    "PD1.K",
+    "R16.1",
+    "C26.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SPI1_MISO": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SPI1_MISO",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB4",
+    "U6.DO"
+   ],
+   "pads": [
+    "U1.56",
+    "U6.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SPI1_MOSI": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SPI1_MOSI",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB5",
+    "U6.DI",
+    "J1.2"
+   ],
+   "pads": [
+    "U1.57",
+    "U6.5",
+    "J1.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SPI1_SCK": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SPI1_SCK",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB3",
+    "U6.CLK",
+    "J1.1"
+   ],
+   "pads": [
+    "U1.55",
+    "U6.6",
+    "J1.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SPI2_MISO": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SPI2_MISO",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB14",
+    "U4.SDO",
+    "U5.MISO"
+   ],
+   "pads": [
+    "U1.35",
+    "U4.1",
+    "U5.8"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SPI2_MOSI": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SPI2_MOSI",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB15",
+    "U4.SDA",
+    "U5.MOSI"
+   ],
+   "pads": [
+    "U1.36",
+    "U4.14",
+    "U5.7"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SPI2_SCK": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SPI2_SCK",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PB10",
+    "U4.SCL",
+    "U5.SCK"
+   ],
+   "pads": [
+    "U1.29",
+    "U4.13",
+    "U5.6"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SWCLK": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SWCLK",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA14",
+    "J2.6"
+   ],
+   "pads": [
+    "U1.49",
+    "J2.6"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SWDIO": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SWDIO",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA13",
+    "J2.5"
+   ],
+   "pads": [
+    "U1.46",
+    "J2.5"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "USB_DM": {
+   "layers": null,
+   "max_vias": null,
+   "name": "USB_DM",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA11",
+    "J2.2",
+    "U10.IO1A",
+    "U10.IO1B"
+   ],
+   "pads": [
+    "U1.44",
+    "J2.2",
+    "U10.1",
+    "U10.6"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "USB_DP": {
+   "layers": null,
+   "max_vias": null,
+   "name": "USB_DP",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA12",
+    "J2.3",
+    "U10.IO2A",
+    "U10.IO2B"
+   ],
+   "pads": [
+    "U1.45",
+    "J2.3",
+    "U10.3",
+    "U10.4"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "V2V8": {
+   "layers": null,
+   "max_vias": null,
+   "name": "V2V8",
+   "netclass": "Power",
+   "no_route": false,
+   "nodes": [
+    "U7.VOUT",
+    "U1.VBAT",
+    "U1.VDD1",
+    "U1.VDD2",
+    "U1.VDD3",
+    "U4.VDD",
+    "U4.VDDIO",
+    "U5.VDD",
+    "U5.VDDIO",
+    "U6.VCC",
+    "U6.WP",
+    "U6.HOLD",
+    "J1.6",
+    "J1.7",
+    "J1.8",
+    "C1.1",
+    "C2.1",
+    "C4.1",
+    "C5.1",
+    "C6.1",
+    "C21.1",
+    "C22.1",
+    "C23.1",
+    "C24.1",
+    "C25.1",
+    "C32.1",
+    "C36.1",
+    "R6.1",
+    "R17.1",
+    "R25.1"
+   ],
+   "pads": [
+    "U7.2",
+    "U1.1",
+    "U1.19",
+    "U1.32",
+    "U1.64",
+    "U4.8",
+    "U4.5",
+    "U5.1",
+    "U5.2",
+    "U6.8",
+    "U6.3",
+    "U6.7",
+    "J1.6",
+    "J1.7",
+    "J1.8",
+    "C1.1",
+    "C2.1",
+    "C4.1",
+    "C5.1",
+    "C6.1",
+    "C21.1",
+    "C22.1",
+    "C23.1",
+    "C24.1",
+    "C25.1",
+    "C32.1",
+    "C36.1",
+    "R6.1",
+    "R17.1",
+    "R25.1"
+   ],
+   "planes": [
+    "In2.Cu"
+   ],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "V2V8_CAM": {
+   "layers": null,
+   "max_vias": null,
+   "name": "V2V8_CAM",
+   "netclass": "CamPower",
+   "no_route": false,
+   "nodes": [
+    "U8.VOUT",
+    "U2.AVDD",
+    "U2.DOVDD",
+    "U3.AVDD",
+    "U3.DOVDD",
+    "C20.1",
+    "C13.1",
+    "C14.1",
+    "C17.1",
+    "C18.1",
+    "R8.1",
+    "R9.1",
+    "R12.1"
+   ],
+   "pads": [
+    "U8.5",
+    "U2.D5",
+    "U2.D1",
+    "U3.D5",
+    "U3.D1",
+    "C20.1",
+    "C13.1",
+    "C14.1",
+    "C17.1",
+    "C18.1",
+    "R8.1",
+    "R9.1",
+    "R12.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "VBAT": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VBAT",
+   "netclass": "Power",
+   "no_route": false,
+   "nodes": [
+    "BT1.1",
+    "U9.VBAT",
+    "U7.VIN",
+    "U8.VIN",
+    "C30.1",
+    "C31.1",
+    "C16.1",
+    "R23.1"
+   ],
+   "pads": [
+    "BT1.1",
+    "U9.3",
+    "U7.3",
+    "U8.1",
+    "C30.1",
+    "C31.1",
+    "C16.1",
+    "R23.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "VBAT_SENSE": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VBAT_SENSE",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PC0",
+    "R23.2",
+    "R24.1",
+    "C35.1"
+   ],
+   "pads": [
+    "U1.8",
+    "R23.2",
+    "R24.1",
+    "C35.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "VBIAS": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VBIAS",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA0",
+    "PD1.A",
+    "R17.2",
+    "R18.1",
+    "C27.1"
+   ],
+   "pads": [
+    "U1.14",
+    "PD1.A",
+    "R17.2",
+    "R18.1",
+    "C27.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "VBUS": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VBUS",
+   "netclass": "Power",
+   "no_route": false,
+   "nodes": [
+    "J2.1",
+    "U10.VBUS",
+    "D17.A"
+   ],
+   "pads": [
+    "J2.1",
+    "U10.5",
+    "D17.2"
+   ],
+   "planes": [],
+   "power_flag": true,
+   "priority": 0,
+   "width": null
+  },
+  "VBUS_D": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VBUS_D",
+   "netclass": "Power",
+   "no_route": false,
+   "nodes": [
+    "D17.K",
+    "U9.VDD",
+    "U11.VIN",
+    "C29.1",
+    "C33.1",
+    "R21.1"
+   ],
+   "pads": [
+    "D17.1",
+    "U9.4",
+    "U11.3",
+    "C29.1",
+    "C33.1",
+    "R21.1"
+   ],
+   "planes": [],
+   "power_flag": true,
+   "priority": 0,
+   "width": null
+  },
+  "VBUS_SENSE": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VBUS_SENSE",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.PA5",
+    "R21.2",
+    "R22.1"
+   ],
+   "pads": [
+    "U1.21",
+    "R21.2",
+    "R22.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "VCAP": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VCAP",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "U1.VCAP",
+    "C3.1"
+   ],
+   "pads": [
+    "U1.30",
+    "C3.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "VDDA": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VDDA",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "R6.2",
+    "U1.VDDA",
+    "C8.1",
+    "C9.1"
+   ],
+   "pads": [
+    "R6.2",
+    "U1.13",
+    "C8.1",
+    "C9.1"
+   ],
+   "planes": [],
+   "power_flag": true,
+   "priority": 0,
+   "width": null
+  },
+  "VDDUSB": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VDDUSB",
+   "netclass": "Power",
+   "no_route": false,
+   "nodes": [
+    "U11.VOUT",
+    "U1.VDDUSB",
+    "C34.1",
+    "C7.1",
+    "C28.1"
+   ],
+   "pads": [
+    "U11.2",
+    "U1.48",
+    "C34.1",
+    "C7.1",
+    "C28.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  }
+ },
+ "no_connects": [],
+ "parts": {
+  "BT1": {
+   "dnp": false,
+   "footprint": "gleda:BatteryTab_1.2x2mm",
+   "group": "power",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {
+    "1": {
+     "net": "VBAT",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "BAT+"
+  },
+  "BT2": {
+   "dnp": false,
+   "footprint": "gleda:BatteryTab_1.2x2mm",
+   "group": "power",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {
+    "1": {
+     "net": "GND",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "BAT-"
+  },
+  "C1": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C10": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "NRST",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C11": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM1555C1H6R8CA01D",
+   "pins": {
+    "1": {
+     "net": "OSC32_IN",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "6p8"
+  },
+  "C12": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM1555C1H6R8CA01D",
+   "pins": {
+    "1": {
+     "net": "OSC32_OUT",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "6p8"
+  },
+  "C13": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C14": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C15": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "CAM_L_DVDD",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C16": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "VBAT",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C17": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C18": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C19": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "CAM_R_DVDD",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C2": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C20": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C21": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "sensor",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C22": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "sensor",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C23": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "sensor",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C24": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "sensor",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C25": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C26": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "GRM1555C1H100JA01D",
+   "pins": {
+    "1": {
+     "net": "PD_K",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "OPAMP_OUT",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "10p"
+  },
+  "C27": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "VBIAS",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C28": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "VDDUSB",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C29": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "GRM155R60J475ME47D",
+   "pins": {
+    "1": {
+     "net": "VBUS_D",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "4u7"
+  },
+  "C3": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R60J475ME47D",
+   "pins": {
+    "1": {
+     "net": "VCAP",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "4u7"
+  },
+  "C30": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "GRM155R60J475ME47D",
+   "pins": {
+    "1": {
+     "net": "VBAT",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "4u7"
+  },
+  "C31": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "VBAT",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C32": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C33": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "VBUS_D",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C34": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "VDDUSB",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C35": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "VBAT_SENSE",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C36": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "display",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C4": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C5": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C6": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R60J475ME47D",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "4u7"
+  },
+  "C7": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "VDDUSB",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "C8": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R61A105KE15D",
+   "pins": {
+    "1": {
+     "net": "VDDA",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1u"
+  },
+  "C9": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "GRM155R71H103KA88D",
+   "pins": {
+    "1": {
+     "net": "VDDA",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "10n"
+  },
+  "D1": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005SURCK",
+   "pins": {
+    "A": {
+     "net": "CP1",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP2",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED red"
+  },
+  "D10": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005F3C",
+   "pins": {
+    "A": {
+     "net": "CP1",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP5",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED NIR"
+  },
+  "D11": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005SURCK",
+   "pins": {
+    "A": {
+     "net": "CP1",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP3",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED red"
+  },
+  "D12": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005F3C",
+   "pins": {
+    "A": {
+     "net": "CP3",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP1",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED NIR"
+  },
+  "D13": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005SURCK",
+   "pins": {
+    "A": {
+     "net": "CP2",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP4",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED red"
+  },
+  "D14": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005F3C",
+   "pins": {
+    "A": {
+     "net": "CP4",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP2",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED NIR"
+  },
+  "D15": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005SURCK",
+   "pins": {
+    "A": {
+     "net": "CP3",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP5",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED red"
+  },
+  "D16": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005F3C",
+   "pins": {
+    "A": {
+     "net": "CP5",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP3",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED NIR"
+  },
+  "D17": {
+   "dnp": false,
+   "footprint": "Diode_SMD:D_SOD-323",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "BAT60JFILM",
+   "pins": {
+    "A": {
+     "net": "VBUS",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "VBUS_D",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "Schottky"
+  },
+  "D2": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005F3C",
+   "pins": {
+    "A": {
+     "net": "CP2",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP1",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED NIR"
+  },
+  "D3": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005SURCK",
+   "pins": {
+    "A": {
+     "net": "CP2",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP3",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED red"
+  },
+  "D4": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005F3C",
+   "pins": {
+    "A": {
+     "net": "CP3",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP2",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED NIR"
+  },
+  "D5": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005SURCK",
+   "pins": {
+    "A": {
+     "net": "CP3",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP4",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED red"
+  },
+  "D6": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005F3C",
+   "pins": {
+    "A": {
+     "net": "CP4",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP3",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED NIR"
+  },
+  "D7": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005SURCK",
+   "pins": {
+    "A": {
+     "net": "CP4",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP5",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED red"
+  },
+  "D8": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005F3C",
+   "pins": {
+    "A": {
+     "net": "CP5",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP4",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED NIR"
+  },
+  "D9": {
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "APHHS1005SURCK",
+   "pins": {
+    "A": {
+     "net": "CP5",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "CP1",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LED red"
+  },
+  "J1": {
+   "dnp": false,
+   "footprint": "Connector_FFC-FPC:Hirose_FH12-10S-0.5SH_1x10-1MP_P0.50mm_Horizontal",
+   "group": "display",
+   "in_bom": true,
+   "mpn": "FH12A-10S-0.5SH(55)",
+   "pins": {
+    "1": {
+     "net": "SPI1_SCK",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "10": {
+     "net": "GND",
+     "pads": [
+      "10"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "SPI1_MOSI",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "3": {
+     "net": "LCD_SCS",
+     "pads": [
+      "3"
+     ],
+     "type": "passive"
+    },
+    "4": {
+     "net": "LCD_EXTCOMIN",
+     "pads": [
+      "4"
+     ],
+     "type": "passive"
+    },
+    "5": {
+     "net": "LCD_DISP",
+     "pads": [
+      "5"
+     ],
+     "type": "passive"
+    },
+    "6": {
+     "net": "V2V8",
+     "pads": [
+      "6"
+     ],
+     "type": "passive"
+    },
+    "7": {
+     "net": "V2V8",
+     "pads": [
+      "7"
+     ],
+     "type": "passive"
+    },
+    "8": {
+     "net": "V2V8",
+     "pads": [
+      "8"
+     ],
+     "type": "passive"
+    },
+    "9": {
+     "net": "GND",
+     "pads": [
+      "9"
+     ],
+     "type": "passive"
+    },
+    "MP": {
+     "net": "GND",
+     "pads": [
+      "MP"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "LCD FPC 10"
+  },
+  "J2": {
+   "dnp": false,
+   "footprint": "gleda:ContactRow_7x1.8mm_P2.54",
+   "group": "service",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {
+    "1": {
+     "net": "VBUS",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "USB_DM",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "3": {
+     "net": "USB_DP",
+     "pads": [
+      "3"
+     ],
+     "type": "passive"
+    },
+    "4": {
+     "net": "GND",
+     "pads": [
+      "4"
+     ],
+     "type": "passive"
+    },
+    "5": {
+     "net": "SWDIO",
+     "pads": [
+      "5"
+     ],
+     "type": "passive"
+    },
+    "6": {
+     "net": "SWCLK",
+     "pads": [
+      "6"
+     ],
+     "type": "passive"
+    },
+    "7": {
+     "net": "NRST",
+     "pads": [
+      "7"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "Cradle pads"
+  },
+  "PD1": {
+   "dnp": false,
+   "footprint": "gleda:Photodiode_4.8x2.5mm",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "VEMD5510C",
+   "pins": {
+    "A": {
+     "net": "VBIAS",
+     "pads": [
+      "A"
+     ],
+     "type": "passive"
+    },
+    "K": {
+     "net": "PD_K",
+     "pads": [
+      "K"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "Photodiode"
+  },
+  "R1": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "RC0402FR-0768RL",
+   "pins": {
+    "1": {
+     "net": "CP1_MCU",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CP1",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "68R"
+  },
+  "R10": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "RC0402FR-0733RL",
+   "pins": {
+    "1": {
+     "net": "CAM_PCLK_L",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CAM_PCLK",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "33R"
+  },
+  "R11": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "RC0402FR-0733RL",
+   "pins": {
+    "1": {
+     "net": "CAM_PCLK_R",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CAM_PCLK",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "33R"
+  },
+  "R12": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "RC0402FR-072K2L",
+   "pins": {
+    "1": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CAM_SDA",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "2k2"
+  },
+  "R13": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "RC0402FR-0733RL",
+   "pins": {
+    "1": {
+     "net": "MCO",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CAM_XVCLK",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "33R"
+  },
+  "R14": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "RC0402FR-07100KL",
+   "pins": {
+    "1": {
+     "net": "CAM_EN",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100k"
+  },
+  "R16": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "RC0402FR-07470KL",
+   "pins": {
+    "1": {
+     "net": "PD_K",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "OPAMP_OUT",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "470k"
+  },
+  "R17": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "RC0402FR-07100KL",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "VBIAS",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100k"
+  },
+  "R18": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "RC0402FR-07100KL",
+   "pins": {
+    "1": {
+     "net": "VBIAS",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100k"
+  },
+  "R19": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "display",
+   "in_bom": true,
+   "mpn": "RC0402FR-07100KL",
+   "pins": {
+    "1": {
+     "net": "LCD_DISP",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100k"
+  },
+  "R2": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "RC0402FR-0768RL",
+   "pins": {
+    "1": {
+     "net": "CP2_MCU",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CP2",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "68R"
+  },
+  "R20": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "RC0402FR-0749K9L",
+   "pins": {
+    "1": {
+     "net": "CHG_PROG",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CHG_PROG_SW",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "49k9"
+  },
+  "R21": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "RC0402FR-07100KL",
+   "pins": {
+    "1": {
+     "net": "VBUS_D",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "VBUS_SENSE",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100k"
+  },
+  "R22": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "RC0402FR-07100KL",
+   "pins": {
+    "1": {
+     "net": "VBUS_SENSE",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100k"
+  },
+  "R23": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "RC0402FR-071ML",
+   "pins": {
+    "1": {
+     "net": "VBAT",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "VBAT_SENSE",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1M"
+  },
+  "R24": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "RC0402FR-071ML",
+   "pins": {
+    "1": {
+     "net": "VBAT_SENSE",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "1M"
+  },
+  "R25": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "RC0402FR-07100KL",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CHG_STAT",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100k"
+  },
+  "R3": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "RC0402FR-0768RL",
+   "pins": {
+    "1": {
+     "net": "CP3_MCU",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CP3",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "68R"
+  },
+  "R4": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "RC0402FR-0768RL",
+   "pins": {
+    "1": {
+     "net": "CP4_MCU",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CP4",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "68R"
+  },
+  "R5": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "grain",
+   "in_bom": true,
+   "mpn": "RC0402FR-0768RL",
+   "pins": {
+    "1": {
+     "net": "CP5_MCU",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CP5",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "68R"
+  },
+  "R6": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "RC0402FR-0710RL",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "VDDA",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "10R"
+  },
+  "R7": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "RC0402FR-0710KL",
+   "pins": {
+    "1": {
+     "net": "BOOT0",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "10k"
+  },
+  "R8": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "RC0402FR-072K2L",
+   "pins": {
+    "1": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CAM_SCL_L",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "2k2"
+  },
+  "R9": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "RC0402FR-072K2L",
+   "pins": {
+    "1": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "CAM_SCL_R",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "2k2"
+  },
+  "U1": {
+   "dnp": false,
+   "footprint": "Package_QFP:LQFP-64_10x10mm_P0.5mm",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "STM32U585RIT6",
+   "pins": {
+    "NRST": {
+     "net": "NRST",
+     "pads": [
+      "7"
+     ],
+     "type": "input"
+    },
+    "PA0": {
+     "net": "VBIAS",
+     "pads": [
+      "14"
+     ],
+     "type": "bidir"
+    },
+    "PA1": {
+     "net": "PD_K",
+     "pads": [
+      "15"
+     ],
+     "type": "bidir"
+    },
+    "PA10": {
+     "net": "FLASH_CS",
+     "pads": [
+      "43"
+     ],
+     "type": "bidir"
+    },
+    "PA11": {
+     "net": "USB_DM",
+     "pads": [
+      "44"
+     ],
+     "type": "bidir"
+    },
+    "PA12": {
+     "net": "USB_DP",
+     "pads": [
+      "45"
+     ],
+     "type": "bidir"
+    },
+    "PA13": {
+     "net": "SWDIO",
+     "pads": [
+      "46"
+     ],
+     "type": "bidir"
+    },
+    "PA14": {
+     "net": "SWCLK",
+     "pads": [
+      "49"
+     ],
+     "type": "bidir"
+    },
+    "PA15": {
+     "net": "CP1_MCU",
+     "pads": [
+      "50"
+     ],
+     "type": "bidir"
+    },
+    "PA2": {
+     "net": "CHG_STAT",
+     "pads": [
+      "16"
+     ],
+     "type": "bidir"
+    },
+    "PA3": {
+     "net": "OPAMP_OUT",
+     "pads": [
+      "17"
+     ],
+     "type": "bidir"
+    },
+    "PA4": {
+     "net": "CAM_HREF",
+     "pads": [
+      "20"
+     ],
+     "type": "bidir"
+    },
+    "PA5": {
+     "net": "VBUS_SENSE",
+     "pads": [
+      "21"
+     ],
+     "type": "bidir"
+    },
+    "PA6": {
+     "net": "CAM_PCLK",
+     "pads": [
+      "22"
+     ],
+     "type": "bidir"
+    },
+    "PA7": {
+     "net": "CHG_PROG_SW",
+     "pads": [
+      "23"
+     ],
+     "type": "bidir"
+    },
+    "PA8": {
+     "net": "MCO",
+     "pads": [
+      "41"
+     ],
+     "type": "bidir"
+    },
+    "PA9": {
+     "net": "CP5_MCU",
+     "pads": [
+      "42"
+     ],
+     "type": "bidir"
+    },
+    "PB0": {
+     "net": "IMU_CS",
+     "pads": [
+      "26"
+     ],
+     "type": "bidir"
+    },
+    "PB1": {
+     "net": "INC_CS",
+     "pads": [
+      "27"
+     ],
+     "type": "bidir"
+    },
+    "PB10": {
+     "net": "SPI2_SCK",
+     "pads": [
+      "29"
+     ],
+     "type": "bidir"
+    },
+    "PB12": {
+     "net": "LCD_SCS",
+     "pads": [
+      "33"
+     ],
+     "type": "bidir"
+    },
+    "PB13": {
+     "net": "LCD_DISP",
+     "pads": [
+      "34"
+     ],
+     "type": "bidir"
+    },
+    "PB14": {
+     "net": "SPI2_MISO",
+     "pads": [
+      "35"
+     ],
+     "type": "bidir"
+    },
+    "PB15": {
+     "net": "SPI2_MOSI",
+     "pads": [
+      "36"
+     ],
+     "type": "bidir"
+    },
+    "PB2": {
+     "net": "LCD_EXTCOMIN",
+     "pads": [
+      "28"
+     ],
+     "type": "bidir"
+    },
+    "PB3": {
+     "net": "SPI1_SCK",
+     "pads": [
+      "55"
+     ],
+     "type": "bidir"
+    },
+    "PB4": {
+     "net": "SPI1_MISO",
+     "pads": [
+      "56"
+     ],
+     "type": "bidir"
+    },
+    "PB5": {
+     "net": "SPI1_MOSI",
+     "pads": [
+      "57"
+     ],
+     "type": "bidir"
+    },
+    "PB6": {
+     "net": "CAM_D5",
+     "pads": [
+      "58"
+     ],
+     "type": "bidir"
+    },
+    "PB7": {
+     "net": "CAM_VSYNC",
+     "pads": [
+      "59"
+     ],
+     "type": "bidir"
+    },
+    "PB8": {
+     "net": "CAM_D6",
+     "pads": [
+      "61"
+     ],
+     "type": "bidir"
+    },
+    "PB9": {
+     "net": "CAM_D7",
+     "pads": [
+      "62"
+     ],
+     "type": "bidir"
+    },
+    "PC0": {
+     "net": "VBAT_SENSE",
+     "pads": [
+      "8"
+     ],
+     "type": "bidir"
+    },
+    "PC1": {
+     "net": "CAM_EN",
+     "pads": [
+      "9"
+     ],
+     "type": "bidir"
+    },
+    "PC10": {
+     "net": "CP2_MCU",
+     "pads": [
+      "51"
+     ],
+     "type": "bidir"
+    },
+    "PC11": {
+     "net": "CAM_D4",
+     "pads": [
+      "52"
+     ],
+     "type": "bidir"
+    },
+    "PC12": {
+     "net": "CP3_MCU",
+     "pads": [
+      "53"
+     ],
+     "type": "bidir"
+    },
+    "PC13": {
+     "net": "CAM_PWDN_R",
+     "pads": [
+      "2"
+     ],
+     "type": "bidir"
+    },
+    "PC14": {
+     "net": "OSC32_IN",
+     "pads": [
+      "3"
+     ],
+     "type": "bidir"
+    },
+    "PC15": {
+     "net": "OSC32_OUT",
+     "pads": [
+      "4"
+     ],
+     "type": "bidir"
+    },
+    "PC2": {
+     "net": "CAM_PWDN_L",
+     "pads": [
+      "10"
+     ],
+     "type": "bidir"
+    },
+    "PC3": {
+     "net": "CAM_SCL_L",
+     "pads": [
+      "11"
+     ],
+     "type": "bidir"
+    },
+    "PC4": {
+     "net": "IMU_INT2",
+     "pads": [
+      "24"
+     ],
+     "type": "bidir"
+    },
+    "PC5": {
+     "net": "IMU_INT1",
+     "pads": [
+      "25"
+     ],
+     "type": "bidir"
+    },
+    "PC6": {
+     "net": "CAM_D0",
+     "pads": [
+      "37"
+     ],
+     "type": "bidir"
+    },
+    "PC7": {
+     "net": "CAM_D1",
+     "pads": [
+      "38"
+     ],
+     "type": "bidir"
+    },
+    "PC8": {
+     "net": "CAM_D2",
+     "pads": [
+      "39"
+     ],
+     "type": "bidir"
+    },
+    "PC9": {
+     "net": "CAM_D3",
+     "pads": [
+      "40"
+     ],
+     "type": "bidir"
+    },
+    "PD2": {
+     "net": "CP4_MCU",
+     "pads": [
+      "54"
+     ],
+     "type": "bidir"
+    },
+    "PH0": {
+     "net": "CAM_SCL_R",
+     "pads": [
+      "5"
+     ],
+     "type": "bidir"
+    },
+    "PH1": {
+     "net": "CAM_SDA",
+     "pads": [
+      "6"
+     ],
+     "type": "bidir"
+    },
+    "PH3": {
+     "net": "BOOT0",
+     "pads": [
+      "60"
+     ],
+     "type": "bidir"
+    },
+    "VBAT": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "power_in"
+    },
+    "VCAP": {
+     "net": "VCAP",
+     "pads": [
+      "30"
+     ],
+     "type": "power_out"
+    },
+    "VDD1": {
+     "net": "V2V8",
+     "pads": [
+      "19"
+     ],
+     "type": "power_in"
+    },
+    "VDD2": {
+     "net": "V2V8",
+     "pads": [
+      "32"
+     ],
+     "type": "power_in"
+    },
+    "VDD3": {
+     "net": "V2V8",
+     "pads": [
+      "64"
+     ],
+     "type": "power_in"
+    },
+    "VDDA": {
+     "net": "VDDA",
+     "pads": [
+      "13"
+     ],
+     "type": "power_in"
+    },
+    "VDDUSB": {
+     "net": "VDDUSB",
+     "pads": [
+      "48"
+     ],
+     "type": "power_in"
+    },
+    "VSS1": {
+     "net": "GND",
+     "pads": [
+      "18"
+     ],
+     "type": "power_in"
+    },
+    "VSS2": {
+     "net": "GND",
+     "pads": [
+      "31"
+     ],
+     "type": "power_in"
+    },
+    "VSS3": {
+     "net": "GND",
+     "pads": [
+      "47"
+     ],
+     "type": "power_in"
+    },
+    "VSS4": {
+     "net": "GND",
+     "pads": [
+      "63"
+     ],
+     "type": "power_in"
+    },
+    "VSSA": {
+     "net": "GND",
+     "pads": [
+      "12"
+     ],
+     "type": "power_in"
+    }
+   },
+   "value": "STM32U585RIT6"
+  },
+  "U10": {
+   "dnp": false,
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "USBLC6-2SC6",
+   "pins": {
+    "GND": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "power_in"
+    },
+    "IO1A": {
+     "net": "USB_DM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "IO1B": {
+     "net": "USB_DM",
+     "pads": [
+      "6"
+     ],
+     "type": "passive"
+    },
+    "IO2A": {
+     "net": "USB_DP",
+     "pads": [
+      "3"
+     ],
+     "type": "passive"
+    },
+    "IO2B": {
+     "net": "USB_DP",
+     "pads": [
+      "4"
+     ],
+     "type": "passive"
+    },
+    "VBUS": {
+     "net": "VBUS",
+     "pads": [
+      "5"
+     ],
+     "type": "power_in"
+    }
+   },
+   "value": "USBLC6-2SC6"
+  },
+  "U11": {
+   "dnp": false,
+   "footprint": "Package_TO_SOT_SMD:SOT-23",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "MCP1700T-3302E/TT",
+   "pins": {
+    "GND": {
+     "net": "GND",
+     "pads": [
+      "1"
+     ],
+     "type": "power_in"
+    },
+    "VIN": {
+     "net": "VBUS_D",
+     "pads": [
+      "3"
+     ],
+     "type": "power_in"
+    },
+    "VOUT": {
+     "net": "VDDUSB",
+     "pads": [
+      "2"
+     ],
+     "type": "power_out"
+    }
+   },
+   "value": "MCP1700-3.3"
+  },
+  "U2": {
+   "dnp": false,
+   "footprint": "gleda:CamCube_BGA25_P0.5",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "OVM7692-RYAA",
+   "pins": {
+    "AVDD": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "D5"
+     ],
+     "type": "power_in"
+    },
+    "D0": {
+     "net": "CAM_D0",
+     "pads": [
+      "B2"
+     ],
+     "type": "bidir"
+    },
+    "D1": {
+     "net": "CAM_D1",
+     "pads": [
+      "B3"
+     ],
+     "type": "bidir"
+    },
+    "D2": {
+     "net": "CAM_D2",
+     "pads": [
+      "B4"
+     ],
+     "type": "bidir"
+    },
+    "D3": {
+     "net": "CAM_D3",
+     "pads": [
+      "C2"
+     ],
+     "type": "bidir"
+    },
+    "D4": {
+     "net": "CAM_D4",
+     "pads": [
+      "C4"
+     ],
+     "type": "bidir"
+    },
+    "D5": {
+     "net": "CAM_D5",
+     "pads": [
+      "D2"
+     ],
+     "type": "bidir"
+    },
+    "D6": {
+     "net": "CAM_D6",
+     "pads": [
+      "D3"
+     ],
+     "type": "bidir"
+    },
+    "D7": {
+     "net": "CAM_D7",
+     "pads": [
+      "D4"
+     ],
+     "type": "bidir"
+    },
+    "DOVDD": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "D1"
+     ],
+     "type": "power_in"
+    },
+    "DVDD": {
+     "net": "CAM_L_DVDD",
+     "pads": [
+      "E3"
+     ],
+     "type": "power_out"
+    },
+    "GND1": {
+     "net": "GND",
+     "pads": [
+      "E1"
+     ],
+     "type": "power_in"
+    },
+    "GND2": {
+     "net": "GND",
+     "pads": [
+      "E5"
+     ],
+     "type": "power_in"
+    },
+    "HREF": {
+     "net": "CAM_HREF",
+     "pads": [
+      "E2"
+     ],
+     "type": "bidir"
+    },
+    "NC1": {
+     "net": null,
+     "pads": [
+      "A1"
+     ],
+     "type": "nc"
+    },
+    "NC2": {
+     "net": null,
+     "pads": [
+      "A2"
+     ],
+     "type": "nc"
+    },
+    "NC3": {
+     "net": null,
+     "pads": [
+      "A4"
+     ],
+     "type": "nc"
+    },
+    "NC4": {
+     "net": null,
+     "pads": [
+      "A5"
+     ],
+     "type": "nc"
+    },
+    "NC5": {
+     "net": null,
+     "pads": [
+      "C3"
+     ],
+     "type": "nc"
+    },
+    "PCLK": {
+     "net": "CAM_PCLK_L",
+     "pads": [
+      "C1"
+     ],
+     "type": "bidir"
+    },
+    "PWDN": {
+     "net": "CAM_PWDN_L",
+     "pads": [
+      "E4"
+     ],
+     "type": "input"
+    },
+    "SCL": {
+     "net": "CAM_SCL_L",
+     "pads": [
+      "B1"
+     ],
+     "type": "input"
+    },
+    "SDA": {
+     "net": "CAM_SDA",
+     "pads": [
+      "B5"
+     ],
+     "type": "bidir"
+    },
+    "VSYNC": {
+     "net": "CAM_VSYNC",
+     "pads": [
+      "C5"
+     ],
+     "type": "bidir"
+    },
+    "XVCLK": {
+     "net": "CAM_XVCLK",
+     "pads": [
+      "A3"
+     ],
+     "type": "input"
+    }
+   },
+   "value": "OVM7692"
+  },
+  "U3": {
+   "dnp": false,
+   "footprint": "gleda:CamCube_BGA25_P0.5",
+   "group": "camera",
+   "in_bom": true,
+   "mpn": "OVM7692-RYAA",
+   "pins": {
+    "AVDD": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "D5"
+     ],
+     "type": "power_in"
+    },
+    "D0": {
+     "net": "CAM_D0",
+     "pads": [
+      "B2"
+     ],
+     "type": "bidir"
+    },
+    "D1": {
+     "net": "CAM_D1",
+     "pads": [
+      "B3"
+     ],
+     "type": "bidir"
+    },
+    "D2": {
+     "net": "CAM_D2",
+     "pads": [
+      "B4"
+     ],
+     "type": "bidir"
+    },
+    "D3": {
+     "net": "CAM_D3",
+     "pads": [
+      "C2"
+     ],
+     "type": "bidir"
+    },
+    "D4": {
+     "net": "CAM_D4",
+     "pads": [
+      "C4"
+     ],
+     "type": "bidir"
+    },
+    "D5": {
+     "net": "CAM_D5",
+     "pads": [
+      "D2"
+     ],
+     "type": "bidir"
+    },
+    "D6": {
+     "net": "CAM_D6",
+     "pads": [
+      "D3"
+     ],
+     "type": "bidir"
+    },
+    "D7": {
+     "net": "CAM_D7",
+     "pads": [
+      "D4"
+     ],
+     "type": "bidir"
+    },
+    "DOVDD": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "D1"
+     ],
+     "type": "power_in"
+    },
+    "DVDD": {
+     "net": "CAM_R_DVDD",
+     "pads": [
+      "E3"
+     ],
+     "type": "power_out"
+    },
+    "GND1": {
+     "net": "GND",
+     "pads": [
+      "E1"
+     ],
+     "type": "power_in"
+    },
+    "GND2": {
+     "net": "GND",
+     "pads": [
+      "E5"
+     ],
+     "type": "power_in"
+    },
+    "HREF": {
+     "net": "CAM_HREF",
+     "pads": [
+      "E2"
+     ],
+     "type": "bidir"
+    },
+    "NC1": {
+     "net": null,
+     "pads": [
+      "A1"
+     ],
+     "type": "nc"
+    },
+    "NC2": {
+     "net": null,
+     "pads": [
+      "A2"
+     ],
+     "type": "nc"
+    },
+    "NC3": {
+     "net": null,
+     "pads": [
+      "A4"
+     ],
+     "type": "nc"
+    },
+    "NC4": {
+     "net": null,
+     "pads": [
+      "A5"
+     ],
+     "type": "nc"
+    },
+    "NC5": {
+     "net": null,
+     "pads": [
+      "C3"
+     ],
+     "type": "nc"
+    },
+    "PCLK": {
+     "net": "CAM_PCLK_R",
+     "pads": [
+      "C1"
+     ],
+     "type": "bidir"
+    },
+    "PWDN": {
+     "net": "CAM_PWDN_R",
+     "pads": [
+      "E4"
+     ],
+     "type": "input"
+    },
+    "SCL": {
+     "net": "CAM_SCL_R",
+     "pads": [
+      "B1"
+     ],
+     "type": "input"
+    },
+    "SDA": {
+     "net": "CAM_SDA",
+     "pads": [
+      "B5"
+     ],
+     "type": "bidir"
+    },
+    "VSYNC": {
+     "net": "CAM_VSYNC",
+     "pads": [
+      "C5"
+     ],
+     "type": "bidir"
+    },
+    "XVCLK": {
+     "net": "CAM_XVCLK",
+     "pads": [
+      "A3"
+     ],
+     "type": "input"
+    }
+   },
+   "value": "OVM7692"
+  },
+  "U4": {
+   "dnp": false,
+   "footprint": "Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y",
+   "group": "sensor",
+   "in_bom": true,
+   "mpn": "LSM6DSV16XTR",
+   "pins": {
+    "CS": {
+     "net": "IMU_CS",
+     "pads": [
+      "12"
+     ],
+     "type": "input"
+    },
+    "GND1": {
+     "net": "GND",
+     "pads": [
+      "6"
+     ],
+     "type": "power_in"
+    },
+    "GND2": {
+     "net": "GND",
+     "pads": [
+      "7"
+     ],
+     "type": "power_in"
+    },
+    "INT1": {
+     "net": "IMU_INT1",
+     "pads": [
+      "4"
+     ],
+     "type": "output"
+    },
+    "INT2": {
+     "net": "IMU_INT2",
+     "pads": [
+      "9"
+     ],
+     "type": "output"
+    },
+    "OCS": {
+     "net": null,
+     "pads": [
+      "10"
+     ],
+     "type": "nc"
+    },
+    "OSDO": {
+     "net": null,
+     "pads": [
+      "11"
+     ],
+     "type": "nc"
+    },
+    "SCL": {
+     "net": "SPI2_SCK",
+     "pads": [
+      "13"
+     ],
+     "type": "input"
+    },
+    "SCX": {
+     "net": "GND",
+     "pads": [
+      "3"
+     ],
+     "type": "passive"
+    },
+    "SDA": {
+     "net": "SPI2_MOSI",
+     "pads": [
+      "14"
+     ],
+     "type": "input"
+    },
+    "SDO": {
+     "net": "SPI2_MISO",
+     "pads": [
+      "1"
+     ],
+     "type": "bidir"
+    },
+    "SDX": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    },
+    "VDD": {
+     "net": "V2V8",
+     "pads": [
+      "8"
+     ],
+     "type": "power_in"
+    },
+    "VDDIO": {
+     "net": "V2V8",
+     "pads": [
+      "5"
+     ],
+     "type": "power_in"
+    }
+   },
+   "value": "LSM6DSV16X"
+  },
+  "U5": {
+   "dnp": false,
+   "footprint": "gleda:LGA-16_5x5mm_P1.0mm",
+   "group": "sensor",
+   "in_bom": true,
+   "mpn": "IIS2ICLXTR",
+   "pins": {
+    "CS": {
+     "net": "INC_CS",
+     "pads": [
+      "5"
+     ],
+     "type": "input"
+    },
+    "GND1": {
+     "net": "GND",
+     "pads": [
+      "3"
+     ],
+     "type": "power_in"
+    },
+    "GND2": {
+     "net": "GND",
+     "pads": [
+      "4"
+     ],
+     "type": "power_in"
+    },
+    "MISO": {
+     "net": "SPI2_MISO",
+     "pads": [
+      "8"
+     ],
+     "type": "bidir"
+    },
+    "MOSI": {
+     "net": "SPI2_MOSI",
+     "pads": [
+      "7"
+     ],
+     "type": "input"
+    },
+    "NC10": {
+     "net": null,
+     "pads": [
+      "10"
+     ],
+     "type": "nc"
+    },
+    "NC11": {
+     "net": null,
+     "pads": [
+      "11"
+     ],
+     "type": "nc"
+    },
+    "NC12": {
+     "net": null,
+     "pads": [
+      "12"
+     ],
+     "type": "nc"
+    },
+    "NC13": {
+     "net": null,
+     "pads": [
+      "13"
+     ],
+     "type": "nc"
+    },
+    "NC14": {
+     "net": null,
+     "pads": [
+      "14"
+     ],
+     "type": "nc"
+    },
+    "NC15": {
+     "net": null,
+     "pads": [
+      "15"
+     ],
+     "type": "nc"
+    },
+    "NC16": {
+     "net": null,
+     "pads": [
+      "16"
+     ],
+     "type": "nc"
+    },
+    "NC9": {
+     "net": null,
+     "pads": [
+      "9"
+     ],
+     "type": "nc"
+    },
+    "SCK": {
+     "net": "SPI2_SCK",
+     "pads": [
+      "6"
+     ],
+     "type": "input"
+    },
+    "VDD": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "power_in"
+    },
+    "VDDIO": {
+     "net": "V2V8",
+     "pads": [
+      "2"
+     ],
+     "type": "power_in"
+    }
+   },
+   "value": "Inclinometer"
+  },
+  "U6": {
+   "dnp": false,
+   "footprint": "Package_SON:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4.3mm",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "MX25R6435FZNIL0",
+   "pins": {
+    "CLK": {
+     "net": "SPI1_SCK",
+     "pads": [
+      "6"
+     ],
+     "type": "input"
+    },
+    "CS": {
+     "net": "FLASH_CS",
+     "pads": [
+      "1"
+     ],
+     "type": "input"
+    },
+    "DI": {
+     "net": "SPI1_MOSI",
+     "pads": [
+      "5"
+     ],
+     "type": "input"
+    },
+    "DO": {
+     "net": "SPI1_MISO",
+     "pads": [
+      "2"
+     ],
+     "type": "bidir"
+    },
+    "GND": {
+     "net": "GND",
+     "pads": [
+      "4",
+      "9"
+     ],
+     "type": "power_in"
+    },
+    "HOLD": {
+     "net": "V2V8",
+     "pads": [
+      "7"
+     ],
+     "type": "input"
+    },
+    "VCC": {
+     "net": "V2V8",
+     "pads": [
+      "8"
+     ],
+     "type": "power_in"
+    },
+    "WP": {
+     "net": "V2V8",
+     "pads": [
+      "3"
+     ],
+     "type": "input"
+    }
+   },
+   "value": "SPI flash"
+  },
+  "U7": {
+   "dnp": false,
+   "footprint": "Package_TO_SOT_SMD:SOT-23",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "MCP1700T-2802E/TT",
+   "pins": {
+    "GND": {
+     "net": "GND",
+     "pads": [
+      "1"
+     ],
+     "type": "power_in"
+    },
+    "VIN": {
+     "net": "VBAT",
+     "pads": [
+      "3"
+     ],
+     "type": "power_in"
+    },
+    "VOUT": {
+     "net": "V2V8",
+     "pads": [
+      "2"
+     ],
+     "type": "power_out"
+    }
+   },
+   "value": "MCP1700-2.8"
+  },
+  "U8": {
+   "dnp": false,
+   "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "LP5907MFX-2.8/NOPB",
+   "pins": {
+    "EN": {
+     "net": "CAM_EN",
+     "pads": [
+      "3"
+     ],
+     "type": "input"
+    },
+    "GND": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "power_in"
+    },
+    "NC": {
+     "net": null,
+     "pads": [
+      "4"
+     ],
+     "type": "nc"
+    },
+    "VIN": {
+     "net": "VBAT",
+     "pads": [
+      "1"
+     ],
+     "type": "power_in"
+    },
+    "VOUT": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "5"
+     ],
+     "type": "power_out"
+    }
+   },
+   "value": "LP5907-2.8"
+  },
+  "U9": {
+   "dnp": false,
+   "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "MCP73831T-2ACI/OT",
+   "pins": {
+    "PROG": {
+     "net": "CHG_PROG",
+     "pads": [
+      "5"
+     ],
+     "type": "passive"
+    },
+    "STAT": {
+     "net": "CHG_STAT",
+     "pads": [
+      "1"
+     ],
+     "type": "open_drain"
+    },
+    "VBAT": {
+     "net": "VBAT",
+     "pads": [
+      "3"
+     ],
+     "type": "power_out"
+    },
+    "VDD": {
+     "net": "VBUS_D",
+     "pads": [
+      "4"
+     ],
+     "type": "power_in"
+    },
+    "VSS": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "power_in"
+    }
+   },
+   "value": "MCP73831"
+  },
+  "Y1": {
+   "dnp": false,
+   "footprint": "Crystal:Crystal_SMD_3215-2Pin_3.2x1.5mm",
+   "group": "mcu",
+   "in_bom": true,
+   "mpn": "ABS07-120-32.768KHZ-T",
+   "pins": {
+    "1": {
+     "net": "OSC32_IN",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "OSC32_OUT",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "32.768k"
+  }
+ }
+}

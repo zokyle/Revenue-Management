@@ -29,6 +29,7 @@ typedef struct {
     uint32_t sector_size;
     long long events_until_cut; /**< < 0: no cut armed */
     bool dead;
+    bool cut_in_erase;          /**< the power cut that made it dead hit a sector erase */
     uint32_t rng;
     unsigned long long events_total;
     uint32_t prog_violations;

@@ -18,10 +18,12 @@
  *                3 XVCLK pin to the clock output, clock started
  *                4 SCCB and DCMI pins to their peripherals, wait
  *                  GL_PROV_CAM_CLOCK_SETTLE_MS
- *                5 for LEFT then RIGHT: release PWDN, software reset,
- *                  wait for it, IMMEDIATELY release the bus (register 0x0C),
- *                  check the product id, power the MIPI block down, select
- *                  YUV422, put the camera to sleep (register 0x0E)
+ *                5 for LEFT then RIGHT: release PWDN, release the bus
+ *                  (register 0x0C) as the FIRST register write, software
+ *                  reset, wait for it, release the bus AGAIN at once (the
+ *                  reset re-enables the pads), check the product id, power
+ *                  the MIPI block down, select YUV422, put the camera to
+ *                  sleep (register 0x0E)
  *                  -> both cameras configured, asleep, bus released
  *   power-down   1 stop any capture, stop the clock
  *                2 every camera-facing pin to ANALOG or driven low
@@ -34,7 +36,22 @@
  * tri-stated with register 0x0C bits 2 and 1 (bit polarity PROVISIONAL:
  * GL_PROV_OV7692_REG0C_BIT_SET_MEANS_DRIVEN; both bits always change
  * together) and it is put to sleep with register 0x0E bit 3 when asked to.
- * PWDN is never relied on to free the bus.
+ * Once both cameras are configured, PWDN is never relied on to free the bus.
+ *
+ * WHAT POWER-UP CANNOT AVOID.  Both sensors leave their power-on reset with
+ * 0x0C = 0x16: pads ENABLED.  They can be told otherwise only over SCCB,
+ * one at a time, after PWDN release and the clock settle time.  Until then
+ * the bring-up of the first camera RELIES ON PWDN holding the second one's
+ * pads off - which is not confirmed for this part
+ * (GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS = 0).  If PWDN does not tri-state
+ * the pads, both sensors have their pads enabled for about 12 ms per rail
+ * cycle (5 ms of it while the rail settles, unclocked and static), and for
+ * about 6 ms one of them is streaming against the other's static levels.
+ * The driver keeps that window as short as the sequence allows (0x0C is the
+ * first write after PWDN release and the first after the reset); it cannot
+ * close it.  The camera model measures it and tests/test_drv_cam.c asserts
+ * the figure; closing it needs the datasheet or a board change (see the
+ * constant's comment in core/gl_provisional.h and the README).
  *
  * STRIPS.  The cameras deliver YUV422; the DCMI byte-select keeps only the
  * Y byte, so a strip is 8-bit luminance, one byte per pixel.  A strip is a
@@ -53,7 +70,10 @@
  * purpose; no code was copied).  The driver writes only registers whose
  * address and purpose appear there, and does NOT write clock-tree, exposure
  * or image-processing registers, for which this project has no verified
- * values: those stay at the sensor's reset defaults.
+ * values: those stay at the sensor's reset defaults.  In register 0x0C it
+ * owns bits 7, 6, 2 and 1 only; the others are written with their reset
+ * values (GL_PROV_OV7692_REG0C_KEEP_BITS: bit 4, YU/YV swap, stays set as
+ * it is after reset and in the public driver's 0xD6).
  *
  * RAM: sizeof(gl_ov7692_t) about 72 bytes.  Stack: under 96 bytes.
  * Blocking times: power-up about 2 x 15 ms of register traffic plus the
@@ -102,7 +122,10 @@ typedef struct {
     int8_t active;                 /**< camera driving the bus, -1 = none */
     uint16_t cap_w, cap_h;         /**< size of the capture in progress */
     uint32_t cap_deadline_ms;
-    uint32_t last_done_ms;         /**< tick at which the last capture completed */
+    uint32_t last_done_ms;         /**< tick at which the last capture was SEEN complete */
+    uint32_t last_done_us;         /**< gl_hal_time_us() at the END OF THE FRAME of the last
+                                        completed capture (latched by the HAL in the frame
+                                        interrupt): the exposure timing of a strip */
     uint32_t frames;               /**< captures completed since power-up */
 } gl_ov7692_t;
 

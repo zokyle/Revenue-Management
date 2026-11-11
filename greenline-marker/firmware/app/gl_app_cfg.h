@@ -45,8 +45,32 @@
  *  for 0.8 m and beyond): its strip window and its first search are shifted
  *  left by these amounts relative to the left camera's. */
 #define GL_APP_RIGHT_WINDOW_SHIFT_PX 8
-#define GL_APP_RIGHT_PRIOR_SHIFT_PX 6.0f
-#define GL_APP_FIRST_SEARCH_PX 10.0f
+/** First search for the line.  Left camera: +-5 px around the band's
+ *  candidate (its lean is known to 0.75 deg: 3 px over half a strip).  Right
+ *  camera: from 1 px right to 16 px left of where the candidate would be at
+ *  infinity (centre -7.5, half-width 8.5). */
+#define GL_APP_RIGHT_PRIOR_SHIFT_PX 7.5f
+#define GL_APP_RIGHT_SEARCH_PX 8.5f
+#define GL_APP_FIRST_SEARCH_PX 5.0f
+/** ... widened by this much per second elapsed since the band's exposure
+ *  (a swaying stick), up to the maximum. */
+#define GL_APP_SWAY_ALLOW_PX_PER_S 3.0f
+#define GL_APP_SWAY_ALLOW_MAX_PX 7.0f
+/** Nearest range at which a stick still fits the strips (disparity 16 px). */
+#define GL_APP_MIN_RANGE_M 0.8f
+/** A band line the strips could not confirm is still reported as a bearing
+ *  (GL_READ_TIER_BEARING) if its band score is at least this. */
+#define GL_APP_BEARING_ONLY_MIN_SCORE 16.0f
+/** What can be a flagstick when both its ends are in the strip: visible
+ *  height (metres, against the disparity) and height over width. */
+#define GL_APP_STICK_MIN_HEIGHT_M 1.0f
+#define GL_APP_STICK_MAX_HEIGHT_M 3.2f
+#define GL_APP_STICK_MIN_ASPECT 60.0f
+/** Largest static (background-structure) uncertainty of a disparity that is
+ *  still accepted as a measurement of a stick, px. */
+#define GL_APP_MAX_STATIC_SIGMA_PX 0.5f
+/** Two band lines closer than this disturb each other's measurement. */
+#define GL_APP_NEIGHBOUR_PX 20.0f
 /** Length of stick, up from its lowest visible point, used for the
  *  disparity (DESIGN: lowest 0.3-0.5 m). */
 #define GL_APP_SEGMENT_LENGTH_M 0.4f
@@ -60,6 +84,32 @@
 
 /* ---- power and housekeeping ------------------------------------------------- */
 
+/** An IMU temperature older than this is not used for the charge gate
+ *  (one battery period plus the longest read that can delay it). */
+#define GL_APP_TEMP_MAX_AGE_MS 45000u
+/** While measuring, a sample arrives every 4.2 ms.  If none has been
+ *  announced for this long the data-ready line / status register is polled
+ *  (a lost interrupt latch must not stop the sample pump) ... */
+#define GL_APP_IMU_STALL_MS 10u
+/** ... and if there has been no sample at all for this long the IMU has
+ *  lost its configuration or died: it is re-initialised. */
+#define GL_APP_IMU_SILENT_MS 100u
+/** First retry interval after a failed IMU recovery; doubled up to the
+ *  maximum.  Asleep the retries ride on the 16 s housekeeping wake-up. */
+#define GL_APP_IMU_RETRY_MIN_MS 1000u
+#define GL_APP_IMU_RETRY_MAX_MS 64000u
+/** After this many failed recoveries in a row (and no USB session) the
+ *  watchdog is no longer refreshed: a clean reset re-initialises the SPI
+ *  peripheral and the pins, which is the last thing left to try.  Motion
+ *  is the only user input: without the IMU the device is dead anyway. */
+#define GL_APP_IMU_MAX_FAILS 8u
+/** A VBUS level must hold this long before the UI is told (spring-pin
+ *  bounce in the cradle).  USB itself is stopped at once when VBUS is seen
+ *  low. */
+#define GL_APP_VBUS_DEBOUNCE_MS 30u
+/** While asleep the cell is measured every this many housekeeping wake-ups
+ *  (about 11 minutes), to catch it falling to the storage threshold. */
+#define GL_APP_SLEEP_BATT_EVERY 40u
 /** Wake-up interrupts of the IMU are ignored for this long after the device
  *  went to sleep: the first samples after the IMU's mode change may trip its
  *  slope detector (behaviour unknown; without this a spurious wake would
@@ -97,5 +147,7 @@
 #define GL_APP_LOGEV_ZEROED 3u      /* arg = bias magnitude in micro-rise/run */
 #define GL_APP_LOGEV_SIX_FACE 4u    /* arg = gl_status_t of the solve */
 #define GL_APP_LOGEV_GRAIN_WHITE 5u /* arg = gl_status_t */
+#define GL_APP_LOGEV_IMU_RECOVERED 6u /* arg = failed attempts before it answered again */
+#define GL_APP_LOGEV_STORAGE 7u     /* arg = cell voltage in mV: storage mode entered */
 
 #endif /* GL_APP_CFG_H */

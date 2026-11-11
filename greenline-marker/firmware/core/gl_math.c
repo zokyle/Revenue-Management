@@ -170,8 +170,12 @@ float gl_median_inplace(float *v, size_t n)
     if (n == 0u) {
         return 0.0f;
     }
-    /* Shell sort, gap sequence n/2, n/4, ..., 1 (non-recursive). */
-    for (size_t gap = n / 2u; gap > 0u; gap /= 2u) {
+    /* Shell sort (non-recursive) with Ciura's gap sequence: about half the
+     * moves of the n/2, n/4, ... sequence for the 150-480 element medians of
+     * the vision code, where this sort was the largest single cost. */
+    static const uint16_t gaps[8] = { 701, 301, 132, 57, 23, 10, 4, 1 };
+    for (unsigned g = 0; g < 8u; g++) {
+        const size_t gap = gaps[g];
         for (size_t i = gap; i < n; i++) {
             float t = v[i];
             size_t j = i;

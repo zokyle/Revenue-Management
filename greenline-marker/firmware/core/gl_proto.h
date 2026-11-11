@@ -57,14 +57,16 @@ typedef enum {
     GL_CMD_SET_SETTINGS = 0x05, /**< -> settings blob (12)  <- - */
     GL_CMD_GET_CAL = 0x06,      /**< -> cal id (1)          <- cal id (1) + blob */
     GL_CMD_SET_CAL = 0x07,      /**< -> cal id (1) + blob   <- -   (needs UNLOCK) */
-    GL_CMD_START_CAL = 0x08,    /**< -> procedure (1), arg (1)  <- - */
+    GL_CMD_START_CAL = 0x08,    /**< -> procedure (1), arg (1)  <- -   (needs UNLOCK, except
+                                     ABORT and ZERO, see gl_proto_calproc_t) */
     GL_CMD_LOG_INFO = 0x09,     /**< -> -                   <- gl_proto_log_info_t, 16 bytes */
     GL_CMD_LOG_READ = 0x0A,     /**< -> restart flag (1)    <- more flag (1) + record stream */
     GL_CMD_LOG_ERASE = 0x0B,    /**< -> "ERAS"              <- -   (needs UNLOCK) */
     GL_CMD_STREAM = 0x0C,       /**< -> source mask (2), period ms (2)  <- - */
     GL_CMD_SET_TIME = 0x0D,     /**< -> RTC seconds (4)     <- - */
     GL_CMD_UNLOCK = 0x0E,       /**< -> "GLFC" unlocks, anything else locks  <- - */
-    GL_CMD_REBOOT = 0x0F        /**< -> "BOOT" normal reset, "DFU!" ROM DFU  <- - (sent before reset) */
+    GL_CMD_REBOOT = 0x0F        /**< -> "BOOT" normal reset, "DFU!" ROM DFU (needs UNLOCK: the ROM
+                                     bootloader has no time-out)  <- - (sent before reset) */
 } gl_proto_cmd_t;
 
 /** Calibration procedures for GL_CMD_START_CAL. */

@@ -26,9 +26,14 @@ def plot(design: Design, tracks: Sequence[Track] = (), vias: Sequence[Via] = (),
     """Write a PNG (or any matplotlib format) of the board.  ``window`` is
     (xmin, ymin, xmax, ymax) in design mm for a close-up; ``marks`` are
     points to circle (e.g. DRC marker positions)."""
+    import warnings
     import matplotlib
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    with warnings.catch_warnings():
+        # a second matplotlib on the system makes pyplot warn that the 3D
+        # projection is unavailable; it is not used here
+        warnings.filterwarnings("ignore", message="Unable to import Axes3D")
+        import matplotlib.pyplot as plt
     from matplotlib.patches import Polygon as MplPolygon, Circle as MplCircle
 
     fig, ax = plt.subplots(figsize=(size, size))

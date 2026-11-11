@@ -73,7 +73,9 @@ static gl_status_t rd_(gl_cam_id_t cam, uint8_t reg, uint8_t *val)
 /* Value of register 0x0C for a camera that does / does not drive the bus. */
 static uint8_t reg0c_(const gl_ov7692_t *d, bool drive)
 {
-    uint8_t v = 0;
+    /* bits this driver does not own keep their reset values */
+    uint8_t v = (uint8_t)(GL_PROV_OV7692_REG0C_KEEP_BITS &
+                          (uint8_t)~(R0C_VFLIP | R0C_HMIRROR | R0C_DRIVE_BITS));
     if (d->cfg.vflip) {
         v |= R0C_VFLIP;
     }
@@ -149,6 +151,14 @@ static gl_status_t cam_bring_up_(gl_ov7692_t *d, gl_cam_id_t cam)
     pwdn_assert_(cam, false);
     gl_hal_delay_ms(GL_PROV_CAM_CLOCK_SETTLE_MS);
 
+    /* The sensor has left its power-on reset with its pads ENABLED (0x0C =
+     * 0x16) and is streaming now.  The very first register write takes it
+     * off the shared bus; until this moment the other sensor's pads are
+     * kept off by PWDN alone, if PWDN does that at all (see ov7692.h). */
+    st = wr_(cam, REG_0C, reg0c_(d, false));
+    if (st != GL_OK) {
+        return st;
+    }
     st = wr_(cam, REG_12, R12_RESET);
     if (st != GL_OK) {
         return st;
@@ -168,7 +178,7 @@ static gl_status_t cam_bring_up_(gl_ov7692_t *d, gl_cam_id_t cam)
             return GL_ERR_TIMEOUT;
         }
     }
-    /* after a reset the outputs are enabled (0x0C = 0x16): release the
+    /* the reset has enabled the outputs again (0x0C = 0x16): release the
      * shared bus before anything else */
     st = wr_(cam, REG_0C, reg0c_(d, false));
     if (st != GL_OK) {
@@ -494,6 +504,7 @@ gl_status_t gl_ov7692_capture_poll(gl_ov7692_t *d)
             return GL_ERR_IO;
         }
         d->last_done_ms = gl_hal_tick_ms();
+        d->last_done_us = gl_hal_dcmi_done_us();
         d->frames++;
         return GL_OK;
     case GL_DCMI_ERROR_TIMEOUT:

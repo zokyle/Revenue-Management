@@ -2,6 +2,7 @@
  * test_gfx.c - framebuffer format, round clipping, line-angle accuracy,
  * aim line geometry, fonts and icons.
  */
+#include <limits.h>
 #include <stdlib.h>
 
 #include "gl_config.h"
@@ -632,6 +633,81 @@ GL_TEST(test_shapes)
     GL_CHECK(gl_gfx_get(&g, 60, 90));
 }
 
+/* Review finding: the integer primitives added positions and sizes without
+ * bounds (signed overflow, undefined behaviour) while the float ones were
+ * clamped.  Runs under UBSan in `make asan`; here the visible result of
+ * every call is checked as well. */
+GL_TEST(test_extreme_integer_arguments)
+{
+    static const int ext[] = { INT_MIN, INT_MIN + 1, -GL_GFX_COORD_LIMIT - 1, -5000, -1, 0, 1,
+                               127, 128, 5000, GL_GFX_COORD_LIMIT + 1, INT_MAX - 3, INT_MAX };
+    const size_t n = sizeof(ext) / sizeof(ext[0]);
+    struct {
+        uint8_t guard0[64];
+        gl_gfx_t gg;
+        uint8_t guard1[64];
+    } box;
+    unsigned calls = 0;
+
+    memset(&box, 0xA5, sizeof(box));
+    gl_gfx_init(&box.gg);
+    gl_gfx_set_clip(&box.gg, true);
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < n; j++) {
+            for (size_t k = 0; k < n; k++) {
+                const int a = ext[i], b = ext[j], c = ext[k];
+                gl_gfx_rect(&box.gg, a, b, c, 4, GL_INK_BLACK);
+                gl_gfx_rect(&box.gg, a, b, 4, c, GL_INK_BLACK);
+                gl_gfx_frame(&box.gg, a, b, c, 9, GL_INK_BLACK);
+                gl_gfx_frame(&box.gg, a, b, 9, c, GL_INK_BLACK);
+                gl_gfx_hline(&box.gg, a, b, c, GL_INK_BLACK);
+                gl_gfx_vline(&box.gg, a, b, c, GL_INK_BLACK);
+                (void)gl_gfx_text(&box.gg, a, b, "A?", c, GL_INK_BLACK);
+                gl_gfx_text_centred(&box.gg, a, b, "0.5", c, GL_INK_BLACK);
+                (void)gl_gfx_big_number(&box.gg, a, b, "-1.5 8", c, GL_INK_BLACK);
+                (void)gl_gfx_big_number_width("-1.5 8", c);
+                (void)gl_gfx_text_width("0.5", c);
+                gl_gfx_icon(&box.gg, a, b, GL_ICON_FLAG, GL_INK_BLACK);
+                gl_gfx_battery(&box.gg, a, b, c);
+                gl_gfx_conf_bar(&box.gg, a, b, c, c);
+                calls += 14u;
+            }
+        }
+    }
+    for (size_t i = 0; i < sizeof(box.guard0); i++) {
+        GL_CHECK(box.guard0[i] == 0xA5u && box.guard1[i] == 0xA5u);
+    }
+    /* nothing outside the aperture circle was touched */
+    {
+        unsigned outside = 0;
+        for (int y = 0; y < GL_GFX_H; y++) {
+            for (int x = 0; x < GL_GFX_W; x++) {
+                if (!ref_inside(x, y) && !gl_gfx_get(&box.gg, x, y)) {
+                    outside++;
+                }
+            }
+        }
+        GL_CHECK_EQ(outside, 0);
+    }
+    /* the clamp changes nothing that can be seen: a rectangle that starts
+     * far off-screen and is very large still covers the whole aperture, one
+     * that lies entirely off-screen draws nothing */
+    gl_gfx_clear(&box.gg, GL_INK_WHITE);
+    gl_gfx_rect(&box.gg, -5000, -5000, 10000, 10000, GL_INK_BLACK);
+    {
+        unsigned all = gl_gfx_count_black(&box.gg);
+        gl_gfx_clear(&box.gg, GL_INK_WHITE);
+        gl_gfx_rect(&box.gg, INT_MIN, INT_MIN, INT_MAX, INT_MAX, GL_INK_BLACK);
+        GL_CHECK_EQ(gl_gfx_count_black(&box.gg), 0); /* ends at -1: left of the screen */
+        gl_gfx_rect(&box.gg, -GL_GFX_COORD_LIMIT / 2, -GL_GFX_COORD_LIMIT / 2, INT_MAX, INT_MAX,
+                    GL_INK_BLACK); /* size clamped to the limit: still spans the screen */
+        GL_CHECK_EQ(gl_gfx_count_black(&box.gg), all);
+        GL_CHECK(all > 11000u); /* pi * 61^2 = 11690 */
+    }
+    printf("    %u calls of the integer primitives with arguments from INT_MIN to INT_MAX: "
+           "no pixel outside the aperture, no guard byte changed\n", calls);
+}
+
 int main(void)
 {
     GL_RUN(test_format_and_bit_order);
@@ -645,5 +721,6 @@ int main(void)
     GL_RUN(test_big_digits_and_icons);
     GL_RUN(test_changed_rows);
     GL_RUN(test_shapes);
+    GL_RUN(test_extreme_integer_arguments);
     return gl_test_summary();
 }

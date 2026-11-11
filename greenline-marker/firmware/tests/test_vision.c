@@ -110,7 +110,7 @@ GL_TEST(test_refine_basic_both_polarities)
     for (int pol = 1; pol >= -1; pol -= 2) {
         gl_synth_scene_t s;
         gl_strip_t st = strip_of(0);
-        gl_vis_prior_t pr = { 322.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+        gl_vis_prior_t pr = { 322.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
         gl_vis_stick_t r;
         scene_init(&s, 1.5f, 60.0f * (float)pol, 3.0f);
         s.stick_x = 320.37f;
@@ -144,7 +144,7 @@ GL_TEST(test_refine_basic_both_polarities)
     /* parameter checks */
     {
         gl_strip_t st = strip_of(0);
-        gl_vis_prior_t pr = { 320.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+        gl_vis_prior_t pr = { 320.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
         gl_vis_stick_t r;
         GL_CHECK_EQ(gl_vis_stick_refine(NULL, &pr, &wk[0], &r), GL_ERR_PARAM);
         st.height = 500;
@@ -188,7 +188,7 @@ static bool stereo_trial(const cond_t *c, uint32_t *rng, float phase_l, float ph
 {
     gl_synth_scene_t s;
     gl_strip_t sl = strip_of(0), sr = strip_of(1);
-    gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+    gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
     gl_vis_stick_t rl, rr;
     gl_vis_segment_t gl, gr;
     float xl, xr, d, sg, bottom, bot;
@@ -308,10 +308,14 @@ GL_TEST(test_disparity_accuracy_table)
         GL_CHECK_EQ(st[i].fails, 0);
         GL_CHECK(fabs(st[i].bias) < 0.02);
     }
-    /* the claimed sigma is honest (within a factor of 1.6 either way) on the
-     * plain conditions */
+    /* The claimed sigma is honest on the plain conditions: never below the
+     * scatter by more than a factor 1.6, and not above it by more than 2.2.
+     * (It is deliberately on the high side for a vertical stick: the
+     * sub-pixel phase bias, 0.009 px per camera and more for a sharp lens,
+     * is a systematic error of the pair that the scatter over random phases
+     * shows only in part.) */
     for (int i = 0; i <= 3; i++) {
-        GL_CHECK(st[i].mean_sigma > st[i].rms / 1.6 && st[i].mean_sigma < st[i].rms * 1.6);
+        GL_CHECK(st[i].mean_sigma > st[i].rms / 1.6 && st[i].mean_sigma < st[i].rms * 2.2);
     }
     /* wide, close sticks are the easy case */
     GL_CHECK(st[13].rms < 0.03 && st[14].rms < 0.03);
@@ -397,7 +401,7 @@ GL_TEST(test_lrrl_cancels_sway)
                 const bool left = (f == 0 || f == 3);
                 const float t = (float)(grp * 4 + f);
                 gl_strip_t st = strip_of(f);
-                gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+                gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
                 gl_vis_stick_t r;
                 scene_init(&s, c.width, c.contrast, c.noise);
                 s.stick_slant = c.slant;
@@ -449,7 +453,7 @@ GL_TEST(test_polarity_flips_along_the_stick)
 {
     gl_synth_scene_t s;
     gl_strip_t st = strip_of(0);
-    gl_vis_prior_t pr = { 321.5f, 250.0f, 0.0f, 0.0f, 0.0f };
+    gl_vis_prior_t pr = { 321.5f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
     gl_vis_stick_t r;
     int neg = 0, pos = 0;
     scene_init(&s, 1.5f, 60.0f, 3.0f); /* stick level 170 on background 110 */
@@ -495,7 +499,7 @@ GL_TEST(test_no_stick_fails_gracefully)
         gl_synth_scene_t s;
         gl_strip_t st = strip_of(0);
         gl_vis_prior_t pr = { 300.0f + 40.0f * gl_synth_rand_uniform(&rng), 250.0f, 0.0f, 0.0f,
-                              0.0f };
+                              0.0f, false, 0.0f, 0.0f, 0 };
         gl_vis_stick_t r;
         scene_init(&s, 1.5f, 60.0f, 3.0f);
         s.stick_present = false;
@@ -553,7 +557,7 @@ GL_TEST(test_no_stick_fails_gracefully)
             gl_synth_render(&s, img[0]);
             for (int edge = 0; edge < 2; edge++) {
                 gl_vis_prior_t pr = { edge ? s.clutter[0].x_right : s.clutter[0].x_left, 250.0f,
-                                      0.0f, 0.0f, 0.0f };
+                                      0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
                 if (pr.x > 360.0f) {
                     continue;
                 }
@@ -573,7 +577,7 @@ GL_TEST(test_no_stick_fails_gracefully)
         float d, sg;
         gl_synth_scene_t s;
         gl_strip_t st = strip_of(0);
-        gl_vis_prior_t pr = { 321.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+        gl_vis_prior_t pr = { 321.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
         scene_init(&s, 1.5f, 60.0f, 3.0f);
         s.stick_x = 320.2f;
         gl_synth_render(&s, img[0]);
@@ -606,7 +610,7 @@ GL_TEST(test_outlier_rejection)
     for (int t = 0; t < trials; t++) {
         gl_synth_scene_t s;
         gl_strip_t st = strip_of(0);
-        gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+        gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
         gl_vis_stick_t r;
         scene_init(&s, 1.5f, 60.0f, 3.0f);
         s.stick_x = 318.0f + 4.0f * gl_synth_rand_uniform(&rng);
@@ -686,7 +690,7 @@ GL_TEST(test_lowest_point_and_base_flag)
         for (int t = 0; t < trials; t++) {
             gl_synth_scene_t s;
             gl_strip_t st = strip_of(0);
-            gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+            gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
             gl_vis_stick_t r;
             scene_init(&s, cases[ci].width, 60.0f, 3.0f);
             s.horizon_row = 300.0f + gl_synth_rand_uniform(&rng);
@@ -741,7 +745,7 @@ GL_TEST(test_lowest_point_and_base_flag)
     {
         gl_synth_scene_t s;
         gl_strip_t st = strip_of(0);
-        gl_vis_prior_t pr = { 320.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+        gl_vis_prior_t pr = { 320.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
         gl_vis_stick_t r;
         scene_init(&s, 1.5f, 60.0f, 3.0f);
         s.horizon_row = -5000.0f;
@@ -770,7 +774,7 @@ GL_TEST(test_top_of_stick_and_angular_height)
     for (int t = 0; t < trials; t++) {
         gl_synth_scene_t s;
         gl_strip_t st = strip_of(0);
-        gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+        gl_vis_prior_t pr = { 0.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
         gl_vis_stick_t r;
         gl_vis_angles_t a;
         const gl_vec3_t up = { 0.0f, 0.0f, 1.0f };
@@ -938,7 +942,7 @@ GL_TEST(test_quality_metrics)
 {
     gl_synth_scene_t s;
     gl_strip_t sl = strip_of(0), sr = strip_of(1);
-    gl_vis_prior_t pr = { 321.0f, 250.0f, 0.0f, 0.0f, 0.0f };
+    gl_vis_prior_t pr = { 321.0f, 250.0f, 0.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, 0 };
     gl_vis_stick_t rl, rr;
     gl_vis_stats_t stl, str;
     gl_vis_quality_t q;
@@ -1085,6 +1089,7 @@ GL_TEST(test_end_to_end_with_camera_models)
                 gl_synth_scene_t s;
                 gl_strip_t st = { img[f], SW, SH, SW, x0s[c], 0 };
                 gl_vis_prior_t pr;
+                memset(&pr, 0, sizeof(pr));
                 gl_synth_defaults(&s, SW, SH, x0s[c], 0);
                 s.horizon_row = vb[c] - 0.4f;
                 s.noise_sigma = 3.0f;

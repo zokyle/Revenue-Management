@@ -104,7 +104,24 @@ for(const side of ['L','R']){
     c.fillStyle='#14171c';c.beginPath();c.arc(l.sx,l.sy,3.2,0,6.3);c.fill();
     c.strokeStyle='rgba(238,240,243,0.95)';c.lineWidth=4;c.textAlign=side==='L'?'left':'right';c.strokeText(l.text,tx,l.ly);
     c.fillStyle='#14171c';c.fillText(l.text,tx,l.ly);}}
-window.__done='tris='+tris;
+// ---- verify the WebGL frame (a lost context or an empty frame must fail, not produce a blank picture)
+const g2=renderer.getContext();
+if(g2.isContextLost())throw new Error('WebGL context lost');
+const bw=g2.drawingBufferWidth,bh=g2.drawingBufferHeight;const bg=scene.background;
+const bgb=[Math.round(255*Math.pow(bg.r,1/2.2)),Math.round(255*Math.pow(bg.g,1/2.2)),Math.round(255*Math.pow(bg.b,1/2.2))];
+const row=new Uint8Array(4*bw);let nbg=0,nmod=0;const ref=[0,0,0];
+g2.readPixels(0,bh-1,bw,1,g2.RGBA,g2.UNSIGNED_BYTE,row);ref[0]=row[0];ref[1]=row[1];ref[2]=row[2];   // top-left pixel = background
+for(let k=1;k<160;k++){const y=Math.floor(bh*k/160);g2.readPixels(0,y,bw,1,g2.RGBA,g2.UNSIGNED_BYTE,row);
+  for(let x=0;x<bw;x+=4){const d=Math.abs(row[4*x]-ref[0])+Math.abs(row[4*x+1]-ref[1])+Math.abs(row[4*x+2]-ref[2]);if(d>24)nmod++;else nbg++;}}
+const frac=nmod/(nmod+nbg);
+if(Math.abs(ref[0]-bgb[0])+Math.abs(ref[1]-bgb[1])+Math.abs(ref[2]-bgb[2])>40)throw new Error('WebGL frame has no background: '+ref.join(','));
+if(frac<(cfg.minModelFraction||0.01))throw new Error('WebGL frame is empty (model fraction '+frac.toFixed(4)+')');
+// ---- compose the picture from the drawing buffer itself (no dependence on the page compositor)
+const outc=document.createElement('canvas');outc.width=W;outc.height=H;const oc=outc.getContext('2d');
+oc.imageSmoothingEnabled=true;oc.imageSmoothingQuality='high';
+oc.drawImage(gl,0,0,W,H);oc.drawImage(ov,0,0,W,H);
+window.__png=outc.toDataURL('image/png');
+window.__done='tris='+tris+' model='+(100*frac).toFixed(1)+'%';
 `;
 
 (async () => {
@@ -125,7 +142,9 @@ window.__done='tris='+tris;
   await page.setContent(html);
   await page.waitForFunction('window.__done', null, { timeout: 180000 });
   console.log(path.basename(cfg.out), await page.evaluate('window.__done'));
-  await page.locator('#wrap').screenshot({ path: cfg.out });
+  const png = await page.evaluate('window.__png');
+  if (!png || !png.startsWith('data:image/png;base64,')) { console.log('no PNG data from the page'); await browser.close(); process.exit(1); }
+  fs.writeFileSync(cfg.out, Buffer.from(png.slice(22), 'base64'));
   await browser.close();
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

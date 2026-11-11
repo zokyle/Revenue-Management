@@ -115,37 +115,66 @@ static gl_status_t get_cal_(void *ctx, uint8_t cal_id, uint8_t *blob, size_t cap
     }
 }
 
+/* SET_CAL.  The record is decoded into a temporary, stored, and adopted in
+ * RAM only when the store has acknowledged it: a refused or failed command
+ * changes NOTHING (it used to decode straight into the live calibration and
+ * then fail in the store when the frame carried trailing bytes, leaving RAM
+ * and flash different until the next reset).  The length must be exactly
+ * that of the record. */
 static gl_status_t set_cal_(void *ctx, uint8_t cal_id, const uint8_t *blob, size_t len)
 {
     gl_app_t *app = (gl_app_t *)ctx;
     gl_status_t st;
-    uint8_t store_id;
-    /* decode first: a record that does not validate changes nothing */
+    gl_cal_tilt_t tilt;
+    gl_cal_cam_t cam;
+    gl_cal_grain_t grain;
+
     switch (cal_id) {
     case GL_CAL_ID_TILT:
-        st = gl_cal_tilt_decode(blob, len, &app->cal_tilt);
-        store_id = (uint8_t)GL_STORE_ID_CAL_TILT;
-        break;
+        if (len != GL_CAL_TILT_BLOB_LEN) {
+            return GL_ERR_PARAM;
+        }
+        st = gl_cal_tilt_decode(blob, len, &tilt);
+        if (st == GL_OK) {
+            st = gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_TILT, blob, len);
+        }
+        if (st == GL_OK) {
+            app->cal_tilt = tilt;
+        }
+        return st;
     case GL_CAL_ID_CAM_L:
-        st = gl_cal_cam_decode(blob, len, &app->cal_cam[GL_CAM_LEFT]);
-        store_id = (uint8_t)GL_STORE_ID_CAL_CAM_L;
-        break;
-    case GL_CAL_ID_CAM_R:
-        st = gl_cal_cam_decode(blob, len, &app->cal_cam[GL_CAM_RIGHT]);
-        store_id = (uint8_t)GL_STORE_ID_CAL_CAM_R;
-        break;
+    case GL_CAL_ID_CAM_R: {
+        const gl_cam_id_t c = (cal_id == GL_CAL_ID_CAM_L) ? GL_CAM_LEFT : GL_CAM_RIGHT;
+        if (len != GL_CAL_CAM_BLOB_LEN) {
+            return GL_ERR_PARAM;
+        }
+        st = gl_cal_cam_decode(blob, len, &cam);
+        if (st == GL_OK) {
+            st = gl_app_store_put(app, (uint8_t)((c == GL_CAM_LEFT) ? GL_STORE_ID_CAL_CAM_L
+                                                                    : GL_STORE_ID_CAL_CAM_R),
+                                  blob, len);
+        }
+        if (st == GL_OK) {
+            app->cal_cam[c] = cam;
+            gl_read_set_cal(&app->read, &app->cal_cam[GL_CAM_LEFT], &app->cal_cam[GL_CAM_RIGHT]);
+        }
+        return st;
+    }
     case GL_CAL_ID_GRAIN:
-        st = gl_cal_grain_decode(blob, len, &app->cal_grain);
-        store_id = (uint8_t)GL_STORE_ID_CAL_GRAIN;
-        break;
+        if (len != GL_CAL_GRAIN_BLOB_LEN) {
+            return GL_ERR_PARAM;
+        }
+        st = gl_cal_grain_decode(blob, len, &grain);
+        if (st == GL_OK) {
+            st = gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_GRAIN, blob, len);
+        }
+        if (st == GL_OK) {
+            app->cal_grain = grain;
+        }
+        return st;
     default:
         return GL_ERR_NOT_FOUND;
     }
-    if (st != GL_OK) {
-        return st;
-    }
-    gl_read_set_cal(&app->read, &app->cal_cam[GL_CAM_LEFT], &app->cal_cam[GL_CAM_RIGHT]);
-    return gl_app_store_put(app, store_id, blob, len);
 }
 
 static gl_status_t start_cal_(void *ctx, uint8_t procedure, uint8_t arg)
@@ -228,7 +257,10 @@ static gl_status_t log_erase_(void *ctx)
         return GL_ERR_NOT_FOUND;
     }
     /* 2044 sectors at tens of ms each: done a sector at a time from the main
-     * loop; LOG_READ answers GL_ERR_BUSY until it has finished */
+     * loop; LOG_READ answers GL_ERR_BUSY until it has finished, and so does
+     * every append to the log (core/gl_log: an append in the middle of an
+     * erase used to leave a stale sector that came back after a reset).
+     * Events and reads that happen meanwhile are not logged. */
     app->log_erasing = true;
     app->log_erase_cursor = 0;
     app->log_iter_valid = false;
@@ -371,8 +403,15 @@ void gl_usb_service(gl_app_t *app, uint32_t now_ms)
         }
     }
     if (app->log_erasing) {
-        if (gl_log_erase_all(&app->log, &app->log_erase_cursor, 1) != GL_ERR_BUSY) {
+        const gl_status_t est = gl_log_erase_all(&app->log, &app->log_erase_cursor, 1);
+        if (est != GL_ERR_BUSY) {
             app->log_erasing = false;
+            if (est != GL_OK) {
+                /* flash error: give the log back to its users in whatever
+                 * consistent state it is in (oldest sectors gone) */
+                gl_log_erase_cancel(&app->log);
+                app->last_error = (uint16_t)est;
+            }
         }
     }
     if (app->reboot_pending) {

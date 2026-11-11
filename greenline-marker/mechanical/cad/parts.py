@@ -45,17 +45,71 @@ def mirror_x(wp):
     return wp.mirror("YZ")
 
 
+def prism_x(pts_yz, x0, x1):
+    """Prism along x with the cross-section pts_yz (list of (y, z))."""
+    return cq.Workplane("YZ").polyline(pts_yz).close().extrude(x1 - x0).translate((x0, 0, 0))
+
+
+def prism_y(pts_xz, y0, y1):
+    """Prism along y with the cross-section pts_xz (list of (x, z))."""
+    return cq.Workplane("ZX").polyline([(z, x) for x, z in pts_xz]).close().extrude(y1 - y0).translate((0, y0, 0))
+
+
+def _xbar(y, z, r, x0, x1):
+    """Cylinder of radius r along x through (y, z)."""
+    return cq.Workplane("YZ").center(y, z).circle(r).extrude(x1 - x0).translate((x0, 0, 0))
+
+
+def _fillet_x(corner, u1, u2, r, x0, x1):
+    """Concave fillet of radius r in the corner `corner` (y, z) between two faces that leave it along the unit
+    directions u1 and u2 (the air wedge lies between them): material to ADD, as a prism along x."""
+    c = (u1[0] * u2[0] + u1[1] * u2[1])
+    half = 0.5 * math.acos(max(-1.0, min(1.0, c)))
+    t = r / math.tan(half)                               # tangent length along each face
+    bis = (u1[0] + u2[0], u1[1] + u2[1]); n = math.hypot(*bis)
+    cen = (corner[0] + bis[0] / n * r / math.sin(half), corner[1] + bis[1] / n * r / math.sin(half))
+    e = 0.02                                             # the filler reaches a little into both faces so that the fuse is clean
+    b1 = (-u1[1], u1[0]); b2 = (-u2[1], u2[0])
+    if b1[0] * u2[0] + b1[1] * u2[1] > 0:                # make b1, b2 point away from the air wedge (into the material)
+        b1 = (-b1[0], -b1[1])
+    if b2[0] * u1[0] + b2[1] * u1[1] > 0:
+        b2 = (-b2[0], -b2[1])
+    p1 = (corner[0] + u1[0] * t, corner[1] + u1[1] * t); p2 = (corner[0] + u2[0] * t, corner[1] + u2[1] * t)
+    pts = [(p1[0] + b1[0] * e, p1[1] + b1[1] * e), p1, p2, (p2[0] + b2[0] * e, p2[1] + b2[1] * e),
+           (corner[0] + (b1[0] + b2[0]) * e, corner[1] + (b1[1] + b2[1]) * e)]
+    return prism_x(pts, x0, x1).cut(_xbar(cen[0], cen[1], r, x0 - 1, x1 + 1))
+
+
 # ----------------------------------------------------------------------------------------------
 # 1. TUB (top shell) - printed, MJF PA12
 # ----------------------------------------------------------------------------------------------
 def _tub_outer():
+    """Outer body of the tub.  The side wall starts at RIM_Z (rim relief): the base plate and the ball feet are the
+    lowest surfaces of the marker."""
     f, c = M["top_fillet"], M["bottom_chamfer"]
-    R, T = P.R_OUT, P.T
+    R, T, z0 = P.R_OUT, P.T, P.RIM_Z
     k = f * (1 - math.sqrt(0.5))
-    prof = (cq.Workplane("XZ").moveTo(0, 0).lineTo(R - c, 0).lineTo(R, c).lineTo(R, T - f)
+    prof = (cq.Workplane("XZ").moveTo(0, z0).lineTo(R - c, z0).lineTo(R, z0 + c).lineTo(R, T - f)
             .threePointArc((R - k, T - k), (R - f, T)).lineTo(0, T).close())
     body = prof.revolve(360, (0, 0, 0), (0, 1, 0))
     return body.intersect(box(-R - 1, R + 1, -R - 1, P.Y_VISOR, -1, T + 1))   # flat visor face, sharp edges
+
+
+def marker_envelope():
+    """Outer envelope of the assembled marker (tub body + base plate), for outline drawings."""
+    return _tub_outer().union(dprism(P.BASE_R, P.BASE_FLAT, 0.0, P.RIM_Z + EPS))
+
+
+def _horn_cuts(z0, z1):
+    """Wall ends below the visor: cut on the radial plane through the outer D corner (removes the feather edge; the
+    wall end face is a full 1.0 mm wide)."""
+    out = []
+    k = (P.R_OUT + 3.0) / P.R_OUT
+    for sx in (1, -1):
+        pts = [(sx * P.HORN_X_IN, P.HORN_Y_IN), (sx * P.HORN_X_OUT * k, P.Y_VISOR * k),
+               (sx * (P.HORN_X_IN - 3.0), P.Y_VISOR * k), (sx * (P.HORN_X_IN - 3.0), P.HORN_Y_IN)]
+        out.append(poly_prism(pts, z0, z1))
+    return out
 
 
 def _hood_positive(cx):
@@ -80,19 +134,26 @@ def _hood_positive(cx):
 
 def _hood_negative(cx):
     xi0, xi1 = cx - P.HOOD_IN_HW, cx + P.HOOD_IN_HW
-    bay = box(xi0, xi1, P.HOOD_REAR_Y1, P.HOOD_FRONT_IN_Y, P.HOOD_Z_OVER_CUBE, P.ROOF_Z)
-    # clear opening: straight through the thickened visor wall, as wide as the bay (rev C: no bevel - the light bundle is
-    # narrower inside the wall than at the aperture, and a wider bay would leave the hood keep-out zone of the YAML)
-    a = P.OPEN_HALF_W
-    tunnel = box(cx - a, cx + a, P.HOOD_FRONT_IN_Y - 0.1, P.WIN_RECESS_FLOOR_Y + 0.05, P.OPEN_Z0, P.OPEN_Z1)
+    zs = M["hood_skirt_z0"]
+    # prism bay: from the rear wall straight to the floor of the window recess (no bevel: the light bundle is narrower
+    # inside the wall than at the aperture, and a wider bay would leave the hood keep-out zone of the YAML)
+    bay = box(xi0, xi1, P.HOOD_REAR_Y1, P.WIN_RECESS_FLOOR_Y + 0.05, P.HOOD_Z_OVER_CUBE, P.ROOF_Z)
+    a = P.OPEN_HALF_W                 # below the bay roof line the opening continues down to the sill, over the front pad
+    sill = box(cx - a, cx + a, P.HOOD_PAD_Y - 0.05, P.WIN_RECESS_FLOOR_Y + 0.05, P.OPEN_Z0, P.HOOD_Z_OVER_CUBE + 0.05)
     recess = box(cx - P.WIN_RECESS_W / 2, cx + P.WIN_RECESS_W / 2, P.WIN_RECESS_FLOOR_Y, P.Y_VISOR + 1,
                  P.WIN_Z0, P.T + 1)
-    out = bay.union(tunnel).union(recess)
+    out = bay.union(sill).union(recess)
     c = P.HOOD_REAR_CHAMFER           # 45 deg chamfer on the rear wall's bottom front edge (parallel to the hypotenuse)
     if c > 0:
         y1, zc, e = P.HOOD_REAR_Y1, P.HOOD_Z_OVER_CUBE, 0.05
-        tri = [(y1 - c - e, zc - e), (y1 + e, zc - e), (y1 + e, zc + c + e)]
-        out = out.union(cq.Workplane("YZ").polyline(tri).close().extrude(xi1 - xi0).translate((xi0, 0, 0)))
+        out = out.union(prism_x([(y1 - c - e, zc - e), (y1 + e, zc - e), (y1 + e, zc + c + e)], xi0, xi1))
+    c, e = M["hood_leadin"], 0.05     # lead-in chamfers at the mouth of the hood (the cube and the prism enter here blind)
+    if c > 0:
+        out = out.union(prism_y([(xi0 - c - e, zs - e), (xi0 + e, zs - e), (xi0 + e, zs + c + e)], P.HOOD_REAR_Y0 - e, P.HOOD_PAD_Y + e))
+        out = out.union(prism_y([(xi1 + c + e, zs - e), (xi1 - e, zs - e), (xi1 - e, zs + c + e)], P.HOOD_REAR_Y0 - e, P.HOOD_PAD_Y + e))
+        cp = P.HOOD_PAD_LEADIN
+        pad = prism_x([(P.HOOD_PAD_Y - e, zs - e), (P.HOOD_PAD_Y + cp + e, zs - e), (P.HOOD_PAD_Y - e, zs + cp + e)], xi0 - c, xi1 + c)
+        out = out.union(pad.intersect(box(xi0 - c - 1, xi1 + c + 1, P.HOOD_PAD_Y - 1, P.Y_VISOR_IN, zs - 1, zs + 1)))
     return out
 
 
@@ -102,11 +163,8 @@ def tub():
     # main cavity above the seal plane (D profile) and the lower cavity that lets the base pass
     shell = shell.cut(dprism(P.R_IN, P.Y_VISOR_IN, P.LEDGE_Z0, P.ROOF_Z))
     shell = shell.cut(cyl(0, 0, P.R_IN, -1, P.LEDGE_Z0))             # open to the front below the visor wall
-    for sx in (1, -1):                # wall ends below the visor: cut on the radial plane through the outer D corner
-        k = (P.R_OUT + 3.0) / P.R_OUT  # (removes the feather edge; the wall end face is a full 1.0 mm wide)
-        pts = [(sx * P.HORN_X_IN, P.HORN_Y_IN), (sx * P.HORN_X_OUT * k, P.Y_VISOR * k),
-               (sx * (P.HORN_X_IN - 3.0), P.Y_VISOR * k), (sx * (P.HORN_X_IN - 3.0), P.HORN_Y_IN)]
-        shell = shell.cut(poly_prism(pts, -1, P.LEDGE_Z0))
+    for n in _horn_cuts(-1, P.LEDGE_Z0):
+        shell = shell.cut(n)
 
     pos = []
     # seating ledge on the arc
@@ -132,27 +190,29 @@ def tub():
         pos.append(box(x0, x1, y0, y1, P.PCB_Z1, zt))
     # PCB locating spigots under the two posts E (they enter the non-plated PCB holes; the post foot seats round them)
     for (sx_, sy_) in (P.LOC_ROUND[:2], P.LOC_SLOT[:2]):
-        pos.append(cyl(sx_, sy_, P.SPIGOT_D / 2, P.SPIGOT_Z0, P.PCB_Z1 + EPS))
+        sp = cyl(sx_, sy_, P.SPIGOT_D / 2, P.SPIGOT_Z0, P.PCB_Z1 + EPS)
+        if M["spigot_tip_chamfer"] > 0:
+            sp = sp.faces("<Z").chamfer(M["spigot_tip_chamfer"])
+        pos.append(sp)
     # camera hoods
     for cx, _cy in P.CAM_XY.values():
         pos.append(_hood_positive(cx))
-    # vent pad and the pad that keeps 0.8 mm under the nose groove
+    # vent pad (runs out to the side wall so that 0.8 mm stays under the drain groove) and the pad under the nose groove
     vx, vy = P.VENT_XY; hp = M["vent_pad"] / 2
-    pos.append(box(vx - hp - 0.6, vx + hp, vy - hp, vy + hp, P.VENT_PAD_Z, zt))
+    pos.append(box(vx - hp - 0.6, R, vy - hp, vy + hp, P.VENT_PAD_Z, zt).intersect(cyl(0, 0, P.R_IN + EPS, 0, T)))
     nw = M["nose_w"] / 2 + P.MIN_WALL
     pos.append(box(-nw, nw, P.THICK_RING_R - 0.3, P.Y_VISOR_IN + EPS, P.ROOF_Z - M["nose_depth"], zt))
-    # anti-rotation key lugs under the visor wall (engage notches in the base plate)
-    for sx in (1, -1):
-        pos.append(box(sx * M["key_x"] - M["key_w"] / 2, sx * M["key_x"] + M["key_w"] / 2,
-                       P.Y_VISOR_IN, P.Y_VISOR, 0, P.LEDGE_Z0 + EPS))
     body = shell
     for p in pos:
         body = body.union(p)
 
+    gw, gd = M["vent_groove_w"] / 2, M["vent_groove_d"]
     neg = [
         cyl(0, 0, P.RECESS_D / 2, P.RECESS_FLOOR_Z, T + 1),                      # cover-glass recess
         cyl(0, 0, P.APERTURE_D / 2, P.BOND_Z - 1, T + 1),                        # display aperture
         cyl(vx, vy, P.VENT_HOLE_D / 2, P.VENT_PAD_Z - 1, T + 1),                 # vent hole
+        box(vx, R + 1, vy - gw, vy + gw, T - gd, T + 1),                         # drain groove from the vent hole over the edge
+        box(vx - gw, vx + gw, vy - M["vent_cross_half"], vy + M["vent_cross_half"], T - gd, T + 1),   # cross groove
         box(-M["nose_w"] / 2, M["nose_w"] / 2, P.RECESS_D / 2 - 0.3, P.Y_VISOR + 1, T - M["nose_depth"], T + 1),
     ]
     for cx, _cy in P.CAM_XY.values():
@@ -165,14 +225,6 @@ def tub():
 # ----------------------------------------------------------------------------------------------
 # 2. BASE PLATE - printed, MJF PA12
 # ----------------------------------------------------------------------------------------------
-def _key_notches(z0, z1):
-    out = []
-    for sx in (1, -1):
-        out.append(box(sx * M["key_x"] - P.KEY_NOTCH_HW, sx * M["key_x"] + P.KEY_NOTCH_HW,
-                       P.KEY_NOTCH_Y0, P.BASE_FLAT + 1, z0, z1))
-    return out
-
-
 def _pad_slot(z0, z1):
     """One slot through all seven pad positions (the 0.34 mm webs between 2.2 mm holes are unprintable)."""
     r = P.PAD_HOLE_D / 2
@@ -194,12 +246,12 @@ def _grain_negative(z0, z1):
 
 
 def base_plate():
-    """0.87 mm plate: grain opening with baffle, pad slot, key notches and three THROUGH holes for the ball feet
-    (the balls are set on a gauge plate and potted from the inside; the print cannot hold a 0.10 mm protrusion)."""
+    """0.87 mm plate: grain opening with baffle, pad slot and three THROUGH holes for the ball feet (the balls are set
+    on a gauge plate and potted from the inside; the print cannot hold a 0.10 mm protrusion).  The edge is plain: no
+    notch crosses the seal land (the plate is registered to the PCB in the lamination jig, the PCB to the tub by the
+    two spigots)."""
     z0, z1 = 0.0, P.BASE_T
     body = dprism(P.BASE_R, P.BASE_FLAT, z0, z1)
-    for n in _key_notches(z0 - 1, z1 + 1):
-        body = body.cut(n)
     body = body.cut(_grain_negative(z0 - 1, z1 + 1)).cut(_pad_slot(z0 - 1, z1 + 1))
     for (x, y) in P.BALL_XY:
         body = body.cut(cyl(x, y, P.BALL_HOLE_D / 2, z0 - 1, z1 + 1))
@@ -214,29 +266,35 @@ def _pin_slot(w, z0, z1):
     return box(xa, xb, P.PAD_Y - w / 2, P.PAD_Y + w / 2, z0, z1).union(cyl(xa, P.PAD_Y, w / 2, z0, z1)).union(cyl(xb, P.PAD_Y, w / 2, z0, z1))
 
 
-def _xbar(y, z, r, x0, x1):
-    """Cylinder of radius r along x through (y, z)."""
-    return cq.Workplane("YZ").center(y, z).circle(r).extrude(x1 - x0).translate((x0, 0, 0))
+def latch_profile():
+    """Section of beam + hook in the y-z plane (the same at every x): front face vertical at the nest radius; back face
+    tapering in from the root to the neck and flaring out again to the nose level; straight nose; retaining face raked
+    back from the nose up to the heel (the nose is its lowest point); lead-in above the nose flat."""
+    zr = M["latch_root_z"]
+    yf, yn = P.LATCH_Y_FACE, P.HOOK_Y
+    return [(yf, zr - EPS), (yf, P.HOOK_HEEL_Z), (yn, P.HOOK_Z0), (yn, P.HOOK_LEAD_Z0), (yf, P.LATCH_TOP_Z),
+            (P.LATCH_Y_BACK1, P.LATCH_TOP_Z), (P.LATCH_Y_BACK1, P.HOOK_Z0), (P.LATCH_Y_BACKN, P.LATCH_NECK_Z),
+            (P.LATCH_Y_BACK0, zr), (P.LATCH_Y_BACK0, zr - EPS)]
 
 
 def latch():
-    """Rear hold-down latch as one solid: a uniform rectangular cantilever (latch_w x latch_h) rooted on the floor of
-    the latch well, a hook whose 90 deg retaining face sits one fit clearance above the tub top and whose nose and
-    30 deg lead-in are concentric with the marker, and a thumb tab that projects rearward from the top (press it
-    down to release).  Root fillets on both faces."""
-    hw, zr, rf = M["latch_w"] / 2, M["latch_root_z"], M["latch_root_fillet"]
-    beam = box(-hw, hw, P.LATCH_Y_BACK, P.LATCH_Y_FACE, zr - EPS, P.HOOK_Z0 + EPS)
-    rbig = 40.0
-    prof = (cq.Workplane("XZ").polyline([(P.HOOK_R, P.HOOK_Z0), (P.HOOK_R, P.HOOK_LEAD_Z0), (P.NEST_R, P.LATCH_TOP_Z),
-                                          (rbig, P.LATCH_TOP_Z), (rbig, P.HOOK_Z0)]).close())
-    ring = prof.revolve(360, (0, 0, 0), (0, 1, 0))
-    hook = ring.intersect(box(-hw, hw, P.LATCH_Y_BACK, 0.0, P.HOOK_Z0 - 1, P.LATCH_TOP_Z + 1))
-    tab = box(-hw, hw, P.TAB_Y0, P.LATCH_Y_BACK + EPS, P.TAB_Z0, P.LATCH_TOP_Z)
-    out = beam.union(hook).union(tab)
-    for yf, sg in ((P.LATCH_Y_FACE, 1), (P.LATCH_Y_BACK, -1)):          # concave root fillets
-        ya, yb = sorted((yf, yf + sg * rf))
-        fil = box(-hw, hw, ya, yb, zr - EPS, zr + rf).cut(_xbar(yf + sg * rf, zr + rf, rf, -hw - 1, hw + 1))
-        out = out.union(fil)
+    """Rear hold-down latch as one solid: rectangular cantilever (latch_w wide; thickness latch_h_root at the root,
+    latch_h_neck at the neck, latch_h_tip where it runs into the hook) rooted on the floor of the latch well, full-width
+    hook with a straight nose and a raked retaining face one fit clearance above the tub top, 30 deg lead-in, and a
+    thumb tab that projects rearward from the top (press it down to release).  Fillets at the root (both faces), at the
+    heel of the hook and under the tab."""
+    hw, tw, zr = M["latch_w"] / 2, M["tab_w"] / 2, M["latch_root_z"]
+    out = prism_x(latch_profile(), -hw, hw)
+    out = out.union(box(-tw, tw, P.TAB_Y0, P.LATCH_Y_BACK1 + EPS, P.TAB_Z0, P.LATCH_TOP_Z))          # thumb tab
+    rf = M["latch_root_fillet"]
+    out = out.union(_fillet_x((P.LATCH_Y_FACE, zr), (0, 1), (1, 0), rf, -hw, hw))                    # root, front face
+    tb = (P.LATCH_Y_BACKN - P.LATCH_Y_BACK0, P.LATCH_S1); n = math.hypot(*tb)                        # direction of the back face
+    out = out.union(_fillet_x((P.LATCH_Y_BACK0, zr), (tb[0] / n, tb[1] / n), (-1, 0), rf, -hw, hw))  # root, back face
+    ca, sa = math.cos(math.radians(M["hook_rake_deg"])), math.sin(math.radians(M["hook_rake_deg"]))
+    out = out.union(_fillet_x((P.LATCH_Y_FACE, P.HOOK_HEEL_Z), (0, -1), (ca, -sa), M["hook_heel_fillet"], -hw, hw))   # heel
+    out = out.union(_fillet_x((P.LATCH_Y_BACK1, P.TAB_Z0), (0, -1), (-1, 0), M["tab_root_fillet"], -tw, tw))          # under the tab
+    fl = (P.LATCH_Y_BACK1 - P.LATCH_Y_BACKN, P.LATCH_L - P.LATCH_S1); nf = math.hypot(*fl)           # smooth blend at the neck
+    out = out.union(_fillet_x((P.LATCH_Y_BACKN, P.LATCH_NECK_Z), (-tb[0] / n, -tb[1] / n), (fl[0] / nf, fl[1] / nf), M["latch_neck_blend"], -hw, hw))
     return out.clean()
 
 
@@ -248,25 +306,64 @@ def lip():
     return tower.union(plate)
 
 
-def cradle(with_latch=True, with_lip=True):
-    """Printed dock body.  Nest = the marker D outline + fit clearance (the flat is the orientation key), floor at the
-    ball-foot plane.  with_latch / with_lip = False give the body without those features (used by the insertion check)."""
-    X, y0, y1 = P.CRADLE_X, P.CRADLE_Y0, P.CRADLE_Y1
-    zb, zt = P.CRADLE_BOT_Z, P.CRADLE_TOP_Z
-    body = box(-X, X, y0, y1, zb, zt).edges("|Z").fillet(M["cradle_corner_r"]).faces(">Z").edges().chamfer(0.8)
-    body = body.cut(dprism(P.NEST_R, P.NEST_FLAT, P.NEST_FLOOR_Z, zt + 1))               # nest: the feet rest on its floor
-    a0, a1 = (math.radians(a) for a in M["scallop_deg"])                                # finger scallops: sectors of the nest wall
-    r1, r2 = P.NEST_R - M["scallop_inset"], 3 * X                                       # removed down to the nest floor (radial end faces)
+def _scallops(z0, z1):
+    """Finger scallops: two sectors of the nest wall (radial end faces)."""
+    X = P.CRADLE_X
+    a0, a1 = (math.radians(a) for a in M["scallop_deg"])
+    r1, r2 = P.NEST_R - M["scallop_inset"], 3 * X
+    out = []
     for sx in (1, -1):
         pts = [(sx * r * math.cos(a), r * math.sin(a)) for r, a in ((r1, a0), (r2, a0), (r2, a1), (r1, a1))]
-        body = body.cut(poly_prism(pts, P.NEST_FLOOR_Z, zt + 1))
+        out.append(poly_prism(pts, z0, z1))
+    return out
+
+
+def _basin():
+    """Negative of the drained nest floor.  The marker stands on its ball feet on the front strip (y >= STRIP_Y0) and on
+    two round pads; everywhere else the floor is lowered and falls from the centre line to both sides, out through the
+    finger scallops.  A rim stays round the pin slot and a dam in front of the latch well, both at the level of the
+    strip, so that water on the floor reaches neither the cradle PCB nor the well."""
+    X, zt = P.CRADLE_X, P.CRADLE_TOP_Z
+    zlo, zhi = P.BASIN_Z_AT_EDGE - 3.0, zt + 1
+    foot = dprism(P.NEST_R, P.NEST_FLAT, zlo, zhi)
+    for sc in _scallops(zlo, zhi):
+        foot = foot.union(sc)
+    foot = foot.cut(box(-2 * X, 2 * X, P.STRIP_Y0, 3 * X, zlo - 1, zhi + 1))                               # landing strip
+    for (bx, by) in P.BALL_XY:
+        if by < P.STRIP_Y0:
+            foot = foot.cut(cyl(bx, by, M["ball_pad_dia"] / 2, zlo - 1, zhi + 1))                          # pads under the rear feet
+    foot = foot.cut(_pin_slot(P.CRADLE_PIN_SLOT_W + 2 * M["slot_rim_t"], zlo - 1, zhi + 1))                # rim round the pin slot
+    foot = foot.cut(box(-P.WELL_HX, P.WELL_HX, -3 * X, P.WELL_Y1 + M["dam_t"], zlo - 1, zhi + 1))          # dam + latch well
+    xe = 2 * X
+    tool = prism_y([(-xe, P.BASIN_RIDGE_Z - xe * P.BASIN_TAN), (0.0, P.BASIN_RIDGE_Z), (xe, P.BASIN_RIDGE_Z - xe * P.BASIN_TAN),
+                    (xe, zhi), (-xe, zhi)], -3 * X, 3 * X)
+    return foot.intersect(tool)
+
+
+def cradle(with_latch=True, with_lip=True, with_tab_stop=True):
+    """Printed dock body.  Nest = the marker D outline + fit clearance (the flat is the orientation key); the ball feet
+    rest on the front strip and two pads, the rest of the floor is a drained basin.  with_latch / with_lip = False give
+    the body without those features (used by the insertion check); with_tab_stop = False is used by the self-test."""
+    X, y0, y1 = P.CRADLE_X, P.CRADLE_Y0, P.CRADLE_Y1
+    zb, zt = P.CRADLE_BOT_Z, P.CRADLE_TOP_Z
+    zr = M["latch_root_z"]
+    body = box(-X, X, y0, y1, zb, zt).edges("|Z").fillet(M["cradle_corner_r"]).faces(">Z").edges().chamfer(0.8)
+    body = body.cut(dprism(P.NEST_R, P.NEST_FLAT, P.NEST_FLOOR_Z, zt + 1))               # nest
+    for sc in _scallops(P.NEST_FLOOR_Z, zt + 1):                                         # finger scallops
+        body = body.cut(sc)
+    body = body.cut(_basin())                                                            # drained floor
+    # the nest wall is open over the width of the latch well (no sliver of wall between nest and well)
+    body = body.cut(box(-P.WELL_HX, P.WELL_HX, P.WELL_Y1 - EPS, P.NEST_WINDOW_Y1, P.NEST_FLOOR_Z, zt + 1))
     # latch well: open pocket in which the cantilever stands free (front gap, side gaps, back cavity)
-    body = body.cut(box(-P.WELL_HX, P.WELL_HX, P.WELL_Y0, P.WELL_Y1, M["latch_root_z"], zt + 1))
+    body = body.cut(box(-P.WELL_HX, P.WELL_HX, P.WELL_Y0, P.WELL_Y1, zr, zt + 1))
     # guard wall behind the latch with two over-travel stop ribs
     body = body.union(box(-P.WELL_HX, P.WELL_HX, P.WELL_Y0 - M["guard_t"], P.WELL_Y0, zt - EPS, M["guard_top_z"]))
     for sx in (1, -1):
         xa, xb = sorted((sx * (M["stop_rib_x"] - M["stop_rib_w"] / 2), sx * (M["stop_rib_x"] + M["stop_rib_w"] / 2)))
-        body = body.union(box(xa, xb, P.WELL_Y0 - EPS, P.STOP_RIB_Y1, M["latch_root_z"] - EPS, M["guard_top_z"]))
+        body = body.union(box(xa, xb, P.WELL_Y0 - EPS, P.STOP_RIB_Y1, zr - EPS, M["guard_top_z"]))
+    if with_tab_stop:                                                                    # stop under the thumb tab
+        hw = M["tab_stop_w"] / 2
+        body = body.union(box(-hw, hw, P.TAB_STOP_Y0, P.TAB_STOP_Y1, zt - 1.0, P.TAB_STOP_Z))
     if with_lip:
         body = body.union(lip())
     if with_latch:
@@ -276,6 +373,9 @@ def cradle(with_latch=True, with_lip=True):
     body = body.cut(box(-P.CPCB_HX - P.CLR, P.CPCB_HX + P.CLR, P.CPCB_Y0 - P.CLR, P.CPCB_Y1 + P.CLR, zb - 1, P.CPCB_Z1))
     uw = M["usb"][0] / 2 + 0.3
     body = body.cut(box(-uw, uw, y0 - 1, P.USB_Y1 + P.CLR, P.CPCB_Z1 - P.CLR, P.USB_Z1 + P.CLR))   # clear under the overhanging shell too
+    # drain of the latch well: a tunnel from the back of the well to the rear face, beside the USB opening
+    dx0, dx1 = M["well_drain_x"]
+    body = body.cut(box(dx0, dx1, y0 - 1, P.WELL_Y0 + 0.5, P.WELL_DRAIN_Z0, P.WELL_DRAIN_Z1))
     for (sx, sy_) in P.CPCB_SCREWS:                                                     # spot marks for 4 screws
         for s in (1, -1):
             body = body.cut(cyl(s * sx, sy_, M["cradle_screw_pilot_dia"] / 2, P.CPCB_Z1 - 0.01,
@@ -291,6 +391,7 @@ def cradle(with_latch=True, with_lip=True):
     for sx in (1, -1):
         for s in (1, -1):
             body = body.cut(cyl(sx * fx, P.CRADLE_CY + s * fy, M["foot_pocket_dia"] / 2, zb - 1, zb + M["foot_pocket_depth"]))
+            body = body.cut(cyl(sx * fx, P.CRADLE_CY + s * fy, M["core_dia"] / 2, zb, P.CORE_Z1))   # blind core in each corner
     return body.clean()
 
 
@@ -311,7 +412,7 @@ def usb_receptacle():
 
 
 def spring_pin(x):
-    """Mill-Max 0914-series pin (PROVISIONAL envelope), drawn compressed onto the modelled pad face."""
+    """Mill-Max 0914-series pin (PROVISIONAL envelope), drawn compressed to its working height on the pad face."""
     y = P.PAD_Y
     tail = cyl(x, y, M["pin_tail_dia"] / 2, P.CPCB_Z0 - M["pin_tail_below_pcb"], P.CPCB_Z1)
     body = cyl(x, y, M["pin_body_dia"] / 2, P.CPCB_Z1, P.PIN_BODY_Z1)
@@ -410,25 +511,32 @@ def lcd_glass():
 
 
 def lcd_flex():
-    """Representative FPC tail (PROVISIONAL): leaves the rear edge, one U-fold, runs back over J1."""
+    """Representative FPC tail (PROVISIONAL): leaves the rear edge of the glass, makes one U-fold (centre-line radius
+    about 1 mm) and runs forward into the mouth of J1, which faces the rear.  Modelled up to the mouth face."""
     t, w = M["flex_t"], M["flex_w"]
-    zt, zb = M["flex_z_top_run"], M["flex_z_bottom_run"]
-    r = (zt - zb) / 2
+    zt, zb = P.FLEX_ZT, P.FLEX_ZB
+    r = P.FLEX_BEND_R
     ya = P.LCD_Y0 - M["flex_straight"]
     j1 = next(p for p in P.TOP_PARTS if p["ref"] == "J1")
+    mouth = j1["y"] - j1["dy"] / 2
     pts = [(P.LCD_Y0, zt), (ya, zt)]
-    for i in range(1, 16):
-        a = math.pi / 2 + math.pi * i / 16
+    for i in range(1, 24):
+        a = math.pi / 2 + math.pi * i / 24
         pts.append((ya + r * math.cos(a), (zt + zb) / 2 + r * math.sin(a)))
-    pts += [(ya, zb), (j1["y"], zb)]
-    poly = LineString(pts).buffer(t / 2, cap_style=2, join_style=1, resolution=4)
+    pts += [(ya, zb), (mouth, zb)]
+    poly = LineString(pts).buffer(t / 2, cap_style=2, join_style=1, resolution=6)
     xy = list(poly.exterior.coords)[:-1]
     return cq.Workplane("YZ").polyline(xy).close().extrude(w).translate((-w / 2, 0, 0))
 
 
 def lcd_adhesive():
+    """Adhesive frame between LCD glass and the roof ledge, with a vent channel from the round window to the rear right
+    corner: the air cell between cover glass and LCD breathes into the (vented) main cavity."""
     body = box(P.LCD_X0, P.LCD_X1, P.LCD_Y0, P.LCD_Y1, P.LCD_Z1, P.BOND_Z)
-    return body.cut(cyl(0, 0, M["lcd_psa_window_dia"] / 2, P.LCD_Z1 - 1, P.BOND_Z + 1))
+    body = body.cut(cyl(0, 0, M["lcd_psa_window_dia"] / 2, P.LCD_Z1 - 1, P.BOND_Z + 1))
+    w = M["lcd_psa_vent_w"] / 2
+    ch = box(M["lcd_psa_window_dia"] / 2 - 1.0, 40.0, -w, w, P.LCD_Z1 - 1, P.BOND_Z + 1).rotate((0, 0, 0), (0, 0, 1), P.LCD_VENT_ANGLE_DEG)
+    return body.cut(ch).clean()
 
 
 def cover_glass():
@@ -466,19 +574,38 @@ def pcb_adhesive():
 
 
 def seal_bead():
-    """Dispensed perimeter bead between the base seal land and the tub seal face (0.33 mm in rev C)."""
+    """Perimeter seal adhesive as cured: the joint between the base seal land and the tub seal face (0.33 mm high in
+    rev C, 0.4 mm wide on the arc, 0.65 mm under the visor wall) plus the fill of the 0.25 mm radial groove between the
+    base edge and the side wall, down to the rim.  One closed ring: nothing crosses the land."""
     z0, z1 = P.BASE_T, P.LEDGE_Z0
-    body = dprism(P.BASE_R, P.BASE_FLAT, z0, z1).cut(dprism(P.LAND_RI, P.LAND_FLAT_IN, z0 - 1, z1 + 1))
-    for n in _key_notches(z0 - 1, z1 + 1):
-        body = body.cut(n)
-    return body.clean()
+    land = dprism(P.BASE_R, P.BASE_FLAT, z0, z1).cut(dprism(P.LAND_RI, P.LAND_FLAT_IN, z0 - 1, z1 + 1))
+    groove = cyl(0, 0, P.R_IN, P.RIM_Z, z1).cut(cyl(0, 0, P.BASE_R, P.RIM_Z - 1, z1 + 1))
+    k = 3.0                                             # the groove exists only where the side wall does: behind the wall ends
+    groove = groove.cut(poly_prism([(0, 0), (P.HORN_X_OUT * k, P.Y_VISOR * k), (-P.HORN_X_OUT * k, P.Y_VISOR * k)], P.RIM_Z - 1, z1 + 1))
+    return land.union(groove).clean()
+
+
+def window_bond(side):
+    """Adhesive line behind a visor window: a frame round the clear opening between the window and the recess floor."""
+    x, _ = P.CAM_XY[side]
+    y0 = P.WIN_RECESS_FLOOR_Y; y1 = P.Y_VISOR - P.WIN_T
+    body = box(x - P.WIN_W / 2, x + P.WIN_W / 2, y0, y1, P.WIN_Z0, P.WIN_Z0 + P.WIN_H)
+    return body.cut(box(x - P.OPEN_HALF_W, x + P.OPEN_HALF_W, y0 - 1, y1 + 1, P.OPEN_Z0, P.OPEN_Z1))
+
+
+def hood_seal(side):
+    """Black form-in-place gasket bead that closes the slit above the camera cube at the rear of its hood (shown as
+    compressed between the rear-wall underside and the cube top)."""
+    x, _ = P.CAM_XY[side]
+    return box(x - P.HOOD_SEAL_HW, x + P.HOOD_SEAL_HW, P.HOOD_SEAL_Y0, P.HOOD_SEAL_Y1, P.CAM_Z1, P.HOOD_Z_OVER_CUBE)
 
 
 def ball_epoxy(i):
-    """UV epoxy that pots ball i: fills the through hole round the ball (flush with the base plane, where the gauge
-    plate was) and domes slightly over the plate top inside the 2.0 mm hole of the adhesive sheet."""
+    """Epoxy that pots ball i: stage 1 fills the through hole round the ball (flush with the base plane, where the gauge
+    plate was); stage 2, at lamination, fills the 2.0 mm hole of the adhesive sheet up to the PCB, so that the ball
+    bears on the board through epoxy in compression."""
     x, y = P.BALL_XY[i]
-    plug = cyl(x, y, P.BALL_HOLE_D / 2, 0.0, P.BASE_T).union(cyl(x, y, M["epoxy_cap_dia"] / 2, P.BASE_T, P.EPOXY_Z1))
+    plug = cyl(x, y, P.BALL_HOLE_D / 2, 0.0, P.BASE_T).union(cyl(x, y, P.PSA_FOOT_HOLE_D / 2, P.PSA_Z0, P.PSA_Z1))
     return plug.cut(cq.Workplane("XY").sphere(P.BALL_D / 2).translate((x, y, P.BALL_Z)))
 
 

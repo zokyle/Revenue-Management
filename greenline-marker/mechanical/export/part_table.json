@@ -5,12 +5,12 @@
   "kind": "printed",
   "material": "MJF PA12, dyed black, vapor smoothed",
   "valid": true,
-  "volume_mm3": 2480.754,
-  "mass_g": 2.5056,
+  "volume_mm3": 2452.786,
+  "mass_g": 2.4773,
   "bbox_min": [
    -23.0,
    -23.0,
-   -0.0
+   0.25
   ],
   "bbox_max": [
    23.0,
@@ -20,17 +20,17 @@
   "size": [
    46.0,
    41.4,
-   7.6
+   7.35
   ]
  },
  {
   "name": "base_plate",
   "group": "puck",
   "kind": "printed",
-  "material": "MJF PA12, dyed black, vapor smoothed",
+  "material": "MJF PA12, dyed black, NOT vapor smoothed",
   "valid": true,
-  "volume_mm3": 1111.181,
-  "mass_g": 1.1223,
+  "volume_mm3": 1113.844,
+  "mass_g": 1.125,
   "bbox_min": [
    -21.75,
    -21.75,
@@ -99,24 +99,24 @@
   "name": "seal_bead",
   "group": "puck",
   "kind": "adhesive",
-  "material": "dispensed adhesive bead 0.33",
+  "material": "dispensed seal adhesive: 0.33 joint on the land + fill of the radial groove",
   "valid": true,
-  "volume_mm3": 18.927,
-  "mass_g": 0.0208,
+  "volume_mm3": 45.614,
+  "mass_g": 0.0502,
   "bbox_min": [
-   -21.75,
-   -21.75,
-   0.87
+   -22.0,
+   -22.0,
+   0.25
   ],
   "bbox_max": [
-   21.75,
+   22.0,
    18.25,
    1.2
   ],
   "size": [
-   43.5,
-   40.0,
-   0.33
+   44.0,
+   40.25,
+   0.95
   ]
  },
  {
@@ -192,6 +192,54 @@
   ]
  },
  {
+  "name": "window_bond_L",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "light-cure acrylic, bond line 0.05 (class only)",
+  "valid": true,
+  "volume_mm3": 0.41,
+  "mass_g": 0.0005,
+  "bbox_min": [
+   -12.5,
+   17.85,
+   4.2
+  ],
+  "bbox_max": [
+   -7.5,
+   17.9,
+   7.6
+  ],
+  "size": [
+   5.0,
+   0.05,
+   3.4
+  ]
+ },
+ {
+  "name": "hood_seal_L",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "black form-in-place gasket bead, silicone-free (class only)",
+  "valid": true,
+  "volume_mm3": 0.244,
+  "mass_g": 0.0003,
+  "bbox_min": [
+   -11.95,
+   14.15,
+   4.56
+  ],
+  "bbox_max": [
+   -8.05,
+   14.4,
+   4.81
+  ],
+  "size": [
+   3.9,
+   0.25,
+   0.25
+  ]
+ },
+ {
   "name": "camera_R",
   "group": "puck",
   "kind": "purchased",
@@ -264,6 +312,54 @@
   ]
  },
  {
+  "name": "window_bond_R",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "light-cure acrylic, bond line 0.05 (class only)",
+  "valid": true,
+  "volume_mm3": 0.41,
+  "mass_g": 0.0005,
+  "bbox_min": [
+   7.5,
+   17.85,
+   4.2
+  ],
+  "bbox_max": [
+   12.5,
+   17.9,
+   7.6
+  ],
+  "size": [
+   5.0,
+   0.05,
+   3.4
+  ]
+ },
+ {
+  "name": "hood_seal_R",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "black form-in-place gasket bead, silicone-free (class only)",
+  "valid": true,
+  "volume_mm3": 0.244,
+  "mass_g": 0.0003,
+  "bbox_min": [
+   8.05,
+   14.15,
+   4.56
+  ],
+  "bbox_max": [
+   11.95,
+   14.4,
+   4.81
+  ],
+  "size": [
+   3.9,
+   0.25,
+   0.25
+  ]
+ },
+ {
   "name": "lcd_glass",
   "group": "puck",
   "kind": "purchased",
@@ -293,22 +389,22 @@
   "kind": "reference",
   "material": "polyimide FPC (PROVISIONAL shape)",
   "valid": true,
-  "volume_mm3": 4.439,
-  "mass_g": 0.0071,
+  "volume_mm3": 3.42,
+  "mass_g": 0.0055,
   "bbox_min": [
    -3.0,
-   -17.65,
-   3.85
+   -18.212,
+   2.725
   ],
   "bbox_max": [
    3.0,
-   -13.9,
+   -16.8,
    4.85
   ],
   "size": [
    6.0,
-   3.75,
-   1.0
+   1.412,
+   2.125
   ]
  },
  {
@@ -317,8 +413,8 @@
   "kind": "adhesive",
   "material": "PSA frame 0.15",
   "valid": true,
-  "volume_mm3": 58.576,
-  "mass_g": 0.0586,
+  "volume_mm3": 57.409,
+  "mass_g": 0.0574,
   "bbox_min": [
    -13.3,
    -16.8,
@@ -459,24 +555,24 @@
   "name": "ball_epoxy_1",
   "group": "puck",
   "kind": "adhesive",
-  "material": "UV-cure epoxy potting (PROVISIONAL)",
+  "material": "dual-cure epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 0.556,
-  "mass_g": 0.0006,
+  "volume_mm3": 0.803,
+  "mass_g": 0.0009,
   "bbox_min": [
-   -0.8,
-   14.2,
+   -1.0,
+   14.0,
    -0.0
   ],
   "bbox_max": [
-   0.8,
-   15.8,
-   0.95
+   1.0,
+   16.0,
+   1.0
   ],
   "size": [
-   1.6,
-   1.6,
-   0.95
+   2.0,
+   2.0,
+   1.0
   ]
  },
  {
@@ -507,24 +603,24 @@
   "name": "ball_epoxy_2",
   "group": "puck",
   "kind": "adhesive",
-  "material": "UV-cure epoxy potting (PROVISIONAL)",
+  "material": "dual-cure epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 0.556,
-  "mass_g": 0.0006,
+  "volume_mm3": 0.803,
+  "mass_g": 0.0009,
   "bbox_min": [
-   -17.3,
-   -10.3,
+   -17.5,
+   -10.5,
    0.0
   ],
   "bbox_max": [
-   -15.7,
-   -8.7,
-   0.95
+   -15.5,
+   -8.5,
+   1.0
   ],
   "size": [
-   1.6,
-   1.6,
-   0.95
+   2.0,
+   2.0,
+   1.0
   ]
  },
  {
@@ -555,24 +651,24 @@
   "name": "ball_epoxy_3",
   "group": "puck",
   "kind": "adhesive",
-  "material": "UV-cure epoxy potting (PROVISIONAL)",
+  "material": "dual-cure epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 0.556,
-  "mass_g": 0.0006,
+  "volume_mm3": 0.803,
+  "mass_g": 0.0009,
   "bbox_min": [
-   15.7,
-   -10.3,
+   15.5,
+   -10.5,
    0.0
   ],
   "bbox_max": [
-   17.3,
-   -8.7,
-   0.95
+   17.5,
+   -8.5,
+   1.0
   ],
   "size": [
-   1.6,
-   1.6,
-   0.95
+   2.0,
+   2.0,
+   1.0
   ]
  },
  {
@@ -586,12 +682,12 @@
   "bbox_min": [
    15.4,
    -5.5,
-   6.34
+   6.24
   ],
   "bbox_max": [
    20.4,
    -0.5,
-   6.6
+   6.5
   ],
   "size": [
    5.0,
@@ -605,8 +701,8 @@
   "kind": "printed",
   "material": "MJF PA12 (the latch is sized for PA12)",
   "valid": true,
-  "volume_mm3": 29908.789,
-  "mass_g": 30.2079,
+  "volume_mm3": 27068.856,
+  "mass_g": 27.3395,
   "bbox_min": [
    -30.0,
    -36.0,
@@ -615,12 +711,12 @@
   "bbox_max": [
    30.0,
    24.0,
-   11.281
+   11.627
   ],
   "size": [
    60.0,
    60.0,
-   22.281
+   22.627
   ]
  },
  {
@@ -634,12 +730,12 @@
   "bbox_min": [
    -15.0,
    -34.2,
-   -6.42
+   -6.455
   ],
   "bbox_max": [
    15.0,
    -12.2,
-   -4.82
+   -4.855
   ],
   "size": [
    30.0,
@@ -658,12 +754,12 @@
   "bbox_min": [
    -4.47,
    -35.5,
-   -4.82
+   -4.855
   ],
   "bbox_max": [
    4.47,
    -28.15,
-   -1.56
+   -1.595
   ],
   "size": [
    8.94,
@@ -677,12 +773,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 13.983,
-  "mass_g": 0.1189,
+  "volume_mm3": 14.014,
+  "mass_g": 0.1191,
   "bbox_min": [
    -8.535,
    -17.915,
-   -7.12
+   -7.155
   ],
   "bbox_max": [
    -6.705,
@@ -692,7 +788,7 @@
   "size": [
    1.83,
    1.83,
-   8.085
+   8.12
   ]
  },
  {
@@ -701,12 +797,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 13.983,
-  "mass_g": 0.1189,
+  "volume_mm3": 14.014,
+  "mass_g": 0.1191,
   "bbox_min": [
    -5.995,
    -17.915,
-   -7.12
+   -7.155
   ],
   "bbox_max": [
    -4.165,
@@ -716,7 +812,7 @@
   "size": [
    1.83,
    1.83,
-   8.085
+   8.12
   ]
  },
  {
@@ -725,12 +821,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 13.983,
-  "mass_g": 0.1189,
+  "volume_mm3": 14.014,
+  "mass_g": 0.1191,
   "bbox_min": [
    -3.455,
    -17.915,
-   -7.12
+   -7.155
   ],
   "bbox_max": [
    -1.625,
@@ -740,7 +836,7 @@
   "size": [
    1.83,
    1.83,
-   8.085
+   8.12
   ]
  },
  {
@@ -749,12 +845,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 13.983,
-  "mass_g": 0.1189,
+  "volume_mm3": 14.014,
+  "mass_g": 0.1191,
   "bbox_min": [
    -0.915,
    -17.915,
-   -7.12
+   -7.155
   ],
   "bbox_max": [
    0.915,
@@ -764,7 +860,7 @@
   "size": [
    1.83,
    1.83,
-   8.085
+   8.12
   ]
  },
  {
@@ -773,12 +869,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 13.983,
-  "mass_g": 0.1189,
+  "volume_mm3": 14.014,
+  "mass_g": 0.1191,
   "bbox_min": [
    1.625,
    -17.915,
-   -7.12
+   -7.155
   ],
   "bbox_max": [
    3.455,
@@ -788,7 +884,7 @@
   "size": [
    1.83,
    1.83,
-   8.085
+   8.12
   ]
  },
  {
@@ -797,12 +893,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 13.983,
-  "mass_g": 0.1189,
+  "volume_mm3": 14.014,
+  "mass_g": 0.1191,
   "bbox_min": [
    4.165,
    -17.915,
-   -7.12
+   -7.155
   ],
   "bbox_max": [
    5.995,
@@ -812,7 +908,7 @@
   "size": [
    1.83,
    1.83,
-   8.085
+   8.12
   ]
  },
  {
@@ -821,12 +917,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 13.983,
-  "mass_g": 0.1189,
+  "volume_mm3": 14.014,
+  "mass_g": 0.1191,
   "bbox_min": [
    6.705,
    -17.915,
-   -7.12
+   -7.155
   ],
   "bbox_max": [
    8.535,
@@ -836,7 +932,7 @@
   "size": [
    1.83,
    1.83,
-   8.085
+   8.12
   ]
  },
  {

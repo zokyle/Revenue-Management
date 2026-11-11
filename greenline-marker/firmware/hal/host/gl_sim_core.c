@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "gl_provisional.h"
 #include "gl_sim_internal.h"
 
 /* ---- board constants of the model --------------------------------------------- */
@@ -19,6 +20,11 @@
 #define SIM_TIA_TAU_US 50.0f                 /* photodiode stage settling */
 #define SIM_OPAMP_WAKE_US 1000u
 #define SIM_USB_PIPE 65536u
+/* MCU temperature sensor of the model: counts at 30 C with VDDA = 3.0 V and
+ * the slope (2.5 mV/K at 14 bits), like the factory calibration points */
+#define SIM_TS_CAL_30C 4000.0f
+#define SIM_TS_COUNTS_PER_K 13.65f
+#define SIM_TS_CAL_VDDA_MV 3000.0f
 
 /* Grain LED netlist OF THE MODEL (anode pin, cathode pin as charlieplex pin
  * numbers 0..4).  Pair k = 0..7 on the pin pairs below; red LED k conducts
@@ -51,6 +57,12 @@ static struct {
     sim_pin_t pin[GL_PIN_COUNT];
     bool rail_on;
     uint64_t rail_on_since;
+    /* fault injection, compute time */
+    unsigned spi_fail_count[GL_SPI_BUS_COUNT];
+    gl_status_t spi_fail_status[GL_SPI_BUS_COUNT];
+    uint32_t compute_us[GL_TRACE_COUNT];
+    bool mcu_temp_pinned;
+    float mcu_temp_c;
     /* irq */
     uint32_t irq_enabled, irq_pending;
     int irq_lock;
@@ -533,7 +545,7 @@ unsigned gl_sim_violation_total(void)
 {
     const gl_sim_violations_t *v = &S.viol;
     return v->cam_rail + v->cam_contention + v->cam_sccb + v->dcmi + v->lcd + v->flash + v->imu +
-           v->spi + v->stop_mode + v->analog + v->watchdog + v->deadlock;
+           v->spi + v->stop_mode + v->analog + v->watchdog + v->deadlock + v->power;
 }
 
 const gl_sim_stats_t *gl_sim_stats(void)
@@ -619,6 +631,32 @@ void gl_sim_usb_set_tx_chunk(size_t max)
     S.usb_tx_chunk = max;
 }
 
+void gl_sim_set_mcu_temperature(float temp_c)
+{
+    S.mcu_temp_pinned = true;
+    S.mcu_temp_c = temp_c;
+}
+
+void gl_sim_spi_fail(gl_spi_bus_t bus, unsigned count, gl_status_t st)
+{
+    if ((unsigned)bus < (unsigned)GL_SPI_BUS_COUNT) {
+        S.spi_fail_count[bus] = count;
+        S.spi_fail_status[bus] = st;
+    }
+}
+
+void gl_sim_irq_drop(uint32_t mask)
+{
+    S.irq_pending &= ~mask;
+}
+
+void gl_sim_set_compute_us(gl_trace_point_t point, uint32_t us)
+{
+    if ((unsigned)point < (unsigned)GL_TRACE_COUNT) {
+        S.compute_us[point] = us;
+    }
+}
+
 void gl_sim_set_reset_reason(uint32_t flags)
 {
     S.reset_reason = flags;
@@ -655,7 +693,8 @@ gl_status_t gl_hal_init(void)
     gl_hal_gpio_mode(GL_PIN_FLASH_CS, GL_PIN_MODE_OUTPUT_PP);
     gl_hal_gpio_write(GL_PIN_IMU_CS, true);
     gl_hal_gpio_mode(GL_PIN_IMU_CS, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_CHG_PROG_EN, true); /* released: charging stopped */
+    /* charging stopped (the level that means depends on the circuit) */
+    gl_hal_gpio_write(GL_PIN_CHG_PROG_EN, GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE != 0);
     gl_hal_gpio_mode(GL_PIN_CHG_PROG_EN, GL_PIN_MODE_OUTPUT_OD);
     gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT_PULLUP);
     gl_hal_gpio_mode(GL_PIN_VBUS_SENSE, GL_PIN_MODE_INPUT);
@@ -701,6 +740,24 @@ void gl_hal_unique_id(uint8_t out[12])
 uint32_t gl_hal_tick_ms(void)
 {
     return (uint32_t)(S.now_us / 1000u);
+}
+
+uint32_t gl_hal_time_us(void)
+{
+    return (uint32_t)S.now_us;
+}
+
+void gl_hal_trace(gl_trace_point_t point)
+{
+    if ((unsigned)point >= (unsigned)GL_TRACE_COUNT) {
+        return;
+    }
+    S.stats.trace_points[point]++;
+    if (S.compute_us[point] != 0u) {
+        /* the computation that has just ended took this long */
+        S.stats.compute_us += S.compute_us[point];
+        run_until_(S.now_us + S.compute_us[point]);
+    }
 }
 
 void gl_hal_delay_ms(uint32_t ms)
@@ -822,6 +879,16 @@ void gl_hal_wake_timer_start(uint32_t ms)
     }
 }
 
+/* True if the PROG enable pin is in its "charging allowed" state. */
+static bool charge_allowed_(void)
+{
+#if GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE
+    return sim_pin_out_low(GL_PIN_CHG_PROG_EN);
+#else
+    return !sim_pin_out_low(GL_PIN_CHG_PROG_EN);
+#endif
+}
+
 #define SIM_STOP_WAKE_MASK \
     (GL_IRQ_IMU_INT1 | GL_IRQ_IMU_INT2 | GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT | GL_IRQ_WAKE_TIMER)
 
@@ -830,7 +897,16 @@ uint32_t gl_hal_sleep(gl_sleep_mode_t mode)
     uint64_t t0 = S.now_us;
     uint32_t wake_mask = (mode == GL_SLEEP_STOP) ? SIM_STOP_WAKE_MASK : 0xFFFFFFFFu;
 
+    /* board rules that hold at every sleep: by the time the main loop goes
+     * to sleep it must have dealt with a VBUS that went away */
+    if (S.usb_started && !S.pin[GL_PIN_VBUS_SENSE].ext) {
+        sim_violation(&S.viol.power, "USB still started with VBUS absent (VDDUSB unpowered)");
+    }
     if (mode == GL_SLEEP_STOP) {
+        if (charge_allowed_()) {
+            sim_violation(&S.viol.power,
+                          "Stop mode with the charger enabled: nothing supervises the temperature");
+        }
         if (S.rail_on) {
             sim_violation(&S.viol.stop_mode, "Stop mode with the camera rail on");
         }
@@ -973,6 +1049,10 @@ gl_status_t gl_hal_spi_transfer(gl_spi_bus_t bus, const uint8_t *tx, uint8_t *rx
     /* the clocks take time */
     run_until_(S.now_us + ((uint64_t)len * 8u * 1000000u + S.spi_cfg[bus].max_hz - 1u) /
                               S.spi_cfg[bus].max_hz);
+    if (S.spi_fail_count[bus] > 0u) {
+        S.spi_fail_count[bus]--;
+        return S.spi_fail_status[bus]; /* injected fault (gl_sim_spi_fail) */
+    }
     return GL_OK;
 }
 
@@ -1059,9 +1139,13 @@ gl_status_t gl_hal_adc_read(gl_adc_ch_t ch, uint16_t n_avg, uint16_t sample_time
         v = 1212.0f / (float)S.vdda_mv * (float)GL_HAL_ADC_FULL_SCALE;
         break;
     case GL_ADC_CH_MCU_TEMP:
-    default:
-        v = 4000.0f;
+    default: {
+        const float t = S.mcu_temp_pinned ? S.mcu_temp_c : sim_imu_temperature();
+        v = (SIM_TS_CAL_30C + (t - 30.0f) * SIM_TS_COUNTS_PER_K) * SIM_TS_CAL_VDDA_MV /
+            (float)S.vdda_mv;
+        noise = 2.0f;
         break;
+    }
     }
     v += noise * sim_rand_normal() / sqrtf((float)n_avg);
     if (v < 0.0f) {
@@ -1074,6 +1158,12 @@ gl_status_t gl_hal_adc_read(gl_adc_ch_t ch, uint16_t n_avg, uint16_t sample_time
     sim_trace(GL_SIM_TR_ADC_READ, (unsigned)ch, *counts, gl_sim_grain_lit_mask(), 0);
     run_until_(S.now_us + (uint64_t)n_avg * ((uint64_t)sample_time_us + 3u));
     return GL_OK;
+}
+
+float gl_hal_adc_mcu_temp_c(uint16_t counts, uint16_t vdda_mv)
+{
+    const float at_cal = (float)counts * (float)vdda_mv / SIM_TS_CAL_VDDA_MV;
+    return 30.0f + (at_cal - SIM_TS_CAL_30C) / SIM_TS_COUNTS_PER_K;
 }
 
 uint16_t gl_hal_adc_vdda_mv(void)

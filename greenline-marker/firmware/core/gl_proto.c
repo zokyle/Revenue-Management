@@ -192,6 +192,13 @@ static gl_status_t h_start_cal(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr
     if (p->ops->start_cal == NULL) {
         return GL_ERR_UNSUPPORTED;
     }
+    /* Every procedure that measures for, or writes, stored calibration is a
+     * factory operation and needs UNLOCK, like SET_CAL.  ABORT only stops
+     * one, and ZERO is passed on so that the host gets the application's
+     * defined refusal (it cannot run in the cradle). */
+    if (!p->unlocked && in[0] != (uint8_t)GL_CALPROC_ABORT && in[0] != (uint8_t)GL_CALPROC_ZERO) {
+        return GL_ERR_STATE;
+    }
     return p->ops->start_cal(p->ops->ctx, in[0], in[1]);
 }
 
@@ -294,6 +301,13 @@ static gl_status_t h_reboot(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr_t 
     }
     if (memcmp(in, "BOOT", 4) != 0 && memcmp(in, "DFU!", 4) != 0) {
         return GL_ERR_PARAM;
+    }
+    /* The ROM bootloader has no time-out and the consumer cradle has no
+     * reset contact: a device sent there stays there until a host makes it
+     * leave.  Only an unlocked (factory / service) session may do that.  A
+     * plain reset is harmless and stays open. */
+    if (memcmp(in, "DFU!", 4) == 0 && !p->unlocked) {
+        return GL_ERR_STATE;
     }
     return GL_OK; /* the reboot itself happens after the response is sent */
 }

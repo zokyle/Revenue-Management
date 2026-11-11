@@ -142,6 +142,9 @@ gl_status_t gl_imu_start_measure(gl_imu_t *imu)
         { GL_IMU_REG_MD1_CFG, 0x00 },
         { GL_IMU_REG_FUNCTIONS_ENABLE, 0x00 },
         { GL_IMU_REG_CTRL3, GL_IMU_CTRL3_BDU | GL_IMU_CTRL3_IF_INC },
+        /* data-ready signalling chosen deliberately, not left to the reset
+         * value: latched unless GL_PROV_IMU_DRDY_PULSED */
+        { GL_IMU_REG_CTRL4, (GL_PROV_IMU_DRDY_PULSED != 0) ? GL_IMU_CTRL4_DRDY_PULSED : 0x00u },
         { GL_IMU_REG_CTRL8, GL_IMU_FS_XL_2G },
         { GL_IMU_REG_CTRL6, GL_IMU_FS_G_1000DPS },
         { GL_IMU_REG_CTRL1, GL_IMU_XL_MODE_HIGH_PERF | GL_IMU_ODR_240HZ },
@@ -197,6 +200,19 @@ gl_status_t gl_imu_read(gl_imu_t *imu, gl_imu_raw_t *out)
     if (st != GL_OK) {
         return st;
     }
+    /* Twelve identical bytes of 0xFF or 0x00 are what a silent bus reads as
+     * (MISO floating or held), not a sample: a real one always carries
+     * gravity or sensor noise in some byte. */
+    {
+        unsigned n_ff = 0, n_00 = 0;
+        for (unsigned i = 0; i < sizeof(b); i++) {
+            n_ff += (b[i] == 0xFFu) ? 1u : 0u;
+            n_00 += (b[i] == 0x00u) ? 1u : 0u;
+        }
+        if (n_ff == sizeof(b) || n_00 == sizeof(b)) {
+            return GL_ERR_NOT_FOUND;
+        }
+    }
     for (unsigned i = 0; i < 3u; i++) {
         g[i] = (int16_t)gl_get_u16(&b[2u * i]);
         a[i] = (int16_t)gl_get_u16(&b[6u + 2u * i]);
@@ -228,19 +244,89 @@ gl_status_t gl_imu_data_ready(gl_imu_t *imu, bool *ready)
     uint8_t s = 0;
     (void)imu;
     gl_status_t st = gl_imu_reg_read(GL_IMU_REG_STATUS, &s, 1);
-    *ready = (st == GL_OK) && (s & 0x01u) != 0u;
+    /* 0xFF is what a silent bus reads as: not "ready" */
+    *ready = (st == GL_OK) && s != 0xFFu && (s & GL_IMU_STATUS_XLDA) != 0u;
     return st;
 }
 
 gl_status_t gl_imu_read_temperature(gl_imu_t *imu, float *temp_c)
 {
+    uint8_t id = 0, ctrl1 = 0;
     uint8_t b[2] = { 0, 0 };
+    uint16_t raw;
+    gl_status_t st;
+
     (void)imu;
-    gl_status_t st = gl_imu_reg_read(GL_IMU_REG_OUT_TEMP_L, b, sizeof(b));
-    if (st == GL_OK) {
-        *temp_c = 25.0f + (float)(int16_t)gl_get_u16(b) / GL_IMU_TEMP_LSB_PER_C;
+    /* liveness first, in the same pass: a bus that reads all-ones or
+     * all-zeros would otherwise "measure" 24.996 C or 25.000 C */
+    st = gl_imu_reg_read(GL_IMU_REG_WHO_AM_I, &id, 1);
+    if (st != GL_OK) {
+        return st;
     }
-    return st;
+    if (id != GL_IMU_WHO_AM_I_VALUE) {
+        return GL_ERR_NOT_FOUND;
+    }
+    st = gl_imu_reg_read(GL_IMU_REG_CTRL1, &ctrl1, 1);
+    if (st != GL_OK) {
+        return st;
+    }
+    if ((ctrl1 & GL_IMU_CTRL1_ODR_MASK) == 0u) {
+        return GL_ERR_STATE; /* accelerometer off: the temperature output is stale */
+    }
+    st = gl_imu_reg_read(GL_IMU_REG_OUT_TEMP_L, b, sizeof(b));
+    if (st != GL_OK) {
+        return st;
+    }
+    raw = gl_get_u16(b);
+    if (raw == 0x0000u || raw == 0xFFFFu) {
+        return GL_ERR_QUALITY;
+    }
+    *temp_c = 25.0f + (float)(int16_t)raw / GL_IMU_TEMP_LSB_PER_C;
+    return GL_OK;
+}
+
+gl_status_t gl_imu_verify(gl_imu_t *imu)
+{
+    uint8_t v = 0;
+    gl_status_t st = gl_imu_reg_read(GL_IMU_REG_WHO_AM_I, &v, 1);
+    if (st != GL_OK) {
+        return st;
+    }
+    if (v != GL_IMU_WHO_AM_I_VALUE) {
+        return GL_ERR_NOT_FOUND;
+    }
+    st = gl_imu_reg_read(GL_IMU_REG_CTRL1, &v, 1);
+    if (st != GL_OK) {
+        return st;
+    }
+    switch ((gl_imu_mode_t)imu->mode) {
+    case GL_IMU_MODE_MEASURE:
+        if (v != (GL_IMU_XL_MODE_HIGH_PERF | GL_IMU_ODR_240HZ)) {
+            return GL_ERR_STATE;
+        }
+        st = gl_imu_reg_read(GL_IMU_REG_INT2_CTRL, &v, 1);
+        if (st == GL_OK && v != GL_IMU_INT2_DRDY_XL) {
+            st = GL_ERR_STATE;
+        }
+        return st;
+    case GL_IMU_MODE_WAKE:
+        if (v != (GL_IMU_XL_MODE_LOW_POWER_1 | GL_IMU_ODR_15HZ)) {
+            return GL_ERR_STATE;
+        }
+        st = gl_imu_reg_read(GL_IMU_REG_MD1_CFG, &v, 1);
+        if (st == GL_OK && v != GL_IMU_MD1_INT1_WU) {
+            st = GL_ERR_STATE;
+        }
+        if (st == GL_OK) {
+            st = gl_imu_reg_read(GL_IMU_REG_FUNCTIONS_ENABLE, &v, 1);
+        }
+        if (st == GL_OK && v != GL_IMU_FUNC_INTERRUPTS_EN) {
+            st = GL_ERR_STATE;
+        }
+        return st;
+    default:
+        return (v == 0x00u) ? GL_OK : GL_ERR_STATE;
+    }
 }
 
 gl_status_t gl_imu_wake_source(gl_imu_t *imu, bool *woke)

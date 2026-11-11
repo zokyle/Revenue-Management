@@ -1,4 +1,4 @@
-# GreenLine GL-1 — master design specification (rev C, EVT1)
+# GreenLine GL-1 — master design specification (rev C2, EVT1)
 
 This file records every architecture decision. `master_params.yaml` holds the numbers that the
 mechanical CAD and the PCB layout must share; `check_layout.py` verifies them. Where this file
@@ -29,7 +29,7 @@ contour map of the surface between ball and hole. The design therefore measures:
 | Quantity | Sensor | Expected quality | Notes |
 |---|---|---|---|
 | Bearing to the hole | Forward cameras, flagstick detection | about 1 mrad | The most valuable camera output: it ties the aim line to the true hole direction. Flagstick must be in the hole. |
-| Distance to the hole | Stereo pair (20.0 mm baseline, f = 657 px) fused with flagstick angular height (stick height learned per course) | 2-4 % to 5 m by stereo; 4-8 % at 8-10 m by stereo alone; about 2-3 % once the stick height is learned | Aim angle is almost independent of distance, so 10 % is enough for the line; the tighter figure is for the displayed number and the pace advice. |
+| Distance to the hole | Stereo pair (20.0 mm baseline, f = 657 px) fused with flagstick angular height (stick height learned per course) | Simulated fused error (random part only): 1 % at 1.5 m, 2 % at 3 m, 3.4 % at 6 m, 3.6 % at 9 m, 5 % at 12 m. Stereo alone: 5 % at 9 m, 7 % at 12 m. A stereo calibration drift of 0.1 px shifts the range by about 3 % | Aim angle is almost independent of distance, so 10 % is enough for the line; the tighter figure is for the displayed number and the pace advice. The stick top is inside the upward field (about 15-17.6 degrees) only beyond about 7 m, and is usable on 52-59 % of long reads. |
 | Mean slope ball-to-hole (uphill / downhill) | Elevation of the lowest visible point of the flagstick, referenced to gravity | 1-3 mrad when the base is visible; a one-sided bound when a crown hides it | Upper bound on the mean slope along the line. |
 | Local slope vector and fall line at the ball | Puck tilt from the accelerometer | sensor about 0.5 mrad; seating on turf 2-5 mrad per placement (estimate, unmeasured) | Seating is the dominant error of the whole instrument. Reduced by a 180-degree spin-and-reread and by Survey mode. |
 | Cross slope along the putt | Puck tilt only (one sample, or several in Survey mode) | 3-5 mrad single drop | No optical measurement of cross slope exists from this viewpoint. |
@@ -38,10 +38,23 @@ contour map of the surface between ball and hole. The design therefore measures:
 
 Operating modes:
 
-1. **Quick Read** — one placement, planar-green assumption with the flagstick-base correction. Intended for putts to about 6 m.
+1. **Quick Read** — one placement: tilt at the ball plus the flagstick-base height (method B1 of the simulator, the firmware default). Intended for putts to about 4.5 m; beyond that the median miss exceeds the hole radius in simulation.
 2. **Precision Read** — place, read, spin the marker 180 degrees in place, read again. Cancels device bias and averages two seatings.
 3. **Survey** — two to four placements along the line (ball, midpoint, about 1 m short of the hole). Each drop records tilt and its own range and bearing to the flagstick; the device fits a slope field through the samples. Intended for long or contoured putts.
 4. **Flag-out fallback** — the golfer points the visor at the hole and dials in the distance; tilt-only read with a low-confidence indicator.
+
+Simulated performance (`sim/results/REPORT.md`; synthetic greens, perfect stroke, grain reading off, 2.5 mrad seating noise assumed, 3600 putts from 1.5 to 12 m). Nothing here is a hardware measurement.
+
+| Method | Holed, all lengths | Holed at 3 m | Holed at 6 m | Median miss |
+|---|---|---|---|---|
+| Aim straight at the flag | 8.9 % | 11 % | 4 % | 23.2 cm |
+| Quick Read | 29.5 % | 44 % | 13 % | 9.9 cm |
+| Precision Read | 31.6 % | 48 % | 14 % | 8.6 cm |
+| Survey, three placements | 34.4 % | 52 % | 23 % | 7.1 cm |
+| Golfer who reads cross slope to 0.5 % | 29.5 % | 42 % | 14 % | 9.5 cm |
+| Golfer who reads cross slope to 1 % | 19.3 % | 25 % | 7 % | 16.4 cm |
+
+The Quick Read is statistically level with a golfer who reads slope to 0.5 % and well ahead of one who reads to 1 %. That standing depends on inputs nobody has measured: seating repeatability on turf (the Quick Read falls 5 points behind the 0.5 % reader at 5 mrad), how accurately a golfer copies the displayed line (0.5 degrees assumed), and metre-scale relief of real greens. Measuring seating repeatability is the first task for a prototype.
 
 ## 3. System architecture
 
@@ -88,14 +101,18 @@ Rails:
 Rules the firmware must honour and the schematic must make possible:
 
 - Every MCU pin that faces a camera (data, PCLK, HREF, VSYNC, XVCLK, SCCB, PWDN) must be driven low or left analog while V2V8_CAM is off, to avoid back-powering the sensors through their protection diodes. SCCB pull-ups (2.2 kohm) go to V2V8_CAM, not V2V8.
-- The two cameras share the 8 data lines, PCLK, HREF and VSYNC. Only one drives the bus at a time: the idle camera has its outputs tri-stated through register 0x0C bits 2 and 1 (register address and default 0x16 VERIFIED from the public Analog Devices OV7692 driver; the bit meanings are PROVISIONAL) and is held in sleep. Each camera has its own SCCB clock line and its own PWDN line; SCCB data is shared. 33 ohm series resistors on PCLK and XVCLK at the source.
+- The two cameras share the 8 data lines, PCLK, HREF and VSYNC. Only one drives the bus at a time: the idle camera has its outputs tri-stated through register 0x0C bits 2 and 1 (register address and default 0x16 VERIFIED from the public Analog Devices OV7692 driver; the bit meanings are PROVISIONAL) and is held in sleep. Each camera has its own SCCB clock line and its own PWDN line; SCCB data is shared. Every camera output (D0-D7, PCLK, HREF, VSYNC) joins the shared bus through a 220 ohm series resistor placed at that camera (three 4-element 0402-in-0804 arrays per camera, for example Panasonic EXB-28V221JX, PROVISIONAL stock). Reason: both cameras' output pads are enabled together for about 14 ms at every power-up unless PWDN tri-states them, which is unconfirmed; the resistors limit that contention to about 6 mA per line, and they also limit the current into an unpowered camera from pins the ROM bootloader drives (PB9 = D7, PA6 = PIXCLK). XVCLK has a 33 ohm series resistor at the MCU. Each PWDN line has a 1 kohm series resistor and must not use a pin that the ROM bootloader drives as an output (the USART transmit pins PA9, PA2 and PC10, PROVISIONAL from memory of ST AN2606; verify).
 - XVCLK comes from the MCU MCO pin (PA8), nominally 12 MHz.
 - DCMI pin assignment on LQFP-64 (VERIFIED against ST's open pin data: pad numbers and alternate functions): D0 PC6 pad 37 AF10, D1 PC7 pad 38 AF10, D2 PC8 pad 39 AF10, D3 PC9 pad 40 AF4, D4 PC11 pad 52 AF10 (not AF4, which is D2 on that pin), D5 PB6 pad 58 AF10, D6 PB8 pad 61 AF10, D7 PB9 pad 62 AF10, PIXCLK PA6 pad 22 AF4, HSYNC PA4 pad 20 AF10, VSYNC PB7 pad 59 AF10. MCO PA8 pad 41. Because PA6 is PIXCLK, SPI1 MISO for the flash must be PB4 (pad 56, AF5). The pin data is at raw.githubusercontent.com/STMicroelectronics/STM32_open_pin_data (mcu/STM32U585RITx.xml and mcu/IP/GPIO-STM32U5x_gpio_v1_0_Modes.xml); use it for every alternate-function choice.
 - USB: PA11 = D- (pad 44), PA12 = D+ (pad 45), crystal-less (HSI48 with clock recovery; PROVISIONAL). VDDUSB (pad 48) from its own 3.3 V regulator as above.
-- LCD: SPI clock and data plus an active-high chip select; DISP on a GPIO with pull-down; EXTCOMIN from LPTIM1 or LPTIM3 (they run in Stop 2; LPTIM2 does not), for example LPTIM1_CH1 on PB2 (pad 28), at 60 Hz (32768 / 546), which is inside both frequency ranges Sharp publishes (54-65 Hz and 1-60 Hz); EXTMODE tied high. J1 is a TOP-contact connector (Hirose FH12A-10S-0.5SH(55), 2.0 mm high, on the FH12 land pattern) because the LCD tail makes one U-fold under the glass, which turns its contacts upward. Which end of the tail is pin 1 is PROVISIONAL and must be read from the Sharp drawing: a wrong guess mirrors all ten pins. LCD connector pin order (PROVISIONAL, from the Sharp datasheet as remembered and consistent with public drivers): 1 SCLK, 2 SI, 3 SCS, 4 EXTCOMIN, 5 DISP, 6 VDDA, 7 VDD, 8 EXTMODE, 9 VSS, 10 VSSA.
-- IMU on its own SPI bus; INT1 to a wake-capable pin, INT2 to a second GPIO.
+- LCD: SPI clock and data plus an active-high chip select; DISP on a GPIO with pull-down; EXTCOMIN from LPTIM1 or LPTIM3 (they run in Stop 2; LPTIM2 does not), for example LPTIM1_CH1 on PB2 (pad 28), at 59.9 Hz (32768 / 547; 546 would give 60.015 Hz, just outside the 1-60 Hz range), which is inside both frequency ranges Sharp publishes (54-65 Hz and 1-60 Hz); EXTMODE tied high. J1 is a TOP-contact connector (Hirose FH12A-10S-0.5SH(55), 2.0 mm high, on the FH12 land pattern) because the LCD tail makes one U-fold under the glass, which turns its contacts upward. Which end of the tail is pin 1 is PROVISIONAL and must be read from the Sharp drawing: a wrong guess mirrors all ten pins. LCD connector pin order (PROVISIONAL, from the Sharp datasheet as remembered and consistent with public drivers): 1 SCLK, 2 SI, 3 SCS, 4 EXTCOMIN, 5 DISP, 6 VDDA, 7 VDD, 8 EXTMODE, 9 VSS, 10 VSSA.
+- IMU on its own SPI bus; INT1 (latched) to a wake-capable pin, INT2 to a second GPIO.
+- Pin map: `firmware/hal/stm32u5/gl_pins.h` holds the firmware's proposal for every pin the lines above do not fix. The netlist may change proposed pins for routing; the netlist then wins and exports the final map, from which the firmware header is regenerated. Every alternate function must be checked against the KiCad symbol or ST's open pin data.
+- Clocks: no high-speed crystal. The MCU runs from its internal oscillators; during a read the PLL raises the core clock to 160 MHz (the vision code needs about 145 million instructions per read), otherwise it runs slowly or sleeps in Stop 2. USB uses the internal 48 MHz oscillator with clock recovery.
 - Grain LEDs: 16 LEDs charlieplexed on 5 MCU pins with one series resistor per pin (5 x 68 ohm), red and NIR LED of each pair antiparallel where possible. Photodiode cathode to the op-amp inverting input, 470 kohm + 10 pF feedback, non-inverting input at a mid-rail bias from a 2 x 100 kohm divider with 100 nF.
-- Charger: PROG resistor 49.9 kohm (20 mA). PROG is taken to ground through an N-MOSFET (or an MCU open-drain pin) so firmware can stop charging outside 0-45 C using the IMU temperature. STAT to an MCU input with pull-up.
+- Charger: PROG resistor 49.9 kohm (20 mA), taken to ground through a low-threshold N-MOSFET (gate threshold 1.5 V maximum, for example onsemi BSS138). The gate is fed from a 1 Mohm / 1 Mohm divider on the charger supply (VBUS after the Schottky), so charging is ON BY DEFAULT whenever VBUS is present, even with the MCU unpowered: a cell at its protection cut-off must be rechargeable. An MCU open-drain pin (CHG_INHIBIT, low = stop) pulls the gate down so firmware can stop charging outside 0-45 C. STAT to an MCU input with a 100 kohm pull-up to V2V8.
+- Cell temperature: a 10 kohm NTC (Murata NCP15XH103F03RC, 0402, PROVISIONAL stock) on the top side within 1 mm of the cell edge, thermally joined to the cell with a dab of thermal adhesive; divider with 10.0 kohm 1 % from a GPIO (NTC_BIAS, driven only while measuring) to an ADC pin (NTC_SENSE). This is the charge-temperature input; the IMU and MCU die temperatures are plausibility checks only.
+- Defined states during reset: 100 kohm pull-down on the LCD chip select (active high) and on DISP; 100 kohm pull-ups to V2V8 on the flash and IMU chip selects.
 - 32.768 kHz crystal on PC14/PC15: Abracon ABS07-120-32.768KHZ-T (6 pF load, lower drive requirement than the 12.5 pF part) with load capacitors sized for 6 pF; no high-speed crystal.
 - BOOT0 (PH3) pulled down with 10 kohm; NRST with 100 nF.
 - Test and service pads on the underside: VBUS, D-, D+, GND, SWDIO, SWCLK, NRST.
@@ -149,7 +166,7 @@ port tested against vectors exported from the reference. Sequence for a Quick Re
 2. Average the accelerometer for 1 s: gravity vector, tilt, temperature-compensated.
 3. Power the camera rail; capture interleaved left-right-right-left strips (a horizontal band round the horizon, then a vertical strip round the flagstick candidate).
 4. Detect the flagstick; measure bearing, disparity, lowest visible point, and angular height.
-5. Fuse range (stereo, stick-height prior), fit the slope model, solve the putt, score confidence.
+5. Fuse range (stereo, stick-height prior), fit the slope model (method B1: tilt plus flag-base height; the turf-horizon fit B2 stays an option that is off by default because it only helps on greens without a fringe), solve the putt, score confidence.
 6. Draw the aim line through the ball position, with distance, slope percent, break in cup widths and a confidence bar.
 
 ## 7. Release gates (summary)

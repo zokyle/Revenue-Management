@@ -55,7 +55,10 @@ AUX_SRC  := $(HOSTHAL_SRC) $(SYNTH_SRC)
 BUILD    ?= build/host
 SAN      ?=
 HOSTOPT  ?= -O2 -g
-HOSTFLAGS := $(WARN) $(HOSTOPT) $(SAN) -fno-common -MMD -MP $(INC)
+# Extra -D for the tests (the sanitizer build runs fewer reads per scene of
+# tests/test_read.c: it is 3-4 times slower).
+TESTDEF  ?=
+HOSTFLAGS := $(WARN) $(HOSTOPT) $(SAN) $(TESTDEF) -fno-common -MMD -MP $(INC)
 
 FW_OBJ   := $(patsubst %.c,$(BUILD)/%.o,$(FW_SRC))
 AUX_OBJ  := $(patsubst %.c,$(BUILD)/%.o,$(AUX_SRC))
@@ -75,6 +78,7 @@ test: config-check
 asan: config-check
 	@echo "$(HOSTCC) $(WARN) -O1 -fsanitize=address,undefined,float-cast-overflow"
 	@$(MAKE) --no-print-directory run-tests BUILD=build/asan HOSTOPT="-O1 -g" \
+	  TESTDEF="-DGL_READ_TEST_TRIALS=3" \
 	  SAN="-fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all -fno-omit-frame-pointer"
 
 $(BUILD)/core/%.o: core/%.c

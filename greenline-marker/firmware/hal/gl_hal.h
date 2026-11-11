@@ -23,6 +23,15 @@
  *    pin sequences (camera rail rule, active-high LCD chip select, ...).
  *  - All calls are blocking and bounded; none allocates memory.
  *  - Units are in the names: _ms, _us, _hz, _mv.
+ *  - EVERY stop / disable / power-down call (gl_hal_dcmi_stop,
+ *    gl_hal_xvclk_stop, gl_hal_extcomin_stop, gl_hal_usb_stop,
+ *    gl_hal_adc_power(false), gl_hal_opamp_enable(false),
+ *    gl_hal_wake_timer_start(0)) must be safe at any time after
+ *    gl_hal_init(), in particular BEFORE the matching start has ever been
+ *    called: the drivers put their devices into the off state at boot by
+ *    calling exactly these.  tests/test_basics.c calls each of them first
+ *    on the host backend; a backend with peripheral handles must guard
+ *    them (see hal/stm32u5).
  */
 #ifndef GL_HAL_H
 #define GL_HAL_H
@@ -45,8 +54,9 @@ extern "C" {
  * Bring up clocks, the tick, GPIO defaults and the always-on peripherals.
  * After this call every camera-facing pin is ANALOG, the camera rail enable
  * is driven low, the LCD chip select and DISP are driven low, the charger
- * PROG enable is released (high-Z = charging disabled) and all chip selects
- * of active-low devices are driven high.
+ * PROG enable is in its "charging stopped" state (drivers/power.h; with the
+ * rev C circuit: released, high-Z) and all chip selects of active-low
+ * devices are driven high.
  */
 gl_status_t gl_hal_init(void);
 
@@ -81,6 +91,11 @@ void gl_hal_unique_id(uint8_t out[12]);
 /** Monotonic milliseconds since boot.  Keeps counting through Stop mode
  *  (LSE-clocked).  Wraps after 49.7 days; use unsigned differences. */
 uint32_t gl_hal_tick_ms(void);
+
+/** Microsecond time stamp from a free-running counter (the tick's own
+ *  clock: 30.5 us resolution on the target).  Wraps after 71.6 minutes: use
+ *  unsigned DIFFERENCES only.  Keeps counting through Stop mode. */
+uint32_t gl_hal_time_us(void);
 
 /** Busy/idle wait.  Resolution 1 ms; may sleep the core between ticks. */
 void gl_hal_delay_ms(uint32_t ms);
@@ -148,7 +163,9 @@ typedef enum {
     /* --- power --- */
     GL_PIN_VBAT_SENSE,     /**< ADC input behind the 2 x 1 Mohm divider */
     GL_PIN_CHG_STAT,       /**< MCP73831 STAT, input with pull-up, low = charging */
-    GL_PIN_CHG_PROG_EN,    /**< open drain: LOW = charging allowed, Hi-Z = stopped */
+    GL_PIN_CHG_PROG_EN,    /**< open drain; which level allows charging is a provisional
+                                board fact (GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE, drivers/power.h):
+                                rev C circuit LOW = charging allowed, Hi-Z = stopped */
     GL_PIN_VBUS_SENSE,     /**< digital input from the VBUS divider, high = in cradle */
     /* --- USB --- */
     GL_PIN_USB_DM,
@@ -334,6 +351,15 @@ gl_status_t gl_hal_dcmi_start(const gl_dcmi_cfg_t *cfg, uint8_t *buf, size_t buf
 /** Capture state; `bytes` (may be NULL) receives the bytes stored so far. */
 gl_dcmi_state_t gl_hal_dcmi_poll(size_t *bytes);
 
+/**
+ * gl_hal_time_us() value latched AT THE END OF THE FRAME of the most recent
+ * capture that reached GL_DCMI_DONE (in the frame interrupt, not when the
+ * application gets round to polling: the read sequence times the L R R L
+ * strips with it, and the main loop may be busy for longer than a frame).
+ * Valid from GL_DCMI_DONE until the next gl_hal_dcmi_start().
+ */
+uint32_t gl_hal_dcmi_done_us(void);
+
 /** Abort a capture and return the peripheral to idle. */
 void gl_hal_dcmi_stop(void);
 
@@ -367,6 +393,14 @@ gl_status_t gl_hal_adc_read(gl_adc_ch_t ch, uint16_t n_avg, uint16_t sample_time
 /** VDDA in millivolts computed from VREFINT and the factory calibration. */
 uint16_t gl_hal_adc_vdda_mv(void);
 
+/**
+ * MCU die temperature in degrees C for a GL_ADC_CH_MCU_TEMP reading taken at
+ * the given VDDA, from the factory calibration points of the part.  Used as
+ * an INDEPENDENT second opinion for the charge-temperature gate (the IMU's
+ * temperature sensor is the first); accuracy a few kelvin.
+ */
+float gl_hal_adc_mcu_temp_c(uint16_t counts, uint16_t vdda_mv);
+
 /** Enable OPAMP1 in standalone mode (external 470 kohm || 10 pF feedback,
  *  non-inverting input on the external mid-rail divider), or power it down. */
 gl_status_t gl_hal_opamp_enable(bool on);
@@ -377,7 +411,7 @@ gl_status_t gl_hal_opamp_enable(bool on);
 
 /**
  * Start a 50 % duty square wave on GL_PIN_LCD_EXTCOMIN with a period of
- * `period_lse_ticks` cycles of the 32.768 kHz clock (546 -> 60.0 Hz).  The
+ * `period_lse_ticks` cycles of the 32.768 kHz clock (547 -> 59.905 Hz).  The
  * pin must be in GL_PIN_MODE_ALTERNATE.  The output keeps running in Stop.
  */
 gl_status_t gl_hal_extcomin_start(uint16_t period_lse_ticks);
@@ -388,7 +422,10 @@ void gl_hal_extcomin_stop(void);
 /* ======================================================================= */
 
 /** Enable the USB device (sets the USB-supply-valid bit; only call while
- *  VBUS is present) / disable it and power the transceiver down. */
+ *  VBUS is present) / disable it and power the transceiver down.  The
+ *  application stops USB as soon as it sees VBUS gone, whatever its UI is
+ *  doing; the host backend counts USB left started without VBUS as a
+ *  violation. */
 gl_status_t gl_hal_usb_start(void);
 void gl_hal_usb_stop(void);
 
@@ -401,6 +438,27 @@ size_t gl_hal_usb_read(uint8_t *buf, size_t max);
 /** Queue up to `len` bytes for transmission.  Returns the count accepted
  *  (may be less than `len` when the transmit buffer is full). */
 size_t gl_hal_usb_write(const uint8_t *buf, size_t len);
+
+/* ======================================================================= */
+/* Trace points (timing instrumentation)                                    */
+/* ======================================================================= */
+
+typedef enum {
+    GL_TRACE_VISION_BAND = 0,  /**< a horizon band has just been analysed */
+    GL_TRACE_VISION_STRIP,     /**< one flagstick strip has just been analysed */
+    GL_TRACE_VISION_GROUP,     /**< one L R R L group has just been combined */
+    GL_TRACE_COUNT
+} gl_trace_point_t;
+
+/**
+ * Mark the END of a piece of heavy computation.  On the target this is for
+ * measuring run times (a test pad or an ITM channel; it may do nothing).
+ * The host simulator, in which computation otherwise takes zero simulated
+ * time, CHARGES the time configured for the point (gl_sim_set_compute_us),
+ * so that the tests can run the capture sequence with realistic vision
+ * run times.  Must be cheap and callable from the main loop only.
+ */
+void gl_hal_trace(gl_trace_point_t point);
 
 #ifdef __cplusplus
 }

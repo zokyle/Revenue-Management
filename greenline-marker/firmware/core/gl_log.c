@@ -252,10 +252,13 @@ gl_status_t gl_log_new_sector(gl_log_t *log)
     uint8_t hdr[GL_LOG_SECTOR_HDR], back[GL_LOG_SECTOR_HDR];
     sector_hdr_t old;
     bool was_valid = false, was_blank = false;
-    uint32_t next, addr;
+    uint32_t next, addr, new_seq;
 
     if (!log->mounted) {
         return GL_ERR_STATE;
+    }
+    if (log->erasing) {
+        return GL_ERR_BUSY;
     }
     next = (log->head_sector + 1u) % log->n_sectors;
     addr = sector_addr_(log, next);
@@ -268,14 +271,16 @@ gl_status_t gl_log_new_sector(gl_log_t *log)
     if (was_valid && log->valid_sectors > 0u) {
         log->valid_sectors--; /* the oldest sector is gone */
     }
-    build_sector_hdr_(hdr, log->head_seq + 1u, log->next_rec_seq);
+    /* never below the numbering used before an erase (seq_floor) */
+    new_seq = ((log->head_seq > log->seq_floor) ? log->head_seq : log->seq_floor) + 1u;
+    build_sector_hdr_(hdr, new_seq, log->next_rec_seq);
     if (log->fl->prog(log->fl->ctx, addr, hdr, sizeof(hdr)) != GL_OK ||
         log->fl->read(log->fl->ctx, addr, back, sizeof(back)) != GL_OK ||
         memcmp(hdr, back, sizeof(hdr)) != 0) {
         return GL_ERR_IO;
     }
     log->head_sector = next;
-    log->head_seq += 1u;
+    log->head_seq = new_seq;
     log->head_offset = GL_LOG_SECTOR_HDR;
     log->valid_sectors++;
     return GL_OK;
@@ -291,6 +296,9 @@ gl_status_t gl_log_append(gl_log_t *log, uint8_t type, uint8_t flags, const uint
 
     if (log == NULL || !log->mounted) {
         return GL_ERR_STATE;
+    }
+    if (log->erasing) {
+        return GL_ERR_BUSY; /* see gl_log_erase_all() */
     }
     ss = log->fl->sector_size;
     if (len > GL_LOG_MAX_PAYLOAD(ss) || (payload == NULL && len != 0u)) {
@@ -428,10 +436,19 @@ gl_status_t gl_log_erase_all(gl_log_t *log, uint32_t *cursor, uint32_t max_secto
     if (log == NULL || !log->mounted || cursor == NULL) {
         return GL_ERR_STATE;
     }
+    if (*cursor == 0u || !log->erasing) {
+        /* The order is fixed HERE, once.  (It used to be recomputed from the
+         * head on every call: an append that opened a new sector in between
+         * shifted it, one old sector was skipped and outranked everything
+         * written after the erase at the next mount.) */
+        *cursor = 0;
+        log->erase_origin = (log->head_sector + 1u) % log->n_sectors;
+        log->erasing = true;
+    }
     while (*cursor < log->n_sectors && max_sectors > 0u) {
         /* oldest first, the head last: an interrupted erase leaves a
          * consistent newest part */
-        uint32_t idx = (log->head_sector + 1u + *cursor) % log->n_sectors;
+        uint32_t idx = (log->erase_origin + *cursor) % log->n_sectors;
         uint8_t b[GL_LOG_SECTOR_HDR];
         if (log->fl->read(log->fl->ctx, sector_addr_(log, idx), b, sizeof(b)) != GL_OK) {
             return GL_ERR_IO;
@@ -440,6 +457,9 @@ gl_status_t gl_log_erase_all(gl_log_t *log, uint32_t *cursor, uint32_t max_secto
             if (log->fl->erase_sector(log->fl->ctx, sector_addr_(log, idx)) != GL_OK) {
                 return GL_ERR_IO;
             }
+            if (log->valid_sectors > 0u) {
+                log->valid_sectors--;
+            }
             max_sectors--;
         }
         (*cursor)++;
@@ -447,12 +467,24 @@ gl_status_t gl_log_erase_all(gl_log_t *log, uint32_t *cursor, uint32_t max_secto
     if (*cursor < log->n_sectors) {
         return GL_ERR_BUSY;
     }
+    /* Empty.  Sector numbering continues above everything used so far. */
+    if (log->head_seq > log->seq_floor) {
+        log->seq_floor = log->head_seq;
+    }
     log->head_sector = log->n_sectors - 1u;
     log->head_offset = log->fl->sector_size;
     log->head_seq = 0;
     log->next_rec_seq = 1;
     log->valid_sectors = 0;
+    log->erasing = false;
     return GL_OK;
+}
+
+void gl_log_erase_cancel(gl_log_t *log)
+{
+    if (log != NULL) {
+        log->erasing = false;
+    }
 }
 
 gl_status_t gl_log_stats(const gl_log_t *log, gl_log_stats_t *out)
@@ -468,7 +500,7 @@ gl_status_t gl_log_stats(const gl_log_t *log, gl_log_stats_t *out)
     if (log->head_seq == 0u) {
         return GL_OK;
     }
-    out->bytes_used = (log->valid_sectors - 1u) * ss +
+    out->bytes_used = ((log->valid_sectors > 0u) ? (log->valid_sectors - 1u) : 0u) * ss +
                       ((log->head_offset > ss) ? ss : log->head_offset);
     out->newest_seq = log->next_rec_seq - 1u;
     /* first record of the oldest sector that belongs to the current lap */
@@ -631,6 +663,21 @@ gl_status_t gl_store_put(gl_store_t *st, uint8_t id, const uint8_t *data, size_t
     slot = store_find_(st, id, true);
     if (slot == NULL) {
         return GL_ERR_FULL;
+    }
+    /* The whole set of values, with this one, must fit ONE sector: a sector
+     * change-over rewrites the set into the fresh sector, and the power-fail
+     * guarantee ("the two newest sectors always hold every value") holds
+     * only then.  Refused before anything is changed. */
+    {
+        uint32_t set_bytes = GL_LOG_SECTOR_HDR + GL_LOG_REC_HDR + pad4_((uint32_t)len);
+        for (unsigned i = 0; i < GL_STORE_MAX_ITEMS; i++) {
+            if (st->item[i].id != 0u && &st->item[i] != slot) {
+                set_bytes += GL_LOG_REC_HDR + pad4_(st->item[i].len);
+            }
+        }
+        if (set_bytes > st->log.fl->sector_size) {
+            return GL_ERR_FULL;
+        }
     }
     slot->id = id;
     slot->len = (uint8_t)len;

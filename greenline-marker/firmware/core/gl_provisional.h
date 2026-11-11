@@ -33,9 +33,33 @@
 #define GL_PROV_OV7692_PWDN_ACTIVE_HIGH 1
 
 /** Whether the sensor's outputs are high-impedance while PWDN is asserted is
- *  NOT confirmed, so the driver never relies on PWDN alone to free the
- *  shared bus: it writes register 0x0C first.  0 = "do not rely on it". */
+ *  NOT confirmed.  0 = "assume they are NOT": a sensor in power-down keeps
+ *  driving its pads (static levels) as long as register 0x0C enables them.
+ *
+ *  What that means, honestly: once both sensors have been configured the
+ *  driver never relies on PWDN to free the shared bus (bus ownership is
+ *  changed with register 0x0C only, break before make).  But POWER-UP cannot
+ *  avoid it: both sensors leave their power-on reset with 0x0C = 0x16 (pads
+ *  enabled) and can only be told otherwise over SCCB, one after the other,
+ *  after PWDN release and the clock settle time.  If PWDN does not tri-state
+ *  the pads, both sensors have their pads enabled for about 12 ms per rail
+ *  cycle, of which about 6 ms with one of them streaming against the
+ *  other's static levels (figures measured by the camera model, which
+ *  follows this constant; tests/test_drv_cam.c asserts them as the accepted
+ *  overlap).  THIS WINDOW CANNOT BE CLOSED IN FIRMWARE.  Release gate: read
+ *  the PWDN pad state in the OmniVision datasheet.  If PWDN does not
+ *  tri-state: PWDN pull-ups to V2V8_CAM with open-drain MCU pins (sensors
+ *  start in power-down and no MCU pin ever drives high), or series
+ *  resistors / a bus switch per camera.
+ *  1 = "PWDN tri-states the pads": the model then counts no overlap. */
 #define GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS 0
+
+/** Register 0x0C bits this firmware does NOT own are written with their
+ *  reset values: the reset value is 0x16 and the public Analog Devices
+ *  driver (the only configuration known to run on hardware) writes 0xD6,
+ *  i.e. it keeps bit 4 (YU/YV swap) SET.  The firmware owns bits 7 (flip),
+ *  6 (mirror), 2 and 1 (output drive); bits 5, 3 and 0 are 0 at reset. */
+#define GL_PROV_OV7692_REG0C_KEEP_BITS 0x10u
 
 /** Image orientation after the fold prism.  A right-angle prism used as a
  *  mirror reverses the image along one axis, and which package edge is
@@ -77,10 +101,15 @@
 #define GL_PROV_LCD_FPC_PIN_VSS 9
 #define GL_PROV_LCD_FPC_PIN_VSSA 10
 
-/** EXTCOMIN: 32768 / 546 = 60.015 Hz.  Sharp publishes two ranges (54-65 Hz
- *  and 1-60 Hz); which is current is unconfirmed.  60 Hz sits in both only
- *  at the very edge of the second one. */
-#define GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS 546u
+/** EXTCOMIN: 32768 / 547 = 59.905 Hz.  Sharp publishes two ranges (54-65 Hz
+ *  and 1-60 Hz); which is current is unconfirmed.  547 ticks is inside both
+ *  with any crystal tolerance.  (DESIGN_SPEC section 4 says 32768 / 546 and
+ *  calls that 60 Hz; it is 60.015 Hz, ABOVE the 1-60 Hz range.  The spec
+ *  sentence needs correcting; this file cannot do that.)
+ *  Also unconfirmed: the order of DISP and EXTCOMIN at switch-on.  The
+ *  driver starts EXTCOMIN before raising DISP; a reviewer remembers the
+ *  Sharp sequence as DISP first.  Check against the datasheet. */
+#define GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS 547u
 
 /** Whether the LPTIM1 PWM output pin keeps toggling in Stop 2 was not
  *  confirmed (RM0456 chapter 58).  If 0, the app must stay in Stop 1 or
@@ -151,9 +180,19 @@
 #define GL_PROV_STICK_DIA_MIN_M 0.0127f
 #define GL_PROV_STICK_DIA_MAX_M 0.0190f
 
-/** Design value of single-pair disparity noise (px) used when a measured
- *  uncertainty is unavailable (grazing-vision.md section 2.2). */
-#define GL_PROV_DISPARITY_SIGMA_PX 0.10f
+/** Stereo calibration error left in a disparity after the factory
+ *  calibration, px one-sigma (UNMEASURED: the calibration fixture does not
+ *  exist yet).  It is the same in every strip and every read of a unit and
+ *  is added to the disparity uncertainty of each read; it is what limits
+ *  the stereo range beyond a few metres (0.05 px = 2.3 % at 6 m, 3.8 % at
+ *  10 m with the 20 mm baseline). */
+#define GL_PROV_STEREO_CAL_SIGMA_PX 0.05f
+
+/** Lens blur (rms radius of the point-spread function, px) is only known
+ *  to lie in this range until the lens is measured at EVT.  The width of a
+ *  line (flagstick or not) is inferred from its profile minus the blur. */
+#define GL_PROV_LENS_BLUR_SIGMA_MIN_PX 0.45f
+#define GL_PROV_LENS_BLUR_SIGMA_MAX_PX 0.80f
 
 /** Grain: DEFAULT modulation acceptance threshold stored in a fresh grain
  *  calibration record.  grain-sensing.md: "do not use a fixed 0.10 ... set
@@ -191,10 +230,14 @@
 #define GL_PROV_OV7692_PID 0x7692u
 #define GL_PROV_OV7692_ENFORCE_PID 1
 
-/** Byte order of the YUV422 stream with register 0x0C bit 4 (YU/YV swap)
- *  clear.  1 = the FIRST byte of every pair is luminance (Y U Y V ...), so
- *  the DCMI byte-select keeps the even bytes.  From the OV7690 datasheet as
- *  remembered.  Symptom if wrong: flat, low-contrast strips (chroma). */
+/** Byte order of the YUV422 stream with register 0x0C bit 4 (YU/YV swap) at
+ *  its RESET value (set: GL_PROV_OV7692_REG0C_KEEP_BITS), which is the only
+ *  state known to run on hardware.  1 = the FIRST byte of every pair is
+ *  luminance, so the DCMI byte-select keeps the even bytes.  This is a
+ *  GUESS: the name "YU/YV swap" suggests that the bit exchanges U and V and
+ *  leaves Y where it is, but no datasheet was available, and the camera
+ *  model of the simulator encodes the same guess (it can prove nothing).
+ *  Symptom if wrong: flat, low-contrast strips (chroma); fix: set to 0. */
 #define GL_PROV_OV7692_Y_IS_FIRST_BYTE 1
 
 /** Sync polarities and the pixel-clock edge on which data are valid, at
@@ -281,6 +324,24 @@
  *  Engineering guesses to be tuned on turf (pocket, cart vibration). */
 #define GL_PROV_IMU_WAKE_THRESHOLD_MG 62u
 
+/** Data-ready signalling on INT2.  0 = LATCHED: the line goes high with a
+ *  new sample and stays high until the output registers are read (the
+ *  part's reset behaviour as remembered: CTRL4 0x13 bit 1 DRDY_PULSED = 0).
+ *  1 = pulsed (about 65 us per sample).  The driver writes CTRL4
+ *  accordingly; the application works with either, because it also polls
+ *  the line when no interrupt has arrived for two sample periods (a single
+ *  lost edge would otherwise stop all samples in latched mode). */
+#define GL_PROV_IMU_DRDY_PULSED 0
+
+/** Absolute accuracy of the IMU's temperature sensor: NOT KNOWN here (the
+ *  datasheet was not available; sister parts specify an offset of up to
+ *  +-15 K, from memory).  The charge gate therefore never trusts it alone:
+ *  the MCU's own die-temperature sensor must agree with it within this
+ *  many kelvin, and BOTH must be inside the charging window.  A factory
+ *  one-point offset is the proper fix if the datasheet confirms a large
+ *  offset (release gate). */
+#define GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C 10.0f
+
 /* ---- grain front end -------------------------------------------------------- */
 
 /** Charlieplex wiring.  NO NETLIST EXISTS YET; this is a PROPOSAL for the
@@ -311,6 +372,27 @@
 #define GL_PROV_CHARGE_TEMP_MIN_C 0.0f
 #define GL_PROV_CHARGE_TEMP_MAX_C 45.0f
 #define GL_PROV_CHARGE_TEMP_HYST_C 2.0f
+
+/** Polarity of the charger's PROG enable pin (open-drain MCU output).
+ *  1 = the rev C circuit: the PROG resistor goes to ground THROUGH the MCU
+ *  pin, so LOW allows charging and a released pin stops it.
+ *  CONSEQUENCE THAT NEEDS A HARDWARE DECISION: with this circuit the
+ *  charger is OFF whenever the MCU is unpowered, so a cell that has reached
+ *  its protection cut-off can never be recharged by the cradle (the MCU is
+ *  fed from the cell).  The proposed fix is a PROG resistor to ground
+ *  through an N-MOSFET whose gate is pulled up from VBUS, the MCU pulling
+ *  the gate low to INHIBIT: charging then defaults to ON.  For that circuit
+ *  set this to 0 (LOW = inhibit, released = charging allowed); nothing else
+ *  in the firmware changes. */
+#define GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE 1
+
+/** Below this cell voltage, with no VBUS, the firmware stops everything it
+ *  can (IMU powered down: no wake-on-motion; only the cradle wakes the
+ *  device) so that the sleep drain does not take the cell down to its
+ *  protection cut-off, from which the rev C charger circuit cannot recover
+ *  it (see GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE).  Engineering guess, no
+ *  cell datasheet. */
+#define GL_PROV_BATT_STORAGE_MV 3250u
 
 /* ---- MX25R6435F: timing --------------------------------------------------------- */
 

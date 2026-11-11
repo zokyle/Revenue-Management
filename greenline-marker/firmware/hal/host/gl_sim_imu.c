@@ -37,6 +37,7 @@
 #define REG_CTRL1 0x10
 #define REG_CTRL2 0x11
 #define REG_CTRL3 0x12
+#define REG_CTRL4 0x13 /* bit 1 DRDY_PULSED */
 #define REG_CTRL6 0x15
 #define REG_CTRL8 0x17
 #define REG_STATUS 0x1E
@@ -77,6 +78,7 @@ static struct {
     float prev_a[3];      /* previous sample (marker axes, g) for the slope filter */
     bool have_prev;
     bool wu_latched;
+    bool drdy_high;       /* latched data-ready level on INT2 */
 } I;
 
 void sim_imu_reset(void)
@@ -129,6 +131,31 @@ void gl_sim_imu_set_temperature(float temp_c)
 void gl_sim_imu_set_present(bool present)
 {
     I.present = present;
+}
+
+float sim_imu_temperature(void)
+{
+    return I.temp_c;
+}
+
+static void odr_changed_(void);
+
+static void drdy_set_(bool high)
+{
+    if (I.drdy_high != high) {
+        I.drdy_high = high;
+        sim_set_input(GL_PIN_IMU_INT2, high);
+    }
+}
+
+void gl_sim_imu_power_glitch(void)
+{
+    memset(I.reg, 0, sizeof(I.reg));
+    I.reg[REG_WHO_AM_I] = 0x70;
+    I.reg[REG_CTRL3] = 0x44;
+    I.wu_latched = false;
+    drdy_set_(false);
+    odr_changed_();
 }
 
 void gl_sim_imu_set_mounting(const int8_t axis[3], const int8_t sign[3])
@@ -219,6 +246,7 @@ static uint64_t k_now_(void)
 
 static void odr_changed_(void)
 {
+    /* note: declared above for gl_sim_imu_power_glitch() */
     const float hz = odr_hz_[I.reg[REG_CTRL1] & 0x0Fu];
     I.t0 = sim_now();
     I.period_us = (hz > 0.0f) ? (uint64_t)(1.0e6f / hz + 0.5f) : 0u;
@@ -271,8 +299,17 @@ void sim_imu_fire(uint64_t t)
         I.have_prev = true;
     }
     if ((I.reg[REG_INT2_CTRL] & 0x01u) != 0u) {
-        sim_set_input(GL_PIN_IMU_INT2, true);
-        sim_set_input(GL_PIN_IMU_INT2, false);
+        if ((I.reg[REG_CTRL4] & 0x02u) != 0u) {
+            /* DRDY_PULSED: one short pulse per sample, read or not */
+            I.drdy_high = false;
+            sim_set_input(GL_PIN_IMU_INT2, true);
+            sim_set_input(GL_PIN_IMU_INT2, false);
+        } else {
+            /* latched (the reset behaviour): high until the accelerometer
+             * output is read.  If the host does not read, the line simply
+             * stays high: there is NO further edge. */
+            drdy_set_(true);
+        }
     }
 }
 
@@ -303,6 +340,9 @@ static uint8_t read_reg_(uint8_t addr)
         }
         sample_(k);
         I.k_read = k;
+        if (addr >= REG_OUTX_L_G + 6u) {
+            drdy_set_(false); /* reading the accelerometer output releases INT2 */
+        }
         const unsigned idx = (unsigned)(addr - REG_OUTX_L_G);
         const int16_t v = (idx < 6u) ? I.cache_g[idx / 2u] : I.cache_a[(idx - 6u) / 2u];
         return ((idx & 1u) == 0u) ? (uint8_t)((uint16_t)v & 0xFFu) : (uint8_t)((uint16_t)v >> 8);
@@ -326,6 +366,7 @@ static void write_reg_(uint8_t addr, uint8_t val)
         memset(I.reg, 0, sizeof(I.reg));
         I.reg[REG_WHO_AM_I] = 0x70;
         I.reg[REG_CTRL3] = 0x44;
+        drdy_set_(false);
         odr_changed_();
         return;
     }
@@ -341,6 +382,9 @@ static void write_reg_(uint8_t addr, uint8_t val)
         /* interrupts start with the next sample, not with a backlog */
         I.have_prev = false;
         I.k_fired = k_now_();
+    }
+    if ((addr == REG_INT2_CTRL && (val & 0x01u) == 0u) || (addr == REG_CTRL1 && (val & 0x0Fu) == 0u)) {
+        drdy_set_(false); /* data-ready no longer routed / no data */
     }
 }
 

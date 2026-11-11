@@ -88,8 +88,10 @@ GL_TEST(test_power_up_sequence)
 {
     /* register writes each camera must receive, in this order */
     static const uint8_t expect[][2] = {
-        { 0x12, 0x80 }, /* software reset */
-        { 0x0C, 0x80 }, /* vertical flip on, outputs RELEASED (bits 2, 1 clear) */
+        { 0x0C, 0x90 }, /* FIRST write: outputs RELEASED (bits 2, 1 clear); vertical flip on,
+                           bit 4 (YU/YV swap) kept at its reset value */
+        { 0x12, 0x80 }, /* software reset (it enables the outputs again) */
+        { 0x0C, 0x90 }, /* released again, before anything else */
         { 0xFF, 0x01 }, /* MIPI bank */
         { 0xB5, 0x30 }, /* MIPI and low-power transmitter powered down */
         { 0xFF, 0x00 }, /* system bank */
@@ -166,6 +168,31 @@ GL_TEST(test_power_up_sequence)
     printf("    power-up: %u trace records, %.1f ms, %u SCCB writes\n", (unsigned)gl_sim_trace_count(),
            (double)t_up / 1000.0, (unsigned)n);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
+
+    /* THE ACCEPTED OVERLAP (review finding).  Both sensors leave reset with
+     * their pads enabled, and the model does not assume that PWDN releases
+     * them (GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS = 0).  Until both have
+     * been released over SCCB the pads of both are enabled: that time is
+     * measured here and bounded, so that a change of the sequence that
+     * lengthens it is noticed.  It cannot be made zero in firmware. */
+    {
+        const gl_sim_stats_t *st = gl_sim_stats();
+        printf("    both sensors' pads enabled during power-up: %.2f ms, of which %.2f ms with "
+               "one of them streaming (PWDN assumed NOT to tri-state)\n",
+               (double)st->cam_powerup_overlap_us / 1000.0,
+               (double)st->cam_powerup_overlap_streaming_us / 1000.0);
+#if GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS == 0
+        /* rail settle 5 ms + clock settle 3 ms + PWDN release settle 3 ms +
+         * one SCCB write, then 2.3 ms more after the left camera's reset */
+        GL_CHECK(st->cam_powerup_overlap_us >= 11000u && st->cam_powerup_overlap_us <= 15000u);
+        GL_CHECK(st->cam_powerup_overlap_streaming_us >= 3000u &&
+                 st->cam_powerup_overlap_streaming_us <= 7000u);
+#else
+        GL_CHECK_EQ(st->cam_powerup_overlap_us, 0u);
+#endif
+        /* after both have been released once, never again */
+        GL_CHECK_EQ(gl_sim_violations()->cam_contention, 0u);
+    }
 }
 
 GL_TEST(test_power_down_sequence)
@@ -222,7 +249,7 @@ GL_TEST(test_bus_ownership)
     GL_CHECK_EQ(gl_ov7692_select(&cam_, GL_CAM_LEFT, GL_OV_OTHER_SLEEP), GL_OK);
     GL_CHECK_EQ(sccb_writes_(0, wr, 8), 2);
     GL_CHECK(wr[0].cam == GL_CAM_LEFT && wr[0].reg == 0x0E && wr[0].val == 0x00); /* wake */
-    GL_CHECK(wr[1].cam == GL_CAM_LEFT && wr[1].reg == 0x0C && wr[1].val == 0x86); /* drive */
+    GL_CHECK(wr[1].cam == GL_CAM_LEFT && wr[1].reg == 0x0C && wr[1].val == 0x96); /* drive */
     GL_CHECK(gl_sim_cam_driving(GL_CAM_LEFT) && !gl_sim_cam_driving(GL_CAM_RIGHT));
     GL_CHECK(!gl_sim_cam_streaming(GL_CAM_RIGHT));
 
@@ -231,9 +258,9 @@ GL_TEST(test_bus_ownership)
     gl_sim_trace_clear();
     GL_CHECK_EQ(gl_ov7692_select(&cam_, GL_CAM_RIGHT, GL_OV_OTHER_AWAKE), GL_OK);
     GL_CHECK_EQ(sccb_writes_(0, wr, 8), 3);
-    GL_CHECK(wr[0].cam == GL_CAM_LEFT && wr[0].reg == 0x0C && wr[0].val == 0x80);
+    GL_CHECK(wr[0].cam == GL_CAM_LEFT && wr[0].reg == 0x0C && wr[0].val == 0x90);
     GL_CHECK(wr[1].cam == GL_CAM_RIGHT && wr[1].reg == 0x0E && wr[1].val == 0x00);
-    GL_CHECK(wr[2].cam == GL_CAM_RIGHT && wr[2].reg == 0x0C && wr[2].val == 0x86);
+    GL_CHECK(wr[2].cam == GL_CAM_RIGHT && wr[2].reg == 0x0C && wr[2].val == 0x96);
     GL_CHECK(gl_sim_cam_driving(GL_CAM_RIGHT) && !gl_sim_cam_driving(GL_CAM_LEFT));
     GL_CHECK(gl_sim_cam_streaming(GL_CAM_LEFT)); /* still awake */
 
@@ -241,8 +268,8 @@ GL_TEST(test_bus_ownership)
     gl_sim_trace_clear();
     GL_CHECK_EQ(gl_ov7692_select(&cam_, GL_CAM_LEFT, GL_OV_OTHER_AWAKE), GL_OK);
     GL_CHECK_EQ(sccb_writes_(0, wr, 8), 2);
-    GL_CHECK(wr[0].cam == GL_CAM_RIGHT && wr[0].reg == 0x0C && wr[0].val == 0x80);
-    GL_CHECK(wr[1].cam == GL_CAM_LEFT && wr[1].reg == 0x0C && wr[1].val == 0x86);
+    GL_CHECK(wr[0].cam == GL_CAM_RIGHT && wr[0].reg == 0x0C && wr[0].val == 0x90);
+    GL_CHECK(wr[1].cam == GL_CAM_LEFT && wr[1].reg == 0x0C && wr[1].val == 0x96);
 
     /* selecting with OTHER_SLEEP puts the idle one to sleep */
     gl_sim_trace_clear();

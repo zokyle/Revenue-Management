@@ -9,8 +9,9 @@
  *
  *   identification          WHO_AM_I
  *   basic configuration     CTRL1 (accel ODR / mode), CTRL2 (gyro ODR /
- *                           mode), CTRL3 (BDU, IF_INC, SW_RESET), CTRL6
- *                           (gyro full scale), CTRL8 (accel full scale)
+ *                           mode), CTRL3 (BDU, IF_INC, SW_RESET), CTRL4
+ *                           (DRDY_PULSED), CTRL6 (gyro full scale), CTRL8
+ *                           (accel full scale)
  *   data                    STATUS_REG, OUT_TEMP, OUTX_L_G .. OUTZ_H_A
  *   data-ready interrupt    INT2_CTRL (accelerometer data ready on INT2)
  *   wake-on-motion          FUNCTIONS_ENABLE, TAP_CFG0, WAKE_UP_THS,
@@ -19,8 +20,11 @@
  *
  * Two operating modes:
  *   MEASURE  accelerometer +-2 g high-performance and gyro +-1000 dps, both
- *            at 240 Hz, data-ready pulses on INT2.  Used for tilt reads,
- *            stillness, gestures, the 180-degree flip angle.
+ *            at 240 Hz, accelerometer data-ready on INT2: LATCHED (high from
+ *            a new sample until the output registers are read) unless
+ *            GL_PROV_IMU_DRDY_PULSED is set; CTRL4 is written accordingly.
+ *            Used for tilt reads, stillness, gestures, the 180-degree flip
+ *            angle.
  *   WAKE     gyro off, accelerometer low-power at 15 Hz, wake-up interrupt
  *            on INT1 when the slope between samples exceeds the threshold.
  *            Used while the MCU is in Stop mode.
@@ -44,6 +48,7 @@
 #define GL_IMU_REG_CTRL1            0x10u /* [3:0] accel ODR, [6:4] accel operating mode */
 #define GL_IMU_REG_CTRL2            0x11u /* [3:0] gyro ODR, [6:4] gyro operating mode */
 #define GL_IMU_REG_CTRL3            0x12u /* bit 6 BDU, bit 2 IF_INC, bit 0 SW_RESET */
+#define GL_IMU_REG_CTRL4            0x13u /* bit 1 DRDY_PULSED (0 = latched data-ready) */
 #define GL_IMU_REG_CTRL6            0x15u /* [3:0] gyro full scale */
 #define GL_IMU_REG_CTRL8            0x17u /* [1:0] accel full scale */
 #define GL_IMU_REG_STATUS           0x1Eu /* bit 0 XLDA, bit 1 GDA, bit 2 TDA */
@@ -61,6 +66,10 @@
 #define GL_IMU_CTRL3_BDU            0x40u
 #define GL_IMU_CTRL3_IF_INC         0x04u
 #define GL_IMU_CTRL3_SW_RESET       0x01u
+#define GL_IMU_CTRL4_DRDY_PULSED    0x02u
+#define GL_IMU_STATUS_XLDA          0x01u
+#define GL_IMU_STATUS_TDA           0x04u
+#define GL_IMU_CTRL1_ODR_MASK       0x0Fu
 #define GL_IMU_ODR_15HZ             0x03u
 #define GL_IMU_ODR_240HZ            0x07u
 #define GL_IMU_XL_MODE_HIGH_PERF    0x00u /* CTRL1 [6:4] = 000 */
@@ -122,14 +131,35 @@ gl_status_t gl_imu_start_wake_on_motion(gl_imu_t *imu, uint16_t threshold_mg);
 gl_status_t gl_imu_stop(gl_imu_t *imu);
 
 /** Read the newest gyro + accelerometer sample (one 12-byte burst), mapped
- *  into marker axes. */
+ *  into marker axes.  GL_ERR_NOT_FOUND if the burst is twelve bytes of 0xFF
+ *  or of 0x00: a bus that nobody drives, not a sample. */
 gl_status_t gl_imu_read(gl_imu_t *imu, gl_imu_raw_t *out);
 
 /** True if a new accelerometer sample is waiting (STATUS_REG). */
 gl_status_t gl_imu_data_ready(gl_imu_t *imu, bool *ready);
 
-/** Die temperature in degrees C. */
+/**
+ * Die temperature in degrees C, WITH A LIVENESS CHECK in the same call:
+ * the device must answer WHO_AM_I with its id, its accelerometer must be
+ * running (CTRL1 output data rate not zero: the temperature output is
+ * only refreshed then) and the raw value must not be 0x0000 or 0xFFFF
+ * (what a silent bus, or a sensor that lost its configuration, reads as:
+ * 25.000 C and 24.996 C).  GL_ERR_NOT_FOUND / GL_ERR_STATE / GL_ERR_QUALITY
+ * respectively, or the bus error; *temp_c is written only on GL_OK.  A
+ * true reading of exactly 25.000 C is refused too: the caller treats that
+ * as "temperature unknown for this period", which is the safe side.
+ */
 gl_status_t gl_imu_read_temperature(gl_imu_t *imu, float *temp_c);
+
+/**
+ * Check that the device is present and still holds the configuration of
+ * the mode the driver put it in (WHO_AM_I; CTRL1; in WAKE mode also
+ * MD1_CFG and FUNCTIONS_ENABLE, in MEASURE mode INT2_CTRL).  A device that
+ * was reset by a supply glitch answers but has lost it.  GL_OK,
+ * GL_ERR_NOT_FOUND (no answer / wrong id), GL_ERR_STATE (configuration
+ * lost), or the bus error.
+ */
+gl_status_t gl_imu_verify(gl_imu_t *imu);
 
 /** Read and clear the wake-up source: *woke = true if a wake-up event was
  *  latched. */

@@ -377,6 +377,9 @@ GL_TEST(test_power_cut_at_every_event)
         }
         erases_before = sim.n_erases;
         (void)erases_before;
+        if (sim.cut_in_erase) {
+            cuts_during_erase++;
+        }
         gl_simflash_power_on(&sim);
         /* 2 records always survive: a full sector holds at least 1 maximum
          * record, and with 5 sectors at least 3 full ones are retained */
@@ -387,9 +390,6 @@ GL_TEST(test_power_cut_at_every_event)
                 first_bad = (long long)k;
             }
         }
-        if (acked < total_records && sim.n_erases > 0) {
-            cuts_during_erase++;
-        }
     }
     printf("    %llu cut points (every programmed byte and every erase stage, %u records, "
            "%u-byte sectors x %u): %u failures\n", total_events, (unsigned)total_records,
@@ -398,6 +398,9 @@ GL_TEST(test_power_cut_at_every_event)
         printf("    first failing cut point: %lld\n", first_bad);
     }
     GL_CHECK_EQ(failures, 0);
+    /* the sweep really did interrupt erases: three stages of each one */
+    GL_CHECK(cuts_during_erase >= 3u * 2u * NSEC);
+    printf("    of which %u interrupted a sector erase\n", cuts_during_erase);
 }
 
 /* A second cut during the recovery appends that follow the first one. */
@@ -543,6 +546,124 @@ GL_TEST(test_erase_all_incremental_and_cut)
         GL_CHECK_EQ(gl_log_erase_all(&l2, &cursor, 100), GL_OK);
         GL_CHECK_EQ(read_all(&l2, idx, MAXREC, &bad), 0);
     }
+}
+
+
+/* Review finding: gl_log_erase_all() recomputed the sector order from the
+ * head on every call, so an append that opened a new sector between two
+ * calls made it skip one old sector; numbering then restarted at 1 and the
+ * stale sector won at the next mount ("erased" records came back, records
+ * acknowledged after the erase vanished). */
+GL_TEST(test_erase_all_with_appends_in_between)
+{
+    static uint32_t idx[MAXREC];
+    unsigned bad, n;
+    uint32_t cursor;
+    uint8_t p[512];
+    size_t len;
+    uint32_t seq_before;
+
+    /* exactly the reviewer's sequence: the head sector is full when the
+     * erase starts, one sector is erased, then an append arrives */
+    fresh(SS, NSEC);
+    GL_CHECK_EQ(gl_log_mount(&lg, &fl, 0, NSEC), GL_OK);
+    GL_CHECK_EQ(run_appends(&lg, 1, 60), 60);
+    while (gl_log_head_free(&lg) >= GL_LOG_REC_HDR + 4u) {
+        len = make_payload(17, p); /* index 17: a 4-byte payload */
+        GL_CHECK_EQ(gl_log_append(&lg, 0x42, 0, p, len, NULL), GL_OK);
+    }
+    seq_before = lg.head_seq;
+    cursor = 0;
+    GL_CHECK_EQ(gl_log_erase_all(&lg, &cursor, 1), GL_ERR_BUSY);
+    /* the append is refused, and so is a forced sector change */
+    len = make_payload(1000, p);
+    GL_CHECK_EQ(gl_log_append(&lg, 0x42, 0, p, len, NULL), GL_ERR_BUSY);
+    GL_CHECK_EQ(gl_log_new_sector(&lg), GL_ERR_BUSY);
+    GL_CHECK_EQ(sim.prog_violations, 0);
+    for (unsigned calls = 0; calls < 20u; calls++) {
+        const gl_status_t st = gl_log_erase_all(&lg, &cursor, 1);
+        if (st == GL_OK) {
+            break;
+        }
+        GL_CHECK_EQ(st, GL_ERR_BUSY);
+        /* appends stay refused until the erase has finished */
+        GL_CHECK_EQ(gl_log_append(&lg, 0x42, 0, p, len, NULL), GL_ERR_BUSY);
+    }
+    GL_CHECK_EQ(read_all(&lg, idx, MAXREC, &bad), 0);
+    for (uint32_t a = 0; a < SS * NSEC; a++) {
+        if (mem[a] != 0xFF) {
+            GL_CHECK(false); /* a sector survived the erase */
+            break;
+        }
+    }
+    /* four records after the erase; after a power cycle they are the log */
+    GL_CHECK_EQ(run_appends(&lg, 2001, 2004), 4);
+    GL_CHECK(lg.head_seq > seq_before); /* sector numbering continued above the old one */
+    {
+        gl_log_t l2;
+        GL_CHECK_EQ(gl_log_mount(&l2, &fl, 0, NSEC), GL_OK);
+        n = read_all(&l2, idx, MAXREC, &bad);
+        GL_CHECK_EQ(bad, 0);
+        GL_CHECK_EQ(n, 4);
+        for (unsigned i = 0; i < n && i < 4u; i++) {
+            GL_CHECK_EQ(idx[i], 2001u + i);
+        }
+    }
+
+    /* every interleaving: k sectors erased, then an append attempt, then
+     * the rest; with the head at every fill level */
+    for (uint32_t fill = 55; fill <= 75; fill++) {
+        for (uint32_t k = 0; k < NSEC; k++) {
+            gl_log_t l2;
+            fresh(SS, NSEC);
+            gl_log_mount(&lg, &fl, 0, NSEC);
+            run_appends(&lg, 1, fill);
+            cursor = 0;
+            if (k > 0u) {
+                (void)gl_log_erase_all(&lg, &cursor, k);
+                len = make_payload(3000, p);
+                GL_CHECK_EQ(gl_log_append(&lg, 0x42, 0, p, len, NULL), GL_ERR_BUSY);
+            }
+            while (gl_log_erase_all(&lg, &cursor, 1) == GL_ERR_BUSY) {
+            }
+            GL_CHECK_EQ(run_appends(&lg, 4001, 4003), 3);
+            GL_CHECK_EQ(gl_log_mount(&l2, &fl, 0, NSEC), GL_OK);
+            n = read_all(&l2, idx, MAXREC, &bad);
+            GL_CHECK_EQ(bad, 0);
+            GL_CHECK_EQ(n, 3);
+            GL_CHECK(n == 3u && idx[0] == 4001u && idx[2] == 4003u);
+        }
+    }
+
+    /* a cancelled erase: the oldest sectors are gone, the newest part is
+     * intact and the log accepts records again */
+    fresh(SS, NSEC);
+    gl_log_mount(&lg, &fl, 0, NSEC);
+    run_appends(&lg, 1, 60);
+    cursor = 0;
+    GL_CHECK_EQ(gl_log_erase_all(&lg, &cursor, 2), GL_ERR_BUSY);
+    gl_log_erase_cancel(&lg);
+    GL_CHECK_EQ(run_appends(&lg, 61, 64), 4);
+    n = read_all(&lg, idx, MAXREC, &bad);
+    GL_CHECK_EQ(bad, 0);
+    GL_CHECK(n >= 5u && idx[n - 1u] == 64u);
+    for (unsigned i = 1; i < n; i++) {
+        GL_CHECK_EQ(idx[i], idx[i - 1] + 1);
+    }
+    {
+        gl_log_t l2;
+        gl_log_stats_t stats;
+        GL_CHECK_EQ(gl_log_mount(&l2, &fl, 0, NSEC), GL_OK);
+        GL_CHECK_EQ(read_all(&l2, idx, MAXREC, &bad), n);
+        GL_CHECK_EQ(bad, 0);
+        GL_CHECK_EQ(gl_log_stats(&lg, &stats), GL_OK);
+        GL_CHECK(stats.bytes_used <= SS * NSEC);
+    }
+    /* a new erase after a cancel starts from the present head */
+    cursor = 0;
+    while (gl_log_erase_all(&lg, &cursor, 1) == GL_ERR_BUSY) {
+    }
+    GL_CHECK_EQ(read_all(&lg, idx, MAXREC, &bad), 0);
 }
 
 /* Real geometry: 4 kB sectors, 2000-byte raw chunks, sampled cut points. */
@@ -825,6 +946,199 @@ GL_TEST(test_store_power_cut_everywhere)
     GL_CHECK_EQ(failures, 0);
 }
 
+
+/* Review finding: the store accepted any geometry, but its power-fail
+ * guarantee needs the whole set of values to fit one sector.  6 items of
+ * 100 bytes in 256-byte sectors: every put was acknowledged and 35099
+ * acknowledged values were lost over the cut points.  Now the put that
+ * would make the set too large is refused, before anything is changed. */
+GL_TEST(test_store_refuses_a_set_that_does_not_fit_one_sector)
+{
+    static gl_store_t st, st2;
+    uint8_t v[GL_STORE_MAX_ITEM_LEN];
+    const uint8_t *d;
+    size_t len;
+    unsigned long long total_events;
+    unsigned lost = 0, refused = 0;
+
+    fresh(SS, ST_NSEC);
+    GL_CHECK_EQ(gl_store_mount(&st, &fl, 0, ST_NSEC), GL_OK);
+    for (uint32_t ver = 1; ver <= 6; ver++) {
+        for (uint8_t id = 1; id <= 6; id++) {
+            memset(v, (int)(id * 16u + ver), sizeof(v));
+            const gl_status_t s = gl_store_put(&st, id, v, 100);
+            /* 16 + 2 x 116 = 248 <= 256; a third 100-byte item cannot fit */
+            GL_CHECK_EQ(s, (id <= 2u) ? GL_OK : GL_ERR_FULL);
+            if (s == GL_ERR_FULL) {
+                refused++;
+                GL_CHECK_EQ(gl_store_get(&st, id, &d, &len), GL_ERR_NOT_FOUND); /* RAM unchanged */
+            }
+        }
+    }
+    GL_CHECK_EQ(refused, 6u * 4u);
+    /* growing an existing item is refused the same way and leaves its value */
+    memset(v, 0x77, sizeof(v));
+    GL_CHECK_EQ(gl_store_put(&st, 2, v, 120), GL_ERR_FULL);
+    GL_CHECK_EQ(gl_store_get(&st, 2, &d, &len), GL_OK);
+    GL_CHECK_EQ(len, 100);
+    GL_CHECK_EQ(d[0], 2u * 16u + 6u);
+    total_events = sim.events_total;
+
+    /* every acknowledged value survives a cut at every event */
+    for (unsigned long long k = 0; k < total_events; k++) {
+        uint32_t acked[7] = { 0, 0, 0, 0, 0, 0, 0 };
+        uint8_t fly_id = 0;
+        uint32_t fly_ver = 0;
+        fresh(SS, ST_NSEC);
+        sim.rng = (uint32_t)(k * 40503u + 7u);
+        gl_store_mount(&st, &fl, 0, ST_NSEC);
+        gl_simflash_arm_cut(&sim, (long long)k);
+        for (uint32_t ver = 1; ver <= 6 && !sim.dead; ver++) {
+            for (uint8_t id = 1; id <= 6 && !sim.dead; id++) {
+                memset(v, (int)(id * 16u + ver), sizeof(v));
+                const gl_status_t s = gl_store_put(&st, id, v, 100);
+                if (s == GL_OK) {
+                    acked[id] = ver;
+                } else if (s != GL_ERR_FULL) {
+                    fly_id = id;
+                    fly_ver = ver;
+                }
+            }
+        }
+        gl_simflash_power_on(&sim);
+        if (gl_store_mount(&st2, &fl, 0, ST_NSEC) != GL_OK) {
+            lost++;
+            continue;
+        }
+        for (uint8_t id = 1; id <= 6; id++) {
+            uint32_t have = 0;
+            if (gl_store_get(&st2, id, &d, &len) == GL_OK && len == 100u) {
+                have = (uint32_t)d[0] - (uint32_t)id * 16u;
+            }
+            if (have != acked[id] && !(id == fly_id && have == fly_ver)) {
+                lost++;
+            }
+        }
+    }
+    printf("    6 x 100-byte items offered to 3 x 256-byte sectors: 2 accepted, 4 refused "
+           "(GL_ERR_FULL); %llu cut points, %u acknowledged values lost\n", total_events, lost);
+    GL_CHECK_EQ(lost, 0);
+    /* from GL_STORE_MIN_SECTOR_BYTES on, the largest possible set fits */
+    GL_CHECK_EQ(GL_STORE_MIN_SECTOR_BYTES, 1168u);
+    fresh(GL_STORE_MIN_SECTOR_BYTES, ST_NSEC);
+    GL_CHECK_EQ(gl_store_mount(&st, &fl, 0, ST_NSEC), GL_OK);
+    for (uint8_t id = 1; id <= 8; id++) {
+        memset(v, id, sizeof(v));
+        GL_CHECK_EQ(gl_store_put(&st, id, v, GL_STORE_MAX_ITEM_LEN), GL_OK);
+    }
+    for (uint8_t id = 1; id <= 8; id++) {
+        memset(v, id + 100, sizeof(v));
+        GL_CHECK_EQ(gl_store_put(&st, id, v, GL_STORE_MAX_ITEM_LEN), GL_OK);
+    }
+    GL_CHECK_EQ(gl_store_mount(&st2, &fl, 0, ST_NSEC), GL_OK);
+    for (uint8_t id = 1; id <= 8; id++) {
+        GL_CHECK(gl_store_get(&st2, id, &d, &len) == GL_OK && len == GL_STORE_MAX_ITEM_LEN &&
+                 d[5] == id + 100);
+    }
+}
+
+/* Review finding (mutation test): with the repair loop of gl_store_mount()
+ * disabled every test still passed, because the repair only matters after
+ * three power cuts in a row, each during a sector change-over: the value
+ * that was not yet rewritten then lives only in the sector that the third
+ * change-over erases.  This test makes such triples: random cut points,
+ * biased by construction toward change-overs (4 items fill a 256-byte
+ * sector, so most programmed bytes belong to one).  Verified by hand: with
+ * the repair disabled it reports lost values. */
+GL_TEST(test_store_three_cuts_in_a_row)
+{
+    static gl_store_t st;
+    unsigned lost = 0, trials = 0, all_three = 0;
+    uint32_t r = 0xC0FFEEu;
+
+    for (unsigned t = 0; t < 4000u; t++) {
+        uint32_t acked[5] = { 0, 0, 0, 0, 0 };
+        uint8_t fly_id[4] = { 0, 0, 0, 0 };
+        uint32_t fly_ver[4] = { 0, 0, 0, 0 };
+        uint32_t ver = 1;
+        uint8_t id = 1;
+        unsigned cuts = 0;
+        bool bad = false;
+
+        fresh(SS, ST_NSEC);
+        sim.rng = t * 2654435761u + 11u;
+        if (gl_store_mount(&st, &fl, 0, ST_NSEC) != GL_OK) {
+            lost++;
+            continue;
+        }
+        /* some history first, so that all three sectors are in use */
+        for (; ver <= 6u; ver++) {
+            for (id = 1; id <= 4; id++) {
+                uint8_t v[GL_STORE_MAX_ITEM_LEN];
+                size_t len;
+                blob_value(id, ver, v, &len);
+                if (gl_store_put(&st, id, v, len) == GL_OK) {
+                    acked[id] = ver;
+                }
+            }
+        }
+        id = 1;
+        for (unsigned c = 0; c < 3u; c++) {
+            r = r * 1664525u + 1013904223u;
+            gl_simflash_arm_cut(&sim, (long long)((r >> 8) % 330u));
+            while (!sim.dead && ver < 200u) {
+                uint8_t v[GL_STORE_MAX_ITEM_LEN];
+                size_t len;
+                blob_value(id, ver, v, &len);
+                if (gl_store_put(&st, id, v, len) == GL_OK) {
+                    acked[id] = ver;
+                } else {
+                    fly_id[c] = id;
+                    fly_ver[c] = ver;
+                }
+                if (++id > 4u) {
+                    id = 1;
+                    ver++;
+                }
+            }
+            if (sim.dead) {
+                cuts++;
+            }
+            gl_simflash_power_on(&sim);
+            /* the mount after the cut repairs; values in flight may or may
+             * not have made it */
+            if (gl_store_mount(&st, &fl, 0, ST_NSEC) != GL_OK) {
+                bad = true;
+                break;
+            }
+            for (uint8_t i = 1; i <= 4; i++) {
+                const uint32_t have = store_version(&st, i);
+                bool ok = (have == acked[i]);
+                for (unsigned q = 0; q <= c; q++) {
+                    if (i == fly_id[q] && have == fly_ver[q]) {
+                        ok = true;
+                        acked[i] = have; /* it is durable now */
+                    }
+                }
+                if (!ok) {
+                    bad = true;
+                }
+            }
+        }
+        trials++;
+        if (cuts == 3u) {
+            all_three++;
+        }
+        if (bad || sim.prog_violations != 0u) {
+            lost++;
+        }
+    }
+    printf("    store: %u runs with three power cuts in a row (%u with all three during "
+           "writes): %u with a lost value\n", trials, all_three, lost);
+    GL_CHECK_EQ(lost, 0);
+    GL_CHECK(all_three > 3000u);
+}
+
 /* ---- record codecs -------------------------------------------------------- */
 
 GL_TEST(test_record_codecs)
@@ -899,9 +1213,12 @@ int main(void)
     GL_RUN(test_double_power_cut);
     GL_RUN(test_io_error_without_power_loss);
     GL_RUN(test_erase_all_incremental_and_cut);
+    GL_RUN(test_erase_all_with_appends_in_between);
     GL_RUN(test_real_geometry_raw_chunks);
     GL_RUN(test_store_basic);
     GL_RUN(test_store_power_cut_everywhere);
+    GL_RUN(test_store_refuses_a_set_that_does_not_fit_one_sector);
+    GL_RUN(test_store_three_cuts_in_a_row);
     GL_RUN(test_record_codecs);
     return gl_test_summary();
 }

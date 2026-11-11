@@ -1,0 +1,201 @@
+{
+ "all_stages": [
+  "checks",
+  "board",
+  "route",
+  "drc",
+  "outputs",
+  "schematic"
+ ],
+ "complete_run": true,
+ "criteria": {
+  "checks_0_errors": true,
+  "kicad_drc_0_errors_0_unconnected": true,
+  "routed_100_percent": true,
+  "schematic_round_trip_matches": true
+ },
+ "design": "greenline_demo",
+ "passed": true,
+ "stages": {
+  "board": {
+   "passed": true,
+   "pcb": "greenline_demo.kicad_pcb",
+   "project": "greenline_demo.kicad_pro"
+  },
+  "checks": {
+   "errors": 0,
+   "passed": true,
+   "warnings": 0
+  },
+  "drc": {
+   "cosmetic_allow_list": [
+    "lib_footprint_issues",
+    "lib_footprint_mismatch",
+    "silk_edge_clearance",
+    "silk_over_copper",
+    "silk_overlap",
+    "text_height",
+    "text_thickness"
+   ],
+   "errors": 0,
+   "errors_by_type": {},
+   "passed": true,
+   "tracks_written": 2277,
+   "unconnected": 0,
+   "vias_written": 284,
+   "warnings_by_type": {
+    "silk_edge_clearance": 1,
+    "silk_over_copper": 34
+   }
+  },
+  "outputs": {
+   "bom": {
+    "cost_per_board": 58.06,
+    "lines": 31,
+    "parts_dnp": 0,
+    "parts_fitted": 91,
+    "unpriced_refs": []
+   },
+   "drc_clean": true,
+   "drill_tables": {
+    "greenline_demo-NPTH.drl": [
+     [
+      1.15,
+      1
+     ]
+    ],
+    "greenline_demo-PTH.drl": [
+     [
+      0.25,
+      284
+     ]
+    ]
+   },
+   "fab_zip": "greenline_demo-fab.zip",
+   "fab_zip_bytes": 147694,
+   "files": 32,
+   "passed": true,
+   "position_rows": 91,
+   "problems": []
+  },
+  "route": {
+   "audit_violations": 0,
+   "connections_routed": 261,
+   "connections_total": 261,
+   "nets": 72,
+   "passed": true,
+   "plane_pieces": {
+    "GND/In1.Cu": 4,
+    "V2V8/In2.Cu": 52
+   },
+   "routed_percent": 100.0,
+   "track_length_by_layer_mm": {
+    "B.Cu": 901.115,
+    "F.Cu": 907.58,
+    "In2.Cu": 339.227
+   },
+   "track_length_mm": 2147.922,
+   "tracks": 2277,
+   "unrouted": [],
+   "vias": 284
+  },
+  "schematic": {
+   "passed": true,
+   "pdf": "schematic/greenline_demo-schematic.pdf",
+   "pdf_pages": 8,
+   "previews": [
+    "schematic/greenline_demo-schematic-1.png",
+    "schematic/greenline_demo-schematic-2.png",
+    "schematic/greenline_demo-schematic-3.png",
+    "schematic/greenline_demo-schematic-4.png",
+    "schematic/greenline_demo-schematic-5.png",
+    "schematic/greenline_demo-schematic-6.png",
+    "schematic/greenline_demo-schematic-7.png",
+    "schematic/greenline_demo-schematic-8.png"
+   ],
+   "project": "greenline_demo.kicad_pro",
+   "root": "greenline_demo.kicad_sch",
+   "round_trip": {
+    "components_compared": 94,
+    "nets_compared": 72,
+    "ok": true,
+    "pads_compared": 332,
+    "problems": [],
+    "unconnected_compared": 21
+   },
+   "sheets": [
+    {
+     "file": "greenline_demo_mcu.kicad_sch",
+     "name": "mcu",
+     "paper": "A4",
+     "parts": 19
+    },
+    {
+     "file": "greenline_demo_camera.kicad_sch",
+     "name": "camera",
+     "paper": "A4",
+     "parts": 14
+    },
+    {
+     "file": "greenline_demo_sensor.kicad_sch",
+     "name": "sensor",
+     "paper": "A4",
+     "parts": 6
+    },
+    {
+     "file": "greenline_demo_power.kicad_sch",
+     "name": "power",
+     "paper": "A4",
+     "parts": 24
+    },
+    {
+     "file": "greenline_demo_display.kicad_sch",
+     "name": "display",
+     "paper": "A4",
+     "parts": 3
+    },
+    {
+     "file": "greenline_demo_grain.kicad_sch",
+     "name": "grain",
+     "paper": "A4",
+     "parts": 27
+    },
+    {
+     "file": "greenline_demo_service.kicad_sch",
+     "name": "service",
+     "paper": "A4",
+     "parts": 1
+    }
+   ],
+   "symbol_library": "gleda.kicad_sym",
+   "symbols": [
+    "C",
+    "Cradle_pads",
+    "D",
+    "Inclinometer",
+    "LCD_FPC_10",
+    "LED",
+    "LP5907-2.8",
+    "LSM6DSV16X",
+    "MCP1700-2.8",
+    "MCP73831",
+    "OVM7692",
+    "PD",
+    "Pad",
+    "R",
+    "SPI_flash",
+    "STM32U585RIT6",
+    "USBLC6-2SC6",
+    "XTAL"
+   ]
+  }
+ },
+ "stages_run": [
+  "checks",
+  "board",
+  "route",
+  "drc",
+  "outputs",
+  "schematic"
+ ]
+}

@@ -1,0 +1,21 @@
+{
+ "router_seconds": 414.09,
+ "routing_reused": false,
+ "seconds": {
+  "board": 1.8,
+  "checks": 0.3,
+  "drc": 1.2,
+  "outputs": 5.0,
+  "route": 416.0,
+  "schematic": 2.4,
+  "total": 426.7
+ },
+ "stages_run": [
+  "checks",
+  "board",
+  "route",
+  "drc",
+  "outputs",
+  "schematic"
+ ]
+}

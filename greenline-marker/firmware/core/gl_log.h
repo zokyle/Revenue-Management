@@ -96,6 +96,10 @@ typedef struct {
     uint32_t head_seq;        /**< its sequence number (0 = no valid sector yet) */
     uint32_t next_rec_seq;    /**< sequence number the next record will get */
     uint32_t valid_sectors;   /**< sectors with a valid header at mount / since */
+    uint32_t seq_floor;       /**< highest sector sequence number used before the last complete
+                                   gl_log_erase_all(): numbering continues above it */
+    uint32_t erase_origin;    /**< first sector of the erase in progress (absolute index) */
+    bool erasing;             /**< gl_log_erase_all() has started and not finished */
     bool mounted;
 } gl_log_t;
 
@@ -128,13 +132,15 @@ gl_status_t gl_log_mount(gl_log_t *log, const gl_flash_if_t *fl, uint32_t base_a
  * GL_ERR_PARAM.  Returns GL_OK only after the record has been programmed
  * and read back correctly; `seq_out` (may be NULL) receives its sequence
  * number.  GL_ERR_IO: flash failure (the damaged space is skipped; the
- * call may be retried).
+ * call may be retried).  GL_ERR_BUSY while an incremental erase
+ * (gl_log_erase_all) is in progress: nothing is written.
  */
 gl_status_t gl_log_append(gl_log_t *log, uint8_t type, uint8_t flags, const uint8_t *payload,
                           size_t len, uint32_t *seq_out);
 
 /** Close the head sector and start a fresh one now (drops the oldest
- *  sector).  Used by the blob store. */
+ *  sector).  Used by the blob store.  GL_ERR_BUSY during an incremental
+ *  erase. */
 gl_status_t gl_log_new_sector(gl_log_t *log);
 
 /** Free bytes left in the head sector for record headers + payloads. */
@@ -162,8 +168,20 @@ gl_status_t gl_log_read_payload(const gl_log_t *log, const gl_log_rec_t *rec, ui
  * per call (a sector erase blocks for tens of ms).  Start with *cursor = 0.
  * Returns GL_ERR_BUSY while sectors remain, GL_OK when the log is empty.
  * Only sectors that are not already blank at their header are erased.
+ *
+ * The order of the sectors is fixed when the erase starts (*cursor == 0)
+ * and gl_log_append() / gl_log_new_sector() answer GL_ERR_BUSY until it has
+ * finished or been cancelled, so no record can be written into the middle
+ * of it.  Sector sequence numbers continue above the highest one used
+ * before the erase: a sector that survived for any reason can never
+ * outrank a newer one at the next mount.
  */
 gl_status_t gl_log_erase_all(gl_log_t *log, uint32_t *cursor, uint32_t max_sectors);
+
+/** Give up an incremental erase.  The sectors erased so far stay erased
+ *  (they were the oldest); the rest of the log, including the head, is
+ *  intact and appends work again.  No effect if none is in progress. */
+void gl_log_erase_cancel(gl_log_t *log);
 
 typedef struct {
     uint32_t bytes_capacity; /**< n_sectors * sector_size */
@@ -201,6 +219,16 @@ typedef struct {
     gl_store_item_t item[GL_STORE_MAX_ITEMS];
 } gl_store_t;
 
+/** Sector size from which EVERY set of values the store can hold fits one
+ *  sector: its header plus one record of the largest size for every item
+ *  (1168 bytes).  The power-fail guarantee ("the two newest sectors always
+ *  hold a full set") needs the set in use to fit one sector; with smaller
+ *  sectors gl_store_put() enforces that per call (GL_ERR_FULL), from this
+ *  size on it can never refuse for that reason.  The application's layout
+ *  is checked against it at compile time (app/gl_app.c). */
+#define GL_STORE_MIN_SECTOR_BYTES \
+    (GL_LOG_SECTOR_HDR + GL_STORE_MAX_ITEMS * (GL_LOG_REC_HDR + GL_STORE_MAX_ITEM_LEN))
+
 /**
  * Mount the store region (n_sectors >= 3), load the newest valid value of
  * every id into RAM and repair an interrupted sector change-over.
@@ -216,7 +244,10 @@ gl_status_t gl_store_get(const gl_store_t *st, uint8_t id, const uint8_t **data,
  * Store a new value (1 <= len <= GL_STORE_MAX_ITEM_LEN, id != 0).  On GL_OK
  * the value is durable.  On an error the previous durable value is still
  * what a remount would load, but RAM already holds the new one.
- * GL_ERR_FULL: more than GL_STORE_MAX_ITEMS distinct ids.
+ * GL_ERR_FULL: more than GL_STORE_MAX_ITEMS distinct ids, or the set of
+ * values including this one would no longer fit one sector (nothing is
+ * changed in that case: an acknowledged value must survive any power cut,
+ * and that needs the whole set in one sector).
  */
 gl_status_t gl_store_put(gl_store_t *st, uint8_t id, const uint8_t *data, size_t len);
 

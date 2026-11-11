@@ -163,8 +163,22 @@ gl_status_t gl_hal_usb_start(void)
     if (started_) {
         return GL_OK;
     }
-    /* VBUS is present (the application checked): the 3.3 V VDDUSB regulator
-     * is up, so the USB supply may be declared valid */
+    /* The application has seen VBUS, so the 3.3 V VDDUSB regulator should
+     * be up.  It is not taken on trust: the USB voltage monitor must report
+     * the supply ready before the supply-valid bit is set (spring pins
+     * bounce; a pin that is not powered must not be declared valid).  The
+     * monitor API (HAL_PWREx_EnableUVM, PWR_FLAG_VDDUSBRDY) is from memory. */
+    HAL_PWREx_EnableUVM();
+    {
+        uint32_t tries = 0;
+        while (!__HAL_PWR_GET_FLAG(PWR_FLAG_VDDUSBRDY)) {
+            if (++tries > 10u) {
+                HAL_PWREx_DisableUVM();
+                return GL_ERR_STATE; /* VDDUSB not present: the application retries on the next VBUS edge */
+            }
+            gl_hal_delay_ms(1);
+        }
+    }
     HAL_PWREx_EnableVddUSB();
 
     memset(&osc, 0, sizeof(osc));
@@ -228,6 +242,7 @@ void gl_hal_usb_stop(void)
     osc.PLL.PLLState = RCC_PLL_NONE;
     (void)HAL_RCC_OscConfig(&osc);
     HAL_PWREx_DisableVddUSB();
+    HAL_PWREx_DisableUVM();
 }
 
 bool gl_hal_usb_connected(void)

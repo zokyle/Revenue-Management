@@ -73,9 +73,12 @@ void sim_lcd_extcomin(bool running, uint16_t period_ticks)
     if (!running && L.disp) {
         sim_violation(&sim_viol()->lcd, "EXTCOMIN stopped while DISP is high");
     }
-    if (running && (period_ticks < 504u || period_ticks > 607u)) {
-        /* 32768 / 607 = 54 Hz, 32768 / 504 = 65 Hz */
-        sim_violation(&sim_viol()->lcd, "EXTCOMIN period %u ticks is outside 54-65 Hz",
+    if (running && (period_ticks < 547u || period_ticks > 606u)) {
+        /* Sharp publishes two ranges, 54-65 Hz and 1-60 Hz; which is current
+         * is unconfirmed, so the model demands both: 32768 / 606 = 54.07 Hz,
+         * 32768 / 547 = 59.90 Hz (546 ticks would be 60.015 Hz: too fast
+         * for the second range) */
+        sim_violation(&sim_viol()->lcd, "EXTCOMIN period %u ticks is outside 54-60 Hz",
                       (unsigned)period_ticks);
     }
     L.extcomin = running;

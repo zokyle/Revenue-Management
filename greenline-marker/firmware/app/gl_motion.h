@@ -47,7 +47,8 @@ typedef struct {
     bool strict;                /**< see the file comment */
     bool motion_latched;        /**< GL_EV_MOTION already posted for this episode */
     bool dial_active;
-    bool spin_active;
+    bool spin_active;           /**< the gyro is being integrated for the Precision spin */
+    bool spin_reported;         /**< GL_EV_SPIN_DONE posted for the present rest position */
     bool taps_enabled;
     uint8_t moving_blocks;      /**< consecutive moving blocks */
     uint8_t displaced_blocks;   /**< consecutive blocks displaced from the rest direction */
@@ -75,8 +76,12 @@ void gl_motion_dial_end(gl_motion_t *m);
 
 /** Arm the 180-degree spin detector at a still moment: `up` is the unit up
  *  vector and `gyro_bias` the still-period gyro mean.  GL_EV_SPIN_DONE is
- *  posted when the marker is at rest again after a half turn. */
+ *  posted when the marker is at rest after a half turn.  THE INTEGRATION
+ *  GOES ON until gl_motion_spin_end(): the angle (gl_spin_yaw(&m->spin))
+ *  stays true if the marker is turned again afterwards, and if it then
+ *  comes to rest at a half turn once more, GL_EV_SPIN_DONE is posted again. */
 void gl_motion_spin_begin(gl_motion_t *m, gl_vec3_t up, gl_vec3_t gyro_bias_rad_s);
+/** Stop integrating (the angle is no longer needed). */
 void gl_motion_spin_end(gl_motion_t *m);
 
 /**

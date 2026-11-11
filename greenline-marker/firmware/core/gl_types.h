@@ -76,10 +76,11 @@ typedef struct { float m[3][3]; } gl_mat3_t;
 
 #define GL_ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
 
-/** Clamp x to [lo, hi]. */
+/** Clamp x to [lo, hi].  A NaN comes back as `lo`, never as NaN, so that
+ *  the result can always be converted to an integer. */
 static inline float gl_clampf(float x, float lo, float hi)
 {
-    return (x < lo) ? lo : ((x > hi) ? hi : x);
+    return !(x >= lo) ? lo : ((x > hi) ? hi : x);
 }
 
 /** Clamp an int to [lo, hi]. */
@@ -91,9 +92,22 @@ static inline int gl_clampi(int x, int lo, int hi)
 /** Wrap an angle to (-pi, pi]. Input must be finite and within a few turns. */
 float gl_wrap_pi(float a_rad);
 
-/** Round to nearest int (half away from zero) without calling libm. */
+/** Largest magnitude gl_roundi() returns (a float exactly representable
+ *  as an int). */
+#define GL_ROUNDI_LIMIT 2000000000
+
+/** Round to nearest int (half away from zero) without calling libm.
+ *  Saturates at +-GL_ROUNDI_LIMIT and returns 0 for NaN, so the conversion
+ *  is defined for every input (C leaves an out-of-range float-to-int
+ *  conversion undefined). */
 static inline int gl_roundi(float x)
 {
+    if (!(x > -2.0e9f)) {
+        return (x != x) ? 0 : -GL_ROUNDI_LIMIT;
+    }
+    if (x > 2.0e9f) {
+        return GL_ROUNDI_LIMIT;
+    }
     return (int)((x >= 0.0f) ? (x + 0.5f) : (x - 0.5f));
 }
 
@@ -123,9 +137,10 @@ float gl_vec3_norm(gl_vec3_t a);
 gl_vec3_t gl_vec3_unit(gl_vec3_t a);
 
 /**
- * Median of n floats (n >= 1).  Sorts `v` in place with a non-recursive
- * Shell sort (O(n^1.3)); for even n returns the mean of the two middle
- * values.  Stack use: a few words.
+ * Median of n floats (n >= 1).  SORTS `v` in place, ascending (callers may
+ * read other percentiles from it afterwards), with a non-recursive Shell
+ * sort (O(n^1.3)); for even n returns the mean of the two middle values.
+ * Stack use: a few words.
  */
 float gl_median_inplace(float *v, size_t n);
 

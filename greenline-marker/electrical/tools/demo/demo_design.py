@@ -5,22 +5,29 @@ outline, layer stack, rule set, part mix and placement of the big parts, so
 that a toolchain that takes this board to "0 errors" is a small step away
 from the real one.
 
-* outline: circle r = 21.2 mm clipped by a chord at y = +17.3 mm, 4 layers,
-  0.8 mm, rule set US_4L_FINE (board minimums 0.09 / 0.09 mm)
-* net classes: Default 0.15 / 0.127, Power 0.30 / 0.127, Fine 0.09 / 0.09
-  (only the nets on the inner balls of the two camera BGAs)
-* GND plane on In1.Cu; F.Cu, In2.Cu and B.Cu are routing layers (supplies are
-  0.30 mm tracks that may neck down to 0.15 mm), through vias only, tented
-  on the bottom side only
+* outline (rev C of ``design/master_params.yaml``): circle r = 21.1 mm clipped
+  by a chord at y = +17.3 mm, a non-plated locating hole (1.15 mm) at
+  (-4.2, 14.55) and a non-plated locating slot (1.15 x 1.65 mm) at
+  (+4.2, 14.55); 4 layers, 0.8 mm, rule set US_4L_FINE (board minimums
+  0.09 / 0.09 mm)
+* net classes: Default 0.15 / 0.127, Power 0.30 / 0.127 (may neck down to
+  0.15), Fine 0.09 / 0.09 (only the signals on the two camera BGAs), CamPower
+  0.15 / 0.09 (the camera supply balls)
+* GND plane on In1.Cu; In2.Cu is the V2V8 plane and, marked ``routable``, the
+  third routing layer next to F.Cu and B.Cu; the other supplies are tracks;
+  through vias only, tented on the bottom side only
 * top: LQFP-64 MCU (real STM32U585RITx pad map from the KiCad library, the
   camera port on the pads the design spec lists), two 25-ball 0.5 mm-pitch
   camera BGAs sharing an 11-signal bus, LGA-14 IMU, LGA-16 inclinometer,
   WSON-8 flash, four SOT-23 family regulators / charger, SOT-23-6 ESD array,
-  3215 crystal, 10-pin 0.5 mm FPC connector, a Schottky diode, 57 x 0402
+  3215 crystal, 10-pin 0.5 mm FPC connector, a Schottky diode, 60 x 0402
   passives, two battery solder pads
 * bottom: 16 x 0402 LEDs on a 5.2 mm radius about (0, -4), charlieplexed on
   5 lines through 5 series resistors, a 2-pad photodiode at (0, -4) and seven
   bare 1.8 mm contact pads at y = -17.0, x = -7.62 ... +7.62
+* mechanics: no copper on F.Cu under the IMU and inclinometer bodies, no
+  top-side parts under the battery body and on the eight 1.6 mm post feet, and
+  nothing taller than 0.95 mm under the two camera hoods except the camera
 
 The camera ball map and several pin assignments are stand-ins - see
 ``design/DESIGN_SPEC.md`` for what is verified.  ``demo_design()`` returns a

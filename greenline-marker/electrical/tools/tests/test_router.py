@@ -785,3 +785,59 @@ def test_mini_board_routes_and_passes_kicad_drc(mini, tmp_path):
     assert data["stats"]["kernel"] in ("numba", "python")
     tracks, vias = board.read_routing(files.pcb)
     assert len(tracks) == len(result.tracks) and len(vias) == len(result.vias)
+
+
+# --------------------------------------------------------------------------
+# internals worth pinning down
+# --------------------------------------------------------------------------
+
+def test_freeze_and_unfreeze_are_exact_inverses():
+    """Frozen copper moves from the negotiable maps to the hard maps and back
+    without leaving a trace (region renegotiation relies on it)."""
+    d = make_board("freeze", 16.0, 12.0)
+    for i in range(4):
+        tp(d, "L%d" % i, -5.0, 3.0 - 2.0 * i)
+        tp(d, "R%d" % i, 5.0, -3.0 + 2.0 * i, side=BOTTOM if i % 2 else "top")
+        d.net("N%d" % i, "L%d.1" % i, "R%d.1" % i)
+    r = router.Router(d, RouterOptions(layers=OUTER))
+    result = r.run()
+    assert result.complete
+
+    def state():
+        out = [r.vpref.copy()]
+        for rc in r.rcs.values():
+            out += [rc.soft.copy(), rc.pad.copy()]
+            if rc.is_via:
+                out += [rc.vhole.copy(), rc.vhard.copy()]
+        return out
+
+    before = state()
+    units = [u for u in r.units if u.routed and u.items]
+    assert units and any(it.is_via for u in units for it in u.items)
+    for u in units:
+        r._freeze(u)
+    frozen = state()
+    assert all(u.frozen for u in units)
+    assert any((a != b).any() for a, b in zip(before, frozen))
+    assert all(int(rc.soft.sum()) == 0 for rc in r.rcs.values())      # nothing negotiable left
+    assert r._rip(units[0]) == []                                      # frozen copper stays
+    for u in units:
+        r._unfreeze(u)
+    after = state()
+    assert all((a == b).all() for a, b in zip(before, after))
+    assert r._rip(units[0]) != []
+
+
+def test_escape_window_grows_past_parts_on_its_rim():
+    d = _bga_design(0.09, 0.23, US_4L_FINE)
+    r = router.Router(d)
+    arr = r.arrays[0]
+    x0, y0, x1, y1 = r._escape_window(arr["bbox"])
+    reach = 3.0 + 1.0 + 0.23 / 2.0
+    assert (x0, y0, x1, y1) == pytest.approx((-reach, -reach, reach, reach))   # nothing near
+    tp(d, "X1", 4.1, 0.0, dia=0.8)                          # a pad right on the rim
+    d.no_connect("X1.1")
+    r = router.Router(d)
+    gx0, gy0, gx1, gy1 = r._escape_window(r.arrays[0]["bbox"])
+    assert gx1 > 4.1 + 0.4 + 0.6 and gx1 <= x1 + 1.0 + 1e-9  # past the pad, within the limit
+    assert (gx0, gy0, gy1) == pytest.approx((x0, y0, y1))

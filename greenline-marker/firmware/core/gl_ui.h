@@ -116,6 +116,8 @@ typedef enum {
 #define GL_ACT_CAL_ABORT        (1u << 16)
 #define GL_ACT_REDRAW           (1u << 17) /**< the screen content changed */
 #define GL_ACT_NEW_READ         (1u << 18) /**< forget the previous result (new placement) */
+#define GL_ACT_SPIN_ABANDON     (1u << 19) /**< the Precision spin was given up: stop integrating,
+                                                show the single read for where the marker faces now */
 
 /** Guards of the transition table. */
 typedef enum {

@@ -74,6 +74,8 @@ typedef struct {
     bool precision;           /**< slope is the combination of two reads 180 degrees apart */
     float view_yaw_rad;
     bool flag_found;
+    bool bearing_valid;       /**< bearing_rad was measured in this read (also when the flag
+                                   counts as not found for lack of a range) */
     bool manual_range;        /**< the distance is the dialled one (flag-out fallback) */
     float bearing_rad;        /**< flagstick bearing from the left camera */
     float base_elev_rad, top_elev_rad;
@@ -116,6 +118,14 @@ typedef struct {
     gl_store_t store;
     gl_log_t log;
     bool imu_ok, flash_ok, storage_ok;
+    /* ---- IMU supervision (motion is the only user input) ---- */
+    uint8_t imu_fails;        /**< failed recoveries in a row */
+    bool imu_fault_shown;     /**< the failure of this episode has been reported */
+    bool wdg_hold;            /**< stop refreshing the watchdog: force a reset */
+    uint32_t imu_retry_ms;    /**< next recovery attempt (while awake) */
+    uint32_t imu_backoff_ms;
+    uint32_t imu_recoveries;  /**< successful recoveries since boot (diagnostics) */
+    uint32_t imu_polls;       /**< samples fetched by polling: an interrupt latch was lost */
     /* ---- persistent data (RAM copies of the store) ---- */
     gl_settings_t settings;
     gl_cal_tilt_t cal_tilt;
@@ -138,8 +148,14 @@ typedef struct {
     uint32_t last_sample_ms;
     uint32_t sleep_since_ms;  /**< when the device last went to sleep */
     uint32_t next_batt_ms;
-    float temp_c;
-    bool temp_valid;
+    float temp_c;             /**< IMU die temperature of the last GOOD read */
+    bool temp_valid;          /**< that read was the most recent attempt and succeeded */
+    uint32_t temp_ms;         /**< when it was taken */
+    uint32_t mcu_temp_ms;     /**< when power.mcu_temp_c was taken */
+    bool vbus_pending;        /**< a VBUS edge is being debounced */
+    uint32_t vbus_settle_ms;
+    bool storage_mode;        /**< cell nearly empty: IMU off, only the cradle wakes the device */
+    uint16_t sleep_ticks;     /**< housekeeping wake-ups since the device went to sleep */
     uint16_t last_error;      /**< gl_status_t of the last failed operation */
     uint32_t reads_total;
     uint16_t read_id;

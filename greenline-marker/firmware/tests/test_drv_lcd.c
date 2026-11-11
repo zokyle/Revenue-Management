@@ -56,8 +56,8 @@ GL_TEST(test_power_on_sequence)
     const gl_sim_trace_t *cfg = gl_sim_trace_at((size_t)i_cfg);
     GL_CHECK_EQ(cfg->b, 0x100u);
     GL_CHECK_EQ(cfg->c, 1000000u);
-    /* EXTCOMIN: 32768 / 546 = 60 Hz */
-    GL_CHECK_EQ(gl_sim_trace_at((size_t)i_tim)->c, 546u);
+    /* EXTCOMIN: 32768 / 547 = 59.905 Hz, inside both published ranges */
+    GL_CHECK_EQ(gl_sim_trace_at((size_t)i_tim)->c, 547u);
 
     /* the clear command is exactly M2 + 8 dummy bits */
     const gl_sim_lcd_t *p = gl_sim_lcd();

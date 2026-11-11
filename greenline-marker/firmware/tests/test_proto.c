@@ -364,13 +364,17 @@ GL_TEST(test_commands)
         GL_CHECK_EQ(pl[0], GL_ERR_NOT_FOUND);
     }
 
-    /* START_CAL passes through, including the app's refusal */
+    /* START_CAL passes through, including the app's refusal (the session
+     * is unlocked for the factory procedure; the lock itself is tested in
+     * test_locked_commands_and_reboot) */
     {
         const uint8_t a[2] = { GL_CALPROC_ZERO, 0 }, b[2] = { GL_CALPROC_SIX_FACE, 4 };
         request(9, GL_CMD_START_CAL, a, 2);
         GL_CHECK_EQ(response(8, &seq, &cmd, &pl), 1);
         GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+        proto.unlocked = true;
         request(10, GL_CMD_START_CAL, b, 2);
+        proto.unlocked = false;
         GL_CHECK_EQ(response(9, &seq, &cmd, &pl), 1);
         GL_CHECK_EQ(pl[0], GL_OK);
         GL_CHECK_EQ(app.calproc, GL_CALPROC_SIX_FACE);
@@ -480,7 +484,44 @@ GL_TEST(test_locked_commands_and_reboot)
     gl_proto_disconnect(&proto);
     GL_CHECK(!proto.unlocked);
 
-    /* reboot: bad magic does nothing; "DFU!" answers first, then reboots */
+    /* START_CAL: ZERO passes through to the app's refusal; the procedures
+     * that measure for or write stored calibration need UNLOCK (review
+     * finding: GRAIN_WHITE and the six-face solve overwrote calibration
+     * from a locked session); ABORT is always allowed */
+    fresh();
+    {
+        const uint8_t a[2] = { GL_CALPROC_ZERO, 0 }, b[2] = { GL_CALPROC_SIX_FACE, 4 };
+        const uint8_t locked[][2] = { { GL_CALPROC_SIX_FACE, 0 }, { GL_CALPROC_SIX_FACE, 6 },
+                                      { GL_CALPROC_GRAIN_WHITE, 0 }, { GL_CALPROC_GRAIN_FLOOR, 8 },
+                                      { GL_CALPROC_CAM_HORIZON, 0 }, { 0x55, 0 } };
+        const uint8_t stop[2] = { GL_CALPROC_ABORT, 0 };
+        int r = 0;
+        request(9, GL_CMD_START_CAL, a, 2);
+        GL_CHECK_EQ(response(r++, &seq, &cmd, &pl), 1);
+        GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+        GL_CHECK_EQ(app.calproc, GL_CALPROC_ZERO); /* it was the app that refused */
+        app.calproc = 0;
+        for (size_t i = 0; i < sizeof(locked) / sizeof(locked[0]); i++) {
+            request((uint8_t)(20 + i), GL_CMD_START_CAL, locked[i], 2);
+            GL_CHECK_EQ(response(r++, &seq, &cmd, &pl), 1);
+            GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+            GL_CHECK_EQ(app.calproc, 0); /* never reached the application */
+        }
+        request(30, GL_CMD_START_CAL, stop, 2);
+        GL_CHECK_EQ(response(r++, &seq, &cmd, &pl), 1);
+        GL_CHECK_EQ(app.calproc, GL_CALPROC_ABORT);
+        request(31, GL_CMD_UNLOCK, "GLFC", 4);
+        GL_CHECK_EQ(response(r++, &seq, &cmd, &pl), 1);
+        request(10, GL_CMD_START_CAL, b, 2);
+        GL_CHECK_EQ(response(r++, &seq, &cmd, &pl), 1);
+        GL_CHECK_EQ(pl[0], GL_OK);
+        GL_CHECK_EQ(app.calproc, GL_CALPROC_SIX_FACE);
+        GL_CHECK_EQ(app.calarg, 4);
+    }
+
+    /* reboot: bad magic does nothing; "DFU!" needs UNLOCK (review finding:
+     * the ROM bootloader has no time-out and the consumer cradle no reset
+     * contact), answers first, then reboots; a plain reset needs no unlock */
     fresh();
     request(1, GL_CMD_REBOOT, "XXXX", 4);
     GL_CHECK_EQ(response(0, &seq, &cmd, &pl), 1);
@@ -488,11 +529,18 @@ GL_TEST(test_locked_commands_and_reboot)
     GL_CHECK_EQ(app.reboot_calls, 0);
     request(2, GL_CMD_REBOOT, "DFU!", 4);
     GL_CHECK_EQ(response(1, &seq, &cmd, &pl), 1);
+    GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+    GL_CHECK_EQ(app.reboot_calls, 0);
+    request(3, GL_CMD_UNLOCK, "GLFC", 4);
+    GL_CHECK_EQ(response(2, &seq, &cmd, &pl), 1);
+    request(4, GL_CMD_REBOOT, "DFU!", 4);
+    GL_CHECK_EQ(response(3, &seq, &cmd, &pl), 1);
     GL_CHECK_EQ(pl[0], GL_OK);
     GL_CHECK_EQ(app.reboot_calls, 1);
     GL_CHECK(app.reboot_dfu);
-    GL_CHECK_EQ(app.reboot_tx_frames_at_call, 2); /* response already sent */
-    request(3, GL_CMD_REBOOT, "BOOT", 4);
+    GL_CHECK_EQ(app.reboot_tx_frames_at_call, 4); /* response already sent */
+    gl_proto_disconnect(&proto); /* locked again */
+    request(5, GL_CMD_REBOOT, "BOOT", 4);
     GL_CHECK_EQ(app.reboot_calls, 2);
     GL_CHECK(!app.reboot_dfu);
 }

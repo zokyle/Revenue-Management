@@ -660,6 +660,7 @@ class Router:
         self.pad_masks: Dict[Tuple[int, Any], Any] = {}
         self._forced_cells: List[Tuple[int, int, int]] = []
         self._force_left = 0
+        self._copper_tree: Any = None
         self._inner: Dict[float, Any] = {}
         self.stats: Dict[str, Any] = {"searches": 0, "expansions": 0, "ripups": 0,
                                       "reroutes": 0}
@@ -1059,7 +1060,10 @@ class Router:
             # pads beyond it) still have to be reached from outside the window
             pts = shapely.points([self.grid.x_of(ix) for ix, _iy in border],
                                  [self.grid.y_of(iy) for _ix, iy in border])
-            near = self.pad_tree.query(pts, predicate="dwithin", distance=o.escape_pad_gap)
+            if self._copper_tree is None:                     # pad copper outlines, built once
+                self._copper_tree = STRtree([p.poly for p in self.pads])
+            near = self._copper_tree.query(pts, predicate="dwithin",
+                                           distance=o.escape_pad_gap)
             crowded = set(int(i) for i in near[0])
             border = [b for i, b in enumerate(border) if i not in crowded]
             rim = np.array([(l, ix, iy) for l in range(self.L) for ix, iy in border],
@@ -2783,7 +2787,12 @@ class Router:
         return res
 
     def _emit(self) -> Tuple[List[Track], List[Via]]:
-        """Final cleanup and conversion to model primitives."""
+        """Final cleanup and conversion to model primitives.
+
+        Per net: duplicate, dangling and looping track pieces go
+        (:func:`cleanup_segments`), and so does a via that no longer joins
+        two things (an escape via whose way on was never used, say) - then
+        the cleanup runs again, because the track into that via now dangles."""
         g = self.grid
         tracks: List[Track] = []
         vias: List[Via] = []
@@ -2793,17 +2802,16 @@ class Router:
                 continue
             ctx = self.ctx[name]
             stubs = [it for it in items if not it.is_via and it.b is None]
-            vnodes = sorted({it.a for it in items if it.is_via})
-            anchors: Set[Tuple[int, int, int]] = set()
+            vset = {it.a for it in items if it.is_via}
+            base: Set[Tuple[int, int, int]] = set()
+            pad_layers: Dict[Tuple[int, int], Set[int]] = {}
             for p in ctx.pads:
-                for n in p.nodes:
+                for n in p.nodelist:
+                    pad_layers.setdefault(n, set()).update(p.lay)
                     for l in p.lay:
-                        anchors.add((l, int(n[0]), int(n[1])))
+                        base.add((l, n[0], n[1]))
             for s in stubs:
-                anchors.add((s.layer, s.a[0], s.a[1]))
-            for v in vnodes:
-                for l in range(self.L):
-                    anchors.add((l, v[0], v[1]))
+                base.add((s.layer, s.a[0], s.a[1]))
             groups: Dict[float, List[Any]] = {}
             for it in items:
                 if not it.is_via and it.b is not None:
@@ -2821,22 +2829,49 @@ class Router:
                         for i in range(n + 1):
                             nodes.add((layer, a[0] + sx * i, a[1] + sy * i))
                     covered[width] = nodes
-            for width in sorted(groups):
-                other: Set[Tuple[int, int, int]] = set()
-                for w2, nodes in covered.items():
-                    if w2 != width:
-                        other |= nodes
-                joints = (covered.get(width, set()) & other) if other else set()
-                cleaned = cleanup_segments(groups[width], anchors | joints, set(vnodes),
-                                           self.L, breaks=joints)
-                for layer, a, b in cleaned:
+            cleaned: Dict[float, List[Any]] = {}
+            for _pass in range(6):
+                anchors = set(base)
+                for v in vset:
+                    for l in range(self.L):
+                        anchors.add((l, v[0], v[1]))
+                cleaned = {}
+                for width in sorted(groups):
+                    other: Set[Tuple[int, int, int]] = set()
+                    for w2, nodes in covered.items():
+                        if w2 != width:
+                            other |= nodes
+                    joints = (covered.get(width, set()) & other) if other else set()
+                    cleaned[width] = cleanup_segments(groups[width], anchors | joints,
+                                                      set(vset), self.L, breaks=joints)
+                # what does each via join?  track ends per layer, pad copper, the plane
+                joined: Dict[Tuple[int, int], Set[Any]] = {v: set() for v in vset}
+                for segs in cleaned.values():
+                    for layer, a, b in segs:
+                        for n in (a, b):
+                            if n in joined:
+                                joined[n].add(layer)
+                for st in stubs:
+                    if st.a in joined:
+                        joined[st.a].add(st.layer)
+                for v in vset:
+                    joined[v].update(pad_layers.get(v, ()))
+                    if ctx.plane:
+                        joined[v].add("plane")
+                dead = [v for v in vset if len(joined[v]) < 2]
+                if not dead:
+                    break
+                vset -= set(dead)
+            for width in sorted(cleaned):
+                for layer, a, b in cleaned[width]:
                     x1, y1 = g.xy(*a)
                     x2, y2 = g.xy(*b)
                     tracks.append(Track(name, self.layers[layer], x1, y1, x2, y2, width))
-            for s in stubs:
-                tracks.append(Track(name, self.layers[s.layer], round(s.x1, 6), round(s.y1, 6),
-                                    round(s.x2, 6), round(s.y2, 6), round(2.0 * s.hw, 6)))
-            for v in vnodes:
+            for st in stubs:
+                tracks.append(Track(name, self.layers[st.layer], round(st.x1, 6),
+                                    round(st.y1, 6), round(st.x2, 6), round(st.y2, 6),
+                                    round(2.0 * st.hw, 6)))
+            for v in sorted(vset):
                 x, y = g.xy(*v)
                 vias.append(Via(name, x, y, ctx.via_d, ctx.via_drill))
         return tracks, vias

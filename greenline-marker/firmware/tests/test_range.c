@@ -118,8 +118,10 @@ GL_TEST(test_fusion_weights)
     }
     /* Learned stick (1 %): at 10 m mono (about 1 %) dominates over stereo (6 %) */
     h.sigma_m = 0.0196f;
-    in = measure(10.0, 1.96, 0.25, 0.0, true); /* stereo off by +0.25 px = 3 sigma */
+    in = measure(10.0, 1.96, 0.20, 0.0, true); /* stereo off by +0.20 px = 2.5 sigma */
     GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+    GL_CHECK(r.consistent);
+    GL_CHECK_EQ(r.sources, GL_RANGE_SRC_STEREO | GL_RANGE_SRC_MONO);
     GL_CHECK_NEAR(r.range_m, 10.0, 0.08);
     GL_CHECK(fabsf(r.stereo_m - 10.0f) > 1.2f);
     GL_CHECK(r.sigma_m < 0.15f);
@@ -158,7 +160,225 @@ GL_TEST(test_inconsistency_flag)
     GL_CHECK(!r.consistent);
     GL_CHECK(r.chi2 > 9.0f);
     GL_CHECK(r.sigma_m > 1.5f * r0.sigma_m); /* uncertainty inflated, not hidden */
+    /* not averaged: one source (stereo, below 5 m), sigma at least half the
+     * disagreement */
+    GL_CHECK_EQ(r.sources, GL_RANGE_SRC_STEREO);
+    GL_CHECK_NEAR(r.range_m, r.stereo_m, 1e-6);
+    GL_CHECK(r.sigma_m >= 0.5f * fabsf(r.stereo_m - r.mono_m) * 0.999f);
 }
+/* A direct input: stereo at z_stereo with the given disparity sigma, and an
+ * angular height that corresponds to z_mono for a 1.96 m stick (0 = none). */
+static gl_range_input_t probe(double z_stereo, double sigma_d, double z_mono)
+{
+    gl_range_input_t in;
+    memset(&in, 0, sizeof(in));
+    in.f_px = (float)F;
+    in.baseline_m = (float)B;
+    in.have_stereo = true;
+    in.disparity_px = (float)(F * B / z_stereo);
+    in.disparity_sigma_px = (float)sigma_d;
+    if (z_mono > 0.0) {
+        in.have_height = true;
+        in.base_visible = true;
+        in.tan_base = 0.0f;
+        in.tan_top = (float)(1.96 / z_mono);
+        in.elev_sigma_rad = 0.3f / 657.0f;
+    }
+    return in;
+}
+
+/* Review finding: the reviewers' probe table.  Two sources that contradict
+ * each other used to give a confident weighted mean sitting on whichever
+ * claimed the smaller sigma (6.02 +- 0.03 m for stereo 6.00 / mono 6.40); a
+ * slightly negative disparity discarded a valid monocular range; and
+ * insignificant disparities came out as "60 m, GL_OK". */
+GL_TEST(test_contradicting_and_insignificant_sources)
+{
+    gl_stick_height_t h;
+    gl_range_result_t r;
+    gl_range_input_t in;
+    static const double mono[3] = { 6.4, 7.0, 9.0 };
+
+    gl_stick_height_reset(&h);
+    h.sigma_m = 0.02f; /* learned */
+    printf("    stereo 6.00 m (sigma_d 0.005 px) against a learned-height angular range:\n");
+    for (int i = 0; i < 3; i++) {
+        in = probe(6.0, 0.005, mono[i]);
+        GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+        printf("      mono %.2f m: chi2 %.0f -> %.2f +- %.2f m from %s, consistent = %d\n", mono[i],
+               (double)r.chi2, (double)r.range_m, (double)r.sigma_m,
+               (r.sources == GL_RANGE_SRC_MONO) ? "the angular height" : "stereo",
+               (int)r.consistent);
+        GL_CHECK(!r.consistent);
+        GL_CHECK(r.chi2 > 9.0f);
+        /* one source, never the average; beyond 5 m with a learned height it
+         * is the angular height */
+        GL_CHECK_EQ(r.sources, GL_RANGE_SRC_MONO);
+        GL_CHECK_NEAR(r.range_m, mono[i], 1e-3);
+        /* and the claim covers half the disagreement, so that the other
+         * source lies within 2 sigma */
+        GL_CHECK(r.sigma_m >= 0.5f * (float)(mono[i] - 6.0) * 0.999f);
+        GL_CHECK(fabsf(r.range_m - 6.0f) <= 2.0f * r.sigma_m * 1.001f);
+        /* both single estimates are still reported */
+        GL_CHECK_NEAR(r.stereo_m, 6.0, 1e-3);
+        GL_CHECK_NEAR(r.mono_m, mono[i], 1e-3);
+    }
+    /* below 5 m stereo is believed, whatever the height says */
+    in = probe(3.0, 0.02, 3.6);
+    GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+    GL_CHECK(!r.consistent);
+    GL_CHECK_EQ(r.sources, GL_RANGE_SRC_STEREO);
+    GL_CHECK_NEAR(r.range_m, 3.0, 1e-3);
+    GL_CHECK(r.sigma_m >= 0.299f);
+    /* and so it is beyond 5 m while the stick height is only the 7 % prior */
+    gl_stick_height_reset(&h);
+    in = probe(6.0, 0.005, 9.0);
+    GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+    GL_CHECK(!r.consistent);
+    GL_CHECK_EQ(r.sources, GL_RANGE_SRC_STEREO);
+    GL_CHECK_NEAR(r.range_m, 6.0, 1e-3);
+    GL_CHECK(r.sigma_m >= 1.499f);
+    h.sigma_m = 0.02f;
+
+    /* disparity -0.02 +- 0.01 px with a valid angular range of 12 m: the
+     * angular range is the answer (it used to be GL_ERR_NOT_FOUND) */
+    in = probe(6.0, 0.01, 12.0);
+    in.disparity_px = -0.02f;
+    GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+    GL_CHECK_EQ(r.sources, GL_RANGE_SRC_MONO);
+    GL_CHECK(r.stereo_rejected);
+    GL_CHECK_NEAR(r.range_m, 12.0, 1e-3);
+    GL_CHECK_NEAR(r.stereo_m, 0.0, 1e-9);
+    GL_CHECK(r.consistent); /* nothing to compare with */
+    printf("    disparity -0.02 +- 0.01 px, angular height for 12 m: %.2f +- %.2f m (stereo "
+           "rejected)\n", (double)r.range_m, (double)r.sigma_m);
+
+    /* insignificant disparities are not ranges (they used to be 60 m, OK) */
+    in = probe(6.0, 0.04, 0.0);
+    in.disparity_px = 0.05f;
+    GL_CHECK_EQ(gl_range_fuse(&in, NULL, &r), GL_ERR_NOT_FOUND);
+    GL_CHECK(r.stereo_rejected);
+    in.disparity_px = 0.20f;
+    in.disparity_sigma_px = 0.20f;
+    GL_CHECK_EQ(gl_range_fuse(&in, NULL, &r), GL_ERR_NOT_FOUND);
+    GL_CHECK(r.stereo_rejected);
+    /* exactly at the significance limit and just below it */
+    in.disparity_px = 0.60f;
+    in.disparity_sigma_px = 0.199f;
+    GL_CHECK_EQ(gl_range_fuse(&in, NULL, &r), GL_OK);
+    GL_CHECK(!r.stereo_rejected);
+    in.disparity_sigma_px = 0.201f;
+    GL_CHECK_EQ(gl_range_fuse(&in, NULL, &r), GL_ERR_NOT_FOUND);
+
+    /* a significant disparity that means more than 40 m is refused, not
+     * clamped: 0.30 +- 0.02 px is 43.8 m */
+    in = probe(43.8, 0.02, 0.0);
+    GL_CHECK_EQ(gl_range_fuse(&in, NULL, &r), GL_ERR_NOT_FOUND);
+    GL_CHECK(r.stereo_rejected);
+    in = probe(39.0, 0.02, 0.0);
+    GL_CHECK_EQ(gl_range_fuse(&in, NULL, &r), GL_OK);
+    GL_CHECK_NEAR(r.range_m, 39.0, 0.05);
+    /* the same for an angular height (a 5 cm "stick": 39 m away, or a twig) */
+    in = probe(6.0, 0.01, 45.0);
+    in.have_stereo = false;
+    GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_ERR_NOT_FOUND);
+    /* a manual distance is clamped to the limit, as before */
+    memset(&in, 0, sizeof(in));
+    in.manual_m = 55.0f;
+    GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+    GL_CHECK_NEAR(r.range_m, GL_RANGE_MAX_M, 1e-6);
+}
+
+/* Review finding: a bright flag moved the detected top to the flag's lower
+ * edge (mono range 19-23 % long) and the stick height was learned from it.
+ * The vision now says when the top end lies in clutter; such an angular
+ * height is not used and not learned from. */
+GL_TEST(test_top_in_clutter_is_not_used)
+{
+    gl_stick_height_t h;
+    gl_range_result_t r;
+    gl_range_input_t in;
+    gl_stick_height_reset(&h);
+    h.sigma_m = 0.02f;
+    /* the flag's lower edge at 1.57 m: mono would say 7.5 m for a 6 m stick */
+    in = probe(6.0, 0.06, 6.0 * 1.96 / 1.57);
+    in.top_in_clutter = true;
+    GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+    GL_CHECK_EQ(r.sources, GL_RANGE_SRC_STEREO);
+    GL_CHECK_NEAR(r.range_m, 6.0, 1e-3);
+    GL_CHECK_NEAR(r.mono_m, 0.0, 1e-9);
+    GL_CHECK(r.consistent);
+    GL_CHECK(!gl_stick_height_learn(&h, &in));
+    GL_CHECK_EQ(h.updates, 0);
+    GL_CHECK_EQ(h.rejected, 0);
+    GL_CHECK_NEAR(h.height_m, 1.96, 1e-6);
+    /* without the stereo there is then no range at all */
+    in.have_stereo = false;
+    GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_ERR_NOT_FOUND);
+    /* the same read with a clean top is used and learned from */
+    in = probe(6.0, 0.06, 6.0);
+    GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+    GL_CHECK_EQ(r.sources, GL_RANGE_SRC_STEREO | GL_RANGE_SRC_MONO);
+    GL_CHECK(gl_stick_height_learn(&h, &in));
+}
+
+/* Review finding: non-finite inputs.  gl_range_fuse() returned GL_OK with
+ * an infinite sigma and gl_stick_height_learn() turned the learned height
+ * into NaN when tan_top was +inf.  (Runs under UBSan in `make asan`.) */
+GL_TEST(test_non_finite_inputs)
+{
+    const float bad[3] = { (float)NAN, (float)INFINITY, -(float)INFINITY };
+    gl_stick_height_t h;
+    gl_range_result_t r;
+    gl_range_input_t in;
+
+    for (int i = 0; i < 3; i++) {
+        float *field[8];
+        gl_stick_height_reset(&h);
+        h.sigma_m = 0.02f;
+        field[0] = &in.disparity_px;
+        field[1] = &in.disparity_sigma_px;
+        field[2] = &in.tan_top;
+        field[3] = &in.tan_base;
+        field[4] = &in.elev_sigma_rad;
+        field[5] = &in.f_px;
+        field[6] = &in.baseline_m;
+        field[7] = &in.cos_bearing;
+        for (int k = 0; k < 8; k++) {
+            gl_status_t st;
+            in = probe(5.0, 0.06, 5.0);
+            *field[k] = bad[i];
+            st = gl_range_fuse(&in, &h, &r);
+            if (st == GL_OK) {
+                /* whatever was still usable gave a finite, plausible answer */
+                GL_CHECK(isfinite(r.range_m) && isfinite(r.sigma_m) && r.sigma_m > 0.0f);
+                GL_CHECK(r.range_m >= GL_RANGE_MIN_M && r.range_m <= GL_RANGE_MAX_M);
+            } else {
+                GL_CHECK_EQ(st, GL_ERR_NOT_FOUND);
+            }
+            (void)gl_stick_height_learn(&h, &in);
+            GL_CHECK(isfinite(h.height_m) && isfinite(h.sigma_m));
+            GL_CHECK(h.height_m > 1.0f && h.height_m < 3.0f);
+        }
+        /* a non-finite stick height record does not poison the result */
+        in = probe(5.0, 0.06, 5.0);
+        h.height_m = bad[i];
+        GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+        GL_CHECK_EQ(r.sources, GL_RANGE_SRC_STEREO);
+        GL_CHECK(!gl_stick_height_learn(&h, &in));
+        gl_stick_height_reset(&h);
+        h.sigma_m = bad[i];
+        GL_CHECK_EQ(gl_range_fuse(&in, &h, &r), GL_OK);
+        GL_CHECK(isfinite(r.sigma_m));
+        GL_CHECK(!gl_stick_height_learn(&h, &in));
+        /* manual */
+        memset(&in, 0, sizeof(in));
+        in.manual_m = bad[i];
+        GL_CHECK_EQ(gl_range_fuse(&in, NULL, &r), GL_ERR_NOT_FOUND);
+    }
+}
+
+
 
 GL_TEST(test_manual_override)
 {
@@ -377,6 +597,9 @@ int main(void)
     GL_RUN(test_stereo_only);
     GL_RUN(test_fusion_weights);
     GL_RUN(test_inconsistency_flag);
+    GL_RUN(test_contradicting_and_insignificant_sources);
+    GL_RUN(test_top_in_clutter_is_not_used);
+    GL_RUN(test_non_finite_inputs);
     GL_RUN(test_manual_override);
     GL_RUN(test_stick_height_learning);
     GL_RUN(test_fusion_monte_carlo);

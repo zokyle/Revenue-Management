@@ -10,14 +10,27 @@
  *   - 0Ch: bit 7 vertical flip, bit 6 horizontal mirror, bit 4 YU/YV swap,
  *     bits 2 and 1 = output drivers enabled (1 = driven); reset value 16h.
  *   - 0Eh bit 3: sleep (stops streaming).
- *   - PWDN high = power-down; in power-down the outputs are released.
+ *   - PWDN high = power-down (no streaming, no SCCB).  Whether the PADS are
+ *     released in power-down follows GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS:
+ *     with 0 (the default: not confirmed) a powered sensor keeps its pads
+ *     enabled, at static levels, as long as register 0Ch says so, PWDN or
+ *     not.  The model therefore distinguishes
+ *       pads      powered and 0Ch bits set (and not PWDN, if PWDN tri-states)
+ *       driving   pads and streaming: valid frames on the bus
+ *     Two sensors with their pads enabled at once are a contention.  Before
+ *     both have been released once since the rail came on (power-up: both
+ *     leave reset with 0Ch = 16h) that time is ACCUMULATED in the statistics
+ *     (cam_powerup_overlap_us, the part with one sensor streaming in
+ *     cam_powerup_overlap_streaming_us); afterwards it is a violation.
  *   - Window: column 0 at HSTART (17h) = 69h in units of 4 pixels, row 0 at
  *     VSTART (19h) = 0Ch in units of 2 lines, HSIZE (18h) = (width + 16) / 4,
  *     VSIZE (1Ah) = (height + 12) / 2, output size in CCh..CFh, input size in
  *     C8h..CBh equal to the output size (no scaling).  After a reset the
  *     vertical output size reads 180h (384 lines), as the comments of the
  *     public driver say, so a driver that wants VGA must program it.
- *   - YUV422 with Y as the first byte of each pair while 0Ch bit 4 is clear.
+ *   - YUV422 with Y as the first byte of each pair while 0Ch bit 4 has its
+ *     reset value (set); clearing it moves Y to the second byte.  A GUESS,
+ *     the same one as GL_PROV_OV7692_Y_IS_FIRST_BYTE (see there).
  *   - The image is upright (as the firmware defines it) when the vertical
  *     flip bit is set and the mirror bit clear: the fold prism is assumed to
  *     invert the image top to bottom.
@@ -30,6 +43,7 @@
  */
 #include <string.h>
 
+#include "gl_provisional.h"
 #include "gl_sim_internal.h"
 
 #define CAM_ADDR7 0x3C
@@ -48,6 +62,8 @@ typedef struct {
     uint8_t bank;
     bool powered, clocked, pwdn;
     bool streaming, driving;
+    bool pads;            /* output pads enabled (see the file comment) */
+    bool released_once;   /* 0Ch written with the drive bits clear since power-on */
     uint64_t t_stream0;
     uint32_t phase_us;
     uint64_t reset_done_at;
@@ -56,6 +72,9 @@ typedef struct {
 static cam_t C[GL_CAM_COUNT];
 static bool xvclk_on_;
 static bool contention_;
+static bool overlap_;          /* both pads enabled during the power-up window */
+static bool overlap_streaming_;
+static uint64_t overlap_since_;
 static gl_sim_scene_fn_t scene_fn_;
 static void *scene_ctx_;
 
@@ -68,6 +87,7 @@ static struct {
     size_t bytes;
     uint64_t t_event;
     bool will_timeout;
+    uint32_t done_us;
     int cam;
     uint64_t t_frame;
     uint32_t frame_no;
@@ -104,6 +124,9 @@ void sim_cam_reset(void)
     D.cam = -1;
     xvclk_on_ = false;
     contention_ = false;
+    overlap_ = false;
+    overlap_streaming_ = false;
+    overlap_since_ = 0;
     scene_fn_ = NULL;
     scene_ctx_ = NULL;
     for (int i = 0; i < (int)GL_CAM_COUNT; i++) {
@@ -172,6 +195,7 @@ void sim_cam_update(void)
         if (!rail && c->powered) {
             defaults_(c); /* registers are lost with the supply */
             c->reset_done_at = 0;
+            c->released_once = false;
         }
         c->powered = rail;
         c->clocked = xvclk_on_;
@@ -186,17 +210,38 @@ void sim_cam_update(void)
             c->t_stream0 = t + c->phase_us;
         }
         c->streaming = streaming;
-        const bool driving = streaming && (c->reg[0][0x0C] & 0x06u) != 0u;
+        const bool enabled = (c->reg[0][0x0C] & 0x06u) != 0u;
+        const bool driving = streaming && enabled;
         if (driving != c->driving && D.busy) {
             D.disturbed = true;
         }
         c->driving = driving;
+        if (c->powered && !enabled) {
+            c->released_once = true;
+        }
+        c->pads = c->present && c->powered && enabled &&
+                  !((GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS != 0) && c->pwdn);
     }
-    const bool both = C[0].driving && C[1].driving;
-    if (both && !contention_) {
-        sim_violation(&sim_viol()->cam_contention, "both cameras drive the shared bus");
+    {
+        const bool both = C[0].pads && C[1].pads;
+        const bool settled = C[0].released_once && C[1].released_once;
+        const bool streaming = C[0].streaming || C[1].streaming;
+        const uint64_t now = sim_now();
+        /* close the interval that has just ended */
+        if (overlap_) {
+            sim_stat()->cam_powerup_overlap_us += now - overlap_since_;
+            if (overlap_streaming_) {
+                sim_stat()->cam_powerup_overlap_streaming_us += now - overlap_since_;
+            }
+        }
+        overlap_ = both && !settled;
+        overlap_streaming_ = overlap_ && streaming;
+        overlap_since_ = now;
+        if (both && settled && !contention_) {
+            sim_violation(&sim_viol()->cam_contention, "both cameras drive the shared bus");
+        }
+        contention_ = both && settled;
     }
-    contention_ = both;
 }
 
 void sim_cam_xvclk(bool running, uint32_t hz)
@@ -243,6 +288,7 @@ gl_status_t gl_hal_sccb_write(gl_cam_id_t cam, uint8_t addr7, uint8_t reg, uint8
         defaults_(c);
         c->reset_done_at = c->reset_stuck ? SIM_NEVER : sim_now() + SCCB_WRITE_US + CAM_RESET_US;
         c->streaming = false; /* restarts when the reset completes */
+        c->released_once = false; /* 0Ch is 16h again: pads enabled */
     } else if (c->bank == 0u && (reg == 0x0Au || reg == 0x0Bu || reg == 0x1Cu || reg == 0x1Du)) {
         sim_violation(&sim_viol()->cam_sccb, "write to read-only camera register 0x%02X", reg);
     } else {
@@ -343,6 +389,11 @@ gl_dcmi_state_t gl_hal_dcmi_poll(size_t *bytes)
     return D.state;
 }
 
+uint32_t gl_hal_dcmi_done_us(void)
+{
+    return D.done_us;
+}
+
 void gl_hal_dcmi_stop(void)
 {
     D.busy = false;
@@ -363,6 +414,7 @@ static void finish_(gl_dcmi_state_t st, size_t bytes)
     D.bytes = bytes;
     if (st == GL_DCMI_DONE) {
         sim_stat()->frames_captured++;
+        D.done_us = (uint32_t)sim_now(); /* the frame-end interrupt latches the time */
     }
     sim_trace(GL_SIM_TR_DCMI_DONE, (unsigned)st, 0, (uint32_t)bytes, 0);
     sim_irq_raise(GL_IRQ_DCMI_DONE);
@@ -442,7 +494,8 @@ void sim_cam_fire(uint64_t t)
         cfg->pclk_rising_edge != true) {
         sim_violation(&sim_viol()->dcmi, "DCMI sync polarity / clock edge do not match the model");
     }
-    const unsigned y_phase = ((r[0x0C] & 0x10u) != 0u) ? 1u : 0u; /* which byte of a pair is Y */
+    /* which byte of a pair is Y: the first while bit 4 has its reset value */
+    const unsigned y_phase = ((r[0x0C] & 0x10u) != 0u) ? 0u : 1u;
     const unsigned out_w = (unsigned)cfg->width_bytes / cfg->byte_select_every;
     const unsigned out_h = cfg->height_lines;
     const bool upright_v = (((r[0x0C] & 0x80u) != 0u) == (CAM_NEEDS_VFLIP != 0));

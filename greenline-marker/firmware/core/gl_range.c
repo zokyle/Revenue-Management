@@ -56,8 +56,8 @@ gl_status_t gl_stick_height_decode(const uint8_t *blob, size_t len, gl_stick_hei
 static bool stereo_rho_(const gl_range_input_t *in, float *rho, float *sig)
 {
     float fb = in->f_px * in->baseline_m;
-    if (!in->have_stereo || !(fb > 0.0f) || !(in->disparity_sigma_px > 0.0f) ||
-        !isfinite(in->disparity_px)) {
+    if (!in->have_stereo || !(fb > 0.0f) || !isfinite(fb) || !(in->disparity_sigma_px > 0.0f) ||
+        !isfinite(in->disparity_sigma_px) || !isfinite(in->disparity_px)) {
         return false;
     }
     {
@@ -74,8 +74,9 @@ static bool mono_rho_(const gl_range_input_t *in, const gl_stick_height_t *h, fl
                       float *sig)
 {
     float th, s_th;
-    if (!in->have_height || !in->base_visible || h == NULL || !(h->height_m > 0.0f) ||
-        !(in->elev_sigma_rad > 0.0f)) {
+    if (!in->have_height || !in->base_visible || in->top_in_clutter || h == NULL ||
+        !(h->height_m > 0.0f) || !isfinite(h->height_m) || !(h->sigma_m >= 0.0f) ||
+        !isfinite(h->sigma_m) || !(in->elev_sigma_rad > 0.0f) || !isfinite(in->elev_sigma_rad)) {
         return false;
     }
     th = in->tan_top - in->tan_base;
@@ -89,15 +90,18 @@ static bool mono_rho_(const gl_range_input_t *in, const gl_stick_height_t *h, fl
     return true;
 }
 
+/* rho must be at least 1 / GL_RANGE_MAX_M (the callers check). */
 static void rho_to_range_(float rho, float sig, float *range, float *sigma)
 {
-    float z;
-    if (rho < 1.0f / GL_RANGE_MAX_M) {
-        rho = 1.0f / GL_RANGE_MAX_M;
-    }
-    z = gl_clampf(1.0f / rho, GL_RANGE_MIN_M, GL_RANGE_MAX_M);
+    const float z = gl_clampf(1.0f / rho, GL_RANGE_MIN_M, GL_RANGE_MAX_M);
     *range = z;
     *sigma = z * z * sig; /* first order: dZ = Z^2 d(rho) */
+}
+
+/* A putt-plausible inverse range. */
+static bool rho_plausible_(float rho)
+{
+    return isfinite(rho) && rho >= 1.0f / GL_RANGE_MAX_M;
 }
 
 gl_status_t gl_range_fuse(const gl_range_input_t *in, const gl_stick_height_t *h,
@@ -113,8 +117,18 @@ gl_status_t gl_range_fuse(const gl_range_input_t *in, const gl_stick_height_t *h
     out->consistent = true;
     have_s = stereo_rho_(in, &rs, &ss);
     have_m = mono_rho_(in, h, &rm, &sm);
-    /* A disparity at or below zero carries no range by itself. */
-    if (have_s && rs > 0.0f) {
+    /* Stereo counts only if the disparity is significantly above zero and
+     * the range it implies is plausible for a putt.  (A disparity of
+     * 0.05 +- 0.04 px used to come out as "60 m, GL_OK", and a slightly
+     * negative one threw a valid monocular range away with it.) */
+    if (have_s && !(rs >= GL_RANGE_MIN_DISPARITY_SNR * ss && rho_plausible_(rs))) {
+        have_s = false;
+        out->stereo_rejected = true;
+    }
+    if (have_m && !rho_plausible_(rm)) {
+        have_m = false;
+    }
+    if (have_s) {
         rho_to_range_(rs, ss, &out->stereo_m, &out->stereo_sigma_m);
     }
     if (have_m) {
@@ -132,18 +146,28 @@ gl_status_t gl_range_fuse(const gl_range_input_t *in, const gl_stick_height_t *h
         out->sources = GL_RANGE_SRC_MANUAL;
         return GL_OK;
     }
-    if (have_s && have_m) {
+    if (have_s && have_m && out->consistent) {
         float ws = 1.0f / (ss * ss), wm = 1.0f / (sm * sm);
         float rho = (ws * rs + wm * rm) / (ws + wm);
         float sig = 1.0f / sqrtf(ws + wm);
-        if (!out->consistent) {
-            sig *= sqrtf(out->chi2 / 9.0f);
-        }
-        if (!(rho > 0.0f)) {
-            return GL_ERR_NOT_FOUND;
-        }
         rho_to_range_(rho, sig, &out->range_m, &out->sigma_m);
         out->sources = GL_RANGE_SRC_STEREO | GL_RANGE_SRC_MONO;
+        return GL_OK;
+    }
+    if (have_s && have_m) {
+        /* They contradict each other: one of the two is wrong and a weighted
+         * mean would sit on whichever CLAIMS the smaller sigma.  Select one
+         * by a rule that does not depend on the claims, and say how far
+         * apart they are. */
+        const bool learned = (h != NULL) && (h->sigma_m <= GL_RANGE_LEARNED_REL_SIGMA * h->height_m);
+        const bool use_mono = learned && (out->stereo_m > GL_RANGE_STEREO_TRUST_M);
+        const float half_gap = 0.5f * fabsf(out->stereo_m - out->mono_m);
+        out->range_m = use_mono ? out->mono_m : out->stereo_m;
+        out->sigma_m = use_mono ? out->mono_sigma_m : out->stereo_sigma_m;
+        if (out->sigma_m < half_gap) {
+            out->sigma_m = half_gap;
+        }
+        out->sources = (uint8_t)(use_mono ? GL_RANGE_SRC_MONO : GL_RANGE_SRC_STEREO);
         return GL_OK;
     }
     if (have_m) {
@@ -152,7 +176,7 @@ gl_status_t gl_range_fuse(const gl_range_input_t *in, const gl_stick_height_t *h
         out->sources = GL_RANGE_SRC_MONO;
         return GL_OK;
     }
-    if (have_s && rs > 0.0f) {
+    if (have_s) {
         out->range_m = out->stereo_m;
         out->sigma_m = out->stereo_sigma_m;
         out->sources = GL_RANGE_SRC_STEREO;
@@ -166,17 +190,18 @@ bool gl_stick_height_learn(gl_stick_height_t *h, const gl_range_input_t *in)
     float rs, ss, z, sz, th, s_th, meas, r_var, p_var, innov, k, floor_sigma;
 
     if (h == NULL || in == NULL || in->manual_m > 0.0f || !in->have_height ||
-        !in->base_visible || !stereo_rho_(in, &rs, &ss) || !(rs > 0.0f) ||
-        !(in->elev_sigma_rad > 0.0f)) {
+        !in->base_visible || in->top_in_clutter || !stereo_rho_(in, &rs, &ss) ||
+        !(rs >= GL_RANGE_MIN_DISPARITY_SNR * ss) || !(in->elev_sigma_rad > 0.0f) ||
+        !isfinite(in->elev_sigma_rad) || !isfinite(h->height_m) || !isfinite(h->sigma_m)) {
         return false;
     }
     z = 1.0f / rs;
-    if (z < GL_RANGE_LEARN_MIN_M || z > GL_RANGE_LEARN_MAX_M) {
+    if (!(z >= GL_RANGE_LEARN_MIN_M && z <= GL_RANGE_LEARN_MAX_M)) {
         return false;
     }
     th = in->tan_top - in->tan_base;
-    if (!(th > 0.0f)) {
-        return false;
+    if (!(th > 0.0f) || !isfinite(th)) {
+        return false; /* an infinite tangent used to turn the learned height into NaN */
     }
     sz = z * z * ss;
     s_th = 1.41421356f * in->elev_sigma_rad;

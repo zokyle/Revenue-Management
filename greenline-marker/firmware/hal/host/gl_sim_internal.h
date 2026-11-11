@@ -60,6 +60,8 @@ void sim_imu_xfer(const gl_spi_cfg_t *cfg, const uint8_t *tx, uint8_t *rx, size_
 uint64_t sim_imu_next_event(void);
 /** Process the sample instant at time t (== sim_imu_next_event()). */
 void sim_imu_fire(uint64_t t);
+/** Die temperature of the IMU model, degrees C. */
+float sim_imu_temperature(void);
 
 /* ---- camera models (gl_sim_cam.c) -------------------------------------------------- */
 

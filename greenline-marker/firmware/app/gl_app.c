@@ -10,6 +10,11 @@
 #include "gl_provisional.h"
 #include "grain_frontend.h"
 
+/* The blob store is power-fail safe only if a full set of values fits one
+ * sector (core/gl_log.h). */
+typedef char gl_app_store_sector_holds_a_full_set_[
+    (GL_MX25R_SECTOR_BYTES >= GL_STORE_MIN_SECTOR_BYTES) ? 1 : -1];
+
 /* The zeroing rule below ("never in the cradle") rests on the cradle seating
  * the marker one way round only (master_params.yaml, cradle.orientations). */
 #if GL_CFG_CRADLE_ORIENTATIONS != 1
@@ -181,6 +186,122 @@ static void strip_hook_(void *ctx, const gl_strip_t *s, gl_cam_id_t cam, uint8_t
 }
 
 /* ======================================================================= */
+/* temperature and the charge gate                                          */
+/* ======================================================================= */
+
+/* Read the IMU's die temperature (with the driver's liveness check).  Any
+ * failure leaves the temperature UNKNOWN: temp_valid is never left over
+ * from an earlier read. */
+static void temp_refresh_(gl_app_t *app, uint32_t now)
+{
+    float t = 0.0f;
+    if (app->imu_ok && gl_imu_read_temperature(&app->imu, &t) == GL_OK) {
+        app->temp_c = t;
+        app->temp_valid = true;
+        app->temp_ms = now;
+    } else {
+        app->temp_valid = false;
+    }
+}
+
+/* Apply the charge gate from what is known NOW.  Charging needs all of:
+ * the device awake (so that this function runs again), a working IMU, an
+ * IMU temperature that passed its liveness check and is fresh, an MCU die
+ * temperature that is fresh, the two agreeing, and both inside the window.
+ * Anything else stops charging: this is the only cell-temperature
+ * protection of the product. */
+static void charge_gate_(gl_app_t *app, uint32_t now)
+{
+    const bool imu_t = app->imu_ok && app->temp_valid &&
+                       (uint32_t)(now - app->temp_ms) <= GL_APP_TEMP_MAX_AGE_MS;
+    const bool mcu_t = app->power.mcu_temp_valid &&
+                       (uint32_t)(now - app->mcu_temp_ms) <= GL_APP_TEMP_MAX_AGE_MS;
+    const float a = app->temp_c, b = app->power.mcu_temp_c;
+    const bool valid = app->awake && imu_t && mcu_t &&
+                       fabsf(a - b) <= GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C;
+    (void)gl_power_charge_gate(&app->power, (a < b) ? a : b, (a > b) ? a : b, valid);
+}
+
+/* ======================================================================= */
+/* IMU supervision: motion is the only user input                           */
+/* ======================================================================= */
+
+/* One attempt to bring the IMU back: probe, reset, and the mode the device
+ * needs right now.  On failure the part is at least asked to stop (it must
+ * not be left measuring at full rate with its interrupts unrouted). */
+static void imu_recover_(gl_app_t *app, uint32_t now)
+{
+    gl_status_t st = gl_imu_init(&app->imu, NULL);
+    if (st == GL_OK) {
+        if (!app->awake && app->storage_mode) {
+            st = GL_OK; /* gl_imu_init() leaves both sensors off: what storage mode wants */
+        } else if (app->awake) {
+            st = gl_imu_start_measure(&app->imu);
+        } else {
+            st = gl_imu_start_wake_on_motion(&app->imu, (uint16_t)GL_PROV_IMU_WAKE_THRESHOLD_MG);
+        }
+    }
+    if (st == GL_OK) {
+        if (!app->imu_ok || app->imu_fails != 0u) {
+            gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_IMU_RECOVERED, (int32_t)app->imu_fails);
+            app->imu_recoveries++;
+        }
+        app->imu_ok = true;
+        app->imu_fails = 0;
+        app->imu_fault_shown = false;
+        app->imu_backoff_ms = 0;
+        app->wdg_hold = false;
+        if (app->awake) {
+            /* the sample stream starts afresh: stillness history, gestures */
+            gl_motion_restart(&app->motion);
+            app->last_sample_ms = now;
+            app->next_batt_ms = now; /* and the temperature is read again at once */
+        }
+        return;
+    }
+    app->imu_ok = false;
+    app->temp_valid = false;
+    (void)gl_imu_stop(&app->imu); /* best effort */
+    if (app->imu_fails < 255u) {
+        app->imu_fails++;
+    }
+    app->imu_backoff_ms = (app->imu_backoff_ms == 0u) ? GL_APP_IMU_RETRY_MIN_MS
+                                                      : (2u * app->imu_backoff_ms);
+    if (app->imu_backoff_ms > GL_APP_IMU_RETRY_MAX_MS) {
+        app->imu_backoff_ms = GL_APP_IMU_RETRY_MAX_MS;
+    }
+    app->imu_retry_ms = now + app->imu_backoff_ms;
+    if (app->imu_fails >= GL_APP_IMU_MAX_FAILS && !app->usb_on) {
+        /* the last thing left to try is a clean reset (SPI peripheral, pins) */
+        app->wdg_hold = true;
+    }
+}
+
+/* The IMU failed a transfer, a check or a mode change.  The failure is
+ * treated as TRANSIENT: one recovery attempt at once; only if that fails is
+ * the fault shown (once per episode), and the retries go on with back-off
+ * while awake and at every housekeeping wake-up while asleep. */
+static void imu_failed_(gl_app_t *app, gl_status_t st, uint32_t now)
+{
+    const bool was_reading = app->tilt_active || app->capture_active;
+    app->imu_ok = false;
+    app->temp_valid = false; /* no temperature: the charge gate closes */
+    charge_gate_(app, now);
+    imu_recover_(app, now);
+    if (app->imu_ok) {
+        if (was_reading) {
+            /* samples were lost: the read in progress starts again */
+            gl_app_post(app, GL_EV_MOTION, 0);
+        }
+        return;
+    }
+    if (!app->imu_fault_shown) {
+        app->imu_fault_shown = true;
+        fault_(app, st);
+    }
+}
+
+/* ======================================================================= */
 /* wake and sleep                                                           */
 /* ======================================================================= */
 
@@ -201,6 +322,13 @@ static void usb_stop_(gl_app_t *app)
         app->stream_mask = 0;
         app->six.active = false;
         gl_proto_disconnect(&app->proto);
+    }
+    if (app->log_erasing) {
+        /* the erase is driven from the USB service: without it, give up.
+         * The oldest sectors are gone, the rest of the log is intact and
+         * accepts records again; the host starts the erase anew. */
+        app->log_erasing = false;
+        gl_log_erase_cancel(&app->log);
     }
     irq_setup_(app);
 }
@@ -227,15 +355,17 @@ static void wake_(gl_app_t *app, uint32_t now)
     }
     if (!app->awake) {
         app->awake = true;
-        if (app->imu_ok) {
-            const gl_status_t st = gl_imu_start_measure(&app->imu);
-            if (st != GL_OK) {
-                app->imu_ok = false;
-                fault_(app, st);
-            }
-        }
+        app->storage_mode = false;
         gl_motion_init(&app->motion, GL_IMU_ACCEL_G_PER_LSB_2G, GL_IMU_GYRO_RAD_S_PER_LSB_1000);
         app->last_sample_ms = now;
+        if (!app->imu_ok) {
+            imu_recover_(app, now); /* every wake-up is a chance to get it back */
+        } else {
+            const gl_status_t st = gl_imu_start_measure(&app->imu);
+            if (st != GL_OK) {
+                imu_failed_(app, st, now);
+            }
+        }
         app->next_batt_ms = now; /* measure the battery at once */
         app->batt_low_sent = false;
     }
@@ -244,36 +374,90 @@ static void wake_(gl_app_t *app, uint32_t now)
 
 static void enter_sleep_(gl_app_t *app)
 {
+    const uint32_t now = gl_hal_tick_ms();
     abort_read_(app);
     app->zero.active = false;
     app->six.active = false;
+    gl_motion_spin_end(&app->motion);
     gl_lcd_off(&app->lcd);
     if (app->usb_on) {
         usb_stop_(app);
     }
-    if (app->imu_ok &&
-        gl_imu_start_wake_on_motion(&app->imu, (uint16_t)GL_PROV_IMU_WAKE_THRESHOLD_MG) != GL_OK) {
-        app->last_error = (uint16_t)GL_ERR_IO;
+    /* Nothing supervises the temperature while the MCU is in Stop mode:
+     * charging is stopped here and resumes when the gate next runs. */
+    gl_power_charge_stop(&app->power);
+    app->awake = false;
+    app->sleep_since_ms = now;
+    app->sleep_ticks = 0;
+    /* A cell that is nearly empty is left alone: IMU off (no wake-on-motion,
+     * only the cradle wakes the device), so that the sleep drain does not
+     * take it to its protection cut-off (GL_PROV_BATT_STORAGE_MV). */
+    app->storage_mode = app->power.storage && !app->power.vbus;
+    if (app->storage_mode) {
+        gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_STORAGE, (int32_t)app->power.batt_mv);
+        if (gl_imu_stop(&app->imu) != GL_OK) {
+            app->imu_ok = false; /* retried at the housekeeping wake-ups */
+        }
+    } else if (!app->imu_ok) {
+        imu_recover_(app, now);
+    } else {
+        const gl_status_t st =
+            gl_imu_start_wake_on_motion(&app->imu, (uint16_t)GL_PROV_IMU_WAKE_THRESHOLD_MG);
+        if (st != GL_OK) {
+            /* without the wake-up interrupt the device would never wake */
+            imu_failed_(app, st, now);
+        }
     }
     if (app->flash_ok) {
         (void)gl_mx25r_sleep(&app->flash);
     }
-    app->awake = false;
-    app->sleep_since_ms = gl_hal_tick_ms();
     irq_setup_(app);
+    /* The device does not sleep in the cradle: whatever brought the UI here
+     * (an error, the low-battery screen), VBUS takes it back to the cradle
+     * state, where charging is supervised. */
+    if (app->power.vbus) {
+        gl_app_post(app, GL_EV_USB_ATTACH, 0);
+    }
 }
 
 /* ======================================================================= */
 /* power                                                                    */
 /* ======================================================================= */
 
-static void vbus_service_(gl_app_t *app)
+/* A VBUS or charger-STAT edge.  The HARDWARE rules are applied here, at
+ * once and whatever the UI is doing: with VBUS gone, USB is stopped (the
+ * USB-supply-valid bit must not stay set with VDDUSB unpowered) and the
+ * charge enable is released.  What the UI is told is debounced. */
+static void vbus_edge_(gl_app_t *app, uint32_t now)
 {
+    gl_power_poll_pins(&app->power);
+    if (!app->power.vbus) {
+        if (app->usb_on) {
+            usb_stop_(app);
+        }
+        gl_power_charge_stop(&app->power);
+    }
+    app->vbus_pending = true;
+    app->vbus_settle_ms = now + GL_APP_VBUS_DEBOUNCE_MS;
+    if (app->ui.state == (uint8_t)GL_UI_CRADLE_USB) {
+        app->redraw = true;
+    }
+}
+
+/* The VBUS level has been stable for the debounce time: tell the UI. */
+static void vbus_settled_(gl_app_t *app, uint32_t now)
+{
+    app->vbus_pending = false;
     gl_power_poll_pins(&app->power);
     if (app->power.vbus != app->ui.usb) {
         gl_app_post(app, app->power.vbus ? GL_EV_USB_ATTACH : GL_EV_USB_DETACH, 0);
+    } else if (app->power.vbus && app->ui.state == (uint8_t)GL_UI_CRADLE_USB && !app->usb_on) {
+        usb_start_(app); /* VBUS bounced: USB was stopped at the first low */
     }
-    (void)gl_power_charge_gate(&app->power, app->temp_c, app->temp_valid);
+    if (!app->power.vbus && app->usb_on) {
+        usb_stop_(app);
+    }
+    charge_gate_(app, now);
     if (app->ui.state == (uint8_t)GL_UI_CRADLE_USB) {
         app->redraw = true;
     }
@@ -292,10 +476,11 @@ static void battery_service_(gl_app_t *app, uint32_t now)
     if (gl_power_measure(&app->power) != GL_OK) {
         app->last_error = (uint16_t)GL_ERR_IO;
     }
-    if (app->imu_ok) {
-        app->temp_valid = (gl_imu_read_temperature(&app->imu, &app->temp_c) == GL_OK);
+    if (app->power.mcu_temp_valid) {
+        app->mcu_temp_ms = now;
     }
-    (void)gl_power_charge_gate(&app->power, app->temp_c, app->temp_valid);
+    temp_refresh_(app, now);
+    charge_gate_(app, now);
     /* Below the LOW threshold the battery symbol on the screens shows it;
      * the device keeps working.  Below CRITICAL it shows the low-battery
      * screen and goes to sleep (the UI's BATT_LOW event): no camera read is
@@ -325,7 +510,7 @@ static gl_status_t tilt_measure_(gl_app_t *app, gl_vec2_t *slope_raw, gl_vec3_t 
     if (st != GL_OK) {
         return st;
     }
-    app->temp_valid = (gl_imu_read_temperature(&app->imu, &app->temp_c) == GL_OK);
+    temp_refresh_(app, gl_hal_tick_ms());
     if (app->temp_valid) {
         temp = app->temp_c;
     }
@@ -435,7 +620,8 @@ static void capture_start_(gl_app_t *app)
     irq_setup_(app);
 }
 
-/* The camera part found the flagstick: range and target. */
+/* The left camera measured the flagstick (with or without a disparity):
+ * range and target. */
 static void flag_measured_(gl_app_t *app)
 {
     const gl_read_result_t *res = &app->read.result;
@@ -443,23 +629,27 @@ static void flag_measured_(gl_app_t *app)
     gl_range_input_t in;
 
     c->flag_found = true;
+    c->bearing_valid = true;
     c->manual_range = false;
     c->bearing_rad = res->angles.bearing_rad;
     c->base_elev_rad = res->angles.base_elev_rad;
     c->top_elev_rad = res->angles.top_elev_rad;
     c->top_valid = res->angles.top_valid;
     c->base = res->angles.base;
-    c->disparity_px = res->disp.disparity_px;
-    c->disparity_sigma_px = res->disp.sigma_px;
+    /* GL_READ_TIER_LEFT: no disparity; the range can then only come from the
+     * stick's angular height (if its height has been learned) */
+    c->disparity_px = res->stick_found ? res->disp.disparity_px : 0.0f;
+    c->disparity_sigma_px = res->stick_found ? res->disp.sigma_px : 0.0f;
 
     memset(&in, 0, sizeof(in));
     in.f_px = GL_CFG_CAM_F_PX;
     in.baseline_m = GL_CFG_CAM_BASELINE_M;
-    in.have_stereo = true;
-    in.disparity_px = res->disp.disparity_px;
-    in.disparity_sigma_px = res->disp.sigma_px;
+    in.have_stereo = res->stick_found;
+    in.disparity_px = c->disparity_px;
+    in.disparity_sigma_px = c->disparity_sigma_px; /* noise + static + calibration */
     in.cos_bearing = cosf(c->bearing_rad);
-    in.have_height = res->angles.top_valid;
+    in.have_height = res->stick_left.top_in_frame;
+    in.top_in_clutter = res->stick_left.top_in_clutter; /* a flag over the tip: not for ranging */
     /* For RANGING the lowest visible point counts as the base also when the
      * stick ends at the turf horizon: on a flat green the base is then within
      * (lens height / distance) of it, and a crown hides centimetres of a
@@ -468,9 +658,10 @@ static void flag_measured_(gl_app_t *app)
     in.base_visible = (res->angles.base != (uint8_t)GL_VIS_BASE_UNKNOWN);
     in.tan_top = tanf(res->angles.top_elev_rad);
     in.tan_base = tanf(res->angles.base_elev_rad);
-    in.elev_sigma_rad = ((res->angles.base == (uint8_t)GL_VIS_BASE_VISIBLE)
-                             ? GL_APP_ELEV_SIGMA_ROWS
-                             : (GL_APP_ELEV_SIGMA_ROWS + 0.5f)) / GL_CFG_CAM_F_PX;
+    /* the read's own figure for the lowest point (0.5 row and more when it
+     * was placed at the turf edge) on top of the top end's */
+    in.elev_sigma_rad = sqrtf(GL_APP_ELEV_SIGMA_ROWS * GL_APP_ELEV_SIGMA_ROWS +
+                              res->bottom_sigma_rows * res->bottom_sigma_rows) / GL_CFG_CAM_F_PX;
     c->range_valid = (gl_range_fuse(&in, &app->stick_height, &c->range) == GL_OK);
     if (gl_stick_height_learn(&app->stick_height, &in)) {
         uint8_t blob[GL_STICK_HEIGHT_BLOB_LEN];
@@ -490,8 +681,20 @@ static void flag_measured_(gl_app_t *app)
 
 static void capture_step_(gl_app_t *app)
 {
+    const uint32_t progress = app->read.progress;
     const gl_status_t st = gl_read_step(&app->read);
     if (st == GL_ERR_BUSY) {
+        if (app->read.progress != progress) {
+            /* The UI's limit on the CAPTURE state is a limit on the time
+             * WITHOUT PROGRESS, not on the whole sequence: how long that
+             * takes depends on the vision's run time on the target, which is
+             * not known yet (measured cost: README).  The sequence is still
+             * bounded: every strip capture has its own time-out in the
+             * driver, every analysis step is a bounded computation and the
+             * number of steps is fixed. */
+            gl_ui_keepalive(&app->ui, gl_hal_tick_ms());
+            gl_hal_watchdog_kick();
+        }
         return;
     }
     /* finished one way or another: the camera rail is off */
@@ -500,9 +703,18 @@ static void capture_step_(gl_app_t *app)
     irq_setup_(app);
     if (st == GL_OK) {
         flag_measured_(app);
-        gl_app_post(app, GL_EV_CAPTURE_DONE, 0);
+        if (!app->read.result.stick_found && !app->cur.range_valid) {
+            /* seen by the left camera only and no learned stick height to
+             * range with: like a missing flag, but the bearing is kept and
+             * the dialled distance is applied along it */
+            app->cur.flag_found = false;
+            gl_app_post(app, GL_EV_CAPTURE_NO_STICK, 0);
+        } else {
+            gl_app_post(app, GL_EV_CAPTURE_DONE, 0);
+        }
     } else if (st == GL_ERR_NO_STICK) {
         app->cur.flag_found = false;
+        app->cur.bearing_valid = false; /* a band-only bearing is logged, not aimed at */
         gl_app_post(app, GL_EV_CAPTURE_NO_STICK, 0);
     } else {
         app->last_error = (uint16_t)st;
@@ -539,8 +751,19 @@ static void build_measurement_(const gl_app_t *app, gl_measurements_t *m)
     if (c->flag_found) {
         m->flag_found = true;
         m->flag_bearing_rad = c->bearing_rad;
-        /* the reference's disparity is f B / DISTANCE; ours measures depth */
-        m->flag_disparity_px = c->disparity_px * cosf(c->bearing_rad);
+        if (res->stick_found) {
+            /* the reference's disparity is f B / DISTANCE; ours measures depth */
+            m->flag_disparity_px = c->disparity_px * cosf(c->bearing_rad);
+        } else {
+            /* GL_READ_TIER_LEFT: no disparity was measured.  The reference
+             * has no input that says so; a zero would read as "infinitely
+             * far".  The range found from the angular height is passed as
+             * the disparity it corresponds to (flag_found is only true here
+             * if there is such a range; see capture_step_()). */
+            m->flag_disparity_px = (c->range_valid && c->range.range_m > 0.0f)
+                                       ? (GL_CFG_CAM_F_PX * GL_CFG_CAM_BASELINE_M / c->range.range_m)
+                                       : 0.0f;
+        }
         m->flag_low_elev_rad = c->base_elev_rad;
         m->flag_base_visible = (c->base == (uint8_t)GL_VIS_BASE_VISIBLE);
         m->flag_top_visible = c->top_valid;
@@ -598,6 +821,12 @@ static float confidence_(const gl_app_t *app, bool solved)
             }
         } else {
             conf *= 0.5f;
+        }
+        if (!app->read.result.stick_found) {
+            conf *= 0.6f; /* one camera only: not checked against a disparity */
+        }
+        if (app->read.result.ambiguous) {
+            conf *= 0.6f; /* a second line in view also passes as a flagstick */
         }
         if (q->sun) {
             conf *= 0.7f;
@@ -730,22 +959,30 @@ static void solve_(gl_app_t *app, bool precision_reread)
     bool solved;
 
     if (precision_reread) {
-        /* combine the read at the ball with the re-read after the spin */
+        /* Combine the read at the ball with the re-read after the spin.  The
+         * gyro has been integrated UP TO NOW, through the re-read (it used to
+         * stop when the spin was first seen complete: a marker turned again
+         * during the re-read was then combined with the stale angle and the
+         * wrong result shown as "2X").  The half-turn test is made again
+         * here, on the angle the re-read was really taken at. */
         gl_precision_t p;
         const float yaw = gl_spin_yaw(&app->motion.spin);
-        if (gl_tilt_precision_combine(app->spin_slope_raw, app->reread_slope_raw, yaw,
+        c->precision = false;
+        if (gl_spin_is_half_turn(&app->motion.spin) &&
+            gl_tilt_precision_combine(app->spin_slope_raw, app->reread_slope_raw, yaw,
                                       &app->cal_tilt, &p) == GL_OK) {
             c->slope = p.slope; /* in the frame of the first read */
             c->precision = true;
         }
-        c->view_yaw_rad = yaw; /* the marker now faces the other way */
+        c->view_yaw_rad = yaw; /* where the marker faces now, whatever came of it */
+        gl_motion_spin_end(&app->motion);
     }
     if (!c->flag_found) {
         /* flag-out fallback: tilt only, along the visor axis, with the
          * dialled distance if there is one */
         const float manual = gl_settings_manual_distance_m(&app->settings);
         c->manual_range = (manual > 0.0f);
-        c->target.bearing_rad = 0.0f;
+        c->target.bearing_rad = c->bearing_valid ? c->bearing_rad : 0.0f;
         c->target.distance_m = c->manual_range ? manual : 0.0f;
     }
     build_measurement_(app, &app->meas_cur);
@@ -986,8 +1223,7 @@ static void imu_sample_(gl_app_t *app, uint32_t now)
     const gl_status_t st = gl_imu_read(&app->imu, &raw);
 
     if (st != GL_OK) {
-        app->imu_ok = false; /* reported once */
-        fault_(app, st);
+        imu_failed_(app, st, now); /* transient until proven otherwise */
         return;
     }
     app->last_sample_ms = now;
@@ -1073,6 +1309,17 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
         app->spin_slope_raw = app->cur.slope_raw;
         gl_motion_spin_begin(&app->motion, app->cur.up, app->cur.gyro_bias);
     }
+    if ((a & GL_ACT_SPIN_ABANDON) != 0u) {
+        /* The Precision spin was not completed (time-out).  The single read
+         * is shown again, but the marker may have been turned by any angle
+         * meanwhile: the screen is drawn for where it faces NOW. */
+        if (app->motion.spin_active && app->view.have_result) {
+            app->cur.view_yaw_rad = gl_spin_yaw(&app->motion.spin);
+            app->cur.precision = false;
+            compose_view_(app, app->view.solved);
+        }
+        gl_motion_spin_end(&app->motion);
+    }
     if ((a & GL_ACT_CAL_ZERO_START) != 0u) {
         zero_start_(app);
     }
@@ -1148,10 +1395,16 @@ gl_status_t gl_app_init(gl_app_t *app)
             first_err = GL_ERR_CORRUPT;
         }
     }
+    /* A probe that fails here is retried (imu_recover_): at the first
+     * sleep entry below, at every wake-up and every 16 s while asleep. */
     st = gl_imu_init(&app->imu, NULL);
     app->imu_ok = (st == GL_OK);
-    if (st != GL_OK && first_err == GL_OK) {
-        first_err = st;
+    if (st != GL_OK) {
+        app->imu_fails = 1;
+        app->imu_fault_shown = true; /* reported below as the boot error */
+        if (first_err == GL_OK) {
+            first_err = st;
+        }
     }
 
     gl_read_init(&app->read, &app->cam);
@@ -1170,11 +1423,8 @@ gl_status_t gl_app_init(gl_app_t *app)
     if (first_err != GL_OK) {
         fault_(app, first_err); /* shows the error screen, then sleeps again */
     }
-    /* already in the cradle at power-up? */
-    gl_power_poll_pins(&app->power);
-    if (app->power.vbus) {
-        gl_app_post(app, GL_EV_USB_ATTACH, 0);
-    }
+    /* (already in the cradle at power-up: enter_sleep_() has posted the
+     * attach event) */
     return first_err;
 }
 
@@ -1189,9 +1439,18 @@ static void sleep_(gl_app_t *app)
     if (gl_event_count(&app->events) != 0u || app->redraw || app->reboot_pending) {
         return; /* more to do right away */
     }
+    if (app->capture_active && gl_read_has_work(&app->read)) {
+        return; /* a group of strips is waiting to be analysed (rail on) */
+    }
     left = gl_ui_time_left_ms(&app->ui, now);
     if (left != 0u && left < wait) {
         wait = left;
+    }
+    if (app->vbus_pending) {
+        const int32_t v = (int32_t)(app->vbus_settle_ms - now);
+        if (v < (int32_t)wait) {
+            wait = (v > 0) ? (uint32_t)v : 1u;
+        }
     }
     if (app->awake) {
         const int32_t batt = (int32_t)(app->next_batt_ms - now);
@@ -1206,6 +1465,17 @@ static void sleep_(gl_app_t *app)
         }
         if (app->capture_active && wait > 5u) {
             wait = 5u; /* poll the capture even if its interrupt is lost */
+        }
+        if (app->imu_ok && wait > GL_APP_IMU_STALL_MS) {
+            /* the data-ready interrupt normally ends the sleep after 4 ms;
+             * if its latch is lost, the line is polled after this long */
+            wait = GL_APP_IMU_STALL_MS;
+        }
+        if (!app->imu_ok) {
+            const int32_t r = (int32_t)(app->imu_retry_ms - now);
+            if (r < (int32_t)wait) {
+                wait = (r > 0) ? (uint32_t)r : 1u;
+            }
         }
         if (app->usb_on && app->stream_mask != 0u) {
             const int32_t s = (int32_t)(app->stream_next_ms - now);
@@ -1228,6 +1498,78 @@ static void sleep_(gl_app_t *app)
     (void)gl_hal_sleep(mode);
 }
 
+/* The 16 s wake-up while asleep: the IMU is the only way the user can wake
+ * the device, so its presence and its wake-up configuration are checked,
+ * and a failed IMU is retried.  Every GL_APP_SLEEP_BATT_EVERY-th time the
+ * cell is measured, to catch it falling to the storage threshold. */
+static void sleep_housekeeping_(gl_app_t *app, uint32_t now)
+{
+    app->sleep_ticks++;
+    if (!app->imu_ok) {
+        imu_recover_(app, now);
+    } else if (!app->storage_mode) {
+        const gl_status_t st = gl_imu_verify(&app->imu);
+        if (st != GL_OK) {
+            imu_failed_(app, st, now);
+        }
+    }
+    if (!app->storage_mode && (app->sleep_ticks % GL_APP_SLEEP_BATT_EVERY) == 0u) {
+        gl_power_poll_pins(&app->power);
+        if (gl_power_measure(&app->power) == GL_OK && app->power.storage && !app->power.vbus) {
+            app->storage_mode = true;
+            gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_STORAGE, (int32_t)app->power.batt_mv);
+            if (app->flash_ok) {
+                (void)gl_mx25r_sleep(&app->flash); /* the log append woke it */
+            }
+            if (gl_imu_stop(&app->imu) != GL_OK) {
+                app->imu_ok = false;
+            }
+            irq_setup_(app);
+        }
+    }
+}
+
+/* While measuring: fetch a sample when the interrupt announced one, and
+ * when it did not for too long.  A lost interrupt latch (or a latched
+ * data-ready line that was already high) must not stop the sample pump:
+ * stillness, motion, taps and the dial all hang on it. */
+static void imu_pump_(gl_app_t *app, uint32_t irq, uint32_t now)
+{
+    bool sample = (irq & GL_IRQ_IMU_INT2) != 0u;
+    const uint32_t quiet_ms = (uint32_t)(now - app->last_sample_ms);
+
+    if (!app->imu_ok) {
+        if ((int32_t)(now - app->imu_retry_ms) >= 0) {
+            imu_recover_(app, now);
+        }
+        return;
+    }
+    if (!sample && quiet_ms >= GL_APP_IMU_STALL_MS) {
+        if (gl_hal_gpio_read(GL_PIN_IMU_INT2)) {
+            sample = true; /* latched data-ready: the line is still high, the edge was missed */
+        } else {
+            bool ready = false;
+            const gl_status_t st = gl_imu_data_ready(&app->imu, &ready);
+            if (st != GL_OK) {
+                imu_failed_(app, st, now);
+                return;
+            }
+            sample = ready;
+        }
+        if (sample) {
+            app->imu_polls++;
+        } else if (quiet_ms >= GL_APP_IMU_SILENT_MS) {
+            /* no data at all: the part has lost its configuration (a supply
+             * glitch resets it) or has died */
+            imu_failed_(app, GL_ERR_TIMEOUT, now);
+            return;
+        }
+    }
+    if (sample) {
+        imu_sample_(app, now);
+    }
+}
+
 void gl_app_run_once(gl_app_t *app)
 {
     const uint32_t irq = gl_hal_irq_take();
@@ -1235,11 +1577,16 @@ void gl_app_run_once(gl_app_t *app)
     gl_event_t e;
 
     app->loops++;
-    gl_hal_watchdog_kick();
+    if (!app->wdg_hold) {
+        gl_hal_watchdog_kick();
+    }
 
     /* 1. interrupt sources -> work */
     if ((irq & (GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT)) != 0u) {
-        vbus_service_(app);
+        vbus_edge_(app, now);
+    }
+    if (app->vbus_pending && (int32_t)(now - app->vbus_settle_ms) >= 0) {
+        vbus_settled_(app, now);
     }
     if (!app->awake) {
         if ((irq & GL_IRQ_IMU_INT1) != 0u) {
@@ -1251,10 +1598,12 @@ void gl_app_run_once(gl_app_t *app)
                 gl_app_post(app, GL_EV_MOTION, 0);
             }
         }
-    } else {
-        if (app->imu_ok && (irq & GL_IRQ_IMU_INT2) != 0u) {
-            imu_sample_(app, now);
+        if ((irq & GL_IRQ_WAKE_TIMER) != 0u &&
+            (uint32_t)(now - app->sleep_since_ms) >= GL_APP_SLEEP_HOUSEKEEP_MS / 2u) {
+            sleep_housekeeping_(app, now);
         }
+    } else {
+        imu_pump_(app, irq, now);
         if (app->capture_active) {
             capture_step_(app);
         }

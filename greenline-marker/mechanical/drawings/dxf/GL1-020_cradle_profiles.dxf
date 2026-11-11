@@ -489,7 +489,7 @@ $SKPOLY
   9
 $TDCREATE
  40
-2461356.641712963
+2461356.7825578703
   9
 $TDUCREATE
  40
@@ -497,7 +497,7 @@ $TDUCREATE
   9
 $TDUPDATE
  40
-2461356.641712963
+2461356.7825578703
   9
 $TDUUPDATE
  40
@@ -549,7 +549,7 @@ $SPLINESEGS
   9
 $HANDSEED
   5
-111
+15D
   9
 $SURFTAB1
  70
@@ -929,11 +929,11 @@ $PSTYLEMODE
   9
 $FINGERPRINTGUID
   2
-{C7D4021C-4B99-4A09-B557-51C218E5CAED}
+{ED46B3CB-8472-4C9D-BFB2-790037120128}
   9
 $VERSIONGUID
   2
-{939DA946-DCCB-40BF-843B-2032426C0C24}
+{015705CA-09F4-4202-8F1A-A64F961B10F2}
   9
 $EXTNAMES
 290
@@ -1549,7 +1549,7 @@ LAYER
 100
 AcDbSymbolTable
  70
-9
+10
   0
 LAYER
   5
@@ -1635,7 +1635,7 @@ AcDbSymbolTableRecord
 100
 AcDbLayerTableRecord
   2
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
  70
 0
  62
@@ -1651,7 +1651,7 @@ Continuous
   0
 LAYER
   5
-4D
+51
 330
 1
 100
@@ -1675,7 +1675,7 @@ Continuous
   0
 LAYER
   5
-70
+74
 330
 1
 100
@@ -1683,7 +1683,7 @@ AcDbSymbolTableRecord
 100
 AcDbLayerTableRecord
   2
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
  70
 0
  62
@@ -1699,7 +1699,7 @@ Continuous
   0
 LAYER
   5
-91
+A3
 330
 1
 100
@@ -1707,7 +1707,7 @@ AcDbSymbolTableRecord
 100
 AcDbLayerTableRecord
   2
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
  70
 0
  62
@@ -1723,7 +1723,7 @@ Continuous
   0
 LAYER
   5
-B6
+CC
 330
 1
 100
@@ -1731,7 +1731,7 @@ AcDbSymbolTableRecord
 100
 AcDbLayerTableRecord
   2
-Zm10p5_FOOT_POCKETS
+Zm6p0_POCKETS
  70
 0
  62
@@ -1747,7 +1747,31 @@ Continuous
   0
 LAYER
   5
-DF
+F5
+330
+1
+100
+AcDbSymbolTableRecord
+100
+AcDbLayerTableRecord
+  2
+Zm10p5_FOOT_POCKETS
+ 70
+0
+ 62
+1
+  6
+Continuous
+370
+-3
+390
+13
+347
+21
+  0
+LAYER
+  5
+11E
 330
 1
 100
@@ -1759,7 +1783,7 @@ X0_SECTION_D-D
  70
 0
  62
-1
+2
   6
 Continuous
 370
@@ -1869,7 +1893,7 @@ ACAD
   0
 APPID
   5
-10E
+15A
 330
 3
 100
@@ -1883,7 +1907,7 @@ HATCHBACKGROUNDCOLOR
   0
 APPID
   5
-10F
+15B
 330
 3
 100
@@ -2287,7 +2311,7 @@ AcDbLine
  31
 0.0
   0
-ARC
+LINE
   5
 34
 330
@@ -2297,21 +2321,19 @@ AcDbEntity
   8
 Z8p6_LIP_HOOK
 100
-AcDbCircle
+AcDbLine
  10
-0.0
+12.0
  20
-0.0
+-21.502072594216372
  30
 0.0
- 40
-21.70207259421637
-100
-AcDbArc
- 50
--108.8171985713165
- 51
--71.18280142868352
+ 11
+-12.0
+ 21
+-21.502072594216372
+ 31
+0.0
   0
 LINE
   5
@@ -2325,15 +2347,15 @@ Z8p6_LIP_HOOK
 100
 AcDbLine
  10
-7.0
+12.0
  20
--20.542150687906005
+-21.50207259421637
  30
 0.0
  11
-7.0
+12.0
  21
--24.4
+-24.55
  31
 0.0
   0
@@ -2349,15 +2371,15 @@ Z8p6_LIP_HOOK
 100
 AcDbLine
  10
--7.0
+-12.0
  20
--24.4
+-24.55
  30
 0.0
  11
-7.0
+12.0
  21
--24.4
+-24.55
  31
 0.0
   0
@@ -2373,15 +2395,15 @@ Z8p6_LIP_HOOK
 100
 AcDbLine
  10
--7.0
+-12.0
  20
--20.542150687906005
+-21.50207259421637
  30
 0.0
  11
--7.0
+-12.0
  21
--24.4
+-24.55
  31
 0.0
   0
@@ -2393,17 +2415,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--8.2
+-13.2
  20
 -27.0
  30
 0.0
  11
--4.5
+-10.0
  21
 -27.0
  31
@@ -2417,17 +2439,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--4.5
+-10.0
  20
--25.971220736707387
+-25.455793015073745
  30
 0.0
  11
--4.5
+-10.0
  21
 -27.0
  31
@@ -2441,19 +2463,19 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--4.5
+-10.0
  20
--25.971220736707387
+-25.455793015073745
  30
 0.0
  11
--3.5
+-9.0
  21
--25.971220736707387
+-25.455793015073745
  31
 0.0
   0
@@ -2465,17 +2487,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--3.5
+-9.0
  20
--25.971220736707387
+-25.455793015073745
  30
 0.0
  11
--3.5
+-9.0
  21
 -27.0
  31
@@ -2489,17 +2511,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--3.5
+-9.0
  20
 -27.0
  30
 0.0
  11
-3.5
+9.0
  21
 -27.0
  31
@@ -2513,17 +2535,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
-3.5
+9.0
  20
--25.971220736707387
+-25.455793015073745
  30
 0.0
  11
-3.5
+9.0
  21
 -27.0
  31
@@ -2537,19 +2559,19 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
-3.5
+9.0
  20
--25.971220736707387
+-25.455793015073745
  30
 0.0
  11
-4.5
+10.0
  21
--25.971220736707387
+-25.455793015073745
  31
 0.0
   0
@@ -2561,17 +2583,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
-4.5
+10.0
  20
--25.971220736707387
+-25.455793015073745
  30
 0.0
  11
-4.5
+10.0
  21
 -27.0
  31
@@ -2585,17 +2607,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
-4.5
+10.000000000000002
  20
 -27.0
  30
 0.0
  11
-8.2
+13.199999999999998
  21
 -27.0
  31
@@ -2609,17 +2631,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
-8.2
+13.2
  20
 -27.0
  30
 0.0
  11
-8.2
+13.2
  21
 -29.0
  31
@@ -2633,17 +2655,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--8.2
+-13.2
  20
 -29.0
  30
 0.0
  11
-8.2
+13.199999999999998
  21
 -29.0
  31
@@ -2657,17 +2679,17 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--8.2
+-13.2
  20
 -27.0
  30
 0.0
  11
--8.2
+-13.2
  21
 -29.0
  31
@@ -2681,19 +2703,19 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--6.0
+-5.0
  20
-23.2
+-33.07452935044209
  30
 0.0
  11
-6.0
+-5.0
  21
-23.2
+-35.07452935044209
  31
 0.0
   0
@@ -2705,19 +2727,19 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
-6.0
+-5.0
  20
-23.2
+-33.07452935044209
  30
 0.0
  11
-6.0
+5.0
  21
-19.65
+-33.07452935044209
  31
 0.0
   0
@@ -2729,7 +2751,103 @@ LINE
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
+100
+AcDbLine
+ 10
+5.0
+ 20
+-33.07452935044209
+ 30
+0.0
+ 11
+5.0
+ 21
+-35.07452935044209
+ 31
+0.0
+  0
+LINE
+  5
+48
+330
+17
+100
+AcDbEntity
+  8
+Z5p0_LIP_LATCH_GUARD_TABSTOP
+100
+AcDbLine
+ 10
+-5.0
+ 20
+-35.07452935044209
+ 30
+0.0
+ 11
+5.0
+ 21
+-35.07452935044209
+ 31
+0.0
+  0
+LINE
+  5
+49
+330
+17
+100
+AcDbEntity
+  8
+Z5p0_LIP_LATCH_GUARD_TABSTOP
+100
+AcDbLine
+ 10
+-6.0
+ 20
+23.2
+ 30
+0.0
+ 11
+6.0
+ 21
+23.2
+ 31
+0.0
+  0
+LINE
+  5
+4A
+330
+17
+100
+AcDbEntity
+  8
+Z5p0_LIP_LATCH_GUARD_TABSTOP
+100
+AcDbLine
+ 10
+6.0
+ 20
+23.2
+ 30
+0.0
+ 11
+6.0
+ 21
+19.65
+ 31
+0.0
+  0
+LINE
+  5
+4B
+330
+17
+100
+AcDbEntity
+  8
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
@@ -2747,13 +2865,13 @@ AcDbLine
   0
 LINE
   5
-48
+4C
 330
 17
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
@@ -2771,23 +2889,23 @@ AcDbLine
   0
 LINE
   5
-49
+4D
 330
 17
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--7.0
+12.0
  20
 -23.25
  30
 0.0
  11
-7.0
+-12.0
  21
 -23.25
  31
@@ -2795,79 +2913,79 @@ AcDbLine
   0
 LINE
   5
-4A
+4E
 330
 17
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
-7.0
+12.0
  20
 -23.25
  30
 0.0
  11
-7.0
+12.0
  21
--24.4
+-24.12043829150248
  31
 0.0
   0
 LINE
   5
-4B
+4F
 330
 17
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--7.0
+12.0
  20
--24.4
+-24.12043829150248
  30
 0.0
  11
-7.0
+-12.0
  21
--24.4
+-24.12043829150248
  31
 0.0
   0
 LINE
   5
-4C
+50
 330
 17
 100
 AcDbEntity
   8
-Z5p0_LIP_LATCH_GUARD
+Z5p0_LIP_LATCH_GUARD_TABSTOP
 100
 AcDbLine
  10
--7.0
+-12.0
  20
 -23.25
  30
 0.0
  11
--7.0
+-12.0
  21
--24.4
+-24.12043829150248
  31
 0.0
   0
 ARC
   5
-4E
+52
 330
 17
 100
@@ -2893,7 +3011,7 @@ AcDbArc
   0
 LINE
   5
-4F
+53
 330
 17
 100
@@ -2917,7 +3035,7 @@ AcDbLine
   0
 ARC
   5
-50
+54
 330
 17
 100
@@ -2943,7 +3061,7 @@ AcDbArc
   0
 LINE
   5
-51
+55
 330
 17
 100
@@ -2967,7 +3085,7 @@ AcDbLine
   0
 LINE
   5
-52
+56
 330
 17
 100
@@ -2991,7 +3109,7 @@ AcDbLine
   0
 ARC
   5
-53
+57
 330
 17
 100
@@ -3017,7 +3135,7 @@ AcDbArc
   0
 LINE
   5
-54
+58
 330
 17
 100
@@ -3036,104 +3154,6 @@ AcDbLine
 13.88308323104058
  21
 18.65
- 31
-0.0
-  0
-ARC
-  5
-55
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbCircle
- 10
-0.0
- 20
-0.0
- 30
-0.0
- 40
-23.25
-100
-AcDbArc
- 50
-126.6640429174842
- 51
--180.0
-  0
-LINE
-  5
-56
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
--30.0
- 20
-0.0
- 30
-0.0
- 11
--23.25
- 21
-0.0
- 31
-0.0
-  0
-LINE
-  5
-57
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
--30.0
- 20
-20.0
- 30
-0.0
- 11
--30.0
- 21
-0.0
- 31
-0.0
-  0
-LINE
-  5
-58
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
--17.278117192349413
- 20
--15.55728659784345
- 30
-0.0
- 11
--30.0
- 21
--27.0121213289352
  31
 0.0
   0
@@ -3159,9 +3179,9 @@ AcDbCircle
 100
 AcDbArc
  50
--138.00000000000037
+126.6640429174842
  51
--110.6518241445023
+-179.99999999999994
   0
 LINE
   5
@@ -3175,15 +3195,15 @@ Z1p0_NEST
 100
 AcDbLine
  10
--8.2
+-30.0
  20
--21.755976190463162
+0.0
  30
 0.0
  11
--8.2
+-23.25
  21
--27.0
+0.0
  31
 0.0
   0
@@ -3199,15 +3219,15 @@ Z1p0_NEST
 100
 AcDbLine
  10
--8.2
+-30.0
  20
--27.0
+20.0
  30
 0.0
  11
--4.5
+-30.0
  21
--27.0
+0.0
  31
 0.0
   0
@@ -3223,213 +3243,21 @@ Z1p0_NEST
 100
 AcDbLine
  10
--4.5
+-17.278117192349406
  20
--25.971220736707387
+-15.557286597843444
  30
 0.0
  11
--4.5
+-30.0
  21
--27.0
- 31
-0.0
-  0
-LINE
-  5
-5D
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
--4.5
- 20
--25.971220736707387
- 30
-0.0
- 11
--3.5
- 21
--25.971220736707387
- 31
-0.0
-  0
-LINE
-  5
-5E
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
--3.5
- 20
--25.971220736707387
- 30
-0.0
- 11
--3.5
- 21
--27.0
- 31
-0.0
-  0
-LINE
-  5
-5F
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
--3.5
- 20
--27.0
- 30
-0.0
- 11
-3.5
- 21
--27.0
- 31
-0.0
-  0
-LINE
-  5
-60
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
-3.5
- 20
--25.971220736707387
- 30
-0.0
- 11
-3.5
- 21
--27.0
- 31
-0.0
-  0
-LINE
-  5
-61
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
-3.5
- 20
--25.971220736707387
- 30
-0.0
- 11
-4.5
- 21
--25.971220736707387
- 31
-0.0
-  0
-LINE
-  5
-62
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
-4.5
- 20
--25.971220736707387
- 30
-0.0
- 11
-4.5
- 21
--27.0
- 31
-0.0
-  0
-LINE
-  5
-63
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
-4.5
- 20
--27.0
- 30
-0.0
- 11
-8.2
- 21
--27.0
- 31
-0.0
-  0
-LINE
-  5
-64
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
-8.2
- 20
--21.755976190463162
- 30
-0.0
- 11
-8.2
- 21
--27.0
+-27.0121213289352
  31
 0.0
   0
 ARC
   5
-65
+5D
 330
 17
 100
@@ -3449,13 +3277,303 @@ AcDbCircle
 100
 AcDbArc
  50
--69.34817585549777
+-138.00000000000043
+ 51
+-124.5929136774537
+  0
+LINE
+  5
+5E
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+-13.2
+ 20
+-19.139553286323064
+ 30
+0.0
+ 11
+-13.2
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+5F
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+-13.2
+ 20
+-27.0
+ 30
+0.0
+ 11
+-10.0
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+60
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+-10.0
+ 20
+-25.455793015073745
+ 30
+0.0
+ 11
+-10.0
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+61
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+-10.0
+ 20
+-25.455793015073745
+ 30
+0.0
+ 11
+-9.0
+ 21
+-25.455793015073745
+ 31
+0.0
+  0
+LINE
+  5
+62
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+-9.0
+ 20
+-25.455793015073745
+ 30
+0.0
+ 11
+-9.0
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+63
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+-9.0
+ 20
+-27.0
+ 30
+0.0
+ 11
+9.0
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+64
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+9.0
+ 20
+-25.455793015073745
+ 30
+0.0
+ 11
+9.0
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+65
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+9.0
+ 20
+-25.455793015073745
+ 30
+0.0
+ 11
+10.0
+ 21
+-25.455793015073745
+ 31
+0.0
+  0
+LINE
+  5
+66
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+10.0
+ 20
+-25.455793015073745
+ 30
+0.0
+ 11
+10.0
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+67
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+10.000000000000002
+ 20
+-27.0
+ 30
+0.0
+ 11
+13.199999999999998
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+68
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+13.2
+ 20
+-19.139553286323064
+ 30
+0.0
+ 11
+13.2
+ 21
+-27.0
+ 31
+0.0
+  0
+ARC
+  5
+69
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbCircle
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 40
+23.25
+100
+AcDbArc
+ 50
+-55.40708632254632
  51
 -41.99999999999963
   0
 LINE
   5
-66
+6A
 330
 17
 100
@@ -3479,106 +3597,6 @@ AcDbLine
   0
 LINE
   5
-67
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
-30.0
- 20
--27.012121328935198
- 30
-0.0
- 11
-30.0
- 21
--32.0
- 31
-0.0
-  0
-ARC
-  5
-68
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbCircle
- 10
-26.0
- 20
--32.0
- 30
-0.0
- 40
-4.0
-100
-AcDbArc
- 50
--90.0
- 51
-0.0
-  0
-LINE
-  5
-69
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbLine
- 10
--26.0
- 20
--36.0
- 30
-0.0
- 11
-26.0
- 21
--36.0
- 31
-0.0
-  0
-ARC
-  5
-6A
-330
-17
-100
-AcDbEntity
-  8
-Z1p0_NEST
-100
-AcDbCircle
- 10
--26.0
- 20
--32.0
- 30
-0.0
- 40
-4.0
-100
-AcDbArc
- 50
-180.0
- 51
--90.0
-  0
-LINE
-  5
 6B
 330
 17
@@ -3589,19 +3607,19 @@ Z1p0_NEST
 100
 AcDbLine
  10
--30.0
+30.0
  20
--27.012121328935198
+-27.0121213289352
  30
 0.0
  11
--30.0
+30.0
  21
 -32.0
  31
 0.0
   0
-LINE
+ARC
   5
 6C
 330
@@ -3611,18 +3629,20 @@ AcDbEntity
   8
 Z1p0_NEST
 100
-AcDbLine
+AcDbCircle
  10
--7.0
+26.0
  20
--23.25
+-32.0
  30
 0.0
- 11
-7.0
- 21
--23.25
- 31
+ 40
+4.0
+100
+AcDbArc
+ 50
+-90.0
+ 51
 0.0
   0
 LINE
@@ -3637,19 +3657,19 @@ Z1p0_NEST
 100
 AcDbLine
  10
-7.0
+-26.0
  20
--23.25
+-36.0
  30
 0.0
  11
-7.0
+26.0
  21
--24.4
+-36.0
  31
 0.0
   0
-LINE
+ARC
   5
 6E
 330
@@ -3659,19 +3679,21 @@ AcDbEntity
   8
 Z1p0_NEST
 100
-AcDbLine
+AcDbCircle
  10
--7.0
+-26.0
  20
--24.4
+-32.0
  30
 0.0
- 11
-7.0
- 21
--24.4
- 31
-0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+180.0
+ 51
+-90.0
   0
 LINE
   5
@@ -3685,19 +3707,43 @@ Z1p0_NEST
 100
 AcDbLine
  10
--7.0
+-30.0
+ 20
+-27.012121328935194
+ 30
+0.0
+ 11
+-30.0
+ 21
+-32.0
+ 31
+0.0
+  0
+LINE
+  5
+70
+330
+17
+100
+AcDbEntity
+  8
+Z1p0_NEST
+100
+AcDbLine
+ 10
+12.0
  20
 -23.25
  30
 0.0
  11
--7.0
+-12.0
  21
--24.4
+-23.25
  31
 0.0
   0
-ARC
+LINE
   5
 71
 330
@@ -3705,23 +3751,21 @@ ARC
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Z1p0_NEST
 100
-AcDbCircle
+AcDbLine
  10
--26.0
+12.0
  20
-20.0
+-23.25
  30
 0.0
- 40
-4.0
-100
-AcDbArc
- 50
-90.0
- 51
-180.0
+ 11
+12.0
+ 21
+-24.195081967213117
+ 31
+0.0
   0
 LINE
   5
@@ -3731,23 +3775,23 @@ LINE
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Z1p0_NEST
 100
 AcDbLine
  10
--26.0
+-12.0
  20
-24.0
+-24.195081967213117
  30
 0.0
  11
-26.0
+12.0
  21
-24.0
+-24.195081967213117
  31
 0.0
   0
-ARC
+LINE
   5
 73
 330
@@ -3755,45 +3799,19 @@ ARC
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbCircle
- 10
-26.0
- 20
-20.0
- 30
-0.0
- 40
-4.0
-100
-AcDbArc
- 50
-0.0
- 51
-90.0
-  0
-LINE
-  5
-74
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Z1p0_NEST
 100
 AcDbLine
  10
-30.0
+-12.0
  20
-20.0
+-23.25
  30
 0.0
  11
-30.0
+-12.0
  21
--32.0
+-24.195081967213117
  31
 0.0
   0
@@ -3805,7 +3823,503 @@ ARC
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbCircle
+ 10
+-26.0
+ 20
+20.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+90.0
+ 51
+180.0
+  0
+LINE
+  5
+76
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+-26.0
+ 20
+24.0
+ 30
+0.0
+ 11
+26.0
+ 21
+24.0
+ 31
+0.0
+  0
+ARC
+  5
+77
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbCircle
+ 10
+26.0
+ 20
+20.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+0.0
+ 51
+90.0
+  0
+LINE
+  5
+78
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+30.0
+ 20
+20.0
+ 30
+0.0
+ 11
+30.0
+ 21
+0.0
+ 31
+0.0
+  0
+LINE
+  5
+79
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+30.0
+ 20
+0.0
+ 30
+0.0
+ 11
+23.25
+ 21
+0.0
+ 31
+0.0
+  0
+ARC
+  5
+7A
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbCircle
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 40
+23.25
+100
+AcDbArc
+ 50
+-1.8952208101659532e-13
+ 51
+33.4039047567968
+  0
+LINE
+  5
+7B
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+-19.409340534907415
+ 20
+12.8
+ 30
+0.0
+ 11
+19.409340534907415
+ 21
+12.8
+ 31
+0.0
+  0
+ARC
+  5
+7C
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbCircle
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 40
+23.25
+100
+AcDbArc
+ 50
+146.5960952432032
+ 51
+-179.99999999999994
+  0
+LINE
+  5
+7D
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+-30.0
+ 20
+0.0
+ 30
+0.0
+ 11
+-23.25
+ 21
+0.0
+ 31
+0.0
+  0
+LINE
+  5
+7E
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+-30.0
+ 20
+20.0
+ 30
+0.0
+ 11
+-30.0
+ 21
+0.0
+ 31
+0.0
+  0
+LINE
+  5
+7F
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+-17.278117192349406
+ 20
+-15.557286597843444
+ 30
+0.0
+ 11
+-30.0
+ 21
+-27.0121213289352
+ 31
+0.0
+  0
+ARC
+  5
+80
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbCircle
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 40
+23.25
+100
+AcDbArc
+ 50
+-138.00000000000043
+ 51
+-123.6686006132898
+  0
+LINE
+  5
+81
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+-12.88953063536451
+ 20
+-19.349999999999994
+ 30
+0.0
+ 11
+-7.885941722939496
+ 21
+-19.349999999999994
+ 31
+0.0
+  0
+ARC
+  5
+82
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbCircle
+ 10
+-7.62
+ 20
+-17.0
+ 30
+0.0
+ 40
+2.365
+100
+AcDbArc
+ 50
+90.0
+ 51
+-96.45650508120364
+  0
+LINE
+  5
+83
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+-7.62
+ 20
+-14.635
+ 30
+0.0
+ 11
+7.620000000000001
+ 21
+-14.635
+ 31
+0.0
+  0
+ARC
+  5
+84
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbCircle
+ 10
+7.62
+ 20
+-17.0
+ 30
+0.0
+ 40
+2.365
+100
+AcDbArc
+ 50
+-83.54349491879651
+ 51
+90.0
+  0
+LINE
+  5
+85
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+7.885941722939496
+ 20
+-19.349999999999994
+ 30
+0.0
+ 11
+12.889530635364517
+ 21
+-19.349999999999994
+ 31
+0.0
+  0
+ARC
+  5
+86
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbCircle
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 40
+23.25
+100
+AcDbArc
+ 50
+-56.331399386710245
+ 51
+-41.99999999999963
+  0
+LINE
+  5
+87
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+17.278117192349413
+ 20
+-15.55728659784345
+ 30
+0.0
+ 11
+30.0
+ 21
+-27.0121213289352
+ 31
+0.0
+  0
+LINE
+  5
+88
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+30.0
+ 20
+-27.0121213289352
+ 30
+0.0
+ 11
+30.0
+ 21
+-32.0
+ 31
+0.0
+  0
+ARC
+  5
+89
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbCircle
  10
@@ -3825,17 +4339,17 @@ AcDbArc
   0
 LINE
   5
-76
+8A
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
-4.769999999999996
+-26.0
  20
 -36.0
  30
@@ -3847,111 +4361,15 @@ AcDbLine
  31
 0.0
   0
-LINE
-  5
-77
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
-4.77
- 20
--27.9
- 30
-0.0
- 11
-4.77
- 21
--36.0
- 31
-0.0
-  0
-LINE
-  5
-78
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
--4.77
- 20
--27.9
- 30
-0.0
- 11
-4.77
- 21
--27.9
- 31
-0.0
-  0
-LINE
-  5
-79
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
--4.77
- 20
--27.9
- 30
-0.0
- 11
--4.77
- 21
--36.0
- 31
-0.0
-  0
-LINE
-  5
-7A
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
--26.0
- 20
--36.0
- 30
-0.0
- 11
--4.77
- 21
--36.0
- 31
-0.0
-  0
 ARC
   5
-7B
+8B
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbCircle
  10
@@ -3971,19 +4389,19 @@ AcDbArc
   0
 LINE
   5
-7C
+8C
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
 -30.0
  20
-20.0
+-27.012121328935194
  30
 0.0
  11
@@ -3995,23 +4413,23 @@ AcDbLine
   0
 LINE
   5
-7D
+8D
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
--8.2
+-13.2
  20
 -21.05
  30
 0.0
  11
--8.2
+-13.2
  21
 -27.0
  31
@@ -4019,23 +4437,23 @@ AcDbLine
   0
 LINE
   5
-7E
+8E
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
--8.2
+-13.2
  20
 -27.0
  30
 0.0
  11
--4.5
+-10.0
  21
 -27.0
  31
@@ -4043,23 +4461,23 @@ AcDbLine
   0
 LINE
   5
-7F
+8F
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
--4.5
+-10.0
  20
--25.971220736707387
+-25.455793015073745
  30
 0.0
  11
--4.5
+-10.0
  21
 -27.0
  31
@@ -4067,71 +4485,47 @@ AcDbLine
   0
 LINE
   5
-80
+90
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
--4.5
+-10.0
  20
--25.971220736707387
+-25.455793015073745
  30
 0.0
  11
--3.5
+-9.0
  21
--25.971220736707387
+-25.455793015073745
  31
 0.0
   0
 LINE
   5
-81
+91
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
--3.5
+-9.0
  20
--25.971220736707387
+-25.455793015073745
  30
 0.0
  11
--3.5
- 21
--27.0
- 31
-0.0
-  0
-LINE
-  5
-82
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
--3.5
- 20
--27.0
- 30
-0.0
- 11
-3.5
+-9.0
  21
 -27.0
  31
@@ -4139,95 +4533,23 @@ AcDbLine
   0
 LINE
   5
-83
+92
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
-3.5
- 20
--25.971220736707387
- 30
-0.0
- 11
-3.5
- 21
--27.0
- 31
-0.0
-  0
-LINE
-  5
-84
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
-3.5
- 20
--25.971220736707387
- 30
-0.0
- 11
-4.5
- 21
--25.971220736707387
- 31
-0.0
-  0
-LINE
-  5
-85
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
-4.5
- 20
--25.971220736707387
- 30
-0.0
- 11
-4.5
- 21
--27.0
- 31
-0.0
-  0
-LINE
-  5
-86
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
-4.5
+-9.0
  20
 -27.0
  30
 0.0
  11
-8.2
+9.0
  21
 -27.0
  31
@@ -4235,23 +4557,23 @@ AcDbLine
   0
 LINE
   5
-87
+93
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
-8.2
+9.0
  20
--21.05
+-25.455793015073745
  30
 0.0
  11
-8.2
+9.0
  21
 -27.0
  31
@@ -4259,23 +4581,119 @@ AcDbLine
   0
 LINE
   5
-88
+94
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
--8.2
+9.0
+ 20
+-25.455793015073745
+ 30
+0.0
+ 11
+10.0
+ 21
+-25.455793015073745
+ 31
+0.0
+  0
+LINE
+  5
+95
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+10.0
+ 20
+-25.455793015073745
+ 30
+0.0
+ 11
+10.0
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+96
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+10.000000000000002
+ 20
+-27.0
+ 30
+0.0
+ 11
+13.199999999999998
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+97
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+13.2
  20
 -21.05
  30
 0.0
  11
-8.2
+13.2
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
+  5
+98
+330
+17
+100
+AcDbEntity
+  8
+Zm0p4_STRIP_PADS_RIM_BASIN
+100
+AcDbLine
+ 10
+-13.2
+ 20
+-21.05
+ 30
+0.0
+ 11
+13.199999999999998
  21
 -21.05
  31
@@ -4283,13 +4701,13 @@ AcDbLine
   0
 LINE
   5
-89
+99
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
@@ -4307,13 +4725,13 @@ AcDbLine
   0
 ARC
   5
-8A
+9A
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbCircle
  10
@@ -4333,13 +4751,13 @@ AcDbArc
   0
 LINE
   5
-8B
+9B
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
@@ -4357,13 +4775,13 @@ AcDbLine
   0
 ARC
   5
-8C
+9C
 330
 17
 100
 AcDbEntity
   8
-Zm2p0_LATCH_WELL_PIN_SLOT
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbCircle
  10
@@ -4381,375 +4799,7 @@ AcDbArc
  51
 -90.0
   0
-LINE
-  5
-8D
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
--7.0
- 20
--23.25
- 30
-0.0
- 11
-7.0
- 21
--23.25
- 31
-0.0
-  0
-LINE
-  5
-8E
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
-7.0
- 20
--23.25
- 30
-0.0
- 11
-7.0
- 21
--24.4
- 31
-0.0
-  0
-LINE
-  5
-8F
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
--7.0
- 20
--24.4
- 30
-0.0
- 11
-7.0
- 21
--24.4
- 31
-0.0
-  0
-LINE
-  5
-90
-330
-17
-100
-AcDbEntity
-  8
-Zm2p0_LATCH_WELL_PIN_SLOT
-100
-AcDbLine
- 10
--7.0
- 20
--23.25
- 30
-0.0
- 11
--7.0
- 21
--24.4
- 31
-0.0
-  0
-ARC
-  5
-92
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbCircle
- 10
--26.0
- 20
-20.0
- 30
-0.0
- 40
-4.0
-100
-AcDbArc
- 50
-90.0
- 51
-180.0
-  0
-LINE
-  5
-93
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbLine
- 10
--26.0
- 20
-24.0
- 30
-0.0
- 11
-26.0
- 21
-24.0
- 31
-0.0
-  0
-ARC
-  5
-94
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbCircle
- 10
-26.0
- 20
-20.0
- 30
-0.0
- 40
-4.0
-100
-AcDbArc
- 50
-0.0
- 51
-90.0
-  0
-LINE
-  5
-95
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbLine
- 10
-30.0
- 20
-20.0
- 30
-0.0
- 11
-30.0
- 21
--32.0
- 31
-0.0
-  0
-ARC
-  5
-96
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbCircle
- 10
-26.0
- 20
--32.0
- 30
-0.0
- 40
-4.0
-100
-AcDbArc
- 50
--90.0
- 51
-0.0
-  0
-LINE
-  5
-97
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbLine
- 10
--26.0
- 20
--36.0
- 30
-0.0
- 11
-26.0
- 21
--36.0
- 31
-0.0
-  0
-ARC
-  5
-98
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbCircle
- 10
--26.0
- 20
--32.0
- 30
-0.0
- 40
-4.0
-100
-AcDbArc
- 50
-180.0
- 51
--90.0
-  0
-LINE
-  5
-99
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbLine
- 10
--30.0
- 20
-20.0
- 30
-0.0
- 11
--30.0
- 21
--32.0
- 31
-0.0
-  0
-LINE
-  5
-9A
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbLine
- 10
--15.25
- 20
--34.45
- 30
-0.0
- 11
-15.25
- 21
--34.45
- 31
-0.0
-  0
-LINE
-  5
-9B
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbLine
- 10
-15.25
- 20
--11.950000000000003
- 30
-0.0
- 11
-15.25
- 21
--34.45
- 31
-0.0
-  0
-LINE
-  5
-9C
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
-100
-AcDbLine
- 10
--15.25
- 20
--11.950000000000003
- 30
-0.0
- 11
-15.25
- 21
--11.950000000000003
- 31
-0.0
-  0
-LINE
+CIRCLE
   5
 9D
 330
@@ -4757,23 +4807,19 @@ LINE
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
-AcDbLine
+AcDbCircle
  10
--15.25
+-16.5
  20
--11.950000000000003
+-9.5
  30
 0.0
- 11
--15.25
- 21
--34.45
- 31
-0.0
+ 40
+2.0
   0
-ARC
+CIRCLE
   5
 9E
 330
@@ -4781,23 +4827,17 @@ ARC
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbCircle
  10
--24.5
+16.5
  20
--20.0
+-9.5
  30
 0.0
  40
 2.0
-100
-AcDbArc
- 50
-180.0
- 51
--90.0
   0
 LINE
   5
@@ -4807,23 +4847,23 @@ LINE
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
--24.5
+12.0
  20
--22.0
+-23.25
  30
 0.0
  11
--19.0
+-12.0
  21
--22.0
+-23.25
  31
 0.0
   0
-ARC
+LINE
   5
 A0
 330
@@ -4831,22 +4871,20 @@ A0
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
-AcDbCircle
+AcDbLine
  10
--19.0
+12.0
  20
--20.0
+-23.25
  30
 0.0
- 40
-2.0
-100
-AcDbArc
- 50
--90.0
- 51
+ 11
+12.0
+ 21
+-24.22568306010929
+ 31
 0.0
   0
 LINE
@@ -4857,23 +4895,23 @@ A1
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
--17.0
+-12.0
  20
-8.0
+-24.22568306010929
  30
 0.0
  11
--17.0
+12.0
  21
--20.0
+-24.22568306010929
  31
 0.0
   0
-ARC
+LINE
   5
 A2
 330
@@ -4881,45 +4919,19 @@ A2
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
-100
-AcDbCircle
- 10
--19.0
- 20
-8.0
- 30
-0.0
- 40
-2.0
-100
-AcDbArc
- 50
-0.0
- 51
-90.0
-  0
-LINE
-  5
-A3
-330
-17
-100
-AcDbEntity
-  8
-Zm6p0_POCKETS
+Zm0p4_STRIP_PADS_RIM_BASIN
 100
 AcDbLine
  10
--24.5
+-12.0
  20
-10.0
+-23.25
  30
 0.0
  11
--19.0
+-12.0
  21
-10.0
+-24.22568306010929
  31
 0.0
   0
@@ -4931,17 +4943,17 @@ A4
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbCircle
  10
--24.5
+-26.0
  20
-8.0
+20.0
  30
 0.0
  40
-2.0
+4.0
 100
 AcDbArc
  50
@@ -4957,19 +4969,19 @@ A5
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
--26.5
+-26.0
  20
-8.0
+24.0
  30
 0.0
  11
--26.5
+26.0
  21
--20.0
+24.0
  31
 0.0
   0
@@ -4981,23 +4993,23 @@ A6
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbCircle
  10
--11.0
+26.0
  20
--7.5
+20.0
  30
 0.0
  40
-2.0
+4.0
 100
 AcDbArc
  50
-180.0
+0.0
  51
--90.0
+90.0
   0
 LINE
   5
@@ -5007,19 +5019,19 @@ A7
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
--11.0
+30.0
  20
--9.5
+20.0
  30
 0.0
  11
-11.0
+30.0
  21
--9.5
+-32.0
  31
 0.0
   0
@@ -5031,23 +5043,23 @@ A8
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbCircle
  10
-11.0
+26.0
  20
--7.5
+-32.0
  30
 0.0
  40
-2.0
+4.0
 100
 AcDbArc
  50
 -90.0
  51
--2.5444437451708134e-14
+0.0
   0
 LINE
   5
@@ -5057,23 +5069,23 @@ A9
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
-13.0
+8.100000000000001
  20
-18.0
+-36.0
  30
 0.0
  11
-13.0
+26.0
  21
--7.5
+-36.0
  31
 0.0
   0
-ARC
+LINE
   5
 AA
 330
@@ -5081,23 +5093,21 @@ AA
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
-AcDbCircle
+AcDbLine
  10
-11.0
+8.1
  20
-18.0
+-27.0
  30
 0.0
- 40
-2.0
-100
-AcDbArc
- 50
+ 11
+8.1
+ 21
+-36.0
+ 31
 0.0
- 51
-90.0
   0
 LINE
   5
@@ -5107,23 +5117,23 @@ AB
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
--11.0
+8.099999999999998
  20
-20.0
+-27.0
  30
 0.0
  11
-11.0
+9.0
  21
-20.0
+-27.0
  31
 0.0
   0
-ARC
+LINE
   5
 AC
 330
@@ -5131,23 +5141,21 @@ AC
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
-AcDbCircle
+AcDbLine
  10
--11.0
+9.0
  20
-18.0
+-25.455793015073745
  30
 0.0
- 40
-2.0
-100
-AcDbArc
- 50
-90.0
- 51
-180.0
+ 11
+9.0
+ 21
+-27.0
+ 31
+0.0
   0
 LINE
   5
@@ -5157,23 +5165,23 @@ AD
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
--13.0
+9.0
  20
-18.0
+-25.455793015073745
  30
 0.0
  11
--13.0
+10.0
  21
--7.5
+-25.455793015073745
  31
 0.0
   0
-ARC
+LINE
   5
 AE
 330
@@ -5181,23 +5189,21 @@ AE
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
-AcDbCircle
+AcDbLine
  10
-19.0
+10.0
  20
--20.0
+-25.455793015073745
  30
 0.0
- 40
-2.0
-100
-AcDbArc
- 50
-180.0
- 51
--90.0
+ 11
+10.0
+ 21
+-27.0
+ 31
+0.0
   0
 LINE
   5
@@ -5207,23 +5213,23 @@ AF
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
-19.0
+10.000000000000002
  20
--22.0
+-27.0
  30
 0.0
  11
-24.5
+13.199999999999998
  21
--22.0
+-27.0
  31
 0.0
   0
-ARC
+LINE
   5
 B0
 330
@@ -5231,22 +5237,20 @@ B0
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
-AcDbCircle
+AcDbLine
  10
-24.5
+13.2
  20
--20.0
+-21.05
  30
 0.0
- 40
-2.0
-100
-AcDbArc
- 50
--90.0
- 51
+ 11
+13.2
+ 21
+-27.0
+ 31
 0.0
   0
 LINE
@@ -5257,23 +5261,23 @@ B1
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
-26.5
+-13.2
  20
-8.0
+-21.05
  30
 0.0
  11
-26.5
+13.199999999999998
  21
--20.0
+-21.05
  31
 0.0
   0
-ARC
+LINE
   5
 B2
 330
@@ -5281,23 +5285,21 @@ B2
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
-AcDbCircle
+AcDbLine
  10
-24.5
+-13.2
  20
-8.0
+-21.05
  30
 0.0
- 40
-2.0
-100
-AcDbArc
- 50
+ 11
+-13.2
+ 21
+-27.0
+ 31
 0.0
- 51
-90.0
   0
 LINE
   5
@@ -5307,23 +5309,23 @@ B3
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
-19.0
+-13.2
  20
-10.0
+-27.0
  30
 0.0
  11
-24.5
+-10.0
  21
-10.0
+-27.0
  31
 0.0
   0
-ARC
+LINE
   5
 B4
 330
@@ -5331,23 +5333,21 @@ B4
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
-AcDbCircle
+AcDbLine
  10
-19.0
+-10.0
  20
-8.0
+-25.455793015073745
  30
 0.0
- 40
-2.0
-100
-AcDbArc
- 50
-90.0
- 51
-180.0
+ 11
+-10.0
+ 21
+-27.0
+ 31
+0.0
   0
 LINE
   5
@@ -5357,23 +5357,47 @@ B5
 100
 AcDbEntity
   8
-Zm6p0_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
-17.0
+-10.0
  20
-8.0
+-25.455793015073745
  30
 0.0
  11
-17.0
+-9.0
  21
--20.0
+-25.455793015073745
  31
 0.0
   0
-ARC
+LINE
+  5
+B6
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+-9.0
+ 20
+-25.455793015073745
+ 30
+0.0
+ 11
+-9.0
+ 21
+-27.0
+ 31
+0.0
+  0
+LINE
   5
 B7
 330
@@ -5381,23 +5405,21 @@ B7
 100
 AcDbEntity
   8
-Zm10p5_FOOT_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
-AcDbCircle
+AcDbLine
  10
--26.0
+-9.0
  20
-20.0
+-27.0
  30
 0.0
- 40
-4.0
-100
-AcDbArc
- 50
-90.0
- 51
-180.0
+ 11
+5.699999999999999
+ 21
+-27.0
+ 31
+0.0
   0
 LINE
   5
@@ -5407,23 +5429,23 @@ B8
 100
 AcDbEntity
   8
-Zm10p5_FOOT_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
--26.0
+5.7
  20
-24.0
+-27.0
  30
 0.0
  11
-26.0
+5.7
  21
-24.0
+-36.0
  31
 0.0
   0
-ARC
+LINE
   5
 B9
 330
@@ -5431,23 +5453,21 @@ B9
 100
 AcDbEntity
   8
-Zm10p5_FOOT_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
-AcDbCircle
+AcDbLine
  10
-26.0
+4.769999999999996
  20
-20.0
+-36.0
  30
 0.0
- 40
-4.0
-100
-AcDbArc
- 50
+ 11
+5.700000000000003
+ 21
+-36.0
+ 31
 0.0
- 51
-90.0
   0
 LINE
   5
@@ -5457,23 +5477,23 @@ BA
 100
 AcDbEntity
   8
-Zm10p5_FOOT_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
 AcDbLine
  10
-30.0
+4.77
  20
-20.0
+-27.9
  30
 0.0
  11
-30.0
+4.77
  21
--32.0
+-36.0
  31
 0.0
   0
-ARC
+LINE
   5
 BB
 330
@@ -5481,22 +5501,20 @@ BB
 100
 AcDbEntity
   8
-Zm10p5_FOOT_POCKETS
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
 100
-AcDbCircle
+AcDbLine
  10
-26.0
+-4.77
  20
--32.0
+-27.9
  30
 0.0
- 40
-4.0
-100
-AcDbArc
- 50
--90.0
- 51
+ 11
+4.77
+ 21
+-27.9
+ 31
 0.0
   0
 LINE
@@ -5507,6 +5525,1482 @@ BC
 100
 AcDbEntity
   8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+-4.77
+ 20
+-27.9
+ 30
+0.0
+ 11
+-4.77
+ 21
+-36.0
+ 31
+0.0
+  0
+LINE
+  5
+BD
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+-26.0
+ 20
+-36.0
+ 30
+0.0
+ 11
+-4.77
+ 21
+-36.0
+ 31
+0.0
+  0
+ARC
+  5
+BE
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbCircle
+ 10
+-26.0
+ 20
+-32.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+180.0
+ 51
+-90.0
+  0
+LINE
+  5
+BF
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+-30.0
+ 20
+20.0
+ 30
+0.0
+ 11
+-30.0
+ 21
+-32.0
+ 31
+0.0
+  0
+CIRCLE
+  5
+C0
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbCircle
+ 10
+-23.5
+ 20
+-29.5
+ 30
+0.0
+ 40
+2.5
+  0
+CIRCLE
+  5
+C1
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbCircle
+ 10
+23.5
+ 20
+-29.5
+ 30
+0.0
+ 40
+2.5
+  0
+LINE
+  5
+C2
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+-7.62
+ 20
+-18.165
+ 30
+0.0
+ 11
+7.620000000000001
+ 21
+-18.165
+ 31
+0.0
+  0
+ARC
+  5
+C3
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbCircle
+ 10
+7.62
+ 20
+-17.0
+ 30
+0.0
+ 40
+1.165
+100
+AcDbArc
+ 50
+-90.0
+ 51
+90.0
+  0
+LINE
+  5
+C4
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+-7.62
+ 20
+-15.835
+ 30
+0.0
+ 11
+7.620000000000001
+ 21
+-15.835
+ 31
+0.0
+  0
+ARC
+  5
+C5
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbCircle
+ 10
+-7.62
+ 20
+-17.0
+ 30
+0.0
+ 40
+1.165
+100
+AcDbArc
+ 50
+90.0
+ 51
+-90.0
+  0
+CIRCLE
+  5
+C6
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbCircle
+ 10
+-23.5
+ 20
+17.5
+ 30
+0.0
+ 40
+2.5
+  0
+CIRCLE
+  5
+C7
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbCircle
+ 10
+23.5
+ 20
+17.5
+ 30
+0.0
+ 40
+2.5
+  0
+LINE
+  5
+C8
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+12.0
+ 20
+-23.25
+ 30
+0.0
+ 11
+-12.0
+ 21
+-23.25
+ 31
+0.0
+  0
+LINE
+  5
+C9
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+12.0
+ 20
+-23.25
+ 30
+0.0
+ 11
+12.0
+ 21
+-24.26065573770492
+ 31
+0.0
+  0
+LINE
+  5
+CA
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+-12.0
+ 20
+-24.260655737704923
+ 30
+0.0
+ 11
+12.0
+ 21
+-24.260655737704923
+ 31
+0.0
+  0
+LINE
+  5
+CB
+330
+17
+100
+AcDbEntity
+  8
+Zm2p0_LATCH_WELL_PIN_SLOT_DRAIN
+100
+AcDbLine
+ 10
+-12.0
+ 20
+-23.25
+ 30
+0.0
+ 11
+-12.0
+ 21
+-24.26065573770492
+ 31
+0.0
+  0
+ARC
+  5
+CD
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-26.0
+ 20
+20.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+90.0
+ 51
+180.0
+  0
+LINE
+  5
+CE
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-26.0
+ 20
+24.0
+ 30
+0.0
+ 11
+26.0
+ 21
+24.0
+ 31
+0.0
+  0
+ARC
+  5
+CF
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+26.0
+ 20
+20.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+0.0
+ 51
+90.0
+  0
+LINE
+  5
+D0
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+30.0
+ 20
+20.0
+ 30
+0.0
+ 11
+30.0
+ 21
+-32.0
+ 31
+0.0
+  0
+ARC
+  5
+D1
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+26.0
+ 20
+-32.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+-90.0
+ 51
+0.0
+  0
+LINE
+  5
+D2
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-26.0
+ 20
+-36.0
+ 30
+0.0
+ 11
+26.0
+ 21
+-36.0
+ 31
+0.0
+  0
+ARC
+  5
+D3
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-26.0
+ 20
+-32.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+180.0
+ 51
+-90.0
+  0
+LINE
+  5
+D4
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-30.0
+ 20
+20.0
+ 30
+0.0
+ 11
+-30.0
+ 21
+-32.0
+ 31
+0.0
+  0
+CIRCLE
+  5
+D5
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-23.5
+ 20
+-29.5
+ 30
+0.0
+ 40
+2.5
+  0
+LINE
+  5
+D6
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-15.25
+ 20
+-34.45
+ 30
+0.0
+ 11
+15.25
+ 21
+-34.45
+ 31
+0.0
+  0
+LINE
+  5
+D7
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+15.25
+ 20
+-11.950000000000003
+ 30
+0.0
+ 11
+15.25
+ 21
+-34.45
+ 31
+0.0
+  0
+LINE
+  5
+D8
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-15.25
+ 20
+-11.950000000000003
+ 30
+0.0
+ 11
+15.25
+ 21
+-11.950000000000003
+ 31
+0.0
+  0
+LINE
+  5
+D9
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-15.25
+ 20
+-11.950000000000003
+ 30
+0.0
+ 11
+-15.25
+ 21
+-34.45
+ 31
+0.0
+  0
+CIRCLE
+  5
+DA
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+23.5
+ 20
+-29.5
+ 30
+0.0
+ 40
+2.5
+  0
+ARC
+  5
+DB
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-24.5
+ 20
+-20.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+180.0
+ 51
+-90.0
+  0
+LINE
+  5
+DC
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-24.5
+ 20
+-22.0
+ 30
+0.0
+ 11
+-19.0
+ 21
+-22.0
+ 31
+0.0
+  0
+ARC
+  5
+DD
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-19.0
+ 20
+-20.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+-90.0
+ 51
+0.0
+  0
+LINE
+  5
+DE
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-17.0
+ 20
+8.0
+ 30
+0.0
+ 11
+-17.0
+ 21
+-20.0
+ 31
+0.0
+  0
+ARC
+  5
+DF
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-19.0
+ 20
+8.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+0.0
+ 51
+90.0
+  0
+LINE
+  5
+E0
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-24.5
+ 20
+10.0
+ 30
+0.0
+ 11
+-19.0
+ 21
+10.0
+ 31
+0.0
+  0
+ARC
+  5
+E1
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-24.5
+ 20
+8.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+90.0
+ 51
+180.0
+  0
+LINE
+  5
+E2
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-26.5
+ 20
+8.0
+ 30
+0.0
+ 11
+-26.5
+ 21
+-20.0
+ 31
+0.0
+  0
+CIRCLE
+  5
+E3
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-23.5
+ 20
+17.5
+ 30
+0.0
+ 40
+2.5
+  0
+ARC
+  5
+E4
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-11.0
+ 20
+-7.5
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+180.0
+ 51
+-90.0
+  0
+LINE
+  5
+E5
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-11.0
+ 20
+-9.5
+ 30
+0.0
+ 11
+11.0
+ 21
+-9.5
+ 31
+0.0
+  0
+ARC
+  5
+E6
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+11.0
+ 20
+-7.5
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+-90.0
+ 51
+-2.5444437451708134e-14
+  0
+LINE
+  5
+E7
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+13.0
+ 20
+18.0
+ 30
+0.0
+ 11
+13.0
+ 21
+-7.5
+ 31
+0.0
+  0
+ARC
+  5
+E8
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+11.0
+ 20
+18.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+0.0
+ 51
+90.0
+  0
+LINE
+  5
+E9
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-11.0
+ 20
+20.0
+ 30
+0.0
+ 11
+11.0
+ 21
+20.0
+ 31
+0.0
+  0
+ARC
+  5
+EA
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+-11.0
+ 20
+18.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+90.0
+ 51
+180.0
+  0
+LINE
+  5
+EB
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+-13.0
+ 20
+18.0
+ 30
+0.0
+ 11
+-13.0
+ 21
+-7.5
+ 31
+0.0
+  0
+ARC
+  5
+EC
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+19.0
+ 20
+-20.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+180.0
+ 51
+-90.0
+  0
+LINE
+  5
+ED
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+19.0
+ 20
+-22.0
+ 30
+0.0
+ 11
+24.5
+ 21
+-22.0
+ 31
+0.0
+  0
+ARC
+  5
+EE
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+24.5
+ 20
+-20.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+-90.0
+ 51
+0.0
+  0
+LINE
+  5
+EF
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+26.5
+ 20
+8.0
+ 30
+0.0
+ 11
+26.5
+ 21
+-20.0
+ 31
+0.0
+  0
+ARC
+  5
+F0
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+24.5
+ 20
+8.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+0.0
+ 51
+90.0
+  0
+LINE
+  5
+F1
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+19.0
+ 20
+10.0
+ 30
+0.0
+ 11
+24.5
+ 21
+10.0
+ 31
+0.0
+  0
+ARC
+  5
+F2
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+19.0
+ 20
+8.0
+ 30
+0.0
+ 40
+2.0
+100
+AcDbArc
+ 50
+90.0
+ 51
+180.0
+  0
+LINE
+  5
+F3
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbLine
+ 10
+17.0
+ 20
+8.0
+ 30
+0.0
+ 11
+17.0
+ 21
+-20.0
+ 31
+0.0
+  0
+CIRCLE
+  5
+F4
+330
+17
+100
+AcDbEntity
+  8
+Zm6p0_POCKETS
+100
+AcDbCircle
+ 10
+23.5
+ 20
+17.5
+ 30
+0.0
+ 40
+2.5
+  0
+ARC
+  5
+F6
+330
+17
+100
+AcDbEntity
+  8
+Zm10p5_FOOT_POCKETS
+100
+AcDbCircle
+ 10
+-26.0
+ 20
+20.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+90.0
+ 51
+180.0
+  0
+LINE
+  5
+F7
+330
+17
+100
+AcDbEntity
+  8
+Zm10p5_FOOT_POCKETS
+100
+AcDbLine
+ 10
+-26.0
+ 20
+24.0
+ 30
+0.0
+ 11
+26.0
+ 21
+24.0
+ 31
+0.0
+  0
+ARC
+  5
+F8
+330
+17
+100
+AcDbEntity
+  8
+Zm10p5_FOOT_POCKETS
+100
+AcDbCircle
+ 10
+26.0
+ 20
+20.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+0.0
+ 51
+90.0
+  0
+LINE
+  5
+F9
+330
+17
+100
+AcDbEntity
+  8
+Zm10p5_FOOT_POCKETS
+100
+AcDbLine
+ 10
+30.0
+ 20
+20.0
+ 30
+0.0
+ 11
+30.0
+ 21
+-32.0
+ 31
+0.0
+  0
+ARC
+  5
+FA
+330
+17
+100
+AcDbEntity
+  8
+Zm10p5_FOOT_POCKETS
+100
+AcDbCircle
+ 10
+26.0
+ 20
+-32.0
+ 30
+0.0
+ 40
+4.0
+100
+AcDbArc
+ 50
+-90.0
+ 51
+0.0
+  0
+LINE
+  5
+FB
+330
+17
+100
+AcDbEntity
+  8
 Zm10p5_FOOT_POCKETS
 100
 AcDbLine
@@ -5525,7 +7019,7 @@ AcDbLine
   0
 ARC
   5
-BD
+FC
 330
 17
 100
@@ -5551,7 +7045,7 @@ AcDbArc
   0
 LINE
   5
-BE
+FD
 330
 17
 100
@@ -5575,7 +7069,7 @@ AcDbLine
   0
 CIRCLE
   5
-BF
+FE
 330
 17
 100
@@ -5595,7 +7089,7 @@ AcDbCircle
   0
 LINE
   5
-C0
+FF
 330
 17
 100
@@ -5619,7 +7113,7 @@ AcDbLine
   0
 LINE
   5
-C1
+100
 330
 17
 100
@@ -5643,7 +7137,7 @@ AcDbLine
   0
 LINE
   5
-C2
+101
 330
 17
 100
@@ -5667,7 +7161,7 @@ AcDbLine
   0
 LINE
   5
-C3
+102
 330
 17
 100
@@ -5691,7 +7185,7 @@ AcDbLine
   0
 CIRCLE
   5
-C4
+103
 330
 17
 100
@@ -5711,7 +7205,7 @@ AcDbCircle
   0
 ARC
   5
-C5
+104
 330
 17
 100
@@ -5737,7 +7231,7 @@ AcDbArc
   0
 LINE
   5
-C6
+105
 330
 17
 100
@@ -5761,7 +7255,7 @@ AcDbLine
   0
 ARC
   5
-C7
+106
 330
 17
 100
@@ -5787,7 +7281,7 @@ AcDbArc
   0
 LINE
   5
-C8
+107
 330
 17
 100
@@ -5811,7 +7305,7 @@ AcDbLine
   0
 ARC
   5
-C9
+108
 330
 17
 100
@@ -5837,7 +7331,7 @@ AcDbArc
   0
 LINE
   5
-CA
+109
 330
 17
 100
@@ -5861,7 +7355,7 @@ AcDbLine
   0
 ARC
   5
-CB
+10A
 330
 17
 100
@@ -5887,7 +7381,7 @@ AcDbArc
   0
 LINE
   5
-CC
+10B
 330
 17
 100
@@ -5911,7 +7405,7 @@ AcDbLine
   0
 CIRCLE
   5
-CD
+10C
 330
 17
 100
@@ -5931,7 +7425,7 @@ AcDbCircle
   0
 ARC
   5
-CE
+10D
 330
 17
 100
@@ -5957,7 +7451,7 @@ AcDbArc
   0
 LINE
   5
-CF
+10E
 330
 17
 100
@@ -5981,7 +7475,7 @@ AcDbLine
   0
 ARC
   5
-D0
+10F
 330
 17
 100
@@ -6007,7 +7501,7 @@ AcDbArc
   0
 LINE
   5
-D1
+110
 330
 17
 100
@@ -6031,7 +7525,7 @@ AcDbLine
   0
 ARC
   5
-D2
+111
 330
 17
 100
@@ -6057,7 +7551,7 @@ AcDbArc
   0
 LINE
   5
-D3
+112
 330
 17
 100
@@ -6081,7 +7575,7 @@ AcDbLine
   0
 ARC
   5
-D4
+113
 330
 17
 100
@@ -6107,7 +7601,7 @@ AcDbArc
   0
 LINE
   5
-D5
+114
 330
 17
 100
@@ -6131,7 +7625,7 @@ AcDbLine
   0
 ARC
   5
-D6
+115
 330
 17
 100
@@ -6157,7 +7651,7 @@ AcDbArc
   0
 LINE
   5
-D7
+116
 330
 17
 100
@@ -6181,7 +7675,7 @@ AcDbLine
   0
 ARC
   5
-D8
+117
 330
 17
 100
@@ -6207,7 +7701,7 @@ AcDbArc
   0
 LINE
   5
-D9
+118
 330
 17
 100
@@ -6231,7 +7725,7 @@ AcDbLine
   0
 ARC
   5
-DA
+119
 330
 17
 100
@@ -6257,7 +7751,7 @@ AcDbArc
   0
 LINE
   5
-DB
+11A
 330
 17
 100
@@ -6281,7 +7775,7 @@ AcDbLine
   0
 ARC
   5
-DC
+11B
 330
 17
 100
@@ -6307,7 +7801,7 @@ AcDbArc
   0
 LINE
   5
-DD
+11C
 330
 17
 100
@@ -6331,7 +7825,7 @@ AcDbLine
   0
 CIRCLE
   5
-DE
+11D
 330
 17
 100
@@ -6351,7 +7845,79 @@ AcDbCircle
   0
 LINE
   5
-E0
+11F
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-14.635000000000005
+ 20
+-0.75
+ 30
+0.0
+ 11
+12.799999999999997
+ 21
+-0.75
+ 31
+0.0
+  0
+LINE
+  5
+120
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+12.8
+ 20
+-0.09999999999999964
+ 30
+0.0
+ 11
+12.8
+ 21
+-0.75
+ 31
+0.0
+  0
+LINE
+  5
+121
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+18.64999999999999
+ 20
+-0.1
+ 30
+0.0
+ 11
+12.799999999999473
+ 21
+-0.1
+ 31
+0.0
+  0
+LINE
+  5
+122
 330
 17
 100
@@ -6375,7 +7941,7 @@ AcDbLine
   0
 LINE
   5
-E1
+123
 330
 17
 100
@@ -6399,7 +7965,7 @@ AcDbLine
   0
 LINE
   5
-E2
+124
 330
 17
 100
@@ -6423,7 +7989,7 @@ AcDbLine
   0
 LINE
   5
-E3
+125
 330
 17
 100
@@ -6447,7 +8013,7 @@ AcDbLine
   0
 LINE
   5
-E4
+126
 330
 17
 100
@@ -6471,7 +8037,7 @@ AcDbLine
   0
 LINE
   5
-E5
+127
 330
 17
 100
@@ -6495,7 +8061,7 @@ AcDbLine
   0
 LINE
   5
-E6
+128
 330
 17
 100
@@ -6519,7 +8085,7 @@ AcDbLine
   0
 LINE
   5
-E7
+129
 330
 17
 100
@@ -6543,7 +8109,7 @@ AcDbLine
   0
 LINE
   5
-E8
+12A
 330
 17
 100
@@ -6567,7 +8133,7 @@ AcDbLine
   0
 LINE
   5
-E9
+12B
 330
 17
 100
@@ -6591,7 +8157,7 @@ AcDbLine
   0
 LINE
   5
-EA
+12C
 330
 17
 100
@@ -6615,7 +8181,7 @@ AcDbLine
   0
 LINE
   5
-EB
+12D
 330
 17
 100
@@ -6639,7 +8205,7 @@ AcDbLine
   0
 LINE
   5
-EC
+12E
 330
 17
 100
@@ -6663,7 +8229,7 @@ AcDbLine
   0
 LINE
   5
-ED
+12F
 330
 17
 100
@@ -6687,7 +8253,7 @@ AcDbLine
   0
 LINE
   5
-EE
+130
 330
 17
 100
@@ -6699,7 +8265,7 @@ AcDbLine
  10
 -11.950000000000003
  20
--4.82
+-4.855
  30
 0.0
  11
@@ -6711,7 +8277,7 @@ AcDbLine
   0
 LINE
   5
-EF
+131
 330
 17
 100
@@ -6723,19 +8289,19 @@ AcDbLine
  10
 -15.835
  20
--4.82
+-4.855
  30
 0.0
  11
 -11.950000000000003
  21
--4.82
+-4.855
  31
 0.0
   0
 LINE
   5
-F0
+132
 330
 17
 100
@@ -6753,13 +8319,13 @@ AcDbLine
  11
 -15.835
  21
--4.82
+-4.855
  31
 0.0
   0
 LINE
   5
-F1
+133
 330
 17
 100
@@ -6769,13 +8335,13 @@ X0_SECTION_D-D
 100
 AcDbLine
  10
-18.64999999999999
+-15.835
  20
 -0.1
  30
 0.0
  11
--15.835
+-14.635
  21
 -0.1
  31
@@ -6783,7 +8349,7 @@ AcDbLine
   0
 LINE
   5
-F2
+134
 330
 17
 100
@@ -6793,69 +8359,21 @@ X0_SECTION_D-D
 100
 AcDbLine
  10
--18.165
+-14.635
  20
 -0.09999999999999964
  30
 0.0
  11
--18.165
+-14.635
  21
--4.82
+-0.75
  31
 0.0
   0
 LINE
   5
-F3
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--27.9
- 20
--4.82
- 30
-0.0
- 11
--18.165
- 21
--4.82
- 31
-0.0
-  0
-LINE
-  5
-F4
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--27.9
- 20
--1.3100000000000005
- 30
-0.0
- 11
--27.9
- 21
--4.82
- 31
-0.0
-  0
-LINE
-  5
-F5
+135
 330
 17
 100
@@ -6867,19 +8385,19 @@ AcDbLine
  10
 -36.0
  20
--1.3100000000000005
+-5.105
  30
 0.0
  11
--27.9
+-36.0
  21
--1.3100000000000005
+-11.0
  31
 0.0
   0
 LINE
   5
-F6
+136
 330
 17
 100
@@ -6891,19 +8409,19 @@ AcDbLine
  10
 -36.0
  20
-2.1999999999999993
+-5.105
  30
 0.0
  11
--36.0
+-34.45
  21
--1.3100000000000005
+-5.105
  31
 0.0
   0
 LINE
   5
-F7
+137
 330
 17
 100
@@ -6913,21 +8431,45 @@ X0_SECTION_D-D
 100
 AcDbLine
  10
--35.199999999999996
+-34.45
  20
-3.0000000000000044
+-5.105
  30
 0.0
  11
--36.0
+-34.45
  21
-2.200000000000003
+-11.0
  31
 0.0
   0
 LINE
   5
-F8
+138
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-36.0
+ 20
+-11.0
+ 30
+0.0
+ 11
+-34.45
+ 21
+-11.0
+ 31
+0.0
+  0
+LINE
+  5
+139
 330
 17
 100
@@ -6943,7 +8485,7 @@ AcDbLine
  30
 0.0
  11
--29.0
+-35.07452935044209
  21
 3.0
  31
@@ -6951,7 +8493,7 @@ AcDbLine
   0
 LINE
   5
-F9
+13A
 330
 17
 100
@@ -6961,9 +8503,81 @@ X0_SECTION_D-D
 100
 AcDbLine
  10
--29.0
+-35.07452935044209
  20
-6.5
+6.569244822265599
+ 30
+0.0
+ 11
+-35.07452935044209
+ 21
+3.0
+ 31
+0.0
+  0
+LINE
+  5
+13B
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-35.07452935044209
+ 20
+6.569244822265599
+ 30
+0.0
+ 11
+-33.07452935044209
+ 21
+6.569244822265599
+ 31
+0.0
+  0
+LINE
+  5
+13C
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-33.07452935044209
+ 20
+6.569244822265599
+ 30
+0.0
+ 11
+-33.07452935044209
+ 21
+3.0
+ 31
+0.0
+  0
+LINE
+  5
+13D
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-33.07452935044209
+ 20
+3.0
  30
 0.0
  11
@@ -6975,7 +8589,7 @@ AcDbLine
   0
 LINE
   5
-FA
+13E
 330
 17
 100
@@ -6987,19 +8601,43 @@ AcDbLine
  10
 -29.0
  20
-6.5
+5.5
  30
 0.0
  11
--27.0
+-29.0
  21
-6.5
+3.0
  31
 0.0
   0
 LINE
   5
-FB
+13F
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-29.0
+ 20
+5.5
+ 30
+0.0
+ 11
+-27.0
+ 21
+5.5
+ 31
+0.0
+  0
+LINE
+  5
+140
 330
 17
 100
@@ -7011,7 +8649,7 @@ AcDbLine
  10
 -27.0
  20
-6.5
+5.5
  30
 0.0
  11
@@ -7023,7 +8661,7 @@ AcDbLine
   0
 LINE
   5
-FC
+141
 330
 17
 100
@@ -7039,7 +8677,7 @@ AcDbLine
  30
 0.0
  11
--24.9
+-25.278380932386472
  21
 -3.8
  31
@@ -7047,7 +8685,7 @@ AcDbLine
   0
 ARC
   5
-FD
+142
 330
 17
 100
@@ -7057,23 +8695,23 @@ X0_SECTION_D-D
 100
 AcDbCircle
  10
--24.9
+-25.278380932386472
  20
--3.3
+-2.8
  30
 0.0
  40
-0.5
+1.0
 100
 AcDbArc
  50
 -90.0
  51
-0.0
+-1.252167375203856
   0
 LINE
   5
-FE
+143
 330
 17
 100
@@ -7083,189 +8721,265 @@ X0_SECTION_D-D
 100
 AcDbLine
  10
--24.4
+-24.11753602530265
  20
-9.681088913245537
+4.5477268424039705
  30
 0.0
  11
--24.4
+-24.278619731231704
  21
--3.3
- 31
-0.0
-  0
-LINE
-  5
-FF
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--33.0
- 20
-9.681088913245537
- 30
-0.0
- 11
--24.4
- 21
-9.681088913245537
- 31
-0.0
-  0
-LINE
-  5
-100
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--33.0
- 20
-11.281088913245537
- 30
-0.0
- 11
--33.0
- 21
-9.681088913245537
- 31
-0.0
-  0
-LINE
-  5
-101
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--23.25
- 20
-11.281088913245537
- 30
-0.0
- 11
--33.0
- 21
-11.281088913245537
- 31
-0.0
-  0
-LINE
-  5
-102
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--21.5
- 20
-8.25
- 30
-0.0
- 11
--23.25
- 21
-11.281088913245533
- 31
-0.0
-  0
-LINE
-  5
-103
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--21.5
- 20
-7.85
- 30
-0.0
- 11
--21.5
- 21
-8.25
- 31
-0.0
-  0
-LINE
-  5
-104
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--23.25
- 20
-7.85
- 30
-0.0
- 11
--21.5
- 21
-7.85
- 31
-0.0
-  0
-LINE
-  5
-105
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--23.25
- 20
-7.85
- 30
-0.0
- 11
--23.25
- 21
--3.3
+-2.821852703850379
  31
 0.0
   0
 ARC
   5
-106
+144
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbCircle
+ 10
+-32.115625634540805
+ 20
+4.722548473206989
+ 30
+0.0
+ 40
+8.0
+100
+AcDbArc
+ 50
+-1.2521673752038802
+ 51
+10.203973721731675
+  0
+LINE
+  5
+145
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-24.55
+ 20
+7.85
+ 30
+0.0
+ 11
+-24.24215904275124
+ 21
+6.139772459729108
+ 31
+0.0
+  0
+LINE
+  5
+146
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-24.55
+ 20
+9.42749907475931
+ 30
+0.0
+ 11
+-24.55
+ 21
+7.85
+ 31
+0.0
+  0
+ARC
+  5
+147
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbCircle
+ 10
+-25.150000000000002
+ 20
+9.42749907475931
+ 30
+0.0
+ 40
+0.6
+100
+AcDbArc
+ 50
+0.0
+ 51
+90.0
+  0
+LINE
+  5
+148
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-32.45
+ 20
+10.02749907475931
+ 30
+0.0
+ 11
+-25.150000000000002
+ 21
+10.02749907475931
+ 31
+0.0
+  0
+LINE
+  5
+149
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-32.45
+ 20
+11.62749907475931
+ 30
+0.0
+ 11
+-32.45
+ 21
+10.02749907475931
+ 31
+0.0
+  0
+LINE
+  5
+14A
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-23.25
+ 20
+11.62749907475931
+ 30
+0.0
+ 11
+-32.45
+ 21
+11.62749907475931
+ 31
+0.0
+  0
+LINE
+  5
+14B
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-21.3
+ 20
+8.25
+ 30
+0.0
+ 11
+-23.25
+ 21
+11.62749907475931
+ 31
+0.0
+  0
+LINE
+  5
+14C
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-21.3
+ 20
+7.85
+ 30
+0.0
+ 11
+-21.3
+ 21
+8.25
+ 31
+0.0
+  0
+LINE
+  5
+14D
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-22.62903905220017
+ 20
+8.181366652585663
+ 30
+0.0
+ 11
+-21.300000000000004
+ 21
+7.85
+ 31
+0.0
+  0
+ARC
+  5
+14E
 330
 17
 100
@@ -7277,11 +8991,61 @@ AcDbCircle
  10
 -22.75
  20
--3.3
+7.696218789447663
  30
 0.0
  40
 0.5
+100
+AcDbArc
+ 50
+76.00000000000004
+ 51
+180.0
+  0
+LINE
+  5
+14F
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-23.25
+ 20
+-2.8
+ 30
+0.0
+ 11
+-23.25
+ 21
+7.696218789447663
+ 31
+0.0
+  0
+ARC
+  5
+150
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbCircle
+ 10
+-22.25
+ 20
+-2.8
+ 30
+0.0
+ 40
+1.0
 100
 AcDbArc
  50
@@ -7291,7 +9055,7 @@ AcDbArc
   0
 LINE
   5
-107
+151
 330
 17
 100
@@ -7301,7 +9065,7 @@ X0_SECTION_D-D
 100
 AcDbLine
  10
--22.75
+-22.25
  20
 -3.8
  30
@@ -7315,7 +9079,7 @@ AcDbLine
   0
 LINE
   5
-108
+152
 330
 17
 100
@@ -7339,7 +9103,31 @@ AcDbLine
   0
 LINE
   5
-109
+153
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-21.05
+ 20
+-0.1
+ 30
+0.0
+ 11
+-18.165
+ 21
+-0.1
+ 31
+0.0
+  0
+LINE
+  5
+154
 330
 17
 100
@@ -7351,19 +9139,67 @@ AcDbLine
  10
 -18.165
  20
--0.1
+-0.09999999999999964
  30
 0.0
  11
--21.05
+-18.165
  21
--0.1
+-4.855
  31
 0.0
   0
 LINE
   5
-10A
+155
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-27.9
+ 20
+-4.855
+ 30
+0.0
+ 11
+-18.165
+ 21
+-4.855
+ 31
+0.0
+  0
+LINE
+  5
+156
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-27.9
+ 20
+-1.3450000000000006
+ 30
+0.0
+ 11
+-27.9
+ 21
+-4.855
+ 31
+0.0
+  0
+LINE
+  5
+157
 330
 17
 100
@@ -7375,19 +9211,19 @@ AcDbLine
  10
 -36.0
  20
--5.07
+-1.3450000000000006
  30
 0.0
  11
--36.0
+-27.9
  21
--11.0
+-1.3450000000000006
  31
 0.0
   0
 LINE
   5
-10B
+158
 330
 17
 100
@@ -7399,61 +9235,37 @@ AcDbLine
  10
 -36.0
  20
--5.07
+2.1999999999999993
  30
 0.0
  11
--34.45
- 21
--5.07
- 31
-0.0
-  0
-LINE
-  5
-10C
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
--34.45
- 20
--5.07
- 30
-0.0
- 11
--34.45
- 21
--11.0
- 31
-0.0
-  0
-LINE
-  5
-10D
-330
-17
-100
-AcDbEntity
-  8
-X0_SECTION_D-D
-100
-AcDbLine
- 10
 -36.0
+ 21
+-1.3450000000000006
+ 31
+0.0
+  0
+LINE
+  5
+159
+330
+17
+100
+AcDbEntity
+  8
+X0_SECTION_D-D
+100
+AcDbLine
+ 10
+-35.199999999999996
  20
--11.0
+3.0000000000000044
  30
 0.0
  11
--34.45
+-36.0
  21
--11.0
+2.200000000000003
  31
 0.0
   0
@@ -8447,7 +10259,7 @@ CREATED_BY_EZDXF
   3
 WRITTEN_BY_EZDXF
 350
-110
+15C
   0
 DICTIONARYVAR
   5
@@ -8459,11 +10271,11 @@ DictionaryVariables
 280
 0
   1
-1.4.5 @ 2026-11-11T15:24:04.394823+00:00
+1.4.5 @ 2026-11-11T18:46:53.683877+00:00
   0
 DICTIONARYVAR
   5
-110
+15C
 330
 2D
 100
@@ -8471,7 +10283,7 @@ DictionaryVariables
 280
 0
   1
-1.4.5 @ 2026-11-11T15:24:04.632606+00:00
+1.4.5 @ 2026-11-11T18:46:53.996624+00:00
   0
 ENDSEC
   0

@@ -6,7 +6,10 @@
  *
  *   time        simulated microseconds.  Time passes ONLY in gl_hal_delay_*,
  *               in gl_hal_sleep and for the duration of bus transfers and ADC
- *               conversions.  Computation takes zero simulated time.
+ *               conversions.  Computation takes zero simulated time, EXCEPT
+ *               at the trace points of gl_hal_trace(): a test can charge a
+ *               run time for each (gl_sim_set_compute_us), which is how the
+ *               capture sequence is tested with realistic vision run times.
  *   GPIO        mode and output latch of every logical pin, external levels
  *               for inputs, every change recorded in the trace
  *   SPI1        LS013B7DH03 model (decodes frames into a panel memory) and
@@ -22,7 +25,14 @@
  * It CHECKS, and counts in gl_sim_violations_t:
  *   - the camera rail rule (every camera-facing pin ANALOG or driven low
  *     while V2V8_CAM is off, and for 1 ms after it is switched on)
- *   - two cameras driving the shared bus at once
+ *   - two cameras driving the shared bus at once.  A sensor in power-down
+ *     is taken to KEEP its pads enabled unless
+ *     GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS says otherwise, so the overlap
+ *     that power-up cannot avoid (both sensors leave reset with their pads
+ *     enabled) is visible: it is measured in gl_sim_stats_t
+ *     (cam_powerup_overlap_us, ..._streaming_us) as an explicitly accepted
+ *     figure, and any overlap AFTER both sensors have been released once is
+ *     a violation
  *   - SCCB traffic to an unpowered / unclocked / powered-down camera
  *   - LCD protocol (active-high SCS, LSB first, mode 0, <= 1.1 MHz, frame
  *     length, line addresses, chip-select timing, DISP without EXTCOMIN)
@@ -35,6 +45,8 @@
  *     started, the ADC or the op-amp powered, or a chip select asserted
  *   - more than one grain LED lit, ADC use while unpowered
  *   - the watchdog not kicked for longer than its period
+ *   - USB left started, at a sleep, with VBUS absent; the charger enabled
+ *     at the entry of Stop mode (nothing supervises the temperature then)
  *
  * The device models encode THIS PROJECT'S UNDERSTANDING of the parts (the
  * same datasheet recollections the drivers are written from, see the README
@@ -145,6 +157,7 @@ typedef struct {
     unsigned analog;          /**< ADC / op-amp misuse, several grain LEDs lit */
     unsigned watchdog;        /**< not kicked within the watchdog period */
     unsigned deadlock;        /**< gl_hal_sleep with nothing that could ever wake it */
+    unsigned power;           /**< USB started without VBUS; charger enabled in Stop mode */
     char first[160];          /**< description of the first violation of any kind */
 } gl_sim_violations_t;
 
@@ -163,6 +176,14 @@ typedef struct {
     uint32_t reboots;
     uint8_t last_reboot;       /**< gl_reboot_t of the most recent request */
     uint32_t frames_captured;  /**< completed DCMI captures */
+    /** Time both sensors had their pads enabled before both had been
+     *  released once since the rail came on (the power-up window that
+     *  firmware cannot close if PWDN does not tri-state the pads), and the
+     *  part of it during which one of the two was streaming. */
+    uint64_t cam_powerup_overlap_us;
+    uint64_t cam_powerup_overlap_streaming_us;
+    uint32_t trace_points[GL_TRACE_COUNT]; /**< gl_hal_trace() calls per point */
+    uint64_t compute_us;       /**< simulated time charged for computation */
 } gl_sim_stats_t;
 
 const gl_sim_stats_t *gl_sim_stats(void);
@@ -225,6 +246,20 @@ void gl_sim_imu_set_temperature(float temp_c);
 void gl_sim_imu_set_mounting(const int8_t axis[3], const int8_t sign[3]);
 /** Make the IMU absent (no answer on SPI: MISO reads 0xFF). */
 void gl_sim_imu_set_present(bool present);
+/** Power glitch of the IMU alone: every register back to its reset value
+ *  (both sensors off, interrupts unrouted); the device still answers. */
+void gl_sim_imu_power_glitch(void);
+/** Die temperature the MCU's own sensor reports.  By default it follows
+ *  the IMU's (one board, one temperature); calling this pins it. */
+void gl_sim_set_mcu_temperature(float temp_c);
+/** Make the next `count` transfers on an SPI bus fail with `st` AFTER they
+ *  have taken place (what a HAL time-out looks like to the driver). */
+void gl_sim_spi_fail(gl_spi_bus_t bus, unsigned count, gl_status_t st);
+/** Lose pending interrupt latches: the bits in `mask` are cleared as if the
+ *  latch had been overwritten (the race the STM32 backend must not have). */
+void gl_sim_irq_drop(uint32_t mask);
+/** Charge `us` of simulated time at every gl_hal_trace(point) (default 0). */
+void gl_sim_set_compute_us(gl_trace_point_t point, uint32_t us);
 /** Register value as the model currently holds it (tests of the driver's
  *  configuration writes). */
 uint8_t gl_sim_imu_reg(uint8_t addr);

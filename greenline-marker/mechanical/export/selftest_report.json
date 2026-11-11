@@ -35,19 +35,19 @@
    "defect": "2 x 2 mm pocket leaving a 0.30 mm roof",
    "check": "5 wall thickness",
    "caught": true,
-   "message": "FAILED: tub: undocumented region, min 0.3 mm at (-18.0, -6.0, 7.3)..(-16.0, -4.0, 7.6)"
+   "message": "FAILED: tub: undocumented region, min 0.3 mm at (-17.99, -6.0, 7.3)..(-16.0, -4.0, 7.6)"
   },
   {
    "defect": "closed 4 mm void inside the cradle body",
    "check": "6 trapped volume",
    "caught": true,
-   "message": "FAILED: cradle: 1 closed void(s), 64.00 mm3; cradle: cavity near [ 22.9 -33.1  -6.1]..[ 25.1 -30.9  -3.9] has no 2.0 mm escape path; cradle: B-rep has 2 shells "
+   "message": "FAILED: cradle: 1 closed void(s), 64.00 mm3; cradle: cavity near [ 17.1 -34.1  -8.1]..[ 19.3 -31.9  -5.9] has no 2.0 mm escape path; cradle: B-rep has 2 shells "
   },
   {
    "defect": "4 mm cavity in the cradle with only a dia 1.0 exit",
    "check": "6 trapped volume",
    "caught": true,
-   "message": "FAILED: cradle: cavity near [ 22.9 -33.1  -6.1]..[ 25.1 -30.9  -3.9] has no 2.0 mm escape path"
+   "message": "FAILED: cradle: cavity near [ 17.1 -34.1  -8.1]..[ 19.3 -31.9  -5.9] has no 2.0 mm escape path"
   },
   {
    "defect": "lip 0.4 mm too low (no clearance over the tub)",
@@ -56,10 +56,16 @@
    "message": "FAILED: orientation 0 deg: common volume 1.980 mm3; lip underside above the tub top: measured 1.8499999999999992 vs 0.25; insertion pose 17.0 deg: body/lip 2.17"
   },
   {
-   "defect": "latch hook cut back by 0.6 mm (overlap 0.3)",
+   "defect": "latch hook cut back by 0.6 mm (overlap 0.25 forward)",
    "check": "7 cradle: pins, key, hold-down, insertion",
    "caught": true,
-   "message": "FAILED: the latch is not present in the cradle solid as designed (499.9 of 507.8 mm3); retaining face z: measured nan vs 7.85; latch free length L (root to reta"
+   "message": "FAILED: the latch is not present in the cradle solid as designed (662.0 of 674.2 mm3); nose (lowest point of the retaining face) z: measured nan vs 7.85; nose a"
+  },
+  {
+   "defect": "stop under the thumb tab left out",
+   "check": "7 cradle: pins, key, hold-down, insertion",
+   "caught": true,
+   "message": "FAILED: top of the stop under the thumb tab: measured 3.0 vs 6.569244822265599; thumb-tab stop: the pressed tab meets the body at inf mm of hook travel, not 2.0"
   },
   {
    "defect": "2 mm rib from the roof down to z 3.0 over the PCB, outside the keep-outs",
@@ -72,6 +78,18 @@
    "check": "10 support posts",
    "caught": true,
    "message": "post placement problem"
+  },
+  {
+   "defect": "key notch through base plate and bead at the seal land (first rev C model)",
+   "check": "13 seal continuity (air-solid test)",
+   "caught": true,
+   "message": "FAILED: the cavity is connected to the outside; outside and cavity are ONE connected air solid: the marker is open; perimeter bead at z = 1.03 is not one closed"
+  },
+  {
+   "defect": "seating ledge 0.3 mm too small on radius",
+   "check": "14 assembly paths (LCD tilt-in, PCB / base join)",
+   "caught": true,
+   "message": "FAILED: LCD tilt-in: only 0.000 mm to the ledge; hinged close, unit open by 0.25 deg: 2.5158 mm3 of interference; hinged close, unit open by 0.5 deg: 1.8163 mm3"
   }
  ]
 }

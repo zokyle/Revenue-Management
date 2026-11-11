@@ -32,6 +32,15 @@ static int clamp_ceil_(float v)
     return (int)ceilf(v);
 }
 
+/* Integer coordinates and sizes are clamped to +-GL_GFX_COORD_LIMIT at the
+ * entry of every integer primitive, so that no sum of a position and a size
+ * can overflow (undefined behaviour for signed int).  The limit is 8000
+ * screens wide: nothing that could be visible is changed by it. */
+static int coord_(int v)
+{
+    return gl_clampi(v, -GL_GFX_COORD_LIMIT, GL_GFX_COORD_LIMIT);
+}
+
 static unsigned isqrt_(unsigned v)
 {
     unsigned r = 0;
@@ -180,6 +189,8 @@ unsigned gl_gfx_changed_rows(const gl_gfx_t *g, const uint8_t shadow[GL_GFX_BYTE
 
 void gl_gfx_hline(gl_gfx_t *g, int x0, int x1, int y, gl_ink_t ink)
 {
+    x0 = coord_(x0);
+    x1 = coord_(x1);
     if (x0 > x1) {
         int t = x0;
         x0 = x1;
@@ -190,6 +201,7 @@ void gl_gfx_hline(gl_gfx_t *g, int x0, int x1, int y, gl_ink_t ink)
 
 void gl_gfx_vline(gl_gfx_t *g, int x, int y0, int y1, gl_ink_t ink)
 {
+    x = coord_(x);
     if (y0 > y1) {
         int t = y0;
         y0 = y1;
@@ -204,11 +216,16 @@ void gl_gfx_vline(gl_gfx_t *g, int x, int y0, int y1, gl_ink_t ink)
 
 void gl_gfx_rect(gl_gfx_t *g, int x, int y, int w, int h, gl_ink_t ink)
 {
-    int y0 = gl_clampi(y, 0, GL_GFX_H);
-    int y1 = gl_clampi(y + h, 0, GL_GFX_H);
+    int y0, y1;
     if (w <= 0 || h <= 0) {
         return;
     }
+    x = coord_(x);
+    y = coord_(y);
+    w = coord_(w);
+    h = coord_(h);
+    y0 = gl_clampi(y, 0, GL_GFX_H);
+    y1 = gl_clampi(y + h, 0, GL_GFX_H);
     for (int yy = y0; yy < y1; yy++) {
         (void)span_(g, x, x + w - 1, yy, ink);
     }
@@ -219,6 +236,10 @@ void gl_gfx_frame(gl_gfx_t *g, int x, int y, int w, int h, gl_ink_t ink)
     if (w <= 0 || h <= 0) {
         return;
     }
+    x = coord_(x);
+    y = coord_(y);
+    w = coord_(w);
+    h = coord_(h);
     gl_gfx_hline(g, x, x + w - 1, y, ink);
     gl_gfx_hline(g, x, x + w - 1, y + h - 1, ink);
     gl_gfx_vline(g, x, y, y + h - 1, ink);
@@ -489,10 +510,11 @@ static unsigned glyph_index_(char ch)
 
 int gl_gfx_text(gl_gfx_t *g, int x, int y, const char *s, int scale, gl_ink_t ink)
 {
-    if (scale < 1) {
-        scale = 1;
-    }
-    for (; *s != '\0'; s++) {
+    /* one glyph at scale 32 is wider than the screen */
+    scale = gl_clampi(scale, 1, GL_GFX_TEXT_SCALE_MAX);
+    x = coord_(x);
+    y = coord_(y);
+    for (int n = 0; *s != '\0' && n < GL_GFX_TEXT_LEN_MAX; s++, n++) {
         const uint8_t *rows = gl_font5x7[glyph_index_(*s)];
         if (x > GL_GFX_W) {
             break; /* nothing further can be visible */
@@ -512,16 +534,18 @@ int gl_gfx_text(gl_gfx_t *g, int x, int y, const char *s, int scale, gl_ink_t in
 
 int gl_gfx_text_width(const char *s, int scale)
 {
-    int n = (int)strlen(s);
-    if (scale < 1) {
-        scale = 1;
+    /* bounded scan: a string that could be visible is far shorter */
+    int n = 0;
+    while (n < GL_GFX_TEXT_LEN_MAX && s[n] != '\0') {
+        n++;
     }
+    scale = gl_clampi(scale, 1, GL_GFX_TEXT_SCALE_MAX);
     return (n == 0) ? 0 : (n * GL_FONT_ADVANCE - 1) * scale;
 }
 
 void gl_gfx_text_centred(gl_gfx_t *g, int cx, int y, const char *s, int scale, gl_ink_t ink)
 {
-    (void)gl_gfx_text(g, cx - gl_gfx_text_width(s, scale) / 2, y, s, scale, ink);
+    (void)gl_gfx_text(g, coord_(cx) - gl_gfx_text_width(s, scale) / 2, y, s, scale, ink);
 }
 
 /* Seven-segment masks, bit 0 = a (top) ... bit 6 = g (middle). */
@@ -530,9 +554,7 @@ static const uint8_t seg7_[10] = { 0x3Fu, 0x06u, 0x5Bu, 0x4Fu, 0x66u,
 
 static void big_metrics_(int h, int *w, int *t, int *gap)
 {
-    if (h < 9) {
-        h = 9;
-    }
+    h = gl_clampi(h, 9, GL_GFX_BIG_H_MAX);
     *w = (h + 1) / 2;
     *t = (h / 6 < 2) ? 2 : h / 6;
     *gap = *t;
@@ -542,7 +564,7 @@ int gl_gfx_big_number_width(const char *s, int h_px)
 {
     int w, t, gap, x = 0;
     big_metrics_(h_px, &w, &t, &gap);
-    for (; *s != '\0'; s++) {
+    for (int n = 0; *s != '\0' && n < GL_GFX_TEXT_LEN_MAX; s++, n++) {
         if (*s >= '0' && *s <= '9') {
             x += w + gap;
         } else if (*s == '-') {
@@ -559,13 +581,18 @@ int gl_gfx_big_number_width(const char *s, int h_px)
 int gl_gfx_big_number(gl_gfx_t *g, int x, int y, const char *s, int h_px, gl_ink_t ink)
 {
     int w, t, gap;
-    int h = (h_px < 9) ? 9 : h_px;
+    const int h = gl_clampi(h_px, 9, GL_GFX_BIG_H_MAX);
     big_metrics_(h, &w, &t, &gap);
+    x = coord_(x);
+    y = coord_(y);
     {
         const int mid = (h - t) / 2;    /* top of the middle bar */
         const int half = h / 2;         /* split between upper and lower verticals */
         for (; *s != '\0'; s++) {
             uint8_t m = 0;
+            if (x > GL_GFX_W) {
+                break; /* nothing further can be visible */
+            }
             if (*s >= '0' && *s <= '9') {
                 m = seg7_[*s - '0'];
             } else if (*s == '-') {
@@ -616,6 +643,8 @@ void gl_gfx_icon(gl_gfx_t *g, int x, int y, gl_icon_t icon, gl_ink_t ink)
         return;
     }
     bm = &gl_icons[icon];
+    x = coord_(x);
+    y = coord_(y);
     for (int r = 0; r < (int)bm->h; r++) {
         uint16_t bits = bm->rows[r];
         for (int c = 0; c < (int)bm->w; c++) {
@@ -630,6 +659,8 @@ void gl_gfx_battery(gl_gfx_t *g, int x, int y, int percent)
 {
     int fill;
     percent = gl_clampi(percent, 0, 100);
+    x = coord_(x);
+    y = coord_(y);
     fill = (percent * 13 + 50) / 100;
     gl_gfx_frame(g, x, y, 17, 9, GL_INK_BLACK);
     gl_gfx_rect(g, x + 17, y + 2, 2, 5, GL_INK_BLACK);
@@ -641,6 +672,8 @@ void gl_gfx_conf_bar(gl_gfx_t *g, int x, int y, int filled, int total)
 {
     total = gl_clampi(total, 0, 10);
     filled = gl_clampi(filled, 0, total);
+    x = coord_(x);
+    y = coord_(y);
     for (int i = 0; i < total; i++) {
         int bx = x + i * 7;
         if (i < filled) {

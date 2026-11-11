@@ -257,6 +257,7 @@ GL_TEST(test_read_interrupted)
 
 GL_TEST(test_precision_read)
 {
+    uint32_t a;
     fresh();
     wake_up();
     quick_read();
@@ -272,7 +273,7 @@ GL_TEST(test_precision_read)
     STATE_IS(GL_UI_READ_TILT);
     GL_CHECK_EQ(ui.read_kind, GL_READ_PRECISION);
     {
-        uint32_t a = ev(GL_EV_TILT_DONE, 0);
+        a = ev(GL_EV_TILT_DONE, 0);
         GL_CHECK(a & GL_ACT_PRECISION);
         GL_CHECK(a & GL_ACT_START_SOLVE);
         GL_CHECK(!(a & GL_ACT_START_CAPTURE));
@@ -286,22 +287,65 @@ GL_TEST(test_precision_read)
     ev(GL_EV_STILL, 0);
     GL_CHECK(ev(GL_EV_TILT_DONE, 0) & GL_ACT_START_CAPTURE);
 
-    /* no spin within 20 s: the quick result stays */
+    /* no spin within 20 s: the quick result stays, and the application is
+     * told that the spin was given up (it stops integrating and redraws the
+     * single read for where the marker faces now) */
     fresh();
     wake_up();
     quick_read();
     ev(GL_EV_DOUBLE_TAP, 0);
     now += 20100;
-    GL_CHECK(gl_ui_tick(&ui, now) & GL_ACT_REDRAW);
+    a = gl_ui_tick(&ui, now);
+    GL_CHECK(a & GL_ACT_REDRAW);
+    GL_CHECK(a & GL_ACT_SPIN_ABANDON);
     STATE_IS(GL_UI_SHOW_RESULT);
 
-    /* a re-read disturbed by motion is retried as a precision re-read */
+    /* Review finding: a re-read DISTURBED by motion used to go to WAIT_STILL
+     * and re-read from there, to be combined with the spin angle measured
+     * before the disturbance.  It now goes back to the spin prompt WITHOUT
+     * re-arming the integrator: only a marker that comes to rest at a half
+     * turn again (a new SPIN_DONE) is re-read. */
+    ev(GL_EV_DOUBLE_TAP, 0);
+    STATE_IS(GL_UI_PRECISION_WAIT_SPIN);
+    ev(GL_EV_SPIN_DONE, 0);
+    STATE_IS(GL_UI_READ_TILT);
+    a = ev(GL_EV_MOTION, 0);
+    STATE_IS(GL_UI_PRECISION_WAIT_SPIN);
+    GL_CHECK(a & GL_ACT_ABORT_READ);
+    GL_CHECK(!(a & GL_ACT_ARM_SPIN));     /* the angle keeps accumulating */
+    GL_CHECK(!(a & GL_ACT_WATCH_STILL));  /* stillness alone must not start a read */
+    GL_CHECK_EQ(ev(GL_EV_STILL, 0), 0u);
+    STATE_IS(GL_UI_PRECISION_WAIT_SPIN);
+    GL_CHECK(ev(GL_EV_SPIN_DONE, 0) & GL_ACT_START_TILT);
+    STATE_IS(GL_UI_READ_TILT);
+    GL_CHECK_EQ(ui.read_kind, GL_READ_PRECISION);
+    /* the same for a failed average */
+    a = ev(GL_EV_TILT_FAIL, 0);
+    STATE_IS(GL_UI_PRECISION_WAIT_SPIN);
+    GL_CHECK(!(a & GL_ACT_ARM_SPIN));
+    ev(GL_EV_SPIN_DONE, 0);
+    GL_CHECK(ev(GL_EV_TILT_DONE, 0) & GL_ACT_PRECISION);
+    STATE_IS(GL_UI_SOLVE);
+    /* a marker that never comes to rest at a half turn again: the prompt
+     * times out to the single result */
+    fresh();
+    wake_up();
+    quick_read();
     ev(GL_EV_DOUBLE_TAP, 0);
     ev(GL_EV_SPIN_DONE, 0);
     ev(GL_EV_MOTION, 0);
+    STATE_IS(GL_UI_PRECISION_WAIT_SPIN);
+    now += 20100;
+    GL_CHECK(gl_ui_tick(&ui, now) & GL_ACT_SPIN_ABANDON);
+    STATE_IS(GL_UI_SHOW_RESULT);
+    /* an ordinary (non-precision) read disturbed by motion still goes to
+     * WAIT_STILL */
+    ev(GL_EV_MOTION, 0);
     STATE_IS(GL_UI_WAIT_STILL);
     ev(GL_EV_STILL, 0);
-    GL_CHECK(ev(GL_EV_TILT_DONE, 0) & GL_ACT_PRECISION);
+    a = ev(GL_EV_MOTION, 0);
+    STATE_IS(GL_UI_WAIT_STILL);
+    GL_CHECK(a & GL_ACT_WATCH_STILL);
 }
 
 GL_TEST(test_survey)
@@ -540,6 +584,62 @@ GL_TEST(test_usb_cradle)
     a = ev(GL_EV_USB_ATTACH, 0);
     GL_CHECK((a & GL_ACT_ABORT_READ) && (a & GL_ACT_USB_START));
     STATE_IS(GL_UI_CRADLE_USB);
+
+    /* Review finding: a fault in the cradle followed by a double tap used
+     * to start a read with VBUS present; from there no state stopped USB
+     * when the marker was lifted out, and the charge gate was no longer
+     * serviced.  In the cradle a double tap on the error screen now goes
+     * back to the cradle state ... */
+    a = ev(GL_EV_FAULT, GL_ERR_IO);
+    STATE_IS(GL_UI_ERROR);
+    GL_CHECK(ui.usb);
+    a = ev(GL_EV_DOUBLE_TAP, 0);
+    STATE_IS(GL_UI_CRADLE_USB);
+    GL_CHECK(!(a & GL_ACT_WATCH_STILL));
+    /* ... out of the cradle it still starts a read */
+    fresh();
+    wake_up();
+    ev(GL_EV_FAULT, GL_ERR_IO);
+    STATE_IS(GL_UI_ERROR);
+    a = ev(GL_EV_DOUBLE_TAP, 0);
+    STATE_IS(GL_UI_WAIT_STILL);
+    GL_CHECK(a & GL_ACT_WATCH_STILL);
+
+    /* ... and EVERY state has an answer to USB_DETACH that stops USB: with
+     * VBUS known present, no sequence of events leaves the UI in a state
+     * from which a detach does not end in USB_STOP */
+    {
+        size_t n = 0;
+        const gl_ui_transition_t *t = gl_ui_table(&n);
+        for (unsigned st = 0; st < GL_UI_STATE_COUNT; st++) {
+            bool found = false;
+            for (int pass = 0; pass < 2 && !found; pass++) {
+                for (size_t i = 0; i < n; i++) {
+                    if (t[i].event == GL_EV_USB_DETACH &&
+                        t[i].state == ((pass == 0) ? st : (unsigned)GL_UI_ANY)) {
+                        GL_CHECK(t[i].actions & GL_ACT_USB_STOP);
+                        GL_CHECK(t[i].guard == GL_G_ALWAYS);
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            GL_CHECK(found);
+        }
+        /* walk every state with ui.usb set and detach */
+        for (unsigned st = 0; st < GL_UI_STATE_COUNT; st++) {
+            fresh();
+            ui.state = (uint8_t)st;
+            ui.usb = true;
+            a = ev(GL_EV_USB_DETACH, 0);
+            GL_CHECK(a & GL_ACT_USB_STOP);
+            GL_CHECK(!ui.usb);
+            GL_CHECK(ui.state == GL_UI_SLEEP || ui.state == GL_UI_ERROR);
+            if (ui.state == GL_UI_SLEEP) {
+                GL_CHECK(a & GL_ACT_ENTER_SLEEP);
+            }
+        }
+    }
 }
 
 /* Rev C: zeroing is done on any hard flat surface, NEVER in the cradle (the
@@ -1038,6 +1138,59 @@ GL_TEST(test_result_screen_shows_the_aim_line)
     }
 }
 
+/* Review finding: gl_ui_render() with view.confidence = NaN was undefined
+ * behaviour ("nan is outside the range of representable values of type
+ * 'int'", gl_ui.c:479); phase 2 will feed solver output into the view.
+ * Every float of the view is given every hostile value, in every state;
+ * runs under UBSan in `make asan`, and the ink must stay in the aperture. */
+GL_TEST(test_render_with_hostile_view_values)
+{
+    static const float bad[] = { (float)NAN, (float)INFINITY, -(float)INFINITY, 3.0e9f, -3.0e9f,
+                                 3.4e38f, -3.4e38f, 1.0e-30f };
+    unsigned renders = 0;
+    fresh();
+    for (int st = 0; st < GL_UI_STATE_COUNT; st++) {
+        ui.state = (uint8_t)st;
+        for (size_t k = 0; k < sizeof(bad) / sizeof(bad[0]); k++) {
+            for (int field = 0; field < 8; field++) {
+                gl_ui_view_t v;
+                view_default(&v);
+                v.have_result = true;
+                v.solved = (field & 1) != 0;
+                switch (field) {
+                case 0: v.confidence = bad[k]; break;
+                case 1: v.aim_rad = bad[k]; break;
+                case 2: v.ball_az_rad = bad[k]; break;
+                case 3: v.distance_m = bad[k]; break;
+                case 4: v.slope_pct = bad[k]; break;
+                case 5: v.fall_line_rad = bad[k]; break;
+                case 6: v.along_pct = bad[k]; break;
+                default: v.break_cups = bad[k]; break;
+                }
+                gl_ui_render(&ui, &v, &gfx);
+                GL_CHECK_EQ(ink_outside(), 0);
+                renders++;
+            }
+            /* all of them at once */
+            {
+                gl_ui_view_t v;
+                view_default(&v);
+                v.have_result = true;
+                v.solved = true;
+                v.confidence = v.aim_rad = v.ball_az_rad = v.distance_m = v.slope_pct = bad[k];
+                v.fall_line_rad = v.along_pct = v.break_cups = bad[k];
+                v.battery_pct = 255;
+                v.cal_step = 255;
+                gl_ui_render(&ui, &v, &gfx);
+                GL_CHECK_EQ(ink_outside(), 0);
+                renders++;
+            }
+        }
+    }
+    printf("    %u renders with NaN / infinite / huge view values: no ink outside the aperture\n",
+           renders);
+}
+
 int main(void)
 {
     GL_RUN(test_table_is_well_formed);
@@ -1056,5 +1209,6 @@ int main(void)
     GL_RUN(test_random_event_fuzz);
     GL_RUN(test_every_screen_stays_in_the_aperture);
     GL_RUN(test_result_screen_shows_the_aim_line);
+    GL_RUN(test_render_with_hostile_view_values);
     return gl_test_summary();
 }

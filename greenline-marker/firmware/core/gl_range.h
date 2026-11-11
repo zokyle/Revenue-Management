@@ -11,6 +11,22 @@
  * because both optical measurements are linear in rho with roughly
  * Gaussian errors: disparity = f B rho and angular height = H rho.
  *
+ * What the fusion REFUSES to do (each was a review finding):
+ *  - turn an insignificant disparity into a range: stereo is used only if
+ *    the disparity is at least GL_RANGE_MIN_DISPARITY_SNR sigmas above zero
+ *    and the range it gives is at most GL_RANGE_MAX_M; otherwise stereo is
+ *    dropped (result flag stereo_rejected) and the monocular estimate, if
+ *    there is one, is used alone;
+ *  - average two estimates that contradict each other (chi2 > 9): one of
+ *    them is wrong, so ONE is selected by a rule (stereo up to
+ *    GL_RANGE_STEREO_TRUST_M, the angular height beyond that if the stick
+ *    height has been learned, else stereo), its sigma is widened to at
+ *    least half the disagreement, and `consistent` is false;
+ *  - use an angular height whose top end lies in clutter (a flag hanging
+ *    over the stick): input flag top_in_clutter;
+ *  - return a range beyond GL_RANGE_MAX_M (a putt-plausible limit): such an
+ *    estimate is refused, not clamped.
+ *
  * "Range" everywhere in this module is the HORIZONTAL DISTANCE from the
  * stereo head to the stick.  Stereo measures depth along the forward axis,
  * which is shorter by cos(bearing) for a stick off to one side (6 % at 20
@@ -75,6 +91,9 @@ typedef struct {
     float tan_top;            /**< tangent of the elevation of the stick top */
     float tan_base;           /**< tangent of the elevation of the lowest visible point */
     float elev_sigma_rad;     /**< one-sigma of EACH of the two elevations */
+    bool top_in_clutter;      /**< the top end of the line was found in clutter (flag cloth,
+                                   foliage), not against clean background: the angular height
+                                   is NOT used and nothing is learned from it */
     float manual_m;           /**< > 0: manual distance, overrides the optics */
 } gl_range_input_t;
 
@@ -86,27 +105,42 @@ typedef struct {
     float chi2;                      /**< stereo-vs-mono disagreement (1 dof); 0 if < 2 sources */
     uint8_t sources;                 /**< GL_RANGE_SRC_* that went into range_m */
     bool consistent;                 /**< chi2 <= 9 */
+    bool stereo_rejected;            /**< a disparity was given but is not significantly above
+                                          zero, or implies a range beyond GL_RANGE_MAX_M */
 } gl_range_result_t;
 
 /** Relative uncertainty assigned to a manually entered distance. */
 #define GL_RANGE_MANUAL_REL_SIGMA 0.10f
-/** Ranges are clamped to this interval. */
+/** Shortest range reported (estimates below it are clamped up to it) and
+ *  the longest putt-plausible range: an optical estimate beyond it is
+ *  REFUSED, not clamped (a manual distance is clamped to it). */
 #define GL_RANGE_MIN_M 0.3f
-#define GL_RANGE_MAX_M 60.0f
+#define GL_RANGE_MAX_M 40.0f
+/** Stereo is used only if disparity >= this many sigmas. */
+#define GL_RANGE_MIN_DISPARITY_SNR 3.0f
+/** When stereo and angular height contradict each other, stereo is believed
+ *  up to this range; beyond it the angular height is, if the stick height
+ *  has been learned (sigma below GL_RANGE_LEARNED_REL_SIGMA of the height). */
+#define GL_RANGE_STEREO_TRUST_M 5.0f
+#define GL_RANGE_LEARNED_REL_SIGMA 0.03f
 
 /**
- * Fuse the available estimates.  The monocular estimate is used only when
- * the base of the stick is visible.  When stereo and mono disagree by more
- * than 3 sigma the fused sigma is inflated by sqrt(chi2 / 9) and
- * `consistent` is false.  GL_ERR_NOT_FOUND if no source is usable.
+ * Fuse the available estimates (see the file comment for what is refused).
+ * The monocular estimate is used only when the base of the stick is
+ * visible and the top is not in clutter.  When stereo and mono disagree by
+ * more than 3 sigma one of them is selected, its sigma widened to at least
+ * half the disagreement, and `consistent` is false.  Non-finite inputs make
+ * the source they belong to unusable.  GL_ERR_NOT_FOUND if no source is
+ * usable (out->stereo_rejected tells whether a disparity was turned down).
  */
 gl_status_t gl_range_fuse(const gl_range_input_t *in, const gl_stick_height_t *h,
                           gl_range_result_t *out);
 
 /**
- * Learn the stick height from this read if the conditions hold (stereo and
- * height both present, base visible, stereo range within the learning
- * window, no manual override).  Returns true if `h` was updated.
+ * Learn the stick height from this read if the conditions hold (stereo
+ * significant and height both present, base visible, top not in clutter,
+ * stereo range within the learning window, no manual override, all inputs
+ * finite).  Returns true if `h` was updated.
  */
 bool gl_stick_height_learn(gl_stick_height_t *h, const gl_range_input_t *in);
 

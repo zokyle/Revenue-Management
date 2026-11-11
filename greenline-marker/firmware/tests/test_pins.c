@@ -137,11 +137,69 @@ GL_TEST(test_function_kinds)
     GL_CHECK_EQ(spec, 19u);
 }
 
+/* Review finding: the firmware offers "reboot to ROM DFU"; the ROM
+ * bootloader drives some pins as push-pull outputs (idle-high TX, MISO)
+ * while the camera rail is off.  CAM_L_PWDN was proposed on PC10
+ * (USART3_TX).  The pin list is from memory of AN2606 in both the generator
+ * and here (written out again by hand): it must be checked against the
+ * document, which is why the table also lives in the generated header. */
+GL_TEST(test_rom_bootloader_pins_are_not_camera_facing_outputs)
+{
+    typedef struct {
+        char port;
+        int pin;
+        const char *fn;
+        int drives;
+    } boot_row_t;
+#define BROW(port, pin, fn, drives) { #port[0], pin, #fn, drives },
+    static const boot_row_t boot[] = { GL_PINS_BOOTLOADER_TABLE(BROW) };
+#undef BROW
+    /* the outputs, by hand: USART1/2/3 TX, SPI1/SPI2 MISO, FDCAN1 TX */
+    static const struct {
+        char port;
+        int pin;
+    } outputs[] = { { 'A', 9 }, { 'A', 2 }, { 'C', 10 }, { 'A', 6 }, { 'B', 14 }, { 'B', 9 } };
+    unsigned n_out = 0, spec_conflicts = 0;
+
+    for (size_t i = 0; i < GL_ARRAY_LEN(boot); i++) {
+        bool by_hand = false;
+        for (size_t k = 0; k < GL_ARRAY_LEN(outputs); k++) {
+            by_hand = by_hand || (boot[i].port == outputs[k].port && boot[i].pin == outputs[k].pin);
+        }
+        GL_CHECK_EQ(boot[i].drives != 0, by_hand);
+        n_out += (boot[i].drives != 0) ? 1u : 0u;
+    }
+    GL_CHECK_EQ(n_out, GL_ARRAY_LEN(outputs));
+
+    for (int p = (int)GL_PIN_CAM_FACING_FIRST; p <= (int)GL_PIN_CAM_FACING_LAST; p++) {
+        const pin_row_t *r = find_((gl_pin_t)p);
+        for (size_t k = 0; k < GL_ARRAY_LEN(outputs); k++) {
+            if (r->port == outputs[k].port && r->pin == outputs[k].pin) {
+                /* only the two rows DESIGN_SPEC fixes may be here */
+                GL_CHECK_EQ(r->src, GL_PINSRC_SPEC);
+                GL_CHECK(p == (int)GL_PIN_CAM_D7 || p == (int)GL_PIN_CAM_PIXCLK);
+                spec_conflicts++;
+            }
+        }
+    }
+    GL_CHECK_EQ(spec_conflicts, 2u); /* PB9 = D7 and PA6 = PIXCLK: release-gate items */
+    /* the pin that used to be CAM_L_PWDN is left unused */
+    for (size_t i = 0; i < GL_ARRAY_LEN(rows_); i++) {
+        GL_CHECK(!(rows_[i].port == 'C' && rows_[i].pin == 10));
+    }
+    GL_CHECK(find_(GL_PIN_CAM_L_PWDN)->port == 'H' && find_(GL_PIN_CAM_L_PWDN)->pin == 0 &&
+             find_(GL_PIN_CAM_L_PWDN)->pad == 5);
+    printf("    %u ROM-bootloader pins (from memory of AN2606), %u driven as outputs; no PROPOSED "
+           "camera-facing pin on them; %u SPEC rows are (PB9 = D7, PA6 = PIXCLK): release gate\n",
+           (unsigned)GL_ARRAY_LEN(boot), n_out, spec_conflicts);
+}
+
 int main(void)
 {
     GL_RUN(test_table_matches_the_logical_pins);
     GL_RUN(test_no_pad_or_port_pin_used_twice);
     GL_RUN(test_design_spec_rows);
     GL_RUN(test_function_kinds);
+    GL_RUN(test_rom_bootloader_pins_are_not_camera_facing_outputs);
     return gl_test_summary();
 }

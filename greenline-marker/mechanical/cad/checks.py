@@ -15,11 +15,14 @@ recorded deviations are printed with their numbers and stay visible as warnings.
   4 fold geometry       exact ray trace lens -> prism -> visor opening, vignetting and tolerance sensitivity
   5 wall thickness      ray-cast audit of the printed parts
   6 trapped volume      closed voids and cavities without a 2 mm escape path (voxel analysis)
-  7 cradle              pins on the pads, orientation key, hold-down (retention, latch strain, forces), posed insertion path
+  7 cradle              pins on the pads, orientation key, hold-down (retention incl. tolerance, latch strain by beam
+                        formula and by plane-strain FE, both over-travel stops), posed insertion and release paths
   8 mass                mass and centre of gravity
   9 quoting             printed-part boxes / volumes and export integrity (STEP and STL re-read)
  10 support posts, 11 design/check_layout.py
  12 tub keep-outs       the YAML tub_keepouts contract proven on the tub solid
+ 13 seal continuity     air-solid test (outside and cavity must be separate), closed bead ring, seal land widths
+ 14 assembly paths      LCD tilt-in, PCB / base unit join (straight and hinged) posed against the tub
 """
 from __future__ import annotations
 import itertools, json, math, subprocess, sys, time
@@ -33,6 +36,7 @@ import assembly as A
 import geom as G
 import optics as O
 import holddown as H
+import latchfe as FE
 from deviations import DEVIATIONS, OPEN as DEV_OPEN, CLOSED as DEV_CLOSED
 
 M = P.MECH
@@ -80,7 +84,7 @@ def _tris(parts, name, print_orientation=False):
     if USE_EXPORTED and f.exists():
         return G.load_stl(f), str(f.relative_to(P.MECH_DIR))
     shape = A.print_orientation(name, parts[name].shape).val() if print_orientation else A.solid_of(parts[name])
-    vs, ts = shape.tessellate(A.STL_TOL, A.STL_ANG)
+    vs, ts = shape.tessellate(*((A.PRINT_STL_TOL, A.PRINT_STL_ANG) if print_orientation else (A.STL_TOL, A.STL_ANG)))
     v = np.array([p.toTuple() for p in vs])
     return v[np.array(ts)], "in-memory tessellation (no export in this run)"
 
@@ -224,17 +228,18 @@ def check_clearances(parts):
         note="the spigot ends inside the PCB hole")
     add("PCB flat edge to visor wall", _sec_dist(board, tub, "z", zl, clip=(-3, 15.5, 3, 20)), clr, nominal=P.Y_VISOR_IN - P.PCB_FLAT,
         method=f"section z = {zl:.2f}, |x| < 3")
-    add("Base plate to tub side wall and key lugs, radial", _sec_dist(S["base_plate"], tub, "z", 0.5 * P.BASE_T), clr, nominal=clr,
-        method=f"section z = {0.5 * P.BASE_T:.2f}")
+    add("Base plate to tub side wall, radial", _sec_dist(S["base_plate"], tub, "z", 0.5 * (P.RIM_Z + P.BASE_T)), clr, nominal=clr,
+        method=f"section z = {0.5 * (P.RIM_Z + P.BASE_T):.2f}", note="groove filled with seal adhesive; no key, no notch in the seal land")
+    add("Tub rim above the base plane (rim relief)", A.bbox_of(parts["tub"])[2] - A.bbox_of(parts["base_plate"])[2], P.RIM_Z, nominal=P.RIM_Z,
+        method="bounding boxes", note=f"base plate and ball feet are the lowest surfaces: the rim is {P.RIM_Z + P.BALL_PROT:.2f} mm above the ball plane (D23)")
     bead = G.RayCaster(tub).first_hit((0.0, -0.5 * (P.LAND_RI + P.BASE_R), P.BASE_T + 1e-6), (0, 0, 1), 1e-9, 5.0)
     add("Base plate top to tub seal face (adhesive bead)", (bead or float("nan")) + 1e-6, P.BEAD_T, nominal=P.BEAD_T,
         method="ray +z from the seal land", note="rev C: 0.87 mm plate, bead 0.33 mm")
     add("Ball foot top to the PCB underside", min_distance(S["ball_1"], S["main_pcb"]), 0.05, nominal=P.PCB_Z0 - P.BALL_TOP_Z,
         note="the ball stands 0.03 above the plate inside the 2.0 mm hole of the adhesive sheet")
-    add("Potting epoxy dome to the PCB underside", min_distance(S["ball_epoxy_1"], S["main_pcb"]), 0.0, nominal=P.PCB_Z0 - P.EPOXY_Z1,
-        note="dome height is a process limit: it must stay below the sheet thickness")
-    add("Potting epoxy dome to the adhesive-sheet hole, radial", min_distance(S["ball_epoxy_1"], S["pcb_adhesive"]), 0.1,
-        nominal=(P.PSA_FOOT_HOLE_D - M["epoxy_cap_dia"]) / 2)
+    add("Potting epoxy to the PCB underside (sheet hole backfilled)", min_distance(S["ball_epoxy_1"], S["main_pcb"]), 0.0, nominal=0.0,
+        note=f"stage 1 dome at most {M['epoxy_dome_max']} mm over the plate; stage 2 fills the 2.0 mm sheet hole, so the ball bears on the PCB through "
+             f"{P.PCB_Z0 - P.BALL_TOP_Z:.2f} mm of epoxy in compression")
     # --- cover glass
     zc = 0.5 * (P.CG_Z0 + P.CG_Z1)
     add("Cover glass to recess wall, radial", _sec_dist(S["cover_glass"], tub, "z", zc), clr, nominal=(P.RECESS_D - P.CG_D) / 2,
@@ -262,13 +267,15 @@ def check_clearances(parts):
         add(f"Visor window {s} rear face to recess floor (bond line)",
             _sec_dist(w, tub, "z", 0.5 * (P.WIN_Z0 + P.OPEN_Z0), clip=(cx - 1.5, 15, cx + 1.5, 20)), M["window_bond"], nominal=M["window_bond"],
             method="section below the opening")
+        add(f"Hood gasket bead {s} to the prism", min_distance(S[f"hood_seal_{s}"], S[f"prism_{s}"]), 0.1,
+            note=f"bead {M['hood_seal_w']} wide on the flat underside of the rear wall, dispensed {M['hood_seal_free_h']} high and cured before the join")
     # --- vent, flex, bottom-side parts
     others = [n for n, i in parts.items() if i.group == "puck" and n not in ("tub", "vent")]
     dv, nv = min((min_distance(S["vent"], S[n]), n) for n in others)
     add(f"Vent disc to nearest part ({nv})", dv, clr)
     add("LCD flex (representative shape) to tub", min_distance(S["lcd_flex"], tub), 0.0, note="PROVISIONAL tail geometry")
-    add("LCD flex (representative shape) to connector J1 / PCB parts", min_distance(S["lcd_flex"], S["main_pcb"]), 0.0,
-        note="PROVISIONAL tail geometry")
+    add("LCD flex (representative shape) to connector J1 / PCB parts", min_distance(S["lcd_flex"], S["main_pcb"]), 0.0, nominal=0.0,
+        note=f"PROVISIONAL tail geometry: one U-fold of radius {P.FLEX_BEND_R:.2f} mm, modelled up to the J1 mouth face (entry {M['fpc_entry_h']} mm above the PCB)")
     pd = P.PD
     pdbox = PT.box(pd["x"] - pd["dx"] / 2, pd["x"] + pd["dx"] / 2, pd["y"] - pd["dy"] / 2, pd["y"] + pd["dy"] / 2, P.PCB_Z0 - pd["h"], P.PCB_Z0).val()
     add("Photodiode body to baffle ring", min_distance(pdbox, S["base_plate"]), clr, nominal=P.BAFFLE_RI - P.PD_HALF_DIAG,
@@ -279,8 +286,12 @@ def check_clearances(parts):
     cr = S["cradle"]
     lipS, latchS, body_nl = PT.lip().val(), PT.latch().val(), _cradle_without_latch()
     add("Marker to nest wall, radial", _sec_dist(tub, cr, "z", 1.5), clr, nominal=clr, method="section z = 1.5")
-    add("Tub rim above the nest floor (ball protrusion)", min_distance(tub, cr), P.BALL_PROT, nominal=P.BALL_PROT,
-        note="the three balls carry the marker; the rim is 0.10 mm clear of the printed floor")
+    add("Base plate underside above the nest strip and pads (ball protrusion)", min_distance(S["base_plate"], cr), P.BALL_PROT, nominal=P.BALL_PROT,
+        note="the three balls carry the marker on the front strip and the two pads; the rest of the nest floor is a drained basin")
+    ang = math.radians(50.0)
+    rim = G.RayCaster(cr).first_hit(((P.R_OUT - 0.15) * math.cos(ang), (P.R_OUT - 0.15) * math.sin(ang), P.RIM_Z), (0, 0, -1), 1e-9, 5.0)
+    add("Tub rim above the nest strip", rim if rim is not None else float("nan"), P.RIM_Z + P.BALL_PROT, nominal=P.RIM_Z + P.BALL_PROT,
+        method="ray -z from the rim at 50 deg")
     add("Lip underside to the tub top", min_distance(tub, lipS), clr, nominal=clr)
     add("Latch (retaining face and beam) to the tub", min_distance(tub, latchS), clr, nominal=clr)
     for sd_ in ("L", "R"):
@@ -288,9 +299,10 @@ def check_clearances(parts):
     add("Lip to cover glass", min_distance(lipS, S["cover_glass"]), clr)
     add("Latch hook to cover glass", min_distance(latchS, S["cover_glass"]), clr)
     vh = PT.cyl(P.VENT_XY[0], P.VENT_XY[1], P.VENT_HOLE_D / 2, P.T - 0.5, P.T + 0.5).val()
-    add("Lip and latch to the vent hole", min(min_distance(lipS, vh), min_distance(latchS, vh)), clr)
+    add("Lip to the vent hole", min_distance(lipS, vh), clr)
+    add("Latch to the vent hole", min_distance(latchS, vh), clr)
     add("Latch to the walls of its well (side gaps, stop ribs)", _sec_dist(latchS, body_nl, "z", 1.0), 0.5, nominal=M["latch_side_gap"],
-        method="section z = 1.00", note="minimum printable gap taken as 0.5 mm; the stop ribs are 1.57 mm behind the beam")
+        method="section z = 1.00", note=f"minimum printable gap taken as 0.5 mm; front gap {M['latch_front_gap']}, stop ribs {P.LATCH_STOP_GAP:.2f} behind the beam at their top")
     add("Spring-pin plunger to base-plate slot, radial", _sec_dist(S["spring_pin_4"], S["base_plate"], "z", 0.5 * P.BASE_T), clr,
         nominal=(P.PAD_HOLE_D - M["pin_plunger_dia"]) / 2, method=f"section z = {0.5 * P.BASE_T:.3f}", note="pin diameters PROVISIONAL")
     zb = 0.5 * (P.CPCB_Z1 + P.PIN_BODY_Z1)
@@ -447,7 +459,7 @@ def check_fold(parts):
     for label, sh in cases:
         lim = {d: O.limit_angle("R", d, rc, True, shift=sh)[0] for d in ("left", "right", "up", "down")}
         limc = {d: O.limit_angle("R", d, rc, False, shift=sh)[0] for d in ("left", "right", "up", "down")}
-        worst = min(O.bundle("R", th, tv, rc, shift=sh)["total_fraction"] for _, th, tv in O.field_points())
+        worst = min(O.bundle("R", th, tv, rc, shift=sh, n_rim=48, n_rings=8)["total_fraction"] for _, th, tv in O.field_points())
         srows.append(dict(case=label, shift_xyz=tuple(round(v, 3) for v in sh),
                           full_pupil_clear_deg_left_right_up_down=tuple(round(lim[d], 1) for d in ("left", "right", "up", "down")),
                           chief_clear_deg_left_right_up_down=tuple(round(limc[d], 1) for d in ("left", "right", "up", "down")),
@@ -465,7 +477,7 @@ def check_fold(parts):
              "margins are the smallest distance of any ray of the pupil bundle to the edge of that aperture (negative = clipped); "
              "the visor margin is taken on the aperture plane (window-recess floor)",
              "field points are rectilinear: direction (tan h, 1, tan v)",
-             f"paraxial check: virtual pupil {P.VIRTUAL_PUPIL_BEHIND_EXIT:.3f} mm behind the exit face (y = {P.VIRTUAL_PUPIL_Y:.3f}), z = {P.AXIS_Z}",
+             f"paraxial check: virtual pupil {P.VIRTUAL_PUPIL_BEHIND_EXIT:.3f} mm behind the exit face (y = {P.VIRTUAL_PUPIL_Y:.3f}), z = {P.AXIS_Z:.2f}",
              "sensitivity cases move the camera and prism together relative to the printed tub (camera R; L is the mirror image)",
              f"PCB location (rev C): spigots dia {P.SPIGOT_D} in a dia {P.LOC_ROUND[2]} hole and a {P.LOC_SLOT[2]} x {P.LOC_SLOT[3]} slot, {span} mm apart: +-{fit:.3f} mm "
              f"at each spigot gives +-{dx:.3f} mm sideways and +-{dy:.3f} mm fore-aft at a camera and +-{yaw_deg:.2f} deg of yaw (a stereo-calibration "
@@ -561,6 +573,10 @@ def _wall_features(name):
             c = P.HOOD_REAR_CHAMFER
             f.append((f"camera {side}: foot of the hood rear wall ({c:.2f} mm edge chamfer facing the prism)", "", P.MIN_WALL - c,
                       [(cx - P.HOOD_OUT_HW - e, P.HOOD_REAR_Y0 - e, P.HOOD_Z_OVER_CUBE - e, cx + P.HOOD_OUT_HW + e, P.HOOD_REAR_Y1 + e, P.HOOD_Z_OVER_CUBE + c + e)]))
+            c = M["hood_leadin"]
+            zs = M["hood_skirt_z0"]
+            f.append((f"camera {side}: feet of the hood skirts ({c} mm lead-in chamfer for the camera cube)", "", M["hood_wall"] - c,
+                      [(cx - P.HOOD_OUT_HW - e, P.HOOD_REAR_Y0 - e, zs - e, cx + P.HOOD_OUT_HW + e, P.Y_VISOR_IN + e, zs + c + e)]))
             land = P.HORN_X_OUT - (P.CAM_X + P.WIN_RECESS_W / 2)
             sg = 1 if cx > 0 else -1
             xa, xb = sorted((sg * (P.CAM_X + P.WIN_RECESS_W / 2 - e), sg * (P.HORN_X_OUT + e)))
@@ -568,11 +584,16 @@ def _wall_features(name):
                       "of the arc)", "", 0.6, [(xa, P.WIN_RECESS_FLOOR_Y - e, P.T - M["top_fillet"] - e, xb, P.Y_VISOR + e, P.T + e)]))
         ch = M["bottom_chamfer"]
         f.append((f"foot of the side wall at the specified {ch} mm bottom chamfer (all round the arc)", "", P.WALL - ch,
-                  [(-P.R_OUT - e, -P.R_OUT - e, -e, P.R_OUT + e, P.R_OUT + e, ch + e)]))
+                  [(-P.R_OUT - e, -P.R_OUT - e, P.RIM_Z - e, P.R_OUT + e, P.R_OUT + e, P.RIM_Z + ch + e)]))
+        c = M["spigot_tip_chamfer"]
+        for (sx_, sy_) in (P.LOC_ROUND[:2], P.LOC_SLOT[:2]):
+            f.append((f"tip of the PCB locating spigot at x = {sx_} (dia {P.SPIGOT_D} pin with a {c} mm lead-in chamfer: a pin, not a wall)", "D19", P.SPIGOT_D - 2 * c,
+                      [(sx_ - P.SPIGOT_D / 2 - e, sy_ - P.SPIGOT_D / 2 - e, P.SPIGOT_Z0 - e, sx_ + P.SPIGOT_D / 2 + e, sy_ + P.SPIGOT_D / 2 + e, P.PCB_Z1 + e)]))
     if name == "cradle":
         hw = M["latch_w"] / 2
-        f.append((f"latch hook nose: solid 60 deg wedge ending in a {M['hook_nose_flat']} mm flat (an edge, not a wall)", "", M["hook_nose_flat"],
-                  [(-hw - e, -P.NEST_R - e, P.HOOK_Z0 - e, hw + e, -P.HOOK_R + 3.2, P.HOOK_LEAD_Z0 + 1.0)]))
+        f.append((f"latch hook nose: solid wedge between the raked retaining face and the lead-in, ending in a {M['hook_nose_flat']} mm flat "
+                  "(an edge, not a wall)", "", M["hook_nose_flat"],
+                  [(-hw - e, P.LATCH_Y_FACE - e, P.HOOK_Z0 - e, hw + e, P.HOOK_Y + e, P.LATCH_TOP_Z + e)]))
     return f
 
 
@@ -652,7 +673,7 @@ def check_walls(parts):
               f"a region is listed when it is thinner than the {P.MIN_WALL} mm rule; regions with any area below 0.5 mm are repeated in the second table",
               "edge chamfers and bevels read thin at their feet by this method; they are listed, not hidden",
               "the 0.7 mm wide bottom land of the side wall is an edge feature of a wall that is 1.0 mm thick above it; the latch beam "
-              f"({M['latch_h']} mm, root {M['latch_h']} mm >= 1.0) and every wall of the cradle are above the rule"]
+              f"(root {P.LATCH_H0} mm >= 1.0, neck {P.LATCH_HN} mm) and every wall of the cradle are above the rule"]
     return res(5, "wall thickness", not fails,
                (f"{len(thin5)} regions thinner than 0.5 mm; {n_doc} recorded regions below {P.MIN_WALL} mm in total; no unrecorded thin region; "
                 + ", ".join(summary_bits)
@@ -817,13 +838,19 @@ def _narrow_feature(name, bmin, bmax):
             return "pad slot end"
         if math.hypot(c[0] - P.GRAIN_X, c[1] - P.GRAIN_Y) < P.GRAIN_R + 0.5:
             return "grain opening sector corner"
-        if c[1] > P.KEY_NOTCH_Y0 - 0.5:
-            return "key notch"
         return "edge"
+    dx0, dx1 = M["well_drain_x"]
+    if dx0 - 0.5 < c[0] < dx1 + 0.5 and c[1] < P.WELL_Y0 + 0.8 and P.WELL_DRAIN_Z0 - 0.5 < c[2] < P.WELL_DRAIN_Z1 + 0.5:
+        return "drain tunnel of the latch well (through to the rear face)"
     if abs(c[0]) < P.WELL_HX + 0.5 and P.WELL_Y0 - 0.5 < c[1] < P.WELL_Y1 + 0.5 and c[2] > M["latch_root_z"] - 0.5:
-        return "latch well (gap round the cantilever, open at the top)"
-    if abs(c[1] - P.PAD_Y) < 2 and abs(c[0]) < 10:
+        return "latch well (gap round the cantilever, open at the top, drained to the rear)"
+    if abs(c[1] - P.PAD_Y) < 2 and abs(c[0]) < 10 and c[2] < P.NEST_FLOOR_Z:
         return "spring-pin slot (through)"
+    fx, fy = M["foot_xy"]
+    if abs(abs(c[0]) - fx) < 3.5 and abs(abs(c[1] - P.CRADLE_CY) - fy) < 3.5 and c[2] < P.CORE_Z1 + 0.5:
+        return "blind core under a foot pocket"
+    if P.BASIN_Z_AT_EDGE - 0.5 < c[2] < P.NEST_FLOOR_Z + 0.3:
+        return "drained nest floor (corner of the basin at a pad, the slot rim, the dam or the strip)"
     if abs(c[0]) < M["lip_half_w"] + 0.5 and c[1] > P.NEST_FLAT - 2.5 and c[2] > P.CRADLE_TOP_Z - 0.5:
         return "nose pocket under the lip (open to both sides)"
     if c[2] < P.CPCB_Z1 + 1 and abs(c[0]) < P.CPCB_HX + 1:
@@ -841,23 +868,36 @@ def _marker_shell(S):
     return sh
 
 
-def _latch_travel_needed(tub_posed, latch, d_max=3.0, tol=1e-4):
+def _latch_travel_needed(tub_posed, latch, mode="F", d_max=3.2, tol=1e-4):
     """Smallest hook travel at which the posed tub no longer intersects the deflected latch (bisection on the solids)."""
-    vol = lambda d: common_volume(tub_posed, H.latch_deflected(latch, d))
+    vol = lambda d: common_volume(tub_posed, H.latch_deflected(latch, d, mode))
     if vol(0.0) <= tol:
         return 0.0
     if vol(d_max) > tol:
         return float("inf")
     lo, hi = 0.0, d_max
-    for _ in range(10):
+    for _ in range(11):
         mid = 0.5 * (lo + hi)
         lo, hi = (mid, hi) if vol(mid) > tol else (lo, mid)
     return hi
 
 
+def _contact_travel(moving, fixed, mode, d_hi, tol=1e-4):
+    """Hook travel at which the deflected latch (or a part of it) first intersects `fixed` (bisection); inf if never up to d_hi."""
+    vol = lambda d: common_volume(H.latch_deflected(moving, d, mode), fixed)
+    if vol(d_hi) <= tol:
+        return float("inf")
+    lo, hi = 0.0, d_hi
+    for _ in range(12):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (lo, mid) if vol(mid) > tol else (mid, hi)
+    return hi
+
+
 def check_cradle(parts):
-    """Rev C dock: seven pin positions on the pads, one orientation, lip + latch hold-down proven with numbers, and the
-    nose-first insertion path proven by posing the marker solids against the cradle solids."""
+    """Rev C dock: seven pin positions on the pads, one orientation, lip + latch hold-down proven with numbers (retention
+    with the rotation of the hook and with tolerance, strain by beam formula and by FE, both over-travel stops), and the
+    nose-first insertion path and the release proven by posing the marker solids against the cradle solids."""
     S = _solids(parts)
     cr, tub, base, psa = S["cradle"], S["tub"], S["base_plate"], S["pcb_adhesive"]
     fails, warns = [], []
@@ -866,10 +906,12 @@ def check_cradle(parts):
     if abs(v_l - latch.Volume()) > 0.01 * latch.Volume():
         fails.append(f"the latch is not present in the cradle solid as designed ({v_l:.1f} of {latch.Volume():.1f} mm3)")
     body_nl = cr.cut(latch)                                   # the cradle with the latch removed (it deflects during insertion)
-    lw = M["lip_half_w"]
+    lw, hw = M["lip_half_w"], M["latch_w"] / 2
     lipS = cr.intersect(PT.box(-lw - 0.5, lw + 0.5, P.LIP_Y0 - 0.5, P.CRADLE_Y1 + 1, P.CRADLE_TOP_Z + 0.01, P.LIP_Z1 + 1).val())
+    hook = latch.intersect(PT.box(-hw - 1, hw + 1, P.TAB_Y0 - 1, P.HOOK_Y + 1, P.HOOK_Z0 - 0.3, P.LATCH_TOP_Z + 1).val())   # rigid part: hook + tab
     rc, rt = G.RayCaster(cr), G.RayCaster(tub)
     rp = M["pin_plunger_dia"] / 2
+    zr = M["latch_root_z"]
 
     # ---------------- (a) pins at the seated position
     prow = []
@@ -883,14 +925,15 @@ def check_cradle(parts):
         v0 = common_volume(base, cyl0) + common_volume(psa, cyl0)
         d0 = min(min_distance(base, cyl0), min_distance(psa, cyl0))
         work = bb[5] - cpcb_top
-        good = off < 1e-3 and tip_gap < 1e-3 and v0 < 1e-6 and d0 >= P.CLR - NUM_TOL and abs(work - (P.PIN_WORK_H - P.PIN_TIP_GAP)) < 1e-3
+        good = off < 1e-3 and tip_gap < 1e-3 and v0 < 1e-6 and d0 >= P.CLR - NUM_TOL and abs(work - P.PIN_WORK_H) < 1e-3
         if not good:
             fails.append(f"pin {i + 1}")
         prow.append(dict(pin=i + 1, x=x, fitted="consumer + factory" if i < len(P.PINS_CONSUMER) else "factory fixture only",
                          axis_to_pad_centre_mm=round(off, 4), tip_to_pad_face_mm=round(tip_gap, 4),
-                         clearance_in_base_and_adhesive_slot_mm=R3(d0), height_above_cradle_pcb_mm=R3(work), ok=good))
-    if abs(cpcb_top - (P.CRADLE_PAD_Z - P.PIN_WORK_H)) > 1e-6:
-        fails.append(f"cradle PCB top at z = {cpcb_top:.3f}, not pad plane {P.CRADLE_PAD_Z} - working height {P.PIN_WORK_H}")
+                         clearance_in_base_and_adhesive_slot_mm=R3(d0), height_above_cradle_pcb_mm=R3(work),
+                         compression_mm=R3(M["pin_max_working_h"] - work), ok=good))
+    if abs(cpcb_top - (P.PAD_Z0 - P.PIN_WORK_H)) > 1e-6:
+        fails.append(f"cradle PCB top at z = {cpcb_top:.3f}, not pad face {P.PAD_Z0} - working height {P.PIN_WORK_H}")
 
     # ---------------- (b) orientation key (the D flat): marker shell turned about its own axis against the cradle
     shell = _marker_shell(S)
@@ -912,31 +955,52 @@ def check_cradle(parts):
         if not ok:
             fails.append(f"{name}: measured {value} vs {nominal}")
         grow.append(dict(quantity=name, measured_mm=R3(value), parameter_mm=R3(nominal), status="ok" if ok else "FAIL", note=note))
-    sec = G.section_polys(cr, "z", 2.0).intersection(sbox(-P.WELL_HX + 0.01, P.STOP_RIB_Y1 + 0.01, P.WELL_HX - 0.01, P.WELL_Y1 - 0.01))
-    bx = sec.bounds if not sec.is_empty else (0, 0, 0, 0)
+
+    def beam_sec(z):
+        sec = G.section_polys(latch, "z", z)
+        return sec.bounds if not sec.is_empty else (0, 0, 0, 0)
+    bx = beam_sec(2.0)
     meas("latch beam width b (section z = 2.0)", bx[2] - bx[0], M["latch_w"])
-    meas("latch beam thickness h (section z = 2.0)", bx[3] - bx[1], M["latch_h"], note="uniform; root >= 1.0 mm required")
-    t = rc.first_hit((0, P.LATCH_Y_BACK - 0.8, 2.0), (0, 0, -1))
+    for label, z, tol in (("at the top of the root fillets", zr + M["latch_root_fillet"] + 0.05, 0.01), ("half way up", zr + 0.5 * P.LATCH_S1, 0.01),
+                          ("at the neck", P.LATCH_NECK_Z, 0.06), ("below the hook", P.HOOK_Z0 - 0.9, 0.01)):
+        bz = beam_sec(z)
+        meas(f"latch beam thickness {label} (z = {z:.2f})", bz[3] - bz[1], float(P.latch_h(z - zr)), tol,
+             note="neck: the R%.0f blend adds up to 0.05" % M["latch_neck_blend"] if "neck" in label else "")
+    h_root = beam_sec(zr + M["latch_root_fillet"] + 0.05); h_min = min(beam_sec(z)[3] - beam_sec(z)[1] for z in np.linspace(zr + 1.2, P.HOOK_Z0 - 0.6, 24))
+    t = rc.first_hit((0, P.LATCH_Y_BACK0 - 1.6, 2.0), (0, 0, -1))
     z_root = 2.0 - t if t else float("nan")
-    yc = -0.5 * (P.TUB_TOP_FLAT_R + P.HOOK_R)
-    t = rc.first_hit((0, yc, P.T + 0.001), (0, 0, 1), 1e-9, 5.0)
-    z_hook = P.T + 0.001 + t if t else float("nan")
-    meas("latch root (well floor) z", z_root, M["latch_root_z"])
-    meas("retaining face z", z_hook, P.HOOK_Z0)
-    meas("latch free length L (root to retaining face)", z_hook - z_root, P.LATCH_L)
-    meas("retaining face above the tub top", z_hook - P.T, P.CLR)
-    r_nose = rc.first_hit((0, 0, P.HOOK_Z0 + M["hook_nose_flat"] / 2), (0, -1, 0))
-    lo, hi = P.HOOK_R, P.R_OUT
+    meas("latch root (well floor) z", z_root, zr)
+    meas("skin between the well floor and the PCB pocket", z_root - cpcb_top, zr - P.CPCB_Z1, note=">= 0.8 mm wall")
+    up = lambda y: (lambda t_: (P.T + 0.001 + t_) if t_ is not None else float("nan"))(rc.first_hit((0, y, P.T + 0.001), (0, 0, 1), 1e-9, 6.0))
+    y1, y2 = P.HOOK_Y - 0.03, P.LATCH_Y_FACE + 0.85
+    z1, z2 = up(y1), up(y2)
+    meas("nose (lowest point of the retaining face) z", z1 - (P.HOOK_Y - y1) * P.HOOK_RAKE_TAN, P.HOOK_Z0)
+    meas("nose above the tub top", z1 - (P.HOOK_Y - y1) * P.HOOK_RAKE_TAN - P.T, P.CLR)
+    rake = math.degrees(math.atan2(z2 - z1, y1 - y2))
+    meas("rake of the retaining face (deg; nose lowest)", rake, M["hook_rake_deg"], 0.05, note="the face stays inclined against release while the hook turns nose-up")
+    meas("latch free length L (root to nose level)", z1 - (P.HOOK_Y - y1) * P.HOOK_RAKE_TAN - z_root, P.LATCH_L)
+    zn = P.HOOK_Z0 + M["hook_nose_flat"] / 2
+    ny = [rc.first_hit((x, 0, zn), (0, -1, 0)) for x in (0.0, hw - 0.5, -(hw - 0.5))]
+    meas("nose position (distance behind the marker axis), x = 0", ny[0], -P.HOOK_Y)
+    meas("nose is straight: same at x = +-%.1f" % (hw - 0.5), max(ny) if None not in ny else None, -P.HOOK_Y)
+    lo, hi = -P.HOOK_Y, P.R_OUT
     for _ in range(40):                                       # outer radius of the flat top of the tub at the rear
         mid = 0.5 * (lo + hi)
         tt = rt.first_hit((0, -mid, P.T + 1.0), (0, 0, -1))
         lo, hi = (mid, hi) if (tt is not None and abs(tt - 1.0) < 1e-6) else (lo, mid)
-    meas("hook nose radius", r_nose, P.HOOK_R)
     meas("flat top of the tub ends at radius", lo, P.TUB_TOP_FLAT_R, note="top edge radius 0.6 outside it")
-    meas("hook overlap u on the flat tub top", lo - (r_nose or float("nan")), P.HOOK_OVERLAP)
-    t = rc.first_hit((M["stop_rib_x"], P.LATCH_Y_BACK - 0.005, M["guard_top_z"] - 0.5), (0, -1, 0))
-    meas("beam back face to the over-travel stop ribs", (t or float("nan")) + 0.005, P.LATCH_STOP_GAP,
-         note=f"contact when the hook has travelled {M['latch_stop_deflection']} mm")
+    meas("hook overlap on the flat tub top, marker centred", lo - (ny[0] or float("nan")), P.HOOK_OVERLAP)
+    meas("hook overlap, marker against the front nest wall (governing)", lo - P.CLR - (ny[0] or float("nan")), P.HOOK_OVERLAP_FWD)
+    zg = M["guard_top_z"] - 0.02
+    yb = P.LATCH_Y_FACE - float(P.latch_h(zg - zr))
+    t = rc.first_hit((M["stop_rib_x"], yb - 0.005, zg), (0, -1, 0))
+    meas("beam back face to the stop ribs at the rib top", (t or float("nan")) + 0.005, yb - P.STOP_RIB_Y1,
+         note=f"met at {M['latch_stop_travel']} mm of hook travel when the hook is pushed back (beam shape under a tip force)")
+    t = rc.first_hit((0, 0.5 * (P.TAB_STOP_Y0 + P.TAB_STOP_Y1), P.LATCH_TOP_Z + 2.0), (0, 0, -1))
+    z_ts = P.LATCH_TOP_Z + 2.0 - t if t else float("nan")
+    meas("top of the stop under the thumb tab", z_ts, P.TAB_STOP_Z, note="absent = the tab can be pressed without limit")
+    t = rc.first_hit((0, P.TAB_Y0 + 1.0, P.TAB_Z0 - 1.5), (0, 0, 1))
+    meas("underside of the thumb tab", P.TAB_Z0 - 1.5 + t if t else float("nan"), P.TAB_Z0)
     y_tip = rc.first_hit((0, 0, 0.5 * (P.LIP_Z0 + P.LIP_Z1)), (0, 1, 0))
     meas("lip overlap on the tub top", P.Y_VISOR - (y_tip or float("nan")), M["lip_overlap"])
     t = rc.first_hit((0, P.Y_VISOR - M["lip_overlap"] / 2, P.T + 0.001), (0, 0, 1), 1e-9, 5.0)
@@ -944,6 +1008,30 @@ def check_cradle(parts):
     lb = lipS.BoundingBox()
     meas("lip width", lb.xmax - lb.xmin, 2 * lw, note=f"window recesses start at |x| = {P.CAM_X - P.WIN_RECESS_W / 2}")
     meas("lip plate thickness", lb.zmax - P.LIP_Z0, M["lip_t"])
+    if h_root[3] - h_root[1] < 1.0 - 1e-6:
+        fails.append("latch root thinner than 1.0 mm")
+    if h_min < P.MIN_WALL - 1e-6:
+        fails.append(f"latch beam thinner than {P.MIN_WALL} mm ({h_min:.3f})")
+
+    # ---------------- (d) both over-travel stops, on the solids
+    srow = []
+    d_tab_solid = _contact_travel(hook, body_nl, "M", M["tab_stop_travel"] + 0.6)
+    ok = abs(d_tab_solid - M["tab_stop_travel"]) < 0.03
+    if not ok:
+        fails.append(f"thumb-tab stop: the pressed tab meets the body at {d_tab_solid:.3f} mm of hook travel, not {M['tab_stop_travel']}")
+    srow.append(dict(stop="thumb tab on its stop (tab pressed: pure moment)", method="hook + tab solid turned about the moment pivot until it meets the cradle body (bisection)",
+                     hook_travel_at_contact_mm=R3(d_tab_solid), parameter_mm=M["tab_stop_travel"], status="ok" if ok else "FAIL"))
+    v_f = common_volume(H.latch_deflected(hook, M["latch_stop_travel"], "F"), body_nl)
+    ok = v_f < 1e-4
+    if not ok:
+        fails.append(f"with the hook pushed back {M['latch_stop_travel']} mm the tab or hook intersects the body by {v_f:.4f} mm3")
+    srow.append(dict(stop="stop ribs behind the beam (hook pushed back: tip force)", method="rib gap measured above; hook + tab solid at the stop travel must clear guard wall and tab stop",
+                     hook_travel_at_contact_mm=M["latch_stop_travel"], parameter_mm=M["latch_stop_travel"], status="ok" if ok else "FAIL"))
+    srow.append(dict(stop="stop ribs when the TAB is pressed", method="beam shape under a pure moment at the rib top (params.latch_shape)",
+                     hook_travel_at_contact_mm=R3(P.RIB_TRAVEL_M), parameter_mm=f">= tab stop {M['tab_stop_travel']}: the ribs never block the release",
+                     status="ok" if P.RIB_TRAVEL_M >= M["tab_stop_travel"] - 1e-9 else "FAIL"))
+    if P.RIB_TRAVEL_M < M["tab_stop_travel"] - 1e-9:
+        fails.append("a pressed tab reaches the stop ribs before its own stop")
 
     # ---------------- (e) insertion path: pose the marker solids tilt by tilt (nose first under the lip, rear last)
     plungers = [PT.spring_pin_free_plunger(x).val() for x in P.PAD_XS]
@@ -959,74 +1047,125 @@ def check_cradle(parts):
         y_pad, z_pad = H.xf(P.PAD_Y, P.PAD_Z0, th, s_, h_)
         comp = max(0.0, P.PIN_TIP_FREE_Z - z_pad)
         engaged = z_slot - P.BASE_T / 2 < P.PIN_TIP_FREE_Z       # the free plunger tip is inside the base slot
-        dl = _latch_travel_needed(tp, latch)
+        dl = _latch_travel_needed(sp, latch, "F")
         d_need = max(d_need, dl)
-        ok = v_fix < 1e-4 and v_pin < 1e-6 and comp <= M["pin_full_stroke"] and dl <= M["latch_stop_deflection"]
+        ok = v_fix < 1e-4 and v_pin < 1e-6 and comp <= M["pin_full_stroke"] and dl <= M["latch_stop_travel"]
         if not ok:
             fails.append(f"insertion pose {th} deg: body/lip {v_fix:.4f} mm3, pins {v_pin:.5f} mm3, latch travel {dl:.2f}, pin compression {comp:.2f}")
-        irow.append(dict(tilt_deg=th, set_back_mm=round(s_, 3), lift_mm=round(h_, 3), rear_edge_height_mm=round(H.xf(-P.R_OUT, 0.0, th, s_, h_)[1], 2),
+        irow.append(dict(tilt_deg=th, set_back_mm=round(s_, 3), lift_mm=round(h_, 3), rear_edge_height_mm=round(H.xf(-P.R_OUT, P.RIM_Z, th, s_, h_)[1], 2),
                          interference_with_nest_lip_floor_mm3=round(v_fix, 5), clearance_to_lip_mm=R3(d_lip),
                          plungers_into_base_or_adhesive_mm3=round(v_pin, 6),
                          slot_centre_offset_from_pin_axis_mm=(round(y_slot - P.PAD_Y, 3) if engaged else "pins not yet in the slot"),
                          pin_compression_mm=round(comp, 3), latch_travel_needed_mm=round(dl, 3), status="ok" if ok else "FAIL"))
 
-    # ---------------- (d) forces, retention, strain (closed form, on the dimensions verified above)
+    # ---------------- (f) release: hook travel that frees the marker, for the three fore-aft positions it can have in the nest
+    rrow, d_rel = [], []
+    for label, back, nominal in (("against the front nest wall (as the insertion leaves it)", -P.CLR, P.RELEASE_TRAVEL[0]), ("centred", 0.0, P.RELEASE_TRAVEL[1]),
+                                 (f"rearmost (the rear nest wall starts {P.REAR_WALL_ANGLE_DEG:.0f} deg from the latch axis)", P.MARKER_BACK_MAX, P.RELEASE_TRAVEL[2])):
+        need = 0.0
+        for lift in M["release_lifts"]:
+            need = max(need, _latch_travel_needed(tub.translate(cq.Vector(0, -back, lift)), hook, "M"))
+        d_rel.append(need)
+        ok = nominal - 0.3 < need <= nominal + 0.01 and need <= M["tab_stop_travel"] - 0.1 + 1e-9 and need <= P.RIB_TRAVEL_M + 1e-9
+        if not ok:
+            fails.append(f"release, marker {label}: hook travel {need:.3f} (nose to marker edge {nominal:.3f}; tab stop {M['tab_stop_travel']}, ribs {P.RIB_TRAVEL_M:.2f})")
+        rrow.append(dict(marker_position=label, marker_shift_back_mm=R3(back), hook_travel_to_free_the_marker_mm=R3(need), nose_to_marker_edge_mm=R3(nominal),
+                         margin_to_the_tab_stop_mm=R3(M["tab_stop_travel"] - need), status="ok" if ok else "FAIL"))
+
+    # ---------------- (g) forces, retention, strain: beam model on the dimensions verified above, FE on the section of the solid
     mt = _mass_table(parts)
     m_puck = sum(r["mass_g"] for r in mt if r["group"] == "puck")
     cg = _cog(mt, "puck")
-    c = H.calc(m_puck, cg[1], d_insert=d_need)
+    c = H.calc(m_puck, cg[1], d_insert=d_need, d_release=d_rel)
     lim, req = M["latch_strain_limit"], M["retention_factor_required"]
-    if c["factor"] < req or c["factor_min"] < req:
-        fails.append(f"retention {c['factor']:.2f} x (nominal) / {c['factor_min']:.2f} x (marker fully forward) is below {req} x the seven-pin force")
-    if max(c["eps_stop"], c["eps_ins"], c["eps_rel_max"]) > lim + 1e-9:
-        fails.append(f"latch strain {100 * max(c['eps_stop'], c['eps_ins']):.2f} % exceeds {100 * lim} %")
-    if c["d_rel_max"] > c["d_stop"]:
-        fails.append("the over-travel stop engages before the hook has released")
-    if M["latch_h"] < 1.0 - 1e-9:
-        fails.append("latch root thinner than 1.0 mm")
     N2 = lambda v: round(float(v), 2)
+    trow = []
+    for r in c["retention"]:
+        need_ok = r is c["nominal"] or r is c["governing"] or "print tolerance" in r["case"]
+        ok = r["factor"] >= req
+        if need_ok and not ok:
+            fails.append(f"retention {r['factor']:.2f} x ({r['case']}) is below {req} x the seven-pin force")
+        trow.append(dict(case=r["case"], hook_overlap_mm=R3(r["overlap"]), E_MPa=r["E"], friction=r["mu"],
+                         holds_up_to_N_at_the_hook=(N2(r["F_hook"]) if r["F_hook"] != float("inf") else "self-locking"),
+                         equals_N_at_the_pin_row=(N2(r["pin_row"]) if r["F_hook"] != float("inf") else "-"),
+                         multiple_of_the_seven_pin_force=(N2(r["factor"]) if r["F_hook"] != float("inf") else "-"),
+                         hook_rotation_at_release_deg=round(r["rot_deg"], 1), contact=r["regime"],
+                         modulus_needed_for_3x_MPa=(round(r["E_min"]) if r["mu"] == 0 else "-"),
+                         status=("ok" if ok else ("FAIL" if need_ok else "below 3 x (information)"))))
+    if c["nominal"]["rot_deg"] > M["hook_rake_deg"] - 0.5:
+        fails.append(f"hook rotation at release {c['nominal']['rot_deg']:.1f} deg reaches the rake {M['hook_rake_deg']} deg: the face becomes a ramp")
+    try:
+        fe = FE.run(cr)
+    except Exception as ex:                                   # a failed FE run is reported, never hidden
+        fe = None
+        fails.append(f"FE of the latch section failed: {ex!r}")
+    fe_per = dict(F=fe["F"]["eps_per_mm"], M=fe["M"]["eps_per_mm"], V=fe["V"]["eps_per_mm"]) if fe else dict(F=float("nan"), M=float("nan"), V=float("nan"))
+    key = {"tip force": "F", "tab moment": "M", "hook load": "V"}
+    erow, worst_full = [], 0.0
+    for r in c["strain"]:
+        e_fe = fe_per[key[r["load"]]] * r["travel"]
+        full = r["case"].startswith("FULL")
+        okk = r["eps"] <= lim + 1e-9 and e_fe <= lim + 1e-9
+        if not okk:
+            fails.append(f"latch strain {100 * r['eps']:.2f} % (beam) / {100 * e_fe:.2f} % (FE peak) exceeds {100 * lim} %: {r['case']}")
+        if full:
+            worst_full = max(worst_full, r["eps"], e_fe)
+        erow.append(dict(case=r["case"], load=r["load"], hook_travel_mm=R3(r["travel"]), strain_beam_formula_pct=round(100 * r["eps"], 2), largest_at=r["at"],
+                         strain_FE_peak_pct=round(100 * e_fe, 2), FE_peak_at=(fe[key[r["load"]]]["where"] if fe else "-"), limit_pct=100 * lim,
+                         status="ok" if okk else "FAIL"))
+    if c["d_rel_max"] > c["d_tab"] + 1e-9:
+        fails.append("the tab stop engages before the hook has released in the rearmost marker position")
+    ferow = []
+    if fe:
+        for k_, label in (("F", "hook pushed back (tip force)"), ("M", "thumb tab pressed (moment)"), ("V", "hook loaded upward (retention)")):
+            beam_per = dict(F=c["epsF_per_mm"], M=c["epsM_per_mm"], V=float("nan"))[k_]
+            ferow.append(dict(load=label, peak_strain_pct_per_mm_of_hook_travel=round(100 * fe[k_]["eps_per_mm"], 3), where=fe[k_]["where"], at_yz=fe[k_]["at"],
+                              root_fillet_pct_per_mm=round(100 * fe[k_]["eps_root_per_mm"], 3), beam_neck_pct_per_mm=round(100 * fe[k_]["eps_beam_per_mm"], 3),
+                              hook_and_tab_pct_per_mm=round(100 * fe[k_]["eps_hook_per_mm"], 3),
+                              beam_formula_pct_per_mm=(round(100 * beam_per, 3) if beam_per == beam_per else "-"),
+                              FE_over_formula=(round(fe[k_]["eps_per_mm"] / beam_per, 2) if beam_per == beam_per else "-"),
+                              stiffness_N_per_mm_free_skin_and_PCB_backed=((N2(fe[k_]["stiffness_free_N_mm"]), N2(fe[k_]["stiffness_pcb_N_mm"])) if k_ == "F" else "-")))
     frow = [
         dict(quantity="pin force, seven pins (factory fixture) / four pins (consumer)", value=(N2(c["Fp7"]), N2(c["Fp4"])), unit="N",
              basis=f"{P.PIN_FORCE_N} N per pin at the working height (PROVISIONAL)"),
         dict(quantity="marker weight", value=round(c["weight"], 3), unit="N", basis=f"{m_puck:.1f} g (check 8)"),
         dict(quantity="hold-down reactions with seven pins: hook / lip", value=(N2(c["F_hook7"]), N2(c["F_lip7"])), unit="N",
-             basis=f"moments about the lip (y {c['y_lip']:.2f}) and the hook (y {c['y_hook']:.2f}); the hook carries {100 * c['hook_share']:.1f} % of a pin-row force"),
+             basis=f"moments about the lip (y {c['y_lip']:.2f}) and the hook contact (y {c['y_hook']:.2f}); the hook carries {100 * c['hook_share']:.1f} % of a pin-row force"),
         dict(quantity="hold-down reactions with four pins: hook / lip", value=(N2(c["F_hook4"]), N2(c["F_lip4"])), unit="N", basis="same"),
-        dict(quantity="latch beam: b x h x L, E, E I", value=(c["b"], c["h"], N2(c["L"]), c["E"], N2(c["EI"])), unit="mm, mm, mm, MPa, N mm2",
-             basis="uniform rectangular cantilever, I = b h^3 / 12; E = HP PA 12 MJF data sheet (XY), dry, 23 C"),
-        dict(quantity="retention at the hook, no friction, nominal overlap", value=N2(c["F_cam"]), unit="N",
-             basis=f"F = 2 E I u / (e L^2), u = {c['u']:.2f}, e = {c['e']:.3f} (hook contact to the beam's neutral axis)"),
-        dict(quantity="= pin-row force that opens the latch / multiple of the seven-pin force", value=(N2(c["pin_equiv"]), N2(c["factor"])), unit="N / x",
-             basis=f"hook force / {c['hook_share']:.3f}; required >= {req} x"),
-        dict(quantity="same with the marker pushed fully forward in the nest", value=(N2(c["F_cam_min"]), N2(c["pin_equiv_min"]), N2(c["factor_min"])), unit="N / N / x",
-             basis=f"u = {c['u_min']:.2f}, e = {c['e_min']:.3f}; required >= {req} x"),
-        dict(quantity="friction above which the hook is self-locking", value=round(c["mu_lock"], 3), unit="-",
-             basis="mu >= 1.5 e / L; PA12 on PA12 is usually 0.2 to 0.4 (assumed, not measured)"),
-        dict(quantity=f"retention at the hook with friction {c['mu_lo']}", value=N2(c["F_fric"]) if c["F_fric"] != float("inf") else "self-locking", unit="N",
-             basis="F = u E I / (e L^2 / 2 - mu L^3 / 3)"),
-        dict(quantity=f"root stress at {req} x the seven-pin force / safety factor to yield", value=(N2(c["sig_root"]), N2(c["sf_root"])), unit="MPa / -",
-             basis=f"hook load {c['F3_hook']:.1f} N: 6 F e / (b h^2) + F / (b h); yield {M['pa12_yield_MPa']} MPa (data sheet)"),
-        dict(quantity="hook travel: insertion (posed solids) / release nominal / release worst / over-travel stop",
-             value=(N2(c["d_ins"]), N2(c["d_rel"]), N2(c["d_rel_max"]), N2(c["d_stop"])), unit="mm",
-             basis="release = hook nose back to the marker radius (nominal: 0.25 gap; worst: marker against the beam)"),
-        dict(quantity="root strain at those travels", value=tuple(round(100 * c[k], 2) for k in ("eps_ins", "eps_rel", "eps_rel_max", "eps_stop")), unit="%",
-             basis=f"eps = 3 h d / (2 L^2) (tip force); limit {100 * lim} %; at the stop under a pure tab moment: {100 * c['eps_stop_moment']:.2f} %"),
-        dict(quantity="latch stiffness at the hook / lateral force at the insertion travel", value=(N2(c["k"]), N2(c["P_ins"])), unit="N/mm / N", basis="k = 3 E I / L^3"),
+        dict(quantity="latch beam: b, h root / neck / at the hook, L, E, E I at the root", value=(c["b"], P.LATCH_H0, P.LATCH_HN, P.LATCH_H1, N2(c["L"]), c["E"], N2(c["EI0"])),
+             unit="mm, mm, mm, mm, mm, MPa, N mm2", basis="rectangular cantilever, I(s) = b h(s)^3 / 12; E = HP PA 12 MJF data sheet (XY), dry, 23 C"),
+        dict(quantity="beam stiffness at the hook (tip force) / per mm of travel for a tab moment", value=(N2(c["k"]), N2(c["kM"])), unit="N/mm, N mm/mm",
+             basis="numerical integration of M / (E I(s)); the plane-strain FE is stiffer (table below), so forces can be up to a quarter higher"),
+        dict(quantity="retention, governing position, no friction", value=(N2(c["governing"]["F_hook"]), N2(c["governing"]["pin_row"]), N2(c["factor_min"])), unit="N at the hook / N at the pin row / x",
+             basis=f"largest upward hook force before the nose leaves the flat top (overlap {c['overlap_fwd']:.2f}), moment about the deflected axis; required >= {req} x"),
+        dict(quantity="modulus at which the governing case is still 3 x", value=round(c["E_min"]), unit="MPa", basis="retention is proportional to E"),
+        dict(quantity=f"hook travel and root stress at {req} x the seven-pin force", value=(N2(c["st3"]["nose_travel"]), N2(c["sig_root"]), N2(c["sf_root"])), unit="mm / MPa / safety factor",
+             basis=f"hook load {c['F3_hook']:.1f} N: 6 F e / (b h^2) + F / (b h) at the root, e = {c['e_root']:.2f}; yield {M['pa12_yield_MPa']} MPa (data sheet)"),
+        dict(quantity="straight pull on a latched marker (tab not pressed, hook self-locked by friction): root reaches yield at", value=(N2(c["F_yield"]), N2(c["pull_at_yield"])),
+             unit="N at the hook / N of pull at the finger scallops", basis="strength of the root governs once friction locks the hook; the user must press the tab"),
+        dict(quantity="hook travel needed: insertion / release forward / centred / rearmost", value=(N2(c["d_ins"]), N2(c["d_rel_fwd"]), N2(c["d_rel"]), N2(c["d_rel_max"])), unit="mm",
+             basis="posed solids (tables below)"),
+        dict(quantity="full deflection: stop ribs (hook pushed) / tab stop (tab pressed)", value=(N2(c["d_stop"]), N2(c["d_tab"])), unit="mm", basis="both stops verified on the solids"),
+        dict(quantity="lateral force on the hook at the insertion travel", value=N2(c["P_ins"]), unit="N", basis="P = k d"),
         dict(quantity="insertion force at the thumb for friction " + " / ".join(str(m) for m in c["ins"]), value=tuple(N2(v) for v in c["ins"].values()), unit="N",
              basis=f"W = P (mu + tan a) / (1 - mu tan a), a = {c['lead_deg']:.0f} deg lead-in; thumb 8 mm in from the rear edge (lever {c['lever']:.2f})"),
         dict(quantity="force to finish seating (last degree, seven pins)", value=N2(c["seat"]), unit="N", basis="friction on the hook nose plus the pins coming under load"),
-        dict(quantity="release: thumb force on the tab, nominal / worst", value=(N2(c["F_tab"]), N2(c["F_tab_max"])), unit="N",
-             basis=f"M = 2 E I d / L^2, pressed {c['tab_lever']:.2f} mm behind the beam axis; the tab end drops about {c['tab_drop']:.1f} mm"),
-        dict(quantity="hook creep-out under the continuous seven-pin load (elastic / with a creep factor of 3)", value=(round(c["creep_d"], 3), round(3 * c["creep_d"], 3)),
-             unit="mm", basis=f"d = F e L^2 / (2 E I) with F = {c['F_hook7']:.2f} N; overlap {c['u']:.2f} mm (creep modulus of MJF PA12 not verified)"),
+        dict(quantity="release: thumb force on the tab, marker forward / centred / rearmost", value=(N2(c["F_tab_fwd"]), N2(c["F_tab"]), N2(c["F_tab_max"])), unit="N",
+             basis=f"M0 = E b d / cw_M, pressed {c['tab_lever']:.2f} mm behind the beam axis; the tab end drops {c['tab_drop']:.1f} mm (centred)"),
+        dict(quantity="thumb force at which the tab lands on its stop / tab drop there", value=(N2(c["F_tab_stop"]), N2(c["tab_drop_stop"])), unit="N / mm",
+             basis="beyond this the thumb force goes into the stop, not into the beam"),
+        dict(quantity=f"over-press of {c['abuse']:.0f} N on the tab: load on the stop / bearing stress", value=(N2(c["abuse_excess"]), N2(c["sig_stop"])), unit="N / MPa",
+             basis=f"stop {M['tab_stop_w']} x {M['tab_stop_t']} mm; the beam moment stays at its value at the stop"),
+        dict(quantity="hook travel under the continuous seven-pin load (elastic / with a creep factor of 3)", value=(round(c["creep_d"], 3), round(3 * c["creep_d"], 3)),
+             unit="mm", basis=f"hook load {c['F_hook7']:.2f} N, governing position; overlap {c['overlap_fwd']:.2f} mm (creep modulus of MJF PA12 not verified)"),
         dict(quantity="lip plate: stress with the whole required force on it / safety factor", value=(N2(c["sig_lip"]), N2(c["sf_lip"])), unit="MPa / -",
              basis=f"6 F a / (w t^2), F = {req} x {c['Fp7']:.2f} N, a = {c['lip_arm']:.2f}, {2 * lw:.0f} x {M['lip_t']} plate"),
         dict(quantity="marker floats against lip and hook when pins are fitted: lift / pin height / stroke used",
-             value=(P.CLR, N2(P.PIN_WORK_H + P.CLR), N2(M["pin_mid_stroke"] - P.CLR)), unit="mm", basis=f"recommended height {P.PIN_WORK_H}, full stroke {M['pin_full_stroke']} (D21)"),
+             value=(P.CLR, N2(P.PIN_FLOAT_H), N2(P.PIN_COMPRESSION - P.CLR)), unit="mm", basis=f"working height {P.PIN_WORK_H} with the marker on its feet, full stroke {M['pin_full_stroke']} (D21)"),
         dict(quantity="rear of the marker pops up on release by about", value=N2(c["pop_up"]), unit="mm", basis="pins return to their free length; then lift at the finger scallops"),
     ]
 
-    # ---------------- (f) finger access at the two scallops (radial rays from outside onto the seated marker)
+    # ---------------- (h) finger access at the two scallops (radial rays from outside onto the seated marker)
     arow = []
     a0, a1 = M["scallop_deg"]
     for sx in (1, -1):
@@ -1043,40 +1182,70 @@ def check_cradle(parts):
             fails.append(f"finger access {'+x' if sx > 0 else '-x'}: only {n_ok} of {n_all} rays reach the marker side")
         chord = 2 * P.R_OUT * math.sin(math.radians(a1 - a0) / 2)
         arow.append(dict(side="+x" if sx > 0 else "-x", scallop_from_deg=a0, to_deg=a1, opening_along_the_marker_mm=round(chord, 1),
-                         marker_side_exposed_from_z=0.0, to_z=P.T, rays_reaching_the_marker=f"{n_ok} of {n_all}", status="ok" if okf else "FAIL"))
+                         marker_side_exposed_from_z=P.RIM_Z, to_z=P.T, rays_reaching_the_marker=f"{n_ok} of {n_all}", status="ok" if okf else "FAIL"))
 
-    warns.append(f"with pins fitted the marker floats up to {P.CLR} mm against lip and hook (D21); the pins then work at {P.PIN_WORK_H + P.CLR:.2f} mm")
-    warns.append(f"insertion {c['ins'][c['mu']]:.0f} N and release {c['F_tab']:.0f} N are estimates (friction {c['mu']} assumed, modulus from the data sheet, "
-                 "dry PA12); pin force and stroke are PROVISIONAL")
-    warns.append(f"the latch beam stands in the build z direction if the cradle is printed as modelled: ask the bureau to lay the beam in the build "
-                 f"plane, and test ten latch cycles on the first article (strain at the stop {100 * c['eps_stop']:.2f} %)")
-    notes = ["hold-down = fixed lip over the top front edge between the camera windows + rear cantilever latch with a 90 deg retaining face; "
-             "formulas in cad/holddown.py",
-             "retention requirement is evaluated WITHOUT friction (lower bound): an upward force on the hook bends the beam back through its "
-             "eccentricity e until the hook has moved by the overlap u",
-             f"insertion path: the marker is tilted nose-down about its front bottom edge, rests {M['insertion_gap']} mm above the nest floor and is as far "
-             f"forward as the front nest wall, the nose pocket and the lip tip allow ({M['insertion_gap']} mm clear); at each tilt the solids of tub + base "
-             "plate + balls are intersected with the cradle (latch removed), the free-length plungers with base plate and adhesive sheet, and the "
-             "latch is rotated back until it no longer intersects the tub (that travel is the insertion deflection)",
-             "latch deflection is modelled as a rigid rotation about the point 2L/3 below the retaining face (exact tip travel and tip slope of a "
-             "tip-loaded cantilever)",
-             f"free plunger tip at z = {P.PIN_TIP_FREE_Z:.2f}; the pads meet the plungers at about 1.9 deg of tilt; the copper pad face is modelled "
-             f"{P.PIN_TIP_GAP} mm below the YAML pad plane, so the modelled pin stands {P.PIN_WORK_H - P.PIN_TIP_GAP:.3f} mm high",
-             "printability of the latch is covered by check 5 (walls; beam 1.15 mm, hook nose recorded) and check 6 (the latch well is open at the "
-             "top; its gaps are listed there)"]
+    # ---------------- (i) drainage of the nest: every opening of the floor into the body is behind a rim at strip level
+    rcb = G.RayCaster(body_nl)
+    drow = []
+    for label, pt, expect in (("basin floor on the centre line", (0.0, 0.0), P.BASIN_RIDGE_Z), ("basin floor at the scallop mouth", (P.NEST_R - 0.5, -6.0), P.BASIN_RIDGE_Z - (P.NEST_R - 0.5) * P.BASIN_TAN),
+                              ("rim round the pin slot", (0.0, P.PAD_Y + P.CRADLE_PIN_SLOT_W / 2 + M["slot_rim_t"] / 2), P.NEST_FLOOR_Z),
+                              ("dam in front of the latch well", (5.0, P.WELL_Y1 + 0.5), P.NEST_FLOOR_Z), ("pad under ball foot 2", P.BALL_XY[1], P.NEST_FLOOR_Z),
+                              ("front strip under ball foot 1", P.BALL_XY[0], P.NEST_FLOOR_Z)):
+        t = rcb.first_hit((pt[0], pt[1], P.CRADLE_TOP_Z + 2.0), (0, 0, -1))
+        zf = P.CRADLE_TOP_Z + 2.0 - t if t is not None else float("nan")
+        ok = abs(zf - expect) < 0.01
+        if not ok:
+            fails.append(f"nest floor at {label}: z {zf:.3f}, expected {expect:.3f}")
+        drow.append(dict(place=label, xy=(round(pt[0], 2), round(pt[1], 2)), floor_z_mm=R3(zf), expected_mm=R3(expect), status="ok" if ok else "FAIL"))
+    drow.append(dict(place="fall of the basin floor from the centre line to each side", xy="-", floor_z_mm=f"{M['basin_fall_deg']} deg", expected_mm="-", status="ok"))
+
+    warns.append(f"with pins fitted the marker floats up to {P.CLR} mm against lip and hook (D21); the pins then stand {P.PIN_FLOAT_H:.2f} mm high")
+    warns.append(f"insertion {c['ins'][c['mu']]:.0f} N and release {c['F_tab_fwd']:.0f} to {c['F_tab_max']:.0f} N are estimates (friction {c['mu']} assumed, modulus from the data "
+                 "sheet, dry PA12); pin force and stroke are PROVISIONAL")
+    warns.append(f"retention with the overlap reduced by {max(M['overlap_tolerances'])} mm is {c['factor_tol']:.1f} x at E = {c['E']:.0f} MPa and needs E >= {c['worst_tol']['E_min']:.0f} MPa: "
+                 "the distance front nest wall to hook nose is a first-article dimension")
+    warns.append(f"largest strain at full deflection is {100 * worst_full:.2f} % (limit {100 * lim} %); the stop positions (rib gap {P.LATCH_STOP_GAP:.2f}, tab stop z {P.TAB_STOP_Z:.2f}) "
+                 "are first-article dimensions: 0.2 mm on the rib gap is about 0.3 mm of hook travel")
+    notes = ["hold-down = fixed lip over the top front edge between the camera windows + rear cantilever latch; formulas in cad/holddown.py",
+             f"retaining face raked {M['hook_rake_deg']} deg (nose lowest): the nose corner bears on the flat top of the marker, so the frictionless reaction is vertical "
+             "and the face cannot cam the latch open while the hook turns nose-up under load; the retention figure is the frictionless lower bound and "
+             "includes that rotation and the growth of the lever as the beam leans back",
+             "'governing position' = marker against the front nest wall, where the lead-in of the hook leaves it during insertion: the overlap is then "
+             f"{P.CLR} mm smaller than with the marker centred",
+             f"insertion path: the marker is tilted nose-down, rests {M['insertion_gap']} mm above the front strip of the nest floor and is as far forward as the "
+             f"front nest wall, the nose pocket and the lip tip allow ({M['insertion_gap']} mm clear); at each tilt the solids of tub + base plate + balls are "
+             "intersected with the cradle (latch removed), the free-length plungers with base plate and adhesive sheet, and the latch is turned back "
+             "until it no longer intersects the marker (that travel is the insertion deflection)",
+             "hook travel = backward travel of the beam axis at the nose level; because the hook also turns nose-up, the nose corner itself moves a "
+             "little further, which is why the travel that frees the marker is smaller than the distance nose to marker edge",
+             "latch deflection in the posed checks = rigid rotation of the solid about the point that reproduces tip travel and tip slope of the bent "
+             f"beam ({P.LATCH_PIVOT_F:.2f} mm below the nose level for a tip force, {P.LATCH_PIVOT_M:.2f} mm for a pure moment); exact for hook and tab",
+             f"FE: plane strain, {fe['elements'] if fe else 0} constant-strain triangles on the section x = {FE.X_SECTION} of the cradle solid, {FE.H_FINE} mm elements at the "
+             "fillets, nodal-averaged principal strain; skin under the well free and PCB-backed, the larger value is used (cad/latchfe.py). "
+             "Refining the fillet mesh from 0.035 to 0.025 mm raised the root peak by 2 %",
+             f"free plunger tip at z = {P.PIN_TIP_FREE_Z:.3f}; the pads meet the plungers at about 1.9 deg of tilt. The cradle PCB top is set {P.PIN_WORK_H} mm below "
+             f"the COPPER FACE of the pads (z {P.PAD_Z0:.3f}), which is modelled {P.PIN_TIP_GAP:.3f} mm below the YAML pad plane (z {P.CRADLE_PAD_Z})",
+             "printability of the latch is covered by check 5 (walls) and check 6 (the latch well is open at the top and drained; its gaps are listed there)"]
     ok_all = not fails
     return res(7, "cradle: pins, key, hold-down, insertion", ok_all,
-               (f"seven pin positions on their pad centres, {min(r['clearance_in_base_and_adhesive_slot_mm'] for r in prow)} mm clear in the slots; nest "
-                f"accepts 0 deg only; hold-down retention {c['factor']:.1f} x the seven-pin force without friction ({c['factor_min']:.1f} x with the marker "
-                f"fully forward; required {req} x); latch strain {100 * c['eps_ins']:.2f} % at insertion ({c['d_ins']:.2f} mm), {100 * c['eps_stop']:.2f} % at the stop "
-                f"(limit {100 * lim} %); insertion about {c['ins'][c['mu']]:.0f} N, release about {c['F_tab']:.0f} N; {len(irow)} posed tilts from "
+               (f"seven pin positions on their pad centres, {min(r['clearance_in_base_and_adhesive_slot_mm'] for r in prow)} mm clear in the slots, at "
+                f"{P.PIN_WORK_H} mm ({P.PIN_COMPRESSION:.2f} compressed); nest accepts 0 deg only; retention without friction {c['factor_min']:.1f} x the seven-pin "
+                f"force in the governing position ({c['factor']:.1f} x centred, {c['factor_tol']:.1f} x with {max(M['overlap_tolerances'])} mm less overlap; required {req} x); "
+                f"strain at full deflection {100 * c['eps_stop']:.2f} % at the stop ribs and {100 * c['eps_tab']:.2f} % at the tab stop by the beam formula, "
+                f"{100 * worst_full:.2f} % peak by FE (limit {100 * lim} %); insertion {c['d_ins']:.2f} mm of hook travel, about {c['ins'][c['mu']]:.0f} N; release "
+                f"{c['d_rel_fwd']:.2f} to {c['d_rel_max']:.2f} mm, {c['F_tab_fwd']:.0f} to {c['F_tab_max']:.0f} N on the tab; {len(irow)} posed tilts from "
                 f"{max(M['insertion_tilts_deg']):.0f} deg to 0 without interference with lip, nest or pins"
                 if ok_all else "FAILED: " + "; ".join(fails)),
                [dict(title="Pins at the seated position", rows=prow), dict(title="Orientation key", rows=orows),
                 dict(title="Hold-down geometry measured on the solids", rows=grow),
-                dict(title="Hold-down forces, retention and latch strain", rows=frow),
+                dict(title="Over-travel stops", rows=srow),
+                dict(title="Retention (largest upward force on the hook before it lets go)", rows=trow),
+                dict(title="Latch strain: beam formula and FE peak", rows=erow),
+                dict(title="FE of the latch section (per mm of hook travel)", rows=ferow),
+                dict(title="Hold-down forces", rows=frow),
                 dict(title="Insertion path (marker solids posed against the cradle solids)", rows=irow),
-                dict(title="Finger access", rows=arow)], notes, warns)
+                dict(title="Release (marker lifted straight up past the deflected hook)", rows=rrow),
+                dict(title="Finger access", rows=arow), dict(title="Drained nest floor", rows=drow)], notes, warns)
 
 
 # ==============================================================================================
@@ -1139,6 +1308,22 @@ def check_mass(parts):
 # ==============================================================================================
 # 9. quoting data and export integrity
 # ==============================================================================================
+def _facet_sag(name, tris):
+    """Largest chord error of the print mesh on the main cylindrical wall of the part (None when not measurable)."""
+    R = dict(tub=P.R_OUT, base_plate=P.BASE_R, cradle=P.NEST_R)[name]
+    mid = 0.5 * (tris + np.roll(tris, 1, axis=1)).reshape(-1, 3)
+    if name == "cradle":                                   # print frame: x' = -z, y' = y, z' = x - xmin
+        z_model = -mid[:, 0]; x_model = mid[:, 2] - P.CRADLE_X
+        r = np.hypot(x_model, mid[:, 1])
+        on = (np.abs(r - R) < 0.05) & (z_model > 0.3) & (z_model < P.CRADLE_TOP_Z - 1.0) & (mid[:, 1] > -19.0) & (mid[:, 1] < P.STRIP_Y0)
+        return float(R - r[on].min()) if on.any() else None
+    r = np.hypot(mid[:, 0], mid[:, 1])
+    zmid = (P.T - mid[:, 2]) if name == "tub" else mid[:, 2]
+    lo, hi = (P.RIM_Z + M["bottom_chamfer"] + 0.2, P.T - M["top_fillet"] - 0.2) if name == "tub" else (0.1, P.BASE_T - 0.1)
+    on = (np.abs(r - R) < 0.05) & (zmid > lo) & (zmid < hi)
+    return float(R - r[on].min()) if on.any() else None
+
+
 def check_quoting(parts):
     rows, fails, notes = [], [], []
     for name in ("tub", "base_plate", "cradle"):
@@ -1153,9 +1338,16 @@ def check_quoting(parts):
         ok = closed and dv < 0.005
         if not ok:
             fails.append(f"{name}: STL closed={closed}, volume differs {100 * dv:.2f} %")
+        zmin = float(tris[:, :, 2].min())
+        sag = _facet_sag(name, tris)
+        if abs(zmin) > 1e-4:
+            ok = False; fails.append(f"{name}: print file does not rest on z = 0 (z min {zmin:.4f})")
+        if sag is not None and sag > A.PRINT_STL_TOL + 1e-3:
+            ok = False; fails.append(f"{name}: facet sag {sag:.4f} mm exceeds the stated STL tolerance {A.PRINT_STL_TOL}")
         rows.append(dict(part=name, process=info.material, print_file=src, box_x_mm=R3(size[0]), box_y_mm=R3(size[1]), box_z_build_mm=R3(size[2]),
                          volume_cm3=round(s.Volume() / 1000, 3), stl_volume_cm3=round(vol / 1000, 3), surface_area_cm2=round(s.Area() / 100, 2),
                          mass_g=round(s.Volume() * info.density / 1000, 2), stl_triangles=len(tris), stl_watertight=closed,
+                         stl_z_min_mm=round(zmin, 5), largest_facet_sag_on_the_main_radius_mm=(round(sag, 4) if sag is not None else "-"),
                          box_volume_cm3=round(float(np.prod(size)) / 1000, 2)))
     # export integrity: re-read every exported STEP and STL and compare with the solid that was checked
     irows = []
@@ -1181,8 +1373,13 @@ def check_quoting(parts):
             fails.append("GL1_assembly.step missing")
     else:
         notes.append("export integrity not run (no export in this run)")
-    notes += [f"STL tolerance {A.STL_TOL} mm linear, {A.STL_ANG} rad angular; print orientation: tub roof-down, base plate and cradle as modelled (z = build direction)",
-              "box = exact axis-aligned bounding box of the solid in print orientation; orientation is a recommendation, the bureau may nest differently"]
+    notes += [f"print files: STL tolerance {A.PRINT_STL_TOL} mm linear, {A.PRINT_STL_ANG} rad angular, resting on z = 0; the same parts are exported as "
+              "STEP in print orientation (export/step/*_print.step) - send the STEP when the bureau accepts it",
+              f"part meshes for renders and mesh checks: {A.STL_TOL} mm linear, {A.STL_ANG} rad angular",
+              "print orientation (z = build direction): tub roof-down; base plate flat; cradle with its x axis as the build direction, so that the side "
+              "profile of the latch beam and of the lip lies in the build plane (orientation of the cradle is to be LOCKED with the bureau)",
+              "facet sag = main radius minus the smallest mid-edge radius of the facets on the cylindrical wall (tub R 23.0, base R 21.75, cradle nest R 23.25)",
+              "box = exact axis-aligned bounding box of the solid in print orientation"]
     return res(9, "printed parts for quoting / export integrity", not fails,
                ("; ".join(f"{r['part']} {r['box_x_mm']} x {r['box_y_mm']} x {r['box_z_build_mm']} mm, {r['volume_cm3']} cm3" for r in rows)
                 + (f"; all {len(irows)} STEP and STL files re-read and match the checked solids" if irows else "")
@@ -1232,9 +1429,11 @@ def check_posts(parts):
     notes = ["post feet are the YAML tub_keepouts.post_feet (the contract with the PCB layout, proven in check 12); passives are not in the YAML",
              f"posts E seat on the PCB round their spigots: full annulus at the round hole, two strips beside the {P.LOC_SLOT[3]} mm slot "
              f"(the slot is wider than the {P.KO_POST_SIZE} mm foot)",
-             f"load path roof -> posts -> PCB -> adhesive sheet -> base plate, none through LCD or battery. Total seat area {area:.1f} mm2: an 800 N "
-             f"footstep carried by the posts alone would be {800 / area:.0f} MPa (PA12 yields near 48 MPa). That is an upper bound - the side wall "
-             "runs to the base plane and takes most of the load - but the footstep case is NOT analysed or tested (open issue)"]
+             f"intended load path roof -> posts -> PCB -> adhesive sheet -> base plate. Total seat area {area:.1f} mm2: an 800 N "
+             f"footstep carried by the posts alone would be {800 / area:.0f} MPa (PA12 yields near 48 MPa). The side wall shares the load only "
+             f"through the ledge and the perimeter joint into the edge of the base plate: its rim ends {P.RIM_Z} mm above the base plane (D23). "
+             "The design review estimates that a load on the cover glass also passes through the roof ledge into the LCD glass. The footstep "
+             "case is NOT analysed or tested (README open issues 3 to 5)"]
     return res(10, "support posts", ok, f"{len(rows)} posts on their keep-out squares, solid from PCB to roof, clear of listed parts and of the LCD glass; "
                f"two spigots under posts E; seat area {area:.1f} mm2" if ok else "post placement problem",
                [dict(title="Support posts", rows=rows)], notes)
@@ -1373,8 +1572,259 @@ def check_keepouts(parts):
                 dict(title="Height of the tub above the PCB top by region (ray-cast height map)", rows=hrow)], notes, warns)
 
 
+# ==============================================================================================
+# 13. seal continuity
+# ==============================================================================================
+SEAL_ENVELOPE = (-26.0, 26.0, -26.0, 22.0, -2.0, 10.0)
+
+
+def _air_solids(S, names):
+    """The air round and inside the marker: a box minus every marker solid.  Returns the list of connected air solids."""
+    air = PT.box(*SEAL_ENVELOPE).val()
+    for n in names:
+        air = air.cut(S[n])
+    return list(air.Solids())
+
+
+def check_seal(parts):
+    """Is the marker closed?  (a) air-solid test: the outside and the inner cavity must be DIFFERENT connected air solids
+    when every modelled seal (bead, adhesive sheet, pottings, window bonds, cover tape, vent disc) is in place;
+    (b) the perimeter bead is one closed ring; (c) the width of every seal land, measured on the sections."""
+    S = _solids(parts)
+    puck = [n for n, i in parts.items() if i.group == "puck"]
+    fails, warns = [], []
+    cx, cy = P.CAM_XY["R"]
+    cxl = P.CAM_XY["L"][0]
+    rx, ry, _ = P.LOC_ROUND
+    probes = [
+        ("outside, above the marker", (0.0, 0.0, 9.5), "outside"),
+        ("grain opening", (P.GRAIN_X + 0.5 * (P.BAFFLE_RO + P.GRAIN_R), P.GRAIN_Y, 0.3), "outside"),
+        ("pad slot", (0.5 * (P.PAD_XS[3] + P.PAD_XS[4]), P.PAD_Y, 0.5), "outside"),
+        ("vent hole (the membrane is modelled as a closed disc)", (P.VENT_XY[0], P.VENT_XY[1], P.T - 0.6), "outside"),
+        ("cover-glass rim gap", (0.5 * (P.CG_D + P.RECESS_D) / 2, 0.0, P.T - 0.5), "outside"),
+        ("window R side slot", (cx + 0.25 * (P.WIN_W + P.WIN_RECESS_W), P.Y_VISOR - 0.25, 5.5), "outside"),
+        ("main cavity (beside the battery)", (-18.0, 5.0, 3.0), "cavity"),
+        ("camera bay R", (cx + 1.5, 15.0, 6.7), "cavity"),
+        ("camera bay L", (cxl - 1.5, 15.0, 6.7), "cavity"),
+        ("camera opening R, behind the window", (cx, P.WIN_RECESS_FLOOR_Y - 0.1, P.AXIS_Z), "cavity"),
+        ("cell between cover glass and LCD", (0.0, 0.0, 0.5 * (P.BOND_Z + P.CG_Z0)), "cavity"),
+        ("PCB locating hole (round), under the spigot tip", (rx, ry, P.PCB_Z0 + 0.1), "closed pocket"),
+        ("PCB locating slot, beside the spigot", (P.LOC_SLOT[0] + 0.5 * (P.LOC_SLOT[3] - 0.1), P.LOC_SLOT[1], P.PCB_Z0 + 0.1), "cavity"),
+        ("radial gap PCB edge to ledge", (0.0, -0.5 * (P.PCB_R + P.LEDGE_RI), 1.5), "cavity"),
+    ]
+    arow, prow = [], []
+    try:
+        sols = _air_solids(S, puck)
+        where = {}
+        for name, pt, expect in probes:
+            v = cq.Vector(*pt)
+            hit = [i for i, a_ in enumerate(sols) if a_.isInside(v, 1e-6)]
+            where[name] = hit[0] if hit else None
+        i_out = where[probes[0][0]]
+        i_cav = where["main cavity (beside the battery)"]
+        known = set()
+        for name, pt, expect in probes:
+            i = where[name]
+            got = "inside material" if i is None else ("outside" if i == i_out else ("cavity" if i == i_cav else "closed pocket"))
+            ok = got == expect and i_out != i_cav
+            if got == "closed pocket":
+                known.add(i); got = f"closed pocket ({sols[i].Volume():.2f} mm3)"; ok = expect == "closed pocket" and i_out != i_cav
+            if not ok:
+                fails.append(f"{name}: {got} (expected {expect})" if i_out != i_cav else "the cavity is connected to the outside")
+            prow.append(dict(probe=name, at_xyz=tuple(round(v_, 2) for v_ in pt), found_in=got, expected=expect, status="ok" if ok else "FAIL"))
+        for i, a_ in sorted(enumerate(sols), key=lambda t: -t[1].Volume()):
+            kind = "outside" if i == i_out else ("inner cavity" if i == i_cav else "closed pocket")
+            if kind == "closed pocket" and i not in known and a_.Volume() > 0.05:
+                fails.append(f"unexpected closed air pocket of {a_.Volume():.2f} mm3")
+            bb = a_.BoundingBox()
+            arow.append(dict(air_solid=kind, volume_mm3=round(a_.Volume(), 2), x=(round(bb.xmin, 1), round(bb.xmax, 1)), y=(round(bb.ymin, 1), round(bb.ymax, 1)),
+                             z=(round(bb.zmin, 1), round(bb.zmax, 1)), contains=", ".join(n for n, _, _ in probes if where[n] == i) or "-"))
+        if i_out is None or i_cav is None or i_out == i_cav:
+            fails.append("outside and cavity are ONE connected air solid: the marker is open")
+        v_cav = sols[i_cav].Volume() if i_cav is not None and i_cav != i_out else float("nan")
+    except Exception as ex:
+        fails.append(f"air-solid boolean failed: {ex!r}")
+        v_cav = float("nan")
+    # (b) the perimeter bead is one closed ring round the PCB
+    brow = []
+    for z in (0.5 * (P.BASE_T + P.LEDGE_Z0), 0.5 * (P.RIM_Z + P.BASE_T)):
+        sec = G.section_polys(S["seal_bead"], "z", z)
+        pcs = [g for g in getattr(sec, "geoms", [sec]) if not g.is_empty]
+        closed = len(pcs) == 1 and len(pcs[0].interiors) == 1 and __import__("shapely.geometry", fromlist=["Polygon"]).Polygon(pcs[0].interiors[0]).contains(Point(0, 0))
+        level = "joint on the seal land" if z > P.BASE_T else "fill of the radial groove (arc only: open across the visor front by design)"
+        need = z > P.BASE_T
+        if need and not closed:
+            fails.append(f"perimeter bead at z = {z:.2f} is not one closed ring ({len(pcs)} pieces)")
+        brow.append(dict(section_z=round(z, 3), level=level, pieces=len(pcs), closed_ring_round_the_interior=closed, area_mm2=round(sec.area, 2),
+                         status="ok" if (closed or not need) else "FAIL"))
+    # (c) seal lands
+    from shapely.geometry import Polygon as SPoly
+    lrow = []
+
+    def land(name, value, note=""):
+        lrow.append(dict(seal=name, land_width_mm=R3(value), note=note))
+    bsec = G.section_polys(S["seal_bead"], "z", 0.5 * (P.BASE_T + P.LEDGE_Z0))
+    face = G.section_polys(S["tub"], "z", P.LEDGE_Z0 + 1e-3).difference(G.section_polys(S["tub"], "z", P.LEDGE_Z0 - 1e-3).buffer(1e-6))   # tub faces at the seal plane
+    joint = bsec.intersection(face).intersection(G.section_polys(S["base_plate"], "z", P.BASE_T - 1e-3))
+    ws = []
+    for ang in np.arange(-179.5, 180.0, 1.0):
+        ray = __import__("shapely.geometry", fromlist=["LineString"]).LineString([(0, 0), (30 * math.cos(math.radians(ang)), 30 * math.sin(math.radians(ang)))])
+        ws.append(joint.intersection(ray).length)
+    land("base perimeter: bead between the tub seal face and the base top, narrowest radial width", min(ws),
+         f"arc {P.BASE_R - P.LAND_RI:.2f}, front {P.BASE_FLAT - P.LAND_FLAT_IN:.2f}; plus the fill of the {P.CLR} mm radial groove ({P.BASE_T - P.RIM_Z:.2f} deep)")
+    if min(ws) < 0.3:
+        fails.append(f"seal land interrupted: bead width {min(ws):.3f} mm at one azimuth")
+    psec = G.section_polys(S["pcb_adhesive"], "z", 0.5 * (P.PSA_Z0 + P.PSA_Z1))
+    pg = max(getattr(psec, "geoms", [psec]), key=lambda g_: g_.area)
+    ext = pg.exterior
+    for ring in pg.interiors:
+        hole = SPoly(ring); c0 = hole.centroid
+        if hole.contains(Point(P.GRAIN_X, P.GRAIN_Y)) or hole.distance(Point(P.GRAIN_X, P.GRAIN_Y)) < P.GRAIN_R:
+            nm = "adhesive sheet: grain opening to the PCB edge"
+        elif abs(c0.y - P.PAD_Y) < 0.5:
+            nm = "adhesive sheet: pad slot to the PCB edge"
+        else:
+            k = min(range(len(P.BALL_XY)), key=lambda i_: math.hypot(c0.x - P.BALL_XY[i_][0], c0.y - P.BALL_XY[i_][1]))
+            nm = f"adhesive sheet: foot hole {k + 1} to the PCB edge (the hole itself is filled with epoxy)"
+        land(nm, hole.distance(ext), "the sheet is the only barrier at the pad slot and the grain opening; a fillet round the PCB edge is the second one")
+    for s_ in ("L", "R"):
+        wsec = G.section_polys(S[f"window_bond_{s_}"], "y", 0.5 * (P.WIN_RECESS_FLOOR_Y + P.Y_VISOR - P.WIN_T))
+        wg = max(getattr(wsec, "geoms", [wsec]), key=lambda g_: g_.area)
+        land(f"visor window {s_}: adhesive frame, narrowest side", SPoly(wg.interiors[0]).distance(wg.exterior) if wg.interiors else 0.0,
+             f"sides {(P.WIN_W - 2 * P.OPEN_HALF_W) / 2:.2f}, sill {P.OPEN_Z0 - P.WIN_Z0:.2f}, top {P.WIN_Z0 + P.WIN_H - P.OPEN_Z1:.2f}; the side gaps of the recess are filled too")
+    land("cover glass: tape ring", (P.CG_D - M["cover_tape_id"]) / 2, "VHB ring on the recess floor")
+    land("vent: adhesive ring of the membrane disc", (M["vent_od"] - M["vent_area_dia"]) / 2, "PROVISIONAL part data")
+    land("ball feet: epoxy plug in the through hole, length of the leak path", P.BASE_T, f"annulus {(P.BALL_HOLE_D - P.BALL_D) / 2:.3f} round the ball, then the backfilled sheet hole")
+    notes = ["air-solid test: a box minus all marker solids; each remaining solid is one connected body of air. The marker is closed when the "
+             "outside and the cavity are different bodies. Adhesives are modelled as cured, at nominal size; this proves that no modelled opening "
+             "by-passes a seal - it does not prove that the adhesive wets or fills (leak test of every unit)",
+             f"free air volume of the sealed cavity: {v_cav:.0f} mm3 (for the leak-test and vent calculations); it includes the cell between cover glass and LCD, "
+             f"which breathes through the {M['lcd_psa_vent_w']} mm channel of the LCD adhesive frame",
+             "the round PCB locating hole is closed by the foot of post E- that seats round it: 0.39 mm3 of trapped air, harmless; the slot is longer "
+             "than the post foot and stays open to the cavity",
+             "first rev C model: two key notches crossed the seal land and connected cavity and outside (design review); the base plate now has a "
+             "plain edge and the bead is one ring"]
+    return res(13, "seal continuity (air-solid test)", not fails,
+               (f"outside and inner cavity are separate air solids (cavity {v_cav:.0f} mm3 incl. the cell under the cover glass); perimeter bead is one closed ring, "
+                f"narrowest joint {min(ws):.2f} mm; adhesive-sheet lands {min(r['land_width_mm'] for r in lrow if r['seal'].startswith('adhesive sheet')):.2f} mm and more"
+                if not fails else "FAILED: " + "; ".join(dict.fromkeys(fails))),
+               [dict(title="Probe points", rows=prow), dict(title="Connected air solids (box minus all marker solids)", rows=arow),
+                dict(title="Perimeter bead sections", rows=brow), dict(title="Seal lands", rows=lrow)], notes, warns)
+
+
+# ==============================================================================================
+# 14. assembly paths
+# ==============================================================================================
+def _turn_x(shape, y0, z0, deg):
+    """Rotate about the axis parallel to x through (y0, z0); positive angle lifts +y points to +z."""
+    return shape.rotate(cq.Vector(0, y0, z0), cq.Vector(1, y0, z0), deg) if abs(deg) > 1e-12 else shape
+
+
+def check_assembly_paths(parts):
+    """Blind assembly steps proven on the solids: (a) the LCD glass (with its adhesive frame) tilted in past the seating
+    ledge; (b) the PCB / base unit lowered straight into the tub with the lateral error a guide may leave; (c) the same
+    unit closed about a hinge behind the tub (the motion that lets the LCD tail be mated with the unit open)."""
+    S = _solids(parts)
+    tub = S["tub"]
+    fails, warns = [], []
+    lim = 1e-4
+    # ---------------- (a) LCD tilt-in
+    lcd = cq.Compound.makeCompound([S["lcd_glass"], S["lcd_adhesive"]])
+    tau, bias = M["lcd_tilt_deg"], M["lcd_bias"]
+    y0, z0 = P.LCD_Y0, P.BOND_Z                               # rear top edge of the glass + frame
+    rise = P.LCD["dy"] * math.sin(math.radians(tau))          # the front edge trails this far behind the rear edge
+    seq = [(tau, bias, -(z0 - P.RIM_Z - 0.1), "rear edge enters the rim, glass tilted, shifted toward the visor"),
+           (tau, bias, -(z0 - P.LEDGE_Z0 - 0.05), "rear edge at the underside of the seating ledge"),
+           (tau, bias, -(z0 - 0.5 * (P.LEDGE_Z0 + P.LEDGE_Z1)), "rear corners inside the ledge ring"),
+           (tau, bias, -(z0 - P.LEDGE_Z1 - 0.05), "rear edge leaves the ledge"),
+           (tau, bias, -(z0 - P.LEDGE_Z1 - 0.9), "rear edge above the ledge"),
+           (tau, bias, -(z0 - (P.SPIGOT_Z0 + rise) + 0.15), "last shifted pose: front edge just below the spigot tips"),
+           (tau, 0.0, -(z0 - (P.SPIGOT_Z0 + rise) + 0.15), "glass pushed back to its final y (rear corners above the ledge)"),
+           (tau, 0.0, -0.8, "rear edge rising to the roof"), (tau, 0.0, -0.3, "rear edge 0.3 below the bonding plane"),
+           (0.66 * tau, 0.0, -0.2, "front hinged up"), (0.33 * tau, 0.0, -0.1, "front hinged up"), (1.0, 0.0, -0.05, "nearly flat"),
+           (0.0, 0.0, 0.0, "seated on the bonding plane (contact)")]
+    lrow = []
+    for i, (t_, dy, dz, what) in enumerate(seq, 1):
+        sh = _turn_x(lcd, y0, z0, -t_).translate(cq.Vector(0, dy, dz))
+        v = common_volume(sh, tub)
+        d = min_distance(sh, tub)
+        zf = z0 + dz - P.LCD["dy"] * math.sin(math.radians(t_))
+        ok = v < lim
+        if not ok:
+            fails.append(f"LCD tilt-in pose {i}: {v:.4f} mm3 of interference with the tub")
+        lrow.append(dict(pose=i, what=what, tilt_deg=round(t_, 2), shift_toward_visor_mm=dy, rear_edge_z=R3(z0 + dz), front_edge_z=R3(zf),
+                         interference_with_tub_mm3=round(v, 5), smallest_gap_to_tub_mm=R3(d), status="ok" if ok else "FAIL"))
+    flat = lcd.translate(cq.Vector(0, P.CLR, -(z0 - 0.5 * (P.LEDGE_Z0 + P.LEDGE_Z1))))
+    lrow.append(dict(pose="-", what=f"for comparison: glass kept FLAT and shifted {P.CLR} (the rev B method, no longer used)", tilt_deg=0.0, shift_toward_visor_mm=P.CLR,
+                     rear_edge_z=R3(0.5 * (P.LEDGE_Z0 + P.LEDGE_Z1)), front_edge_z=R3(0.5 * (P.LEDGE_Z0 + P.LEDGE_Z1)),
+                     interference_with_tub_mm3=round(common_volume(flat, tub), 5), smallest_gap_to_tub_mm=R3(min_distance(flat, tub)), status="information"))
+    gap_ledge = min(r["smallest_gap_to_tub_mm"] for r in lrow[1:4])
+    if gap_ledge < P.CLR - NUM_TOL:
+        fails.append(f"LCD tilt-in: only {gap_ledge:.3f} mm to the ledge")
+    # ---------------- (b), (c) PCB / base unit
+    unit_names = ["main_pcb", "camera_L", "camera_R", "prism_L", "prism_R", "battery", "pcb_adhesive", "base_plate"] + \
+                 [f"{k}_{i}" for i in range(1, len(P.BALL_XY) + 1) for k in ("ball", "ball_epoxy")]
+    optics = cq.Compound.makeCompound([S[n] for n in ("camera_L", "camera_R", "prism_L", "prism_R")])
+    board = cq.Compound.makeCompound([S[n] for n in ("main_pcb", "battery", "pcb_adhesive", "base_plate")])
+    fixed = cq.Compound.makeCompound([S[n] for n in ("lcd_glass", "lcd_adhesive", "foam_pad", "vent")])
+    o = M["join_offset"]
+    offs = [(0.0, 0.0), (o, o), (o, -o), (-o, o), (-o, -o)]
+    jrow = []
+    for drop in M["join_drops"]:
+        worst, dmin_o, dmin_b = 0.0, float("inf"), float("inf")
+        for ox, oy in offs:
+            mv = cq.Vector(ox, oy, -drop)
+            a_, b_ = optics.translate(mv), board.translate(mv)
+            worst = max(worst, common_volume(a_, tub), common_volume(b_, tub))
+            if (ox, oy) == (0.0, 0.0):
+                worst = max(worst, common_volume(b_, fixed))
+            else:
+                dmin_o = min(dmin_o, min_distance(a_, tub))
+                if (ox, oy) == (o, o):
+                    dmin_b = min_distance(b_, tub)
+        ok = worst < lim
+        if not ok:
+            fails.append(f"PCB / base unit {drop} mm below its seat with {o} mm lateral error: {worst:.4f} mm3 of interference")
+        jrow.append(dict(unit_below_its_seat_mm=drop, lateral_error_tested_mm=f"0 and +-{o} in x and y", prism_top_z=R3(P.PRISM_Z1 - drop), pcb_top_z=R3(P.PCB_Z1 - drop),
+                         worst_interference_mm3=round(worst, 5), cameras_and_prisms_to_tub_mm=R3(dmin_o), board_and_base_to_tub_mm=R3(dmin_b),
+                         status="ok" if ok else "FAIL"))
+    hy, hz = M["hinge_y"], M["hinge_z"]
+    hrow = []
+    for th in M["hinge_open_deg"]:
+        a_, b_ = _turn_x(optics, hy, hz, -th), _turn_x(board, hy, hz, -th)
+        v = max(common_volume(a_, tub), common_volume(b_, tub), common_volume(b_, fixed))
+        d_o, d_b = min_distance(a_, tub), min_distance(b_, tub)
+        ok = v < lim
+        if not ok:
+            fails.append(f"hinged close, unit open by {th} deg: {v:.4f} mm3 of interference")
+        j1 = next(q for q in P.TOP_PARTS if q["ref"] == "J1")
+        my, mz = j1["y"] - j1["dy"] / 2, P.FLEX_ZB
+        t = math.radians(th)
+        qy = hy + (my - hy) * math.cos(t) + (mz - hz) * math.sin(t); qz = hz - (my - hy) * math.sin(t) + (mz - hz) * math.cos(t)
+        hrow.append(dict(unit_open_by_deg=th, front_edge_of_the_base_below_the_rim_mm=R3((P.BASE_FLAT - hy) * math.sin(t) - P.RIM_Z), interference_mm3=round(v, 5),
+                         cameras_and_prisms_to_tub_mm=R3(d_o), board_and_base_to_tub_mm=R3(d_b),
+                         J1_mouth_to_the_glass_rear_edge_mm=R3(math.hypot(qy - P.LCD_Y0, qz - P.LCD_Z0)), status="ok" if ok else "FAIL"))
+    cap = (P.LOC_ROUND[2] - (P.SPIGOT_D - 2 * M["spigot_tip_chamfer"])) / 2
+    notes = [f"(a) LCD: glass with its adhesive frame, rear edge first at {tau} deg, shifted {bias} mm toward the visor while the rear corners pass the "
+             f"seating ledge (r {P.LEDGE_RI}); the front edge is then still below the spigot tips (z {P.SPIGOT_Z0:.1f}) and the post feet, so the shift is free. Smallest gap to the "
+             f"ledge {gap_ledge:.2f} mm (flat insertion: {lrow[-1]['smallest_gap_to_tub_mm']} mm). The frame is applied to the LCD, not to the roof",
+             f"(b) the unit = PCB with cameras, prisms, battery, adhesive sheet, base plate and potted feet (the base is laminated to the PCB before the "
+             f"join). Straight descent with +-{o} mm of lateral error in x and y until the spigots engage ({P.SPIGOT_H} mm before the seat); the "
+             f"{M['spigot_tip_chamfer']} mm tip chamfer of the spigots captures up to {cap:.3f} mm. The hood gaskets (compressible) and the wet seal adhesive are not part of this test",
+             f"(c) hinge axis parallel to x at y = {hy}, z = {hz} (join fixture). The last column is the straight distance from the mouth of J1 to the rear "
+             "edge of the LCD glass: the length of free tail needed to mate the connector at that opening (the real tail length is PROVISIONAL)",
+             "these are nominal solids: the paths show that the motion exists and how much room it has, not that every printed part allows it "
+             "(go gauges in the assembly sequence)"]
+    return res(14, "assembly paths (LCD tilt-in, PCB / base join)", not fails,
+               (f"LCD glass tilts in at {tau} deg with {gap_ledge:.2f} mm to the ledge ({len(seq)} poses, no interference); the PCB / base unit descends with "
+                f"+-{o} mm lateral error ({len(jrow)} heights) and closes about the fixture hinge ({len(hrow)} angles) without interference"
+                if not fails else "FAILED: " + "; ".join(fails)),
+               [dict(title="LCD tilt-in (glass + adhesive frame against the tub)", rows=lrow),
+                dict(title="PCB / base unit, straight descent", rows=jrow), dict(title="PCB / base unit, hinged close", rows=hrow)], notes, warns)
+
+
 CHECKS = [check_interference, check_clearances, check_fov, check_fold, check_walls, check_trapped, check_cradle, check_mass,
-          check_quoting, check_posts, check_layout_script, check_keepouts]
+          check_quoting, check_posts, check_layout_script, check_keepouts, check_seal, check_assembly_paths]
 
 
 # ==============================================================================================
@@ -1405,7 +1855,7 @@ def write_report(results, elapsed=None):
     md = [f"# GL-1 mechanical check report (parameters rev {P.REV})", "",
           "Generated by `python3 cad/build.py`. PROVISIONAL: nothing has been built or measured; every number below is computed from the CAD model.",
           "", f"**Overall: {'all checks pass' if ok else 'CHECKS FAILED'}**; {sum(len(r['warnings']) for r in results)} warnings; "
-          f"{len(DEV_OPEN)} recorded deviations from the specification still stand, {len(DEV_CLOSED)} were closed by revision C (listed at the end).", "",
+          f"{len(DEV_OPEN)} recorded deviations from the specification still stand, {len(DEV_CLOSED)} are closed (listed at the end).", "",
           "| # | Check | Result | Warnings | Summary |", "|---|---|---|---|---|"]
     for r in results:
         md.append(f"| {r['id']} | {r['name']} | {'PASS' if r['passed'] else 'FAIL'} | {len(r['warnings'])} | {r['summary'].replace('|', '/')} |")
@@ -1424,7 +1874,7 @@ def write_report(results, elapsed=None):
     for d in DEV_OPEN:
         md += [f"- **{d['id']} {d['part']}** [{d['status']}]{' (YAML)' if d['yaml_change'] else ''}: required: {d['requirement']}. "
                f"Implemented: {d['implemented']}. Reason: {d['reason']}."]
-    md += ["", "Closed by revision C:", ""]
+    md += ["", "Closed:", ""]
     for d in DEV_CLOSED:
         md += [f"- {d['id']} {d['part']}: {d['requirement']} -> {d['implemented']} ({d['reason']})."]
     md.append("")

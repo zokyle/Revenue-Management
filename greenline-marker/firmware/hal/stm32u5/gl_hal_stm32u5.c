@@ -15,7 +15,8 @@
  * What it needs around it (not in this repository): the CMSIS device files
  * and startup code (startup_stm32u585xx.s, system_stm32u5xx.c), a linker
  * script, stm32u5xx_hal_conf.h with the modules ADC, CORTEX, DCMI, DMA,
- * EXTI, FLASH, GPIO, IWDG, LPTIM, OPAMP, PCD, PWR, RCC, RTC, SPI enabled,
+ * EXTI, FLASH, GPIO, ICACHE, IWDG, LPTIM, OPAMP, PCD, PWR, RCC, RTC, SPI
+ * enabled,
  * and - for gl_hal_stm32u5_usb.c - ST's USB device library with its CDC
  * class plus the usual usbd_conf.c / usbd_desc.c glue.
  *
@@ -39,6 +40,17 @@
  *             of 4.
  *   interrupts  handlers only latch a bit in a pending mask (and the
  *             DCMI / USB handlers move data); the main loop does the work.
+ *             EVERY read-modify-write of that mask is done with interrupts
+ *             masked (PRIMASK), in thread context AND in the handlers: the
+ *             handlers run at two priorities (RTC, LPTIM3, DCMI, DMA at 1;
+ *             EXTI at 2), so one can preempt another in the middle of an
+ *             update, and thread code clears bits (review finding: a lost
+ *             latch stopped the IMU sample pump).  The application does
+ *             not rely on it alone: it also polls the data-ready line.
+ *   guards    every stop / disable function returns at once if its
+ *             peripheral was never started (gl_hal.h requires stop before
+ *             start to be safe; the HAL de-initialisation functions write
+ *             through handle->Instance, which is NULL in a zeroed handle).
  *
  * IDENTIFIERS TO CHECK FIRST when this is compiled (written from memory;
  * they are collected in the "identifier map" below so that a wrong name is
@@ -47,7 +59,9 @@
  * API of the U5 HAL (it differs from the L4 one), RCC_MSIRANGE_0 = 48 MHz,
  * the MCO source names, the IRQ names of the individual EXTI lines, the
  * RTC wake-up call (the U5 version has an extra auto-clear argument), the
- * system-memory address of the ROM bootloader, flash latency for 48 MHz,
+ * system-memory address of the ROM bootloader, the temperature-sensor
+ * calibration macros (TEMPSENSOR_CAL1_ADDR ..., whether the calibration
+ * values are 14-bit), HAL_ICACHE_Enable, flash latency for 48 MHz,
  * the kernel-clock selection names (RCC_PERIPHCLK_LPTIM34, _ADCDAC, _ICLK),
  * the autonomous-mode clock macros (__HAL_RCC_LPTIMx_CLKAM_ENABLE), the
  * OPAMP init fields and the TAMP backup-register access.
@@ -143,10 +157,32 @@ static bool adc_on_;
 static volatile gl_dcmi_state_t dcmi_state_ = GL_DCMI_IDLE;
 static size_t dcmi_expect_;
 static uint32_t dcmi_deadline_ms_;
+static volatile uint32_t dcmi_done_us_; /* gl_hal_time_us() at the frame-end interrupt */
+static bool extcomin_on_;               /* LPTIM1 initialised and running */
+static bool opamp_on_;                  /* OPAMP1 initialised and running */
 
+/* Latch interrupt-source bits.  Called from handlers of two priorities and
+ * from thread context: the update is one critical section, so no bit set by
+ * a preempting handler between the load and the store can be lost. */
 static void raise_(uint32_t bit)
 {
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
     irq_pending_ |= bit & irq_enabled_;
+    if (primask == 0u) {
+        __enable_irq();
+    }
+}
+
+/* Clear latched bits (thread context), atomically for the same reason. */
+static void clear_pending_(uint32_t bits)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    irq_pending_ &= ~bits;
+    if (primask == 0u) {
+        __enable_irq();
+    }
 }
 
 /* For gl_hal_stm32u5_usb.c (received bytes). */
@@ -217,6 +253,8 @@ static gl_status_t clocks_init_(void)
 /* ROM bootloader hand-over and reset bookkeeping                           */
 /* ======================================================================= */
 
+static void gpio_clocks_(void);
+
 /* Called first thing after reset, before any clock or peripheral set-up:
  * if the previous run asked for the ROM DFU bootloader, jump to it. */
 static void dfu_check_(void)
@@ -227,7 +265,30 @@ static void dfu_check_(void)
     if (TAMP->BKP0R == GLH_DFU_MAGIC) {
         const uint32_t *vectors = (const uint32_t *)GLH_ROM_BOOTLOADER_ADDR;
         void (*entry)(void);
-        TAMP->BKP0R = 0;
+        TAMP->BKP0R = 0; /* one attempt: the next reset boots the application */
+        /* The ROM bootloader has no time-out and the consumer cradle has no
+         * reset contact.  Enter it only with VBUS present (in the cradle);
+         * with VBUS gone there is no USB host to talk to and the device
+         * would sit in the bootloader until the cell is flat.  The pin is
+         * read as a plain input: nothing else is configured yet.
+         * LIMIT: a marker left in a powered cradle whose host never issues
+         * a DFU "leave" stays in the bootloader, NOT charging (the charge
+         * enable is released), until it is lifted out and put back - a
+         * power cycle of VBUS alone does not reset the MCU.  README, open
+         * issues. */
+        {
+            const glh_pin_t *vb = &pin_[GL_PIN_VBUS_SENSE];
+            GPIO_InitTypeDef g;
+            gpio_clocks_();
+            memset(&g, 0, sizeof(g));
+            g.Pin = vb->mask;
+            g.Mode = GPIO_MODE_INPUT;
+            g.Pull = GPIO_NOPULL;
+            HAL_GPIO_Init(vb->port, &g);
+            if (HAL_GPIO_ReadPin(vb->port, vb->mask) != GPIO_PIN_SET) {
+                return; /* not in the cradle: boot the application */
+            }
+        }
         entry = (void (*)(void))vectors[1];
         __set_MSP(vectors[0]);
         entry();
@@ -326,6 +387,20 @@ static uint64_t lse_ticks_(void)
         __enable_irq();
     }
     return ((uint64_t)hi << 16) | lo;
+}
+
+uint32_t gl_hal_time_us(void)
+{
+    /* ticks * 1e6 / 32768 = ticks * 15625 / 512; 30.5 us resolution */
+    return (uint32_t)((lse_ticks_() * 15625u) >> 9);
+}
+
+void gl_hal_trace(gl_trace_point_t point)
+{
+    /* Timing instrumentation.  Nothing by default; for a run-time
+     * measurement on the bench, toggle a spare pad or write `point` to an
+     * ITM channel here. */
+    (void)point;
 }
 
 uint32_t gl_hal_tick_ms(void)
@@ -449,7 +524,9 @@ void gl_hal_rtc_set_seconds(uint32_t seconds)
 void gl_hal_wake_timer_start(uint32_t ms)
 {
     (void)HAL_RTCEx_DeactivateWakeUpTimer(&hrtc_);
-    irq_pending_ &= ~GL_IRQ_WAKE_TIMER;
+    /* called before every sleep, up to 240 times a second: this clear must
+     * not lose a bit that a handler sets at the same moment */
+    clear_pending_(GL_IRQ_WAKE_TIMER);
     if (ms == 0u) {
         return;
     }
@@ -497,7 +574,11 @@ static void gpio_clocks_(void)
 }
 
 /* EXTI trigger of an interrupt pin: the IMU lines on the rising edge, VBUS
- * and the charger STAT line on both. */
+ * and the charger STAT line on both.  INT2 (data ready) is LATCHED by the
+ * sensor unless GL_PROV_IMU_DRDY_PULSED: it stays high until the output is
+ * read, so a sample that is not fetched produces no further edge.  The
+ * application therefore also polls the line (gl_hal_gpio_read) when no
+ * interrupt has arrived for two sample periods. */
 static uint32_t exti_mode_(gl_pin_t pin)
 {
     return (pin == GL_PIN_IMU_INT1 || pin == GL_PIN_IMU_INT2) ? GPIO_MODE_IT_RISING
@@ -1003,8 +1084,11 @@ void GPDMA1_Channel0_IRQHandler(void)
 
 void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *h)
 {
-    /* end of the snapshot frame: complete only if the DMA took every byte */
+    /* end of the snapshot frame: complete only if the DMA took every byte.
+     * The time is latched HERE, in the interrupt: the application times the
+     * L R R L strips with it and may poll much later. */
     if (dcmi_state_ == GL_DCMI_BUSY) {
+        dcmi_done_us_ = gl_hal_time_us();
         dcmi_state_ = (__HAL_DMA_GET_COUNTER(h->DMA_Handle) == 0u) ? GL_DCMI_DONE
                                                                    : GL_DCMI_ERROR_SIZE;
         raise_(GL_IRQ_DCMI_DONE);
@@ -1121,6 +1205,11 @@ gl_dcmi_state_t gl_hal_dcmi_poll(size_t *bytes)
         *bytes = (st == GL_DCMI_DONE) ? dcmi_expect_ : 0u;
     }
     return st;
+}
+
+uint32_t gl_hal_dcmi_done_us(void)
+{
+    return dcmi_done_us_;
 }
 
 void gl_hal_dcmi_stop(void)
@@ -1243,6 +1332,20 @@ gl_status_t gl_hal_adc_read(gl_adc_ch_t ch, uint16_t n_avg, uint16_t sample_time
     return st;
 }
 
+float gl_hal_adc_mcu_temp_c(uint16_t counts, uint16_t vdda_mv)
+{
+    /* Two-point factory calibration (30 C and 130 C at VREF+ = 3.0 V).  The
+     * macros and the resolution of the stored values are from memory. */
+    const float cal1 = (float)*TEMPSENSOR_CAL1_ADDR;
+    const float cal2 = (float)*TEMPSENSOR_CAL2_ADDR;
+    const float at_cal = (float)counts * (float)vdda_mv / (float)TEMPSENSOR_CAL_VREFANALOG;
+    if (!(cal2 > cal1)) {
+        return 1000.0f; /* blank calibration: drivers/power.c rejects the value */
+    }
+    return (float)TEMPSENSOR_CAL1_TEMP +
+           (at_cal - cal1) * (float)(TEMPSENSOR_CAL2_TEMP - TEMPSENSOR_CAL1_TEMP) / (cal2 - cal1);
+}
+
 uint16_t gl_hal_adc_vdda_mv(void)
 {
     uint32_t raw = 0, mv;
@@ -1257,8 +1360,18 @@ uint16_t gl_hal_adc_vdda_mv(void)
 gl_status_t gl_hal_opamp_enable(bool on)
 {
     if (!on) {
-        (void)HAL_OPAMP_Stop(&hopamp_);
-        (void)HAL_OPAMP_DeInit(&hopamp_);
+        /* never touch a handle that was not initialised: HAL_OPAMP_DeInit
+         * writes through hopamp_.Instance (NULL in a zeroed handle).  This
+         * path is taken when the ADC failed to power up before the op-amp
+         * was ever enabled (drivers/grain_frontend.c). */
+        if (opamp_on_) {
+            (void)HAL_OPAMP_Stop(&hopamp_);
+            (void)HAL_OPAMP_DeInit(&hopamp_);
+            opamp_on_ = false;
+        }
+        return GL_OK;
+    }
+    if (opamp_on_) {
         return GL_OK;
     }
     HAL_PWREx_EnableVddA();
@@ -1272,9 +1385,14 @@ gl_status_t gl_hal_opamp_enable(bool on)
     hopamp_.Init.InvertingInput = OPAMP_INVERTINGINPUT_IO0;       /* PA1 */
     hopamp_.Init.NonInvertingInput = OPAMP_NONINVERTINGINPUT_IO0; /* PA0 */
     hopamp_.Init.UserTrimming = OPAMP_TRIMMING_FACTORY;
-    if (HAL_OPAMP_Init(&hopamp_) != HAL_OK || HAL_OPAMP_Start(&hopamp_) != HAL_OK) {
+    if (HAL_OPAMP_Init(&hopamp_) != HAL_OK) {
         return GL_ERR_IO;
     }
+    if (HAL_OPAMP_Start(&hopamp_) != HAL_OK) {
+        (void)HAL_OPAMP_DeInit(&hopamp_); /* Instance is valid here */
+        return GL_ERR_IO;
+    }
+    opamp_on_ = true;
     return GL_OK;
 }
 
@@ -1287,6 +1405,9 @@ gl_status_t gl_hal_extcomin_start(uint16_t period_lse_ticks)
     LPTIM_OC_ConfigTypeDef oc;
     if (period_lse_ticks < 2u) {
         return GL_ERR_PARAM;
+    }
+    if (extcomin_on_) {
+        gl_hal_extcomin_stop(); /* restart with the new period */
     }
     __HAL_RCC_LPTIM1_CLK_ENABLE();
     __HAL_RCC_LPTIM1_CLKAM_ENABLE(); /* keep the kernel clock in Stop 2 */
@@ -1302,6 +1423,7 @@ gl_status_t gl_hal_extcomin_start(uint16_t period_lse_ticks)
     hlptim1_.Init.Input2Source = LPTIM_INPUT2SOURCE_GPIO;
     hlptim1_.Init.RepetitionCounter = 0;
     if (HAL_LPTIM_Init(&hlptim1_) != HAL_OK) {
+        __HAL_RCC_LPTIM1_CLK_DISABLE();
         return GL_ERR_IO;
     }
     memset(&oc, 0, sizeof(oc));
@@ -1309,8 +1431,11 @@ gl_status_t gl_hal_extcomin_start(uint16_t period_lse_ticks)
     oc.OCPolarity = LPTIM_OCPOLARITY_HIGH;
     if (HAL_LPTIM_OC_ConfigChannel(&hlptim1_, &oc, LPTIM_CHANNEL_1) != HAL_OK ||
         HAL_LPTIM_PWM_Start(&hlptim1_, LPTIM_CHANNEL_1) != HAL_OK) {
+        (void)HAL_LPTIM_DeInit(&hlptim1_); /* Instance is valid here */
+        __HAL_RCC_LPTIM1_CLK_DISABLE();
         return GL_ERR_IO;
     }
+    extcomin_on_ = true;
     /* Whether the PWM pin keeps toggling in Stop 2 is PROVISIONAL
      * (GL_PROV_LPTIM_PWM_RUNS_IN_STOP2): if it does not, the application
      * stays out of Stop mode while the display is on. */
@@ -1319,9 +1444,18 @@ gl_status_t gl_hal_extcomin_start(uint16_t period_lse_ticks)
 
 void gl_hal_extcomin_stop(void)
 {
+    /* The display driver calls this unconditionally when it switches the
+     * panel off, which the application does at EVERY BOOT before the timer
+     * has ever been started.  hlptim1_ is then a zeroed handle and
+     * HAL_LPTIM_PWM_Stop / HAL_LPTIM_DeInit would write through a NULL
+     * Instance (a bus fault on the first boot of the target). */
+    if (!extcomin_on_) {
+        return;
+    }
     (void)HAL_LPTIM_PWM_Stop(&hlptim1_, LPTIM_CHANNEL_1);
     (void)HAL_LPTIM_DeInit(&hlptim1_);
     __HAL_RCC_LPTIM1_CLK_DISABLE();
+    extcomin_on_ = false;
 }
 
 /* ======================================================================= */
@@ -1341,6 +1475,10 @@ gl_status_t gl_hal_init(void)
     if (st != GL_OK) {
         return st;
     }
+    /* Instruction cache: the vision code is several million instructions
+     * per strip; without the cache every flash access pays the wait states.
+     * (1-way mode is the reset default; from memory.) */
+    (void)HAL_ICACHE_Enable();
     /* cycle counter for gl_hal_delay_us() */
     DCB->DEMCR |= DCB_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0;
@@ -1366,8 +1504,13 @@ gl_status_t gl_hal_init(void)
     gl_hal_gpio_mode(GL_PIN_FLASH_CS, GL_PIN_MODE_OUTPUT_PP);
     gl_hal_gpio_write(GL_PIN_IMU_CS, true);
     gl_hal_gpio_mode(GL_PIN_IMU_CS, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_CHG_PROG_EN, true); /* released: charging stopped */
+    /* charging stopped until the application's gate has run: with the rev C
+     * circuit the pin is released, with the inverted (default-on) circuit
+     * it is pulled low (GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE) */
+    gl_hal_gpio_write(GL_PIN_CHG_PROG_EN, GL_PROV_CHG_PROG_LOW_ALLOWS_CHARGE != 0);
     gl_hal_gpio_mode(GL_PIN_CHG_PROG_EN, GL_PIN_MODE_OUTPUT_OD);
+    extcomin_on_ = false;
+    opamp_on_ = false;
     gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT_PULLUP);
     gl_hal_gpio_mode(GL_PIN_VBUS_SENSE, GL_PIN_MODE_INPUT);
     gl_hal_gpio_mode(GL_PIN_IMU_INT1, GL_PIN_MODE_INPUT);

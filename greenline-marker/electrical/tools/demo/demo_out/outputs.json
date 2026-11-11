@@ -1,0 +1,280 @@
+{
+ "bom": {
+  "cost_per_board": 58.06,
+  "lines": 31,
+  "parts_dnp": 0,
+  "parts_fitted": 91,
+  "unpriced_refs": []
+ },
+ "drc": "KiCad DRC 0 error(s), 0 unconnected, 35 warning(s) (silk_edge_clearance 1, silk_over_copper 34)",
+ "drc_clean": true,
+ "drill_tables": {
+  "greenline_demo-NPTH.drl": [
+   [
+    1.15,
+    1
+   ]
+  ],
+  "greenline_demo-PTH.drl": [
+   [
+    0.25,
+    284
+   ]
+  ]
+ },
+ "files": [
+  {
+   "bytes": 4576,
+   "path": "assembly/greenline_demo-bom.csv",
+   "sha256": "4e04f55bbb7b89b26fc203025214a183d3e50e98fcf8e27c723563ce256c5f13"
+  },
+  {
+   "bytes": 6499,
+   "path": "assembly/greenline_demo-pos.csv",
+   "sha256": "83abf1d573483ea8d9b8e0616ef2f0b838bb49cf86553082e58a22a22c19a36e"
+  },
+  {
+   "bytes": 4087,
+   "path": "fab/README.txt",
+   "sha256": "242a0c0028ec755dd870a17ea4dc2232f974966a30b6e43cba231b68a850b9cd"
+  },
+  {
+   "bytes": 43027,
+   "path": "fab/greenline_demo-B_Cu.gbr",
+   "sha256": "f4f8a8a7cc3d42276fd1768bb188290621aa009ec1c3505c4f274da621cc2052"
+  },
+  {
+   "bytes": 4140,
+   "path": "fab/greenline_demo-B_Mask.gbr",
+   "sha256": "cd2ef5b263b83e974609ae08c12204f220ca51cbbe0612467a18889876e47a5e"
+  },
+  {
+   "bytes": 3872,
+   "path": "fab/greenline_demo-B_Paste.gbr",
+   "sha256": "1233220d1b959a6217b15987219847305beecee994577551cc28a49a730d6691"
+  },
+  {
+   "bytes": 7169,
+   "path": "fab/greenline_demo-B_Silkscreen.gbr",
+   "sha256": "d6ac2de17b8e663058cf4086093615bb3efeaa6c1432da8d3ce9f7ad74acce01"
+  },
+  {
+   "bytes": 800,
+   "path": "fab/greenline_demo-Edge_Cuts.gbr",
+   "sha256": "e47fa7de5eb1b9d5cad544ed9b1121f716033df4d7dc94fc518f00124aa0af7b"
+  },
+  {
+   "bytes": 91517,
+   "path": "fab/greenline_demo-F_Cu.gbr",
+   "sha256": "f3973e731b9b50e0f71436328e7572979373de7f5f37e67244731acb1cd315f8"
+  },
+  {
+   "bytes": 50888,
+   "path": "fab/greenline_demo-F_Mask.gbr",
+   "sha256": "a83fc89f28f09884feb56279e73192fd900344967c2c13bd59e9aeeb076a19df"
+  },
+  {
+   "bytes": 11646,
+   "path": "fab/greenline_demo-F_Paste.gbr",
+   "sha256": "5657cc5c5c8e80eed2b1cd0468721cc0dbaf2cd1995736440653c8b468bf8f1a"
+  },
+  {
+   "bytes": 62162,
+   "path": "fab/greenline_demo-F_Silkscreen.gbr",
+   "sha256": "90e4e0f1b03a0a9806addcd2ca6dcee8e57a13fc77364bea3dba21aa5f23e500"
+  },
+  {
+   "bytes": 169411,
+   "path": "fab/greenline_demo-In1_Cu.gbr",
+   "sha256": "7b6c428e2e6dad9de46d5420bef0146ef9a2101566fa047bb8d2fa04191f0956"
+  },
+  {
+   "bytes": 143784,
+   "path": "fab/greenline_demo-In2_Cu.gbr",
+   "sha256": "adb67882d9efcff0b939b153a6883475396c30175b18a0a8d5b4d082d7cfd161"
+  },
+  {
+   "bytes": 18473,
+   "path": "fab/greenline_demo-NPTH-drl_map.gbr",
+   "sha256": "42d227265269c29cb37911a76a5a3bc1964adcdf78fa4c3ca556050d16a3f39c"
+  },
+  {
+   "bytes": 295,
+   "path": "fab/greenline_demo-NPTH.drl",
+   "sha256": "eb1d4c68b1c8c95feddcb434c139c7f8f1d6282b57d8c3a6c71c531b6346fbb0"
+  },
+  {
+   "bytes": 41785,
+   "path": "fab/greenline_demo-PTH-drl_map.gbr",
+   "sha256": "198ae6c242935cf10aa7fd18a6562b7be6c82567e9a758a735f7c300da5d8fcc"
+  },
+  {
+   "bytes": 3540,
+   "path": "fab/greenline_demo-PTH.drl",
+   "sha256": "bee62bf44c22c5b35de79a597a7299641fc7fb48ae650a33dfd2cea7eece6cc8"
+  },
+  {
+   "bytes": 3668,
+   "path": "fab/greenline_demo-job.gbrjob",
+   "sha256": "aa8d2bf0f999058f4d3015ce8dca940049506ccb30269819ea654fd69b747f61"
+  },
+  {
+   "bytes": 548793,
+   "path": "greenline_demo-board.step",
+   "sha256": "3af7b2dad1b19a01281a7dd57c4571c83525f3b9d8b7a38c21b2b84abe28432c"
+  },
+  {
+   "bytes": 147694,
+   "path": "greenline_demo-fab.zip",
+   "sha256": "046af000d31d7834a2b877c57e52f7c4c4979b09252323c9f0c82522ff8e28f9"
+  },
+  {
+   "bytes": 71542,
+   "path": "greenline_demo-mechanical.json",
+   "sha256": "e86e3a22430ae55cd3da4dcbc8aa2cb9f938507933ad086d40caff33a227745e"
+  },
+  {
+   "bytes": 78865,
+   "path": "greenline_demo-netlist.json",
+   "sha256": "95883ac6b920297980def51147e18e1e19a11cb692772a4320a7f8dd590554be"
+  },
+  {
+   "bytes": 148860,
+   "path": "renders/greenline_demo-In1_Cu.png",
+   "sha256": "72ae12e2f575e6047751ff6cd4ca652848533ccb2c990d924d7948a7d1ab1671"
+  },
+  {
+   "bytes": 318877,
+   "path": "renders/greenline_demo-In1_Cu.svg",
+   "sha256": "1341ea11fd1c37611c4727800b5568d2b24e6d707a6125f4a7a533492913a23d"
+  },
+  {
+   "bytes": 142366,
+   "path": "renders/greenline_demo-In2_Cu.png",
+   "sha256": "f25898cd2911bfb675274d7aa3fbe8443e50306c5c9bf792c64018e66ea8a846"
+  },
+  {
+   "bytes": 306562,
+   "path": "renders/greenline_demo-In2_Cu.svg",
+   "sha256": "160e3d55539f6441e6fb7a7f9ab416bb988851216774ff74477b13aef803f221"
+  },
+  {
+   "bytes": 126147,
+   "path": "renders/greenline_demo-bottom.png",
+   "sha256": "50aab840021a03223d940ef4918237cdf0c66a104b1fa3b4f8a39522cdb88226"
+  },
+  {
+   "bytes": 365759,
+   "path": "renders/greenline_demo-bottom.svg",
+   "sha256": "8fd3eb88735bc01d949789f11e58646a1a5ac10a7307fd4c3edfd792558f10df"
+  },
+  {
+   "bytes": 186183,
+   "path": "renders/greenline_demo-top.png",
+   "sha256": "a73d91a29140cb1fa8f502ac6b8727f8a6c2141a36c2ec3cee4d6360bde524d0"
+  },
+  {
+   "bytes": 549830,
+   "path": "renders/greenline_demo-top.svg",
+   "sha256": "d43bfcf7d7bdb9da8e6dfb676cc903fad96946ff49dd241681eb2bd6537c8442"
+  },
+  {
+   "bytes": 1392,
+   "path": "renders/renders.json",
+   "sha256": "884b17cd7543b9f1aea05038c964060632f5bb4061388122385812decfaeebc3"
+  }
+ ],
+ "ok": true,
+ "position_rows": 91,
+ "problems": [],
+ "renders": {
+  "In1_Cu": {
+   "dpi": 600,
+   "file": "greenline_demo-In1_Cu.png",
+   "layers": [
+    "In1.Cu",
+    "Edge.Cuts"
+   ],
+   "mirrored": false,
+   "origin_px": [
+    522.205,
+    433.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    1045,
+    956
+   ],
+   "svg": "greenline_demo-In1_Cu.svg",
+   "view": "In1.Cu seen from above",
+   "x_sign": 1
+  },
+  "In2_Cu": {
+   "dpi": 600,
+   "file": "greenline_demo-In2_Cu.png",
+   "layers": [
+    "In2.Cu",
+    "Edge.Cuts"
+   ],
+   "mirrored": false,
+   "origin_px": [
+    522.205,
+    433.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    1045,
+    956
+   ],
+   "svg": "greenline_demo-In2_Cu.svg",
+   "view": "In2.Cu seen from above",
+   "x_sign": 1
+  },
+  "bottom": {
+   "dpi": 600,
+   "file": "greenline_demo-bottom.png",
+   "layers": [
+    "B.Cu",
+    "B.Fab",
+    "B.SilkS",
+    "Edge.Cuts"
+   ],
+   "mirrored": true,
+   "origin_px": [
+    522.595,
+    433.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    1045,
+    956
+   ],
+   "svg": "greenline_demo-bottom.svg",
+   "view": "bottom side seen from below (mirrored)",
+   "x_sign": -1
+  },
+  "top": {
+   "dpi": 600,
+   "file": "greenline_demo-top.png",
+   "layers": [
+    "F.Cu",
+    "F.Fab",
+    "F.SilkS",
+    "Edge.Cuts"
+   ],
+   "mirrored": false,
+   "origin_px": [
+    522.205,
+    433.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    1045,
+    956
+   ],
+   "svg": "greenline_demo-top.svg",
+   "view": "top side seen from above",
+   "x_sign": 1
+  }
+ }
+}

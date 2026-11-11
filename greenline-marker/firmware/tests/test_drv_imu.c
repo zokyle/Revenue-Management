@@ -6,6 +6,7 @@
  */
 #include "gl_test.h"
 
+#include "gl_provisional.h"
 #include "gl_tilt.h"
 #include "gl_trace_util.h"
 #include "lsm6dsv16x.h"
@@ -64,6 +65,20 @@ GL_TEST(test_measure_mode_registers_and_scaling)
     GL_CHECK_EQ(gl_sim_imu_reg(0x15), 0x03); /* +-1000 dps */
     GL_CHECK_EQ(gl_sim_imu_reg(0x17), 0x00); /* +-2 g */
     GL_CHECK_EQ(gl_sim_imu_reg(0x0E), 0x01); /* accel data ready on INT2 */
+    /* CTRL4 is WRITTEN (not left to its reset value): latched data-ready
+     * unless GL_PROV_IMU_DRDY_PULSED */
+    GL_CHECK_EQ(gl_sim_imu_reg(0x13), (GL_PROV_IMU_DRDY_PULSED != 0) ? 0x02 : 0x00);
+    {
+        bool ctrl4_written = false;
+        for (size_t i = 0; i < gl_sim_trace_count(); i++) {
+            const gl_sim_trace_t *t = gl_sim_trace_at(i);
+            const uint8_t *b = (t->type == (uint8_t)GL_SIM_TR_SPI_XFER) ? gl_sim_trace_bytes(t) : NULL;
+            if (b != NULL && t->b == (uint16_t)GL_SIM_DEV_IMU && t->c == 2u && b[0] == 0x13u) {
+                ctrl4_written = true;
+            }
+        }
+        GL_CHECK(ctrl4_written);
+    }
     GL_CHECK_NEAR(imu_.accel_g_per_lsb, 0.061e-3, 1e-9);
     GL_CHECK_NEAR(imu_.gyro_rad_s_per_lsb, 35.0e-3 * 3.14159265358979 / 180.0, 1e-9);
     GL_CHECK_NEAR(imu_.sample_hz, 240.0, 1e-6);
@@ -89,6 +104,118 @@ GL_TEST(test_measure_mode_registers_and_scaling)
     gl_sim_imu_set_temperature(-4.25f);
     GL_CHECK_EQ(gl_imu_read_temperature(&imu_, &t), GL_OK);
     GL_CHECK_NEAR(t, -4.25, 0.01);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* Review findings: the temperature read converted whatever two bytes the
+ * bus returned (all-ones = 24.996 C, all-zeros = 25.000 C, both "valid");
+ * the charge gate hangs on it.  It now proves the sensor is alive in the
+ * same call.  gl_imu_read() likewise refuses a burst nobody drove, and
+ * gl_imu_verify() finds a part that has lost its configuration. */
+GL_TEST(test_liveness_checks)
+{
+    float t = -99.0f;
+    gl_imu_raw_t s;
+    bool ready = true;
+    uint8_t bus[16];
+
+    fresh_();
+    GL_CHECK_EQ(gl_imu_init(&imu_, NULL), GL_OK);
+    GL_CHECK_EQ(gl_imu_start_measure(&imu_), GL_OK);
+    gl_sim_imu_set_temperature(31.5f);
+    gl_hal_delay_ms(20);
+    /* exact traffic of a good temperature read: WHO_AM_I, CTRL1, OUT_TEMP */
+    gl_sim_trace_clear();
+    GL_CHECK_EQ(gl_imu_read_temperature(&imu_, &t), GL_OK);
+    GL_CHECK_EQ(tr_spi_bytes(0, gl_sim_trace_count(), GL_SIM_DEV_IMU, bus, sizeof(bus)), 2 + 2 + 3);
+    GL_CHECK_EQ(bus[0], 0x8F); /* WHO_AM_I | read */
+    GL_CHECK_EQ(bus[2], 0x90); /* CTRL1 | read */
+    GL_CHECK_EQ(bus[4], 0xA0); /* OUT_TEMP_L | read */
+    GL_CHECK_NEAR(t, 31.5, 0.01);
+    GL_CHECK_EQ(gl_imu_verify(&imu_), GL_OK);
+
+    /* a silent bus (MISO reads 0xFF): not 24.996 C */
+    gl_sim_imu_set_present(false);
+    t = -99.0f;
+    GL_CHECK_EQ(gl_imu_read_temperature(&imu_, &t), GL_ERR_NOT_FOUND);
+    GL_CHECK_NEAR(t, -99.0, 1e-9); /* not written */
+    GL_CHECK_EQ(gl_imu_read(&imu_, &s), GL_ERR_NOT_FOUND);
+    GL_CHECK_EQ(gl_imu_data_ready(&imu_, &ready), GL_OK);
+    GL_CHECK(!ready); /* a status byte of 0xFF is not "data ready" */
+    GL_CHECK_EQ(gl_imu_verify(&imu_), GL_ERR_NOT_FOUND);
+    gl_sim_imu_set_present(true);
+    gl_hal_delay_ms(10);
+    GL_CHECK_EQ(gl_imu_read(&imu_, &s), GL_OK);
+
+    /* a bus error is passed on, and nothing is written */
+    gl_sim_spi_fail(GL_SPI_BUS_2, 1, GL_ERR_TIMEOUT);
+    GL_CHECK_EQ(gl_imu_read_temperature(&imu_, &t), GL_ERR_TIMEOUT);
+    GL_CHECK_NEAR(t, -99.0, 1e-9);
+
+    /* the part was reset by a supply glitch: it answers, but its sensors
+     * are off and its temperature output is frozen at 0 (= 25.000 C) */
+    gl_sim_imu_power_glitch();
+    GL_CHECK_EQ(gl_imu_read_temperature(&imu_, &t), GL_ERR_STATE);
+    GL_CHECK_EQ(gl_imu_verify(&imu_), GL_ERR_STATE);
+    GL_CHECK_NEAR(t, -99.0, 1e-9);
+    GL_CHECK_EQ(gl_imu_start_measure(&imu_), GL_OK);
+    GL_CHECK_EQ(gl_imu_verify(&imu_), GL_OK);
+    /* raw 0x0000 and 0xFFFF are refused even from a live part: exactly what
+     * a frozen or floating output reads as */
+    gl_sim_imu_set_temperature(25.0f);
+    GL_CHECK_EQ(gl_imu_read_temperature(&imu_, &t), GL_ERR_QUALITY);
+    gl_sim_imu_set_temperature(25.0f - 1.0f / 256.0f);
+    GL_CHECK_EQ(gl_imu_read_temperature(&imu_, &t), GL_ERR_QUALITY);
+    gl_sim_imu_set_temperature(25.0f + 2.0f / 256.0f);
+    GL_CHECK_EQ(gl_imu_read_temperature(&imu_, &t), GL_OK);
+    GL_CHECK_NEAR(t, 25.008, 0.002);
+
+    /* verify in the wake-on-motion mode: a lost MD1_CFG is found */
+    GL_CHECK_EQ(gl_imu_start_wake_on_motion(&imu_, 62), GL_OK);
+    GL_CHECK_EQ(gl_imu_verify(&imu_), GL_OK);
+    GL_CHECK_EQ(gl_imu_reg_write(0x5E, 0x00), GL_OK);
+    GL_CHECK_EQ(gl_imu_verify(&imu_), GL_ERR_STATE);
+    GL_CHECK_EQ(gl_imu_stop(&imu_), GL_OK);
+    GL_CHECK_EQ(gl_imu_verify(&imu_), GL_OK);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* Review finding: the model pulsed INT2 on every sample whether or not the
+ * output was read; the part's reset behaviour (as remembered) is LATCHED.
+ * The model now follows CTRL4: latched by default, pulsed with DRDY_PULSED. */
+GL_TEST(test_data_ready_is_latched)
+{
+    gl_imu_raw_t s;
+    unsigned edges = 0;
+    fresh_();
+    GL_CHECK_EQ(gl_imu_init(&imu_, NULL), GL_OK);
+    GL_CHECK_EQ(gl_imu_start_measure(&imu_), GL_OK);
+    gl_hal_irq_enable(GL_IRQ_IMU_INT2, true);
+    gl_hal_delay_ms(10);
+    /* the line is high and stays high; without a read there is ONE edge */
+    GL_CHECK(gl_hal_gpio_read(GL_PIN_IMU_INT2));
+    GL_CHECK_EQ(gl_hal_irq_take(), GL_IRQ_IMU_INT2);
+    gl_hal_delay_ms(100); /* 24 more samples */
+    GL_CHECK(gl_hal_gpio_read(GL_PIN_IMU_INT2));
+    GL_CHECK_EQ(gl_hal_irq_take(), 0u); /* no new edge: this is how a lost latch stalls */
+    /* reading the accelerometer output releases it; the next sample raises it */
+    GL_CHECK_EQ(gl_imu_read(&imu_, &s), GL_OK);
+    GL_CHECK(!gl_hal_gpio_read(GL_PIN_IMU_INT2));
+    gl_hal_delay_ms(5);
+    GL_CHECK(gl_hal_gpio_read(GL_PIN_IMU_INT2));
+    GL_CHECK_EQ(gl_hal_irq_take(), GL_IRQ_IMU_INT2);
+    /* pulsed mode (CTRL4 bit 1), for comparison: an edge per sample, line low */
+    GL_CHECK_EQ(gl_imu_read(&imu_, &s), GL_OK);
+    GL_CHECK_EQ(gl_imu_reg_write(0x13, 0x02), GL_OK);
+    (void)gl_hal_irq_take();
+    for (unsigned i = 0; i < 24u; i++) {
+        gl_hal_delay_us(4167);
+        if ((gl_hal_irq_take() & GL_IRQ_IMU_INT2) != 0u) {
+            edges++;
+        }
+        GL_CHECK(!gl_hal_gpio_read(GL_PIN_IMU_INT2));
+    }
+    GL_CHECK(edges >= 23u);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }
 
@@ -290,6 +417,8 @@ int main(void)
 {
     GL_RUN(test_init_exact_bytes);
     GL_RUN(test_measure_mode_registers_and_scaling);
+    GL_RUN(test_liveness_checks);
+    GL_RUN(test_data_ready_is_latched);
     GL_RUN(test_axis_mapping);
     GL_RUN(test_data_ready_interrupt_rate);
     GL_RUN(test_wake_on_motion);

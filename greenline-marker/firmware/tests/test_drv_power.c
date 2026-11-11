@@ -64,19 +64,36 @@ GL_TEST(test_measure_exact_adc_sequence)
         gl_sim_set_vbat_mv(cells[i]);
         gl_sim_trace_clear();
         GL_CHECK_EQ(gl_power_measure(&pw_), GL_OK);
-        /* exactly: ADC on, ONE conversion of the battery channel, ADC off */
-        GL_CHECK_EQ(gl_sim_trace_count(), 3);
-        if (gl_sim_trace_count() == 3u) {
+        /* exactly: ADC on, ONE conversion of the battery channel, ONE of
+         * the MCU temperature sensor (the second opinion of the charge
+         * gate), ADC off */
+        GL_CHECK_EQ(gl_sim_trace_count(), 4);
+        if (gl_sim_trace_count() == 4u) {
             const gl_sim_trace_t *t0 = gl_sim_trace_at(0), *t1 = gl_sim_trace_at(1);
-            const gl_sim_trace_t *t2 = gl_sim_trace_at(2);
+            const gl_sim_trace_t *t2 = gl_sim_trace_at(2), *t3 = gl_sim_trace_at(3);
             GL_CHECK(t0->type == GL_SIM_TR_ADC_POWER && t0->a == 1u);
             GL_CHECK(t1->type == GL_SIM_TR_ADC_READ && t1->a == (uint8_t)GL_ADC_CH_VBAT_DIV);
-            GL_CHECK(t2->type == GL_SIM_TR_ADC_POWER && t2->a == 0u);
+            GL_CHECK(t2->type == GL_SIM_TR_ADC_READ && t2->a == (uint8_t)GL_ADC_CH_MCU_TEMP);
+            GL_CHECK(t3->type == GL_SIM_TR_ADC_POWER && t3->a == 0u);
         }
         GL_CHECK_NEAR(pw_.batt_mv, cells[i], 3.0);
         GL_CHECK_EQ(pw_.percent, gl_power_percent(pw_.batt_mv));
         GL_CHECK_EQ(pw_.low, cells[i] < GL_PROV_BATT_LOW_MV);
         GL_CHECK_EQ(pw_.critical, cells[i] < GL_PROV_BATT_CRITICAL_MV);
+        GL_CHECK_EQ(pw_.storage, cells[i] < GL_PROV_BATT_STORAGE_MV);
+        GL_CHECK(pw_.mcu_temp_valid);
+    }
+    /* the MCU die temperature: follows the board, at any VDDA */
+    {
+        static const float temps[] = { -10.0f, 0.0f, 25.0f, 45.0f, 60.0f };
+        for (size_t i = 0; i < GL_ARRAY_LEN(temps); i++) {
+            gl_sim_set_mcu_temperature(temps[i]);
+            gl_sim_set_vdda_mv((uint16_t)(2700u + 40u * (unsigned)i));
+            GL_CHECK_EQ(gl_power_measure(&pw_), GL_OK);
+            GL_CHECK(pw_.mcu_temp_valid);
+            GL_CHECK_NEAR(pw_.mcu_temp_c, temps[i], 0.3);
+        }
+        gl_sim_set_vdda_mv(2800);
     }
     /* the reading follows VDDA (measured through VREFINT), so a sagging
      * 2.8 V rail does not falsify the battery voltage */
@@ -124,14 +141,14 @@ GL_TEST(test_charge_gate_window_and_hysteresis)
 {
     fresh_();
     /* no VBUS: never enabled, whatever the temperature */
-    GL_CHECK(!gl_power_charge_gate(&pw_, 25.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 25.0f, 25.0f, true));
     expect_gate_(false);
 
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     gl_power_poll_pins(&pw_);
     /* exact pin traffic of one gate call: a single write of the PROG pin */
     gl_sim_trace_clear();
-    GL_CHECK(gl_power_charge_gate(&pw_, 25.0f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 25.0f, 25.0f, true));
     GL_CHECK_EQ(gl_sim_trace_count(), 1);
     {
         const gl_sim_trace_t *t = gl_sim_trace_at(0);
@@ -141,37 +158,63 @@ GL_TEST(test_charge_gate_window_and_hysteresis)
     expect_gate_(true);
 
     /* hot side: stays on up to 45.0 C, off above; back on only at <= 43 C */
-    GL_CHECK(gl_power_charge_gate(&pw_, 44.9f, true));
-    GL_CHECK(gl_power_charge_gate(&pw_, 45.0f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 44.9f, 44.9f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 45.0f, 45.0f, true));
     expect_gate_(true);
-    GL_CHECK(!gl_power_charge_gate(&pw_, 45.1f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 45.1f, 45.1f, true));
     expect_gate_(false);
-    GL_CHECK(!gl_power_charge_gate(&pw_, 44.0f, true));
-    GL_CHECK(!gl_power_charge_gate(&pw_, 43.1f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 44.0f, 44.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 43.1f, 43.1f, true));
     expect_gate_(false);
-    GL_CHECK(gl_power_charge_gate(&pw_, 43.0f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 43.0f, 43.0f, true));
     expect_gate_(true);
 
     /* cold side: off below 0 C, back on only at >= 2 C */
-    GL_CHECK(gl_power_charge_gate(&pw_, 0.0f, true));
-    GL_CHECK(!gl_power_charge_gate(&pw_, -0.1f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 0.0f, 0.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, -0.1f, -0.1f, true));
     expect_gate_(false);
-    GL_CHECK(!gl_power_charge_gate(&pw_, 1.9f, true));
-    GL_CHECK(gl_power_charge_gate(&pw_, 2.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 1.9f, 1.9f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 2.0f, 2.0f, true));
+    expect_gate_(true);
+
+    /* two sensors (the application passes the IMU's and the MCU's die
+     * temperature as the cold and the hot end): BOTH ends must be inside
+     * the window, so one sensor reading too low cannot keep charging on */
+    GL_CHECK(gl_power_charge_gate(&pw_, 20.0f, 30.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 20.0f, 45.5f, true));   /* hot end outside */
+    expect_gate_(false);
+    GL_CHECK(!gl_power_charge_gate(&pw_, 20.0f, 43.5f, true));   /* hysteresis on the hot end */
+    GL_CHECK(gl_power_charge_gate(&pw_, 20.0f, 42.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, -0.5f, 10.0f, true));   /* cold end outside */
+    GL_CHECK(!gl_power_charge_gate(&pw_, 1.0f, 10.0f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 2.5f, 10.0f, true));
+    /* nonsense stops it: ends the wrong way round, NaN, infinity */
+    GL_CHECK(!gl_power_charge_gate(&pw_, 30.0f, 20.0f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 20.0f, 30.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, (float)NAN, 30.0f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 20.0f, 30.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 20.0f, (float)INFINITY, true));
+    expect_gate_(false);
+    GL_CHECK(gl_power_charge_gate(&pw_, 25.0f, 25.0f, true));
+    /* gl_power_charge_stop(): off at once, and the hysteresis starts over */
+    gl_power_charge_stop(&pw_);
+    expect_gate_(false);
+    GL_CHECK(!gl_power_charge_gate(&pw_, 44.0f, 44.0f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 25.0f, 25.0f, true));
     expect_gate_(true);
 
     /* temperature unknown (IMU not readable): stop */
-    GL_CHECK(!gl_power_charge_gate(&pw_, 25.0f, false));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 25.0f, 25.0f, false));
     expect_gate_(false);
     /* and a first valid reading at the edge of the window does not start it */
-    GL_CHECK(!gl_power_charge_gate(&pw_, 44.5f, true));
-    GL_CHECK(gl_power_charge_gate(&pw_, 30.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 44.5f, 44.5f, true));
+    GL_CHECK(gl_power_charge_gate(&pw_, 30.0f, 30.0f, true));
     expect_gate_(true);
 
     /* VBUS removed: released at the next gate call */
     gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
     gl_power_poll_pins(&pw_);
-    GL_CHECK(!gl_power_charge_gate(&pw_, 30.0f, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 30.0f, 30.0f, true));
     expect_gate_(false);
 
     /* sweep: the pin is low exactly when VBUS is present and the gate says so */
@@ -181,7 +224,7 @@ GL_TEST(test_charge_gate_window_and_hysteresis)
             gl_sim_set_input(GL_PIN_VBUS_SENSE, vb != 0);
             gl_power_poll_pins(&pw_);
             for (int t = -200; t <= 600; t += 5) {
-                const bool en = gl_power_charge_gate(&pw_, (float)t * 0.1f, true);
+                const bool en = gl_power_charge_gate(&pw_, (float)t * 0.1f, (float)t * 0.1f, true);
                 GL_CHECK_EQ(gl_sim_pin_drives_low(GL_PIN_CHG_PROG_EN), en);
                 if (en) {
                     GL_CHECK(vb != 0 && t >= 0 && t <= 450);
