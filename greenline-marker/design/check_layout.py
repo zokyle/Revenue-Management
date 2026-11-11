@@ -106,7 +106,7 @@ for fx, fy in fz["positions"]:
     zone = Point(fx, fy).buffer(fz["dia"] / 2, 64)
     if not pcb_poly.buffer(-0.3).contains(Point(fx, fy).buffer(fz["land_dia"] / 2)): errs.append(f"foot land at {fx},{fy} is not on the PCB")
     for p_ in parts:
-        if p_["ref"] != "BT1" and zone.intersects(rect(p_)): errs.append(f"{p_['ref']} sits over the ball foot at {fx},{fy}")
+        if p_["ref"] != "BT1" and zone.buffer(fz.get("part_margin", 0.0)).intersects(rect(p_)): errs.append(f"{p_['ref']} sits over (or within the margin of) the ball foot at {fx},{fy}")
     for b_ in post_boxes:
         if zone.intersects(b_): errs.append(f"a tub post stands on the foot zone at {fx},{fy}")
 hd = ko["camera_hoods"]
@@ -124,8 +124,16 @@ for name in ("round", "slot"):
         if hole.buffer(0.3).intersects(rect(p_)): errs.append(f"PCB locating {name} clashes with {p_['ref']}")
     if not any(abs(h_["x"] - cx) < 1e-6 and abs(h_["y"] - cy) < 1e-6 for cx, cy in pf["locating"]["centres"]):
         errs.append(f"PCB locating {name} is not under a locating post")
-    if L > pf["locating"]["size"] - 0.3 or h_["dia"] > pf["locating"]["size"] - 0.6: errs.append(f"locating post foot too small for the {name}")
+    # the slot may run the full width of the keep-out square (N9); the post seats on the strips either side of it in y
+    if L > pf["locating"]["size"] + 1e-9 or h_["dia"] > pf["locating"]["size"] - 0.6: errs.append(f"locating post foot too small for the {name}")
 if lh["round"]["x"] * lh["slot"]["x"] >= 0 or abs(lh["round"]["x"]) < abs(cam["right"]["x"]): errs.append("locating features must lie either side of the board, outboard of the cameras")
+# LCD flex tail (provisional keep-out, N10): only low parts under the fold; the connector itself is exempt
+lt = ko.get("lcd_tail")
+if lt:
+    tail = box(-lt["half_w"], lt["y"][0], lt["half_w"], lt["y"][1])
+    for p_ in parts:
+        if p_["ref"] != "J1" and p_["h"] > lt["max_part_height"] and tail.intersects(rect(p_)):
+            errs.append(f"{p_['ref']} (h {p_['h']}) is under the LCD flex tail")
 # battery lead pads and the alternative base plate
 bz = P["battery"]["pads"]["zone"]; padzone = box(bz["x"][0], bz["y"][0], bz["x"][1], bz["y"][1])
 if not keep.contains(padzone): errs.append("battery pad zone is not inside the PCB keep-in")

@@ -5,8 +5,8 @@
   "kind": "printed",
   "material": "MJF PA12, dyed black, vapor smoothed",
   "valid": true,
-  "volume_mm3": 2452.786,
-  "mass_g": 2.4773,
+  "volume_mm3": 2470.906,
+  "mass_g": 2.4956,
   "bbox_min": [
    -23.0,
    -23.0,
@@ -26,11 +26,11 @@
  {
   "name": "base_plate",
   "group": "puck",
-  "kind": "printed",
-  "material": "MJF PA12, dyed black, NOT vapor smoothed",
+  "kind": "fabricated",
+  "material": "FR-4 0.80 mm, matte black solder mask both sides, no copper, routed outline, drilled holes",
   "valid": true,
-  "volume_mm3": 1113.844,
-  "mass_g": 1.125,
+  "volume_mm3": 1005.669,
+  "mass_g": 1.8605,
   "bbox_min": [
    -21.75,
    -21.75,
@@ -39,12 +39,60 @@
   "bbox_max": [
    21.75,
    18.25,
-   0.87
+   0.8
   ],
   "size": [
    43.5,
    40.0,
-   0.87
+   0.8
+  ]
+ },
+ {
+  "name": "pcb_adhesive",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "3M 93020LE (300LSE) double-coated tape, die cut, 0.2 mm, die cut (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 231.357,
+  "mass_g": 0.2314,
+  "bbox_min": [
+   -21.1,
+   -21.1,
+   0.8
+  ],
+  "bbox_max": [
+   21.1,
+   17.3,
+   1.0
+  ],
+  "size": [
+   42.2,
+   38.4,
+   0.2
+  ]
+ },
+ {
+  "name": "seal_bead",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "dispensed seal adhesive: 0.40 joint on the land + fill of the radial groove",
+  "valid": true,
+  "volume_mm3": 49.783,
+  "mass_g": 0.0548,
+  "bbox_min": [
+   -22.0,
+   -22.0,
+   0.25
+  ],
+  "bbox_max": [
+   22.0,
+   18.25,
+   1.2
+  ],
+  "size": [
+   44.0,
+   40.25,
+   0.95
   ]
  },
  {
@@ -53,8 +101,8 @@
   "kind": "purchased",
   "material": "FR-4 + parts (envelope)",
   "valid": true,
-  "volume_mm3": 1512.431,
-  "mass_g": 3.3273,
+  "volume_mm3": 1512.373,
+  "mass_g": 3.3272,
   "bbox_min": [
    -21.1,
    -21.1,
@@ -72,50 +120,74 @@
   ]
  },
  {
-  "name": "pcb_adhesive",
+  "name": "baffle_ring",
+  "group": "puck",
+  "kind": "printed",
+  "material": "MJF PA12, dyed black, not vapor smoothed",
+  "valid": true,
+  "volume_mm3": 15.251,
+  "mass_g": 0.0154,
+  "bbox_min": [
+   -4.1,
+   -8.1,
+   0.05
+  ],
+  "bbox_max": [
+   4.1,
+   0.1,
+   0.87
+  ],
+  "size": [
+   8.2,
+   8.2,
+   0.82
+  ]
+ },
+ {
+  "name": "baffle_adhesive",
   "group": "puck",
   "kind": "adhesive",
-  "material": "3M 9472LE (300LSE) transfer tape 0.13, die cut (PROVISIONAL)",
+  "material": "opaque black double-coated tape 0.13 mm, die-cut annulus (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 153.432,
-  "mass_g": 0.1534,
+  "volume_mm3": 2.418,
+  "mass_g": 0.0024,
   "bbox_min": [
-   -21.1,
-   -21.1,
+   -4.1,
+   -8.1,
    0.87
   ],
   "bbox_max": [
-   21.1,
-   17.3,
+   4.1,
+   0.1,
    1.0
   ],
   "size": [
-   42.2,
-   38.4,
+   8.2,
+   8.2,
    0.13
   ]
  },
  {
-  "name": "seal_bead",
+  "name": "grain_potting",
   "group": "puck",
   "kind": "adhesive",
-  "material": "dispensed seal adhesive: 0.33 joint on the land + fill of the radial groove",
+  "material": "clear optical epoxy, hard, low fluorescence (PROVISIONAL, class only)",
   "valid": true,
-  "volume_mm3": 45.614,
-  "mass_g": 0.0502,
+  "volume_mm3": 99.067,
+  "mass_g": 0.1139,
   "bbox_min": [
-   -22.0,
-   -22.0,
-   0.25
+   -6.5,
+   -10.5,
+   0.05
   ],
   "bbox_max": [
-   22.0,
-   18.25,
-   1.2
+   6.5,
+   2.5,
+   1.0
   ],
   "size": [
-   44.0,
-   40.25,
+   13.0,
+   13.0,
    0.95
   ]
  },
@@ -171,34 +243,10 @@
   "name": "visor_window_L",
   "group": "puck",
   "kind": "purchased",
-  "material": "EVT: cast acrylic 0.5",
+  "material": "borosilicate 0.4 mm (D 263 T eco class), custom cut",
   "valid": true,
-  "volume_mm3": 8.5,
-  "mass_g": 0.0101,
-  "bbox_min": [
-   -12.5,
-   17.9,
-   4.2
-  ],
-  "bbox_max": [
-   -7.5,
-   18.4,
-   7.6
-  ],
-  "size": [
-   5.0,
-   0.5,
-   3.4
-  ]
- },
- {
-  "name": "window_bond_L",
-  "group": "puck",
-  "kind": "adhesive",
-  "material": "light-cure acrylic, bond line 0.05 (class only)",
-  "valid": true,
-  "volume_mm3": 0.41,
-  "mass_g": 0.0005,
+  "volume_mm3": 6.5,
+  "mass_g": 0.0163,
   "bbox_min": [
    -12.5,
    17.85,
@@ -206,13 +254,37 @@
   ],
   "bbox_max": [
    -7.5,
-   17.9,
-   7.6
+   18.25,
+   7.45
   ],
   "size": [
    5.0,
-   0.05,
-   3.4
+   0.4,
+   3.25
+  ]
+ },
+ {
+  "name": "window_bond_L",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "thixotropic light-cure adhesive: frame of side-gap fills, top bead and sill fillet (class only)",
+  "valid": true,
+  "volume_mm3": 0.91,
+  "mass_g": 0.001,
+  "bbox_min": [
+   -12.75,
+   17.85,
+   4.2
+  ],
+  "bbox_max": [
+   -7.25,
+   18.37,
+   7.55
+  ],
+  "size": [
+   5.5,
+   0.52,
+   3.35
   ]
  },
  {
@@ -221,22 +293,22 @@
   "kind": "adhesive",
   "material": "black form-in-place gasket bead, silicone-free (class only)",
   "valid": true,
-  "volume_mm3": 0.244,
-  "mass_g": 0.0003,
+  "volume_mm3": 0.429,
+  "mass_g": 0.0005,
   "bbox_min": [
    -11.95,
-   14.15,
-   4.56
+   13.85,
+   4.48
   ],
   "bbox_max": [
    -8.05,
-   14.4,
+   14.35,
    4.81
   ],
   "size": [
    3.9,
-   0.25,
-   0.25
+   0.5,
+   0.33
   ]
  },
  {
@@ -291,34 +363,10 @@
   "name": "visor_window_R",
   "group": "puck",
   "kind": "purchased",
-  "material": "EVT: cast acrylic 0.5",
+  "material": "borosilicate 0.4 mm (D 263 T eco class), custom cut",
   "valid": true,
-  "volume_mm3": 8.5,
-  "mass_g": 0.0101,
-  "bbox_min": [
-   7.5,
-   17.9,
-   4.2
-  ],
-  "bbox_max": [
-   12.5,
-   18.4,
-   7.6
-  ],
-  "size": [
-   5.0,
-   0.5,
-   3.4
-  ]
- },
- {
-  "name": "window_bond_R",
-  "group": "puck",
-  "kind": "adhesive",
-  "material": "light-cure acrylic, bond line 0.05 (class only)",
-  "valid": true,
-  "volume_mm3": 0.41,
-  "mass_g": 0.0005,
+  "volume_mm3": 6.5,
+  "mass_g": 0.0163,
   "bbox_min": [
    7.5,
    17.85,
@@ -326,13 +374,37 @@
   ],
   "bbox_max": [
    12.5,
-   17.9,
-   7.6
+   18.25,
+   7.45
   ],
   "size": [
    5.0,
-   0.05,
-   3.4
+   0.4,
+   3.25
+  ]
+ },
+ {
+  "name": "window_bond_R",
+  "group": "puck",
+  "kind": "adhesive",
+  "material": "thixotropic light-cure adhesive: frame of side-gap fills, top bead and sill fillet (class only)",
+  "valid": true,
+  "volume_mm3": 0.91,
+  "mass_g": 0.001,
+  "bbox_min": [
+   7.25,
+   17.85,
+   4.2
+  ],
+  "bbox_max": [
+   12.75,
+   18.37,
+   7.55
+  ],
+  "size": [
+   5.5,
+   0.52,
+   3.35
   ]
  },
  {
@@ -341,22 +413,22 @@
   "kind": "adhesive",
   "material": "black form-in-place gasket bead, silicone-free (class only)",
   "valid": true,
-  "volume_mm3": 0.244,
-  "mass_g": 0.0003,
+  "volume_mm3": 0.429,
+  "mass_g": 0.0005,
   "bbox_min": [
    8.05,
-   14.15,
-   4.56
+   13.85,
+   4.48
   ],
   "bbox_max": [
    11.95,
-   14.4,
+   14.35,
    4.81
   ],
   "size": [
    3.9,
-   0.25,
-   0.25
+   0.5,
+   0.33
   ]
  },
  {
@@ -435,19 +507,19 @@
   "name": "cover_glass",
   "group": "puck",
   "kind": "purchased",
-  "material": "mineral glass crystal 28.0 x 1.0",
+  "material": "mineral glass crystal 28.0 x 1.0 (EVT, not step-proof)",
   "valid": true,
   "volume_mm3": 615.752,
   "mass_g": 1.5394,
   "bbox_min": [
    -14.0,
    -14.0,
-   6.55
+   6.48
   ],
   "bbox_max": [
    14.0,
    14.0,
-   7.55
+   7.48
   ],
   "size": [
    28.0,
@@ -459,10 +531,10 @@
   "name": "cover_tape",
   "group": "puck",
   "kind": "adhesive",
-  "material": "3M VHB 5907 ring 0.2",
+  "material": "3M 9472LE transfer tape ring 0.13 mm, dia 28.0 / 25.0",
   "valid": true,
-  "volume_mm3": 40.055,
-  "mass_g": 0.0288,
+  "volume_mm3": 16.234,
+  "mass_g": 0.0162,
   "bbox_min": [
    -14.0,
    -14.0,
@@ -471,12 +543,12 @@
   "bbox_max": [
    14.0,
    14.0,
-   6.55
+   6.48
   ],
   "size": [
    28.0,
    28.0,
-   0.2
+   0.13
   ]
  },
  {
@@ -501,6 +573,54 @@
    34.0,
    10.0,
    2.0
+  ]
+ },
+ {
+  "name": "battery_lead_1",
+  "group": "puck",
+  "kind": "reference",
+  "material": "cell lead + solder joint, envelope to the YAML joint height",
+  "valid": true,
+  "volume_mm3": 12.384,
+  "mass_g": 0.0186,
+  "bbox_min": [
+   -19.15,
+   -3.9,
+   1.8
+  ],
+  "bbox_max": [
+   -17.0,
+   -1.5,
+   4.2
+  ],
+  "size": [
+   2.15,
+   2.4,
+   2.4
+  ]
+ },
+ {
+  "name": "battery_lead_2",
+  "group": "puck",
+  "kind": "reference",
+  "material": "cell lead + solder joint, envelope to the YAML joint height",
+  "valid": true,
+  "volume_mm3": 12.384,
+  "mass_g": 0.0186,
+  "bbox_min": [
+   -19.15,
+   -7.0,
+   1.8
+  ],
+  "bbox_max": [
+   -17.0,
+   -4.6,
+   4.2
+  ],
+  "size": [
+   2.15,
+   2.4,
+   2.4
   ]
  },
  {
@@ -555,10 +675,10 @@
   "name": "ball_epoxy_1",
   "group": "puck",
   "kind": "adhesive",
-  "material": "dual-cure epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
+  "material": "dual-cure or two-part epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 0.803,
-  "mass_g": 0.0009,
+  "volume_mm3": 0.88,
+  "mass_g": 0.001,
   "bbox_min": [
    -1.0,
    14.0,
@@ -603,10 +723,10 @@
   "name": "ball_epoxy_2",
   "group": "puck",
   "kind": "adhesive",
-  "material": "dual-cure epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
+  "material": "dual-cure or two-part epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 0.803,
-  "mass_g": 0.0009,
+  "volume_mm3": 0.88,
+  "mass_g": 0.001,
   "bbox_min": [
    -17.5,
    -10.5,
@@ -651,10 +771,10 @@
   "name": "ball_epoxy_3",
   "group": "puck",
   "kind": "adhesive",
-  "material": "dual-cure epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
+  "material": "dual-cure or two-part epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 0.803,
-  "mass_g": 0.0009,
+  "volume_mm3": 0.88,
+  "mass_g": 0.001,
   "bbox_min": [
    15.5,
    -10.5,
@@ -1029,6 +1149,174 @@
    8.0,
    8.0,
    3.0
+  ]
+ },
+ {
+  "name": "base_plate_pa12",
+  "group": "alt",
+  "kind": "printed",
+  "material": "HP MJF PA12, dyed black, NOT vapor smoothed, free-state flatness 0.3 max",
+  "valid": true,
+  "volume_mm3": 1114.631,
+  "mass_g": 1.1258,
+  "bbox_min": [
+   -21.75,
+   -21.75,
+   0.0
+  ],
+  "bbox_max": [
+   21.75,
+   18.25,
+   0.87
+  ],
+  "size": [
+   43.5,
+   40.0,
+   0.87
+  ]
+ },
+ {
+  "name": "pcb_adhesive_pa12",
+  "group": "alt",
+  "kind": "adhesive",
+  "material": "3M 9472LE (300LSE) adhesive transfer tape, 0.13 mm, die cut (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 153.549,
+  "mass_g": 0.1535,
+  "bbox_min": [
+   -21.1,
+   -21.1,
+   0.87
+  ],
+  "bbox_max": [
+   21.1,
+   17.3,
+   1.0
+  ],
+  "size": [
+   42.2,
+   38.4,
+   0.13
+  ]
+ },
+ {
+  "name": "seal_bead_pa12",
+  "group": "alt",
+  "kind": "adhesive",
+  "material": "dispensed seal adhesive: 0.33 joint on the land + fill of the radial groove",
+  "valid": true,
+  "volume_mm3": 45.614,
+  "mass_g": 0.0502,
+  "bbox_min": [
+   -22.0,
+   -22.0,
+   0.25
+  ],
+  "bbox_max": [
+   22.0,
+   18.25,
+   1.2
+  ],
+  "size": [
+   44.0,
+   40.25,
+   0.95
+  ]
+ },
+ {
+  "name": "grain_potting_pa12",
+  "group": "alt",
+  "kind": "adhesive",
+  "material": "clear optical epoxy, hard, low fluorescence (PROVISIONAL, class only)",
+  "valid": true,
+  "volume_mm3": 93.59,
+  "mass_g": 0.1076,
+  "bbox_min": [
+   -6.5,
+   -10.5,
+   0.05
+  ],
+  "bbox_max": [
+   6.5,
+   2.488,
+   1.0
+  ],
+  "size": [
+   13.0,
+   12.988,
+   0.95
+  ]
+ },
+ {
+  "name": "ball_epoxy_1_pa12",
+  "group": "alt",
+  "kind": "adhesive",
+  "material": "dual-cure or two-part epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 0.803,
+  "mass_g": 0.0009,
+  "bbox_min": [
+   -1.0,
+   14.0,
+   -0.0
+  ],
+  "bbox_max": [
+   1.0,
+   16.0,
+   1.0
+  ],
+  "size": [
+   2.0,
+   2.0,
+   1.0
+  ]
+ },
+ {
+  "name": "ball_epoxy_2_pa12",
+  "group": "alt",
+  "kind": "adhesive",
+  "material": "dual-cure or two-part epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 0.803,
+  "mass_g": 0.0009,
+  "bbox_min": [
+   -17.5,
+   -10.5,
+   0.0
+  ],
+  "bbox_max": [
+   -15.5,
+   -8.5,
+   1.0
+  ],
+  "size": [
+   2.0,
+   2.0,
+   1.0
+  ]
+ },
+ {
+  "name": "ball_epoxy_3_pa12",
+  "group": "alt",
+  "kind": "adhesive",
+  "material": "dual-cure or two-part epoxy: potting + backfill of the sheet hole (PROVISIONAL)",
+  "valid": true,
+  "volume_mm3": 0.803,
+  "mass_g": 0.0009,
+  "bbox_min": [
+   15.5,
+   -10.5,
+   0.0
+  ],
+  "bbox_max": [
+   17.5,
+   -8.5,
+   1.0
+  ],
+  "size": [
+   2.0,
+   2.0,
+   1.0
   ]
  }
 ]

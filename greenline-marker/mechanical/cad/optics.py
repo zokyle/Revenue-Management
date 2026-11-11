@@ -25,15 +25,21 @@ def pupil_centre(side, shift=(0.0, 0.0, 0.0)):
 
 
 def pupil_samples(n_rim=32, n_rings=6):
-    """Offsets (dx, dy) in the pupil plane: centre, filled rings and the rim. Returns (offsets, is_rim)."""
+    """Offsets (dx, dy) in the pupil plane: centre, filled rings and the rim. Returns (offsets, is_rim).
+    The rim ring always contains the four extreme points (+-r, 0) and (0, +-r): they are the rays that limit the field
+    left / right and up / down, so a limit angle found with these samples is the limit of the whole pupil disc (inner
+    rings are staggered by half a step)."""
     r = M["pupil_dia"] / 2
     pts, rim = [(0.0, 0.0)], [False]
     for k in range(1, n_rings + 1):
         rr = r * k / n_rings
+        last = k == n_rings
         m = max(6, int(round(n_rim * k / n_rings)))
+        if last:
+            m = 4 * max(2, int(math.ceil(m / 4)))            # a multiple of four, starting at angle 0: the extreme points are samples
         for i in range(m):
-            a = 2 * math.pi * (i + 0.5 * (k % 2)) / m
-            pts.append((rr * math.cos(a), rr * math.sin(a))); rim.append(k == n_rings)
+            a = 2 * math.pi * (i + (0.0 if last else 0.5 * ((n_rings - k) % 2))) / m
+            pts.append((rr * math.cos(a), rr * math.sin(a))); rim.append(last)
     return np.array(pts), np.array(rim)
 
 
@@ -128,10 +134,11 @@ def bundle(side, tan_h, tan_v, caster=None, shift=(0.0, 0.0, 0.0), n_rim=32, n_r
                 m_entrance=m_ent, m_hypotenuse=m_hyp, m_exit=m_exit, blocked=first_block)
 
 
-def limit_angle(side, direction, caster, full_pupil, shift=(0.0, 0.0, 0.0), hi=60.0, tol=0.02):
+def limit_angle(side, direction, caster, full_pupil, shift=(0.0, 0.0, 0.0), hi=60.0, tol=None):
     """Largest field angle (deg) in `direction` ('left','right','up','down') that is still unobstructed, by bisection.
     full_pupil=False: chief ray only; True: every sampled pupil ray must pass.  Returns (angle, limiting element)."""
     sgn = {"left": (-1, 0), "right": (1, 0), "up": (0, 1), "down": (0, -1)}[direction]
+    tol = M["fov_angle_tol"] if tol is None else tol
 
     def clear(a):
         t = math.tan(math.radians(a))
@@ -151,6 +158,23 @@ def limit_angle(side, direction, caster, full_pupil, shift=(0.0, 0.0, 0.0), hi=6
     else:
         why = b["chief"]["clipped_at"] or ("tub (visor opening)" if not b["chief_ok"] else "none")
     return lo_a, why
+
+
+def upper_field_closed_form(dz=0.0, dy_away=0.0):
+    """Upper field of the full pupil (deg) with the optics dz high and dy_away further from the visor, in closed form: the
+    ray from the upper rim of the pupil through the top edge of the opening on the recess floor.  With a = air path (pupil
+    to prism + exit face to the recess floor) and L = glass path (one prism leg):
+        a tan(t) + L tan(t') = margin,   sin(t) = n sin(t').      Cross-check of the ray trace in check 4."""
+    from scipy.optimize import brentq
+    a = (P.PRISM_Z0 - P.PUPIL_Z) + (P.WIN_RECESS_FLOOR_Y - P.PRISM_EXIT_Y) + dy_away
+    margin = P.OPEN_Z1 - (P.AXIS_Z + dz) - M["pupil_dia"] / 2
+    f = lambda t: a * math.tan(t) + P.PRISM_LEG * math.tan(math.asin(math.sin(t) / N_GLASS)) - margin
+    return math.degrees(brentq(f, 0.0, math.radians(60.0)))
+
+
+def upper_field_terms(dz=0.0):
+    """(air path a, glass path L, margin) of upper_field_closed_form, for the report text."""
+    return ((P.PRISM_Z0 - P.PUPIL_Z) + (P.WIN_RECESS_FLOOR_Y - P.PRISM_EXIT_Y), P.PRISM_LEG, P.OPEN_Z1 - (P.AXIS_Z + dz) - M["pupil_dia"] / 2)
 
 
 def frustum_rects(side, full_pupil, far=200.0):

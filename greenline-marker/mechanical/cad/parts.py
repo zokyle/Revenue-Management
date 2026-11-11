@@ -1,8 +1,10 @@
 """GreenLine GL-1 parts.  One function per part, each returning a CadQuery Workplane holding one
 solid (or a compound for multi-body reference parts) in the assembly frame (see params.py).
 
-Printed parts: tub(), base_plate(), cradle() (rev C: the cradle carries a fixed lip and a sprung latch).  Everything else is a purchased / reference part
-modelled as a simple envelope solid for fit, clearance and optical checks.
+Printed parts: tub(), cradle() (with its fixed lip and sprung latch), baffle_ring() and - in the alternative build - the
+PA12 base_plate().  Rev D: the primary base plate is routed FR-4.  base_plate(), pcb_adhesive(), seal_bead(), ball_epoxy()
+and grain_potting() follow the ACTIVE base variant of params (params.base_variant).  Everything else is a purchased /
+reference part modelled as a simple envelope solid for fit, clearance and optical checks.
 """
 from __future__ import annotations
 import math
@@ -175,7 +177,8 @@ def tub():
     pos.append(cyl(0, 0, P.THICK_RING_R, P.BOND_Z, zt))
     pos.append(box(-P.LCD_POCKET_X, P.LCD_POCKET_X, -R, P.LCD_POCKET_Y1, P.BOND_Z, zt)
                .intersect(cyl(0, 0, P.R_IN + EPS, 0, T)))
-    # LCD locating ribs (sides and rear; the front is located by posts E and the hood rear walls)
+    # LCD locating ribs (sides and rear; the front is located by posts E and the hood rear walls, the sides also by posts B).
+    # The two rear ribs reach down to the free height above the PCB: the tilted glass is pushed back against them (step 9)
     rz0, rt = M["lcd_rib_z0"], M["lcd_rib_t"]
     for (ya, yb) in M["lcd_side_ribs_y"]:
         for sx in (1, -1):
@@ -184,11 +187,12 @@ def tub():
     xa, xb = M["lcd_rear_ribs_x"]
     for sx in (1, -1):
         x0, x1 = sorted((sx * xa, sx * xb))
-        pos.append(box(x0, x1, P.LCD_POCKET_Y0 - rt, P.LCD_POCKET_Y0, rz0, P.BOND_Z + EPS))
+        pos.append(box(x0, x1, P.LCD_POCKET_Y0 - rt, P.LCD_POCKET_Y0, P.LCD_REAR_RIB_Z0, P.BOND_Z + EPS))
     # support posts roof -> PCB top
     for _, x0, x1, y0, y1 in P.post_rects():
         pos.append(box(x0, x1, y0, y1, P.PCB_Z1, zt))
-    # PCB locating spigots under the two posts E (they enter the non-plated PCB holes; the post foot seats round them)
+    # PCB locating spigots under the two posts B (they enter the non-plated PCB holes; the post foot seats round them).
+    # Rev D: the pair is 28.7 mm apart, outboard of the cameras
     for (sx_, sy_) in (P.LOC_ROUND[:2], P.LOC_SLOT[:2]):
         sp = cyl(sx_, sy_, P.SPIGOT_D / 2, P.SPIGOT_Z0, P.PCB_Z1 + EPS)
         if M["spigot_tip_chamfer"] > 0:
@@ -223,19 +227,22 @@ def tub():
 
 
 # ----------------------------------------------------------------------------------------------
-# 2. BASE PLATE - printed, MJF PA12
+# 2. BASE PLATE - primary: routed FR-4 from the PCB fabricator; alternative: printed MJF PA12 (params.base_variant)
 # ----------------------------------------------------------------------------------------------
 def _pad_slot(z0, z1):
-    """One slot through all seven pad positions (the 0.34 mm webs between 2.2 mm holes are unprintable)."""
+    """One slot through all seven pad positions (the 0.34 mm webs between 2.2 mm holes cannot be made)."""
     r = P.PAD_HOLE_D / 2
     xa, xb = min(P.PAD_XS), max(P.PAD_XS)
     return box(xa, xb, P.PAD_Y - r, P.PAD_Y + r, z0, z1).union(cyl(xa, P.PAD_Y, r, z0, z1)).union(cyl(xb, P.PAD_Y, r, z0, z1))
 
 
 def _grain_negative(z0, z1):
-    """Grain opening minus the baffle ring and its three spokes (all from the YAML)."""
+    """Grain opening.  FR-4 plate: a plain round hole (the baffle is a separate ring bonded to the PCB).  PA12 plate: the
+    opening minus the integral baffle ring and its three spokes (all from the YAML)."""
     gx, gy = P.GRAIN_X, P.GRAIN_Y
     opening = cyl(gx, gy, P.GRAIN_R, z0, z1)
+    if not P.BAFFLE_INTEGRAL:
+        return opening
     ring = cyl(gx, gy, P.BAFFLE_RO, z0 - 1, z1 + 1).cut(cyl(gx, gy, P.BAFFLE_RI, z0 - 2, z1 + 2))
     keep = ring
     w = P.SPOKE_W / 2
@@ -246,10 +253,10 @@ def _grain_negative(z0, z1):
 
 
 def base_plate():
-    """0.87 mm plate: grain opening with baffle, pad slot and three THROUGH holes for the ball feet (the balls are set
-    on a gauge plate and potted from the inside; the print cannot hold a 0.10 mm protrusion).  The edge is plain: no
-    notch crosses the seal land (the plate is registered to the PCB in the lamination jig, the PCB to the tub by the
-    two spigots)."""
+    """Base plate of the active variant (z 0 .. BASE_T): D outline, grain opening, one slot over the seven pads and three
+    THROUGH holes for the ball feet (drilled dia 1.10 in FR-4, printed and reamed dia 1.15 in PA12; the balls are set on
+    a gauge plate and potted from the inside).  The edge is plain: no notch crosses the seal land (the plate is
+    registered to the PCB in the lamination jig, the PCB to the tub by the two spigots)."""
     z0, z1 = 0.0, P.BASE_T
     body = dprism(P.BASE_R, P.BASE_FLAT, z0, z1)
     body = body.cut(_grain_negative(z0 - 1, z1 + 1)).cut(_pad_slot(z0 - 1, z1 + 1))
@@ -258,8 +265,66 @@ def base_plate():
     return body.clean()
 
 
+def baffle_ring():
+    """FR-4 build: separate printed black PA12 light baffle round the photodiode, bonded to the PCB underside on a die-cut
+    adhesive annulus.  Its lower face is flush with the surface of the clear potting (z = GRAIN_FILL_Z)."""
+    gx, gy = P.GRAIN_X, P.GRAIN_Y
+    return cyl(gx, gy, P.BAFFLE_RO, P.BAFFLE_RING_Z0, P.BAFFLE_RING_Z1).cut(cyl(gx, gy, P.BAFFLE_RI, -1, P.PCB_Z0 + 1))
+
+
+def baffle_adhesive():
+    """Die-cut adhesive annulus between the baffle ring and the PCB underside (same diameters as the ring)."""
+    gx, gy = P.GRAIN_X, P.GRAIN_Y
+    return cyl(gx, gy, P.BAFFLE_RO, P.BAFFLE_RING_Z1, P.PCB_Z0).cut(cyl(gx, gy, P.BAFFLE_RI, -1, P.PCB_Z0 + 1))
+
+
+def baffle_ring_sprue():
+    """PRINT FILE of the baffle ring (not an assembly part): a sprued set of MECH['ring_sprue']['n'] rings, each printed
+    BAFFLE_RING_PRINT_H high (the lapping allowance is on top) and joined by a gate on its outside to a runner bar, so that the
+    bureau handles one piece instead of loose 0.015 g rings.  Rings in two rows along the runner (the y axis), resting on z = 0."""
+    sp = M["ring_sprue"]
+    n, pitch, rw, gw, gl = sp["n"], sp["pitch"], sp["runner"], sp["gate_w"], sp["gate_len"]
+    per_row = (n + 1) // 2
+    h = P.BAFFLE_RING_PRINT_H
+    cx = rw / 2 + gl + P.BAFFLE_RO                           # ring centres this far from the runner axis
+    ylen = (per_row - 1) * pitch + 2 * P.BAFFLE_RO
+    body = box(-rw / 2, rw / 2, -ylen / 2, ylen / 2, 0.0, rw)
+    k = 0
+    for sx in (1, -1):
+        for j in range(per_row):
+            if k >= n:
+                break
+            k += 1
+            y = (j - (per_row - 1) / 2) * pitch
+            ring = cyl(sx * cx, y, P.BAFFLE_RO, 0.0, h).cut(cyl(sx * cx, y, P.BAFFLE_RI, -1, h + 1))
+            xa, xb = sorted((sx * (rw / 2 - EPS), sx * (rw / 2 + gl + 0.5 * P.BAFFLE_WALL)))
+            gate = box(xa, xb, y - gw / 2, y + gw / 2, 0.0, min(h, P.MIN_WALL)).cut(cyl(sx * cx, y, P.BAFFLE_RI, -1, h + 1))
+            body = body.union(ring).union(gate)
+    return body.clean()
+
+
+def photodiode_box():
+    pd = P.PD
+    return box(pd["x"] - pd["dx"] / 2, pd["x"] + pd["dx"] / 2, pd["y"] - pd["dy"] / 2, pd["y"] + pd["dy"] / 2, P.PCB_Z0 - pd["h"], P.PCB_Z0)
+
+
+def grain_potting():
+    """Clear potting of the grain opening as cured: from the PCB underside down to z = GRAIN_FILL_Z (0.05 inside the
+    opening, so that it never stands proud of the base plane), embedding the LEDs and the photodiode outside and inside
+    the baffle ring.  It is everything inside the opening cylinder that is not plate, adhesive, baffle or a part."""
+    gx, gy = P.GRAIN_X, P.GRAIN_Y
+    body = cyl(gx, gy, P.GRAIN_R, P.GRAIN_FILL_Z, P.PCB_Z0)
+    body = body.cut(base_plate()).cut(pcb_adhesive())                     # integral baffle and spokes, sheet on them (PA12 build)
+    if not P.BAFFLE_INTEGRAL:
+        body = body.cut(cyl(gx, gy, P.BAFFLE_RO, P.BAFFLE_RING_Z0 - 1, P.PCB_Z0 + 1).cut(cyl(gx, gy, P.BAFFLE_RI, -2, P.PCB_Z0 + 2)))
+    body = body.cut(photodiode_box())
+    for b in led_boxes():
+        body = body.cut(b)
+    return body.clean()
+
+
 # ----------------------------------------------------------------------------------------------
-# 3. CRADLE (rev C: charging / data dock, one orientation, lip + latch hold-down) with its pins and PCB
+# 3. CRADLE (charging / data dock, one orientation, lip + latch hold-down; numbers from the YAML cradle block) with its pins and PCB
 # ----------------------------------------------------------------------------------------------
 def _pin_slot(w, z0, z1):
     xa, xb = min(P.PAD_XS), max(P.PAD_XS)
@@ -457,14 +522,15 @@ def pcb_board():
     return body.cut(box(sx - h, sx + h, sy - sd / 2, sy + sd / 2, z0, z1).union(cyl(sx - h, sy, sd / 2, z0, z1)).union(cyl(sx + h, sy, sd / 2, z0, z1)))
 
 
-def led_boxes():
+def led_boxes(z_overlap=0.0):
+    """The sixteen 0402 LED bodies under the PCB (pairs on the YAML ring); z_overlap lets them reach into the board for a clean fuse."""
     out = []
     lr, lt = M["led_body"]; h = P.LED_RING["led_height"]
     for k in range(P.LED_RING["count_pairs"]):
-        ang = 22.5 + 45.0 * k
+        ang = P.LED_RING["first_azimuth_deg"] + P.LED_RING["step_deg"] * k
         for off in (-M["led_pair_offset"], M["led_pair_offset"]):
             b = box(P.LED_RING["radius"] - lr / 2, P.LED_RING["radius"] + lr / 2, off - lt / 2, off + lt / 2,
-                    P.PCB_Z0 - h, P.PCB_Z0)
+                    P.PCB_Z0 - h, P.PCB_Z0 + z_overlap)
             out.append(b.rotate((0, 0, 0), (0, 0, 1), ang).translate((P.LED_RING["x"], P.LED_RING["y"], 0)))
     return out
 
@@ -477,8 +543,8 @@ def main_pcb():
             continue
         body = body.union(box(p["x"] - p["dx"] / 2, p["x"] + p["dx"] / 2, p["y"] - p["dy"] / 2, p["y"] + p["dy"] / 2,
                               P.PCB_Z1 - 0.01, P.PCB_Z1 + p["h"]))
-    for b in led_boxes():
-        body = body.union(b.translate((0, 0, 0.01)))
+    for b in led_boxes(0.01):
+        body = body.union(b)
     pd = P.PD
     body = body.union(box(pd["x"] - pd["dx"] / 2, pd["x"] + pd["dx"] / 2, pd["y"] - pd["dy"] / 2, pd["y"] + pd["dy"] / 2,
                           P.PCB_Z0 - pd["h"], P.PCB_Z0 + 0.01))
@@ -544,17 +610,29 @@ def cover_glass():
 
 
 def cover_tape():
+    """Transfer-tape ring under the cover glass (rev D: 0.13 mm, OD = the glass, ID 25.0)."""
     return cyl(0, 0, P.CG_D / 2, P.RECESS_FLOOR_Z, P.CG_Z0).cut(cyl(0, 0, M["cover_tape_id"] / 2, 0, P.T))
 
 
 def visor_window(side):
+    """0.40 mm borosilicate window seated on the floor of its recess: front face WIN_SUBFLUSH below the visor face, top
+    edge WIN_TOP_BELOW below the tub top (rev D)."""
     x, _ = P.CAM_XY[side]
-    return box(x - P.WIN_W / 2, x + P.WIN_W / 2, P.Y_VISOR - P.WIN_T, P.Y_VISOR, P.WIN_Z0, P.WIN_Z0 + P.WIN_H)
+    return box(x - P.WIN_W / 2, x + P.WIN_W / 2, P.WIN_Y0, P.WIN_Y1, P.WIN_Z0, P.WIN_TOP_Z)
 
 
 def battery():
     b = P.BAT
     return box(b["x"] - b["dx"] / 2, b["x"] + b["dx"] / 2, b["y"] - b["dy"] / 2, b["y"] + b["dy"] / 2, b["z0"], b["z1"])
+
+
+def battery_lead(i):
+    """Envelope of one cell lead and its solder joint: the pad footprint (nominal position inside the YAML pad zone)
+    extended to the protection-board end of the cell, up to the joint height the YAML allows above the PCB top."""
+    x0, y0, x1, y1 = P.battery_pad_rects()[i]
+    b = P.BAT
+    cell_end = b["x"] - b["dx"] / 2
+    return box(min(x0, cell_end), max(x1, cell_end), y0, y1, P.PCB_Z1, P.PCB_Z1 + P.BAT_JOINT_H)
 
 
 def foam_pad():
@@ -563,8 +641,9 @@ def foam_pad():
 
 
 def pcb_adhesive():
-    """Die-cut adhesive sheet between base plate and PCB (z 0.87 .. 1.00): grain opening, pad slot and three
-    2.0 mm holes round the potted ball feet."""
+    """Die-cut adhesive sheet between base plate and PCB (z BASE_T .. 1.00; 0.20 mm in the FR-4 build, 0.13 mm in the
+    PA12 build): grain opening (plain, or with the baffle pattern of the PA12 plate), pad slot and three 2.0 mm holes
+    round the potted ball feet."""
     z0, z1 = P.PSA_Z0, P.PSA_Z1
     body = dprism(P.PCB_R, P.PCB_FLAT, z0, z1)
     body = body.cut(_grain_negative(z0 - 1, z1 + 1)).cut(_pad_slot(z0 - 1, z1 + 1))
@@ -574,9 +653,10 @@ def pcb_adhesive():
 
 
 def seal_bead():
-    """Perimeter seal adhesive as cured: the joint between the base seal land and the tub seal face (0.33 mm high in
-    rev C, 0.4 mm wide on the arc, 0.65 mm under the visor wall) plus the fill of the 0.25 mm radial groove between the
-    base edge and the side wall, down to the rim.  One closed ring: nothing crosses the land."""
+    """Perimeter seal adhesive as cured: the joint between the base seal land and the tub seal face (BEAD_T high: 0.40 mm
+    on the FR-4 plate, 0.33 mm on the PA12 plate; 0.4 mm wide on the arc, 0.65 mm under the visor wall) plus the fill of
+    the 0.25 mm radial groove between the base edge and the side wall, down to the rim.  One closed ring: nothing
+    crosses the land."""
     z0, z1 = P.BASE_T, P.LEDGE_Z0
     land = dprism(P.BASE_R, P.BASE_FLAT, z0, z1).cut(dprism(P.LAND_RI, P.LAND_FLAT_IN, z0 - 1, z1 + 1))
     groove = cyl(0, 0, P.R_IN, P.RIM_Z, z1).cut(cyl(0, 0, P.BASE_R, P.RIM_Z - 1, z1 + 1))
@@ -586,24 +666,39 @@ def seal_bead():
 
 
 def window_bond(side):
-    """Adhesive line behind a visor window: a frame round the clear opening between the window and the recess floor."""
+    """Adhesive round a visor window.  Rev D: the glass sits on the recess floor and on its shelf, so there is no adhesive
+    line behind it.  The seal is a closed FRAME of thixotropic (non-wicking) adhesive round the edge of the glass, all of it
+    outside the clear opening: the fill of the two side gaps of the recess, a bead along the top edge of the glass (it stays
+    below the tub top) and a fillet on the shelf along the bottom edge in front of the glass (it stays behind the visor
+    face).  Check 13 proves that this frame, and not the bare seat of the glass, closes the opening."""
     x, _ = P.CAM_XY[side]
-    y0 = P.WIN_RECESS_FLOOR_Y; y1 = P.Y_VISOR - P.WIN_T
-    body = box(x - P.WIN_W / 2, x + P.WIN_W / 2, y0, y1, P.WIN_Z0, P.WIN_Z0 + P.WIN_H)
-    return body.cut(box(x - P.OPEN_HALF_W, x + P.OPEN_HALF_W, y0 - 1, y1 + 1, P.OPEN_Z0, P.OPEN_Z1))
+    hw, hr = P.WIN_W / 2, P.WIN_RECESS_W / 2
+    y0, y1 = P.WIN_RECESS_FLOOR_Y, P.WIN_Y1
+    zt = min(P.T, P.WIN_TOP_Z + M["window_top_bead"])
+    f = P.WIN_SILL_FILLET
+    body = box(x - hr, x - hw, y0, y1, P.WIN_Z0, zt).union(box(x + hw, x + hr, y0, y1, P.WIN_Z0, zt))
+    body = body.union(box(x - hw - 0.01, x + hw + 0.01, y0, y1, P.WIN_TOP_Z, zt))
+    if f > 0:                                             # sill fillet: triangle on the shelf against the front face of the glass
+        body = body.union(prism_x([(y1, P.WIN_Z0), (y1 + f, P.WIN_Z0), (y1, P.WIN_Z0 + f)], x - hr, x + hr))
+    if M["window_bond"] > 0:                              # adhesive line behind the glass, round the clear opening
+        film = box(x - hw, x + hw, y0, P.WIN_Y0, P.WIN_Z0, P.WIN_TOP_Z)
+        body = body.union(film.cut(box(x - P.OPEN_HALF_W, x + P.OPEN_HALF_W, y0 - 1, y1 + 1, P.OPEN_Z0, P.OPEN_Z1)))
+    return body.clean()
 
 
 def hood_seal(side):
-    """Black form-in-place gasket bead that closes the slit above the camera cube at the rear of its hood (shown as
-    compressed between the rear-wall underside and the cube top)."""
+    """Black form-in-place gasket bead that closes the slit above the camera cube at the rear of its hood, shown as
+    squeezed at constant volume (params.hood_seal_section): a low bead on the underside of the rear wall, astride the rear
+    edge of the cube top - the part behind the cube hangs free like a curtain, the part over the cube is flattened to the
+    slit height."""
     x, _ = P.CAM_XY[side]
-    return box(x - P.HOOD_SEAL_HW, x + P.HOOD_SEAL_HW, P.HOOD_SEAL_Y0, P.HOOD_SEAL_Y1, P.CAM_Z1, P.HOOD_Z_OVER_CUBE)
+    return prism_x(P.hood_seal_section()["pts"], x - P.HOOD_SEAL_HW, x + P.HOOD_SEAL_HW).clean()
 
 
 def ball_epoxy(i):
     """Epoxy that pots ball i: stage 1 fills the through hole round the ball (flush with the base plane, where the gauge
     plate was); stage 2, at lamination, fills the 2.0 mm hole of the adhesive sheet up to the PCB, so that the ball
-    bears on the board through epoxy in compression."""
+    bears on its copper land on the board through epoxy in compression.  Follows the active base variant."""
     x, y = P.BALL_XY[i]
     plug = cyl(x, y, P.BALL_HOLE_D / 2, 0.0, P.BASE_T).union(cyl(x, y, P.PSA_FOOT_HOLE_D / 2, P.PSA_Z0, P.PSA_Z1))
     return plug.cut(cq.Workplane("XY").sphere(P.BALL_D / 2).translate((x, y, P.BALL_Z)))

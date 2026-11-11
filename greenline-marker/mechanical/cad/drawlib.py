@@ -23,7 +23,7 @@ matplotlib.rcParams["font.family"] = "DejaVu Sans"
 
 MM = 1 / 25.4
 PT = 0.3528                     # mm per point
-DRAWING_REV = "C-EVT1"
+DRAWING_REV = "D-EVT1"
 LW_VIS, LW_THIN, LW_DIM = 0.75, 0.35, 0.3
 C_DIM = "#1a3f8f"
 
@@ -170,8 +170,8 @@ class View:
         if segs:
             self.ax.add_collection(LineCollection(segs, linewidths=lw, colors=color, linestyles=ls, zorder=zorder, alpha=alpha, capstyle="round"))
 
-    def hlr(self, shapes, view, hidden=False, lw=LW_VIS, color="k", zorder=5):
-        h = G.hlr(shapes, view, hidden=hidden)
+    def hlr(self, shapes, view, hidden=False, lw=LW_VIS, color="k", zorder=5, chord_tol=0.01):
+        h = G.hlr(shapes, view, chord_tol=chord_tol, hidden=hidden)
         if hidden:
             self.lines(h["hidden"], lw=0.28, color="#666", ls=(0, (4, 2.5)), zorder=zorder - 1)
         self.lines(h["visible"], lw=lw, color=color, zorder=zorder)

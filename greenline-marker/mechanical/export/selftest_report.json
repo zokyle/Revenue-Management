@@ -1,95 +1,414 @@
 {
  "all_defects_caught": true,
+ "seeded_defects": 43,
  "cases": [
   {
    "defect": "prism R raised 0.30 mm into the roof",
    "check": "1 interference",
-   "caught": true,
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
    "message": "1 failing pairs: [('tub', 'prism_R', '0.0121 mm3')]"
   },
   {
    "defect": "LCD glass shifted 0.20 mm toward the cameras",
    "check": "2 clearances",
-   "caught": true,
-   "message": "FAILED: ['LCD glass to tub, lateral (ribs, posts E, hood rear walls)', 'LCD glass to roof bonding plane (adhesive frame)']"
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: ['LCD glass to tub, lateral (ribs, posts B and E, hood rear walls)', 'LCD glass to roof bonding plane (adhesive frame)']"
   },
   {
    "defect": "battery raised 0.25 mm (eats the swell allowance)",
    "check": "2 clearances",
-   "caught": true,
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
    "message": "FAILED: ['Battery to foam pad', 'Battery to LCD glass']"
+  },
+  {
+   "defect": "visor window R 0.20 mm proud of its seat (stands above the visor face)",
+   "check": "2 clearances",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: ['Visor window R front face below the visor face (sub-flush)']"
+  },
+  {
+   "defect": "clear potting 0.05 mm proud of the base plane",
+   "check": "2 clearances",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: ['Baffle ring crest to the potting surface at its limit (flush in the model)', 'Potting surface inside the grain opening (above the base plane), maximum-material condition', 'Potting over the tallest embedded par"
+  },
+  {
+   "defect": "baffle ring bonded 0.5 mm off centre",
+   "check": "2 clearances",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: ['Photodiode body to the baffle ring (separate ring)', 'Grain LEDs to the baffle ring', 'Baffle ring to the wall of the grain opening']"
   },
   {
    "defect": "0.4 mm bar across the camera R opening",
    "check": "3 field of view",
-   "caught": true,
-   "message": "FAILED: camera R chief rays hits tub: 0.39608 mm3; camera R full beam hits tub: 0.45659 mm3; camera R chief ray blocked at 0.00 deg left (< 26.0); camera R chie"
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: camera R chief rays hits tub: 0.39608 mm3; camera R full beam hits tub: 0.45688 mm3; camera R chief ray blocked at 0.00 deg left (< 26.0); camera R chief ray blocked at 0.00 deg right (< 26.0); camera R chief ray"
   },
   {
    "defect": "0.4 mm bar across the camera R opening",
    "check": "4 fold geometry",
-   "caught": true,
-   "message": "FAILED: camera R axis: chief ray clipped at the visor opening; camera R left edge: chief ray clipped at the visor opening; camera R right edge: chief ray clippe"
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: camera R axis: chief ray clipped at the visor opening; camera R left edge: chief ray clipped at the visor opening; camera R right edge: chief ray clipped at the visor opening; upper field at the tolerance limit i"
+  },
+  {
+   "defect": "roof 0.1 mm low over the camera R opening (upper field below the guaranteed 15 deg)",
+   "check": "4 fold geometry",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: upper field at the tolerance limit is 13.14 deg, more than 0.05 deg below the 15.0 deg the YAML guarantees"
+  },
+  {
+   "defect": "roof 0.01 mm low over the camera R opening (upper field 0.2 deg under the guaranteed figure: more than the recorded shortfall D31)",
+   "check": "4 fold geometry",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: upper field at the tolerance limit is 14.78 deg, more than 0.05 deg below the 15.0 deg the YAML guarantees"
+  },
+  {
+   "defect": "hood gasket bead R dispensed 0.2 mm too far forward (over the chamfer of the rear wall)",
+   "check": "2 clearances",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: ['Hood gasket bead R: front edge behind the chamfer of the rear wall']"
   },
   {
    "defect": "2 x 2 mm pocket leaving a 0.30 mm roof",
    "check": "5 wall thickness",
-   "caught": true,
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
    "message": "FAILED: tub: undocumented region, min 0.3 mm at (-17.99, -6.0, 7.3)..(-16.0, -4.0, 7.6)"
   },
   {
    "defect": "closed 4 mm void inside the cradle body",
    "check": "6 trapped volume",
-   "caught": true,
-   "message": "FAILED: cradle: 1 closed void(s), 64.00 mm3; cradle: cavity near [ 17.1 -34.1  -8.1]..[ 19.3 -31.9  -5.9] has no 2.0 mm escape path; cradle: B-rep has 2 shells "
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: cradle: 1 closed void(s), 64.00 mm3; cradle: cavity near [ 17.1 -34.1  -8.1]..[ 19.3 -31.9  -5.9] has no 2.0 mm escape path; cradle: B-rep has 2 shells (an inner shell is a closed void)"
   },
   {
    "defect": "4 mm cavity in the cradle with only a dia 1.0 exit",
    "check": "6 trapped volume",
-   "caught": true,
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
    "message": "FAILED: cradle: cavity near [ 17.1 -34.1  -8.1]..[ 19.3 -31.9  -5.9] has no 2.0 mm escape path"
   },
   {
    "defect": "lip 0.4 mm too low (no clearance over the tub)",
    "check": "7 cradle: pins, key, hold-down, insertion",
-   "caught": true,
-   "message": "FAILED: orientation 0 deg: common volume 1.980 mm3; lip underside above the tub top: measured 1.8499999999999992 vs 0.25; insertion pose 17.0 deg: body/lip 2.17"
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: orientation 0 deg: common volume 1.980 mm3; lip underside above the tub top: measured 1.8499999999999992 vs 0.25; insertion pose 17.0 deg: body/lip 2.1770 mm3, pins 0.00000 mm3, latch travel 0.00, pin compression"
   },
   {
    "defect": "latch hook cut back by 0.6 mm (overlap 0.25 forward)",
    "check": "7 cradle: pins, key, hold-down, insertion",
-   "caught": true,
-   "message": "FAILED: the latch is not present in the cradle solid as designed (662.0 of 674.2 mm3); nose (lowest point of the retaining face) z: measured nan vs 7.85; nose a"
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: the latch is not present in the cradle solid as designed (662.0 of 674.2 mm3); nose (lowest point of the retaining face) z: measured nan vs 7.85; nose above the tub top: measured nan vs 0.25; rake of the retainin"
   },
   {
    "defect": "stop under the thumb tab left out",
    "check": "7 cradle: pins, key, hold-down, insertion",
-   "caught": true,
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
    "message": "FAILED: top of the stop under the thumb tab: measured 3.0 vs 6.569244822265599; thumb-tab stop: the pressed tab meets the body at inf mm of hook travel, not 2.0"
   },
   {
    "defect": "2 mm rib from the roof down to z 3.0 over the PCB, outside the keep-outs",
    "check": "12 tub keep-out contract (YAML tub_keepouts)",
-   "caught": true,
-   "message": "FAILED: 5.4000 mm3 of tub inside the layout space at x -1.00..1.00, y -3.00..-1.00, z 3.00..4.35; under the LCD glass: tub 1.20 mm above the PCB at (-0.9, -2.9)"
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: 5.4000 mm3 of tub inside the layout space at x -1.00..1.00, y -3.00..-1.00, z 3.00..4.35; under the LCD glass: tub 1.20 mm above the PCB at (-0.9, -2.9), contract minimum 2.55"
   },
   {
    "defect": "support post A+ shortened by 0.5 mm",
-   "check": "10 support posts",
-   "caught": true,
-   "message": "post placement problem"
+   "check": "10 support posts and ball-foot zones",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: post A+"
+  },
+  {
+   "defect": "a tub post standing on the front ball-foot zone",
+   "check": "10 support posts and ball-foot zones",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: foot zone 1: none, tub 2.56 mm2"
+  },
+  {
+   "defect": "U8 back over the front ball foot (rev C position in the YAML part list)",
+   "check": "10 support posts and ball-foot zones",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: foot zone 1: U8, tub 0.0 mm2"
   },
   {
    "defect": "key notch through base plate and bead at the seal land (first rev C model)",
    "check": "13 seal continuity (air-solid test)",
-   "caught": true,
-   "message": "FAILED: the cavity is connected to the outside; outside and cavity are ONE connected air solid: the marker is open; perimeter bead at z = 1.03 is not one closed"
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: the cavity is connected to the outside; outside and cavity are ONE connected air solid: the marker is open; perimeter bead at z = 1.00 is not one closed ring (1 pieces); seal land interrupted: bead width 0.000 mm"
+  },
+  {
+   "defect": "visor window R: adhesive frame without the fillet along the bottom edge (bare glass on its shelf)",
+   "check": "13 seal continuity (air-solid test)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: the cavity is connected to the outside; outside and cavity are ONE connected air solid: the marker is open"
+  },
+  {
+   "defect": "visor window R: adhesive frame without the bead along the top edge",
+   "check": "13 seal continuity (air-solid test)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: the cavity is connected to the outside; outside and cavity are ONE connected air solid: the marker is open"
+  },
+  {
+   "defect": "visor window L: no adhesive at all (glass only seated)",
+   "check": "13 seal continuity (air-solid test)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: the cavity is connected to the outside; outside and cavity are ONE connected air solid: the marker is open"
+  },
+  {
+   "defect": "1 mm gap in the tape ring under the cover glass",
+   "check": "13 seal continuity (air-solid test)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: the cavity is connected to the outside; outside and cavity are ONE connected air solid: the marker is open"
   },
   {
    "defect": "seating ledge 0.3 mm too small on radius",
    "check": "14 assembly paths (LCD tilt-in, PCB / base join)",
-   "caught": true,
-   "message": "FAILED: LCD tilt-in: only 0.000 mm to the ledge; hinged close, unit open by 0.25 deg: 2.5158 mm3 of interference; hinged close, unit open by 0.5 deg: 1.8163 mm3"
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: LCD tilt-in: only 0.000 mm to the ledge; hinged close, unit open by 0.25 deg: 2.5158 mm3 of interference; hinged close, unit open by 0.5 deg: 1.8163 mm3 of interference; hinged close, unit open by 1.0 deg: 0.6424"
+  },
+  {
+   "defect": "rear glass ribs ending 0.6 mm higher (no stop for the LCD at the push-back height)",
+   "check": "14 assembly paths (LCD tilt-in, PCB / base join)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: LCD tilt-in: the rear ribs do not stop the glass at the push-back height (rear edge z 4.82, ribs from z 4.35)"
+  },
+  {
+   "defect": "FR-4 plate with a square 1 x 1 mm notch in its edge (sharp internal corners)",
+   "check": "15 FR-4 base plate: fabrication rules",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: outline as in the YAML (x min, y min, x max, y max): (-21.75, -21.744, 21.75, 18.25) (required (-21.75, -21.75, 21.75, 18.25)); sharp internal corners (would need a drilled relief): 2 (required 0)"
+  },
+  {
+   "defect": "FR-4 plate with a drilled hole 0.4 mm from the edge",
+   "check": "15 FR-4 base plate: fabrication rules",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: features: one grain opening, one pad slot, three drilled ball-foot holes: 6 cut-outs, 4 drilled (required 5 cut-outs, 3 drilled); smallest web or edge distance: 0.400 (outline to ball-foot hole 2) (required >= 1."
+  },
+  {
+   "defect": "PA12 plate: foot hole 1 printed at dia 0.9 (the ball does not enter)",
+   "check": "16 alternative base plate (printed PA12)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: interference: 3 failing pairs: [('base_plate', 'ball_1', '0.0434 mm3'), ('base_plate', 'ball_epoxy_1', '0.3068 mm3'), ('base_plate', 'ball_epoxy_1', 'intended contact missing')]; clearance: Ball in its through ho"
+  },
+  {
+   "defect": "PA12 build: 3 mm gap in the perimeter seal bead",
+   "check": "16 alternative base plate (printed PA12)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: seal: FAILED: the cavity is connected to the outside; outside and cavity are ONE connected air solid: the marker is open; perimeter bead at z = 1.03 is not one closed ring (1 pieces); seal land interrupted: bead "
+  },
+  {
+   "defect": "board import: board built from the rev D YAML (conforming, synthetic)",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "board gl1_synthetic_from_yaml agrees with the YAML outline, hole and slot; 14 top-side parts clear the tub by 0.25 mm or more (U2) and respect post feet, hood zones, free height and foot zones; 18 bottom-side parts insid"
+  },
+  {
+   "defect": "board import: a 1.5 mm part under camera hood R",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): C901: 0.000 mm to the tub (< 0.2); 1.5 mm tall under camera hood R (limit 0.95)"
+  },
+  {
+   "defect": "board import: an 0402 resistor on post foot A+",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): R901: 0.000 mm to the tub (< 0.2); on post foot A+"
+  },
+  {
+   "defect": "board import: an 0402 capacitor over the front ball-foot zone",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): C902: over ball-foot zone 1 (0.50 mm2)"
+  },
+  {
+   "defect": "board import: the round locating hole 0.3 mm off",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): locating hole (round, NPTH): x, y, diameter: board (14.049999999999999, 10.8, 1.15), YAML (14.35, 10.8, 1.15)"
+  },
+  {
+   "defect": "board import: the contact-pad row shifted 0.4 mm",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (8): J2 (bottom): outside the grain opening and the pad slot; contact pad 1: 0.400 mm from its YAML position, 0.400 mm from the cradle pin axis; contact pad 2: 0.400 mm from its YAML position, 0.400 mm from the cr"
+  },
+  {
+   "defect": "board import: a bottom-side capacitor outside the grain opening",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): C903 (bottom): outside the grain opening and the pad slot"
+  },
+  {
+   "defect": "board import: a rectangular outline with the bounds of the D that states a tolerance of 10 mm for itself",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (2): outline: largest deviation from the YAML D shape (R 21.10, flat y 17.30): board 8.739906166072306, YAML 0.0; outer contour: number of arcs, lines, other elements (the D is one arc and one line): board (0, 4, "
+  },
+  {
+   "defect": "board import: a 2.5 mm part whose side is neither top nor bottom",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): C904: side 'front' is neither 'top' nor 'bottom': the part cannot be checked"
+  },
+  {
+   "defect": "board import: an opening listed only in the polygon holes of the outline",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): openings listed only in the polygon holes or the inner contours (not in cutouts / npth_holes): board 1, YAML 0"
+  },
+  {
+   "defect": "board import: a 2.5 mm part in the path of the LCD tail behind J1",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): C905: 0.000 mm to the LCD flex tail (< 0.2; representative tail shape, PROVISIONAL)"
+  },
+  {
+   "defect": "board import: a 2.5 mm part under hood R that is marked not fitted (DNP): passes, with a warning",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "board gl1_synthetic_from_yaml agrees with the YAML outline, hole and slot; 14 top-side parts clear the tub by 0.25 mm or more (U2) and respect post feet, hood zones, free height and foot zones; 18 bottom-side parts insid"
+  },
+  {
+   "defect": "board import: demonstration board of the toolchain (rev C positions: holes under posts E, U8 over the front foot)",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (8): locating hole (round, NPTH): x, y, diameter: board (-4.2, 14.55, 1.15), YAML (14.35, 10.8, 1.15); locating slot: centre x, y, width, overall length along x, y1 - y2: board (4.2, 14.55, 1.15, 1.65, 0.0), YAML "
+  },
+  {
+   "defect": "board import: no board file",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "skipped: no board file"
+  },
+  {
+   "defect": "unmodified model",
+   "check": "10 support posts and ball-foot zones",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "8 posts on their keep-out squares, solid from PCB to roof, clear of listed parts and of the LCD glass; two spigots under posts B (28.7 mm apart); seat area 20.9 mm2; no post foot and no soldered part other than the batte"
+  },
+  {
+   "defect": "unmodified model",
+   "check": "12 tub keep-out contract (YAML tub_keepouts)",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "no tub material in the layout space below z 4.35 (0.000000 mm3 common); eight post feet inside their squares (1.6 mm, posts B 2.2 mm); hood skirts 1.20 mm above the PCB inside the +-2.85 zones (parts to 0.95); lowest tub"
+  },
+  {
+   "defect": "unmodified model",
+   "check": "13 seal continuity (air-solid test)",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "outside and inner cavity are separate air solids (cavity 4205 mm3 incl. the cell under the cover glass); perimeter bead is one closed ring, 0.40 mm high, narrowest joint 0.40 mm, 49.8 mm3 at nominal gaps; adhesive-sheet "
+  },
+  {
+   "defect": "unmodified model",
+   "check": "15 FR-4 base plate: fabrication rules",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "0.80 mm plate of constant section, 3 drilled dia 1.1 holes, grain opening dia 13.0 and pad slot 17.44 x 2.2 routed; smallest internal radius 1.10 mm (rule 0.5), no sharp internal corner; smallest web 2.02 mm (outline to "
+  },
+  {
+   "defect": "unmodified model",
+   "check": "16 alternative base plate (printed PA12)",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "PA12 plate 0.87 mm + sheet 0.13 mm: no interference (69 tested pairs (294 total)); 17 base-specific clearances met (ball in its hole 0.075, photodiode to ring 0.594); base_plate_pa12 minimum 0.800 mm, no trapped powder; "
   }
  ]
 }

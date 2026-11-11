@@ -1,4 +1,4 @@
-"""Cradle hold-down (rev C): beam model of the latch, sizing of the lip, and the poses of the insertion path.
+"""Cradle hold-down (designed in rev C, numbers in the YAML since rev D): beam model of the latch, sizing of the lip, and the poses of the insertion path.
 
 checks.check_cradle() verifies the geometry assumed here against the solids (beam section, nose, stops, clearances),
 proves the insertion and release travel by posing the marker solids against the cradle solids, and cross-checks the

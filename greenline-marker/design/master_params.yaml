@@ -4,6 +4,8 @@
 # Status of every dimension is given in `basis`: datasheet | search-verified | provisional (must be
 # checked against the manufacturer drawing before release) | design (our choice).
 rev: D-EVT1          # rev D: decisions on the rev C design review (mechanical/PROPOSED_PARAM_CHANGES.md parts B and C; DESIGN_SPEC section 5)
+# Amended in place after the rev D mechanical review (items N1 to N10 of mechanical/PROPOSED_PARAM_CHANGES.md part B;
+# each is marked "N<n>" below). The next revision letter is taken when the board layout is folded back in.
 envelope:
   outer_radius: 23.0          # dia 46.0, design
   thickness: 7.6              # design: every printed wall >= 0.8 mm (MJF PA12 bureau minimums 0.76-1.0 mm)
@@ -18,15 +20,22 @@ base_plate:
   # laminate that carries the IMU, the cameras and the feet does not bow with temperature or humidity; flat and stiff).
   material: "FR-4 0.80 mm, matte black solder mask both sides, no copper, routed outline, drilled holes"
   thickness: 0.80             # z 0..0.80; with the 0.20 mm adhesive sheet the PCB bottom stays at z = 1.00
+  # N6: fabrication tolerances (drawing GL1-011). Plates are sorted on thickness at incoming inspection: the lower limit
+  # keeps 0.02 mm of epoxy between each ball and its PCB land. The plate thickness is NOT in the seal-joint chain.
+  tolerances: {outline: 0.10, holes: 0.05, thickness_over_mask: 0.10}
+  thickness_accepted: [0.76, 0.90]
+  mask_relief_dia: 1.25       # solder mask pulled back round each ball-foot hole, both faces
   psa: {mpn: "3M 93020LE (300LSE) double-coated tape, die cut", thickness: 0.20, basis: provisional}   # z 0.80..1.00; seals the pad slot and the grain opening
   # ALTERNATIVE for an all-printed build and for the EVT comparison: same outline and features in MJF PA12.
-  alternative: {material: "HP MJF PA12, dyed black, NOT vapor smoothed, free-state flatness 0.3 max", thickness: 0.87, psa_thickness: 0.13, psa_mpn: "3M 9472LE (300LSE) adhesive transfer tape", foot_hole_dia: 1.15, baffle: integral}
+  alternative: {material: "HP MJF PA12, dyed black, NOT vapor smoothed, free-state flatness 0.3 max", thickness: 0.87, psa_thickness: 0.13, psa_mpn: "3M 9472LE (300LSE) adhesive transfer tape", foot_hole_dia: 1.15, baffle: integral, thickness_accepted: [0.83, 0.92]}
   radius: 21.75               # drops into the tub from below (0.25 radial clearance)
   flat_y: 18.25               # base plate runs UNDER the visor wall on the flat front (wall sits on the base there)
   seal_land: {r_inner: 21.35, r_outer: 21.75, flat_y_inner: 17.6}   # dispensed adhesive bead (not tape: the land is only 0.4 mm wide); the 0.25 mm radial gap to the wall is filled too
   # through-opening; PCB bottom is the cavity ceiling. Filled flush with a clear, hard, low-fluorescence potting so that
   # mud and dew cannot reach the LEDs and the photodiode (0.05 below the base plane; the ball feet stand 0.10 proud).
-  grain_cavity: {x: 0.0, y: -4.0, dia: 13.0, fill: "clear optical epoxy, surface 0.05 below the base plane", fill_basis: provisional}
+  # N4: the potting surface must never come closer to the base plane than z 0.05 (the ball feet stand only 0.10 proud);
+  # the fill is aimed at z 0.10 and accepted up to z 0.20 (deeper inside), measured wet and trimmed before cure.
+  grain_cavity: {x: 0.0, y: -4.0, dia: 13.0, fill: "clear optical epoxy", fill_surface_z: {never_below: 0.05, target: 0.10, max: 0.20, below_ring_crest: [0.0, 0.10]}, fill_volume_nominal_mm3: 93.4, fill_basis: provisional}
   # the seven pad positions share ONE slot (2.2 mm holes on 2.54 pitch would leave 0.34 mm webs)
   pad_holes: {form: slot, dia: 2.2, slot_length: 17.44, y: -17.0, xs: [-7.62, -5.08, -2.54, 0.0, 2.54, 5.08, 7.62]}
   # ball feet: THROUGH holes; the balls are set on a gauge plate with 0.10 mm pockets and potted from the inside with a
@@ -35,7 +44,8 @@ base_plate:
   feet: {ball_dia: 1.0, protrusion: 0.10, hole_dia: 1.10, psa_hole_dia: 2.0, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]], epoxy_dome_max: 0.08, backfill: true, pcb_keepout_dia: 2.5, pcb_land_dia: 1.6}
   # light baffle round the photodiode. FR-4 plate: a separate printed black PA12 ring (no spokes) bonded to the PCB on a
   # die-cut adhesive annulus, its top flush with the potting. PA12 plate: integral with the plate on three spokes.
-  baffle: {inner_dia: 6.6, wall: 0.8, outer_dia: 8.2, spokes_deg: [90, 225, 315], spoke_width: 0.8}
+  baffle: {inner_dia: 6.6, wall: 0.8, outer_dia: 8.2, spokes_deg: [90, 225, 315], spoke_width: 0.8,
+           ring: {height: 0.82, height_tol: [-0.03, 0.0], matched_to: "measured plate thickness + 0.02", adhesive: "opaque black double-coated tape 0.13", crest_z: [0.0, 0.15]}}   # N4: separate ring of the FR-4 build
 pcb:
   thickness: 0.8              # 4-layer FR-4, ENIG; z 1.0 .. 1.8
   z_bottom: 1.0
@@ -44,7 +54,7 @@ pcb:
   # two non-plated holes that take printed spigots on tub posts B: they locate the PCB (and so the cameras) to the tub.
   # The cameras lie between the spigots (28.7 mm apart), so 0.075 mm of fit is 0.075 mm and 0.3 degrees at a camera.
   # Round hole on the flash side, slot on the IMU side. Go gauge dia 1.10 on the spigots at first article.
-  locating_holes: {round: {x: 14.35, y: 10.8, dia: 1.15}, slot: {x: -14.35, y: 10.8, dia: 1.15, length_x: 1.8}, spigot_dia: 1.0, spigot_height: 0.6}
+  locating_holes: {round: {x: 14.35, y: 10.8, dia: 1.15}, slot: {x: -14.35, y: 10.8, dia: 1.15, length_x: 2.2}, spigot_dia: 1.0, spigot_height: 0.6}
   component_edge_clearance: 0.2
   max_top_height_under_lcd: 2.55   # battery+swell or parts must stay below z = 4.35
 tub_ledge: {r_inner: 21.35, z0: 1.2, z1: 2.2}    # inward step of the tub wall that seats on the seal
@@ -57,7 +67,7 @@ lcd:
   psa_thickness: 0.15
 # EVT: flat mineral watch crystal (NOT step-proof). Production: chemically strengthened glass or sapphire specified by
 # strength (ring-on-ring 600 MPa or more), 1.0 mm, printed black border.
-cover_glass: {dia: 28.0, thickness: 1.0, recess_dia: 28.5, recess_depth: 1.25, bond: "3M 9472LE transfer tape ring 0.13 mm, OD 28.0 / ID 25.0", bond_thickness: 0.13, sub_flush: 0.12}
+cover_glass: {dia: 28.0, thickness: 1.0, recess_dia: 28.5, recess_depth: 1.25, bond: "3M 9472LE transfer tape ring 0.13 mm, OD 28.0 / ID 25.0", bond_thickness: 0.13, bond_id: 25.0, sub_flush: 0.12}
 battery:
   mpn: GM201030-PCB           # PowerStream, 2 x 10 x 30 mm cell + PCM (search-verified listing; PCM length provisional)
   body: {x: 0.0, y: -5.2, dx: 34.0, dy: 10.0, z0: 1.8, z1: 3.8}
@@ -78,9 +88,11 @@ cameras:
   pixel_um: 1.75
   f_px: 657
   fov_deg: {h: 51.9, v: 40.1}     # landscape: 640 px along x
-  # field the enclosure must leave clear (half angles). The upper edge has only 0.054 mm of margin to the roof: at the
-  # tolerance limit the upper field is 15 degrees, which is accepted (it only delays stick-top visibility from 6.6 to 7.8 m).
-  field_required_deg: {h: 26.0, up: 17.6, up_guaranteed: 15.0, down: 8.0}
+  # field the enclosure must leave clear (half angles). The upper edge has only 0.054 mm of margin to the roof.
+  # N3: up_guaranteed is the worst case with the optics 0.2 mm high AND the 0.075 mm spigot play against it (model:
+  # 14.97 deg without the play, 14.61 with it; nominal 18.56). Accepted: it only delays stick-top visibility from
+  # 6.6 m to about 8.1 m on a worst-case unit.
+  field_required_deg: {h: 26.0, up: 17.6, up_guaranteed: 14.5, down: 8.0}
 prisms:
   mpn: "Edmund Optics 32-526"     # 2.0 mm legs, N-BK7, aluminised hypotenuse (search-verified)
   leg: 2.0
@@ -102,6 +114,12 @@ visor_window:               # one per camera, centred on the camera x, bonded in
   # 0.525 mm instead of 0.8; the bonded window backs it. The lower field is needed only to about -8 deg (the flagstick
   # base sits near the horizon), so the sill stays at 4.6.
   min_wall_behind_recess: 0.525
+  # N2: recess 0.55 - glass 0.40 - 0.15 leaves no adhesive line behind the glass. The glass seats bare on the recess
+  # floor and is sealed by a frame of non-slumping adhesive round its edge; nothing is wicked (it would reach the roof
+  # edge of the opening, where the light bundle has 0.054 mm).
+  sub_flush: 0.15
+  bond_line: 0.0
+  bond: "frame of thixotropic adhesive round the glass edge: side gaps, top bead 0.10, sill fillet 0.12 x 0.12; nothing behind the glass"
   material: "0.40 mm borosilicate (SCHOTT D 263 T eco class), custom cut 5.0 x 3.25; AR coating optional at EVT"
 vent: {type: "W. L. Gore VE80205 adhesive ePTFE vent, OD 5.0, vent dia 2.0, 0.26 thick", hole_dia: 1.0, x: 17.9, y: -3.0, location: "roof underside, on a pad raised 0.3 mm that runs out to the side wall; two drain grooves 0.6 wide x 0.3 deep cross at the vent hole on the top face", basis: provisional}
 # Contract between the tub and the board layout. Outside the named keep-outs a top-side part may be up to
@@ -111,11 +129,16 @@ tub_keepouts:
   post_feet:
     size: 1.6
     centres: [[-15.4, 1.8], [15.4, 1.8], [-6.5, -18.6], [6.5, -18.6], [-4.2, 14.55], [4.2, 14.55]]
-    locating: {size: 2.2, centres: [[-14.35, 10.8], [14.35, 10.8]]}    # posts B: carry the two PCB spigots
+    # N1: the 2.2 squares are the layout keep-outs. The feet as built are 1.9 x 2.2 with their inner faces at
+    # x = +-13.55, because the 26.6 mm LCD glass passes between posts B on its way in.
+    locating: {size: 2.2, centres: [[-14.35, 10.8], [14.35, 10.8]], foot: {dx: 1.9, dy: 2.2, x_inner: 13.55}}    # posts B: carry the two PCB spigots
   camera_hoods: {half_w: 2.85, y0: 13.7, y1: 17.3, max_part_height: 0.95, note: "per camera, centred on the camera x; the camera cube itself is exempt"}
   # each ball foot bears on the PCB: bottom side dia 2.5 with no via and no track, and an unmasked copper land dia 1.6;
   # top side no soldered part inside the same circle (the battery may lie over the two rear feet)
-  foot_zones: {dia: 2.5, land_dia: 1.6, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]]}
+  foot_zones: {dia: 2.5, land_dia: 1.6, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]], part_margin: 0.3}   # N7: free parts keep 0.3 mm from a zone at layout
+  # N10: the LCD flex tail folds down behind the mouth of J1 (underside about 0.93 mm above the PCB). PROVISIONAL until
+  # the Sharp tail drawing is in hand (release gate B16). J1 itself is exempt.
+  lcd_tail: {half_w: 3.25, y: [-18.3, -16.8], max_part_height: 0.7, basis: provisional}
 # Charging / data dock. The puck seats at 0 degrees only and is held down against the spring pins.
 cradle:
   body: {dx: 60.0, dy: 60.0, dz: 14.0, y: [-36.0, 24.0], overall_height: 22.63}    # not centred on the marker
@@ -146,7 +169,7 @@ top_side_parts:
   - {ref: U7,  name: "MCP1700-2.8 LDO SOT-23",      x: 10.5,  y: -13.5, dx: 3.0,  dy: 3.0,  h: 1.2}
   - {ref: U11, name: "MCP1700-3.3 LDO SOT-23 (VDDUSB)", x: 14.0, y: -12.2, dx: 3.0,  dy: 3.0,  h: 1.2}
   - {ref: U9,  name: "MCP73831 charger SOT-23-5",   x: -10.5, y: -13.5, dx: 3.0,  dy: 3.0,  h: 1.45}
-  - {ref: U10, name: "USBLC6-2SC6 ESD SOT-23-6",    x: -14.2, y: -12.2, dx: 3.0,  dy: 3.0,  h: 1.45}
+  - {ref: U10, name: "USBLC6-2SC6 ESD SOT-23-6",    x: -13.9, y: -12.2, dx: 3.0,  dy: 3.0,  h: 1.45}   # N7: 0.3 mm inboard, clear of ball foot 2
   - {ref: Y1,  name: "32.768 kHz xtal 3215",        x: 8.6,   y: 12.2,  dx: 3.4,  dy: 1.7,  h: 0.9}
 bottom_side_parts:
   grain_led_ring: {x: 0.0, y: -4.0, radius: 5.2, count_pairs: 8, first_azimuth_deg: 22.5, step_deg: 45.0, led_height: 0.45}   # azimuth CCW from +x seen from above

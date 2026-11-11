@@ -19,7 +19,8 @@ RENDER_JS = P.MECH_DIR / "tools" / "render" / "render.js"
 M = P.MECH
 
 COLORS = {            # r, g, b, opacity (render colours; black PA12 is drawn dark grey so that its shape reads)
-    "tub": (0.17, 0.18, 0.21, 1), "base_plate": (0.30, 0.32, 0.38, 1), "main_pcb": (0.10, 0.46, 0.24, 1),
+    "tub": (0.17, 0.18, 0.21, 1), "base_plate": (0.20, 0.27, 0.24, 1), "main_pcb": (0.10, 0.46, 0.24, 1),
+    "grain_potting": (0.70, 0.90, 0.96, 0.38), "baffle_ring": (0.07, 0.07, 0.08, 1), "baffle_adhesive": (0.26, 0.26, 0.29, 1),
     "pcb_adhesive": (0.95, 0.84, 0.36, 1), "seal_bead": (0.96, 0.50, 0.12, 1), "lcd_glass": (0.70, 0.78, 0.70, 1),
     "lcd_flex": (0.88, 0.55, 0.10, 1), "lcd_adhesive": (0.96, 0.86, 0.40, 1), "cover_glass": (0.72, 0.88, 0.98, 0.32),
     "cover_tape": (0.10, 0.10, 0.11, 1), "battery": (0.76, 0.77, 0.81, 1), "foam_pad": (0.42, 0.34, 0.50, 1),
@@ -27,16 +28,17 @@ COLORS = {            # r, g, b, opacity (render colours; black PA12 is drawn da
     "cradle_pcb": (0.06, 0.36, 0.52, 1), "usb_receptacle": (0.82, 0.82, 0.84, 1),
 }
 PREFIX_COLORS = {"ball_epoxy_": (0.40, 0.66, 0.90, 1), "camera_": (0.33, 0.33, 0.40, 1), "prism_": (0.50, 0.78, 0.96, 0.62), "visor_window_": (0.62, 0.86, 0.96, 0.42),
-                 "window_bond_": (0.96, 0.86, 0.40, 1), "hood_seal_": (0.05, 0.05, 0.06, 1),
-                 "ball_": (0.88, 0.89, 0.92, 1), "spring_pin_": (0.86, 0.70, 0.22, 1), "cradle_foot_": (0.08, 0.08, 0.09, 1)}
-LIGHT_EDGES = ("tub", "base_plate", "cover_tape", "cradle_foot_", "camera_", "foam_pad", "hood_seal_")
-CAP_COLORS = {"tub": (0.80, 0.80, 0.83), "base_plate": (0.58, 0.65, 0.80), "cradle": (0.74, 0.77, 0.83), "main_pcb": (0.45, 0.78, 0.52),
-              "battery": (0.90, 0.90, 0.93)}
+                 "window_bond_": (0.84, 0.80, 0.62, 1), "hood_seal_": (0.05, 0.05, 0.06, 1),
+                 "ball_": (0.88, 0.89, 0.92, 1), "spring_pin_": (0.86, 0.70, 0.22, 1), "cradle_foot_": (0.08, 0.08, 0.09, 1),
+                 "battery_lead_": (0.82, 0.50, 0.28, 1)}
+LIGHT_EDGES = ("tub", "base_plate", "cradle_foot_", "camera_", "foam_pad", "hood_seal_", "baffle_ring")
+CAP_COLORS = {"tub": (0.80, 0.80, 0.83), "base_plate": (0.60, 0.74, 0.60), "cradle": (0.74, 0.77, 0.83), "main_pcb": (0.45, 0.78, 0.52),
+              "battery": (0.90, 0.90, 0.93), "grain_potting": (0.80, 0.93, 0.97), "baffle_ring": (0.30, 0.30, 0.33)}
 NAMES = {            # label text per part
-    "tub": "Tub (top shell), MJF PA12", "base_plate": "Base plate, MJF PA12", "main_pcb": "Main PCB assembly (0.8 mm)",
-    "pcb_adhesive": "Adhesive sheet PCB-to-base (0.13 mm)", "seal_bead": "Perimeter seal (dispensed adhesive)",
+    "tub": "Tub (top shell), MJF PA12", "base_plate": "Base plate, routed FR-4 0.80", "main_pcb": "Main PCB assembly (0.8 mm)",
+    "pcb_adhesive": "Adhesive sheet PCB-to-base (0.20 mm)", "seal_bead": "Perimeter seal (dispensed adhesive)",
     "lcd_glass": "Memory LCD LS013B7DH03", "lcd_flex": "LCD flex tail (representative)", "lcd_adhesive": "LCD adhesive frame (0.15 mm)",
-    "cover_glass": "Cover glass dia 28 x 1.0", "cover_tape": "VHB 5907 tape ring (0.2 mm)", "battery": "LiPo cell GM201030-PCB",
+    "cover_glass": "Cover glass dia 28 x 1.0", "cover_tape": "Transfer-tape ring 0.13 (dia 28 / 25)", "battery": "LiPo cell GM201030-PCB",
     "foam_pad": "Foam pad (0.3 mm)", "vent": "ePTFE vent (Gore VE80205)", "cradle": "Cradle body (printed)",
     "cradle_pcb": "Cradle PCB 30 x 22 x 1.6", "usb_receptacle": "USB-C receptacle (USB4105)",
 }
@@ -186,40 +188,42 @@ def render_all(parts=None, verbose=True):
                    title="GL-1 marker, assembled - front / top",
                    subtitle="flat visor face with the two camera windows toward the hole (+y); 46.0 mm across, 7.6 mm thick",
                    footer=FOOT, parts=[_entry(n, stl[n]) for n in puck],
-                   labels=[dict(text="Visor window R", anchor=[cxr, P.Y_VISOR, 6.3], side="L"),
+                   labels=[dict(text="Visor window R, 0.15 below the face", anchor=[cxr, P.WIN_Y1, 6.3], side="L"),
                            dict(text="Camera opening behind the window", anchor=[cxr, P.Y_VISOR, 5.3], side="L"),
                            dict(text="Tub: top edge R0.6", anchor=[21.6, 6.0, P.T - 0.15], side="L"),
                            dict(text="Vent hole + drain grooves", anchor=[P.VENT_XY[0] + 1.5, P.VENT_XY[1], P.T], side="L"),
                            dict(text="Base plate under the visor wall", anchor=[4.0, P.BASE_FLAT, 0.5], side="L"),
-                           dict(text="Cover glass dia 28 x 1.0", anchor=[-9.5, -8.5, P.CG_Z1], side="R"),
+                           dict(text="Cover glass dia 28 x 1.0, 0.12 below flush", anchor=[-9.5, -8.5, P.CG_Z1], side="R"),
                            dict(text="LCD behind the dia 22 aperture", anchor=[-4, 1, P.CG_Z1], side="R"),
                            dict(text="Nose index groove 1.0 x 0.3", anchor=[0, 16.3, P.T], side="R"),
-                           dict(text="Visor window L", anchor=[cxl, P.Y_VISOR, 6.3], side="R"),
+                           dict(text="Visor window L (0.40 borosilicate)", anchor=[cxl, P.WIN_Y1, 6.3], side="R"),
                            dict(text="Rim 0.25 above the base plane", anchor=[-P.R_OUT * math.cos(math.radians(40)), P.R_OUT * math.sin(math.radians(40)), P.RIM_Z], side="R")])
         outs.append(_run(cfg, tmp))
         # ---------------- (b) from below
         tgt = (0, 0, 1.5)
-        eye = _eye((0.30, 0.62, -0.72), tgt, 98, W, H, fov)
+        eye = _eye((0.30, 0.62, -0.72), tgt, 86, W, H, fov)
         gx, gy = P.GRAIN_X, P.GRAIN_Y
+        rp = 0.5 * (P.BAFFLE_RO + P.GRAIN_R)
         cfg = dict(out=str(RENDER_DIR / "GL1_render_b_underside.png"), width=W, height=H, eye=eye, target=tgt, fov=fov,
                    title="GL-1 marker - underside",
-                   subtitle="grain opening with baffle ring, pad slot with the seven pads, three potted ball feet (0.10 proud); tub rim 0.25 higher",
+                   subtitle=f"FR-4 base plate; grain opening potted clear to {P.GRAIN_FILL_Z} inside; pad slot with seven pads; three potted ball feet {P.BALL_PROT:.2f} proud; tub rim {P.RIM_Z} higher",
                    footer=FOOT, parts=[_entry(n, stl[n]) for n in puck] + list(detail.values()),
-                   labels=[dict(text="Ball foot 3 in its epoxy potting", anchor=[P.BALL_XY[2][0], P.BALL_XY[2][1], -0.1], side="L"),
-                           dict(text="Grain opening dia 13", anchor=[gx + 5.9, gy + 2.2, 0.0], side="L"),
-                           dict(text="LED pairs on r 5.2", anchor=[gx + 5.2 * math.cos(math.radians(247.5)), gy + 5.2 * math.sin(math.radians(247.5)), 0.6], side="L"),
+                   labels=[dict(text="Ball foot 3 (drilled dia 1.10)", anchor=[P.BALL_XY[2][0], P.BALL_XY[2][1], -0.1], side="L"),
+                           dict(text="Clear potting, dia 13 opening", anchor=[gx + rp * math.cos(math.radians(-10)), gy + rp * math.sin(math.radians(-10)), P.GRAIN_FILL_Z], side="L"),
+                           dict(text="LED pairs on r 5.2 (potted)", anchor=[gx + 5.2 * math.cos(math.radians(247.5)), gy + 5.2 * math.sin(math.radians(247.5)), 0.6], side="L"),
                            dict(text="Pad slot 17.44 x 2.2", anchor=[P.PAD_XS[-1] + 0.6, P.PAD_Y, 0.0], side="L"),
                            dict(text="Contact pads x7 (gold)", anchor=[P.PAD_XS[4], P.PAD_Y, 0.95], side="L"),
                            dict(text="Visor wall over the base plate", anchor=[-3.0, P.Y_VISOR, 2.6], side="R"),
                            dict(text="Seal adhesive at the rim", anchor=[-21.875 * math.cos(math.radians(25)), 21.875 * math.sin(math.radians(25)), P.RIM_Z], side="R"),
                            dict(text="Ball foot 1 (front)", anchor=[P.BALL_XY[0][0], P.BALL_XY[0][1], -0.1], side="R"),
-                           dict(text="Photodiode inside the baffle ring", anchor=[gx - 1.0, gy, 0.55], side="R"),
-                           dict(text="Baffle ring on three spokes", anchor=[gx - P.BAFFLE_RO + 0.35, gy - 0.5, 0.0], side="R"),
-                           dict(text="Base plate, 0.25 radial gap", anchor=[-17.5, 3.0, 0.0], side="R"),
+                           dict(text="Photodiode in the baffle ring", anchor=[gx - 1.0, gy, 0.55], side="R"),
+                           dict(text="Baffle ring (black PA12)", anchor=[gx - 0.5 * (P.BAFFLE_RI + P.BAFFLE_RO), gy - 0.5, P.BAFFLE_RING_Z0], side="R"),
+                           dict(text="FR-4 base plate (black mask)", anchor=[-17.5, 3.0, 0.0], side="R"),
                            dict(text="Ball foot 2", anchor=[P.BALL_XY[1][0], P.BALL_XY[1][1], -0.1], side="R")])
         outs.append(_run(cfg, tmp))
         # ---------------- (c) exploded, every part separated along z
-        dz = {"ball_epoxy_": -31, "ball_": -38, "base_plate": -24, "seal_bead": -12, "pcb_adhesive": -2, "main_pcb": 10, "camera_": 21, "battery": 21, "prism_": 29,
+        dz = {"ball_epoxy_": -44, "ball_": -51, "base_plate": -37, "grain_potting": -30, "seal_bead": -23, "baffle_ring": -17, "baffle_adhesive": -11, "pcb_adhesive": -1,
+              "main_pcb": 10, "camera_": 21, "battery_lead_": 21, "battery": 21, "prism_": 29,
               "foam_pad": 32, "lcd_flex": 38, "lcd_glass": 46, "lcd_adhesive": 58, "hood_seal_": 64, "vent": 69, "tub": 74, "visor_window_": 74, "window_bond_": 74,
               "cover_tape": 95, "cover_glass": 106}
 
@@ -229,27 +233,30 @@ def render_all(parts=None, verbose=True):
                     return (0, 9.0 if n.startswith("visor_window_") else (4.5 if n.startswith("window_bond_") else 0), v)
             return (0, 0, 0)
         eye_dir = np.array([0.62, 0.72, 0.30]); eye_dir /= np.linalg.norm(eye_dir)
-        tgt = np.array([0.0, 0.0, 39.0]); eye = tgt + 500 * eye_dir
+        tgt = np.array([0.0, 0.0, 32.5]); eye = tgt + 500 * eye_dir
         r = _screen_right(eye, tgt)
         order = [("cover_glass", "R"), ("cover_tape", "L"), ("tub", "R"), ("visor_window_L", "R"), ("window_bond_R", "L"), ("vent", "L"), ("hood_seal_L", "R"),
                  ("lcd_adhesive", "L"),
-                 ("lcd_glass", "R"), ("lcd_flex", "L"), ("foam_pad", "L"), ("prism_L", "R"), ("battery", "L"), ("camera_L", "R"), ("main_pcb", "L"),
-                 ("pcb_adhesive", "R"), ("seal_bead", "L"), ("base_plate", "R"), ("ball_epoxy_1", "R"), ("ball_3", "L")]
-        extra = {"visor_window_L": "Visor windows x2", "prism_L": "Fold prisms x2 (2 mm, N-BK7)",
-                 "camera_L": "Camera cubes x2 (OVM7692)", "ball_3": "Ball feet x3 (dia 1.0)", "ball_epoxy_1": "Epoxy potting x3", "lcd_flex": "LCD flex tail (representative)",
-                 "window_bond_R": "Window adhesive frames x2", "hood_seal_L": "Black hood gaskets x2",
-                 "seal_bead": "Perimeter seal (dispensed)", "pcb_adhesive": "Adhesive sheet 0.13 (die cut)", "lcd_adhesive": "LCD adhesive frame 0.15, vented",
-                 "cover_tape": "VHB 5907 ring 0.2", "main_pcb": "Main PCB assembly", "tub": "Tub (top shell)", "base_plate": "Base plate",
+                 ("lcd_glass", "R"), ("lcd_flex", "L"), ("foam_pad", "L"), ("prism_L", "R"), ("battery", "L"), ("battery_lead_1", "L"), ("camera_L", "R"), ("main_pcb", "L"),
+                 ("pcb_adhesive", "R"), ("baffle_adhesive", "L"), ("baffle_ring", "R"), ("seal_bead", "L"), ("grain_potting", "R"), ("base_plate", "R"),
+                 ("ball_epoxy_1", "R"), ("ball_3", "L")]
+        extra = {"visor_window_L": "Visor windows x2 (0.40 glass)", "prism_L": "Fold prisms x2 (2 mm, N-BK7)",
+                 "camera_L": "Camera cubes x2 (OVM7692)", "ball_3": "Ball feet x3 (dia 1.0)", "ball_epoxy_1": "Ball potting x3 (epoxy)", "lcd_flex": "LCD flex tail (representative)",
+                 "window_bond_R": "Window adhesive frame x2", "hood_seal_L": "Black hood gaskets x2",
+                 "seal_bead": "Perimeter seal (dispensed)", "pcb_adhesive": "Adhesive sheet 0.20 (die cut)", "lcd_adhesive": "LCD adhesive frame 0.15, vented",
+                 "cover_tape": "Tape ring 0.13 (dia 28 / 25)", "main_pcb": "Main PCB assembly", "tub": "Tub (top shell)", "base_plate": "Base plate, FR-4 0.80",
+                 "grain_potting": "Clear potting (grain opening)", "baffle_ring": "Baffle ring (black PA12)", "baffle_adhesive": "Baffle annulus 0.13 (black tape)",
+                 "battery_lead_1": "Battery leads x2 (envelope)",
                  "cover_glass": "Cover glass dia 28 x 1.0", "lcd_glass": "Memory LCD (glass 0.75)", "battery": "LiPo cell 34 x 10 x 2",
                  "foam_pad": "Foam pad 0.3", "vent": "ePTFE vent (inside the roof)"}
         labels = []
         for n, side in order:
-            small = n.startswith(("visor_window_", "window_bond_", "hood_seal_", "prism_", "camera_", "ball_", "vent", "lcd_flex"))
+            small = n.startswith(("visor_window_", "window_bond_", "hood_seal_", "prism_", "camera_", "ball_", "vent", "lcd_flex", "battery_lead_", "baffle_"))
             a = _rim_anchor(parts, n, side, r, off(n), frac=0.0 if small else 0.88)
             labels.append(dict(text=extra.get(n, NAMES.get(n, n)), anchor=a, side=side))
-        cfg = dict(out=str(RENDER_DIR / "GL1_render_c_exploded.png"), width=1800, height=2400, eye=list(eye), target=list(tgt), ortho=84,
+        cfg = dict(out=str(RENDER_DIR / "GL1_render_c_exploded.png"), width=1800, height=2400, eye=list(eye), target=list(tgt), ortho=91,
                    title="GL-1 marker - exploded along z",
-                   subtitle="every part of the marker, separated along z (windows also moved forward); assembly sequence in README.md",
+                   subtitle="every part of the marker (primary build: FR-4 base plate), separated along z (windows also moved forward); assembly sequence in README.md",
                    footer=FOOT, labels=labels, labelTop=150, fontSize=30,
                    parts=[_entry(n, stl[n], off(n)) for n in puck] + [dict(v, offset=[0, 0, dz["main_pcb"]]) for v in detail.values()])
         outs.append(_run(cfg, tmp))
@@ -259,26 +266,27 @@ def render_all(parts=None, verbose=True):
         cutter = PT.box(cxr, big, ystep, big, -big, big).union(PT.box(0, big, -big, ystep, -big, big)).val()
         cut = _cut_stls(parts, puck, cutter, tmp, "cut")
         tgt, fovd = (2.0, -1.5, 3.2), 18
-        eye = _eye((0.80, -0.42, 0.42), tgt, 92, W, H, fovd)
+        eye = _eye((0.80, -0.42, 0.42), tgt, 78, W, H, fovd)
         labels = [dict(text="Thick roof 2.05", anchor=[0, -19.5, P.T - 1.0], side="L"),
                   dict(text="Cover glass 1.0", anchor=[0, -11.5, 0.5 * (P.CG_Z0 + P.CG_Z1)], side="L"),
-                  dict(text="VHB tape ring 0.2", anchor=[0, -13.2, P.RECESS_FLOOR_Z + 0.1], side="L"),
+                  dict(text="Transfer-tape ring 0.13", anchor=[0, -13.2, P.RECESS_FLOOR_Z + 0.06], side="L"),
                   dict(text="Roof ledge 0.8", anchor=[0, -12.2, 0.5 * (P.BOND_Z + P.RECESS_FLOOR_Z)], side="L"),
                   dict(text="LCD glass 0.75 + frame 0.15", anchor=[0, -15.0, 0.5 * (P.LCD_Z0 + P.LCD_Z1)], side="L"),
                   dict(text="Foam pad 0.3", anchor=[0, -9.6, P.FOAM_Z0 + 0.15], side="L"),
                   dict(text="Battery 2.0 + swell gap", anchor=[0, -8.6, 2.8], side="L"),
                   dict(text="FPC connector J1", anchor=[0, -14.0, 2.9], side="L"),
-                  dict(text="PCB 0.8 on sheet 0.13", anchor=[0, -20.3, 1.4], side="L"),
+                  dict(text="PCB 0.80 on sheet 0.20", anchor=[0, -20.3, 1.4], side="L"),
                   dict(text="Seal adhesive", anchor=[0, -P.LAND_RI - 0.2, 1.05], side="L"),
-                  dict(text="Base plate 0.87", anchor=[0, -19.3, 0.43], side="L"),
+                  dict(text="FR-4 base plate 0.80", anchor=[0, -19.3, 0.40], side="L"),
                   dict(text="Section step at y = %.1f" % ystep, anchor=[5.5, ystep, 7.0], side="R"),
-                  dict(text="Visor window", anchor=[cxr, P.Y_VISOR - 0.25, 7.0], side="R"),
+                  dict(text="Visor window 0.40", anchor=[cxr, 0.5 * (P.WIN_Y0 + P.WIN_Y1), 7.0], side="R"),
                   dict(text="Fold prism", anchor=[cxr, 16.1, 5.2], side="R"),
                   dict(text="Camera opening (sill z 4.6)", anchor=[cxr, P.WIN_RECESS_FLOOR_Y - 0.4, P.OPEN_Z0 - 0.3], side="R"),
                   dict(text="Camera cube 2.76", anchor=[cxr, 15.6, 3.2], side="R"),
                   dict(text="MCU (U1) under the LCD", anchor=[0, 7.2, 2.6], side="R"),
                   dict(text="Photodiode in the baffle ring", anchor=[0, P.GRAIN_Y + 0.3, 0.75], side="R"),
-                  dict(text="Grain opening dia 13", anchor=[0, P.GRAIN_Y + P.GRAIN_R - 1.2, 0.3], side="R")]
+                  dict(text="Baffle ring (bonded to the PCB)", anchor=[0, P.GRAIN_Y + 0.5 * (P.BAFFLE_RI + P.BAFFLE_RO), 0.45], side="R"),
+                  dict(text="Clear potting, grain opening dia 13", anchor=[0, P.GRAIN_Y + P.GRAIN_R - 1.2, 0.4], side="R")]
         cfg = dict(out=str(RENDER_DIR / "GL1_render_d_cutaway.png"), width=W, height=H, eye=eye, target=tgt, fov=fovd,
                    title="GL-1 marker - cut-away",
                    subtitle=f"true boolean cut on x = 0 (centre stack) behind y = {ystep:.1f} and on x = {cxr} (through camera R) in front of it; cut faces in a lighter tint",

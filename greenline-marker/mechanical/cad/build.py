@@ -8,8 +8,11 @@
     python3 cad/build.py --summary     # also print the part table (bounding boxes, volumes)
     python3 cad/build.py --selftest    # negative tests: seed defects and confirm that the checks catch them
 
+Rev D: the primary build has the routed FR-4 base plate; the parts of the alternative build (printed PA12 plate, its
+adhesive sheet, seal joint and pottings) are built, exported and checked in the same run (check 16).
+
 Outputs: export/step, export/stl/{parts,print}, export/params_resolved.json, export/part_table.json,
-export/check_report.{json,md}, drawings/*.pdf|svg (+ dxf/, preview/), renders/*.png.
+export/check_report.{json,md}, drawings/*.pdf|svg (+ dxf/, fab/, preview/), renders/*.png.
 """
 from __future__ import annotations
 import argparse, json, pathlib, shutil, subprocess, sys, time
@@ -61,7 +64,9 @@ def main(argv=None):
     print(f"GL-1 mechanical build, params rev {P.REV}", flush=True)
     parts = A.build_parts()
     bad = [n for n, i in parts.items() if not A.solid_of(i).isValid()]
-    print(f"built {len(parts)} parts in {time.time() - t:.1f} s; invalid solids: {bad or 'none'}", flush=True)
+    n_alt = sum(1 for i in parts.values() if i.group == "alt")
+    print(f"built {len(parts)} parts ({len(parts) - n_alt} primary build with the {P.BASE['key']} base plate, {n_alt} of the alternative {P.BASE_ALT} build) "
+          f"in {time.time() - t:.1f} s; invalid solids: {bad or 'none'}", flush=True)
     if bad:
         failures.append(f"invalid solids: {bad}")
     if a.summary:
@@ -79,7 +84,8 @@ def main(argv=None):
             out = drawings.draw_all(parts, verbose=False)
             pv = previews()
             print(f"drawings: {len([o for o in out if o.endswith('.pdf')])} PDF, {len(list((P.MECH_DIR / 'drawings').glob('*.svg')))} SVG, "
-                  f"{len([o for o in out if o.endswith('.dxf')])} DXF, {len(pv)} previews", flush=True)
+                  f"{len([o for o in out if o.endswith('.dxf')])} DXF, {len([o for o in out if o.endswith(('.gbr', '.drl'))])} fabrication files (Gerber / Excellon), "
+                  f"{len(pv)} previews", flush=True)
         except Exception as e:
             failures.append(f"drawings: {e!r}")
             print(f"drawings FAILED: {e!r}", flush=True)

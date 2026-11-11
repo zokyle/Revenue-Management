@@ -1,0 +1,14 @@
+G04 GreenLine GL-1, GL1-011 base plate, FR-4 0.80 mm, NO COPPER. PROVISIONAL - not released. Rev D-EVT1*
+G04 Origin = centre of the R21.75 outline arc, +y toward the flat, seen on the top (PCB) face. Units mm.*
+%TF.FileFunction,Soldermask,Bot*%
+%TF.FilePolarity,Negative*%
+%TF.Part,Single*%
+%FSLAX46Y46*%
+%MOMM*%
+%LPD*%
+%ADD10C,1.250000*%
+D10*
+X0Y15000000D03*
+X-16500000Y-9500000D03*
+X16500000Y-9500000D03*
+M02*
