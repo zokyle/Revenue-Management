@@ -106,9 +106,13 @@ def test_regions_and_canopy_steps():
         assert g.canopy_step(*at(r_edge + g.collar_width + 0.05)) == 0.040
         assert g.radial_margin(*at(r_edge - 1.0)) == pytest.approx(1.0)
         x, y = at(r_edge + 3.0)
-        assert g.canopy_z(x, y) == pytest.approx(g.z(x, y) + 0.040)
+        assert g.canopy_z(x, y) == pytest.approx(g.terrain_z(x, y) + 0.040)
+        x, y = at(r_edge + 0.5 * g.collar_width)
+        assert g.canopy_z(x, y) == pytest.approx(g.z(x, y) + 0.008)  # no surround terrain under the collar
     assert g.on_green(0.0, 0.0) and g.region(0.0, 0.0) == gr.REGION_GREEN
     assert 0.8 <= g.collar_width <= 1.5
+    # the terrain is modelled out to the edge of the height grid: well into the rough
+    assert g.model_radius == 24.0 >= g.edge_radius_max + g.collar_width + 2.0
     # vectorised
     xs = np.linspace(-20, 20, 81)
     reg = g.region(xs, 0 * xs)
@@ -205,22 +209,120 @@ def test_speed_and_grain_ranges():
     assert 0.2 < np.mean(kappas >= 0.05) < 0.5  # share of strongly grained greens
 
 
-def test_params_override_gives_an_exact_plane_and_optional_surrounds():
+def test_params_override_gives_an_exact_plane_and_chosen_surrounds():
     base = gr.CLASS_PARAMS["planar"]
     prm = dataclasses.replace(base, tilt_range=(0.02, 0.02), undulation_slope_rms_range=(0.0, 0.0))
     g = gr.make_green("planar", 3, prm)
     rng = np.random.default_rng(0)
     px, py = rng.uniform(-20, 20, 500), rng.uniform(-20, 20, 500)
+    # the rolling surface is the plane everywhere (surround terrain is separate)
     assert np.allclose(g.z(px, py), g.tilt[0] * px + g.tilt[1] * py, atol=1e-8)
     assert np.allclose(g.slope(px, py), 0.02, atol=1e-8)
-    # surrounds falling away: putting surface and collar unchanged, rough lower
-    g2 = gr.make_green("planar", 3, dataclasses.replace(prm, surround_slope_range=(-0.05, -0.05)))
-    assert g2.surround_slope == -0.05 and g.surround_slope == 0.0
-    xx, yy, inside = _inside_nodes(g)
-    assert np.allclose(g2.surface.heights[inside], g.surface.heights[inside], atol=1e-12)
-    assert g2.stimp_ft == g.stimp_ft and g2.grain == g.grain
-    far = g.edge_radius(0.0) + g.collar_width + 5.0
-    assert g2.z(far, 0.0) < g.z(far, 0.0) - 0.15
+    # uniform surrounds falling away at 5 %: everything else is the same green
+    g2 = gr.make_green(
+        "planar", 3, dataclasses.replace(prm, surround_slope_range=(-0.05, -0.05), surround_harmonic_amp_max=(0.0, 0.0))
+    )
+    assert g2.surround_slope == -0.05 and np.all(g2.surround_amp == 0.0)
+    assert np.array_equal(g2.surface.heights, g.surface.heights)
+    assert g2.stimp_ft == g.stimp_ft and g2.grain == g.grain and g2.flagstick_height == g.flagstick_height
+    assert g2.edge_r0 == g.edge_r0 and g2.collar_width == g.collar_width
+    for theta in (0.0, 1.0, 4.0):
+        far = g2.edge_radius(theta) + g2.collar_width + 5.0
+        x, y = far * math.cos(theta), far * math.sin(theta)
+        assert g2.surround_dz(x, y) == pytest.approx(-0.05 * 125.0 / (25.0 + 1.5**2))
+        assert g2.terrain_z(x, y) == pytest.approx(g2.z(x, y) - 0.05 * 125.0 / 27.25)
+    with pytest.raises(ValueError):
+        gr.make_green("planar", 3, dataclasses.replace(prm, surround_onset=0.0))
+
+
+def test_surround_terrain_starts_beyond_the_collar_and_follows_the_drawn_slope():
+    lo, hi = gr.CLASS_PARAMS["gentle"].surround_slope_range
+    a1, a2 = gr.CLASS_PARAMS["gentle"].surround_harmonic_amp_max
+    means = []
+    for seed in range(25):
+        g = gr.make_green("gentle", seed)
+        means.append(g.surround_slope)
+        assert lo <= g.surround_slope <= hi
+        assert 0.0 <= g.surround_amp[0] <= a1 and 0.0 <= g.surround_amp[1] <= a2
+        theta = np.linspace(0.0, 2 * np.pi, 97)
+        s_theta = g.surround_slope_at(theta)
+        assert s_theta.min() >= lo - a1 - a2 and s_theta.max() <= hi + a1 + a2
+        assert s_theta.mean() == pytest.approx(g.surround_slope, abs=2e-3)
+        r_out = g.edge_radius(theta) + g.collar_width  # outer edge of the collar
+        ux, uy = np.cos(theta), np.sin(theta)
+        # nothing on the green or the collar
+        for r in (0.3 * r_out, r_out - g.collar_width, r_out - 1e-9):
+            assert np.all(g.surround_dz(r * ux, r * uy) == 0.0)
+            assert np.array_equal(g.terrain_z(r * ux, r * uy), g.z(r * ux, r * uy))
+        # smooth (C2) onset: cubic in the distance beyond the collar
+        for rho in (0.01, 0.05):
+            dz = g.surround_dz((r_out + rho) * ux, (r_out + rho) * uy)
+            assert np.allclose(dz, s_theta * rho**3 / g.surround_onset**2, rtol=2e-3, atol=1e-12)
+        # far out the extra radial slope tends to the drawn value
+        d1 = g.surround_dz((r_out + 60.0) * ux, (r_out + 60.0) * uy)
+        d2 = g.surround_dz((r_out + 61.0) * ux, (r_out + 61.0) * uy)
+        assert np.allclose(d2 - d1, s_theta, rtol=2e-3, atol=1e-6)
+        # the camera sees terrain + canopy
+        x, y = (r_out + 4.0) * ux, (r_out + 4.0) * uy
+        assert np.allclose(g.canopy_z(x, y), g.z(x, y) + g.surround_dz(x, y) + gr.ROUGH_STEP)
+    assert np.mean(means) < 0.0  # greens are mostly built up: surrounds fall away
+
+
+def test_without_fringe_is_the_same_green_with_a_smooth_continuation():
+    sc = gr.make_scenario("undulating", 6.0, 4)
+    g = sc.green
+    assert g.has_fringe
+    twin = g.without_fringe()
+    assert not twin.has_fringe
+    assert twin.surface is g.surface  # the ball rolls on the very same surface
+    assert twin.collar_step == 0.0 and twin.rough_step == 0.0 and twin.surround_slope == 0.0
+    assert twin.stimp_ft == g.stimp_ft and twin.grain == g.grain and twin.flagstick_height == g.flagstick_height
+    assert twin.edge_r0 == g.edge_r0 and twin.collar_width == g.collar_width and twin.seed == g.seed
+    rng = np.random.default_rng(1)
+    px, py = rng.uniform(-22, 22, 2000), rng.uniform(-22, 22, 2000)
+    assert np.array_equal(twin.canopy_z(px, py), twin.z(px, py))
+    assert np.array_equal(twin.terrain_z(px, py), g.z(px, py))
+    assert np.array_equal(twin.region(px, py), g.region(px, py))  # the boundary is still known
+    on = g.on_green(px, py)
+    assert np.array_equal(g.canopy_z(px[on], py[on]), twin.canopy_z(px[on], py[on]))
+    assert np.max(np.abs(g.canopy_z(px[~on], py[~on]) - twin.canopy_z(px[~on], py[~on]))) > 0.04
+    # intermediate twin: canopy steps kept, terrain continues the putting surface
+    mid = g.without_surrounds()
+    assert mid.surface is g.surface and mid.has_fringe
+    assert mid.collar_step == gr.COLLAR_STEP and mid.rough_step == gr.ROUGH_STEP
+    assert np.array_equal(mid.terrain_z(px, py), g.z(px, py))
+    assert np.allclose(mid.canopy_z(px, py), g.z(px, py) + g.canopy_step(px, py), rtol=0, atol=1e-15)
+    assert not mid.without_fringe().has_fringe
+    # the original is untouched, and the scenario twin is the same putt
+    assert g.has_fringe and g.rough_step == gr.ROUGH_STEP
+    sc2 = sc.without_fringe()
+    assert np.array_equal(sc2.hole_xy, sc.hole_xy) and np.array_equal(sc2.ball_xy, sc.ball_xy)
+    assert sc2.distance == sc.distance and sc2.seed == sc.seed and not sc2.green.has_fringe
+    assert sc2.green.surface is g.surface
+
+
+def test_flagstick_height_is_drawn_per_green():
+    heights = []
+    for cls in gr.GREEN_CLASSES:
+        for seed in range(30):
+            h = gr.make_green(cls, seed).flagstick_height
+            assert 2.0 <= h <= 2.3
+            heights.append(h)
+    assert np.ptp(heights) > 0.2
+    assert gr.make_green("gentle", 8).flagstick_height == gr.make_green("gentle", 8).flagstick_height
+    assert gr.DEFAULT_FLAGSTICK_HEIGHT == 2.13
+
+
+def test_scenario_point_at():
+    sc = gr.make_scenario("gentle", 9.0, 6)
+    assert np.allclose(sc.point_at(0.0), sc.ball_xy)
+    assert np.allclose(sc.point_at(9.0), sc.hole_xy)
+    mid = sc.point_at(4.5)
+    assert mid.shape == (2,) and np.allclose(mid, 0.5 * (sc.ball_xy + sc.hole_xy))
+    pts = sc.point_at(np.array([0.0, 4.5, 8.0]))
+    assert pts.shape == (3, 2)
+    assert np.allclose(np.hypot(*(pts - sc.ball_xy).T), [0.0, 4.5, 8.0])
+    assert np.all(sc.green.on_green(pts[:, 0], pts[:, 1]))
 
 
 # --------------------------------------------------------------------------
@@ -324,6 +426,12 @@ def test_green_from_surface_wraps_exact_surfaces():
     assert g.region(0.0, 10.5) == gr.REGION_COLLAR
     assert g.region(-11.3, 0.0) == gr.REGION_ROUGH
     assert g.canopy_z(0.0, 12.0) == pytest.approx(quad.z(0.0, 12.0) + gr.ROUGH_STEP)
+    assert g.surround_slope == 0.0 and g.terrain_z(0.0, 15.0) == quad.z(0.0, 15.0)
+    assert g.flagstick_height == gr.DEFAULT_FLAGSTICK_HEIGHT
+    assert g.model_radius == pytest.approx(10.0 + 1.2 + 10.0)  # analytic surface: 10 m beyond the collar
+    g3 = gr.green_from_surface(quad, edge_radius=10.0, collar_width=1.0, surround_slope=0.04, flagstick_height=2.2)
+    assert g3.terrain_z(0.0, 14.0) == pytest.approx(quad.z(0.0, 14.0) + 0.04 * 27.0 / (9.0 + 2.25))
+    assert g3.flagstick_height == 2.2 and g3.has_fringe
     assert np.allclose(g.tilt, [0.01, -0.02])
     # holes and balls can be placed on it, and the aim solver runs on it
     rng = np.random.default_rng(0)

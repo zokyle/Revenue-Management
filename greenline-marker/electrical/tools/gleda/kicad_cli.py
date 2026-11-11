@@ -118,6 +118,7 @@ def _arc_points(x0: float, y0: float, rx: float, ry: float, phi_deg: float,
         da += 2 * math.pi
     elif not sweep and da > 0:
         da -= 2 * math.pi
+    n = max(n, int(math.ceil(abs(da) / math.radians(1.0))))      # at most 1 degree per step
     pts = []
     for i in range(1, n + 1):
         a = a0 + da * i / n

@@ -115,6 +115,11 @@ __all__ = [
     "solve_aim",
     "solve_aim_batch",
     "solve_aim_quadratic_batch",
+    "DEFAULT_TOL_MISS",
+    "DEFAULT_TOL_PACE",
+    "DEFAULT_PHI_MAX",
+    "DEFAULT_V_MAX",
+    "DEFAULT_MAX_ROLLS",
 ]
 
 # --------------------------------------------------------------------------
@@ -1142,9 +1147,14 @@ def _solve_pace(
     w_hi = g_hi
     last = 0
     bisect = False
+    # A continuous g with |dg/de| of order one (it is exactly 1 on a plane)
+    # is within tol_g of zero long before the bracket is this narrow:
+    w_jump = tol_g / 16.0
+    if w_jump < 4e-15 * (1.0 + e_hi):
+        w_jump = 4e-15 * (1.0 + e_hi)  # floating-point resolution of e
     for it in range(80):
         width = e_hi - e_lo
-        if width <= 1e-7 * (1.0 + e_hi):
+        if width <= w_jump:
             break  # bracket collapsed onto a jump of g: no (robust) exact pace
         if bisect:
             e = 0.5 * (e_lo + e_hi)
@@ -1360,11 +1370,18 @@ def _solve_kernel(
         last = 0
         bisect = False
         status = _SOLVE_NO_CONVERGENCE
+        # The lateral miss normally changes by about D metres per radian of
+        # aim.  The bracket is declared collapsed onto a jump of the miss
+        # when it is 1e4 times narrower than the tolerance needs at 1 m/rad,
+        # or when the miss still changes by 1000 tolerances across a bracket
+        # narrower than tol_y radians (defaults: 1e-9 rad; 1 cm across
+        # 0.01 mrad).  Then there is no continuous solution.
+        w_jump = 1e-4 * tol_y
+        if w_jump < 1e-15:
+            w_jump = 1e-15
         for it in range(80):
             width = p_hi - p_lo
-            if width <= 1e-9 or (width <= 1e-5 and y_hi - y_lo > 0.01):
-                # the lateral miss jumps across zero (or changes by more than
-                # 1 cm per 0.01 mrad of aim): no continuous solution
+            if width <= w_jump or (width <= tol_y and y_hi - y_lo > 1e3 * tol_y):
                 break
             if n_tot >= max_rolls:
                 break
@@ -1539,18 +1556,44 @@ class QuadraticSurface(Surface):
         self.z0 = float(z0)
         self._p = np.array([self.z0, self.a, self.b, self.c, self.d, self.e], dtype=np.float64)
 
-    @classmethod
-    def from_coeffs(cls, coeffs, z0=0.0) -> "QuadraticSurface":
-        """Build from the length-5 vector ``(a, b, c, d, e)``."""
+    @staticmethod
+    def from_coeffs(coeffs, z0=0.0) -> "QuadraticSurface":
+        """Build a :class:`QuadraticSurface` from the length-5 vector
+        ``(a, b, c, d, e)``."""
         coeffs = np.asarray(coeffs, dtype=float)
         if coeffs.shape != (5,):
             raise ValueError("coeffs must be (a, b, c, d, e)")
-        return cls(*coeffs, z0=z0)
+        return QuadraticSurface(*coeffs, z0=z0)
 
     @property
     def coeffs(self) -> np.ndarray:
         """``(a, b, c, d, e)`` as a length-5 array."""
         return self._p[1:].copy()
+
+    def in_frame(self, origin, angle: float) -> "QuadraticSurface":
+        """The same surface expressed in a translated and rotated frame.
+
+        The new frame has its origin at ``origin`` (x, y) [m] of this
+        surface's frame and its +x axis rotated by ``angle`` [rad] CCW, so
+        ``new.z(u, v) == self.z(origin + R(angle) @ (u, v))``.  With
+        ``origin`` = ball and ``angle`` = bearing of the ball->hole line the
+        result is the patch in the putt frame (ball at the origin, hole at
+        ``(D, 0)``); its ``z0`` is the height at ``origin``.
+        """
+        ox, oy = _xy(origin, "origin")
+        ca = math.cos(angle)
+        sa = math.sin(angle)
+        # gradient at the new origin, and the Hessian, rotated into the new axes
+        gx = self.a + self.c * ox + self.d * oy
+        gy = self.b + self.d * ox + self.e * oy
+        return QuadraticSurface(
+            a=gx * ca + gy * sa,
+            b=-gx * sa + gy * ca,
+            c=self.c * ca * ca + 2.0 * self.d * ca * sa + self.e * sa * sa,
+            d=(self.e - self.c) * ca * sa + self.d * (ca * ca - sa * sa),
+            e=self.c * sa * sa - 2.0 * self.d * ca * sa + self.e * ca * ca,
+            z0=self.z(ox, oy),
+        )
 
     def z(self, x, y):
         x = np.asarray(x, dtype=float)
@@ -2519,6 +2562,19 @@ def solve_aim(
     inside), each a secant walk to a bracket followed by Illinois regula
     falsi; the initial guesses come from the energy balance and planar
     small-slope theory.  Typically 6-15 trial rolls.
+
+    Accuracy: with the default tolerances the returned ``(phi, v0)`` lies
+    within about 3e-5 m (lateral, at the hole) and 5e-6 (relative, speed) of
+    the exact solution of the discretised model.  Tolerances down to 1e-9 m
+    are honoured (about twice the trial rolls); use those when the numbers
+    are to be compared digit by digit with another implementation, whose
+    iteration path may differ.
+
+    Failures are physical, not numerical, in the cases examined: they occur
+    on surfaces whose slope-plus-grain drive near the path approaches or
+    exceeds ``a_r`` (the ball cannot be stopped or arrives on a knife edge).
+    A caller that needs an aim regardless can use the returned best iterate
+    together with ``miss`` and ``v_hole`` to judge it.
     """
     sx, sy = _xy(start, "start")
     hx, hy = _xy(hole, "hole")

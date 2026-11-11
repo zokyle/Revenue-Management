@@ -44,8 +44,52 @@ def test_quadratic_surface_values_and_gradient():
     assert np.array_equal(s2.z(x, y), s.z(x, y))
     with pytest.raises(ValueError):
         ph.QuadraticSurface.from_coeffs([1, 2, 3])
+    # also reachable through the subclass, and always a full quadratic
+    s3 = ph.PlaneSurface.from_coeffs(s.coeffs)
+    assert type(s3) is ph.QuadraticSurface and np.array_equal(s3.coeffs, s.coeffs)
     # broadcasting
     assert np.asarray(s.z(x[:, None], y[None, :5])).shape == (200, 5)
+
+
+def test_quadratic_surface_in_frame_is_the_same_surface():
+    """in_frame(origin, angle) re-expresses the patch in a moved and rotated
+    frame: heights and (rotated) gradients agree, and a putt solved in the
+    putt frame equals the putt solved in the world frame."""
+    rng = np.random.default_rng(21)
+    s = ph.QuadraticSurface(0.012, -0.02, 0.004, 0.003, -0.005, z0=0.1)
+    for _ in range(5):
+        origin = rng.uniform(-5, 5, 2)
+        ang = rng.uniform(-np.pi, np.pi)
+        t = s.in_frame(origin, ang)
+        ca, sa = math.cos(ang), math.sin(ang)
+        u, v = rng.uniform(-8, 8, 100), rng.uniform(-8, 8, 100)
+        wx, wy = origin[0] + ca * u - sa * v, origin[1] + sa * u + ca * v
+        assert np.allclose(t.z(u, v), s.z(wx, wy), rtol=0, atol=1e-13)
+        assert t.z0 == pytest.approx(s.z(*origin), abs=1e-15)
+        gx, gy = s.grad(wx, wy)
+        tu, tv = t.grad(u, v)
+        assert np.allclose(tu, gx * ca + gy * sa, atol=1e-14)
+        assert np.allclose(tv, -gx * sa + gy * ca, atol=1e-14)
+        # curvature invariants
+        assert t.c + t.e == pytest.approx(s.c + s.e, abs=1e-15)
+        assert t.c * t.e - t.d**2 == pytest.approx(s.c * s.e - s.d**2, abs=1e-15)
+        # identity and round trip
+        back = t.in_frame((-(origin[0] * ca + origin[1] * sa), origin[0] * sa - origin[1] * ca), -ang)
+        assert np.allclose(back.coeffs, s.coeffs, atol=1e-14) and back.z0 == pytest.approx(s.z0, abs=1e-14)
+    assert np.array_equal(s.in_frame((0.0, 0.0), 0.0).coeffs, s.coeffs)
+    # putt-frame patch: ball at the origin, hole at (D, 0)
+    ball, hole = np.array([1.0, -2.0]), np.array([4.5, 1.0])
+    bearing = math.atan2(hole[1] - ball[1], hole[0] - ball[0])
+    dist = float(np.hypot(*(hole - ball)))
+    grain = ph.Grain(0.07, 0.6)
+    world = ph.solve_aim(s, ball, hole, A10, grain)
+    putt = ph.solve_aim(s.in_frame(ball, bearing), (0.0, 0.0), (dist, 0.0), A10, grain.rotated(bearing))
+    assert world.ok and putt.ok
+    assert putt.phi == pytest.approx(world.phi, abs=2e-6)
+    assert putt.v0 == pytest.approx(world.v0, abs=2e-6)
+    plane = ph.PlaneSurface(0.02, 0.0).in_frame((3.0, 1.0), math.pi / 2)  # x' = world +y
+    assert plane.a == pytest.approx(0.0, abs=1e-17) and plane.b == pytest.approx(-0.02)
+    assert plane.z0 == pytest.approx(0.06) and plane.c == plane.d == plane.e == 0.0
 
 
 def _random_grid(seed=1, n=41, spacing=0.25):

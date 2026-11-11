@@ -9,6 +9,10 @@
     "text_height": "text smaller than the fab's legibility limit",
     "text_thickness": "text stroke thinner than the fab's legibility limit"
   },
+  "custom_rules": [
+    "gleda min track width of net class Default",
+    "gleda min track width of net class Power"
+  ],
   "error_count": 0,
   "errors": {},
   "footprint_errors": 0,

@@ -1,0 +1,4281 @@
+{
+  "board": "dshape.kicad_pcb",
+  "cosmetic_allow_list": {
+    "lib_footprint_issues": "footprint library not configured (headless run)",
+    "lib_footprint_mismatch": "footprint differs from library copy",
+    "silk_edge_clearance": "silkscreen close to the board edge",
+    "silk_over_copper": "silkscreen clipped by solder mask openings",
+    "silk_overlap": "silkscreen items overlapping each other",
+    "text_height": "text smaller than the fab's legibility limit",
+    "text_thickness": "text stroke thinner than the fab's legibility limit"
+  },
+  "custom_rules": [
+    "gleda min track width of net class Default",
+    "gleda min track width of net class Fine",
+    "gleda min track width of net class Power"
+  ],
+  "error_count": 0,
+  "errors": {},
+  "footprint_errors": 0,
+  "items": [
+    {
+      "description": "Silkscreen clipped by board edge",
+      "items": [
+        {
+          "description": "Line on Edge.Cuts",
+          "kicad_x": 112.2536,
+          "kicad_y": 82.7,
+          "x": 12.2536,
+          "y": 17.3
+        },
+        {
+          "description": "Polygon on F.Silkscreen",
+          "kicad_x": -1.3,
+          "kicad_y": -1.51,
+          "x": -101.3,
+          "y": 101.51
+        }
+      ],
+      "rule": "board setup constraints silk",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_edge_clearance"
+    },
+    {
+      "description": "Silkscreen clipped by board edge",
+      "items": [
+        {
+          "description": "Arc on Edge.Cuts",
+          "kicad_x": 100.0,
+          "kicad_y": 100.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        {
+          "description": "Circle on F.Silkscreen",
+          "kicad_x": 87.765,
+          "kicad_y": 82.925,
+          "x": -12.235,
+          "y": 17.075
+        }
+      ],
+      "rule": "board setup constraints silk",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_edge_clearance"
+    },
+    {
+      "description": "Isolated copper fill",
+      "items": [
+        {
+          "description": "Zone [GND] on In1.Cu",
+          "kicad_x": 77.8002,
+          "kicad_y": 122.1951,
+          "x": -22.1998,
+          "y": -22.1951
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "isolated_copper"
+    },
+    {
+      "description": "Isolated copper fill",
+      "items": [
+        {
+          "description": "Zone [+3V0] on In2.Cu",
+          "kicad_x": 77.8002,
+          "kicad_y": 122.1951,
+          "x": -22.1998,
+          "y": -22.1951
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "isolated_copper"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 3 [GND] of U4 on F.Cu",
+          "kicad_x": 87.8375,
+          "kicad_y": 94.25,
+          "x": -12.1625,
+          "y": 5.75
+        },
+        {
+          "description": "Pad 2 [GND] of U4 on F.Cu",
+          "kicad_x": 87.8375,
+          "kicad_y": 93.75,
+          "x": -12.1625,
+          "y": 6.25
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad E3 [GND] of U2 on F.Cu",
+          "kicad_x": 89.8,
+          "kicad_y": 85.4,
+          "x": -10.2,
+          "y": 14.6
+        },
+        {
+          "description": "Pad E4 [GND] of U2 on F.Cu",
+          "kicad_x": 90.3,
+          "kicad_y": 85.4,
+          "x": -9.7,
+          "y": 14.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 10 [GND] of J1 on F.Cu",
+          "kicad_x": 102.25,
+          "kicad_y": 112.05,
+          "x": 2.25,
+          "y": -12.05
+        },
+        {
+          "description": "Pad 9 [GND] of J1 on F.Cu",
+          "kicad_x": 101.75,
+          "kicad_y": 112.05,
+          "x": 1.75,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 6 [GND] of U4 on F.Cu",
+          "kicad_x": 89.0,
+          "kicad_y": 94.9125,
+          "x": -11.0,
+          "y": 5.0875
+        },
+        {
+          "description": "Pad 7 [GND] of U4 on F.Cu",
+          "kicad_x": 89.5,
+          "kicad_y": 94.9125,
+          "x": -10.5,
+          "y": 5.0875
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad E2 [GND] of U3 on F.Cu",
+          "kicad_x": 109.7,
+          "kicad_y": 85.4,
+          "x": 9.7,
+          "y": 14.6
+        },
+        {
+          "description": "Pad E3 [GND] of U3 on F.Cu",
+          "kicad_x": 110.2,
+          "kicad_y": 85.4,
+          "x": 10.2,
+          "y": 14.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad E3 [GND] of U3 on F.Cu",
+          "kicad_x": 110.2,
+          "kicad_y": 85.4,
+          "x": 10.2,
+          "y": 14.6
+        },
+        {
+          "description": "Pad E4 [GND] of U3 on F.Cu",
+          "kicad_x": 110.7,
+          "kicad_y": 85.4,
+          "x": 10.7,
+          "y": 14.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad E3 [GND] of U2 on F.Cu",
+          "kicad_x": 89.8,
+          "kicad_y": 85.4,
+          "x": -10.2,
+          "y": 14.6
+        },
+        {
+          "description": "Pad E2 [GND] of U2 on F.Cu",
+          "kicad_x": 89.3,
+          "kicad_y": 85.4,
+          "x": -10.7,
+          "y": 14.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 4 [GND] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 95.5,
+          "x": 9.9,
+          "y": 4.5
+        },
+        {
+          "description": "Pad 3 [GND] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 94.5,
+          "x": 9.9,
+          "y": 5.5
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 3 [GND] of U4 on F.Cu",
+          "kicad_x": 87.8375,
+          "kicad_y": 94.25,
+          "x": -12.1625,
+          "y": 5.75
+        },
+        {
+          "description": "Pad 6 [GND] of U4 on F.Cu",
+          "kicad_x": 89.0,
+          "kicad_y": 94.9125,
+          "x": -11.0,
+          "y": 5.0875
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C5 on F.Cu",
+          "kicad_x": 104.48,
+          "kicad_y": 85.4,
+          "x": 4.48,
+          "y": 14.6
+        },
+        {
+          "description": "Pad 2 [GND] of C6 on F.Cu",
+          "kicad_x": 104.48,
+          "kicad_y": 84.0,
+          "x": 4.48,
+          "y": 16.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 47 [GND] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 89.85,
+          "x": 5.675,
+          "y": 10.15
+        },
+        {
+          "description": "Pad 2 [GND] of C3 on F.Cu",
+          "kicad_x": 107.3,
+          "kicad_y": 90.52,
+          "x": 7.3,
+          "y": 9.48
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C12 on F.Cu",
+          "kicad_x": 85.8,
+          "kicad_y": 93.52,
+          "x": -14.2,
+          "y": 6.48
+        },
+        {
+          "description": "Pad 2 [GND] of U4 on F.Cu",
+          "kicad_x": 87.8375,
+          "kicad_y": 93.75,
+          "x": -12.1625,
+          "y": 6.25
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad E4 [GND] of U3 on F.Cu",
+          "kicad_x": 110.7,
+          "kicad_y": 85.4,
+          "x": 10.7,
+          "y": 14.6
+        },
+        {
+          "description": "Pad 2 [GND] of C14 on F.Cu",
+          "kicad_x": 111.6,
+          "kicad_y": 87.32,
+          "x": 11.6,
+          "y": 12.68
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [GND] of U7 on F.Cu",
+          "kicad_x": 109.5625,
+          "kicad_y": 112.55,
+          "x": 9.5625,
+          "y": -12.55
+        },
+        {
+          "description": "Pad 2 [GND] of C10 on F.Cu",
+          "kicad_x": 107.4,
+          "kicad_y": 112.12,
+          "x": 7.4,
+          "y": -12.12
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C11 on F.Cu",
+          "kicad_x": 113.0,
+          "kicad_y": 113.12,
+          "x": 13.0,
+          "y": -13.12
+        },
+        {
+          "description": "Pad 1 [GND] of BT2 on F.Cu",
+          "kicad_x": 114.6,
+          "kicad_y": 111.6,
+          "x": 14.6,
+          "y": -11.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C3 on F.Cu",
+          "kicad_x": 107.3,
+          "kicad_y": 90.52,
+          "x": 7.3,
+          "y": 9.48
+        },
+        {
+          "description": "Pad 2 [GND] of C15 on F.Cu",
+          "kicad_x": 109.48,
+          "kicad_y": 89.6,
+          "x": 9.48,
+          "y": 10.4
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of R8 on F.Cu",
+          "kicad_x": 92.6,
+          "kicad_y": 114.49,
+          "x": -7.4,
+          "y": -14.49
+        },
+        {
+          "description": "Pad 2 [GND] of C9 on F.Cu",
+          "kicad_x": 92.6,
+          "kicad_y": 112.12,
+          "x": -7.4,
+          "y": -12.12
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C17 on F.Cu",
+          "kicad_x": 107.2,
+          "kicad_y": 84.22,
+          "x": 7.2,
+          "y": 15.78
+        },
+        {
+          "description": "Pad 2 [GND] of C6 on F.Cu",
+          "kicad_x": 104.48,
+          "kicad_y": 84.0,
+          "x": 4.48,
+          "y": 16.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C16 on F.Cu",
+          "kicad_x": 92.8,
+          "kicad_y": 84.22,
+          "x": -7.2,
+          "y": 15.78
+        },
+        {
+          "description": "Pad E4 [GND] of U2 on F.Cu",
+          "kicad_x": 90.3,
+          "kicad_y": 85.4,
+          "x": -9.7,
+          "y": 14.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad E2 [GND] of U3 on F.Cu",
+          "kicad_x": 109.7,
+          "kicad_y": 85.4,
+          "x": 9.7,
+          "y": 14.6
+        },
+        {
+          "description": "Pad 2 [GND] of C17 on F.Cu",
+          "kicad_x": 107.2,
+          "kicad_y": 84.22,
+          "x": 7.2,
+          "y": 15.78
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C4 on F.Cu",
+          "kicad_x": 107.3,
+          "kicad_y": 96.52,
+          "x": 7.3,
+          "y": 3.48
+        },
+        {
+          "description": "Pad 4 [GND] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 95.5,
+          "x": 9.9,
+          "y": 4.5
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C14 on F.Cu",
+          "kicad_x": 111.6,
+          "kicad_y": 87.32,
+          "x": 11.6,
+          "y": 12.68
+        },
+        {
+          "description": "Pad 2 [GND] of C15 on F.Cu",
+          "kicad_x": 109.48,
+          "kicad_y": 89.6,
+          "x": 9.48,
+          "y": 10.4
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C14 on F.Cu",
+          "kicad_x": 111.6,
+          "kicad_y": 87.32,
+          "x": 11.6,
+          "y": 12.68
+        },
+        {
+          "description": "Pad 2 [GND] of C8 on F.Cu",
+          "kicad_x": 114.3,
+          "kicad_y": 85.62,
+          "x": 14.3,
+          "y": 14.38
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of R8 on F.Cu",
+          "kicad_x": 92.6,
+          "kicad_y": 114.49,
+          "x": -7.4,
+          "y": -14.49
+        },
+        {
+          "description": "Pad MP [GND] of J1 on F.Cu",
+          "kicad_x": 95.85,
+          "kicad_y": 115.3,
+          "x": -4.15,
+          "y": -15.3
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [GND] of U7 on F.Cu",
+          "kicad_x": 109.5625,
+          "kicad_y": 112.55,
+          "x": 9.5625,
+          "y": -12.55
+        },
+        {
+          "description": "Pad 2 [GND] of C11 on F.Cu",
+          "kicad_x": 113.0,
+          "kicad_y": 113.12,
+          "x": 13.0,
+          "y": -13.12
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of U8 on F.Cu",
+          "kicad_x": 98.8625,
+          "kicad_y": 84.55,
+          "x": -1.1375,
+          "y": 15.45
+        },
+        {
+          "description": "Pad 63 [GND] of U1 on F.Cu",
+          "kicad_x": 96.75,
+          "kicad_y": 87.425,
+          "x": -3.25,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C2 on F.Cu",
+          "kicad_x": 92.7,
+          "kicad_y": 96.52,
+          "x": -7.3,
+          "y": 3.48
+        },
+        {
+          "description": "Pad 7 [GND] of U4 on F.Cu",
+          "kicad_x": 89.5,
+          "kicad_y": 94.9125,
+          "x": -10.5,
+          "y": 5.0875
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C7 on F.Cu",
+          "kicad_x": 85.7,
+          "kicad_y": 85.62,
+          "x": -14.3,
+          "y": 14.38
+        },
+        {
+          "description": "Pad E2 [GND] of U2 on F.Cu",
+          "kicad_x": 89.3,
+          "kicad_y": 85.4,
+          "x": -10.7,
+          "y": 14.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad MP [GND] of J1 on F.Cu",
+          "kicad_x": 104.15,
+          "kicad_y": 115.3,
+          "x": 4.15,
+          "y": -15.3
+        },
+        {
+          "description": "Pad 10 [GND] of J1 on F.Cu",
+          "kicad_x": 102.25,
+          "kicad_y": 112.05,
+          "x": 2.25,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of R9 on F.Cu",
+          "kicad_x": 113.51,
+          "kicad_y": 97.8,
+          "x": 13.51,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 4 [GND] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 95.5,
+          "x": 9.9,
+          "y": 4.5
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C1 on F.Cu",
+          "kicad_x": 92.7,
+          "kicad_y": 89.02,
+          "x": -7.3,
+          "y": 10.98
+        },
+        {
+          "description": "Pad E4 [GND] of U2 on F.Cu",
+          "kicad_x": 90.3,
+          "kicad_y": 85.4,
+          "x": -9.7,
+          "y": 14.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of R8 on F.Cu",
+          "kicad_x": 92.6,
+          "kicad_y": 114.49,
+          "x": -7.4,
+          "y": -14.49
+        },
+        {
+          "description": "Pad 2 [GND] of U9 on F.Cu",
+          "kicad_x": 88.3625,
+          "kicad_y": 113.5,
+          "x": -11.6375,
+          "y": -13.5
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C1 on F.Cu",
+          "kicad_x": 92.7,
+          "kicad_y": 89.02,
+          "x": -7.3,
+          "y": 10.98
+        },
+        {
+          "description": "Pad 63 [GND] of U1 on F.Cu",
+          "kicad_x": 96.75,
+          "kicad_y": 87.425,
+          "x": -3.25,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 4 [GND] of J2 on B.Cu",
+          "kicad_x": 100.0,
+          "kicad_y": 117.0,
+          "x": 0.0,
+          "y": -17.0
+        },
+        {
+          "description": "Pad MP [GND] of J1 on F.Cu",
+          "kicad_x": 95.85,
+          "kicad_y": 115.3,
+          "x": -4.15,
+          "y": -15.3
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad MP [GND] of J1 on F.Cu",
+          "kicad_x": 104.15,
+          "kicad_y": 115.3,
+          "x": 4.15,
+          "y": -15.3
+        },
+        {
+          "description": "Pad 4 [GND] of J2 on B.Cu",
+          "kicad_x": 100.0,
+          "kicad_y": 117.0,
+          "x": 0.0,
+          "y": -17.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad MP [GND] of J1 on F.Cu",
+          "kicad_x": 104.15,
+          "kicad_y": 115.3,
+          "x": 4.15,
+          "y": -15.3
+        },
+        {
+          "description": "Pad 2 [GND] of C10 on F.Cu",
+          "kicad_x": 107.4,
+          "kicad_y": 112.12,
+          "x": 7.4,
+          "y": -12.12
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 31 [GND] of U1 on F.Cu",
+          "kicad_x": 103.25,
+          "kicad_y": 98.775,
+          "x": 3.25,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 2 [GND] of C4 on F.Cu",
+          "kicad_x": 107.3,
+          "kicad_y": 96.52,
+          "x": 7.3,
+          "y": 3.48
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 18 [GND] of U1 on F.Cu",
+          "kicad_x": 96.75,
+          "kicad_y": 98.775,
+          "x": -3.25,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 2 [GND] of C2 on F.Cu",
+          "kicad_x": 92.7,
+          "kicad_y": 96.52,
+          "x": -7.3,
+          "y": 3.48
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C3 on F.Cu",
+          "kicad_x": 107.3,
+          "kicad_y": 90.52,
+          "x": 7.3,
+          "y": 9.48
+        },
+        {
+          "description": "Pad 3 [GND] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 94.5,
+          "x": 9.9,
+          "y": 5.5
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of R9 on F.Cu",
+          "kicad_x": 113.51,
+          "kicad_y": 97.8,
+          "x": 13.51,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 2 [GND] of C13 on F.Cu",
+          "kicad_x": 116.0,
+          "kicad_y": 93.52,
+          "x": 16.0,
+          "y": 6.48
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 18 [GND] of U1 on F.Cu",
+          "kicad_x": 96.75,
+          "kicad_y": 98.775,
+          "x": -3.25,
+          "y": 1.225
+        },
+        {
+          "description": "Pad A [GND] of PD1 on B.Cu",
+          "kicad_x": 98.1,
+          "kicad_y": 104.0,
+          "x": -1.9,
+          "y": -4.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [GND] of C6 on F.Cu",
+          "kicad_x": 104.48,
+          "kicad_y": 84.0,
+          "x": 4.48,
+          "y": 16.0
+        },
+        {
+          "description": "Pad 2 [GND] of U8 on F.Cu",
+          "kicad_x": 98.8625,
+          "kicad_y": 84.55,
+          "x": -1.1375,
+          "y": 15.45
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 31 [GND] of U1 on F.Cu",
+          "kicad_x": 103.25,
+          "kicad_y": 98.775,
+          "x": 3.25,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 18 [GND] of U1 on F.Cu",
+          "kicad_x": 96.75,
+          "kicad_y": 98.775,
+          "x": -3.25,
+          "y": 1.225
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad A [GND] of PD1 on B.Cu",
+          "kicad_x": 98.1,
+          "kicad_y": 104.0,
+          "x": -1.9,
+          "y": -4.0
+        },
+        {
+          "description": "Pad 9 [GND] of J1 on F.Cu",
+          "kicad_x": 101.75,
+          "kicad_y": 112.05,
+          "x": 1.75,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [VBUS] of C9 on F.Cu",
+          "kicad_x": 92.6,
+          "kicad_y": 113.08,
+          "x": -7.4,
+          "y": -13.08
+        },
+        {
+          "description": "Pad 4 [VBUS] of U9 on F.Cu",
+          "kicad_x": 90.6375,
+          "kicad_y": 114.45,
+          "x": -9.3625,
+          "y": -14.45
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 4 [VBUS] of U9 on F.Cu",
+          "kicad_x": 90.6375,
+          "kicad_y": 114.45,
+          "x": -9.3625,
+          "y": -14.45
+        },
+        {
+          "description": "Pad 1 [VBUS] of J2 on B.Cu",
+          "kicad_x": 92.38,
+          "kicad_y": 117.0,
+          "x": -7.62,
+          "y": -17.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [VBUS] of C9 on F.Cu",
+          "kicad_x": 92.6,
+          "kicad_y": 113.08,
+          "x": -7.4,
+          "y": -13.08
+        },
+        {
+          "description": "Pad 39 [VBUS] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 93.85,
+          "x": 5.675,
+          "y": 6.15
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [VBAT] of C10 on F.Cu",
+          "kicad_x": 107.4,
+          "kicad_y": 113.08,
+          "x": 7.4,
+          "y": -13.08
+        },
+        {
+          "description": "Pad 3 [VBAT] of U7 on F.Cu",
+          "kicad_x": 111.4375,
+          "kicad_y": 113.5,
+          "x": 11.4375,
+          "y": -13.5
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [VBAT] of BT1 on F.Cu",
+          "kicad_x": 85.4,
+          "kicad_y": 111.6,
+          "x": -14.6,
+          "y": -11.6
+        },
+        {
+          "description": "Pad 3 [VBAT] of U9 on F.Cu",
+          "kicad_x": 88.3625,
+          "kicad_y": 114.45,
+          "x": -11.6375,
+          "y": -14.45
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [VBAT] of C5 on F.Cu",
+          "kicad_x": 103.52,
+          "kicad_y": 85.4,
+          "x": 3.52,
+          "y": 14.6
+        },
+        {
+          "description": "Pad 1 [VBAT] of U8 on F.Cu",
+          "kicad_x": 98.8625,
+          "kicad_y": 83.6,
+          "x": -1.1375,
+          "y": 16.4
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 3 [VBAT] of U9 on F.Cu",
+          "kicad_x": 88.3625,
+          "kicad_y": 114.45,
+          "x": -11.6375,
+          "y": -14.45
+        },
+        {
+          "description": "Pad 1 [VBAT] of C10 on F.Cu",
+          "kicad_x": 107.4,
+          "kicad_y": 113.08,
+          "x": 7.4,
+          "y": -13.08
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [VBAT] of C5 on F.Cu",
+          "kicad_x": 103.52,
+          "kicad_y": 85.4,
+          "x": 3.52,
+          "y": 14.6
+        },
+        {
+          "description": "Pad 1 [VBAT] of C10 on F.Cu",
+          "kicad_x": 107.4,
+          "kicad_y": 113.08,
+          "x": 7.4,
+          "y": -13.08
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 7 [+3V0] of J1 on F.Cu",
+          "kicad_x": 100.75,
+          "kicad_y": 112.05,
+          "x": 0.75,
+          "y": -12.05
+        },
+        {
+          "description": "Pad 8 [+3V0] of J1 on F.Cu",
+          "kicad_x": 101.25,
+          "kicad_y": 112.05,
+          "x": 1.25,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 6 [+3V0] of J1 on F.Cu",
+          "kicad_x": 100.25,
+          "kicad_y": 112.05,
+          "x": 0.25,
+          "y": -12.05
+        },
+        {
+          "description": "Pad 7 [+3V0] of J1 on F.Cu",
+          "kicad_x": 100.75,
+          "kicad_y": 112.05,
+          "x": 0.75,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [+3V0] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 92.5,
+          "x": 9.9,
+          "y": 7.5
+        },
+        {
+          "description": "Pad 2 [+3V0] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 93.5,
+          "x": 9.9,
+          "y": 6.5
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 8 [+3V0] of U4 on F.Cu",
+          "kicad_x": 90.1625,
+          "kicad_y": 94.75,
+          "x": -9.8375,
+          "y": 5.25
+        },
+        {
+          "description": "Pad 5 [+3V0] of U4 on F.Cu",
+          "kicad_x": 88.5,
+          "kicad_y": 94.9125,
+          "x": -11.5,
+          "y": 5.0875
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [+3V0] of C1 on F.Cu",
+          "kicad_x": 92.7,
+          "kicad_y": 89.98,
+          "x": -7.3,
+          "y": 10.02
+        },
+        {
+          "description": "Pad 1 [+3V0] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 89.35,
+          "x": -5.675,
+          "y": 10.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [+3V0] of C3 on F.Cu",
+          "kicad_x": 107.3,
+          "kicad_y": 91.48,
+          "x": 7.3,
+          "y": 8.52
+        },
+        {
+          "description": "Pad 48 [+3V0] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 89.35,
+          "x": 5.675,
+          "y": 10.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [+3V0] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 89.35,
+          "x": -5.675,
+          "y": 10.65
+        },
+        {
+          "description": "Pad 64 [+3V0] of U1 on F.Cu",
+          "kicad_x": 96.25,
+          "kicad_y": 87.425,
+          "x": -3.75,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 5 [+3V0] of U4 on F.Cu",
+          "kicad_x": 88.5,
+          "kicad_y": 94.9125,
+          "x": -11.5,
+          "y": 5.0875
+        },
+        {
+          "description": "Pad 1 [+3V0] of C12 on F.Cu",
+          "kicad_x": 85.8,
+          "kicad_y": 94.48,
+          "x": -14.2,
+          "y": 5.52
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [+3V0] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 92.5,
+          "x": 9.9,
+          "y": 7.5
+        },
+        {
+          "description": "Pad 1 [+3V0] of C3 on F.Cu",
+          "kicad_x": 107.3,
+          "kicad_y": 91.48,
+          "x": 7.3,
+          "y": 8.52
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [+3V0] of U7 on F.Cu",
+          "kicad_x": 109.5625,
+          "kicad_y": 114.45,
+          "x": 9.5625,
+          "y": -14.45
+        },
+        {
+          "description": "Pad 1 [+3V0] of C11 on F.Cu",
+          "kicad_x": 113.0,
+          "kicad_y": 114.08,
+          "x": 13.0,
+          "y": -14.08
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 8 [+3V0] of U4 on F.Cu",
+          "kicad_x": 90.1625,
+          "kicad_y": 94.75,
+          "x": -9.8375,
+          "y": 5.25
+        },
+        {
+          "description": "Pad 1 [+3V0] of C2 on F.Cu",
+          "kicad_x": 92.7,
+          "kicad_y": 97.48,
+          "x": -7.3,
+          "y": 2.52
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 32 [+3V0] of U1 on F.Cu",
+          "kicad_x": 103.75,
+          "kicad_y": 98.775,
+          "x": 3.75,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 1 [+3V0] of C4 on F.Cu",
+          "kicad_x": 107.3,
+          "kicad_y": 97.48,
+          "x": 7.3,
+          "y": 2.52
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 19 [+3V0] of U1 on F.Cu",
+          "kicad_x": 97.25,
+          "kicad_y": 98.775,
+          "x": -2.75,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 1 [+3V0] of C2 on F.Cu",
+          "kicad_x": 92.7,
+          "kicad_y": 97.48,
+          "x": -7.3,
+          "y": 2.52
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [+3V0] of C4 on F.Cu",
+          "kicad_x": 107.3,
+          "kicad_y": 97.48,
+          "x": 7.3,
+          "y": 2.52
+        },
+        {
+          "description": "Pad 2 [+3V0] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 93.5,
+          "x": 9.9,
+          "y": 6.5
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 8 [+3V0] of U4 on F.Cu",
+          "kicad_x": 90.1625,
+          "kicad_y": 94.75,
+          "x": -9.8375,
+          "y": 5.25
+        },
+        {
+          "description": "Pad 1 [+3V0] of C1 on F.Cu",
+          "kicad_x": 92.7,
+          "kicad_y": 89.98,
+          "x": -7.3,
+          "y": 10.02
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [+3V0] of U5 on F.Cu",
+          "kicad_x": 109.9,
+          "kicad_y": 93.5,
+          "x": 9.9,
+          "y": 6.5
+        },
+        {
+          "description": "Pad 1 [+3V0] of C13 on F.Cu",
+          "kicad_x": 116.0,
+          "kicad_y": 94.48,
+          "x": 16.0,
+          "y": 5.52
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 32 [+3V0] of U1 on F.Cu",
+          "kicad_x": 103.75,
+          "kicad_y": 98.775,
+          "x": 3.75,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 19 [+3V0] of U1 on F.Cu",
+          "kicad_x": 97.25,
+          "kicad_y": 98.775,
+          "x": -2.75,
+          "y": 1.225
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 8 [+3V0] of J1 on F.Cu",
+          "kicad_x": 101.25,
+          "kicad_y": 112.05,
+          "x": 1.25,
+          "y": -12.05
+        },
+        {
+          "description": "Pad 2 [+3V0] of U7 on F.Cu",
+          "kicad_x": 109.5625,
+          "kicad_y": 114.45,
+          "x": 9.5625,
+          "y": -14.45
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 32 [+3V0] of U1 on F.Cu",
+          "kicad_x": 103.75,
+          "kicad_y": 98.775,
+          "x": 3.75,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 8 [+3V0] of J1 on F.Cu",
+          "kicad_x": 101.25,
+          "kicad_y": 112.05,
+          "x": 1.25,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [V2V8_CAM] of R6 on F.Cu",
+          "kicad_x": 94.29,
+          "kicad_y": 85.4,
+          "x": -5.71,
+          "y": 14.6
+        },
+        {
+          "description": "Pad 1 [V2V8_CAM] of R7 on F.Cu",
+          "kicad_x": 94.29,
+          "kicad_y": 84.0,
+          "x": -5.71,
+          "y": 16.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [V2V8_CAM] of R6 on F.Cu",
+          "kicad_x": 94.29,
+          "kicad_y": 85.4,
+          "x": -5.71,
+          "y": 14.6
+        },
+        {
+          "description": "Pad 1 [V2V8_CAM] of C16 on F.Cu",
+          "kicad_x": 92.8,
+          "kicad_y": 85.18,
+          "x": -7.2,
+          "y": 14.82
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [V2V8_CAM] of C17 on F.Cu",
+          "kicad_x": 107.2,
+          "kicad_y": 85.18,
+          "x": 7.2,
+          "y": 14.82
+        },
+        {
+          "description": "Pad D1 [V2V8_CAM] of U3 on F.Cu",
+          "kicad_x": 109.2,
+          "kicad_y": 84.9,
+          "x": 9.2,
+          "y": 15.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad C5 [V2V8_CAM] of U2 on F.Cu",
+          "kicad_x": 90.8,
+          "kicad_y": 84.4,
+          "x": -9.2,
+          "y": 15.6
+        },
+        {
+          "description": "Pad D1 [V2V8_CAM] of U2 on F.Cu",
+          "kicad_x": 88.8,
+          "kicad_y": 84.9,
+          "x": -11.2,
+          "y": 15.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad D1 [V2V8_CAM] of U3 on F.Cu",
+          "kicad_x": 109.2,
+          "kicad_y": 84.9,
+          "x": 9.2,
+          "y": 15.1
+        },
+        {
+          "description": "Pad C5 [V2V8_CAM] of U3 on F.Cu",
+          "kicad_x": 111.2,
+          "kicad_y": 84.4,
+          "x": 11.2,
+          "y": 15.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad C5 [V2V8_CAM] of U2 on F.Cu",
+          "kicad_x": 90.8,
+          "kicad_y": 84.4,
+          "x": -9.2,
+          "y": 15.6
+        },
+        {
+          "description": "Pad 1 [V2V8_CAM] of C16 on F.Cu",
+          "kicad_x": 92.8,
+          "kicad_y": 85.18,
+          "x": -7.2,
+          "y": 14.82
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 5 [V2V8_CAM] of U8 on F.Cu",
+          "kicad_x": 101.1375,
+          "kicad_y": 83.6,
+          "x": 1.1375,
+          "y": 16.4
+        },
+        {
+          "description": "Pad 1 [V2V8_CAM] of C6 on F.Cu",
+          "kicad_x": 103.52,
+          "kicad_y": 84.0,
+          "x": 3.52,
+          "y": 16.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [V2V8_CAM] of R10 on F.Cu",
+          "kicad_x": 97.4,
+          "kicad_y": 84.51,
+          "x": -2.6,
+          "y": 15.49
+        },
+        {
+          "description": "Pad 1 [V2V8_CAM] of R7 on F.Cu",
+          "kicad_x": 94.29,
+          "kicad_y": 84.0,
+          "x": -5.71,
+          "y": 16.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [V2V8_CAM] of R10 on F.Cu",
+          "kicad_x": 97.4,
+          "kicad_y": 84.51,
+          "x": -2.6,
+          "y": 15.49
+        },
+        {
+          "description": "Pad 5 [V2V8_CAM] of U8 on F.Cu",
+          "kicad_x": 101.1375,
+          "kicad_y": 83.6,
+          "x": 1.1375,
+          "y": 16.4
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [V2V8_CAM] of C6 on F.Cu",
+          "kicad_x": 103.52,
+          "kicad_y": 84.0,
+          "x": 3.52,
+          "y": 16.0
+        },
+        {
+          "description": "Pad 1 [V2V8_CAM] of C17 on F.Cu",
+          "kicad_x": 107.2,
+          "kicad_y": 85.18,
+          "x": 7.2,
+          "y": 14.82
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 44 [CAM_EN] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 91.35,
+          "x": 5.675,
+          "y": 8.65
+        },
+        {
+          "description": "Pad 3 [CAM_EN] of U8 on F.Cu",
+          "kicad_x": 98.8625,
+          "kicad_y": 85.5,
+          "x": -1.1375,
+          "y": 14.5
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CAM_EN] of R9 on F.Cu",
+          "kicad_x": 112.49,
+          "kicad_y": 97.8,
+          "x": 12.49,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 44 [CAM_EN] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 91.35,
+          "x": 5.675,
+          "y": 8.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CAM_L_DVDD] of C7 on F.Cu",
+          "kicad_x": 85.7,
+          "kicad_y": 86.58,
+          "x": -14.3,
+          "y": 13.42
+        },
+        {
+          "description": "Pad D5 [CAM_L_DVDD] of U2 on F.Cu",
+          "kicad_x": 90.8,
+          "kicad_y": 84.9,
+          "x": -9.2,
+          "y": 15.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad D5 [CAM_R_DVDD] of U3 on F.Cu",
+          "kicad_x": 111.2,
+          "kicad_y": 84.9,
+          "x": 11.2,
+          "y": 15.1
+        },
+        {
+          "description": "Pad 1 [CAM_R_DVDD] of C8 on F.Cu",
+          "kicad_x": 114.3,
+          "kicad_y": 86.58,
+          "x": 14.3,
+          "y": 13.42
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 50 [CAM_D0] of U1 on F.Cu",
+          "kicad_x": 103.25,
+          "kicad_y": 87.425,
+          "x": 3.25,
+          "y": 12.575
+        },
+        {
+          "description": "Pad B2 [CAM_D0] of U3 on F.Cu",
+          "kicad_x": 109.7,
+          "kicad_y": 83.9,
+          "x": 9.7,
+          "y": 16.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad B2 [CAM_D0] of U2 on F.Cu",
+          "kicad_x": 89.3,
+          "kicad_y": 83.9,
+          "x": -10.7,
+          "y": 16.1
+        },
+        {
+          "description": "Pad 50 [CAM_D0] of U1 on F.Cu",
+          "kicad_x": 103.25,
+          "kicad_y": 87.425,
+          "x": 3.25,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 51 [CAM_D1] of U1 on F.Cu",
+          "kicad_x": 102.75,
+          "kicad_y": 87.425,
+          "x": 2.75,
+          "y": 12.575
+        },
+        {
+          "description": "Pad B3 [CAM_D1] of U3 on F.Cu",
+          "kicad_x": 110.2,
+          "kicad_y": 83.9,
+          "x": 10.2,
+          "y": 16.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad B3 [CAM_D1] of U2 on F.Cu",
+          "kicad_x": 89.8,
+          "kicad_y": 83.9,
+          "x": -10.2,
+          "y": 16.1
+        },
+        {
+          "description": "Pad 51 [CAM_D1] of U1 on F.Cu",
+          "kicad_x": 102.75,
+          "kicad_y": 87.425,
+          "x": 2.75,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 52 [CAM_D2] of U1 on F.Cu",
+          "kicad_x": 102.25,
+          "kicad_y": 87.425,
+          "x": 2.25,
+          "y": 12.575
+        },
+        {
+          "description": "Pad B4 [CAM_D2] of U3 on F.Cu",
+          "kicad_x": 110.7,
+          "kicad_y": 83.9,
+          "x": 10.7,
+          "y": 16.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad B4 [CAM_D2] of U2 on F.Cu",
+          "kicad_x": 90.3,
+          "kicad_y": 83.9,
+          "x": -9.7,
+          "y": 16.1
+        },
+        {
+          "description": "Pad 52 [CAM_D2] of U1 on F.Cu",
+          "kicad_x": 102.25,
+          "kicad_y": 87.425,
+          "x": 2.25,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 53 [CAM_D3] of U1 on F.Cu",
+          "kicad_x": 101.75,
+          "kicad_y": 87.425,
+          "x": 1.75,
+          "y": 12.575
+        },
+        {
+          "description": "Pad C2 [CAM_D3] of U3 on F.Cu",
+          "kicad_x": 109.7,
+          "kicad_y": 84.4,
+          "x": 9.7,
+          "y": 15.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad C2 [CAM_D3] of U2 on F.Cu",
+          "kicad_x": 89.3,
+          "kicad_y": 84.4,
+          "x": -10.7,
+          "y": 15.6
+        },
+        {
+          "description": "Pad 53 [CAM_D3] of U1 on F.Cu",
+          "kicad_x": 101.75,
+          "kicad_y": 87.425,
+          "x": 1.75,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 54 [CAM_D4] of U1 on F.Cu",
+          "kicad_x": 101.25,
+          "kicad_y": 87.425,
+          "x": 1.25,
+          "y": 12.575
+        },
+        {
+          "description": "Pad C3 [CAM_D4] of U3 on F.Cu",
+          "kicad_x": 110.2,
+          "kicad_y": 84.4,
+          "x": 10.2,
+          "y": 15.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad C3 [CAM_D4] of U2 on F.Cu",
+          "kicad_x": 89.8,
+          "kicad_y": 84.4,
+          "x": -10.2,
+          "y": 15.6
+        },
+        {
+          "description": "Pad 54 [CAM_D4] of U1 on F.Cu",
+          "kicad_x": 101.25,
+          "kicad_y": 87.425,
+          "x": 1.25,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 55 [CAM_D5] of U1 on F.Cu",
+          "kicad_x": 100.75,
+          "kicad_y": 87.425,
+          "x": 0.75,
+          "y": 12.575
+        },
+        {
+          "description": "Pad C4 [CAM_D5] of U3 on F.Cu",
+          "kicad_x": 110.7,
+          "kicad_y": 84.4,
+          "x": 10.7,
+          "y": 15.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad C4 [CAM_D5] of U2 on F.Cu",
+          "kicad_x": 90.3,
+          "kicad_y": 84.4,
+          "x": -9.7,
+          "y": 15.6
+        },
+        {
+          "description": "Pad 55 [CAM_D5] of U1 on F.Cu",
+          "kicad_x": 100.75,
+          "kicad_y": 87.425,
+          "x": 0.75,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 56 [CAM_D6] of U1 on F.Cu",
+          "kicad_x": 100.25,
+          "kicad_y": 87.425,
+          "x": 0.25,
+          "y": 12.575
+        },
+        {
+          "description": "Pad D2 [CAM_D6] of U3 on F.Cu",
+          "kicad_x": 109.7,
+          "kicad_y": 84.9,
+          "x": 9.7,
+          "y": 15.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad D2 [CAM_D6] of U2 on F.Cu",
+          "kicad_x": 89.3,
+          "kicad_y": 84.9,
+          "x": -10.7,
+          "y": 15.1
+        },
+        {
+          "description": "Pad 56 [CAM_D6] of U1 on F.Cu",
+          "kicad_x": 100.25,
+          "kicad_y": 87.425,
+          "x": 0.25,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad D3 [CAM_D7] of U2 on F.Cu",
+          "kicad_x": 89.8,
+          "kicad_y": 84.9,
+          "x": -10.2,
+          "y": 15.1
+        },
+        {
+          "description": "Pad 57 [CAM_D7] of U1 on F.Cu",
+          "kicad_x": 99.75,
+          "kicad_y": 87.425,
+          "x": -0.25,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 57 [CAM_D7] of U1 on F.Cu",
+          "kicad_x": 99.75,
+          "kicad_y": 87.425,
+          "x": -0.25,
+          "y": 12.575
+        },
+        {
+          "description": "Pad D3 [CAM_D7] of U3 on F.Cu",
+          "kicad_x": 110.2,
+          "kicad_y": 84.9,
+          "x": 10.2,
+          "y": 15.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad D4 [CAM_HREF] of U2 on F.Cu",
+          "kicad_x": 90.3,
+          "kicad_y": 84.9,
+          "x": -9.7,
+          "y": 15.1
+        },
+        {
+          "description": "Pad 59 [CAM_HREF] of U1 on F.Cu",
+          "kicad_x": 98.75,
+          "kicad_y": 87.425,
+          "x": -1.25,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 59 [CAM_HREF] of U1 on F.Cu",
+          "kicad_x": 98.75,
+          "kicad_y": 87.425,
+          "x": -1.25,
+          "y": 12.575
+        },
+        {
+          "description": "Pad D4 [CAM_HREF] of U3 on F.Cu",
+          "kicad_x": 110.7,
+          "kicad_y": 84.9,
+          "x": 10.7,
+          "y": 15.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad A2 [CAM_PCLK] of U2 on F.Cu",
+          "kicad_x": 89.3,
+          "kicad_y": 83.4,
+          "x": -10.7,
+          "y": 16.6
+        },
+        {
+          "description": "Pad 58 [CAM_PCLK] of U1 on F.Cu",
+          "kicad_x": 99.25,
+          "kicad_y": 87.425,
+          "x": -0.75,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 58 [CAM_PCLK] of U1 on F.Cu",
+          "kicad_x": 99.25,
+          "kicad_y": 87.425,
+          "x": -0.75,
+          "y": 12.575
+        },
+        {
+          "description": "Pad A2 [CAM_PCLK] of U3 on F.Cu",
+          "kicad_x": 109.7,
+          "kicad_y": 83.4,
+          "x": 9.7,
+          "y": 16.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad A3 [CAM_VSYNC] of U2 on F.Cu",
+          "kicad_x": 89.8,
+          "kicad_y": 83.4,
+          "x": -10.2,
+          "y": 16.6
+        },
+        {
+          "description": "Pad 60 [CAM_VSYNC] of U1 on F.Cu",
+          "kicad_x": 98.25,
+          "kicad_y": 87.425,
+          "x": -1.75,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 60 [CAM_VSYNC] of U1 on F.Cu",
+          "kicad_x": 98.25,
+          "kicad_y": 87.425,
+          "x": -1.75,
+          "y": 12.575
+        },
+        {
+          "description": "Pad A3 [CAM_VSYNC] of U3 on F.Cu",
+          "kicad_x": 110.2,
+          "kicad_y": 83.4,
+          "x": 10.2,
+          "y": 16.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad A4 [CAM_XVCLK] of U2 on F.Cu",
+          "kicad_x": 90.3,
+          "kicad_y": 83.4,
+          "x": -9.7,
+          "y": 16.6
+        },
+        {
+          "description": "Pad 61 [CAM_XVCLK] of U1 on F.Cu",
+          "kicad_x": 97.75,
+          "kicad_y": 87.425,
+          "x": -2.25,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 61 [CAM_XVCLK] of U1 on F.Cu",
+          "kicad_x": 97.75,
+          "kicad_y": 87.425,
+          "x": -2.25,
+          "y": 12.575
+        },
+        {
+          "description": "Pad A4 [CAM_XVCLK] of U3 on F.Cu",
+          "kicad_x": 110.7,
+          "kicad_y": 83.4,
+          "x": 10.7,
+          "y": 16.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CAM_SDA] of R10 on F.Cu",
+          "kicad_x": 97.4,
+          "kicad_y": 83.49,
+          "x": -2.6,
+          "y": 16.51
+        },
+        {
+          "description": "Pad B5 [CAM_SDA] of U2 on F.Cu",
+          "kicad_x": 90.8,
+          "kicad_y": 83.9,
+          "x": -9.2,
+          "y": 16.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CAM_SDA] of R10 on F.Cu",
+          "kicad_x": 97.4,
+          "kicad_y": 83.49,
+          "x": -2.6,
+          "y": 16.51
+        },
+        {
+          "description": "Pad 49 [CAM_SDA] of U1 on F.Cu",
+          "kicad_x": 103.75,
+          "kicad_y": 87.425,
+          "x": 3.75,
+          "y": 12.575
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 49 [CAM_SDA] of U1 on F.Cu",
+          "kicad_x": 103.75,
+          "kicad_y": 87.425,
+          "x": 3.75,
+          "y": 12.575
+        },
+        {
+          "description": "Pad B5 [CAM_SDA] of U3 on F.Cu",
+          "kicad_x": 111.2,
+          "kicad_y": 83.9,
+          "x": 11.2,
+          "y": 16.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 62 [CAM_SCL_L] of U1 on F.Cu",
+          "kicad_x": 97.25,
+          "kicad_y": 87.425,
+          "x": -2.75,
+          "y": 12.575
+        },
+        {
+          "description": "Pad 2 [CAM_SCL_L] of R6 on F.Cu",
+          "kicad_x": 95.31,
+          "kicad_y": 85.4,
+          "x": -4.69,
+          "y": 14.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CAM_SCL_L] of R6 on F.Cu",
+          "kicad_x": 95.31,
+          "kicad_y": 85.4,
+          "x": -4.69,
+          "y": 14.6
+        },
+        {
+          "description": "Pad B1 [CAM_SCL_L] of U2 on F.Cu",
+          "kicad_x": 88.8,
+          "kicad_y": 83.9,
+          "x": -11.2,
+          "y": 16.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 33 [CAM_SCL_R] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 96.85,
+          "x": 5.675,
+          "y": 3.15
+        },
+        {
+          "description": "Pad B1 [CAM_SCL_R] of U3 on F.Cu",
+          "kicad_x": 109.2,
+          "kicad_y": 83.9,
+          "x": 9.2,
+          "y": 16.1
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad B1 [CAM_SCL_R] of U3 on F.Cu",
+          "kicad_x": 109.2,
+          "kicad_y": 83.9,
+          "x": 9.2,
+          "y": 16.1
+        },
+        {
+          "description": "Pad 2 [CAM_SCL_R] of R7 on F.Cu",
+          "kicad_x": 95.31,
+          "kicad_y": 84.0,
+          "x": -4.69,
+          "y": 16.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad C1 [CAM_PWDN_L] of U2 on F.Cu",
+          "kicad_x": 88.8,
+          "kicad_y": 84.4,
+          "x": -11.2,
+          "y": 15.6
+        },
+        {
+          "description": "Pad 46 [CAM_PWDN_L] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 90.35,
+          "x": 5.675,
+          "y": 9.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 45 [CAM_PWDN_R] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 90.85,
+          "x": 5.675,
+          "y": 9.15
+        },
+        {
+          "description": "Pad C1 [CAM_PWDN_R] of U3 on F.Cu",
+          "kicad_x": 109.2,
+          "kicad_y": 84.4,
+          "x": 9.2,
+          "y": 15.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [SPI_SCK] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 89.85,
+          "x": -5.675,
+          "y": 10.15
+        },
+        {
+          "description": "Pad 13 [SPI_SCK] of U4 on F.Cu",
+          "kicad_x": 89.0,
+          "kicad_y": 93.0875,
+          "x": -11.0,
+          "y": 6.9125
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 6 [SPI_SCK] of U5 on F.Cu",
+          "kicad_x": 111.5,
+          "kicad_y": 96.1,
+          "x": 11.5,
+          "y": 3.9
+        },
+        {
+          "description": "Pad 2 [SPI_SCK] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 89.85,
+          "x": -5.675,
+          "y": 10.15
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 3 [SPI_MOSI] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 90.35,
+          "x": -5.675,
+          "y": 9.65
+        },
+        {
+          "description": "Pad 14 [SPI_MOSI] of U4 on F.Cu",
+          "kicad_x": 88.5,
+          "kicad_y": 93.0875,
+          "x": -11.5,
+          "y": 6.9125
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 7 [SPI_MOSI] of U5 on F.Cu",
+          "kicad_x": 112.5,
+          "kicad_y": 96.1,
+          "x": 12.5,
+          "y": 3.9
+        },
+        {
+          "description": "Pad 3 [SPI_MOSI] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 90.35,
+          "x": -5.675,
+          "y": 9.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 4 [SPI_MISO] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 90.85,
+          "x": -5.675,
+          "y": 9.15
+        },
+        {
+          "description": "Pad 1 [SPI_MISO] of U4 on F.Cu",
+          "kicad_x": 87.8375,
+          "kicad_y": 93.25,
+          "x": -12.1625,
+          "y": 6.75
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 8 [SPI_MISO] of U5 on F.Cu",
+          "kicad_x": 113.5,
+          "kicad_y": 96.1,
+          "x": 13.5,
+          "y": 3.9
+        },
+        {
+          "description": "Pad 4 [SPI_MISO] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 90.85,
+          "x": -5.675,
+          "y": 9.15
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 12 [CS_IMU] of U4 on F.Cu",
+          "kicad_x": 89.5,
+          "kicad_y": 93.0875,
+          "x": -10.5,
+          "y": 6.9125
+        },
+        {
+          "description": "Pad 5 [CS_IMU] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 91.35,
+          "x": -5.675,
+          "y": 8.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 6 [CS_INC] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 91.85,
+          "x": -5.675,
+          "y": 8.15
+        },
+        {
+          "description": "Pad 5 [CS_INC] of U5 on F.Cu",
+          "kicad_x": 110.5,
+          "kicad_y": 96.1,
+          "x": 10.5,
+          "y": 3.9
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 4 [IMU_INT] of U4 on F.Cu",
+          "kicad_x": 87.8375,
+          "kicad_y": 94.75,
+          "x": -12.1625,
+          "y": 5.25
+        },
+        {
+          "description": "Pad 7 [IMU_INT] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 92.35,
+          "x": -5.675,
+          "y": 7.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [OSC32_IN] of C14 on F.Cu",
+          "kicad_x": 111.6,
+          "kicad_y": 88.28,
+          "x": 11.6,
+          "y": 11.72
+        },
+        {
+          "description": "Pad 1 [OSC32_IN] of Y1 on F.Cu",
+          "kicad_x": 110.15,
+          "kicad_y": 87.8,
+          "x": 10.15,
+          "y": 12.2
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [OSC32_IN] of Y1 on F.Cu",
+          "kicad_x": 110.15,
+          "kicad_y": 87.8,
+          "x": 10.15,
+          "y": 12.2
+        },
+        {
+          "description": "Pad 8 [OSC32_IN] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 92.85,
+          "x": -5.675,
+          "y": 7.15
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [OSC32_OUT] of C15 on F.Cu",
+          "kicad_x": 108.52,
+          "kicad_y": 89.6,
+          "x": 8.52,
+          "y": 10.4
+        },
+        {
+          "description": "Pad 2 [OSC32_OUT] of Y1 on F.Cu",
+          "kicad_x": 107.65,
+          "kicad_y": 87.8,
+          "x": 7.65,
+          "y": 12.2
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [OSC32_OUT] of Y1 on F.Cu",
+          "kicad_x": 107.65,
+          "kicad_y": 87.8,
+          "x": 7.65,
+          "y": 12.2
+        },
+        {
+          "description": "Pad 9 [OSC32_OUT] of U1 on F.Cu",
+          "kicad_x": 94.325,
+          "kicad_y": 93.35,
+          "x": -5.675,
+          "y": 6.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 20 [LCD_SCLK] of U1 on F.Cu",
+          "kicad_x": 97.75,
+          "kicad_y": 98.775,
+          "x": -2.25,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 1 [LCD_SCLK] of J1 on F.Cu",
+          "kicad_x": 97.75,
+          "kicad_y": 112.05,
+          "x": -2.25,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 21 [LCD_SI] of U1 on F.Cu",
+          "kicad_x": 98.25,
+          "kicad_y": 98.775,
+          "x": -1.75,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 2 [LCD_SI] of J1 on F.Cu",
+          "kicad_x": 98.25,
+          "kicad_y": 112.05,
+          "x": -1.75,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 22 [LCD_SCS] of U1 on F.Cu",
+          "kicad_x": 98.75,
+          "kicad_y": 98.775,
+          "x": -1.25,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 3 [LCD_SCS] of J1 on F.Cu",
+          "kicad_x": 98.75,
+          "kicad_y": 112.05,
+          "x": -1.25,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 23 [LCD_EXTCOMIN] of U1 on F.Cu",
+          "kicad_x": 99.25,
+          "kicad_y": 98.775,
+          "x": -0.75,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 4 [LCD_EXTCOMIN] of J1 on F.Cu",
+          "kicad_x": 99.25,
+          "kicad_y": 112.05,
+          "x": -0.75,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 24 [LCD_DISP] of U1 on F.Cu",
+          "kicad_x": 99.75,
+          "kicad_y": 98.775,
+          "x": -0.25,
+          "y": 1.225
+        },
+        {
+          "description": "Pad 5 [LCD_DISP] of J1 on F.Cu",
+          "kicad_x": 99.75,
+          "kicad_y": 112.05,
+          "x": -0.25,
+          "y": -12.05
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP1_MCU] of R1 on F.Cu",
+          "kicad_x": 82.49,
+          "kicad_y": 97.8,
+          "x": -17.51,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 25 [CP1_MCU] of U1 on F.Cu",
+          "kicad_x": 100.25,
+          "kicad_y": 98.775,
+          "x": 0.25,
+          "y": 1.225
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP1] of D11 on B.Cu",
+          "kicad_x": 96.6659,
+          "kicad_y": 108.0199,
+          "x": -3.3341,
+          "y": -8.0199
+        },
+        {
+          "description": "Pad 1 [CP1] of D12 on B.Cu",
+          "kicad_x": 97.5619,
+          "kicad_y": 108.6186,
+          "x": -2.4381,
+          "y": -8.6186
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP1] of D1 on B.Cu",
+          "kicad_x": 105.2,
+          "kicad_y": 103.515,
+          "x": 5.2,
+          "y": -3.515
+        },
+        {
+          "description": "Pad 1 [CP1] of D2 on B.Cu",
+          "kicad_x": 104.9898,
+          "kicad_y": 102.4581,
+          "x": 4.9898,
+          "y": -2.4581
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP1] of D11 on B.Cu",
+          "kicad_x": 96.6659,
+          "kicad_y": 108.0199,
+          "x": -3.3341,
+          "y": -8.0199
+        },
+        {
+          "description": "Pad 2 [CP1] of D10 on B.Cu",
+          "kicad_x": 95.3814,
+          "kicad_y": 106.4381,
+          "x": -4.6186,
+          "y": -6.4381
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP1] of D9 on B.Cu",
+          "kicad_x": 94.8,
+          "kicad_y": 103.515,
+          "x": -5.2,
+          "y": -3.515
+        },
+        {
+          "description": "Pad 2 [CP1] of D10 on B.Cu",
+          "kicad_x": 95.3814,
+          "kicad_y": 106.4381,
+          "x": -4.6186,
+          "y": -6.4381
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP1] of D12 on B.Cu",
+          "kicad_x": 97.5619,
+          "kicad_y": 108.6186,
+          "x": -2.4381,
+          "y": -8.6186
+        },
+        {
+          "description": "Pad 2 [CP1] of D1 on B.Cu",
+          "kicad_x": 105.2,
+          "kicad_y": 103.515,
+          "x": 5.2,
+          "y": -3.515
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP1] of R1 on F.Cu",
+          "kicad_x": 83.51,
+          "kicad_y": 97.8,
+          "x": -16.49,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 1 [CP1] of D9 on B.Cu",
+          "kicad_x": 94.8,
+          "kicad_y": 103.515,
+          "x": -5.2,
+          "y": -3.515
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP2_MCU] of R2 on F.Cu",
+          "kicad_x": 84.49,
+          "kicad_y": 97.8,
+          "x": -15.51,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 26 [CP2_MCU] of U1 on F.Cu",
+          "kicad_x": 100.75,
+          "kicad_y": 98.775,
+          "x": 0.75,
+          "y": 1.225
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP2] of D3 on B.Cu",
+          "kicad_x": 103.3341,
+          "kicad_y": 99.9801,
+          "x": 3.3341,
+          "y": 0.0199
+        },
+        {
+          "description": "Pad 1 [CP2] of D4 on B.Cu",
+          "kicad_x": 102.4381,
+          "kicad_y": 99.3814,
+          "x": 2.4381,
+          "y": 0.6186
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP2] of D13 on B.Cu",
+          "kicad_x": 100.485,
+          "kicad_y": 109.2,
+          "x": 0.485,
+          "y": -9.2
+        },
+        {
+          "description": "Pad 1 [CP2] of D14 on B.Cu",
+          "kicad_x": 101.5419,
+          "kicad_y": 108.9898,
+          "x": 1.5419,
+          "y": -8.9898
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP2] of D2 on B.Cu",
+          "kicad_x": 104.6186,
+          "kicad_y": 101.5619,
+          "x": 4.6186,
+          "y": -1.5619
+        },
+        {
+          "description": "Pad 2 [CP2] of D3 on B.Cu",
+          "kicad_x": 103.3341,
+          "kicad_y": 99.9801,
+          "x": 3.3341,
+          "y": 0.0199
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP2] of D1 on B.Cu",
+          "kicad_x": 105.2,
+          "kicad_y": 104.485,
+          "x": 5.2,
+          "y": -4.485
+        },
+        {
+          "description": "Pad 2 [CP2] of D2 on B.Cu",
+          "kicad_x": 104.6186,
+          "kicad_y": 101.5619,
+          "x": 4.6186,
+          "y": -1.5619
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP2] of D14 on B.Cu",
+          "kicad_x": 101.5419,
+          "kicad_y": 108.9898,
+          "x": 1.5419,
+          "y": -8.9898
+        },
+        {
+          "description": "Pad 1 [CP2] of D1 on B.Cu",
+          "kicad_x": 105.2,
+          "kicad_y": 104.485,
+          "x": 5.2,
+          "y": -4.485
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP2] of D4 on B.Cu",
+          "kicad_x": 102.4381,
+          "kicad_y": 99.3814,
+          "x": 2.4381,
+          "y": 0.6186
+        },
+        {
+          "description": "Pad 2 [CP2] of R2 on F.Cu",
+          "kicad_x": 85.51,
+          "kicad_y": 97.8,
+          "x": -14.49,
+          "y": 2.2
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP3_MCU] of R3 on F.Cu",
+          "kicad_x": 86.49,
+          "kicad_y": 97.8,
+          "x": -13.51,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 27 [CP3_MCU] of U1 on F.Cu",
+          "kicad_x": 101.25,
+          "kicad_y": 98.775,
+          "x": 1.25,
+          "y": 1.225
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP3] of D15 on B.Cu",
+          "kicad_x": 104.0199,
+          "kicad_y": 107.3341,
+          "x": 4.0199,
+          "y": -7.3341
+        },
+        {
+          "description": "Pad 1 [CP3] of D16 on B.Cu",
+          "kicad_x": 104.6186,
+          "kicad_y": 106.4381,
+          "x": 4.6186,
+          "y": -6.4381
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP3] of D6 on B.Cu",
+          "kicad_x": 98.4581,
+          "kicad_y": 99.0102,
+          "x": -1.5419,
+          "y": 0.9898
+        },
+        {
+          "description": "Pad 2 [CP3] of D5 on B.Cu",
+          "kicad_x": 99.515,
+          "kicad_y": 98.8,
+          "x": -0.485,
+          "y": 1.2
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP3] of D4 on B.Cu",
+          "kicad_x": 101.5419,
+          "kicad_y": 99.0102,
+          "x": 1.5419,
+          "y": 0.9898
+        },
+        {
+          "description": "Pad 2 [CP3] of D5 on B.Cu",
+          "kicad_x": 99.515,
+          "kicad_y": 98.8,
+          "x": -0.485,
+          "y": 1.2
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP3] of D11 on B.Cu",
+          "kicad_x": 95.9801,
+          "kicad_y": 107.3341,
+          "x": -4.0199,
+          "y": -7.3341
+        },
+        {
+          "description": "Pad 2 [CP3] of D12 on B.Cu",
+          "kicad_x": 98.4581,
+          "kicad_y": 108.9898,
+          "x": -1.5419,
+          "y": -8.9898
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP3] of D3 on B.Cu",
+          "kicad_x": 104.0199,
+          "kicad_y": 100.6659,
+          "x": 4.0199,
+          "y": -0.6659
+        },
+        {
+          "description": "Pad 2 [CP3] of D4 on B.Cu",
+          "kicad_x": 101.5419,
+          "kicad_y": 99.0102,
+          "x": 1.5419,
+          "y": 0.9898
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP3] of D12 on B.Cu",
+          "kicad_x": 98.4581,
+          "kicad_y": 108.9898,
+          "x": -1.5419,
+          "y": -8.9898
+        },
+        {
+          "description": "Pad 2 [CP3] of D15 on B.Cu",
+          "kicad_x": 104.0199,
+          "kicad_y": 107.3341,
+          "x": 4.0199,
+          "y": -7.3341
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP3] of D16 on B.Cu",
+          "kicad_x": 104.6186,
+          "kicad_y": 106.4381,
+          "x": 4.6186,
+          "y": -6.4381
+        },
+        {
+          "description": "Pad 1 [CP3] of D3 on B.Cu",
+          "kicad_x": 104.0199,
+          "kicad_y": 100.6659,
+          "x": 4.0199,
+          "y": -0.6659
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP3] of R3 on F.Cu",
+          "kicad_x": 87.51,
+          "kicad_y": 97.8,
+          "x": -12.49,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 1 [CP3] of D6 on B.Cu",
+          "kicad_x": 98.4581,
+          "kicad_y": 99.0102,
+          "x": -1.5419,
+          "y": 0.9898
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP4_MCU] of R4 on F.Cu",
+          "kicad_x": 88.49,
+          "kicad_y": 97.8,
+          "x": -11.51,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 28 [CP4_MCU] of U1 on F.Cu",
+          "kicad_x": 101.75,
+          "kicad_y": 98.775,
+          "x": 1.75,
+          "y": 1.225
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP4] of D8 on B.Cu",
+          "kicad_x": 95.3814,
+          "kicad_y": 101.5619,
+          "x": -4.6186,
+          "y": -1.5619
+        },
+        {
+          "description": "Pad 2 [CP4] of D7 on B.Cu",
+          "kicad_x": 95.9801,
+          "kicad_y": 100.6659,
+          "x": -4.0199,
+          "y": -0.6659
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP4] of D6 on B.Cu",
+          "kicad_x": 97.5619,
+          "kicad_y": 99.3814,
+          "x": -2.4381,
+          "y": 0.6186
+        },
+        {
+          "description": "Pad 2 [CP4] of D7 on B.Cu",
+          "kicad_x": 95.9801,
+          "kicad_y": 100.6659,
+          "x": -4.0199,
+          "y": -0.6659
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP4] of D5 on B.Cu",
+          "kicad_x": 100.485,
+          "kicad_y": 98.8,
+          "x": 0.485,
+          "y": 1.2
+        },
+        {
+          "description": "Pad 2 [CP4] of D6 on B.Cu",
+          "kicad_x": 97.5619,
+          "kicad_y": 99.3814,
+          "x": -2.4381,
+          "y": 0.6186
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP4] of D13 on B.Cu",
+          "kicad_x": 99.515,
+          "kicad_y": 109.2,
+          "x": -0.485,
+          "y": -9.2
+        },
+        {
+          "description": "Pad 2 [CP4] of D14 on B.Cu",
+          "kicad_x": 102.4381,
+          "kicad_y": 108.6186,
+          "x": 2.4381,
+          "y": -8.6186
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP4] of D8 on B.Cu",
+          "kicad_x": 95.3814,
+          "kicad_y": 101.5619,
+          "x": -4.6186,
+          "y": -1.5619
+        },
+        {
+          "description": "Pad 2 [CP4] of R4 on F.Cu",
+          "kicad_x": 89.51,
+          "kicad_y": 97.8,
+          "x": -10.49,
+          "y": 2.2
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP4] of D13 on B.Cu",
+          "kicad_x": 99.515,
+          "kicad_y": 109.2,
+          "x": -0.485,
+          "y": -9.2
+        },
+        {
+          "description": "Pad 1 [CP4] of D8 on B.Cu",
+          "kicad_x": 95.3814,
+          "kicad_y": 101.5619,
+          "x": -4.6186,
+          "y": -1.5619
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP5_MCU] of R5 on F.Cu",
+          "kicad_x": 90.49,
+          "kicad_y": 97.8,
+          "x": -9.51,
+          "y": 2.2
+        },
+        {
+          "description": "Pad 29 [CP5_MCU] of U1 on F.Cu",
+          "kicad_x": 102.25,
+          "kicad_y": 98.775,
+          "x": 2.25,
+          "y": 1.225
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP5] of D10 on B.Cu",
+          "kicad_x": 95.0102,
+          "kicad_y": 105.5419,
+          "x": -4.9898,
+          "y": -5.5419
+        },
+        {
+          "description": "Pad 2 [CP5] of D9 on B.Cu",
+          "kicad_x": 94.8,
+          "kicad_y": 104.485,
+          "x": -5.2,
+          "y": -4.485
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [CP5] of D8 on B.Cu",
+          "kicad_x": 95.0102,
+          "kicad_y": 102.4581,
+          "x": -4.9898,
+          "y": -2.4581
+        },
+        {
+          "description": "Pad 2 [CP5] of D9 on B.Cu",
+          "kicad_x": 94.8,
+          "kicad_y": 104.485,
+          "x": -5.2,
+          "y": -4.485
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP5] of D7 on B.Cu",
+          "kicad_x": 96.6659,
+          "kicad_y": 99.9801,
+          "x": -3.3341,
+          "y": 0.0199
+        },
+        {
+          "description": "Pad 2 [CP5] of D8 on B.Cu",
+          "kicad_x": 95.0102,
+          "kicad_y": 102.4581,
+          "x": -4.9898,
+          "y": -2.4581
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP5] of D15 on B.Cu",
+          "kicad_x": 103.3341,
+          "kicad_y": 108.0199,
+          "x": 3.3341,
+          "y": -8.0199
+        },
+        {
+          "description": "Pad 2 [CP5] of D16 on B.Cu",
+          "kicad_x": 104.9898,
+          "kicad_y": 105.5419,
+          "x": 4.9898,
+          "y": -5.5419
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP5] of D7 on B.Cu",
+          "kicad_x": 96.6659,
+          "kicad_y": 99.9801,
+          "x": -3.3341,
+          "y": 0.0199
+        },
+        {
+          "description": "Pad 2 [CP5] of R5 on F.Cu",
+          "kicad_x": 91.51,
+          "kicad_y": 97.8,
+          "x": -8.49,
+          "y": 2.2
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CP5] of D10 on B.Cu",
+          "kicad_x": 95.0102,
+          "kicad_y": 105.5419,
+          "x": -4.9898,
+          "y": -5.5419
+        },
+        {
+          "description": "Pad 1 [CP5] of D15 on B.Cu",
+          "kicad_x": 103.3341,
+          "kicad_y": 108.0199,
+          "x": 3.3341,
+          "y": -8.0199
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad K [PD_K] of PD1 on B.Cu",
+          "kicad_x": 101.9,
+          "kicad_y": 104.0,
+          "x": 1.9,
+          "y": -4.0
+        },
+        {
+          "description": "Pad 30 [PD_K] of U1 on F.Cu",
+          "kicad_x": 102.75,
+          "kicad_y": 98.775,
+          "x": 2.75,
+          "y": 1.225
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 1 [CHG_STAT] of U9 on F.Cu",
+          "kicad_x": 88.3625,
+          "kicad_y": 112.55,
+          "x": -11.6375,
+          "y": -12.55
+        },
+        {
+          "description": "Pad 40 [CHG_STAT] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 93.35,
+          "x": 5.675,
+          "y": 6.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 5 [CHG_PROG] of U9 on F.Cu",
+          "kicad_x": 90.6375,
+          "kicad_y": 112.55,
+          "x": -9.3625,
+          "y": -12.55
+        },
+        {
+          "description": "Pad 1 [CHG_PROG] of R8 on F.Cu",
+          "kicad_x": 92.6,
+          "kicad_y": 115.51,
+          "x": -7.4,
+          "y": -15.51
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 2 [USB_DM] of J2 on B.Cu",
+          "kicad_x": 94.92,
+          "kicad_y": 117.0,
+          "x": -5.08,
+          "y": -17.0
+        },
+        {
+          "description": "Pad 37 [USB_DM] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 94.85,
+          "x": 5.675,
+          "y": 5.15
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 3 [USB_DP] of J2 on B.Cu",
+          "kicad_x": 97.46,
+          "kicad_y": 117.0,
+          "x": -2.54,
+          "y": -17.0
+        },
+        {
+          "description": "Pad 38 [USB_DP] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 94.35,
+          "x": 5.675,
+          "y": 5.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 5 [SWDIO] of J2 on B.Cu",
+          "kicad_x": 102.54,
+          "kicad_y": 117.0,
+          "x": 2.54,
+          "y": -17.0
+        },
+        {
+          "description": "Pad 34 [SWDIO] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 96.35,
+          "x": 5.675,
+          "y": 3.65
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 6 [SWCLK] of J2 on B.Cu",
+          "kicad_x": 105.08,
+          "kicad_y": 117.0,
+          "x": 5.08,
+          "y": -17.0
+        },
+        {
+          "description": "Pad 35 [SWCLK] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 95.85,
+          "x": 5.675,
+          "y": 4.15
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {
+          "description": "Pad 36 [NRST] of U1 on F.Cu",
+          "kicad_x": 105.675,
+          "kicad_y": 95.35,
+          "x": 5.675,
+          "y": 4.65
+        },
+        {
+          "description": "Pad 7 [NRST] of J2 on B.Cu",
+          "kicad_x": 107.62,
+          "kicad_y": 117.0,
+          "x": 7.62,
+          "y": -17.0
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    }
+  ],
+  "severity_overrides": {
+    "lib_footprint_issues": {
+      "reason": "headless runs have no global footprint library table, so every footprint would be flagged 'library not found'",
+      "severity": "ignore"
+    },
+    "lib_footprint_mismatch": {
+      "reason": "placed footprints legitimately differ from their library copy (hidden reference, BOM properties), which KiCad reports for every generated footprint",
+      "severity": "ignore"
+    }
+  },
+  "tampered_checks": [],
+  "unconnected": 181,
+  "warning_count": 4,
+  "warnings": {
+    "isolated_copper": 2,
+    "silk_edge_clearance": 2
+  },
+  "zones_filled": 2
+}

@@ -25,6 +25,9 @@ power_in_undriven      error     power_in pin on a net with no power_out and no
 output_conflict        error     two output / power_out pins on one net
 netclass_unknown       error     net refers to an undefined net class
 rule_violation         error     rule set / net class / net option inconsistent
+                                 (class track or clearance below the board
+                                 minimum, bad via, unknown layer, bad
+                                 ``via_tenting``, name unusable in a DRC rule)
 plane_invalid          error     plane on an unknown net or non-copper layer
 =====================  ========  ==============================================
 
@@ -35,6 +38,8 @@ footprint_missing      error     footprint cannot be loaded
 pad_missing            error     pin mapped to a pad the footprint lacks
 pad_unmapped           error     numbered footprint pad not mapped by any pin
 pad_multiple_pins      error     pad number claimed by two pins
+pad_clearance_override warning   pad clearance override below the board minimum
+                                 (KiCad silently raises it to the minimum)
 =====================  ========  ==============================================
 
 BOM / placement:
@@ -48,8 +53,12 @@ courtyard_overlap      error     courtyards of two parts on one side overlap
 outside_outline        error     courtyard crosses the board edge or a cutout
 in_keepout             error     courtyard inside a no-footprint keep-out
 pad_in_keepout         error     pad copper inside a no-pads keep-out
+keepout_blocks_pad     warning   connected pad lies completely inside a no-track
+                                 keep-out on its only copper layer
 hole_collision         error     courtyard or pad over an NPTH hole
 pad_edge_clearance     error     pad copper closer to the edge than the rule
+pad_spacing            error     two pads of one part on different nets are closer
+                                 than the clearance KiCad's DRC will require
 missing_decoupling     error     IC power pin net has no capacitor to ground
 decoupling_far         warning   nearest decoupling capacitor is far from the pin
 =====================  ========  ==============================================
@@ -60,7 +69,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from .model import Design, Part, TOP, BOTTOM
+from .model import Design, Part, TOP, BOTTOM, VIA_TENTING
 
 ERROR = "error"
 WARNING = "warning"
@@ -167,6 +176,12 @@ class CheckReport:
         return self
 
 
+def _bad_rule_name(name: str) -> bool:
+    """True if a net / net-class name cannot be quoted inside a KiCad custom
+    rule condition (see :func:`gleda.board.custom_rules_text`)."""
+    return not name or any(ch in name for ch in "'\"\\*?") or name != name.strip()
+
+
 # --------------------------------------------------------------------------
 # electrical checks (pure model)
 # --------------------------------------------------------------------------
@@ -197,6 +212,27 @@ def check_electrical(design: Design, report: CheckReport) -> None:
         if nc.via_drill < design.rules.min_drill - 1e-9:
             report.error("rule_violation", "net class %s via drill %.3f < min drill %.3f"
                          % (nc.name, nc.via_drill, design.rules.min_drill))
+        if nc.via_diameter < design.rules.min_via_diameter - 1e-9:
+            report.error("rule_violation", "net class %s via diameter %.3f < min via "
+                         "diameter %.3f" % (nc.name, nc.via_diameter,
+                                            design.rules.min_via_diameter))
+        if nc.min_track_width is not None:
+            if nc.min_track_width > nc.track_width + 1e-9:
+                report.error("rule_violation", "net class %s min_track_width %.3f > its "
+                             "track width %.3f" % (nc.name, nc.min_track_width,
+                                                   nc.track_width))
+            if nc.min_track_width < design.rules.min_track - 1e-9:
+                report.error("rule_violation", "net class %s min_track_width %.3f < min "
+                             "track %.3f" % (nc.name, nc.min_track_width,
+                                             design.rules.min_track))
+        if _bad_rule_name(nc.name):
+            report.error("rule_violation", "net class name %r cannot be used in a KiCad "
+                         "DRC rule (quotes, backslash, * and ? are not allowed)" % nc.name)
+    if "Default" not in design.netclasses:
+        report.error("rule_violation", "the net class 'Default' is missing")
+    if design.via_tenting not in VIA_TENTING:
+        report.error("rule_violation", "via_tenting %r is not one of %s"
+                     % (design.via_tenting, ", ".join(sorted(VIA_TENTING))))
 
     # pin -> nets
     pin_nets: Dict[Tuple[str, str], List[str]] = {}
@@ -207,6 +243,10 @@ def check_electrical(design: Design, report: CheckReport) -> None:
         if net.width is not None and net.width < design.rules.min_track - 1e-9:
             report.error("rule_violation", "net %s width %.3f < min track %.3f"
                          % (net.name, net.width, design.rules.min_track), net=net.name)
+        if _bad_rule_name(net.name):
+            report.error("rule_violation", "net name %r cannot be used in a KiCad DRC "
+                         "rule (quotes, backslash, * and ? are not allowed)" % net.name,
+                         net=net.name)
         if net.layers:
             for layer in net.layers:
                 if layer not in design.copper_layers:
@@ -341,6 +381,14 @@ def check_footprints(design: Design, report: CheckReport) -> Dict[str, Any]:
                     report.error("pad_multiple_pins", "%s pad %r is mapped by pins %s and %s"
                                  % (part.ref, pad, claimed[pad], pin.name), [part.ref])
                 claimed.setdefault(pad, pin.name)
+        low = sorted({p.clearance for p in geom.pads
+                      if p.clearance and p.clearance < design.rules.min_clearance - 1e-9})
+        if low:
+            report.warning("pad_clearance_override", "%s: footprint %s has pad clearance "
+                           "override(s) %s mm below the board minimum %.3f mm; KiCad uses "
+                           "the board minimum" % (part.ref, geom.lib_id,
+                                                  ", ".join("%.3f" % c for c in low),
+                                                  design.rules.min_clearance), [part.ref])
         unmapped = [n for n in geom.pad_numbers if n not in claimed]
         if unmapped:
             report.error("pad_unmapped", "%s: footprint %s pad(s) %s are not mapped by any pin"
@@ -437,6 +485,18 @@ def check_placement(design: Design, report: CheckReport, geoms: Dict[str, Any]) 
                         report.error("pad_in_keepout", "%s pad %s is inside keep-out %s"
                                      % (part.ref, pad.number, ko.name or "(unnamed)"),
                                      [part.ref])
+            elif ko.tracks and ko_layers & occupied_layers:
+                # a connected pad buried in a no-track area cannot be routed
+                ko_poly = ko_poly or geometry.keepout_polygon(ko)
+                pads = pads if pads is not None else geometry.part_pads(design, part)
+                for pad in pads:
+                    if pad.polygon is None or not pad.net or not pad.layers:
+                        continue
+                    if set(pad.layers) <= ko_layers and ko_poly.contains(pad.polygon):
+                        report.warning("keepout_blocks_pad", "%s pad %s (net %s) lies "
+                                       "completely inside the no-track keep-out %s"
+                                       % (part.ref, pad.number, pad.net,
+                                          ko.name or "(unnamed)"), [part.ref], pad.net)
         # pad copper to board edge / holes
         if not part.allow_overhang:
             pads = pads if pads is not None else geometry.part_pads(design, part)
@@ -463,6 +523,41 @@ def check_placement(design: Design, report: CheckReport, geoms: Dict[str, Any]) 
                     msg = "%s pad %s is %.3f mm from the board edge (min %.3f)" % (
                         part.ref, worst[1], worst[0], rules.copper_to_edge)
                 report.error("pad_edge_clearance", msg, [part.ref])
+        # pads of this part against each other (land pattern vs. the rules)
+        pads = pads if pads is not None else geometry.part_pads(design, part)
+        _check_pad_spacing(design, report, part, pads)
+
+
+def _check_pad_spacing(design: Design, report: CheckReport, part: Part, pads) -> None:
+    """Pads of one part on different nets must keep the clearance KiCad's DRC
+    will ask for (:meth:`Design.clearance`, pad overrides included).  Pad
+    polygons lie slightly inside the true copper, so a finding here is always
+    real; marginal cases are left to KiCad."""
+    items = [(p, p.polygon.bounds) for p in pads if p.polygon is not None]
+    found = 0
+    for i in range(len(items)):
+        a, ba = items[i]
+        for j in range(i + 1, len(items)):
+            b, bb = items[j]
+            if a.number == b.number or (a.net is not None and a.net == b.net):
+                continue
+            if not set(a.layers) & set(b.layers):
+                continue
+            need = design.clearance(a.net, b.net, local_a=a.clearance, local_b=b.clearance)
+            if bb[0] - ba[2] >= need or ba[0] - bb[2] >= need \
+                    or bb[1] - ba[3] >= need or ba[1] - bb[3] >= need:
+                continue
+            gap = a.polygon.distance(b.polygon)
+            if gap < need - _DIST_EPS:
+                found += 1
+                if found <= 4:
+                    report.error("pad_spacing", "%s pads %s (%s) and %s (%s) are %.3f mm "
+                                 "apart, KiCad will require %.3f mm" % (
+                                     part.ref, a.number, a.net or "no net", b.number,
+                                     b.net or "no net", gap, need), [part.ref])
+    if found > 4:
+        report.error("pad_spacing", "%s: %d more pad pairs are too close"
+                     % (part.ref, found - 4), [part.ref])
 
 
 def check_decoupling(design: Design, report: CheckReport, max_distance: Optional[float] = 6.0,

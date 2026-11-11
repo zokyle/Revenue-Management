@@ -118,8 +118,10 @@ def test_against_independent_scipy_integrator(surf, phi, v0, dist):
             -A10 * s[3] / speed - KF * gy + acc_g[1],
         ]
 
+    v_event = 1e-4  # [m/s] the reference integration ends at this speed
+
     def nearly_stopped(_t, s):
-        return math.hypot(s[2], s[3]) - 1e-3
+        return math.hypot(s[2], s[3]) - v_event
 
     nearly_stopped.terminal = True
     r = ph.simulate_putt(surf, (0, 0), (dist, 0), phi, v0, A10, grain)
@@ -132,11 +134,26 @@ def test_against_independent_scipy_integrator(surf, phi, v0, dist):
     assert ref.success
     assert np.allclose(r.xy[k], ref.y[:2, -1], rtol=0, atol=2e-8)
     assert np.allclose(r.v[k], ref.y[2:, -1], rtol=0, atol=2e-8)
-    # (b) rest position: integrate the reference down to 1 mm/s, where less
-    # than 1e-6 m of roll remains (v^2 / 2a), and compare
+    # (b) rest position: integrate the reference down to 0.1 mm/s (the
+    # equation of motion is singular at v = 0, so an adaptive integrator
+    # cannot be run into the stop itself) and close the remaining roll
+    # analytically: v^2 / (2 * dec) along the direction of travel, with
+    # dec = a_r - drive . v_hat the along-track deceleration there.  That
+    # remainder is 1e-8 ... 3e-8 m here (it is larger for a ball that stops
+    # while running downhill, where dec is only ~0.2 m/s^2).
     ref = solve_ivp(rhs, (0.0, 60.0), y0, method="DOP853", rtol=1e-12, atol=1e-14, events=nearly_stopped)
     assert ref.success and ref.t_events[0].size == 1
-    assert np.hypot(*(r.stop_xy - ref.y[:2, -1])) < 2e-6
+    x_e, y_e, vx_e, vy_e = ref.y[:, -1]
+    s_e = math.hypot(vx_e, vy_e)
+    assert s_e == pytest.approx(v_event, rel=1e-6)
+    gx, gy = surf.grad(x_e, y_e)
+    dec = A10 - ((acc_g[0] - KF * gx) * vx_e + (acc_g[1] - KF * gy) * vy_e) / s_e
+    assert dec > 0.1
+    remainder = s_e**2 / (2.0 * dec)
+    assert remainder < 5e-8
+    rest = np.array([x_e + vx_e / s_e * remainder, y_e + vy_e / s_e * remainder])
+    assert np.hypot(*(r.stop_xy - rest)) < 3e-8
+    assert r.t_end == pytest.approx(ref.t[-1] + s_e / dec, abs=1e-5)
 
 
 def test_default_dt_is_converged():

@@ -137,8 +137,9 @@ def mini_design(name="mini"):
 
     d.add_plane("GND", "In1.Cu")
     d.add_plane("+3V0", "In2.Cu")
-    # antenna keep-out at the top end of the module: no copper on any layer
-    d.add_keepout(RoundedPolygon.rect(-3.5, 9.5, 7.0, 3.0), name="antenna",
+    # antenna keep-out beyond the top end of the module: no copper on any layer
+    # (it stays clear of the J1 pads, which end at y = 9.5)
+    d.add_keepout(RoundedPolygon.rect(-3.5, 10.6, 7.0, 1.6), name="antenna",
                   tracks=True, vias=True, copper=True)
     # no components on the bottom side under the battery contact area
     d.add_keepout(Circle(-11.0, -6.5, 1.5), layers=("B.Cu",), name="spring",

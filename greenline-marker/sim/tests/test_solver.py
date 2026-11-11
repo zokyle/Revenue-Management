@@ -192,6 +192,30 @@ def test_solver_converges_on_random_quadratics():
     assert np.median(rolls) <= 12
 
 
+def test_tight_tolerances_converge_to_the_same_solution():
+    """With tol_miss = tol_pace = 1e-9 m (as used for exported reference
+    vectors) the solver still converges - a tight tolerance must not be
+    mistaken for a discontinuity - and the default-tolerance solution lies
+    within 5e-5 m (lateral, at the hole) of the tight one."""
+    rng = np.random.default_rng(31)
+    n_ok = 0
+    for i in range(120):
+        surf, dist, a_r, grain, past = _random_case(rng, 0.03, 0.002 if i % 2 else 0.0)
+        loose = ph.solve_aim(surf, (0, 0), (dist, 0), a_r, grain, past)
+        tight = ph.solve_aim(surf, (0, 0), (dist, 0), a_r, grain, past, tol_miss=1e-9, tol_pace=1e-9)
+        assert tight.status == loose.status
+        if not tight.ok:
+            continue
+        n_ok += 1
+        r = ph.simulate_putt(surf, (0, 0), (dist, 0), tight.phi, tight.v0, a_r, grain)
+        assert abs(r.lateral_at_line) < 5e-9
+        assert abs(r.speed_at_line**2 - tight.v_hole_target**2) / (2 * a_r) < 5e-9
+        assert abs(tight.phi - loose.phi) * dist < 5e-5
+        assert tight.v0 == pytest.approx(loose.v0, rel=2e-5)
+        assert tight.n_rolls <= 80
+    assert n_ok >= 115
+
+
 def test_ok_solutions_are_always_true_solutions_even_on_wild_patches():
     """Extreme patches (4 % slope, curvature sigma 0.004 1/m over up to 12 m,
     i.e. local slopes beyond the critical slope): failures are allowed but

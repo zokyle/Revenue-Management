@@ -182,7 +182,7 @@ def test_bad_geometry_is_reported_by_type(tmp_path, mini):
     tracks = [
         Track("SCK", "F.Cu", 0.0, 12.5, 3.0, 12.5, 0.10),                # thinner than min track
         Track("SCK", "B.Cu", 0.0, 14.8, 3.0, 14.5, 0.15),                # too close to the edge
-        Track("MOSI", "F.Cu", -5.0, 9.5, -2.0, 9.5, 0.15),               # inside the antenna keep-out
+        Track("MOSI", "F.Cu", -5.0, 10.6, -2.0, 10.6, 0.15),             # inside the antenna keep-out
         # two different nets 0.1 mm apart (both hang on their pads)
         Track("LED1", "F.Cu", r11[0], r11[1], r11[0] - 2.0, r11[1], 0.15),
         Track("LED2", "F.Cu", r21[0], r21[1], r21[0] - 1.0, r21[1], 0.15),

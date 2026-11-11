@@ -231,3 +231,91 @@ def test_castellated_board_edge_pad_loads_in_kicad():
 
 def test_test_pad_is_not_collected_by_pytest():
     assert F.test_pad.__test__ is False and F.pogo_pad is F.test_pad
+
+
+# -- BGA, two-pad parts, pad clearance override ---------------------------------
+
+def test_bga_generator_names_and_positions():
+    spec = F.bga("BGA25", 5, 5, pitch=0.5, pad_d=0.23, body=(3.47, 2.95), height=2.76)
+    assert len(spec.pads) == 25 and spec.smd and spec.height == 2.76
+    pads = {p.number: p for p in spec.pads}
+    # A1 is the TOP-LEFT ball seen from the top of the board (+y up)
+    assert (pads["A1"].x, pads["A1"].y) == (-1.0, 1.0)
+    assert (pads["A5"].x, pads["A5"].y) == (1.0, 1.0)
+    assert (pads["E1"].x, pads["E1"].y) == (-1.0, -1.0)
+    assert (pads["C3"].x, pads["C3"].y) == (0.0, 0.0)
+    assert all(p.shape == "circle" and p.w == p.h == 0.23 and p.kind == "smd"
+               and p.clearance is None for p in spec.pads)
+    assert spec.body_bbox() == (-1.735, -1.475, 1.735, 1.475)
+    assert spec.pin1[0] < -1.735 and spec.pin1[1] > 0          # marker at the A1 corner
+    assert "BGA-25 5x5, pitch 0.5 mm, pad 0.23 mm" in spec.description
+    # default body: the ball field plus one pitch
+    assert F.bga("B", 4, 3, pitch=0.8, pad_d=0.4).body == (3.2, 2.4)
+
+
+def test_bga_row_letters_skip_i_o_q_s_x_z():
+    assert [F.bga_row_name(i) for i in range(9)] == list("ABCDEFGHJ")
+    assert F.bga_row_name(19) == "Y" and F.bga_row_name(20) == "AA"
+    assert F.bga_row_name(21) == "AB"
+    big = F.bga("BIG", 2, 22, pitch=0.5, pad_d=0.25)
+    assert [p.number for p in big.pads[-4:]] == ["AA1", "AA2", "AB1", "AB2"]
+    assert not any(ch in "IOQSXZ" for p in big.pads for ch in p.number)
+
+
+def test_bga_omit_and_errors():
+    spec = F.bga("BGA_OMIT", 3, 3, pitch=0.5, pad_d=0.25, omit=["b2"])
+    assert len(spec.pads) == 8 and "B2" not in spec.pad_numbers()
+    with pytest.raises(ValueError, match="unknown ball"):
+        F.bga("X", 3, 3, pitch=0.5, pad_d=0.25, omit=["D4"])
+    with pytest.raises(ValueError, match="smaller than the pitch"):
+        F.bga("X", 3, 3, pitch=0.5, pad_d=0.5)
+    with pytest.raises(ValueError):
+        F.bga("X", 0, 3, pitch=0.5, pad_d=0.25)
+    with pytest.raises(ValueError, match="every ball"):
+        F.bga("X", 1, 1, pitch=0.5, pad_d=0.25, omit=["A1"])
+
+
+def test_pad_clearance_override_round_trip():
+    spec = F.bga("BGA_CLR", 2, 2, pitch=0.5, pad_d=0.23, pad_clearance=0.09,
+                 mask_margin=0.03, paste_margin=-0.01)
+    text = F.kicad_mod_text(spec)
+    assert text.count("(clearance 0.09)") == 4
+    assert text.count("(solder_mask_margin 0.03)") == 4
+    assert text.count("(solder_paste_margin -0.01)") == 4
+    geom = F.resolve(spec)                                   # read back through pcbnew
+    assert [p.clearance for p in geom.pads] == [0.09] * 4
+    assert geom.pads[0].number == "A1" and (geom.pads[0].x, geom.pads[0].y) == (-0.25, 0.25)
+    assert F.resolve("Capacitor_SMD:C_0402_1005Metric").pads[0].clearance is None
+    with pytest.raises(ValueError, match="clearance override"):
+        F.PadSpec("1", 0, 0, 1, 1, clearance=0.0)
+
+
+def test_two_pad_generator():
+    spec = F.two_pad("PD_4.8x2.5", pad_w=1.0, pad_h=1.8, pitch=3.8, body=(4.8, 2.5),
+                     numbers=("A", "K"), height=0.48, polarised=True)
+    assert [(p.number, p.x, p.y, p.w, p.h) for p in spec.pads] == [
+        ("A", -1.9, 0.0, 1.0, 1.8), ("K", 1.9, 0.0, 1.0, 1.8)]
+    assert spec.pin1 == (-1.9 - 0.5 - 0.35, 0.0) and spec.body == (4.8, 2.5)
+    geom = F.resolve(spec)
+    assert geom.pad_numbers == ["A", "K"] and geom.body == (-2.4, -1.25, 2.4, 1.25)
+    bare = F.two_pad("Contacts", pad_w=1.5, pad_h=2.5, pitch=4.0, paste=False)
+    assert all(p.kind == "conn" for p in bare.pads) and bare.pin1 is None
+    assert "F.Paste" not in F.kicad_mod_text(bare)
+    with pytest.raises(ValueError, match="overlap"):
+        F.two_pad("X", pad_w=2.0, pad_h=1.0, pitch=1.5)
+
+
+def test_bare_pad_row_on_the_bottom_side():
+    """Flush contact pads: copper + mask opening, no paste, not in BOM / PnP."""
+    spec = F.pad_row("Row7", 7, 2.54, 1.8)
+    assert [p.x for p in spec.pads] == pytest.approx([-7.62, -5.08, -2.54, 0, 2.54, 5.08, 7.62])
+    assert all(p.kind == "conn" and p.shape == "circle" and p.w == 1.8 for p in spec.pads)
+    assert spec.exclude_from_bom and spec.exclude_from_pos and not spec.silk
+    from gleda.model import Design, Circle, Part, n_pin, BOTTOM
+    from gleda import geometry
+    d = Design("row", Circle(0, 0, 12))
+    d.add(Part("J2", "pads", spec, pins=n_pin(7), x=0.0, y=-5.0, side=BOTTOM, in_bom=False))
+    pads = geometry.part_pads(d, d.part("J2"))
+    # flipping to the bottom keeps x: pad 1 stays at -x as seen from the TOP
+    assert [(p.number, round(p.x, 2)) for p in pads][0] == ("1", -7.62)
+    assert all(p.layers == ("B.Cu",) and p.y == pytest.approx(-5.0) for p in pads)

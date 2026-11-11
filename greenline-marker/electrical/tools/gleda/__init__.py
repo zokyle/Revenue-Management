@@ -12,9 +12,9 @@ drc         zone fill + KiCad DRC runner and report parser
 kicad_cli   thin kicad-cli wrappers (SVG export, SVG reader for orientation checks)
 """
 from .model import (  # noqa: F401
-    Design, Part, Pin, Net, NetClass, Rules, US_4L_STD, Outline, Circle,
-    RoundedPolygon, Slot, Hole, Keepout, Plane, Stackup, Track, Via,
-    two_pin, n_pin, TOP, BOTTOM, ALL_LAYERS,
+    Design, Part, Pin, Net, NetClass, Rules, US_4L_STD, US_4L_FINE, Outline, Circle,
+    RoundedPolygon, Slot, PathShape, Hole, Keepout, Plane, Stackup, Track, Via,
+    two_pin, n_pin, TOP, BOTTOM, ALL_LAYERS, VIA_TENTING,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

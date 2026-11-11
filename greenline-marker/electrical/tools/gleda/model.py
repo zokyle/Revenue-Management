@@ -3,9 +3,10 @@
 Pure Python (no pcbnew, no shapely at import time).  A :class:`Design` holds
 everything the rest of the toolchain needs:
 
-* board outline (circle / rounded polygon + cutouts, slots, notches, NPTH holes)
+* board outline (circle / rounded polygon / general line + arc path such as
+  a circle clipped by a chord, + cutouts, slots, notches, NPTH holes)
 * stack-up, design rules (:class:`Rules`, default :data:`US_4L_STD`) and net
-  classes
+  classes, each with its own track width and clearance
 * parts (:class:`Part`) with BOM data, footprint, pin -> pad mapping,
   placement and height
 * nets (:class:`Net`) connecting part pins, explicit no-connects
@@ -49,6 +50,15 @@ COPPER_LAYERS_4 = ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")
 COPPER_LAYERS_6 = ("F.Cu", "In1.Cu", "In2.Cu", "In3.Cu", "In4.Cu", "B.Cu")
 
 ALL_LAYERS = "all"
+
+#: Allowed values of :attr:`Design.via_tenting` -> the sides on which vias get
+#: a solder-mask OPENING ("both" = tented on both sides, no openings).
+VIA_TENTING: Dict[str, Tuple[str, ...]] = {
+    "both": (),
+    "bottom": ("F.Mask",),
+    "top": ("B.Mask",),
+    "none": ("F.Mask", "B.Mask"),
+}
 
 Point = Tuple[float, float]
 
@@ -98,6 +108,10 @@ class Rules:
     default_track: float = 0.15
     #: default power track width (net class "Power")
     power_track: float = 0.30
+    #: clearance of the net classes "Default" and "Power" (and of every net
+    #: class created without an explicit clearance).  ``min_clearance`` is the
+    #: board-level floor; a fine-pitch net class may go down to it.
+    default_clearance: float = 0.127
     #: clearance of copper zones (planes / pours) to other nets
     zone_clearance: float = 0.20
     #: minimum copper width inside a zone fill
@@ -137,23 +151,50 @@ class Rules:
         if self.power_track < self.min_track - 1e-9:
             problems.append("power track %.3f < min track %.3f"
                             % (self.power_track, self.min_track))
+        if self.default_clearance < self.min_clearance - 1e-9:
+            problems.append("default clearance %.3f < min clearance %.3f"
+                            % (self.default_clearance, self.min_clearance))
         return problems
 
 
 #: Default rule set: standard US 4-layer fab, through vias only.
 US_4L_STD = Rules()
 
+#: Same fab class with the board-level minimums lowered to 0.09 / 0.09 mm
+#: (3.5 mil) so that a fine net class can escape 0.5 mm-pitch BGAs.  The net
+#: classes "Default" (0.15 / 0.127) and "Power" (0.30 / 0.127) are unchanged;
+#: add the fine class with
+#: ``design.add_netclass("Fine", track_width=0.09, clearance=0.09)``.
+US_4L_FINE = replace(US_4L_STD, name="US_4L_FINE", min_track=0.09, min_clearance=0.09)
+
 
 @dataclass
 class NetClass:
-    """KiCad net class.  ``clearance`` etc. default to the rule-set values
-    (filled in by :class:`Design`)."""
+    """KiCad net class with its own track width and clearance.
+
+    ``track_width``      width the router uses for nets of this class
+    ``clearance``        copper clearance of this class.  KiCad's DRC requires
+                         ``max(clearance of class A, clearance of class B)``
+                         between items of two nets (see :meth:`Design.clearance`)
+    ``via_diameter`` / ``via_drill``  via used for nets of this class
+    ``min_track_width``  narrowest track KiCad's DRC accepts on nets of this
+                         class (written as a custom rule into ``.kicad_dru``);
+                         ``None`` means ``track_width``, i.e. no neck-down
+
+    Unspecified values are filled in from the rule set by
+    :meth:`Design.add_netclass`."""
     name: str
     track_width: float
     clearance: float
     via_diameter: float
     via_drill: float
     description: str = ""
+    min_track_width: Optional[float] = None
+
+    @property
+    def hard_min_track(self) -> float:
+        """Narrowest track allowed on nets of this class."""
+        return self.track_width if self.min_track_width is None else self.min_track_width
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -293,7 +334,133 @@ class Slot:
     width: float
 
 
-Shape = Union[Circle, RoundedPolygon, Slot]
+@dataclass(frozen=True)
+class PathSegment:
+    """One step of a :class:`PathShape`: a straight line to ``end`` or, when
+    ``center`` is given, a circular arc to ``end`` about ``center`` (``ccw`` =
+    counter-clockwise in the +y-up design frame)."""
+    end: Point
+    center: Optional[Point] = None
+    ccw: bool = True
+
+
+@dataclass(frozen=True)
+class PathShape:
+    """Closed outline made of straight lines and circular arcs.
+
+    Build it step by step::
+
+        PathShape.begin(-5, 0).line_to(5, 0).arc_to(-5, 0, 0, 0, ccw=True).close()
+
+    or use a factory: :meth:`clipped_circle` (a circle cut by one or more
+    chords) / :meth:`d_shape` (a circle with one flat).  The path may run in
+    either direction; it must not intersect itself.
+    """
+    start: Point
+    segments: Tuple[PathSegment, ...] = ()
+
+    def __post_init__(self):
+        object.__setattr__(self, "start", (float(self.start[0]), float(self.start[1])))
+        object.__setattr__(self, "segments", tuple(self.segments))
+
+    # -- construction ------------------------------------------------------
+    @classmethod
+    def begin(cls, x: float, y: float) -> "PathShape":
+        """Start a path at (x, y)."""
+        return cls((float(x), float(y)), ())
+
+    @property
+    def end(self) -> Point:
+        """Current end point of the path."""
+        return self.segments[-1].end if self.segments else self.start
+
+    def line_to(self, x: float, y: float) -> "PathShape":
+        """Append a straight line to (x, y); returns the extended path."""
+        return PathShape(self.start, self.segments + (PathSegment((float(x), float(y))),))
+
+    def arc_to(self, x: float, y: float, cx: float, cy: float,
+               ccw: bool = True) -> "PathShape":
+        """Append a circular arc about (cx, cy) to (x, y).  The current end
+        point and (x, y) must be at the same distance from the centre."""
+        r0 = math.hypot(self.end[0] - cx, self.end[1] - cy)
+        r1 = math.hypot(x - cx, y - cy)
+        if r0 < 1e-9 or abs(r0 - r1) > 1e-6:
+            raise ValueError("arc end points are %.6f and %.6f mm from the centre"
+                             % (r0, r1))
+        if math.hypot(self.end[0] - x, self.end[1] - y) < 1e-9:
+            raise ValueError("arc with identical end points (use Circle for a full circle)")
+        seg = PathSegment((float(x), float(y)), (float(cx), float(cy)), bool(ccw))
+        return PathShape(self.start, self.segments + (seg,))
+
+    @property
+    def closed(self) -> bool:
+        return bool(self.segments) and math.hypot(
+            self.end[0] - self.start[0], self.end[1] - self.start[1]) < 1e-9
+
+    def close(self) -> "PathShape":
+        """Close the path with a straight line back to the start if needed."""
+        path = self
+        if not path.closed:
+            path = path.line_to(*path.start)
+        arcs = sum(1 for seg in path.segments if seg.center is not None)
+        if len(path.segments) < (2 if arcs else 3):
+            raise ValueError("a closed path needs at least three lines, or two segments "
+                             "one of which is an arc")
+        return path
+
+    # -- factories ---------------------------------------------------------
+    @classmethod
+    def clipped_circle(cls, cx: float, cy: float, r: float,
+                       chords: Sequence[Tuple[float, float]]) -> "PathShape":
+        """Circle of radius ``r`` about (cx, cy) with one or more segments cut
+        off by straight chords.
+
+        Each chord is ``(angle_deg, distance)``: the unit normal of the chord
+        points in direction ``angle_deg`` (0 = +x, 90 = +y) and the chord lies
+        ``distance`` mm from the centre along it; everything beyond the chord
+        is removed.  ``(90, 17.3)`` cuts the circle off at y = cy + 17.3.
+        The removed segments must not overlap each other.
+        """
+        if r <= 0:
+            raise ValueError("radius must be positive")
+        if not chords:
+            raise ValueError("clipped_circle needs at least one chord (use Circle)")
+        cuts = []
+        for angle, dist in chords:
+            if not -r < dist < r:
+                raise ValueError("chord distance %.4f must be inside the radius %.4f"
+                                 % (dist, r))
+            cuts.append((math.radians(angle) % (2 * math.pi), math.acos(dist / r)))
+        cuts.sort()
+        n = len(cuts)
+        for i in range(n):
+            a0, h0 = cuts[i]
+            a1, h1 = cuts[(i + 1) % n]
+            gap = (a1 - a0) % (2 * math.pi) if n > 1 else 2 * math.pi
+            if gap - h0 - h1 < 1e-9:
+                raise ValueError("chords overlap; describe the outline as a polygon")
+
+        def pt(angle: float) -> Point:
+            x, y = cx + r * math.cos(angle), cy + r * math.sin(angle)
+            return (round(x, 9) + 0.0, round(y, 9) + 0.0)
+
+        path = cls.begin(*pt(cuts[0][0] + cuts[0][1]))
+        for i in range(n):
+            a1, h1 = cuts[(i + 1) % n]
+            path = path.arc_to(*pt(a1 - h1), cx, cy, ccw=True)     # kept arc
+            path = path.line_to(*pt(a1 + h1))                      # the chord
+        return path.close()
+
+    @classmethod
+    def d_shape(cls, r: float, flat_y: float, cx: float = 0.0, cy: float = 0.0
+                ) -> "PathShape":
+        """Circle of radius ``r`` about (cx, cy) with a flat at ``y = flat_y``
+        (the side beyond the flat, away from the centre, is removed)."""
+        d = flat_y - cy
+        return cls.clipped_circle(cx, cy, r, [(90.0, d)] if d >= 0 else [(270.0, -d)])
+
+
+Shape = Union[Circle, RoundedPolygon, Slot, PathShape]
 
 
 @dataclass(frozen=True)
@@ -309,7 +476,9 @@ class Hole:
 class Outline:
     """Board outline.
 
-    ``shape``    outer boundary (:class:`Circle` or :class:`RoundedPolygon`)
+    ``shape``    outer boundary (:class:`Circle`, :class:`RoundedPolygon` or a
+                 general line + arc :class:`PathShape`, e.g.
+                 ``PathShape.d_shape(21.2, 17.3)``)
     ``cutouts``  shapes removed from the board.  A cutout that lies completely
                  inside the outer boundary becomes an internal routed cutout;
                  one that crosses the boundary becomes a notch (the boundary
@@ -692,23 +861,45 @@ class Design:
         self.vias: List[Via] = []
         #: nets treated as ground for the decoupling check (None = by name)
         self.ground_nets: Optional[Set[str]] = None
-        self.add_netclass("Default", track_width=rules.default_track)
-        self.add_netclass("Power", track_width=rules.power_track)
+        #: which side(s) of the board have their vias covered by solder mask:
+        #: "both" (default), "bottom" (top side open), "top" or "none".
+        #: See :data:`VIA_TENTING` and :func:`gleda.board.apply_routing`.
+        self.via_tenting: str = "both"
+        #: write a ``.kicad_dru`` rule per net class (and per net with a width
+        #: override) so that KiCad's DRC rejects tracks narrower than the
+        #: class allows; without it KiCad only checks the board minimum.
+        self.enforce_track_widths: bool = True
+        self.add_netclass("Default", track_width=rules.default_track,
+                          clearance=rules.default_clearance)
+        self.add_netclass("Power", track_width=rules.power_track,
+                          clearance=rules.default_clearance)
 
     # -- net classes -------------------------------------------------------
     def add_netclass(self, name: str, track_width: Optional[float] = None,
                      clearance: Optional[float] = None,
                      via_diameter: Optional[float] = None,
-                     via_drill: Optional[float] = None, description: str = "") -> NetClass:
-        """Create or replace a net class; unspecified values come from the rules."""
+                     via_drill: Optional[float] = None, description: str = "",
+                     min_track_width: Optional[float] = None) -> NetClass:
+        """Create or replace a net class; unspecified values come from the
+        rules (``default_track``, ``default_clearance``, the standard via).
+
+        A fine-pitch escape class on a board built with :data:`US_4L_FINE`::
+
+            d.add_netclass("Fine", track_width=0.09, clearance=0.09)
+            d.net("CAM_D3", "U2.C3", "U1.PC9", netclass="Fine")
+
+        ``min_track_width`` permits neck-downs: KiCad's DRC then accepts
+        tracks of this class down to that width instead of ``track_width``.
+        """
         r = self.rules
         nc = NetClass(
             name=name,
             track_width=r.default_track if track_width is None else track_width,
-            clearance=r.min_clearance if clearance is None else clearance,
+            clearance=r.default_clearance if clearance is None else clearance,
             via_diameter=r.via_diameter if via_diameter is None else via_diameter,
             via_drill=r.via_drill if via_drill is None else via_drill,
             description=description,
+            min_track_width=min_track_width,
         )
         self.netclasses[name] = nc
         return nc
@@ -824,9 +1015,9 @@ class Design:
         schematic round trip."""
         return {name: {"%s.%s" % rp for rp in self.net_pads(name)} for name in self.nets}
 
-    def netclass_of(self, net_name: str) -> NetClass:
+    def netclass_of(self, net_name: Optional[str]) -> NetClass:
         """Net class object of a net (falls back to Default)."""
-        net = self.nets.get(net_name)
+        net = self.nets.get(net_name) if net_name else None
         cls = net.netclass if net else "Default"
         return self.netclasses.get(cls, self.netclasses["Default"])
 
@@ -836,6 +1027,99 @@ class Design:
         if net is not None and net.width is not None:
             return net.width
         return self.netclass_of(net_name).track_width
+
+    def min_track_width(self, net_name: str) -> float:
+        """Narrowest track KiCad's DRC accepts on this net.
+
+        This is the smaller of the net's ``width`` override and its class's
+        ``min_track_width`` (default: the class ``track_width``), never below
+        the board minimum ``rules.min_track``.  With
+        ``enforce_track_widths`` (default) the same number is written into the
+        board's ``.kicad_dru``; without it only ``rules.min_track`` is checked
+        by KiCad."""
+        nc = self.netclass_of(net_name)
+        width = nc.hard_min_track
+        net = self.nets.get(net_name)
+        if net is not None and net.width is not None:
+            width = min(width, net.width)
+        return max(width, self.rules.min_track)
+
+    def via_size(self, net_name: Optional[str] = None) -> Tuple[float, float]:
+        """(pad diameter, drill) of the via used for a net (from its class)."""
+        nc = self.netclass_of(net_name)
+        return (nc.via_diameter, nc.via_drill)
+
+    def clearance(self, net_a: Optional[str], net_b: Optional[str] = None, *,
+                  local_a: Optional[float] = None,
+                  local_b: Optional[float] = None) -> float:
+        """Copper clearance KiCad 7's DRC requires between an item of
+        ``net_a`` and an item of a different net ``net_b``.
+
+        Verified against KiCad 7.0.11 (``tests/test_netclasses.py``):
+
+        * normally ``max(clearance of class A, clearance of class B)`` - a
+          fine-class track next to Default-class copper needs the Default
+          clearance;
+        * if either item is a pad with a local clearance override
+          (``local_a`` / ``local_b``, see ``PlacedPad.clearance``) the result
+          is the larger override instead, whatever the net classes say;
+        * never less than the board minimum ``rules.min_clearance``.
+
+        ``None`` (or an unknown name) stands for copper without a net, which
+        KiCad puts in the Default class.  Zones additionally keep their own
+        clearance (``rules.zone_clearance`` / ``Plane.clearance``).
+        """
+        floor = self.rules.min_clearance
+        overrides = [c for c in (local_a, local_b) if c]
+        if overrides:
+            return max(max(overrides), floor)
+        return max(self.netclass_of(net_a).clearance,
+                   self.netclass_of(net_b).clearance, floor)
+
+    def board_minimums(self) -> Dict[str, Any]:
+        """Smallest features the fab must be able to make - for the fab README.
+
+        ``min_track`` / ``min_clearance`` are the board-level DRC floors of
+        the rule set.  ``smallest_*`` are the smallest values any net class in
+        use (or pad clearance override) actually asks for; they can be larger
+        than the floors when no fine class is used."""
+        r = self.rules
+        used = {n.netclass for n in self.nets.values()} | {"Default"}
+        classes = [nc for name, nc in self.netclasses.items() if name in used]
+        widths = [nc.hard_min_track for nc in classes]
+        widths += [n.width for n in self.nets.values() if n.width is not None]
+        clearances = [nc.clearance for nc in classes]
+        pad_overrides: List[float] = []
+        for part in self.parts:
+            for pad in getattr(part.footprint, "pads", ()) or ():
+                c = getattr(pad, "clearance", None)
+                if c:
+                    pad_overrides.append(c)
+        return {
+            "rule_set": r.name,
+            "min_track": r.min_track,
+            "min_clearance": r.min_clearance,
+            "smallest_track_in_use": max(min(widths), r.min_track),
+            "smallest_clearance_in_use": max(min(clearances + pad_overrides),
+                                             r.min_clearance),
+            "smallest_pad_clearance_override": min(pad_overrides) if pad_overrides else None,
+            "via_diameter": min(nc.via_diameter for nc in classes),
+            "via_drill": min(nc.via_drill for nc in classes),
+            "min_annular": r.min_annular,
+            "min_drill": r.min_drill,
+            "hole_to_hole": r.hole_to_hole,
+            "hole_clearance": r.hole_clearance,
+            "copper_to_edge": r.copper_to_edge,
+            "blind_buried_vias": r.blind_buried_vias,
+            "via_tenting": self.via_tenting,
+            "net_classes": {
+                nc.name: {"track_width": nc.track_width, "clearance": nc.clearance,
+                          "min_track_width": nc.hard_min_track,
+                          "via_diameter": nc.via_diameter, "via_drill": nc.via_drill,
+                          "nets": sorted(n.name for n in self.nets.values()
+                                         if n.netclass == nc.name)}
+                for nc in sorted(self.netclasses.values(), key=lambda c: c.name)},
+        }
 
     def is_ground(self, net_name: str) -> bool:
         if self.ground_nets is not None:
@@ -858,6 +1142,26 @@ class Design:
         ko = Keepout(shape, layers, **kwargs)
         self.keepouts.append(ko)
         return ko
+
+    def add_body_keepout(self, ref: str, layers: Union[str, Sequence[str]] = ("F.Cu",),
+                         margin: float = 0.15, **kwargs) -> Keepout:
+        """Keep copper out from under a component body, e.g. no tracks, vias
+        or pours on the top layer under a MEMS sensor::
+
+            d.add_body_keepout("U4")                    # F.Cu under top-side U4
+
+        The region is the largest rectangle under the body that stays
+        ``margin`` mm away from every pad of the part (so its own pads can
+        still be reached from outside); see
+        :func:`gleda.geometry.body_keepout_shape`.  ``layers`` defaults to the
+        top copper layer - pass ``("B.Cu",)`` for a bottom-side part or
+        :data:`ALL_LAYERS`.  Keyword arguments are the :class:`Keepout` flags
+        (tracks, vias and copper pours are forbidden by default; note that a
+        via keep-out on any layer blocks through vias)."""
+        from . import geometry
+        shape = geometry.body_keepout_shape(self, ref, margin)
+        kwargs.setdefault("name", "under_%s" % ref)
+        return self.add_keepout(shape, layers, **kwargs)
 
     def plane_layers(self, net_name: str) -> List[str]:
         """Layers on which ``net_name`` has a plane / pour."""
@@ -905,6 +1209,8 @@ class Design:
             "rules": self.rules.to_dict(),
             "stackup": self.stackup.to_dict(),
             "netclasses": {k: v.to_dict() for k, v in self.netclasses.items()},
+            "minimums": self.board_minimums(),
+            "via_tenting": self.via_tenting,
             "parts": [p.to_dict() for p in self.parts],
             "netlist": self.netlist(),
             "planes": [{"net": p.net, "layer": p.layer, "whole_board": p.shape is None,
@@ -917,8 +1223,9 @@ class Design:
 
 
 __all__ = [
-    "TOP", "BOTTOM", "ELECTRICAL_TYPES", "ALL_LAYERS", "Rules", "US_4L_STD",
+    "TOP", "BOTTOM", "ELECTRICAL_TYPES", "ALL_LAYERS", "Rules", "US_4L_STD", "US_4L_FINE",
     "NetClass", "Stackup", "StackupLayer", "Circle", "RoundedPolygon", "Slot",
+    "PathShape", "PathSegment", "VIA_TENTING",
     "Hole", "Outline", "Keepout", "Plane", "Pin", "Part", "Net", "Track", "Via",
     "Design", "make_pin", "two_pin", "n_pin", "parse_node", "copper_layer_names",
     "replace",

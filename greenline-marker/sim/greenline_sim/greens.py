@@ -4,14 +4,37 @@ A :class:`Green` is the TRUE world the Monte Carlo rolls balls on and the
 sensor models look at.  It consists of
 
 * a smooth turf surface ``z(x, y)`` (a :class:`~greenline_sim.physics.GridSurface`)
-  covering the putting surface and its surrounds, built from
-  an overall tilt + a low-frequency random undulation field
+  covering the putting surface and continuing smoothly beyond it, built
+  from an overall tilt + a low-frequency random undulation field
   (+ an optional tier or ridge),
 * a closed green boundary 9-16 m from the centre, a collar (fringe) ring
   whose canopy stands ``COLLAR_STEP`` = 8 mm above the putting surface and
   rough beyond it standing ``ROUGH_STEP`` = 40 mm above (these steps are what
   a grazing camera sees; they do not change the rolling surface),
-* the true green speed (Stimp) and grain.
+* the terrain of the surrounds: beyond the collar the ground departs from
+  the smooth continuation of the putting surface with a radial slope that
+  varies with azimuth (run-offs, mounds, a hillside behind the green).  The
+  default ranges (mean -8 % ... +2 %, azimuthal variation up to 6 % and 3 %)
+  are an ASSUMPTION, not survey data; they are named parameters of
+  :class:`GreenParams`,
+* the true green speed (Stimp) and grain, and the height of the flagstick.
+
+Three height functions are kept apart on purpose:
+
+``Green.z`` / ``Green.surface``
+    the surface the BALL ROLLS on: the putting surface and its smooth
+    continuation.  No canopy, no surround terrain.
+``Green.terrain_z``
+    the true ground: ``z`` plus the surround terrain beyond the collar.
+``Green.canopy_z``
+    the top of the grass a grazing CAMERA sees: ``terrain_z`` plus the canopy
+    step of the collar / rough.
+
+On the putting surface itself all three are identical.  ``Green.without_fringe()``
+gives the optimistic "no-fringe" twin of a green (no canopy steps, no
+surround terrain, same putting surface) for testing how much the collar,
+rough and surrounds spoil what a grazing camera can learn from the turf
+horizon.
 
 Four classes are provided: ``'planar'``, ``'gentle'``, ``'undulating'`` and
 ``'tiered'`` (see :data:`CLASS_PARAMS`).  Everything is reproducible from an
@@ -50,6 +73,7 @@ __all__ = [
     "GREEN_CLASSES",
     "COLLAR_STEP",
     "ROUGH_STEP",
+    "DEFAULT_FLAGSTICK_HEIGHT",
     "REGION_GREEN",
     "REGION_COLLAR",
     "REGION_ROUGH",
@@ -74,6 +98,9 @@ COLLAR_STEP = 0.008
 
 ROUGH_STEP = 0.040
 """Height of the rough canopy above the putting surface [m]."""
+
+DEFAULT_FLAGSTICK_HEIGHT = 2.13
+"""Nominal visible flagstick height above the hole lip [m] (7 ft)."""
 
 REGION_GREEN = 0
 REGION_COLLAR = 1
@@ -116,9 +143,19 @@ class GreenParams:
     collar_step, rough_step : float [m]
         Canopy heights above the putting surface.
     surround_slope_range : (min, max) [m/m]
-        Extra radial slope of the terrain beyond the collar (negative =
-        falls away, positive = rises).  Default (0, 0): the surrounds simply
-        continue the tilt + undulation field.
+        Mean extra radial slope of the terrain beyond the collar, relative to
+        the smooth continuation of the putting surface (negative = falls
+        away, positive = rises).  Most greens are built up, so the default
+        range is mostly negative.
+    surround_harmonic_amp_max : 2 floats [m/m]
+        Maximum amplitudes of the 1st and 2nd angular harmonics of that
+        radial slope (1st: one side higher than the other, e.g. a hillside;
+        2nd: saddle).  Amplitudes ~ Uniform(0, max), phases uniform.
+    surround_onset : float [m]
+        Length scale over which the surround slope sets in beyond the collar.
+    flagstick_height_range : (min, max) [m]
+        Visible height of the flagstick above the hole lip (one value per
+        green, standing in for "per course").
     half_width : float [m];  spacing : float [m]
         Half-width and node spacing of the square height grid.
     n_modes : int
@@ -148,7 +185,10 @@ class GreenParams:
     collar_width_range: Tuple[float, float] = (0.8, 1.5)
     collar_step: float = COLLAR_STEP
     rough_step: float = ROUGH_STEP
-    surround_slope_range: Tuple[float, float] = (0.0, 0.0)
+    surround_slope_range: Tuple[float, float] = (-0.08, 0.02)
+    surround_harmonic_amp_max: Tuple[float, float] = (0.06, 0.03)
+    surround_onset: float = 1.5
+    flagstick_height_range: Tuple[float, float] = (2.0, 2.3)
     half_width: float = 24.0
     spacing: float = 0.5
     n_modes: int = 48
@@ -195,7 +235,7 @@ CLASS_PARAMS: Dict[str, GreenParams] = {
 
 @dataclass
 class Green:
-    """A synthetic green: true surface, boundary, canopy, speed and grain.
+    """A synthetic green: true surface, boundary, canopy, surrounds, speed and grain.
 
     Coordinates: origin at the green centre, x/y horizontal [m], z up [m].
 
@@ -205,8 +245,9 @@ class Green:
     seed : int or None
         Seed it was generated from (None if a Generator was passed).
     surface : Surface
-        True turf surface z(x, y) the ball rolls on; also covers the collar
-        and rough (smooth continuation), without the canopy steps.  A
+        True turf surface z(x, y) the ball rolls on: the putting surface and
+        its smooth continuation under the collar and beyond, without the
+        canopy steps and without the surround terrain.  A
         :class:`~greenline_sim.physics.GridSurface` for generated greens.
     edge_r0 : float [m]
         Mean boundary radius.
@@ -227,10 +268,19 @@ class Green:
         ``height * exp(-(x cos(az) + y sin(az) - offset)^2 / (2 width^2))``
         (negative height = swale).
     surround_slope : float [m/m]
+        Mean extra radial slope of the terrain beyond the collar (negative =
+        falls away from the green).
     stimp_ft : float [ft]
         True green speed.
     grain : Grain
         True grain (world frame).
+    surround_amp, surround_phase : (2,) arrays [m/m], [rad]
+        Amplitudes and phases of the 1st and 2nd angular harmonics of the
+        surround slope (see :meth:`surround_slope_at`).
+    surround_onset : float [m]
+        Length scale of the onset of the surround slope beyond the collar.
+    flagstick_height : float [m]
+        True visible height of the flagstick above the hole lip.
     """
 
     green_class: str
@@ -250,6 +300,10 @@ class Green:
     surround_slope: float
     stimp_ft: float
     grain: Grain
+    surround_amp: np.ndarray = field(default_factory=lambda: np.zeros(2))
+    surround_phase: np.ndarray = field(default_factory=lambda: np.zeros(2))
+    surround_onset: float = 1.5
+    flagstick_height: float = DEFAULT_FLAGSTICK_HEIGHT
 
     # ---- speed / grain ----------------------------------------------------
 
@@ -266,7 +320,9 @@ class Green:
     # ---- surface ----------------------------------------------------------
 
     def z(self, x, y):
-        """True turf height z [m] (no canopy)."""
+        """Height z [m] of the surface the ball rolls on (no canopy, no
+        surround terrain; identical to :meth:`terrain_z` and
+        :meth:`canopy_z` on the putting surface)."""
         return self.surface.z(x, y)
 
     def grad(self, x, y):
@@ -337,17 +393,99 @@ class Green:
         return int(out) if out.ndim == 0 else out
 
     def canopy_step(self, x, y):
-        """Height of the grass canopy above the putting-surface datum [m]:
-        0 on the green, ``collar_step`` on the collar, ``rough_step`` beyond."""
+        """Height of the grass canopy above the ground [m]: 0 on the green,
+        ``collar_step`` on the collar, ``rough_step`` beyond."""
         m = np.asarray(self.radial_margin(x, y))
         out = np.where(m >= 0.0, 0.0, np.where(m >= -self.collar_width, self.collar_step, self.rough_step))
         return float(out) if out.ndim == 0 else out
 
-    def canopy_z(self, x, y):
-        """Height of the visible grass top [m]: ``z + canopy_step``.  This is
-        the silhouette a grazing camera sees; the ball rolls on ``z``."""
-        out = np.asarray(self.surface.z(x, y)) + np.asarray(self.canopy_step(x, y))
+    # ---- surrounds -----------------------------------------------------------
+
+    def surround_slope_at(self, theta):
+        """Extra radial slope of the surrounds [m/m] at azimuth ``theta`` [rad]:
+        ``surround_slope + sum_k surround_amp[k] cos((k + 1)(theta - surround_phase[k]))``,
+        k = 0, 1.  Negative = the ground falls away from the green."""
+        theta = np.asarray(theta, dtype=float)
+        out = np.full_like(theta, self.surround_slope)
+        for k in range(2):
+            out = out + self.surround_amp[k] * np.cos((k + 1) * (theta - self.surround_phase[k]))
         return float(out) if out.ndim == 0 else out
+
+    def surround_dz(self, x, y):
+        """Height of the true ground above the smooth continuation of the
+        putting surface [m]; zero on the green and the collar.
+
+        With ``rho`` the radial distance beyond the outer edge of the collar
+        and ``s`` the surround slope at that azimuth,
+        ``dz = s * rho^3 / (rho^2 + surround_onset^2)``: a C2 onset at the
+        collar edge that tends to the radial slope ``s`` (its steepest point,
+        ``1.125 s``, is at ``rho = sqrt(3) * surround_onset``).
+        """
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        theta = np.arctan2(y, x)
+        rho = np.maximum(np.hypot(x, y) - (np.asarray(self.edge_radius(theta)) + self.collar_width), 0.0)
+        out = np.asarray(self.surround_slope_at(theta)) * rho**3 / (rho * rho + self.surround_onset**2)
+        return float(out) if out.ndim == 0 else out
+
+    def terrain_z(self, x, y):
+        """Height of the true ground [m]: ``z + surround_dz`` (no canopy)."""
+        out = np.asarray(self.surface.z(x, y)) + np.asarray(self.surround_dz(x, y))
+        return float(out) if out.ndim == 0 else out
+
+    def canopy_z(self, x, y):
+        """Height of the visible grass top [m]: ``terrain_z + canopy_step``.
+        This is the silhouette a grazing camera sees; the ball rolls on ``z``."""
+        out = np.asarray(self.terrain_z(x, y)) + np.asarray(self.canopy_step(x, y))
+        return float(out) if out.ndim == 0 else out
+
+    @property
+    def model_radius(self) -> float:
+        """Radius from the green centre [m] within which the terrain is
+        modelled; a sensor ray-march should not look further.  The largest
+        circle inside the height grid, or 10 m beyond the collar for an
+        analytic (unbounded) surface."""
+        xmin, xmax, ymin, ymax = self.surface.bounds
+        r = min(-xmin, xmax, -ymin, ymax)
+        if math.isfinite(r):
+            return float(r)
+        return self.edge_radius_max + self.collar_width + 10.0
+
+    @property
+    def has_fringe(self) -> bool:
+        """True if anything beyond the putting surface differs from its smooth
+        continuation (canopy steps or surround terrain)."""
+        return bool(
+            self.collar_step != 0.0
+            or self.rough_step != 0.0
+            or self.surround_slope != 0.0
+            or np.any(np.asarray(self.surround_amp) != 0.0)
+        )
+
+    def without_surrounds(self) -> "Green":
+        """Twin of this green whose terrain beyond the collar simply continues
+        the putting surface (``terrain_z == z``); the collar and rough canopy
+        steps are kept.  Intermediate case between the realistic green and
+        :meth:`without_fringe`.  Same rolling surface object."""
+        return replace(self, surround_slope=0.0, surround_amp=np.zeros(2), surround_phase=np.zeros(2))
+
+    def without_fringe(self) -> "Green":
+        """Optimistic "no-fringe" twin of this green.
+
+        Same rolling surface (the same object), boundary, speed, grain and
+        flagstick, but no collar/rough canopy steps and no surround terrain:
+        beyond the putting surface a camera sees its smooth continuation, so
+        ``canopy_z == terrain_z == z`` everywhere.  Holes and balls placed on
+        the original are equally valid on the twin.
+        """
+        return replace(
+            self,
+            collar_step=0.0,
+            rough_step=0.0,
+            surround_slope=0.0,
+            surround_amp=np.zeros(2),
+            surround_phase=np.zeros(2),
+        )
 
 
 @dataclass
@@ -379,6 +517,18 @@ class PuttScenario:
     def dz(self) -> float:
         """Height of the hole relative to the ball, ``z_hole - z_ball`` [m]."""
         return float(self.green.z(*self.hole_xy) - self.green.z(*self.ball_xy))
+
+    def point_at(self, s) -> np.ndarray:
+        """Point(s) on the straight ball->hole line, ``s`` [m] from the ball
+        (0 = ball, ``distance`` = hole).  Scalar -> (2,), array (n,) -> (n, 2)."""
+        s = np.asarray(s, dtype=float)
+        unit = (self.hole_xy - self.ball_xy) / self.distance
+        return self.ball_xy + s[..., None] * unit
+
+    def without_fringe(self) -> "PuttScenario":
+        """The same putt on the no-fringe twin of the green
+        (see :meth:`Green.without_fringe`)."""
+        return replace(self, green=self.green.without_fringe())
 
 
 # --------------------------------------------------------------------------
@@ -508,11 +658,14 @@ def make_green(green_class: str, seed: SeedLike, params: Optional[GreenParams] =
         zz = zz + height * np.exp(-0.5 * (s / width) ** 2)
         ridge = {"height": height, "width": width, "azimuth": az, "offset": offset, "max_slope": max_slope}
 
-    # ---- surrounds ----------------------------------------------------------
+    # ---- surrounds (analytic, on top of the rolling surface: Green.surround_dz)
     surround_slope = _uniform(rng, prm.surround_slope_range)
-    if surround_slope != 0.0:
-        rho = np.maximum(rr - (edge_r + collar_width), 0.0)
-        zz = zz + surround_slope * rho * rho / (rho + 1.0)  # C1 onset, -> slope
+    surround_amp = np.array([rng.uniform(0.0, a) for a in prm.surround_harmonic_amp_max])
+    surround_phase = rng.uniform(0.0, 2.0 * math.pi, size=2)
+    if surround_amp.shape != (2,):
+        raise ValueError("surround_harmonic_amp_max must hold two amplitudes")
+    if not (prm.surround_onset > 0.0):
+        raise ValueError("surround_onset must be positive [m]")
 
     # ---- speed and grain ----------------------------------------------------
     stimp = float(np.clip(rng.normal(prm.stimp_mean, prm.stimp_sd), *prm.stimp_range))
@@ -525,6 +678,7 @@ def make_green(green_class: str, seed: SeedLike, params: Optional[GreenParams] =
     else:
         grain_az = float(rng.uniform(0.0, 2.0 * math.pi))
     grain_az = math.atan2(math.sin(grain_az), math.cos(grain_az))
+    flagstick_height = _uniform(rng, prm.flagstick_height_range)
 
     surface = GridSurface(x, y, zz)
     z_centre = surface.z(0.0, 0.0)
@@ -548,6 +702,10 @@ def make_green(green_class: str, seed: SeedLike, params: Optional[GreenParams] =
         surround_slope=surround_slope,
         stimp_ft=stimp,
         grain=Grain(kappa, grain_az),
+        surround_amp=surround_amp,
+        surround_phase=surround_phase,
+        surround_onset=float(prm.surround_onset),
+        flagstick_height=flagstick_height,
     )
 
 
@@ -560,6 +718,8 @@ def green_from_surface(
     grain: Optional[Grain] = None,
     collar_step: float = COLLAR_STEP,
     rough_step: float = ROUGH_STEP,
+    surround_slope: float = 0.0,
+    flagstick_height: float = DEFAULT_FLAGSTICK_HEIGHT,
     half_width: float = 24.0,
     spacing: float = 0.5,
     green_class: str = "custom",
@@ -581,6 +741,11 @@ def green_from_surface(
         True green speed and grain.
     collar_step, rough_step : float [m]
         Canopy heights above the putting surface.
+    surround_slope : float [m/m]
+        Extra radial slope of the terrain beyond the collar, the same at
+        every azimuth (default 0: the surrounds continue the surface).
+    flagstick_height : float [m]
+        Visible height of the flagstick above the hole lip.
     green_class : str
         Label stored on the green (not one of :data:`GREEN_CLASSES`).
     """
@@ -608,9 +773,10 @@ def green_from_surface(
         corr_length=math.inf,
         tier=None,
         ridge=None,
-        surround_slope=0.0,
+        surround_slope=float(surround_slope),
         stimp_ft=float(stimp_ft),
         grain=Grain() if grain is None else grain,
+        flagstick_height=float(flagstick_height),
     )
 
 

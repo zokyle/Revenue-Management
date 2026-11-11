@@ -4,8 +4,9 @@ Two kinds of footprint can be given to :class:`gleda.model.Part`:
 
 * a KiCad library id string ``"Lib:Name"`` (loaded from the installed
   ``*.pretty`` libraries), or
-* a :class:`FootprintSpec` built here (castellated module, FPC connector,
-  test pad, battery tab, quad/dual leadless package, NPTH hole, ...).
+* a :class:`FootprintSpec` built here (BGA, castellated module, FPC
+  connector, quad/dual leadless package, two-pad chip part, bare test / pogo /
+  contact pads and pad rows, battery tab, NPTH hole, ...).
 
 A :class:`FootprintSpec` is pure data in footprint-local design coordinates
 (mm, +y UP, looking at the component side, rotation CCW).  It is turned into a
@@ -87,6 +88,11 @@ class PadSpec:
     ``paste`` / ``mask`` switch the paste / mask aperture off for SMD pads;
     ``paste_margin`` / ``mask_margin`` are per-pad overrides (mm, negative
     shrinks the aperture).
+    ``clearance`` is a local copper clearance override (mm).  KiCad's DRC uses
+    it INSTEAD of the net-class clearances for anything next to this pad
+    (never below the board minimum) - the way to let a fine track pass
+    between the balls of a fine-pitch BGA without putting every net of the
+    package into the fine class.  See :meth:`gleda.model.Design.clearance`.
     """
     number: str
     x: float
@@ -102,8 +108,11 @@ class PadSpec:
     mask: bool = True
     paste_margin: Optional[float] = None
     mask_margin: Optional[float] = None
+    clearance: Optional[float] = None
 
     def __post_init__(self):
+        if self.clearance is not None and self.clearance <= 0:
+            raise ValueError("pad %s: clearance override must be positive" % (self.number,))
         if self.shape not in PAD_SHAPES:
             raise ValueError("pad %s: unknown shape %r" % (self.number, self.shape))
         if self.kind not in PAD_KINDS:
@@ -304,6 +313,8 @@ def _pad_sexpr(p: PadSpec) -> str:
         parts.append("(solder_mask_margin %s)" % _f(p.mask_margin))
     if p.paste_margin is not None:
         parts.append("(solder_paste_margin %s)" % _f(p.paste_margin))
+    if p.clearance is not None:
+        parts.append("(clearance %s)" % _f(p.clearance))
     return " ".join(parts) + ")"
 
 
@@ -557,6 +568,99 @@ def quad_package(name: str, body_w: float, body_h: float, *, pitch: float,
         tags="LGA QFN DFN")
 
 
+#: BGA row letters (JEDEC: I, O, Q, S, X and Z are not used).
+BGA_ROW_LETTERS = "ABCDEFGHJKLMNPRTUVWY"
+
+
+def bga_row_name(index: int) -> str:
+    """Row name of a BGA for a 0-based row index: A, B, ... Y, AA, AB, ..."""
+    n = len(BGA_ROW_LETTERS)
+    if index < n:
+        return BGA_ROW_LETTERS[index]
+    return BGA_ROW_LETTERS[index // n - 1] + BGA_ROW_LETTERS[index % n]
+
+
+def bga(name: str, nx: int, ny: int, *, pitch: float, pad_d: float,
+        body: Optional[Tuple[float, float]] = None, height: Optional[float] = None,
+        pad_clearance: Optional[float] = None, mask_margin: Optional[float] = None,
+        paste_margin: Optional[float] = None, omit: Sequence[str] = (),
+        description: str = "", courtyard_margin: float = 0.25) -> FootprintSpec:
+    """Ball grid array land pattern, seen from the top of the board.
+
+    ``nx`` columns (numbered 1..nx from the left) by ``ny`` rows (lettered
+    A, B, ... from the top, skipping I, O, Q, S, X, Z), so ball A1 is the
+    top-left pad.  Round pads of diameter ``pad_d`` on a ``pitch`` grid
+    centred on the footprint anchor.  ``omit`` lists depopulated balls
+    (``["C3"]``).  ``body`` is the package outline (default: the ball field
+    plus one pitch).
+
+    ``pad_clearance`` gives every pad a local clearance override (see
+    :class:`PadSpec`).  Escape arithmetic for one track between two adjacent
+    pads: ``pitch - pad_d >= track + 2 * clearance``.  At 0.5 mm pitch a
+    0.09 mm track with 0.09 mm clearance needs ``pad_d <= 0.23`` - with
+    0.25 mm pads KiCad reports a clearance of 0.08 mm
+    (``tests/test_netclasses.py`` proves both cases with KiCad's DRC).
+    """
+    if nx < 1 or ny < 1:
+        raise ValueError("%s: a BGA needs at least one ball" % name)
+    if pad_d >= pitch:
+        raise ValueError("%s: pad diameter %.3f must be smaller than the pitch %.3f"
+                         % (name, pad_d, pitch))
+    skip = {str(o).upper() for o in omit}
+    pads: List[PadSpec] = []
+    known = set()
+    for row in range(ny):
+        for col in range(nx):
+            number = "%s%d" % (bga_row_name(row), col + 1)
+            known.add(number)
+            if number in skip:
+                continue
+            x = (col - (nx - 1) / 2.0) * pitch
+            y = ((ny - 1) / 2.0 - row) * pitch
+            pads.append(PadSpec(number, round(x, 6), round(y, 6), pad_d, pad_d, "circle",
+                                mask_margin=mask_margin, paste_margin=paste_margin,
+                                clearance=pad_clearance))
+    if skip - known:
+        raise ValueError("%s: cannot omit unknown ball(s) %s" % (name, sorted(skip - known)))
+    if not pads:
+        raise ValueError("%s: every ball is omitted" % name)
+    if body is None:
+        body = (round(nx * pitch, 6), round(ny * pitch, 6))
+    return FootprintSpec(
+        name=name, pads=pads, body=tuple(body), height=height,
+        pin1=(-body[0] / 2.0 - 0.3, body[1] / 2.0),
+        description=description or "BGA-%d %dx%d, pitch %g mm, pad %g mm" % (
+            len(pads), nx, ny, pitch, pad_d),
+        tags="BGA CSP", courtyard_margin=courtyard_margin)
+
+
+def two_pad(name: str, *, pad_w: float, pad_h: float, pitch: float,
+            body: Optional[Tuple[float, float]] = None, shape: str = "roundrect",
+            numbers: Tuple[str, str] = ("1", "2"), height: Optional[float] = None,
+            paste: bool = True, polarised: bool = False, description: str = "",
+            tags: str = "", courtyard_margin: float = 0.25) -> FootprintSpec:
+    """Two-terminal part (photodiode, big LED, inductor, switch, ...): pads
+    ``numbers[0]`` at ``x = -pitch/2`` and ``numbers[1]`` at ``+pitch/2``.
+
+    ``pitch`` is the pad centre distance, ``pad_w`` the pad size along x.
+    ``polarised`` adds a pin-1 mark next to the first pad; ``paste=False``
+    makes bare contact pads (mask opening, no paste)."""
+    if pitch <= pad_w:
+        raise ValueError("%s: pads overlap (pitch %.3f <= pad width %.3f)"
+                         % (name, pitch, pad_w))
+    kind = "smd" if paste else "conn"
+    pads = [PadSpec(str(numbers[0]), -pitch / 2.0, 0.0, pad_w, pad_h, shape, kind),
+            PadSpec(str(numbers[1]), pitch / 2.0, 0.0, pad_w, pad_h, shape, kind)]
+    if body is None:
+        body = (pitch + pad_w, pad_h)
+    pin1 = (-pitch / 2.0 - pad_w / 2.0 - 0.35, 0.0) if polarised else None
+    return FootprintSpec(
+        name=name, pads=pads, body=tuple(body), height=height, pin1=pin1,
+        description=description or "Two-pad part, pads %gx%g mm, pitch %g mm" % (
+            pad_w, pad_h, pitch),
+        tags=tags or "two pad", courtyard_margin=courtyard_margin)
+
+
 def smd_pad(name: str, w: float, h: Optional[float] = None, *, shape: str = "circle",
             paste: bool = False, number: str = "1", description: str = "",
             tags: str = "pad", height: Optional[float] = 0.0) -> FootprintSpec:
@@ -629,6 +733,8 @@ class PadGeom:
     ``layers`` are KiCad layer names for the footprint on the top side
     (through pads list every copper layer name KiCad knows).  ``polygon`` is
     the copper outline (arcs approximated by KiCad, max error ~5 um).
+    ``clearance`` is the pad's (or its footprint's) local clearance override
+    in mm, None if there is none.
     """
     number: str
     x: float
@@ -641,6 +747,7 @@ class PadGeom:
     drill: float
     layers: Tuple[str, ...]
     polygon: Tuple[Point, ...]
+    clearance: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -799,6 +906,8 @@ def geom_from_pcbnew(fp, height: Optional[float] = None) -> FootprintGeom:
                     pt = outline.CPoint(i)
                     poly_pts.append(coords.local_from_kicad_mm(nm(pt.x), nm(pt.y)))
         drill = nm(pad.GetDrillSize().x) if kind in ("th", "npth") else 0.0
+        # KiCad: a pad's own override wins, else the footprint-level one
+        local_clearance = pad.GetLocalClearance() or fp.GetLocalClearance()
         if not has_copper and kind == "smd":
             # paste-only / mask-only aperture pads carry no copper: skip them
             continue
@@ -808,7 +917,8 @@ def geom_from_pcbnew(fp, height: Optional[float] = None) -> FootprintGeom:
             shape=_SHAPE_NAMES.get(pad.GetShape(), "custom"),
             rotation=coords.normalize_angle(pad.GetOrientationDegrees()),
             kind=kind, drill=drill, layers=layers,
-            polygon=tuple((round(px, 6), round(py, 6)) for px, py in poly_pts)))
+            polygon=tuple((round(px, 6), round(py, 6)) for px, py in poly_pts),
+            clearance=(nm(local_clearance) if local_clearance > 0 else None)))
     # body: bounding box of the fab-layer drawings (line width removed)
     body: Optional[List[float]] = None
     for g in fp.GraphicalItems():
@@ -903,7 +1013,8 @@ def lib_id_of(footprint: Union[str, FootprintSpec]) -> str:
 
 __all__ = [
     "PadSpec", "Graphic", "FootprintSpec", "PadGeom", "FootprintGeom", "FootprintError",
-    "castellated_module", "fpc_connector", "quad_package", "smd_pad", "test_pad",
+    "castellated_module", "fpc_connector", "quad_package", "bga", "bga_row_name",
+    "two_pad", "smd_pad", "test_pad",
     "pogo_pad", "battery_tab", "pad_row", "npth_hole", "kicad_mod_text",
     "write_library", "load", "resolve", "geom_from_pcbnew", "lib_id_of",
     "footprint_key", "find_library", "add_library_dir", "library_dirs",

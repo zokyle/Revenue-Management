@@ -115,6 +115,9 @@ class DrcResult:
     tampered: List[str] = field(default_factory=list)
     #: counts declared in the report headers (cross-checked against the parse)
     declared: Dict[str, int] = field(default_factory=dict)
+    #: names of the custom rules in the ``.kicad_dru`` next to the board that
+    #: KiCad applied in addition to the project rules (empty: no rules file)
+    custom_rules: List[str] = field(default_factory=list)
 
     # -- aggregates --------------------------------------------------------
     def _by_type(self, severity: str) -> Dict[str, int]:
@@ -169,6 +172,7 @@ class DrcResult:
             "footprint_errors": len(self.footprint_errors),
             "zones_filled": self.zones_filled,
             "tampered_checks": list(self.tampered),
+            "custom_rules": list(self.custom_rules),
             "cosmetic_allow_list": dict(COSMETIC_CHECKS),
             "severity_overrides": {k: {"severity": v[0], "reason": v[1]}
                                    for k, v in SEVERITY_OVERRIDES.items()},
@@ -290,6 +294,17 @@ def check_project_severities(pcb_path: str) -> List[str]:
     return [c for c in CORE_ERROR_CHECKS if sev.get(c, "error") != "error"]
 
 
+def custom_rule_names(pcb_path: str) -> List[str]:
+    """Names of the rules in the ``.kicad_dru`` file next to a board (KiCad
+    loads that file automatically when it runs DRC).  Empty if there is none."""
+    dru = os.path.splitext(pcb_path)[0] + ".kicad_dru"
+    if not os.path.exists(dru):
+        return []
+    with open(dru, encoding="utf-8") as fh:
+        text = fh.read()
+    return re.findall(r'^\(rule\s+"([^"]*)"', text, flags=re.M)
+
+
 # --------------------------------------------------------------------------
 # running
 # --------------------------------------------------------------------------
@@ -377,6 +392,7 @@ def run_drc(pcb_path: str, report_path: Optional[str] = None,
     result.report_path = report_path
     result.zones_filled = meta.get("zones_filled")
     result.tampered = check_project_severities(pcb_path)
+    result.custom_rules = custom_rule_names(pcb_path)
     _strip_report_timestamp(report_path, text)
     if json_path:
         result.write_json(json_path)
@@ -485,7 +501,7 @@ def _main(argv: Sequence[str]) -> int:
 
 __all__ = ["DrcItem", "DrcViolation", "DrcResult", "DrcError", "COSMETIC_CHECKS",
            "parse_report", "fill_zones", "run_drc", "assert_clean",
-           "check_project_severities"]
+           "check_project_severities", "custom_rule_names"]
 
 
 if __name__ == "__main__":

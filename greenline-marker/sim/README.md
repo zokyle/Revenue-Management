@@ -12,8 +12,8 @@ says otherwise (`stimp_ft`).
 
 | Path | Content |
 | --- | --- |
-| `greenline_sim/physics.py` | rolling-ball model, surfaces, `simulate_putt`, `roll_batch`, `solve_aim` |
-| `greenline_sim/greens.py` | seeded synthetic greens and putt scenarios |
+| `greenline_sim/physics.py` | rolling-ball model, surfaces, `simulate_putt`, `roll_batch`, `solve_aim` and its batch forms |
+| `greenline_sim/greens.py` | seeded synthetic greens (surface, boundary, collar/rough canopy, surround terrain, speed, grain, flagstick) and putt scenarios |
 | `greenline_sim/bench.py` | timing and closed-form checks (`python -m greenline_sim.bench`) |
 | `greenline_sim/_jit.py` | optional numba acceleration with a pure-Python fallback |
 | `tests/` | pytest suite |
@@ -23,13 +23,16 @@ says otherwise (`stimp_ft`).
 
 ```
 cd sim
-python -m pytest -q            # tests
+python -m pytest -q            # tests (about 15 s with numba)
 python -m greenline_sim.bench  # solver timing + closed-form table
 ```
 
 numba is used when it is importable. `GREENLINE_SIM_NO_NUMBA=1` forces the
-pure-Python kernels (same algorithm, roughly 50x slower); the test-suite
-checks that both give the same numbers.
+pure-Python kernels: the same algorithm, about 50x slower for `solve_aim` on
+a quadratic patch (about 20 ms per solve) and about 1000x slower for rolls on
+a grid surface, so it is a correctness fallback, not a way to run the Monte
+Carlo. The test suite then takes about 1.5 minutes; `tests/test_fallback.py`
+checks that both paths give the same numbers.
 
 ## Physics in one paragraph
 
@@ -62,6 +65,9 @@ print(putt.captured, putt.delta, putt.lateral_at_line, putt.stop_xy)
 # estimator-style: a quadratic patch in the putt frame (ball at origin, hole at (D, 0))
 patch = ph.QuadraticSurface(a=0.004, b=0.012, c=0.001, d=0.0, e=-0.002)
 aim2 = ph.solve_aim(patch, (0.0, 0.0), (sc.distance, 0.0), g.a_r, g.grain.rotated(sc.bearing))
+
+# what a grazing camera sees beyond the putting surface, and the optimistic twin
+print(g.canopy_z(0.0, 20.0), g.without_fringe().canopy_z(0.0, 20.0))
 ```
 
 ## Things worth knowing
@@ -71,17 +77,38 @@ aim2 = ph.solve_aim(patch, (0.0, 0.0), (sc.distance, 0.0), g.a_r, g.grain.rotate
   `PACE_LIMITED` means the line through the hole exists but the ball cannot
   arrive as slowly as asked (steep downhill, or `past = 0` on a slope where
   the dying ball would have to curl back to the hole). The other statuses
-  mean no usable line was found; the best iterate is still returned.
+  mean no usable line was found; the best iterate is still returned, with
+  its residual `miss`. Failures occur where the slope-plus-grain drive near
+  the path approaches or exceeds `a_r`.
 * The capture rule (Holmes 1991 / Penner 2002: holed if the impact parameter
   is below the hole radius and the speed there is below
   `1.63 * sqrt(1 - (delta/R)^2)` m/s) is an assumption and can be swapped:
   `CaptureModel(exponent=1.0)` or any `callable(delta, speed) -> bool`.
 * `GridSurface` needs a uniform grid; it is a C2 bicubic B-spline through the
   samples with an exact analytic gradient.
-* A `Green` holds the true surface (`green.surface`), the boundary
-  (`edge_radius`, `on_green`, `region`), the canopy heights a grazing camera
-  sees (`canopy_step`, `canopy_z`: +8 mm collar, +40 mm rough), and the true
-  speed and grain (`stimp_ft`, `a_r`, `grain`).
+* A `Green` keeps three heights apart: `z` (what the ball rolls on: the
+  putting surface and its smooth continuation), `terrain_z` (the true ground:
+  `z` plus the surround terrain beyond the collar) and `canopy_z` (what a
+  grazing camera sees: `terrain_z` plus the +8 mm collar / +40 mm rough
+  canopy). On the putting surface all three coincide.
+  `Green.without_fringe()` is the optimistic twin with neither canopy steps
+  nor surround terrain and the very same rolling surface.
+* The surround terrain (mean radial slope -8 % ... +2 % with azimuthal
+  variation) is an assumption with named parameters in `GreenParams`, not
+  survey data.
+
+## Measured (4 cores, numba 0.68)
+
+* `solve_aim`, one call at a time, random quadratic patches (slope <= 3 %,
+  curvature sigma 0.002 1/m, 1-12 m, Stimp 8-13, grain <= 0.15): mean 0.4 ms,
+  median 0.25 ms, 99th percentile 1.5 ms; 99.6 % solve. The rare failing
+  solve uses its whole budget of 200 trial rolls (about 25 ms).
+* `solve_aim_quadratic_batch`: about 0.05 ms per solve wall clock.
+* `roll_batch`: about 10 microseconds per putt wall clock.
+* Dying putt on a pure cross slope: solved `phi` over `(5/14) G s / a_r` is
+  1.0008 (0.5 %, Stimp 8) to 1.031 (2 %, Stimp 12.5), the same at 2, 4 and
+  8 m to 3e-5; the excess is the neglected second-order term.
+* 10 ft, 1 % cross slope, Stimp 10, 0.43 m past: aim offset 0.137 m.
 
 ## Status
 

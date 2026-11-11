@@ -10,9 +10,11 @@ All coordinates are design mm, +y up (see :mod:`gleda.coords`).
 
 Polygon approximation of arcs: ``tol`` is the maximum deviation.  With
 ``mode="inscribed"`` the polygon lies inside the true shape, with
-``mode="circumscribed"`` it contains the true shape.  :func:`outline_polygon`
-uses an inscribed outer boundary and circumscribed cutouts, so the returned
-board polygon is always a (slightly) conservative subset of the real board.
+``mode="circumscribed"`` it contains the true shape - also for shapes with
+concave arcs (inward fillets, :class:`gleda.model.PathShape` arcs that bulge
+into the shape).  :func:`outline_polygon` uses an inscribed outer boundary
+and circumscribed cutouts, so the returned board polygon is always a
+(slightly) conservative subset of the real board.
 """
 from __future__ import annotations
 
@@ -24,7 +26,8 @@ from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
 from . import coords
-from .model import Circle, RoundedPolygon, Slot, Outline, Design, Part, BOTTOM
+from .model import (Circle, RoundedPolygon, Slot, PathShape, Outline, Design, Part,
+                    BOTTOM)
 
 Point = Tuple[float, float]
 
@@ -156,6 +159,40 @@ def slot_path(slot: Slot) -> List[object]:
     ]
 
 
+def path_shape_path(shape: PathShape) -> List[object]:
+    """Exact closed path of a general line + arc :class:`PathShape`."""
+    if not shape.closed:
+        raise ValueError("PathShape is not closed (call .close())")
+    path: List[object] = []
+    p = shape.start
+    for seg in shape.segments:
+        e = seg.end
+        if seg.center is None:
+            if math.hypot(e[0] - p[0], e[1] - p[1]) > 1e-9:
+                path.append(Line(p, e))
+        else:
+            c = seg.center
+            r0 = math.hypot(p[0] - c[0], p[1] - c[1])
+            r1 = math.hypot(e[0] - c[0], e[1] - c[1])
+            if r0 < 1e-9 or abs(r0 - r1) > 1e-6:
+                raise ValueError("PathShape arc end points are %.6f and %.6f mm from "
+                                 "its centre" % (r0, r1))
+            a0 = math.atan2(p[1] - c[1], p[0] - c[0])
+            a1 = math.atan2(e[1] - c[1], e[0] - c[0])
+            sweep = (a1 - a0) % (2 * math.pi)
+            if sweep < 1e-12:
+                raise ValueError("PathShape arc with identical end points")
+            if not seg.ccw:
+                sweep -= 2 * math.pi
+            am = a0 + sweep / 2.0
+            mid = (c[0] + r0 * math.cos(am), c[1] + r0 * math.sin(am))
+            path.append(Arc(p, mid, e, c, r0))
+        p = e
+    if len(path) < 2:
+        raise ValueError("PathShape needs at least two non-degenerate segments")
+    return path
+
+
 def shape_path(shape) -> List[object]:
     """Exact closed path (list of :class:`Line`/:class:`Arc`, or a single
     :class:`FullCircle`) of a model shape."""
@@ -165,6 +202,8 @@ def shape_path(shape) -> List[object]:
         return rounded_polygon_path(shape.points, shape.radius)
     if isinstance(shape, Slot):
         return slot_path(shape)
+    if isinstance(shape, PathShape):
+        return path_shape_path(shape)
     raise TypeError("unsupported shape %r" % (shape,))
 
 
@@ -203,26 +242,52 @@ def _arc_points(center: Point, radius: float, a0: float, sweep: float, tol: floa
     return out
 
 
+def path_orientation(path: Sequence[object]) -> float:
+    """Signed area of the coarse polygon through the element end points and
+    arc mid points: > 0 for a counter-clockwise path (+y up), < 0 clockwise."""
+    pts: List[Point] = []
+    for el in path:
+        if isinstance(el, FullCircle):
+            return math.pi * el.radius * el.radius
+        pts.append(el.start)
+        if isinstance(el, Arc):
+            pts.append(el.mid)
+    area = 0.0
+    for i, (x0, y0) in enumerate(pts):
+        x1, y1 = pts[(i + 1) % len(pts)]
+        area += x0 * y1 - x1 * y0
+    return area / 2.0
+
+
 def path_points(path: Sequence[object], tol: float = DEFAULT_TOL,
                 mode: str = "inscribed") -> List[Point]:
     """Polygon vertices approximating a closed path.
 
-    ``mode`` refers to arcs that bulge OUTWARD (convex corners); for a simple
-    convex-cornered shape "inscribed" gives a polygon inside the true shape.
+    With ``mode="inscribed"`` the polygon lies inside the true shape, with
+    ``"circumscribed"`` it contains it.  Arcs that bulge outward (convex) and
+    arcs that bulge into the shape (concave: inward fillets) are treated
+    accordingly - the direction of each arc is compared with the orientation
+    of the whole path.
     """
+    if mode not in ("inscribed", "circumscribed"):
+        raise ValueError("mode must be 'inscribed' or 'circumscribed'")
     if len(path) == 1 and isinstance(path[0], FullCircle):
         fc = path[0]
         n = max(8, arc_segments(fc.radius, 2 * math.pi, tol))
         r = fc.radius / math.cos(math.pi / n) if mode == "circumscribed" else fc.radius
         return [(fc.center[0] + r * math.cos(2 * math.pi * i / n),
                  fc.center[1] + r * math.sin(2 * math.pi * i / n)) for i in range(n)]
+    orientation = path_orientation(path)
+    other = "circumscribed" if mode == "inscribed" else "inscribed"
     pts: List[Point] = []
     for el in path:
         if isinstance(el, Line):
             pts.append(el.start)
         elif isinstance(el, Arc):
             a0, sweep = el.angles
-            arc_pts = _arc_points(el.center, el.radius, a0, sweep, tol, mode)
+            convex = sweep * orientation >= 0
+            arc_pts = _arc_points(el.center, el.radius, a0, sweep, tol,
+                                  mode if convex else other)
             pts.extend(arc_pts[:-1])
         else:
             raise TypeError("unexpected path element %r" % (el,))
@@ -474,6 +539,10 @@ class PlacedPad:
     ``net``      net name or None (unconnected / no-connect)
     ``kind``     "smd" | "th" | "npth" | "conn"
     ``drill``    finished hole diameter (0 for SMD)
+    ``clearance`` local clearance override of the pad (or of its footprint) in
+                 mm, None if it has none.  KiCad uses it INSTEAD of the net
+                 class clearances - pass it to :meth:`Design.clearance` as
+                 ``local_a`` / ``local_b`` (or use :func:`pad_clearance`)
     """
     ref: str
     number: str
@@ -490,6 +559,7 @@ class PlacedPad:
     rotation: float
     shape: str
     side: str
+    clearance: Optional[float] = None
 
     @property
     def key(self) -> str:
@@ -543,7 +613,7 @@ def part_pads(design: Design, part: Part) -> List[PlacedPad]:
             x=x, y=y, layers=layers, polygon=poly, kind=pg.kind, drill=pg.drill,
             w=pg.w, h=pg.h,
             rotation=coords.local_angle_to_board(pg.rotation, part.rotation, part.side),
-            shape=pg.shape, side=part.side))
+            shape=pg.shape, side=part.side, clearance=pg.clearance))
     return out
 
 
@@ -565,6 +635,82 @@ def pads_by_net(design: Design) -> Dict[str, List[PlacedPad]]:
         if pad.net:
             out.setdefault(pad.net, []).append(pad)
     return out
+
+
+def pad_clearance(design: Design, pad: PlacedPad, other_net: Optional[str],
+                  other_pad: Optional[PlacedPad] = None) -> float:
+    """Clearance KiCad's DRC requires between ``pad`` and copper of
+    ``other_net`` (a track, via or - with ``other_pad`` - another pad).
+
+    Thin wrapper around :meth:`gleda.model.Design.clearance` that feeds in the
+    pads' local clearance overrides."""
+    return design.clearance(pad.net, other_net, local_a=pad.clearance,
+                            local_b=other_pad.clearance if other_pad is not None else None)
+
+
+def body_keepout_shape(design: Design, ref: str, margin: float = 0.15) -> RoundedPolygon:
+    """Rectangle under the body of part ``ref`` that stays ``margin`` mm away
+    from every pad of that part, as a board-coordinate :class:`RoundedPolygon`.
+
+    It is the largest rectangle (aligned with the footprint axes) inside the
+    body outline that contains the body centre and touches no pad grown by
+    ``margin``.  For peripheral packages (LGA, QFN, SOIC, ...) this is the
+    pad-free area in the middle of the land pattern.  Raises ValueError if
+    the centre itself is covered (exposed pad, BGA)."""
+    from . import footprints
+    part = design.part(ref)
+    if not part.placed:
+        raise ValueError("%s is not placed" % ref)
+    geom = footprints.resolve(part.footprint)
+    xmin, ymin, xmax, ymax = geom.body
+    if part.body:
+        cx, cy = (xmin + xmax) / 2.0, (ymin + ymax) / 2.0
+        xmin, xmax = cx - part.body[0] / 2.0, cx + part.body[0] / 2.0
+        ymin, ymax = cy - part.body[1] / 2.0, cy + part.body[1] / 2.0
+    boxes = []
+    for pg in geom.pads:
+        if pg.polygon:
+            xs = [q[0] for q in pg.polygon]
+            ys = [q[1] for q in pg.polygon]
+            box = (min(xs), min(ys), max(xs), max(ys))
+        else:
+            half = max(pg.drill, pg.w, pg.h) / 2.0
+            box = (pg.x - half, pg.y - half, pg.x + half, pg.y + half)
+        boxes.append((box[0] - margin, box[1] - margin, box[2] + margin, box[3] + margin))
+    # largest pad-free rectangle that contains the body centre: every pad box
+    # must end up entirely left of, right of, below or above it
+    cx, cy = (xmin + xmax) / 2.0, (ymin + ymax) / 2.0
+    eps = 1e-9
+    lefts = sorted({xmin} | {b[2] for b in boxes if xmin < b[2] <= cx + eps})
+    rights = sorted({xmax} | {b[0] for b in boxes if cx - eps <= b[0] < xmax})
+    best: Optional[Tuple[float, List[float]]] = None
+    for left in lefts:
+        for right in rights:
+            if right - left <= eps:
+                continue
+            bottom, top, ok = ymin, ymax, True
+            for b in boxes:
+                if b[2] <= left + eps or b[0] >= right - eps:
+                    continue                           # beside the rectangle
+                if b[3] <= cy + eps:
+                    bottom = max(bottom, b[3])
+                elif b[1] >= cy - eps:
+                    top = min(top, b[1])
+                else:
+                    ok = False                         # pad straddles the centre line
+                    break
+            if not ok or top - bottom <= eps:
+                continue
+            area = (right - left) * (top - bottom)
+            if best is None or area > best[0] + eps:
+                best = (area, [left, bottom, right, top])
+    if best is None:
+        raise ValueError("%s: no pad-free area under the body centre (margin %.3f mm)"
+                         % (ref, margin))
+    rect = best[1]
+    pts = coords.points_local_to_board(_rect_points(tuple(rect)), part.x, part.y,
+                                       part.rotation, part.side)
+    return RoundedPolygon(tuple((round(x, 6), round(y, 6)) for x, y in pts))
 
 
 def pad_position(design: Design, ref: str, pad: str) -> Point:
