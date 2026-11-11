@@ -188,6 +188,11 @@ typedef struct {
     int8_t flank[GL_VIS_STRIP_MAX_H][GL_VIS_FLANK_COLS];
     uint16_t rowsum[GL_VIS_STRIP_MAX_W]; /**< scratch: one (binned) row */
     uint8_t flank_off;                   /**< columns from the line to the nearest flank pixel */
+    /** Strip column of the coarse position each measured row's centroid
+     *  started from (valid where GL_VIS_ROW_MEASURED): lets the second pass
+     *  of the refinement take over the first pass's centroid for a row whose
+     *  coarse column did not change. */
+    uint8_t col[GL_VIS_STRIP_MAX_H];
 } gl_vis_stick_work_t;
 
 /** What is known about the stick before refinement (from the band). */

@@ -1,0 +1,672 @@
+{
+  "board": "greenline_demo.kicad_pcb",
+  "cosmetic_allow_list": {
+    "lib_footprint_issues": "footprint library not configured (headless run)",
+    "lib_footprint_mismatch": "footprint differs from library copy",
+    "silk_edge_clearance": "silkscreen close to the board edge",
+    "silk_over_copper": "silkscreen clipped by solder mask openings",
+    "silk_overlap": "silkscreen items overlapping each other",
+    "text_height": "text smaller than the fab's legibility limit",
+    "text_thickness": "text stroke thinner than the fab's legibility limit"
+  },
+  "custom_rules": [
+    "gleda min track width of net class Default",
+    "gleda min track width of net class CamPower",
+    "gleda min track width of net class Fine",
+    "gleda min track width of net class Power"
+  ],
+  "error_count": 0,
+  "errors": {},
+  "footprint_errors": 0,
+  "items": [
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 116.1464,
+          "kicad_y": 89.98,
+          "x": 16.1464,
+          "y": 10.02
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 87.6464,
+          "kicad_y": 88.82,
+          "x": -12.3536,
+          "y": 11.18
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 87.6464,
+          "kicad_y": 89.58,
+          "x": -12.3536,
+          "y": 10.42
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 108.5,
+          "kicad_y": 96.21,
+          "x": 8.5,
+          "y": 3.79
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 108.51,
+          "kicad_y": 90.99,
+          "x": 8.51,
+          "y": 9.01
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 89.7464,
+          "kicad_y": 89.58,
+          "x": -10.2536,
+          "y": 10.42
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Polygon on F.Silkscreen",
+          "kicad_x": -1.3,
+          "kicad_y": -1.51,
+          "x": -101.3,
+          "y": 101.51
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 105.1464,
+          "kicad_y": 84.08,
+          "x": 5.1464,
+          "y": 15.92
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 106.64,
+          "kicad_y": 114.7078,
+          "x": 6.64,
+          "y": -14.7078
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 81.49,
+          "kicad_y": 97.11,
+          "x": -18.51,
+          "y": 2.89
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 86.71,
+          "kicad_y": 97.11,
+          "x": -13.29,
+          "y": 2.89
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 86.71,
+          "kicad_y": 97.11,
+          "x": -13.29,
+          "y": 2.89
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 86.71,
+          "kicad_y": 91.89,
+          "x": -13.29,
+          "y": 8.11
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 86.0,
+          "kicad_y": 113.46,
+          "x": -14.0,
+          "y": -13.46
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 111.845,
+          "kicad_y": 85.985,
+          "x": 11.845,
+          "y": 14.015
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 89.7464,
+          "kicad_y": 89.97,
+          "x": -10.2536,
+          "y": 10.03
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 116.1464,
+          "kicad_y": 94.02,
+          "x": 16.1464,
+          "y": 5.98
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 87.6464,
+          "kicad_y": 89.97,
+          "x": -12.3536,
+          "y": 10.03
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 94.89,
+          "kicad_y": 87.99,
+          "x": -5.11,
+          "y": 12.01
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 105.11,
+          "kicad_y": 98.21,
+          "x": 5.11,
+          "y": 1.79
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Polygon on F.Silkscreen",
+          "kicad_x": -5.725,
+          "kicad_y": -4.16,
+          "x": -105.725,
+          "y": 104.16
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Polygon on F.Silkscreen",
+          "kicad_x": -1.1625,
+          "kicad_y": -1.51,
+          "x": -101.1625,
+          "y": 101.51
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 117.2464,
+          "kicad_y": 96.52,
+          "x": 17.2464,
+          "y": 3.48
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 117.2464,
+          "kicad_y": 97.28,
+          "x": 17.2464,
+          "y": 2.72
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 116.1464,
+          "kicad_y": 90.42,
+          "x": 16.1464,
+          "y": 9.58
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 93.11,
+          "kicad_y": 98.2078,
+          "x": -6.89,
+          "y": 1.7922
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 108.225,
+          "kicad_y": 87.925,
+          "x": 8.225,
+          "y": 12.075
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 100.0,
+          "kicad_y": 86.11,
+          "x": 0.0,
+          "y": 13.89
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 89.7464,
+          "kicad_y": 110.52,
+          "x": -10.2536,
+          "y": -10.52
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 88.155,
+          "kicad_y": 85.985,
+          "x": -11.845,
+          "y": 14.015
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 91.845,
+          "kicad_y": 85.985,
+          "x": -8.155,
+          "y": 14.015
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 88.065,
+          "kicad_y": 95.36,
+          "x": -11.935,
+          "y": 4.64
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 89.935,
+          "kicad_y": 92.64,
+          "x": -10.065,
+          "y": 7.36
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 89.935,
+          "kicad_y": 95.36,
+          "x": -10.065,
+          "y": 4.64
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Polygon on F.Silkscreen",
+          "kicad_x": -1.61,
+          "kicad_y": -1.36,
+          "x": -101.61,
+          "y": 101.36
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 92.39,
+          "kicad_y": 90.7078,
+          "x": -7.61,
+          "y": 9.2922
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 102.66,
+          "kicad_y": 112.6,
+          "x": 2.66,
+          "y": -12.6
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 116.1464,
+          "kicad_y": 93.58,
+          "x": 16.1464,
+          "y": 6.42
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    },
+    {
+      "description": "Silkscreen clipped by board edge",
+      "items": [
+        {
+          "description": "Line on Edge.Cuts",
+          "kicad_x": 112.0797,
+          "kicad_y": 82.7,
+          "x": 12.0797,
+          "y": 17.3
+        },
+        {
+          "description": "Polygon on F.Silkscreen",
+          "kicad_x": -1.3,
+          "kicad_y": -1.51,
+          "x": -101.3,
+          "y": 101.51
+        }
+      ],
+      "rule": "board setup constraints silk",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_edge_clearance"
+    }
+  ],
+  "severity_overrides": {
+    "lib_footprint_issues": {
+      "reason": "headless runs have no global footprint library table, so every footprint would be flagged 'library not found'",
+      "severity": "ignore"
+    },
+    "lib_footprint_mismatch": {
+      "reason": "placed footprints legitimately differ from their library copy (hidden reference, BOM properties), which KiCad reports for every generated footprint",
+      "severity": "ignore"
+    }
+  },
+  "tampered_checks": [],
+  "unconnected": 0,
+  "warning_count": 39,
+  "warnings": {
+    "silk_edge_clearance": 1,
+    "silk_over_copper": 38
+  },
+  "zones_filled": 2
+}

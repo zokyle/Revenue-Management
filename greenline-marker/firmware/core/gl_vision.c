@@ -1410,7 +1410,7 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
                                 gl_vis_stick_work_t *wk, gl_vis_stick_t *out)
 {
     int rows, w, g, core_h, nb, rows_clean, bot_idx, top_idx, first_in = -1, last_in = -1;
-    float noise, s_w, search, cut, h_row = 0.0f, h_sigma = 1.0e3f;
+    float noise, s_w, s_w_a, search, cut, h_row = 0.0f, h_sigma = 1.0e3f;
     line_t line;
     unsigned n_meas, n_in = 0, n_cand = 0, min_meas;
     bool have_h, bottom_known = false;
@@ -1479,21 +1479,25 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
     }
     out->noise_sigma = noise;
 
+    /* (From here on the loops over the measured rows stop at rows_clean:
+     * no row at or below the turf edge is ever measured.) */
+
     /* ---- pass A: wide search along the prior ---- */
-    n_meas = measure_all_(strip, wk, &line, rows_clean, nb, search, s_w, noise);
+    s_w_a = s_w;
+    n_meas = measure_all_(strip, wk, &line, rows_clean, nb, search, s_w, noise, false);
     out->rows_measured = (uint16_t)(n_meas * (unsigned)nb);
     if (n_meas < min_meas) {
         return GL_ERR_NO_STICK;
     }
-    flag_wide_(wk, rows);
+    flag_wide_(wk, rows_clean);
     cut = (search > 2.0f) ? search : 2.0f;
-    (void)irls_step_(wk, rows, &line, cut);
-    (void)irls_step_(wk, rows, &line, cut);
-    (void)irls_step_(wk, rows, &line, 1.5f);
+    (void)irls_step_(wk, rows_clean, &line, cut);
+    (void)irls_step_(wk, rows_clean, &line, cut);
+    (void)irls_step_(wk, rows_clean, &line, 1.5f);
     cut = 1.5f;
     for (int it = 0; it < 4; it++) {
-        cut = robust_cut_(wk, rows, &line, cut);
-        n_in = irls_step_(wk, rows, &line, cut);
+        cut = robust_cut_(wk, rows_clean, &line, cut);
+        n_in = irls_step_(wk, rows_clean, &line, cut);
     }
     if (n_in < min_meas || fabsf(line.b) > 0.15f) {
         out->rows_used = (uint16_t)(n_in * (unsigned)nb);
@@ -1503,27 +1507,31 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
     /* ---- pass B: re-measure along the fit with a matched window ---- */
     {
         unsigned n = 0;
-        for (int r = 0; r < rows; r++) {
+        for (int r = 0; r < rows_clean; r++) {
             if ((wk->flag[r] & (GL_VIS_ROW_MEASURED | GL_VIS_ROW_WIDE)) == GL_VIS_ROW_MEASURED &&
                 fabsf(wk->x[r] - line_at_(&line, (float)r)) < cut) {
                 wk->tmp[n++] = wk->m2[r];
             }
         }
         if (n >= 3u) {
-            s_w = gl_clampf(sqrtf(gl_median_inplace(wk->tmp, n)), MIN_WINDOW_SIGMA, 6.0f);
+            s_w = gl_clampf(sqrtf(gl_median_select(wk->tmp, n)), MIN_WINDOW_SIGMA, 6.0f);
         }
     }
     search = (s_w > 1.5f) ? s_w : 1.5f;
-    n_meas = measure_all_(strip, wk, &line, rows_clean, nb, search, s_w, noise);
+    /* If the matched window is the one pass A used (every stick narrower
+     * than about 3.4 px: both are MIN_WINDOW_SIGMA), a row whose coarse
+     * column is unchanged has the centroid pass A found: it is taken over. */
+    n_meas = measure_all_(strip, wk, &line, rows_clean, nb, search, s_w, noise,
+                          nb == 1 && s_w == s_w_a);
     out->rows_measured = (uint16_t)(n_meas * (unsigned)nb);
     if (n_meas < min_meas) {
         return GL_ERR_NO_STICK;
     }
-    flag_wide_(wk, rows);
+    flag_wide_(wk, rows_clean);
     cut = search;
     for (int it = 0; it < 5; it++) {
-        cut = robust_cut_(wk, rows, &line, cut);
-        n_in = irls_step_(wk, rows, &line, cut);
+        cut = robust_cut_(wk, rows_clean, &line, cut);
+        n_in = irls_step_(wk, rows_clean, &line, cut);
     }
     if (n_in < min_meas || fabsf(line.b) > 0.15f) {
         out->rows_used = (uint16_t)(n_in * (unsigned)nb);
@@ -1532,7 +1540,7 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
 
     /* ---- inliers, covariance ---- */
     n_in = 0;
-    for (int r = 0; r < rows; r++) {
+    for (int r = 0; r < rows_clean; r++) {
         if ((wk->flag[r] & (GL_VIS_ROW_MEASURED | GL_VIS_ROW_WIDE)) == GL_VIS_ROW_MEASURED) {
             float res = wk->x[r] - line_at_(&line, (float)r);
             n_cand++;
@@ -1581,7 +1589,7 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
      * residuals (AR(1) effective sample size). */
     {
         float num = 0.0f, den = 0.0f, rho;
-        for (int r = 0; r + nb < rows; r++) {
+        for (int r = 0; r + nb < rows_clean; r++) {
             if ((wk->flag[r] & wk->flag[r + nb] & GL_VIS_ROW_INLIER) != 0u) {
                 float ra = wk->x[r] - line_at_(&line, (float)r);
                 float rb = wk->x[r + nb] - line_at_(&line, (float)(r + nb));
@@ -1604,26 +1612,28 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
     /* ---- quality: medians over the inlier rows ---- */
     {
         unsigned n = 0;
-        for (int r = 0; r < rows; r++) {
+        for (int r = 0; r < rows_clean; r++) {
             if ((wk->flag[r] & GL_VIS_ROW_INLIER) != 0u) {
                 wk->tmp[n++] = (float)wk->peak[r];
             }
         }
-        out->contrast = gl_median_inplace(wk->tmp, n);
+        out->contrast = gl_median_select(wk->tmp, n);
         n = 0;
-        for (int r = 0; r < rows; r++) {
+        for (int r = 0; r < rows_clean; r++) {
             if ((wk->flag[r] & GL_VIS_ROW_INLIER) != 0u) {
                 wk->tmp[n++] = wk->m2[r];
             }
         }
-        out->width_px = sqrtf(gl_median_inplace(wk->tmp, n));
+        out->width_px = sqrtf(gl_median_select(wk->tmp, n));
     }
 
     /* ---- extent: ends of the line from the forced amplitude profile ---- */
     row_geom_(s_w, &core_h, &g);
     (void)core_h;
     wk->flank_off = (uint8_t)g;
-    forced_amp_(strip, wk, &line, g, s_w);
+    forced_amp_(strip, wk, &line, g, s_w,
+                have_h ? ((int)ceilf(h_row + 0.5f) + TURF_ROWS) : rows, /* (t0 + TURF_ROWS below) */
+                first_in - nb / 2, last_in + (nb - 1) / 2);
     {
         /* noise of a matched amplitude: pixel noise under the template
          * (sum g^2 ~ sqrt(pi) s_w) plus that of the background (1 / FLANK_W) */
@@ -1633,13 +1643,13 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
         float ref, pol = 0.0f, bg_tol, cross = 0.0f, end_sigma;
         int edge = 0, res_t, res_b;
 
-        for (int r = 0; r < rows; r++) {
+        for (int r = 0; r < rows_clean; r++) {
             if ((wk->flag[r] & (GL_VIS_ROW_INLIER | ROW_FORCED)) ==
                 (GL_VIS_ROW_INLIER | ROW_FORCED)) {
                 wk->tmp[n++] = fabsf(wk->flux[r]);
             }
         }
-        ref = (n >= 3u) ? gl_median_inplace(wk->tmp, n) : 0.0f;
+        ref = (n >= 3u) ? gl_median_select(wk->tmp, n) : 0.0f;
         if (nb > 1 || !(ref > 4.0f * amp_noise)) {
             /* faint: the mean SIGNED amplitude between the outermost inliers */
             float sum = 0.0f;
@@ -1687,7 +1697,7 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
                 }
             }
             if (n >= 3u) {
-                bg_in = gl_median_inplace(wk->tmp, n);
+                bg_in = gl_median_select(wk->tmp, n);
             }
             for (int k = 1; k <= 10; k++) {
                 const int rr = edge - k;

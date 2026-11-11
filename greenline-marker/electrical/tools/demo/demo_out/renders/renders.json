@@ -1,0 +1,90 @@
+{
+ "In1_Cu": {
+  "dpi": 600,
+  "file": "greenline_demo-In1_Cu.png",
+  "layers": [
+   "In1.Cu",
+   "Edge.Cuts"
+  ],
+  "mirrored": false,
+  "origin_px": [
+   522.205,
+   433.205
+  ],
+  "px_per_mm": 23.622047,
+  "size_px": [
+   1045,
+   956
+  ],
+  "svg": "greenline_demo-In1_Cu.svg",
+  "view": "In1.Cu seen from above",
+  "x_sign": 1
+ },
+ "In2_Cu": {
+  "dpi": 600,
+  "file": "greenline_demo-In2_Cu.png",
+  "layers": [
+   "In2.Cu",
+   "Edge.Cuts"
+  ],
+  "mirrored": false,
+  "origin_px": [
+   522.205,
+   433.205
+  ],
+  "px_per_mm": 23.622047,
+  "size_px": [
+   1045,
+   956
+  ],
+  "svg": "greenline_demo-In2_Cu.svg",
+  "view": "In2.Cu seen from above",
+  "x_sign": 1
+ },
+ "bottom": {
+  "dpi": 600,
+  "file": "greenline_demo-bottom.png",
+  "layers": [
+   "B.Cu",
+   "B.Fab",
+   "B.SilkS",
+   "Edge.Cuts"
+  ],
+  "mirrored": true,
+  "origin_px": [
+   522.595,
+   433.205
+  ],
+  "px_per_mm": 23.622047,
+  "size_px": [
+   1045,
+   956
+  ],
+  "svg": "greenline_demo-bottom.svg",
+  "view": "bottom side seen from below (mirrored)",
+  "x_sign": -1
+ },
+ "top": {
+  "dpi": 600,
+  "file": "greenline_demo-top.png",
+  "layers": [
+   "F.Cu",
+   "F.Fab",
+   "F.SilkS",
+   "Edge.Cuts"
+  ],
+  "mirrored": false,
+  "origin_px": [
+   522.205,
+   433.205
+  ],
+  "px_per_mm": 23.622047,
+  "size_px": [
+   1045,
+   956
+  ],
+  "svg": "greenline_demo-top.svg",
+  "view": "top side seen from above",
+  "x_sign": 1
+ }
+}

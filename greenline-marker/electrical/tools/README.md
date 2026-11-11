@@ -1285,7 +1285,7 @@ design checks: 0 errors                yes
 KiCad DRC: 0 errors, 0 unconnected     yes
 schematic netlist round trip matches   yes
 ------------------------------------------------------------------------------
-DEMO BUILD PASSED (193 s)
+DEMO BUILD PASSED (197 s)
 ```
 
 The route stage also prints what is not a pass criterion but should be read:
@@ -1332,7 +1332,7 @@ same `routing.json` again (the slow test compares it with the stored one):
 | KiCad DRC | 0 errors, 0 unconnected; 39 warnings, all cosmetic (38 `silk_over_copper`: silkscreen clipped by the via mask openings on the untented top side, 1 `silk_edge_clearance`) |
 | outputs | 11 Gerber layers, 298 plated holes of 0.25 mm, 1 NPTH of 1.15 mm, the locating slot on Edge.Cuts; outline, all 360 pad flashes (316 top, 44 bottom), mask (317 / 45 flashes), paste (316 / 34 flashes: none on the contact row, none on the fiducials), 298 via mask openings on top and none on the bottom, and all 299 drill hits agree with the model; 91 pick-and-place rows (J1: anchor 1.6 mm from its body centre, both given); BOM 31 lines |
 | schematic | 8 sheets (A4), 18 generated symbols; KiCad's netlist matches the model: 72 nets, 332 pads, 94 components, 21 unconnected pins (the fiducials are board-only) |
-| run time | 193 s in total on an idle 4-core machine, of which the router 179 s (numba kernel; 187 s and 199 s on two other runs); everything else takes about 13 s |
+| run time | 197 s in total on a 4-core machine, of which the router 184 s (numba kernel; 193 s, 187 s and 199 s in total on three other runs); everything else takes about 13 s |
 
 How this compares with the board before the review fixes (same placement, no
 fiducials, vias 0.1 mm from their pads, fine tracks never widened): 2277

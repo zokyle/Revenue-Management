@@ -65,7 +65,8 @@ WARN     := -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror
 # Extra checks for firmware code (core, drivers, app): no silent double
 # arithmetic, no variable-length arrays, every global function declared.
 FW_WARN  := -Wdouble-promotion -Wvla -Wmissing-prototypes -Wstrict-prototypes -Wundef
-INC      := -Icore -Idrivers -Ihal -Ihal/host -Ihal/stm32u5 -Iapp -Itests -Itests/synth -Itests/solver
+INC      := -Icore -Idrivers -Ihal -Ihal/host -Ihal/stm32u5 -Iapp -Itests -Itests/synth -Itests/solver \
+            -Itests/vision_ref
 
 CORE_SRC    := $(sort $(wildcard core/*.c))
 DRV_SRC     := $(sort $(wildcard drivers/*.c))
@@ -77,9 +78,11 @@ TEST_SRC    := $(sort $(wildcard tests/test_*.c))
 
 SOLVER_SRC  := $(sort $(wildcard core/gl_solver*.c))
 SOLVERT_SRC := tests/solver/gl_solver_vectors.c tests/solver/gl_solver_run.c
+# the phase-1 vision code, frozen: the oracle of tests/test_vision_equiv.c
+VISREF_SRC  := tests/vision_ref/gl_vision_ref.c
 
 FW_SRC   := $(CORE_SRC) $(DRV_SRC) $(APP_LIB_SRC)
-AUX_SRC  := $(HOSTHAL_SRC) $(SYNTH_SRC) $(SOLVERT_SRC)
+AUX_SRC  := $(HOSTHAL_SRC) $(SYNTH_SRC) $(SOLVERT_SRC) $(VISREF_SRC)
 
 # ---- host flavours (selected by the recursive invocations below) ----------
 BUILD    ?= build/host
