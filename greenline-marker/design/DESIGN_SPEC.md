@@ -1,4 +1,4 @@
-# GreenLine GL-1 — master design specification (rev B, EVT1)
+# GreenLine GL-1 — master design specification (rev C, EVT1)
 
 This file records every architecture decision. `master_params.yaml` holds the numbers that the
 mechanical CAD and the PCB layout must share; `check_layout.py` verifies them. Where this file
@@ -29,7 +29,7 @@ contour map of the surface between ball and hole. The design therefore measures:
 | Quantity | Sensor | Expected quality | Notes |
 |---|---|---|---|
 | Bearing to the hole | Forward cameras, flagstick detection | about 1 mrad | The most valuable camera output: it ties the aim line to the true hole direction. Flagstick must be in the hole. |
-| Distance to the hole | Stereo pair (20.4 mm baseline, f = 657 px) fused with flagstick angular height (stick height learned per course) | 2-4 % to 5 m by stereo; 4-8 % at 8-10 m by stereo alone; about 2-3 % once the stick height is learned | Aim angle is almost independent of distance, so 10 % is enough for the line; the tighter figure is for the displayed number and the pace advice. |
+| Distance to the hole | Stereo pair (20.0 mm baseline, f = 657 px) fused with flagstick angular height (stick height learned per course) | 2-4 % to 5 m by stereo; 4-8 % at 8-10 m by stereo alone; about 2-3 % once the stick height is learned | Aim angle is almost independent of distance, so 10 % is enough for the line; the tighter figure is for the displayed number and the pace advice. |
 | Mean slope ball-to-hole (uphill / downhill) | Elevation of the lowest visible point of the flagstick, referenced to gravity | 1-3 mrad when the base is visible; a one-sided bound when a crown hides it | Upper bound on the mean slope along the line. |
 | Local slope vector and fall line at the ball | Puck tilt from the accelerometer | sensor about 0.5 mrad; seating on turf 2-5 mrad per placement (estimate, unmeasured) | Seating is the dominant error of the whole instrument. Reduced by a 180-degree spin-and-reread and by Survey mode. |
 | Cross slope along the putt | Puck tilt only (one sample, or several in Survey mode) | 3-5 mrad single drop | No optical measurement of cross slope exists from this viewpoint. |
@@ -66,12 +66,12 @@ Decisions and reasons:
 - **One microcontroller, no radio.** The brief asks for a self-contained device. Dropping Bluetooth removes a module (140 mm2 and 2.1 mm tall), the antenna keep-out, the intentional-radiator work and the Bluetooth SIG listing fee (reported at about $12k, PROVISIONAL). Settings are made on the device; logs, calibration and firmware updates go through the charging cradle as a USB full-speed device (the STM32 ROM bootloader provides USB DFU). A Bluetooth variant is a later option.
 - **STM32U585RIT6 (LQFP-64).** Hardware camera port (DCMI) with DMA and crop, 786 kB RAM (two VGA strips fit easily), single-precision FPU, Stop-mode current of a few microamps, crystal-less USB, and a pin map that is in the installed KiCad library (VERIFIED source of pad numbers). LQFP-64 is routable with ordinary 5/5 mil rules; the WLCSP and 0.5 mm BGA variants would need an HDI board.
 - **OVM7692-RYAA camera cubes, mounted flat, each with a 2 mm aluminised right-angle prism bonded on top.** The cube is 2.95 x 3.47 x 2.76 mm (VERIFIED: OmniVision product brief via search; DigiKey 884-1027-1-ND, in stock). Mounting it flat keeps both cameras and the accelerometer on one rigid FR-4 board, which the stereo and gravity-reference budgets need (a printed shell moves by milliradians with temperature). The prism turns the view to horizontal and puts the optical axis 5.6 mm above the turf. Two small flat windows on the visor face close the openings, so the optics stay dry and are mechanically isolated from the shell.
-- **20.4 mm stereo baseline.** Set by the display: the 26.6 x 30.3 mm LCD glass leaves room for the cubes only in front of its forward edge. Stereo covers short and medium putts; flagstick angular height covers long ones.
-- **Tilt sensing.** LSM6DSV16X 6-axis IMU (VERIFIED pin-compatible with the LSM6DSM symbol in the KiCad library; LGA-14L 2.5 x 3.0 x 0.83 mm), with per-unit factory temperature compensation and a user flip calibration in the cradle. Target 0.5-1 mrad. A precision inclinometer (ST IIS2ICLX) was considered and left off this board: its pin map and footprint could not be verified from any reachable source, it costs about $28 and is 1.7 mm tall, and turf seating (2-5 mrad), not sensor error, is expected to dominate. It remains a documented option for a later revision.
+- **20.0 mm stereo baseline.** Set by the display: the 26.6 x 30.3 mm LCD glass leaves room for the cubes only in front of its forward edge. Stereo covers short and medium putts; flagstick angular height covers long ones.
+- **Tilt sensing.** LSM6DSV16X 6-axis IMU (VERIFIED pin-compatible with the LSM6DSM symbol in the KiCad library; LGA-14L 2.5 x 3.0 x 0.83 mm), with per-unit factory temperature compensation and a user zeroing routine on any hard flat surface (read, turn the marker 180 degrees in place, read again: the reversal cancels the surface's own tilt). Factory calibration is done on a granite surface plate. Target 0.5-1 mrad. A precision inclinometer (ST IIS2ICLX) was considered and left off this board: its pin map and footprint could not be verified from any reachable source, it costs about $28 and is 1.7 mm tall, and turf seating (2-5 mrad), not sensor error, is expected to dominate. It remains a documented option for a later revision.
 - **Display.** Sharp LS013B7DH03, 1.28 inch 128 x 128 reflective memory LCD (outline 26.6 x 30.3 x 0.746 mm VERIFIED from Sharp's brochure via search; DigiKey 425-2903-ND). Sunlight readable, about 15 microwatts static. Seen through a 22 mm round aperture under a 28 mm mineral-glass watch crystal. The smaller LS010B7DH04 would allow a smaller puck but has no US distributor listing.
 - **Power.** PowerStream GM201030-PCB lithium-polymer cell, 2 x 10 x 30 mm, about 43 mAh (VERIFIED listing; capacity, protection-board size and safety certificates still to be obtained), charged at 20 mA by a Microchip MCP73831 from cradle VBUS. Microchip MCP1700-2.8 (1.6 uA quiescent) feeds the always-on 2.8 V rail; TI LP5907-2.8 with enable feeds the cameras only during a read, so MCU and camera logic levels match. A second MCP1700 (3.3 V) fed from VBUS powers only the MCU's independent VDDUSB pin, because USB needs at least 3.0 V there and is only used in the cradle. No coin cell (Reese's Law / UL 4200A obligations and height).
 - **Grain sensor.** Eight red and eight near-infrared 0402 LEDs on a 5.2 mm radius and one low-profile photodiode, all on the PCB underside inside a 13 mm opening in the base. The photodiode current is amplified by the MCU's internal op-amp and sampled by its ADC with LED-on minus LED-off differencing. Experimental (section 2).
-- **Charging and data contacts.** Seven flush gold pads on the PCB underside, reached through holes in the base by pogo pins in the cradle: VBUS, D-, D+, GND, SWDIO, SWCLK, NRST. The row is off-centre so that a puck placed 180 degrees round in the cradle for flip calibration touches no pins.
+- **Charging and data contacts.** Seven flush gold pads on the PCB underside, reached through one slot in the base by spring pins in the cradle: VBUS, D-, D+, GND, SWDIO, SWCLK, NRST. The consumer cradle fits the first four pins only; the factory fixture fits all seven. The cradle accepts the marker in one orientation and holds it down against the pin force (about 0.6 N per pin against a marker weight of 0.11 N).
 
 ## 4. Electrical design rules for the netlist
 
@@ -101,12 +101,12 @@ Rules the firmware must honour and the schematic must make possible:
 - Test and service pads on the underside: VBUS, D-, D+, GND, SWDIO, SWCLK, NRST.
 - No copper pours or vias under the IMU body on the top layer; keep it away from the charger and regulators.
 
-PCB: 4 layers, 0.8 mm, ENIG, D-shaped outline (radius 21.2 mm, flat at y = 17.3 mm), through vias only,
+PCB: 4 layers, 0.8 mm, ENIG, D-shaped outline (radius 21.1 mm, flat at y = 17.3 mm) with two non-plated locating holes at (-4.2, 14.55) and (4.2, 14.55, slotted) that take spigots on the tub, through vias only,
 0.25 mm drill, default 0.15 mm tracks with 0.127 mm clearance, and a fine net class of 0.10 mm track /
 0.10 mm clearance used only to escape the camera BGAs (provisional 5 x 5 footprint, 0.5 mm pitch, 0.20 mm
 pads). 4 mil features are a standard tier at Sierra Circuits and Bay Area Circuits; OSH Park has no
 0.8 mm 4-layer service. Vias tented and plugged on the underside (the underside is a wetted surface inside the grain opening and
-the pad holes). Layer 2 solid ground. Parts on the top side except the grain LEDs, photodiode and
+the pad slot). Layer 2 solid ground. The top side must respect `tub_keepouts` in the YAML: eight 1.6 mm post feet and, under each camera hood, nothing taller than 0.95 mm except the camera. Parts on the top side except the grain LEDs, photodiode and
 contact pads.
 
 ## 5. Mechanical design rules
@@ -115,8 +115,9 @@ Stack at the centre, bottom to top (mm above the base plane):
 
 | From | To | Item |
 |---|---|---|
-| 0.00 | 1.00 | Base plate (printed PA12), with three 1.0 mm stainless balls protruding 0.10 mm as hard feet |
-| 1.00 | 1.80 | PCB, laminated to the base plate with a die-cut pressure-sensitive adhesive sheet that also seals the pad holes and the grain opening |
+| 0.00 | 0.87 | Base plate (printed PA12), with three 1.0 mm stainless balls protruding 0.10 mm as hard feet (through holes; balls set on a gauge plate and potted) |
+| 0.87 | 1.00 | Die-cut adhesive sheet (3M 9472LE class, 0.13 mm) that laminates the PCB to the base plate and seals the pad slot and the grain opening |
+| 1.00 | 1.80 | PCB |
 | 1.80 | 3.80 | Battery (2.0 mm) |
 | 3.80 | 4.20 | Swelling allowance |
 | 4.35 | 4.65 | Foam pad |
@@ -125,17 +126,17 @@ Stack at the centre, bottom to top (mm above the base plane):
 | 5.55 | 6.35 | Roof ledge (0.80 mm) around the 22 mm aperture |
 | 6.35 | 7.60 | Cover-glass recess: 0.2 mm tape ring and 1.0 mm mineral-glass crystal, 0.05 mm below flush |
 
-Stack at the cameras: base 1.00, PCB 0.80, cube 2.76, bond 0.05, prism 2.00 (top at 6.61), 0.19 clearance, roof 0.80 (underside at 6.80), top at 7.60. Optical axis 5.61 mm above the base plane.
+Stack at the cameras: base 0.87, adhesive 0.13, PCB 0.80, cube 2.76, bond 0.05, prism 2.00 (top at 6.61), 0.19 clearance, roof 0.80 (underside at 6.80), top at 7.60. Optical axis 5.61 mm above the base plane.
 
 Every printed wall is at least 0.8 mm and every drop-in fit has 0.25 mm nominal clearance, because US Multi Jet Fusion bureaus state minimum walls of 0.76-1.0 mm and tolerances of +-0.2 to 0.3 mm. A tighter-tolerance process (Carbon DLS epoxy) could take about 0.3 mm off the thickness.
 
 Parts:
 
-1. **Tub (top shell)** — HP Multi Jet Fusion PA12, dyed black, vapor smoothed. Side wall 1.0 mm, roof 0.8 mm, D-shaped with a flat visor face at y = 18.4 mm that carries two bevelled camera openings, each closed by a small flat window bonded into a recess on the visor face (the prisms stay dry inside). Inside: the LCD pocket and ledge, the cover-glass recess, two prism pockets with light-tight snouts, support posts that carry a footstep load from the roof to the PCB without loading the LCD or the battery, an inward ledge near the bottom that seats on the base-plate seal, and a flat pad for a pressure-equalisation vent.
-2. **Base plate** — MJF PA12, 1.0 mm, with the 13 mm grain opening (and a central baffle ring on three spokes that shades the photodiode from direct LED light), seven 2.2 mm pad holes, three ball seats, and the seal land round the edge.
+1. **Tub (top shell)** — HP Multi Jet Fusion PA12, dyed black, vapor smoothed. Side wall 1.0 mm, roof 0.8 mm, D-shaped with a flat visor face at y = 18.4 mm that carries two bevelled camera openings, each closed by a small flat window (5.0 x 3.4 x 0.5 mm; clear opening 4.0 mm wide) bonded into a recess on the visor face (the prisms stay dry inside). Inside: the LCD pocket and ledge, the cover-glass recess, two prism bays with light hoods (a 0.25-0.35 mm slit remains above each cube at the rear and is closed with a dab of black adhesive at assembly), two spigots that locate the PCB, support posts that carry a footstep load from the roof to the PCB without loading the LCD or the battery, an inward ledge near the bottom that seats on the base-plate seal, and a flat pad for a pressure-equalisation vent.
+2. **Base plate** — MJF PA12, 0.87 mm, with the 13 mm grain opening (and a central baffle ring on three spokes that shades the photodiode from direct LED light), one 17.44 x 2.2 mm slot over the seven pads (separate 2.2 mm holes would leave 0.34 mm webs), three 1.15 mm through holes for the ball feet, and the seal land round the edge. The balls are set to 0.10 mm protrusion on a gauge plate and potted with UV epoxy, because the print cannot hold that dimension.
 3. **Cover glass** — 28.0 x 1.0 mm flat mineral-glass watch crystal for EVT; chemically strengthened glass with a printed black border for production.
 4. **Prisms** — two Edmund Optics 32-526 (VERIFIED: 2.00 mm legs, N-BK7, aluminised hypotenuse, $105 each at 1-5; a volume source such as Tower Optical must be quoted for production). Bonded to the cube top at the four corners with UV-cure adhesive, leaving an air gap over the lens. They are not part of the seal: the visor windows close the openings, so shell strain does not reach the optics.
-5. **Charging and calibration cradle** — printed nest with seven Mill-Max 0914-series long-stroke spring pins soldered into the cradle board, a small 2-layer board with a USB-C receptacle, and a hard flat seat that accepts the puck at 0 and 180 degrees.
+5. **Charging and data cradle** — printed nest that accepts the marker one way round, Mill-Max 0914-series long-stroke spring pins soldered into a small 2-layer board with a USB-C receptacle (four pins fitted for charging and USB, seven in the factory fixture), and a hold-down: a fixed lip over the front edge between the camera windows and a sprung latch at the rear. Calibration does not use the cradle.
 
 Sealing: bonded construction (no O-ring; a standard gland does not fit). Seal qualification loads and the vent requirement are in `docs/research/enclosure-manufacturing.md`.
 
