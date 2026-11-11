@@ -26,8 +26,8 @@ for p in parts:
         extra = P["battery"]["swell_allowance"] if p["ref"] == "BT1" else 0.0
         if p["ref"] == "BT1": top = P["battery"]["body"]["z1"] + extra
         if top > lim + 1e-9: errs.append(f"{p['ref']} top z={top:.2f} exceeds under-LCD limit {lim:.2f}")
-    elif top > P["roof"]["underside_z"] - 0.1 and p["ref"] not in ("U2", "U3"):
-        errs.append(f"{p['ref']} top z={top:.2f} hits the roof")
+    elif p["h"] > P["tub_keepouts"]["free_height_above_pcb"] + 1e-9 and p["ref"] not in ("U2", "U3"):
+        errs.append(f"{p['ref']} height {p['h']} exceeds the free height above the PCB ({P['tub_keepouts']['free_height_above_pcb']})")
 for a, b in itertools.combinations(parts, 2):
     if rect(a).buffer(0.1).intersects(rect(b).buffer(0.1)):
         errs.append(f"{a['ref']} overlaps/too close to {b['ref']}")
@@ -87,12 +87,28 @@ for a in baf["spokes_deg"]:
 pd = P["bottom_side_parts"]["photodiode"]
 if math.hypot(pd["dx"], pd["dy"]) > baf["inner_dia"] - 0.4: errs.append("photodiode diagonal does not fit inside the baffle ring")
 # tub posts and camera hoods against the top-side parts; PCB locating holes
-ko = P["tub_keepouts"]; half = ko["post_feet"]["size"] / 2
-for cx, cy in ko["post_feet"]["centres"]:
-    foot = box(cx - half, cy - half, cx + half, cy + half)
+ko = P["tub_keepouts"]; pf = ko["post_feet"]
+post_list = [(c, pf["size"]) for c in pf["centres"]] + [(c, pf["locating"]["size"]) for c in pf["locating"]["centres"]]
+post_boxes = []
+for (cx, cy), size in post_list:
+    half = size / 2
+    foot = box(cx - half, cy - half, cx + half, cy + half); post_boxes.append(foot)
     if not pcb_poly.buffer(-0.1).contains(foot): errs.append(f"post foot at {cx},{cy} is not on the PCB")
     for p_ in parts:
         if foot.buffer(0.2).intersects(rect(p_)): errs.append(f"post foot at {cx},{cy} clashes with {p_['ref']}")
+for a, b in itertools.combinations(post_boxes, 2):
+    if a.intersects(b): errs.append("two post feet overlap")
+# ball-foot zones: no soldered part above a foot (the battery may lie over the rear feet); consistent with base_plate.feet
+fz = ko["foot_zones"]
+if sorted(map(tuple, fz["positions"])) != sorted(map(tuple, bp["feet"]["positions"])): errs.append("tub_keepouts.foot_zones differ from base_plate.feet.positions")
+if abs(fz["dia"] - bp["feet"]["pcb_keepout_dia"]) > 1e-9: errs.append("foot zone diameter differs from base_plate.feet.pcb_keepout_dia")
+for fx, fy in fz["positions"]:
+    zone = Point(fx, fy).buffer(fz["dia"] / 2, 64)
+    if not pcb_poly.buffer(-0.3).contains(Point(fx, fy).buffer(fz["land_dia"] / 2)): errs.append(f"foot land at {fx},{fy} is not on the PCB")
+    for p_ in parts:
+        if p_["ref"] != "BT1" and zone.intersects(rect(p_)): errs.append(f"{p_['ref']} sits over the ball foot at {fx},{fy}")
+    for b_ in post_boxes:
+        if zone.intersects(b_): errs.append(f"a tub post stands on the foot zone at {fx},{fy}")
 hd = ko["camera_hoods"]
 for side, ref in (("left", "U2"), ("right", "U3")):
     c = cam[side]; zone = box(c["x"] - hd["half_w"], hd["y0"], c["x"] + hd["half_w"], hd["y1"])
@@ -106,8 +122,23 @@ for name in ("round", "slot"):
     if not pcb_poly.buffer(-0.5).contains(hole): errs.append(f"PCB locating {name} too close to the board edge")
     for p_ in parts:
         if hole.buffer(0.3).intersects(rect(p_)): errs.append(f"PCB locating {name} clashes with {p_['ref']}")
-    if not any(abs(h_["x"] - cx) < 1e-6 and abs(h_["y"] - cy) < 1e-6 for cx, cy in ko["post_feet"]["centres"]):
-        errs.append(f"PCB locating {name} is not under a tub post")
+    if not any(abs(h_["x"] - cx) < 1e-6 and abs(h_["y"] - cy) < 1e-6 for cx, cy in pf["locating"]["centres"]):
+        errs.append(f"PCB locating {name} is not under a locating post")
+    if L > pf["locating"]["size"] - 0.3 or h_["dia"] > pf["locating"]["size"] - 0.6: errs.append(f"locating post foot too small for the {name}")
+if lh["round"]["x"] * lh["slot"]["x"] >= 0 or abs(lh["round"]["x"]) < abs(cam["right"]["x"]): errs.append("locating features must lie either side of the board, outboard of the cameras")
+# battery lead pads and the alternative base plate
+bz = P["battery"]["pads"]["zone"]; padzone = box(bz["x"][0], bz["y"][0], bz["x"][1], bz["y"][1])
+if not keep.contains(padzone): errs.append("battery pad zone is not inside the PCB keep-in")
+for p_ in parts:
+    if padzone.intersects(rect(p_)): errs.append(f"battery pad zone clashes with {p_['ref']}")
+alt = bp["alternative"]
+if abs(alt["thickness"] + alt["psa_thickness"] - pcb["z_bottom"]) > 1e-6: errs.append("alternative base plate + adhesive != PCB bottom z")
+# glass parts below flush
+cg = P["cover_glass"]
+sub = cg["recess_depth"] - cg["bond_thickness"] - cg["thickness"]
+if abs(sub - cg["sub_flush"]) > 1e-6: errs.append(f"cover glass sub-flush is {sub:.2f}, YAML says {cg['sub_flush']}")
+vwp = P["visor_window"]
+notes.append(f"cover glass {sub:.2f} below flush; visor windows {vwp['recess_depth'] - vwp['t']:.2f} below the visor face")
 # visor windows: recess inside the flat face with a full wall outboard, and clear of each other
 vw = P["visor_window"]; chord = math.sqrt(R ** 2 - env["front_flat_y_outer"] ** 2)
 out = chord - (abs(cam["right"]["x"]) + vw["recess_w"] / 2)

@@ -1,7 +1,7 @@
 # GreenLine GL-1 firmware (phase 1)
 
 Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.md` rev C,
-`../design/master_params.yaml` rev C-EVT1).
+`../design/master_params.yaml` rev D-EVT1).
 
 ## Status - read this first
 

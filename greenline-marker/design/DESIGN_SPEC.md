@@ -1,4 +1,4 @@
-# GreenLine GL-1 — master design specification (rev C2, EVT1)
+# GreenLine GL-1 — master design specification (rev D, EVT1)
 
 This file records every architecture decision. `master_params.yaml` holds the numbers that the
 mechanical CAD and the PCB layout must share; `check_layout.py` verifies them. Where this file
@@ -118,13 +118,13 @@ Rules the firmware must honour and the schematic must make possible:
 - Test and service pads on the underside: VBUS, D-, D+, GND, SWDIO, SWCLK, NRST.
 - No copper pours or vias under the IMU body on the top layer; keep it away from the charger and regulators.
 
-PCB: 4 layers, 0.8 mm, ENIG, D-shaped outline (radius 21.1 mm, flat at y = 17.3 mm) with two non-plated locating holes at (-4.2, 14.55) and (4.2, 14.55, slotted) that take spigots on the tub, through vias only,
+PCB: 4 layers, 0.8 mm, ENIG, D-shaped outline (radius 21.1 mm, flat at y = 17.3 mm) with two non-plated locating holes at (14.35, 10.8) and (-14.35, 10.8, slotted along x) that take spigots on the tub, through vias only,
 0.25 mm drill, default 0.15 mm tracks with 0.127 mm clearance, and a fine net class of 0.10 mm track /
 0.10 mm clearance used only to escape the camera BGAs (provisional 5 x 5 footprint, 0.5 mm pitch, 0.20 mm
 pads). 4 mil features are a standard tier at Sierra Circuits and Bay Area Circuits; OSH Park has no
 0.8 mm 4-layer service. Vias tented and plugged on the underside (the underside is a wetted surface inside the grain opening and
-the pad slot). Layer 2 solid ground. The top side must respect `tub_keepouts` in the YAML: eight 1.6 mm post feet and, under each camera hood, nothing taller than 0.95 mm except the camera. Parts on the top side except the grain LEDs, photodiode and
-contact pads.
+the pad slot), and no via at all inside the grain opening or the pad slot. Layer 2 solid ground. The top side must respect `tub_keepouts` in the YAML: no part taller than 2.55 mm anywhere (cameras excepted), six 1.6 mm and two 2.2 mm post feet, nothing taller than 0.95 mm under each camera hood except the camera, and no soldered part above a ball foot. Under each ball foot the bottom side has a 2.5 mm circle with no via and no track and an unmasked 1.6 mm copper land that the ball bears on. Two solder pads for the cell leads sit in the strip beyond the protection-board end of the cell. Parts on the top side except the grain LEDs, photodiode and
+contact pads. The cameras, the LCD connector and the battery are fixed mechanical interfaces; every other part may be placed where routing needs it, and the YAML part list is then regenerated from the board.
 
 ## 5. Mechanical design rules
 
@@ -132,8 +132,8 @@ Stack at the centre, bottom to top (mm above the base plane):
 
 | From | To | Item |
 |---|---|---|
-| 0.00 | 0.87 | Base plate (printed PA12), with three 1.0 mm stainless balls protruding 0.10 mm as hard feet (through holes; balls set on a gauge plate and potted) |
-| 0.87 | 1.00 | Die-cut adhesive sheet (3M 9472LE class, 0.13 mm) that laminates the PCB to the base plate and seals the pad slot and the grain opening |
+| 0.00 | 0.80 | Base plate (0.80 mm FR-4 from the PCB fabricator), with three 1.0 mm stainless balls protruding 0.10 mm as hard feet (through holes; balls set on a gauge plate and potted) |
+| 0.80 | 1.00 | Die-cut adhesive sheet (3M 93020LE class, 0.20 mm) that laminates the PCB to the base plate and seals the pad slot and the grain opening |
 | 1.00 | 1.80 | PCB |
 | 1.80 | 3.80 | Battery (2.0 mm) |
 | 3.80 | 4.20 | Swelling allowance |
@@ -141,19 +141,22 @@ Stack at the centre, bottom to top (mm above the base plane):
 | 4.65 | 5.40 | LCD glass |
 | 5.40 | 5.55 | Adhesive frame bonding the LCD under the roof ledge |
 | 5.55 | 6.35 | Roof ledge (0.80 mm) around the 22 mm aperture |
-| 6.35 | 7.60 | Cover-glass recess: 0.2 mm tape ring and 1.0 mm mineral-glass crystal, 0.05 mm below flush |
+| 6.35 | 7.60 | Cover-glass recess: 0.13 mm tape ring and 1.0 mm mineral-glass crystal, 0.12 mm below flush |
 
-Stack at the cameras: base 0.87, adhesive 0.13, PCB 0.80, cube 2.76, bond 0.05, prism 2.00 (top at 6.61), 0.19 clearance, roof 0.80 (underside at 6.80), top at 7.60. Optical axis 5.61 mm above the base plane.
+Stack at the cameras: base 0.80, adhesive 0.20, PCB 0.80, cube 2.76, bond 0.05, prism 2.00 (top at 6.61), 0.19 clearance, roof 0.80 (underside at 6.80), top at 7.60. Optical axis 5.61 mm above the base plane.
 
-Every printed wall is at least 0.8 mm and every drop-in fit has 0.25 mm nominal clearance, because US Multi Jet Fusion bureaus state minimum walls of 0.76-1.0 mm and tolerances of +-0.2 to 0.3 mm. A tighter-tolerance process (Carbon DLS epoxy) could take about 0.3 mm off the thickness.
+Every printed wall is at least 0.8 mm (one recorded exception: 0.525 mm behind each window recess) and every drop-in fit has 0.25 mm nominal clearance, because US Multi Jet Fusion bureaus state minimum walls of 0.76-1.0 mm and tolerances of +-0.2 to 0.3 mm. A tighter-tolerance process (Carbon DLS epoxy) could take about 0.3 mm off the thickness.
 
 Parts:
 
-1. **Tub (top shell)** — HP Multi Jet Fusion PA12, dyed black, vapor smoothed. Side wall 1.0 mm, roof 0.8 mm, D-shaped with a flat visor face at y = 18.4 mm that carries two bevelled camera openings, each closed by a small flat window (5.0 x 3.4 x 0.5 mm; clear opening 4.0 mm wide) bonded into a recess on the visor face (the prisms stay dry inside). Inside: the LCD pocket and ledge, the cover-glass recess, two prism bays with light hoods (a 0.25-0.35 mm slit remains above each cube at the rear and is closed with a dab of black adhesive at assembly), two spigots that locate the PCB, support posts that carry a footstep load from the roof to the PCB without loading the LCD or the battery, an inward ledge near the bottom that seats on the base-plate seal, and a flat pad for a pressure-equalisation vent.
-2. **Base plate** — MJF PA12, 0.87 mm, with the 13 mm grain opening (and a central baffle ring on three spokes that shades the photodiode from direct LED light), one 17.44 x 2.2 mm slot over the seven pads (separate 2.2 mm holes would leave 0.34 mm webs), three 1.15 mm through holes for the ball feet, and the seal land round the edge. The balls are set to 0.10 mm protrusion on a gauge plate and potted with UV epoxy, because the print cannot hold that dimension.
-3. **Cover glass** — 28.0 x 1.0 mm flat mineral-glass watch crystal for EVT; chemically strengthened glass with a printed black border for production.
-4. **Prisms** — two Edmund Optics 32-526 (VERIFIED: 2.00 mm legs, N-BK7, aluminised hypotenuse, $105 each at 1-5; a volume source such as Tower Optical must be quoted for production). Bonded to the cube top at the four corners with UV-cure adhesive, leaving an air gap over the lens. They are not part of the seal: the visor windows close the openings, so shell strain does not reach the optics.
-5. **Charging and data cradle** — printed nest that accepts the marker one way round, Mill-Max 0914-series long-stroke spring pins soldered into a small 2-layer board with a USB-C receptacle (four pins fitted for charging and USB, seven in the factory fixture), and a hold-down: a fixed lip over the front edge between the camera windows and a sprung latch at the rear. Calibration does not use the cradle.
+1. **Tub (top shell)** — HP Multi Jet Fusion PA12, dyed black, vapor smoothed. Side wall 1.0 mm ending 0.25 mm above the base plane (so the three ball feet are always the seat), roof 0.8 mm, D-shaped with a flat visor face at y = 18.4 mm that carries two straight camera openings 4.0 mm wide, each closed by a small flat window (5.0 x 3.25 x 0.4 mm borosilicate) bonded into a recess on the visor face, 0.15 mm below the face and the top (the prisms stay dry inside). Inside: the LCD pocket and ledge, the cover-glass recess, two prism bays with light hoods (the slit above each cube at the rear is closed by a black gasket bead cured on the tub before assembly), two spigots on the outer front posts that locate the PCB (the cameras lie between them), support posts that carry load from the roof to the PCB without loading the LCD or the battery, an inward ledge near the bottom that seats on the base-plate seal, and a raised pad for the pressure-equalisation vent with drain grooves on the top face. The LCD adhesive frame has a vent channel so the space under the cover glass breathes into the vented cavity.
+2. **Base plate** — routed from 0.80 mm FR-4 with black solder mask and no copper, ordered from the PCB fabricator. It has the 13 mm grain opening, one 17.44 x 2.2 mm slot over the seven pads (separate 2.2 mm holes would leave 0.34 mm webs), three 1.10 mm drilled holes for the ball feet, and the seal land round the edge. Reason for FR-4: the plate is laminated to the PCB that carries the level sensor, the cameras and the feet. A nylon plate there acts like a bimetal strip (nylon expands roughly seven times more than FR-4 with temperature and also swells with humidity), and the review estimated 0.04 to 0.3 mrad of tilt error per kelvin; an FR-4 plate has the same expansion as the PCB, is flatter (hole positions to 0.05 mm) and makes the laminate about as stiff as a 1.8 mm board under a footstep. A printed PA12 plate of the same outline (0.87 mm with a 0.13 mm sheet, integral baffle, not vapor smoothed) remains the documented alternative for an all-printed build and is compared at EVT. The balls are set to 0.10 mm protrusion on a gauge plate and potted with a dual-cure or two-part epoxy; each ball bears on a copper land on the PCB.
+3. **Grain baffle and fill** — a printed black PA12 ring (8.2 mm outside, 6.6 mm inside) bonded to the PCB round the photodiode shades it from direct LED light. The grain opening is then filled with a clear, hard, low-fluorescence potting to 0.05 mm below the base plane, so mud and dew cannot reach the LEDs and the photodiode.
+4. **Cover glass** — 28.0 x 1.0 mm flat mineral-glass watch crystal for EVT on a 0.13 mm tape ring (28 / 25 mm), 0.12 mm below flush. The EVT crystal is NOT step-proof (review estimate: it breaks at 100 to 200 N on a 20 mm patch). Production: chemically strengthened glass or sapphire specified by strength (ring-on-ring 600 MPa or more) with a printed black border; if step tests fail, 0.2 mm more puck thickness above the LCD is the reserved remedy.
+5. **Prisms** — two Edmund Optics 32-526 (VERIFIED: 2.00 mm legs, N-BK7, aluminised hypotenuse, $105 each at 1-5; a volume source such as Tower Optical must be quoted for production). Bonded to the cube top at the four corners with UV-cure adhesive, leaving an air gap over the lens. They are not part of the seal: the visor windows close the openings, so shell strain does not reach the optics.
+6. **Charging and data cradle** — printed nest (60 x 60 mm, 22.6 mm high overall) that accepts the marker one way round, with a drained floor, Mill-Max 0914-series long-stroke spring pins soldered into a small 2-layer board with a USB-C receptacle (four pins fitted for charging and USB, seven in the factory fixture), and a hold-down: a fixed lip over the front edge between the camera windows and a sprung latch with a thumb tab at the rear (calculated retention 6 times the seven-pin force; to be proven by cycle, creep and pull tests on first articles). Calibration does not use the cradle. Contact pads are ENIG at EVT and selective hard gold in production; the marker must be dry before docking.
+
+Field of view: the enclosure leaves the cameras 26 degrees each side, 17.6 degrees up and 8 degrees down. The upper edge clears the roof by only 0.054 mm, so at the tolerance limit the upper field is 15 degrees; this is accepted (it delays the range-from-stick-height measurement from 6.6 m to 7.8 m and nothing else).
 
 Sealing: bonded construction (no O-ring; a standard gland does not fit). Seal qualification loads and the vent requirement are in `docs/research/enclosure-manufacturing.md`.
 

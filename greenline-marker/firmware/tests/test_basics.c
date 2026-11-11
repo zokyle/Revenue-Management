@@ -333,7 +333,7 @@ GL_TEST(test_calibration_records)
 GL_TEST(test_generated_config)
 {
     /* values that must agree with design/master_params.yaml rev C */
-    GL_CHECK(strcmp(GL_CFG_PARAMS_REV, "C-EVT1") == 0);
+    GL_CHECK(strcmp(GL_CFG_PARAMS_REV, "D-EVT1") == 0);
     GL_CHECK_NEAR(GL_CFG_CAM_F_PX, 657.0, 1e-6);
     GL_CHECK_NEAR(GL_CFG_CAM_BASELINE_MM, 20.0, 1e-5);
     GL_CHECK_NEAR(GL_CFG_CAM_AXIS_HEIGHT_MM, 5.61, 1e-5);
