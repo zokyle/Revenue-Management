@@ -1,4 +1,4 @@
-# GreenLine GL-1 — master design specification (rev D, EVT1, with amendments E1 to E28)
+# GreenLine GL-1 — master design specification (rev D, EVT1, with amendments E1 to E34)
 
 This file records every architecture decision. `master_params.yaml` holds the numbers that the
 mechanical CAD and the PCB layout must share; `check_layout.py` verifies them. Where this file
@@ -41,10 +41,18 @@ Amendments after rev D (each is worked into the text below and marked with its n
 | E26 | The 3.3 V regulator for the processor's USB supply pin becomes one with an enable input (TI LP5907MFX-3.3/NOPB, the same family as the camera regulator) and is enabled by the 2.8 V rail | Docking a marker whose cell is empty raised the USB supply pin before the main supply, which the processor's data sheet forbids while the main supply is under 1 V (from memory of the ST data sheet; reading that paragraph stays a release gate) |
 | E27 | Netlist departures accepted: 2.2 uF in place of the 1 uF 0402 capacitors on the regulators (C22, C23, C26, C27); the photodiode wake pull-up R31 is 150 kohm, so the sleep-current limit of E14 is measured with the underside dark (a lit underside adds up to about 5 microamps); the VBUS sense divider is 100 k : 100 k on the pad side | A 1 uF 0402 part keeps well under half its value at 2.8 V; 1 megohm could not hold the wake line high in daylight |
 | E28 | "LCD connector pin order 1 SCLK ... 10 VSSA" is the order on the display's TAIL. With the tail folded once and the connector mouth to the rear the tail meets the connector mirrored: connector pad 1 = VSSA ... pad 10 = SCLK (PROVISIONAL: which edge of the tail is pin 1 must be read from the Sharp drawing; a wrong guess mirrors all ten pins) | The first netlist wired the connector in tail order |
+| E29 | Survey finishes at the ball. The marker treats the placement it is standing on as the ball and shows a line after every placement from the second on (for example: 1 m short of the hole, the midpoint, then the ball) | In the old order (ball first) no line appeared until a fourth placement back at the ball |
+| E30 | Recall: a single tap on a marker that has not been lifted since its last result shows that result again for 45 s with its age; no new camera read | A result could not be seen again after its 45 s on the screen |
+| E31 | "TOO STEEP": when the fitted slope is close to the slope on which a ball no longer stops, the marker says so and draws only a dashed, tentative line | Near that slope the solution is not determined: the review found the aim flipping on a one-microradian change of input |
+| E32 | In the cradle the marker goes to sleep (static charging symbol) once the USB host has been idle or absent for 30 s, and firmware stops the charge after 6 hours of continuous charging as a backstop | The charger ends a charge when the current falls to 2 mA; an awake marker draws more than that from the same node, so the charge would never end |
+| E33 | Three display states: solid line with confidence bar = normal solution; dashed line marked APPROX = a fallback solution; message without a line = no solution. The putt solve is limited to 300,000 integration steps (about 1 to 2 s by the model) | Several fallbacks looked identical to a clean result |
+| E34 | Firmware update cannot strand a unit: a small write-protected boot stub at the start of flash checks the application image (length and CRC) and starts ST's built-in USB loader when the image is invalid or an update was requested. Factory recovery is by SWD on the cradle's three service pins. USB vendor and product IDs are a release gate (none assigned) | The cell is sealed in and there is no reset button, so a half-written application could not be recovered by the user |
 
 E17 to E22 come from the enclosure review of 2026-11-13. They are decided here and enter `master_params.yaml` and the CAD together at the next revision letter, so that the mechanical checks, which assert the YAML values, never run against a half-changed file. Until then the YAML still carries 14.5 degrees, [0.76, 0.90] / [0.83, 0.92], the plate + 0.02 ring rule and 0.05 mm, and the enclosure package records the same changes as proposals P1 to P9 (`mechanical/PROPOSED_PARAM_CHANGES.md`, part C). P6 (U11 0.2 mm inboard) is settled by the board placement.
 
 E24 to E28 come from the netlist review of 2026-11-13 (`electrical/gl1_main/NETLIST_NOTES.md`, sections 5 and 8). E27 and E28 are already in the netlist. E24, E25 and E26 are decided here and are worked into the netlist, the board and the parameters at the next revision letter; until then the netlist still carries the Schottky (D17), the three-pin 3.3 V regulator (U11) and J1 on its first position, and the text of sections 4 and 5 below still describes those.
+
+E29 to E34 are product and firmware decisions taken after the firmware review of 2026-11-13 (`firmware/README.md`, open issues 17, 18, 21, 28, 31); firmware phase 3 implements them.
 
 
 ## 1. What the product is
@@ -78,7 +86,7 @@ Operating modes:
 
 1. **Quick Read** — one placement: tilt at the ball plus the flagstick-base height (method B1 of the simulator, the firmware default). Intended for putts to about 4.5 m; beyond that the median miss exceeds the hole radius in simulation.
 2. **Precision Read** — place, read, spin the marker 180 degrees in place, read again. Cancels device bias and averages two seatings.
-3. **Survey** — two to four placements along the line (ball, midpoint, about 1 m short of the hole). Each drop records tilt and its own range and bearing to the flagstick; the device fits a slope field through the samples. Intended for long or contoured putts.
+3. **Survey** — two to four placements along the line, finishing at the ball (for example about 1 m short of the hole, the midpoint, then the ball; E29). Each drop records tilt and its own range and bearing to the flagstick; the device fits a slope field through the samples. Intended for long or contoured putts.
 4. **Flag-out fallback** — the golfer points the visor at the hole and dials in the distance; tilt-only read with a low-confidence indicator.
 
 Simulated performance (`sim/results/REPORT.md`; synthetic greens, perfect stroke, grain reading off, 2.5 mrad seating noise assumed, 3600 putts from 1.5 to 12 m). Nothing here is a hardware measurement.
