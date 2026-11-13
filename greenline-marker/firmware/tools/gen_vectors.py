@@ -67,7 +67,8 @@ def flag(value):
 def generate(data, digest):
     if data.get("schema_version") != SCHEMA_VERSION:
         raise SystemExit(f"gen_vectors: schema_version {data.get('schema_version')} is not {SCHEMA_VERSION}")
-    for key in ("estimator_cases", "solver_cases", "fallback_estimator_cases", "fallback_solver_cases", "roll_cases"):
+    for key in ("estimator_cases", "solver_cases", "fallback_estimator_cases", "fallback_solver_cases", "roll_cases",
+                "near_miss_estimator_cases"):
         if key not in data:
             raise SystemExit(f"gen_vectors: the JSON has no '{key}' (regenerate it with greenline_sim.refvectors)")
     cfg = data["estimator_config"]
@@ -78,7 +79,7 @@ def generate(data, digest):
 
     def add_estimator(case, group):
         over = case["config_overrides"]
-        unknown = set(over) - {"use_grain", "past", "lm_max_iter"}
+        unknown = set(over) - {"use_grain", "past", "lm_max_iter", "near_miss_keep"}
         if unknown:
             raise SystemExit(f"gen_vectors: config override not supported by the C tests: {sorted(unknown)}")
         c = dict(cfg)
@@ -118,6 +119,12 @@ def generate(data, digest):
             f".method = {METHODS[case['method']]}, .use_grain = {flag(c['use_grain'])}, .past = {num(c['past'])}, "
             f".tol_miss = {num(c['tol_miss'])}, .tol_pace = {num(c['tol_pace'])}, .lm_tol = {num(c['lm_tol'])}, "
             f".lm_max_iter = {int(c['lm_max_iter'])}, .lm_max_iter_overridden = {flag('lm_max_iter' in over)},\n      "
+            f".near_miss = {num(over.get('near_miss_keep', 0.0))}, .kept = {flag(case.get('kept', False))}, "
+            f".patch_miss = {num(case.get('patch_solve', {}).get('miss'))}, "
+            f".without_source = {int(case.get('without_rule', {}).get('aim_source', 0))}, "
+            f".without_status = {int(case.get('without_rule', {}).get('solve_status', 0))}, "
+            f".without_phi = {num(case.get('without_rule', {}).get('phi'))}, "
+            f".without_v0 = {num(case.get('without_rule', {}).get('v0'))},\n      "
             f".n_drops = {len(drops)}, .first_meas = {first},\n      .exp = {{\n        "
             f".patch = {nums(e['patch'], 5)},\n        .level_offsets = {nums(e['level_offsets'], 2)}, "
             f".distance = {num(e['distance'])}, .distance_sigma = {num(e['distance_sigma'])},\n        "
@@ -143,6 +150,9 @@ def generate(data, digest):
     n_est_original = len(est_rows)
     for case in data["fallback_estimator_cases"]:
         add_estimator(case, 1)
+    n_est_fallback_end = len(est_rows)
+    for case in data["near_miss_estimator_cases"]:
+        add_estimator(case, 2)
 
     sol_rows = []
 
@@ -195,7 +205,7 @@ def generate(data, digest):
     out.append(" * Reference vectors of the Python reference (sim/greenline_sim) as C data in")
     out.append(" * double precision, for the host tests only (tests/test_solver.c).")
     out.append(f" * Source: schema {data['schema_version']}, seed {data['seed']}, sha256 {digest}.")
-    out.append(f" * {n_est_original} + {len(est_rows) - n_est_original} estimator cases, "
+    out.append(f" * {n_est_original} + {n_est_fallback_end - n_est_original} + {len(est_rows) - n_est_fallback_end} estimator cases, "
                f"{n_sol_original} + {len(sol_rows) - n_sol_original} solver cases, {len(roll_rows)} rolls.")
     out.append(" */")
     out.append('#include "gl_solver_vectors.h"')
@@ -221,12 +231,13 @@ def generate(data, digest):
     out.append("};")
     out.append(f"const unsigned gl_vec_n_meas = {len(meas_rows)}u;")
     out.append("")
-    out.append("/* estimator_cases, then fallback_estimator_cases */")
+    out.append("/* estimator_cases, then fallback_estimator_cases, then near_miss_estimator_cases */")
     out.append("const gl_vec_est_case_t gl_vec_est[] = {")
     out.extend(est_rows)
     out.append("};")
     out.append(f"const unsigned gl_vec_n_est = {len(est_rows)}u;")
     out.append(f"const unsigned gl_vec_n_est_original = {n_est_original}u;")
+    out.append(f"const unsigned gl_vec_n_est_near_first = {n_est_fallback_end}u;")
     out.append("")
     out.append("/* solver_cases, then fallback_solver_cases */")
     out.append("const gl_vec_sol_case_t gl_vec_sol[] = {")

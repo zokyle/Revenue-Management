@@ -1,0 +1,125 @@
+** Drc report for gl1_cradle.kicad_pcb **
+
+** Found 0 DRC violations **
+
+** Found 29 unconnected pads **
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(96.0900 mm, 102.8000 mm): Pad 1 [CC1] of R1 on B.Cu
+    @(98.7500 mm, 104.9450 mm): Pad A5 [CC1] of J1 on F.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(103.2000 mm, 104.9250 mm): Pad B1 [GND] of J1 on F.Cu
+    @(104.3200 mm, 105.5200 mm): PTH pad S1 [GND] of J1
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(96.8000 mm, 104.9250 mm): Pad B12 [GND] of J1 on F.Cu
+    @(95.6800 mm, 105.5200 mm): PTH pad S1 [GND] of J1
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(96.8000 mm, 104.9250 mm): Pad B12 [GND] of J1 on F.Cu
+    @(97.1100 mm, 102.8000 mm): Pad 2 [GND] of R1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(103.9100 mm, 102.8000 mm): Pad 2 [GND] of R2 on B.Cu
+    @(103.2000 mm, 104.9250 mm): Pad B1 [GND] of J1 on F.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(103.1900 mm, 97.4000 mm): Pad 1 [GND] of J2 on B.Cu
+    @(101.5800 mm, 99.4000 mm): Pad 2 [GND] of C1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(96.8625 mm, 99.4000 mm): Pad 2 [GND] of U1 on B.Cu
+    @(97.1100 mm, 102.8000 mm): Pad 2 [GND] of R1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(103.9100 mm, 102.8000 mm): Pad 2 [GND] of R2 on B.Cu
+    @(101.5800 mm, 99.4000 mm): Pad 2 [GND] of C1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(95.6800 mm, 105.5200 mm): PTH pad S1 [GND] of J1
+    @(95.6800 mm, 109.7000 mm): PTH pad S1 [GND] of J1
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(104.3200 mm, 109.7000 mm): PTH pad S1 [GND] of J1
+    @(104.3200 mm, 105.5200 mm): PTH pad S1 [GND] of J1
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(101.5800 mm, 99.4000 mm): Pad 2 [GND] of C1 on B.Cu
+    @(96.8625 mm, 99.4000 mm): Pad 2 [GND] of U1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(103.1900 mm, 97.4000 mm): Pad 1 [GND] of J2 on B.Cu
+    @(100.0000 mm, 93.8000 mm): PTH pad 1 [GND] of SP4
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(101.7500 mm, 104.9450 mm): Pad B5 [CC2] of J1 on F.Cu
+    @(102.8900 mm, 102.8000 mm): Pad 1 [CC2] of R2 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(100.6200 mm, 99.4000 mm): Pad 1 [VBUS_IN] of C1 on B.Cu
+    @(99.1375 mm, 99.4000 mm): Pad 5 [VBUS_IN] of U1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(97.6000 mm, 104.9450 mm): Pad A4 [VBUS_IN] of J1 on F.Cu
+    @(102.4000 mm, 104.9450 mm): Pad B4 [VBUS_IN] of J1 on F.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(97.6000 mm, 104.9450 mm): Pad A4 [VBUS_IN] of J1 on F.Cu
+    @(99.1375 mm, 99.4000 mm): Pad 5 [VBUS_IN] of U1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(91.2125 mm, 101.6000 mm): Pad 1 [VBUS_IN] of F1 on B.Cu
+    @(97.6000 mm, 104.9450 mm): Pad A4 [VBUS_IN] of J1 on F.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(92.3800 mm, 93.8000 mm): PTH pad 1 [VBUS] of SP1
+    @(92.7875 mm, 101.6000 mm): Pad 2 [VBUS] of F1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(99.2500 mm, 104.9450 mm): Pad B7 [USB_DM] of J1 on F.Cu
+    @(100.2500 mm, 104.9450 mm): Pad A7 [USB_DM] of J1 on F.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(99.1375 mm, 100.3500 mm): Pad 6 [USB_DM] of U1 on B.Cu
+    @(96.8625 mm, 100.3500 mm): Pad 1 [USB_DM] of U1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(99.2500 mm, 104.9450 mm): Pad B7 [USB_DM] of J1 on F.Cu
+    @(99.1375 mm, 100.3500 mm): Pad 6 [USB_DM] of U1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(94.9200 mm, 93.8000 mm): PTH pad 1 [USB_DM] of SP2
+    @(96.8625 mm, 100.3500 mm): Pad 1 [USB_DM] of U1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(99.7500 mm, 104.9450 mm): Pad A6 [USB_DP] of J1 on F.Cu
+    @(100.7500 mm, 104.9450 mm): Pad B6 [USB_DP] of J1 on F.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(96.8625 mm, 98.4500 mm): Pad 3 [USB_DP] of U1 on B.Cu
+    @(99.1375 mm, 98.4500 mm): Pad 4 [USB_DP] of U1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(97.4600 mm, 93.8000 mm): PTH pad 1 [USB_DP] of SP3
+    @(96.8625 mm, 98.4500 mm): Pad 3 [USB_DP] of U1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(99.7500 mm, 104.9450 mm): Pad A6 [USB_DP] of J1 on F.Cu
+    @(99.1375 mm, 98.4500 mm): Pad 4 [USB_DP] of U1 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(102.5400 mm, 93.8000 mm): PTH pad 1 [SWDIO] of SP5
+    @(105.7300 mm, 97.4000 mm): Pad 2 [SWDIO] of J2 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(105.0800 mm, 93.8000 mm): PTH pad 1 [SWCLK] of SP6
+    @(108.2700 mm, 97.4000 mm): Pad 3 [SWCLK] of J2 on B.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
+    @(107.6200 mm, 93.8000 mm): PTH pad 1 [NRST] of SP7
+    @(110.8100 mm, 97.4000 mm): Pad 4 [NRST] of J2 on B.Cu
+
+** Found 0 Footprint errors **
+
+** End of Report **

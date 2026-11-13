@@ -19,14 +19,18 @@ for _p in (os.path.normpath(os.path.join(HERE, "..", "gl1_main")), HERE):
 import gl1_cradle_design as G         # noqa: E402
 import check_cradle_rules             # noqa: E402
 import netlist_stage                  # noqa: E402
+import update_notes                   # noqa: E402
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", default=os.path.join(HERE, "netlist_out"))
     args = ap.parse_args(argv)
-    return netlist_stage.run(G.gl1_cradle_design(), args.out, rules=check_cradle_rules.rules,
-                             title="GL-1 cradle board")
+    code = netlist_stage.run(G.gl1_cradle_design(), args.out, rules=check_cradle_rules.rules,
+                             rules_selftest=check_cradle_rules.selftest, title="GL-1 cradle board")
+    if code == 0:                         # keep the generated tables of CRADLE_NOTES.md in step
+        update_notes.main(["--board", "cradle"])
+    return code
 
 
 if __name__ == "__main__":

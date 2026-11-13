@@ -210,4 +210,16 @@
 /* EXTCOMIN: LSE ticks per period, read from DESIGN_SPEC ("32768 / N"). */
 #define GL_PINS_EXTCOMIN_LSE_TICKS 547
 
+/* How DESIGN_SPEC says the firmware stops the charger, READ FROM ITS TEXT (a
+ * change of that sentence makes this file stale, and `make test` says so).
+ *   ACTIVE_HIGH 0, NTC_INPUT 0: rev C2 - MCP73831 without a temperature input,
+ *       CHG_INHIBIT an open-drain pin, LOW = stop.  THIS IS WHAT drivers/power.c
+ *       AND THE SIMULATOR IMPLEMENT (the phase-2 brief).
+ *   ACTIVE_HIGH 1, NTC_INPUT 1: rev D amendment E1 - BQ25101 with its own
+ *       thermistor input, CHG_INHIBIT push-pull to an N-MOSFET gate, HIGH = stop.
+ * If these say 1 the specification has moved on and the driver has not:
+ * tests/test_pins.c pins the difference as NOT MET (README, open issues). */
+#define GL_PINS_SPEC_CHG_INHIBIT_ACTIVE_HIGH 1
+#define GL_PINS_SPEC_CHARGER_HAS_NTC_INPUT 1
+
 #endif /* GL_PINS_H */

@@ -376,6 +376,10 @@ bool gl_sim_charger_on(void);
 gl_clock_t gl_sim_clock(void);
 /** Make the next `count` switches to GL_CLOCK_FAST fail (PLL does not lock). */
 void gl_sim_clock_fail(unsigned count);
+/** Make the next `count` switches back to GL_CLOCK_SLOW fail: the call
+ *  returns an error and the core is STILL fast (what the STM32 backend
+ *  reports when the system clock could not be switched back to MSIS). */
+void gl_sim_clock_fail_slow(unsigned count);
 /** Make the next `count` transfers on an SPI bus fail with `st` AFTER they
  *  have taken place (what a HAL time-out looks like to the driver). */
 void gl_sim_spi_fail(gl_spi_bus_t bus, unsigned count, gl_status_t st);

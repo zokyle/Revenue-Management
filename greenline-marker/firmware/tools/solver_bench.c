@@ -17,10 +17,17 @@
  *             count is the median of its mode
  *   survey3   the same for the three-drop Survey
  *   b2        the same for method B2 with a horizon
- *   worst     the costliest estimate that could be constructed: a 20.7 m
- *             putt across a slope near the limit of what the green holds,
- *             on which neither the patch nor its secant plane can be
- *             solved (both solves run to their roll budget)
+ *   worst     the costliest estimates anybody has constructed (the phase-2
+ *             review's searches; NOT a proven maximum), each without a step
+ *             budget (the solver's default, the reference) and with the
+ *             application's (GL_APP_SOLVE_MAX_STEPS):
+ *               W2  26 m by stereo, method B1, tilt 6.8 %: neither the patch
+ *                   nor its secant plane can be solved, both solves run to
+ *                   their roll budget
+ *               W1  30 m dialled, down a slope at 0.90 of critical: a
+ *                   tilt-only plane, which used to be solved twice
+ *               W0  the case this table had before the review (20.7 m)
+ *   worst-budget   W2 with the application's step budget, for callgrind
  *
  * Not firmware: tools/ is compiled by no firmware target.
  */
@@ -28,6 +35,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <math.h>
+
+#include "gl_app_cfg.h"
 #include "gl_solver.h"
 #include "gl_solver_run.h"
 
@@ -78,9 +88,47 @@ static unsigned median_case_(const char *mode, int need_horizon, int quiet)
     return picks[n / 2u].index;
 }
 
-/** The costliest estimate that could be constructed (see the header):
- *  20.74 m, tilt (-0.74 %, -6.61 %), Stimp 12.72; the stick's base where a
- *  patch with c = 0.0008 /m puts it. */
+/** W2 (the safety review's search, seed 11): 26.0 m by stereo, method B1. */
+static float worst_w2_(gl_measurements_t *m)
+{
+    gl_solver_measurements_init(m);
+    m->tilt_x = (float)0.0041603158475774019;
+    m->tilt_y = (float)-0.06771927674515206;
+    m->stimp_ft = 12.0f;
+    m->flag_found = true;
+    m->flag_bearing_rad = (float)-0.3758663894382302;
+    m->flag_disparity_px = (float)(657.0 * 0.02 / 26.014521134960443);
+    m->flag_low_elev_rad = (float)(-0.023759670697298448 - 0.0056 / 26.014521134960443);
+    m->flag_base_visible = false;
+    m->stick_height_est_m = 2.1f;
+    m->stick_height_rel_sigma = 0.05f;
+    return 0.64f; /* the pace of the case: 64 cm past */
+}
+
+/** W1 (the safety review's search, seed 21): 30 m dialled, down a slope at
+ *  0.90 of critical, Stimp 12.5; flag found but not ranged. */
+static float worst_w1_(gl_measurements_t *m)
+{
+    const double stimp = 12.5, a_r = 1.83 * 1.83 / (2.0 * stimp * 0.3048), crit = a_r / (5.0 / 7.0 * 9.80665);
+    const double b = 0.33910485203911905, sx = -0.89850998513005353 * crit, sy = -0.27816065634007064 * crit;
+    const double d = 29.985267577435099;
+    gl_solver_measurements_init(m);
+    m->tilt_x = (float)(sx * cos(b) - sy * sin(b));
+    m->tilt_y = (float)(sx * sin(b) + sy * cos(b));
+    m->stimp_ft = (float)stimp;
+    m->flag_found = true;
+    m->flag_bearing_rad = (float)b;
+    m->user_distance_m = 0.01f * (float)floor(d * 100.0 + 0.5);
+    m->flag_low_elev_rad = (float)(0.024216351276332825 - 0.0056 / d);
+    m->flag_base_visible = false;
+    m->stick_height_est_m = 2.1f;
+    m->stick_height_rel_sigma = 0.05f;
+    return 0.38f;
+}
+
+/** W0, the worst case of this table before the review: 20.74 m, tilt
+ *  (-0.74 %, -6.61 %), Stimp 12.72; the stick's base where a patch with
+ *  c = 0.0008 /m puts it. */
 static void worst_case_(gl_measurements_t *m)
 {
     gl_solver_measurements_init(m);
@@ -100,6 +148,9 @@ static void worst_case_(gl_measurements_t *m)
  * (--toggle-collect=bench_estimate_).  `c` != NULL: a vector case; else the
  * placement `m`.
  */
+static float bench_past_ = 0.30f;
+static uint32_t bench_max_steps_ = 0u;
+
 #if defined(__GNUC__)
 __attribute__((noinline))
 #endif
@@ -112,6 +163,8 @@ static void bench_estimate_(const gl_vec_est_case_t *c, const gl_measurements_t 
         gl_solver_options_t opt;
         gl_estimate_t e;
         gl_solver_default_options(&opt);
+        opt.past_m = bench_past_;
+        opt.max_steps = bench_max_steps_;
         r->status = (int)gl_solver_estimate(m, &opt, &work, &e);
         r->aim_source = e.aim_source;
         r->solve_status = e.solve_status;
@@ -122,17 +175,37 @@ static void bench_estimate_(const gl_vec_est_case_t *c, const gl_measurements_t 
     }
 }
 
-static void run_worst_(void)
+static void run_worst_one_(const char *name, const char *what, const gl_measurements_t *m, float past,
+                           uint32_t max_steps)
 {
-    gl_measurements_t m;
     gl_vec_est_result_t r;
     memset(&r, 0, sizeof(r));
+    bench_past_ = past;
+    bench_max_steps_ = max_steps;
+    bench_estimate_(NULL, m, &r);
+    bench_past_ = 0.30f;
+    bench_max_steps_ = 0u;
+    printf("  %-10s %s, %s: status %d, aim_source %u, solve_status %u, %lu trial rolls, %lu RK4 steps, %lu fit "
+           "iterations\n", name, what, (max_steps != 0u) ? "application's step budget" : "no step budget", r.status,
+           (unsigned)r.aim_source, (unsigned)r.solve_status, (unsigned long)r.n_rolls, (unsigned long)r.n_steps,
+           (unsigned long)r.n_iter);
+}
+
+static void run_worst_(int budget_only)
+{
+    gl_measurements_t m;
+    float past = worst_w2_(&m);
+    if (budget_only) {
+        run_worst_one_("worst", "W2, 26 m by stereo, B1", &m, past, GL_APP_SOLVE_MAX_STEPS);
+        return;
+    }
+    run_worst_one_("worst", "W2, 26 m by stereo, B1", &m, past, 0u);
+    run_worst_one_("worst", "W2, 26 m by stereo, B1", &m, past, GL_APP_SOLVE_MAX_STEPS);
+    past = worst_w1_(&m);
+    run_worst_one_("worst", "W1, 30 m dialled, 0.90 of critical", &m, past, 0u);
+    run_worst_one_("worst", "W1, 30 m dialled, 0.90 of critical", &m, past, GL_APP_SOLVE_MAX_STEPS);
     worst_case_(&m);
-    bench_estimate_(NULL, &m, &r);
-    printf("  %-10s 20.7 m across a slope near the limit: status %d, aim_source %u, solve_status %u, %lu trial "
-           "rolls, %lu RK4 steps, %lu fit iterations\n",
-           "worst", r.status, (unsigned)r.aim_source, (unsigned)r.solve_status, (unsigned long)r.n_rolls,
-           (unsigned long)r.n_steps, (unsigned long)r.n_iter);
+    run_worst_one_("worst", "W0, 20.7 m (this table before the review)", &m, 0.30f, 0u);
 }
 
 static void run_one_(unsigned index, const char *name)
@@ -160,7 +233,7 @@ int main(int argc, char **argv)
         run_one_(median_case_("B1", 0, 1), "typical");
         run_one_(median_case_("SURVEY3", 0, 1), "survey3");
         run_one_(median_case_("B2", 1, 1), "b2");
-        run_worst_();
+        run_worst_(0);
         return 0;
     }
     if (strcmp(which, "typical") == 0) {
@@ -170,9 +243,11 @@ int main(int argc, char **argv)
     } else if (strcmp(which, "b2") == 0) {
         run_one_(median_case_("B2", 1, 1), which);
     } else if (strcmp(which, "worst") == 0) {
-        run_worst_();
+        run_worst_(0);
+    } else if (strcmp(which, "worst-budget") == 0) {
+        run_worst_(1);
     } else {
-        fprintf(stderr, "usage: solver_bench [all | typical | survey3 | b2 | worst]\n");
+        fprintf(stderr, "usage: solver_bench [all | typical | survey3 | b2 | worst | worst-budget]\n");
         return 2;
     }
     return 0;

@@ -37,6 +37,12 @@
 
 /* ---- range fusion ------------------------------------------------------------ */
 
+/** A finite number whose square is not: Python's `x ** 2` raises there. */
+static bool sq_overflows_(gl_real_t x)
+{
+    return gls_finite(x) && !gls_finite(x * x);
+}
+
 /**
  * Reference: fuse_range.  Returns false if the arithmetic divided by zero
  * (a range channel of zero distance, or weights that vanish): the
@@ -78,6 +84,8 @@ static bool fuse_range_(const gl_measurements_t *m, gl_range_estimate_t *out)
             mono = m->stick_height_est_m / span;
             sig_m = mono * GLS_SQRT(m->stick_height_rel_sigma * m->stick_height_rel_sigma +
                                     GLS_R(2.0) * (q * q));
+            /* (the reference squares with `**`, which raises OverflowError) */
+            ok = ok && !sq_overflows_(m->stick_height_rel_sigma) && !sq_overflows_(q);
         }
     }
     if (gls_finite(stereo) && gls_finite(mono)) {
@@ -93,6 +101,20 @@ static bool fuse_range_(const gl_measurements_t *m, gl_range_estimate_t *out)
                  (ws + wm != GLS_R(0.0));
             dist = (ws * stereo + wm * mono) / (ws + wm);
             sig = GLS_R(1.0) / GLS_SQRT(ws + wm);
+            /* Absurd but FINITE inputs (a stick height of 1e300, or of 1e-20
+             * in single precision): the square of a sigma overflows, its
+             * weight becomes 0 or infinite, and the "fused" distance is one
+             * channel alone or not a number.  The reference raises
+             * OverflowError there (sig ** 2); this used to pass as a result
+             * (GL_OK at the stereo range with the other channel silently
+             * dropped, or "not ranged" with the 3 m default).  The
+             * arithmetic left the finite range: say so.  A sigma that is
+             * not finite TO BEGIN WITH (a not-a-number input) is not
+             * arithmetic: it propagates as it does in the reference. */
+            if (gls_finite(sig_s) && gls_finite(sig_m)) {
+                ok = ok && gls_finite(sig_s * sig_s) && gls_finite(sig_m * sig_m) && gls_finite(ws) &&
+                     gls_finite(wm) && gls_finite(dist) && gls_finite(sig);
+            }
             sig_s = dist * dist * GLS_SIGMA_DISP / fb;
         }
         out->distance_m = dist;
@@ -554,7 +576,25 @@ static void fit_lm_(const problem_t *p, unsigned n_h, const gl_real_t *x0, const
                 continue;
             }
             for (unsigned a = 0; a < NPAR; a++) {
-                const gl_real_t rel = GLS_FABS(step[a]) / par_scale_(a);
+                gl_real_t scale = par_scale_(a);
+#if GL_SOLVER_REAL_BITS == 32
+                /* SINGLE PRECISION ONLY.  A step cannot be smaller than the
+                 * spacing of the numbers around the parameter it moves: a
+                 * silhouette offset of 0.25 has neighbours 3e-8 apart, which
+                 * is 3e-5 in the scaled units of lm_tol (1e-5).  Such a fit
+                 * flip-flopped between two neighbours of equal cost for all
+                 * 60 iterations and was reported "not converged" although it
+                 * had converged in 9.  A step of at most GLS_LM_STEP_ULPS
+                 * spacings counts as below the tolerance.  (The double build,
+                 * the one compared with the reference, is not touched.) */
+                {
+                    const gl_real_t spacing = GLS_LM_STEP_ULPS * FLT_EPSILON * GLS_FABS(x[a]);
+                    if (opt->lm_tol > GLS_R(0.0) && spacing > opt->lm_tol * scale) {
+                        scale = spacing / opt->lm_tol;
+                    }
+                }
+#endif
+                const gl_real_t rel = GLS_FABS(step[a]) / scale;
                 if (rel > biggest) {
                     biggest = rel;
                 }
@@ -645,6 +685,12 @@ static gl_real_t cross_sigma_read_(gl_real_t distance, const gl_real_t *stations
         n11 += wgt * stations[i] * stations[i];
     }
     det = n00 * n11 - n01 * n01;
+    if (!gls_finite(det) || !(det > GLS_R(0.0))) {
+        /* the normal matrix overflowed (a distance of 1e17 m in single
+         * precision): the sigma would come out as 0, "certain".  Not a
+         * number instead; the estimator refuses it (GL_ERR_RANGE). */
+        return GLS_NAN;
+    }
     v_b = n11 / det;
     v_d = n00 / det;
     v_bd = -n01 / det;

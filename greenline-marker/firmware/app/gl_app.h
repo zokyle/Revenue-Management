@@ -22,17 +22,17 @@
  * app/gl_main.c; the host tests allocate their own).  Nothing is allocated
  * dynamically.
  *
- * RAM: sizeof(gl_app_t) is about 313 kB, of which 293 kB are the image
+ * RAM: sizeof(gl_app_t) is about 321 kB, of which 301 kB are the image
  * buffers and vision work areas of gl_read_t (see gl_read.h).  The exact
  * figure is in the `make cross` size table (bss of gl_main); gl_app.c and
  * gl_usb.c add 1.8 kB of static scratch (one raw-strip log record, two raw
  * grain measurements).
- * Stack (arm-none-eabi-gcc -Os, -fstack-usage): the deepest chain is
- * gl_app_run_once (312) -> gl_read_step (208) -> strip / band analysis
- * (650 / 640 including their callees) = about 1.2 kB; the logging, solve,
- * USB and start-up chains stay below 1 kB.  With the HAL backend's frames
- * and nested interrupt frames on top, a 4 kB main stack is ample.  No
- * recursion anywhere.
+ * Stack (arm-none-eabi-gcc -Os, -fstack-usage; the frames and the chains
+ * are listed in the README, "Memory"): the deepest chain is the putt solve,
+ * about 1.7 kB below main(); the vision's is about 1.4 kB; the logging, USB
+ * and start-up chains stay below 1 kB.  With the HAL backend's frames and
+ * nested interrupt frames on top, a 4 kB main stack leaves a factor of two.
+ * No recursion anywhere.
  */
 #ifndef GL_APP_H
 #define GL_APP_H
@@ -161,6 +161,9 @@ typedef struct {
     uint32_t next_chg_ms;     /**< next charge-temperature check while VBUS is present */
     bool clock_fast;          /**< the 160 MHz clock is on (capture and solve only) */
     uint16_t clock_fails;     /**< switches to the fast clock that failed (diagnostics) */
+    bool vbus_acted;          /**< the VBUS level that has been dealt with (vbus_edge_): the
+                                   pin is compared with it at every loop pass, so the edge
+                                   interrupt is a convenience, not a necessity */
     bool vbus_pending;        /**< a VBUS edge is being debounced */
     uint32_t vbus_settle_ms;
     bool storage_mode;        /**< cell nearly empty: IMU off, only the cradle wakes the device */

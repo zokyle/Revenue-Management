@@ -225,6 +225,15 @@ GL_TEST(test_core_clock_calls_are_recorded_and_checked)
     GL_CHECK_EQ(gl_hal_clock_set(GL_CLOCK_FAST), GL_OK);
     GL_CHECK_EQ(gl_hal_clock_set(GL_CLOCK_SLOW), GL_OK);
     GL_CHECK_EQ(gl_sim_stats()->clock_to_fast, gl_sim_stats()->clock_to_slow);
+    /* a switch BACK that does not take place: an error, and the clock is
+     * still fast (the caller must not believe otherwise) */
+    GL_CHECK_EQ(gl_hal_clock_set(GL_CLOCK_FAST), GL_OK);
+    gl_sim_clock_fail_slow(1);
+    GL_CHECK_EQ(gl_hal_clock_set(GL_CLOCK_SLOW), GL_ERR_IO);
+    GL_CHECK_EQ(gl_hal_clock_get(), GL_CLOCK_FAST);
+    GL_CHECK_EQ(gl_hal_clock_set(GL_CLOCK_SLOW), GL_OK);
+    GL_CHECK_EQ(gl_hal_clock_get(), GL_CLOCK_SLOW);
+    GL_CHECK_EQ(gl_sim_stats()->clock_to_fast, gl_sim_stats()->clock_to_slow);
     /* bus timing does not follow the core clock: the same SPI transfer takes
      * the same time either way */
     {
@@ -272,11 +281,91 @@ GL_TEST(test_extcomin_divides_32768_by_547)
     gl_hal_extcomin_stop();
 }
 
+/*
+ * The STM32 backend cannot be run here (no vendor sources, no target).  Two
+ * properties of its start-up are checked on its SOURCE TEXT, because the
+ * review found them violated and a compile cannot show them:
+ *
+ *   - gl_hal_init() starts the independent watchdog before the clock set-up
+ *     and before anything that can return or hang (it used to start it
+ *     LAST, and a clock error returned before it: the application's first
+ *     delay then waited for ever, with no watchdog);
+ *   - gl_hal_init() has ONE return statement, at its end: no error path
+ *     leaves before the pins, the cycle counter and the tick exist.
+ *
+ * This is a check of the text, not of behaviour: it says the order is as
+ * written, not that the order works on the part.
+ */
+static char backend_src_[160000];
+
+static const char *after_(const char *from, const char *what)
+{
+    const char *p = (from != NULL) ? strstr(from, what) : NULL;
+    return p;
+}
+
+GL_TEST(test_backend_starts_the_watchdog_first)
+{
+    FILE *f = fopen("hal/stm32u5/gl_hal_stm32u5.c", "rb");
+    size_t n = 0;
+    const char *body, *end, *wdg, *clocks, *dfu, *halinit, *p;
+    unsigned returns = 0;
+
+    GL_CHECK(f != NULL); /* the tests are run from the firmware directory (make test) */
+    if (f == NULL) {
+        return;
+    }
+    n = fread(backend_src_, 1, sizeof(backend_src_) - 1u, f);
+    fclose(f);
+    backend_src_[n] = '\0';
+    GL_CHECK(n > 30000u && n < sizeof(backend_src_) - 1u);
+    body = after_(backend_src_, "\ngl_status_t gl_hal_init(void)\n{");
+    GL_CHECK(body != NULL);
+    end = after_(body, "\n}\n");
+    GL_CHECK(end != NULL);
+    if (body == NULL || end == NULL) {
+        return;
+    }
+    dfu = after_(body, "dfu_check_();");
+    halinit = after_(body, "HAL_Init()");
+    wdg = after_(body, "HAL_IWDG_Init(&hiwdg_)");
+    clocks = after_(body, "clocks_init_();");
+    GL_CHECK(dfu != NULL && halinit != NULL && wdg != NULL && clocks != NULL);
+    if (dfu == NULL || halinit == NULL || wdg == NULL || clocks == NULL) {
+        return;
+    }
+    GL_CHECK(dfu < halinit && halinit < wdg && wdg < clocks && clocks < end);
+    for (p = body; (p = strstr(p, "return ")) != NULL && p < end; p++) {
+        /* a statement: only blanks between the start of the line and it */
+        const char *q = p;
+        while (q > body && q[-1] == ' ') {
+            q--;
+        }
+        if (q[-1] != '\n') {
+            continue; /* the word in a comment */
+        }
+        returns++;
+        GL_CHECK(p > clocks); /* nothing returns before the watchdog runs */
+    }
+    printf("    hal/stm32u5/gl_hal_stm32u5.c, gl_hal_init(): the watchdog is started %ld characters "
+           "before the clock set-up; %u return statement(s) in the function\n", (long)(clocks - wdg),
+           returns);
+    GL_CHECK_EQ(returns, 1);
+    /* the delays have a second exit */
+    p = after_(backend_src_, "\nvoid gl_hal_delay_us(uint32_t us)\n{");
+    GL_CHECK(p != NULL && after_(p, "pass < cycles") != NULL &&
+             after_(p, "pass < cycles") < after_(p, "\n}\n"));
+    p = after_(backend_src_, "\nvoid gl_hal_delay_ms(uint32_t ms)\n{");
+    GL_CHECK(p != NULL && after_(p, "HAL_GetTick()") != NULL &&
+             after_(p, "HAL_GetTick()") < after_(p, "\n}\n"));
+}
+
 int main(void)
 {
     GL_RUN(test_chip_selects_are_inactive_through_reset_and_init);
     GL_RUN(test_mcu_reset_of_the_model);
     GL_RUN(test_core_clock_calls_are_recorded_and_checked);
     GL_RUN(test_extcomin_divides_32768_by_547);
+    GL_RUN(test_backend_starts_the_watchdog_first);
     return gl_test_summary();
 }

@@ -800,6 +800,12 @@ GL_TEST(test_precision_reread_with_a_second_turn)
      * (216 degrees = -144 degrees), not the stale 176 */
     GL_CHECK_NEAR(fabs((double)app.cur.view_yaw_rad) * 57.29578, 144.0, 1.5);
     GL_CHECK_NEAR(fabs((double)app.view.ball_az_rad) * 57.29578, 144.0, 1.5);
+    /* the gyro integration goes on while this read is shown (a second
+     * request for the spin must count from the frame of the read, not from
+     * where the marker was left) and ends with the read */
+    GL_CHECK(app.motion.spin_active);
+    GL_CHECK_NEAR(fabs((double)gl_spin_yaw(&app.motion.spin)) * 57.29578, 144.0, 1.5);
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, now_ms_() + 50000u));
     GL_CHECK(!app.motion.spin_active);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 

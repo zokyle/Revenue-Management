@@ -8,6 +8,7 @@
  * again here by hand, independently of tools/gen_pins.py.
  */
 #include "gl_test.h"
+#include "power.h"
 
 #include "gl_hal.h"
 #include "gl_pins.h"
@@ -300,6 +301,50 @@ GL_TEST(test_rev_c2_extcomin_divider_and_reset_levels)
     }
 }
 
+/*
+ * NOT MET (review, specification drift): the charger of DESIGN_SPEC is no
+ * longer the one this firmware was written for.
+ *
+ *   firmware (the phase-2 brief, "rev C2"): MCP73831, on by default, no
+ *       temperature input; CHG_INHIBIT open drain, LOW = stop; the firmware
+ *       is the only cell-temperature protection while it runs.
+ *   DESIGN_SPEC on disk (rev D, amendment E1): BQ25101 with its own NTC input
+ *       (JEITA in hardware, also with the MCU in reset, hung or in the ROM
+ *       bootloader); CHG_INHIBIT a PUSH-PULL output to an N-MOSFET gate,
+ *       HIGH = stop.
+ *
+ * On an E1 board the driver's "stop" (pin low, open drain) stops nothing and
+ * its "release" (analog) is what the gate pull-down does anyway: the charger
+ * is then governed by its own thermistor, and the cradle screen's TOO COLD /
+ * TOO HOT would describe the firmware's opinion, not what the charger does.
+ * The two NOT MET rows of the charger state table (ROM bootloader, hung
+ * firmware) are what E1 was made to cover.
+ *
+ * This is a decision for the owner (which document is authoritative for the
+ * next phase), not something a test can settle.  The generator reads the
+ * sentence from the specification; this test PINS the present difference, so
+ * that it cannot be forgotten: when the driver follows E1 (or the
+ * specification goes back), this check fails and is replaced by the test of
+ * the new circuit.
+ */
+GL_TEST(test_charger_of_the_specification_is_not_the_firmwares)
+{
+    printf("    DESIGN_SPEC, read by tools/gen_pins.py: CHG_INHIBIT active %s, charger %s a temperature input "
+           "of its own;\n    drivers/power.c: CHG_INHIBIT active %s (open drain), charger %s one\n",
+           GL_PINS_SPEC_CHG_INHIBIT_ACTIVE_HIGH ? "HIGH" : "LOW",
+           GL_PINS_SPEC_CHARGER_HAS_NTC_INPUT ? "with" : "without",
+           GL_POWER_CHG_INHIBIT_ACTIVE_HIGH ? "HIGH" : "LOW",
+           GL_POWER_CHARGER_HAS_NTC_INPUT ? "with" : "without");
+    printf("    NOT MET: the firmware implements the rev C2 circuit of its brief; the specification on disk is "
+           "rev D with amendment E1\n");
+    /* PINNED: the specification says E1 ... */
+    GL_CHECK_EQ(GL_PINS_SPEC_CHG_INHIBIT_ACTIVE_HIGH, 1);
+    GL_CHECK_EQ(GL_PINS_SPEC_CHARGER_HAS_NTC_INPUT, 1);
+    /* ... and the driver is the rev C2 one */
+    GL_CHECK_EQ(GL_POWER_CHG_INHIBIT_ACTIVE_HIGH, 0);
+    GL_CHECK_EQ(GL_POWER_CHARGER_HAS_NTC_INPUT, 0);
+}
+
 int main(void)
 {
     GL_RUN(test_table_matches_the_logical_pins);
@@ -309,5 +354,6 @@ int main(void)
     GL_RUN(test_rom_bootloader_pins_are_not_camera_facing_outputs);
     GL_RUN(test_rev_c2_pwdn_charger_and_ntc_pins);
     GL_RUN(test_rev_c2_extcomin_divider_and_reset_levels);
+    GL_RUN(test_charger_of_the_specification_is_not_the_firmwares);
     return gl_test_summary();
 }

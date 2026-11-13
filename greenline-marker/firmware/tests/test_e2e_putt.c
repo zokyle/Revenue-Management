@@ -51,6 +51,25 @@ typedef struct {
 
 #define LINE_MAX_RUNS 900
 
+
+/* The picture as the GOLFER behind the ball sees it.  A result whose ball
+ * position lies behind the marker (the half turn of a Precision Read) is
+ * drawn turned round by gl_ui_render(): every pixel test below then looks at
+ * the panel turned back, and every angle it is compared with is referred to
+ * the opposite direction (seen_angle_) - the frame of a marker that faces
+ * the hole. */
+static bool turned_;
+
+static bool seen_black_(int x, int y)
+{
+    return turned_ ? panel_black_(127 - x, 127 - y) : panel_black_(x, y);
+}
+
+static float seen_angle_(float a)
+{
+    return turned_ ? gl_wrap_pi(a - GL_PI_F) : a;
+}
+
 /* The aim line is 6 px wide (plus the edge dither).  Collect the centres of
  * all horizontal runs of black pixels 5 to 9 px long in the panel memory,
  * find the straight line that the most of them lie on (every pair of
@@ -68,12 +87,12 @@ static void measure_line_(line_t *out)
         int x = 0;
         while (x < 128) {
             int x0;
-            if (!panel_black_(x, y)) {
+            if (!seen_black_(x, y)) {
                 x++;
                 continue;
             }
             x0 = x;
-            while (x < 128 && panel_black_(x, y)) {
+            while (x < 128 && seen_black_(x, y)) {
                 x++;
             }
             if (x - x0 >= 5 && x - x0 <= 9 && n < LINE_MAX_RUNS) {
@@ -178,7 +197,7 @@ static double ink_in_the_dash_gaps_(float aim_rad, float ball_az_rad)
         for (int x = 0; x < 128; x++) {
             if (!gl_gfx_get(&solid, x, y) && gl_gfx_get(&dashed, x, y)) {
                 n++;
-                black += panel_black_(x, y) ? 1u : 0u;
+                black += seen_black_(x, y) ? 1u : 0u;
             }
         }
     }
@@ -203,7 +222,7 @@ static unsigned label_mismatch_(int cx, int y, const char *text)
             if (!gl_gfx_in_clip(&scratch, xx, yy)) {
                 continue;
             }
-            bad += (panel_black_(xx, yy) != !gl_gfx_get(&scratch, xx, yy)) ? 1u : 0u;
+            bad += (seen_black_(xx, yy) != !gl_gfx_get(&scratch, xx, yy)) ? 1u : 0u;
         }
     }
     return bad;
@@ -219,7 +238,7 @@ static double rose_direction_(int rose_x)
     for (int y = 46; y <= 70; y++) {
         for (int x = rose_x - 12; x <= rose_x + 12; x++) {
             const double dx = (double)x - rose_x, dy = (double)y - 58.0;
-            if (dx * dx + dy * dy <= 11.0 * 11.0 && panel_black_(x, y)) {
+            if (dx * dx + dy * dy <= 11.0 * 11.0 && seen_black_(x, y)) {
                 sx += dx;
                 sy += dy;
                 n++;
@@ -247,7 +266,7 @@ static double coverage_through_centre_(double angle)
             continue;
         }
         total++;
-        black += panel_black_(x, y) ? 1u : 0u;
+        black += seen_black_(x, y) ? 1u : 0u;
     }
     return (total > 0u) ? (double)black / (double)total : 0.0;
 }
@@ -507,6 +526,14 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
     opt.method = app.solve_opt.method;
     opt.past = (double)app.solve_opt.past_m;
     opt.tight = 1;
+    opt.use_grain = app.solve_opt.use_grain ? 1 : 0;
+    opt.near_miss = (double)app.solve_opt.near_miss_m;
+    /* the application's own two settings of the solve: the near-miss rule
+     * (5 mm, the reference's near_miss_keep) and the step budget (the
+     * firmware's own limit; the reference has none) */
+    GL_CHECK_NEAR(app.solve_opt.near_miss_m, 0.005, 1e-9);
+    GL_CHECK_EQ(app.solve_opt.max_steps, GL_APP_SOLVE_MAX_STEPS);
+    GL_CHECK(app.est.n_steps <= GL_APP_SOLVE_MAX_STEPS + 6004u);
     gl_ref_estimate(rec, n, ball, &opt, &ref);
     fw_est_(&fw);
     GL_CHECK_EQ(ref.status, GL_OK);
@@ -516,8 +543,9 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
         GL_CHECK_EQ(tru.status, GL_OK);
     }
     if (dump_ != NULL) {
-        fprintf(dump_, "{\"name\": \"%s\", \"method\": %d, \"past\": %.9g, \"ball_index\": %u, "
-                       "\"drops\": [", name, opt.method, opt.past, ball);
+        fprintf(dump_, "{\"name\": \"%s\", \"method\": %d, \"past\": %.9g, \"use_grain\": %d, "
+                       "\"near_miss\": %.9g, \"ball_index\": %u, \"drops\": [",
+                name, opt.method, opt.past, opt.use_grain, opt.near_miss, ball);
         for (unsigned i = 0; i < n; i++) {
             fprintf(dump_, "%s", (i > 0) ? ", " : "");
             dump_meas_(&rec[i]);
@@ -580,6 +608,8 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
     gl_ui_result_text(&app.ui, &app.view, &row->text);
     row->boxes = gl_ui_conf_boxes(app.view.confidence);
     GL_CHECK_EQ(app.view.line_here, x->expect_line);
+    /* drawn turned round when the ball lies behind the marker */
+    turned_ = fabsf(app.view.ball_az_rad) > 0.5f * GL_PI_F;
     measure_line_(&ln);
     if (x->expect_line) {
         /* the view's aim is the estimate's, turned into the marker's present frame */
@@ -588,14 +618,27 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
         GL_CHECK_NEAR(yaw, x->view_yaw, 0.02);
         if (!x->on_screen) {
             /* The true line leaves the aperture (more than about 13.5 degrees
-             * off the visor axis): a DASHED parallel through the screen
-             * centre shows the direction, an arrow the side.  Whatever else
-             * it is, it is not a solid line. */
+             * off the visor axis): the PARALLEL through the screen centre
+             * shows the direction, in the style of the result - solid for a
+             * solution, tentative dashes for anything less (told from the
+             * pixels in the gaps of the dashes, like the lines on the
+             * screen).  No arrow: the one there used to be pointed away from
+             * the aim. */
             const double cov = coverage_through_centre_((double)app.view.aim_rad);
             const double cov_off = coverage_through_centre_((double)app.view.aim_rad + 0.5);
-            GL_CHECK(cov > 0.35 && cov < 0.80);
+            const double ink = ink_in_the_dash_gaps_(seen_angle_(app.view.aim_rad),
+                                                     seen_angle_(app.view.ball_az_rad));
+            GL_CHECK(cov > 0.35);
             GL_CHECK(cov_off < 0.25);
-            GL_CHECK(!(ln.found && ln.rows >= 40u));
+            GL_CHECK(!isnan(ink));
+            row->dashed = ink < 0.3;
+            GL_CHECK_EQ(row->dashed,
+                        !app.view.solved || !(app.view.distance_m > 0.0f) || !app.view.flag_found);
+            if (row->dashed) {
+                most_dashed_ink_ = (ink > most_dashed_ink_) ? ink : most_dashed_ink_;
+            } else {
+                least_solid_ink_ = (ink < least_solid_ink_) ? ink : least_solid_ink_;
+            }
             row->drawn_aim = (double)NAN;
         } else {
             GL_CHECK(ln.found);
@@ -603,9 +646,10 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
         if (ln.found && x->on_screen) {
             /* a line through the ball position in direction a has dx/dy = tan(a) */
             const double drawn = atan(ln.k);
-            const double d_view = orient_diff_(drawn, (double)app.view.aim_rad);
-            const double bx = 63.5 - (double)GL_CFG_BALL_CENTRE_Y_PX * sin((double)app.view.ball_az_rad);
-            const double byp = 63.5 - (double)GL_CFG_BALL_CENTRE_Y_PX * cos((double)app.view.ball_az_rad);
+            const double d_view = orient_diff_(drawn, (double)seen_angle_(app.view.aim_rad));
+            const double baz = (double)seen_angle_(app.view.ball_az_rad);
+            const double bx = 63.5 - (double)GL_CFG_BALL_CENTRE_Y_PX * sin(baz);
+            const double byp = 63.5 - (double)GL_CFG_BALL_CENTRE_Y_PX * cos(baz);
             const double miss = fabs(ln.k * byp + ln.c - bx) * cos(drawn);
             /* back to the read frame, on the branch of the firmware's aim */
             row->drawn_aim = fw.aim_azimuth_device + d_view;
@@ -620,13 +664,17 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
                 GL_CHECK(miss < 3.0);
                 GL_CHECK(ln.rows >= 30u);
                 /* SOLID only for a solution of a putt whose distance is known
-                 * (measured or dialled); long dashes for anything else, told
-                 * from the panel's pixels in the gaps of the dashes. */
+                 * (measured or dialled) and whose direction the cameras
+                 * measured; long dashes for anything else - an aim that is
+                 * not a solution, an assumed distance, the flag-out fallback
+                 * - told from the panel's pixels in the gaps of the dashes. */
                 {
-                    const double ink = ink_in_the_dash_gaps_(app.view.aim_rad, app.view.ball_az_rad);
+                    const double ink = ink_in_the_dash_gaps_(seen_angle_(app.view.aim_rad),
+                                                             seen_angle_(app.view.ball_az_rad));
                     GL_CHECK(!isnan(ink));
                     row->dashed = ink < 0.3;
-                    GL_CHECK_EQ(row->dashed, !app.view.solved || !(app.view.distance_m > 0.0f));
+                    GL_CHECK_EQ(row->dashed, !app.view.solved || !(app.view.distance_m > 0.0f) ||
+                                                 !app.view.flag_found);
                     if (row->dashed) {
                         most_dashed_ink_ = (ink > most_dashed_ink_) ? ink : most_dashed_ink_;
                     } else {
@@ -664,8 +712,14 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
             GL_CHECK_NEAR(shown_number_(row->text.distance), ref.distance / unit, 0.051);
             GL_CHECK_EQ(strchr(row->text.distance, '?') != NULL, assumed);
             if (x->solved) {
+                /* "PLAYS": the flat putt that needs the same stroke - the
+                 * reference's roll-out distance less the PAST setting - with
+                 * a "?" when the base of the stick was hidden (the hole
+                 * height is then only bounded) */
                 GL_CHECK(strncmp(row->text.plays, "PLAYS ", 6) == 0);
-                GL_CHECK_NEAR(shown_number_(row->text.plays), ref.plays_like / unit, 0.052);
+                GL_CHECK_NEAR(shown_number_(row->text.plays),
+                              (ref.plays_like - (double)app.solve_opt.past_m) / unit, 0.052);
+                GL_CHECK_EQ(strchr(row->text.plays, '?') != NULL, ref.base_hidden);
             } else {
                 GL_CHECK(row->text.plays[0] == '\0');
             }
@@ -739,6 +793,9 @@ static double expected_confidence_(void)
         c = 0.0;
     } else if (app.est.aim_source == GL_AIM_BEST_EFFORT && c > 0.2) {
         c = 0.2;
+    }
+    if (app.est.flag_missing && c > 0.09) {
+        c = 0.09; /* flag-out: the direction is the golfer's pointing: no box */
     }
     return c;
 }
@@ -864,12 +921,14 @@ GL_TEST(test_quick_read_scenes_line_and_numbers)
         } else {
             GL_CHECK(fabs((double)app.est.break_cups) < 0.3);
         }
-        /* uphill: the putt plays longer than its length plus the 30 cm it is
-         * hit past the hole; downhill shorter */
+        /* uphill: the putt rolls out further than its length plus the 30 cm
+         * it is hit past the hole, and is SHOWN as playing longer than its
+         * length (the 30 cm taken off again); downhill shorter */
         if (fabs(along) > 0.002) {
             GL_CHECK_EQ(app.est.plays_like_m > app.est.distance_m + 0.30f, along > 0.0);
             GL_CHECK_EQ(app.est.dz_hole_m > 0.0f, along > 0.0);
-            GL_CHECK_EQ(app.view.plays_like_m > app.view.distance_m + 0.30f, along > 0.0);
+            GL_CHECK_EQ(app.view.plays_like_m > app.view.distance_m, along > 0.0);
+            GL_CHECK_NEAR(app.view.plays_like_m, app.est.plays_like_m - 0.30f, 1e-5);
         }
         /* slope and fall line at the ball: the tilt reading */
         GL_CHECK_NEAR(app.view.slope_pct, 100.0 * sqrt(s->sx * s->sx + s->sy * s->sy), 0.06);
@@ -1012,7 +1071,7 @@ GL_TEST(test_precision_read_line_and_numbers)
     truth_record_(&rec, &tru);
     {
         gl_ref_est_t t;
-        gl_ref_opt_t opt = { GL_SOLVER_METHOD_B1, 0.30, 1 };
+        gl_ref_opt_t opt = { GL_SOLVER_METHOD_B1, 0.30, 1, 0, 0.005 };
         gl_ref_estimate(&tru, 1, 0, &opt, &t);
         single_err = 1000.0 * fabs((double)app.est.aim_azimuth_device_rad - t.aim_azimuth_device);
     }
@@ -1051,6 +1110,9 @@ GL_TEST(test_precision_read_line_and_numbers)
     GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 1u);
     GL_CHECK_EQ(gl_sim_stats()->clock_to_fast, 2u);
     GL_CHECK_EQ(gl_sim_stats()->trace_points[GL_TRACE_SOLVE], 2u);
+    /* the screen was drawn turned round: upright for the golfer */
+    GL_CHECK(turned_);
+    turned_ = false;
 }
 
 /* ======================================================================= */
@@ -1204,12 +1266,17 @@ GL_TEST(test_flag_out_fallback_on_the_display)
     x.truth_tol_mrad = 6.0;
     check_result_("Flag out, dialled 4.5 m, rises LEFT 1.5 %, uphill 1 %", &x, &tru);
     /* shown for what it is: the message, the no-flag icon, "?" after the
-     * dialled distance, the estimator's reduced confidence */
+     * dialled distance, a TENTATIVE (dashed) line - its direction is the
+     * golfer's pointing - and an empty confidence bar (the estimator's own
+     * score, 0.21 here, is capped below the first box) */
     GL_CHECK_EQ(app.view.note, GL_UI_NOTE_NO_FLAG);
     GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.note, "NO FLAG") == 0);
     GL_CHECK(!app.view.flag_found && app.view.distance_assumed);
     GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.distance, "14.8FT?") == 0);
-    GL_CHECK_NEAR(app.view.confidence, app.est.confidence, 1e-6);
+    GL_CHECK(rows_[n_rows_ - 1u].dashed);
+    GL_CHECK(app.est.confidence > 0.15f);
+    GL_CHECK_NEAR(app.view.confidence, 0.09, 1e-6);
+    GL_CHECK_EQ(rows_[n_rows_ - 1u].boxes, 0);
     /* the same placement read WITH the flag scores higher */
     {
         const float without = app.view.confidence;
@@ -1472,8 +1539,8 @@ GL_TEST(test_estimator_fallbacks_reached_by_real_reads)
     GL_CHECK_EQ(app.est.aim_source, GL_AIM_FROM_PLANE);
     memset(&x, 0, sizeof(x));
     x.expect_line = true;
-    x.on_screen = false; /* 24 degrees off the visor axis: the dashed substitute */
-    x.solved = true;     /* a solution - of the secant plane */
+    x.on_screen = false; /* 24 degrees off the visor axis: the parallel through the centre */
+    x.solved = true;     /* a solution - of the secant plane: drawn solid */
     check_result_("Secant plane: twisted green, Survey of 3 drops, Stimp 8", &x, truth_);
     GL_CHECK_EQ(app.view.note, GL_UI_NOTE_APPROX);
     GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.note, "APPROX") == 0);
@@ -1530,6 +1597,10 @@ GL_TEST(test_fallback_mappings_that_no_read_produces)
           GL_UI_NOTE_APPROX, true },
         { "Mapping only: pace limited on the patch", GL_AIM_FROM_PATCH, GL_SOLVE_PACE_LIMITED, true,
           false, GL_UI_NOTE_PACE, true },
+        /* a kept near miss of the patch solve (within 5 mm of the hole centre):
+         * an aim on the fitted surface, said to be approximate */
+        { "Mapping only: near miss kept (patch, NO_CONVERGENCE)", GL_AIM_FROM_PATCH,
+          GL_SOLVE_NO_CONVERGENCE, true, false, GL_UI_NOTE_APPROX, true },
         { "Mapping only: best effort, aim on the screen", GL_AIM_BEST_EFFORT, GL_SOLVE_NO_CONVERGENCE,
           true, false, GL_UI_NOTE_NOT_SOLVED, false },
         { "Mapping only: straight (aim_source 3)", GL_AIM_STRAIGHT, GL_SOLVE_INVALID, true, false,
@@ -1537,7 +1608,7 @@ GL_TEST(test_fallback_mappings_that_no_read_produces)
         { "Mapping only: fit stopped on its limit", GL_AIM_FROM_PATCH, GL_SOLVE_OK, false, false,
           GL_UI_NOTE_FIT, true },
         { "Mapping only: poor horizon (B2)", GL_AIM_FROM_PATCH, GL_SOLVE_OK, true, true,
-          GL_UI_NOTE_NONE, true },
+          GL_UI_NOTE_HORIZON, true },
     };
     gl_estimate_t base;
     unsigned black_solid = 0;

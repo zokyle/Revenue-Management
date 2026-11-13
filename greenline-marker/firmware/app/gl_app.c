@@ -26,6 +26,11 @@ typedef char gl_app_method_codes_match_[
     ((int)GL_METHOD_B1 == (int)GL_SOLVER_METHOD_B1 && (int)GL_METHOD_B2 == (int)GL_SOLVER_METHOD_B2)
         ? 1 : -1];
 
+/* build_measurement_() copies the read's horizon samples into the solver's
+ * record: the read must not have more of them than the solver takes. */
+typedef char gl_app_horizon_samples_fit_the_solver_[
+    (GL_VIS_HORIZON_BINS <= GL_SOLVER_MAX_HORIZON) ? 1 : -1];
+
 #define ALL_IRQS                                                                          \
     (GL_IRQ_IMU_INT1 | GL_IRQ_IMU_INT2 | GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT |           \
      GL_IRQ_WAKE_TIMER | GL_IRQ_USB_RX | GL_IRQ_DCMI_DONE | GL_IRQ_TICK)
@@ -276,9 +281,12 @@ static void clock_(gl_app_t *app, bool fast)
         } else {
             app->clock_fails++;
         }
-    } else {
-        (void)gl_hal_clock_set(GL_CLOCK_SLOW);
+    } else if (gl_hal_clock_set(GL_CLOCK_SLOW) == GL_OK) {
         app->clock_fast = false;
+    } else {
+        /* still fast (the backend says so): no Stop mode until a later pass
+         * gets it down (gl_app_run_once tries again at every pass) */
+        app->clock_fails++;
     }
 }
 
@@ -454,6 +462,7 @@ static void enter_sleep_(gl_app_t *app)
     if (!app->power.vbus) {
         gl_power_charge_release(&app->power);
         app->power.chg_reason = (uint8_t)GL_CHG_NO_VBUS;
+        app->vbus_acted = false; /* "no VBUS" is dealt with: USB stopped above, pin released */
     }
     app->awake = false;
     app->sleep_since_ms = now;
@@ -493,8 +502,11 @@ static void enter_sleep_(gl_app_t *app)
 /* power                                                                    */
 /* ======================================================================= */
 
-/* A VBUS or charger-STAT edge.  The HARDWARE rules are applied here, at
- * once and whatever the UI is doing.  With VBUS gone, USB is stopped (the
+/* A VBUS or charger-STAT edge - or a VBUS LEVEL that differs from the one
+ * last dealt with (gl_app_run_once compares at every loop pass: the edge
+ * interrupt only makes the loop run sooner, a lost latch costs time, not
+ * the supervision).  The HARDWARE rules are applied here, at once and
+ * whatever the UI is doing.  With VBUS gone, USB is stopped (the
  * USB-supply-valid bit must not stay set with VDDUSB unpowered) and
  * CHG_INHIBIT is released.  With VBUS there, the charger has ALREADY
  * started by itself (rev C2): the cell temperature is measured in this very
@@ -503,6 +515,7 @@ static void enter_sleep_(gl_app_t *app)
 static void vbus_edge_(gl_app_t *app, uint32_t now)
 {
     gl_power_poll_pins(&app->power);
+    app->vbus_acted = app->power.vbus; /* this level has now been dealt with */
     if (!app->power.vbus) {
         if (app->usb_on) {
             usb_stop_(app);
@@ -684,7 +697,7 @@ static void capture_start_(gl_app_t *app)
         return;
     }
     app->read_id++;
-    clock_(app, true); /* the vision of a read is about 145 million instructions */
+    clock_(app, true); /* the vision of a read is 58 to 88 million instructions (README) */
     st = gl_read_start(&app->read, app->cur.up, GL_APP_LRRL_REPEATS);
     if (st != GL_OK) {
         clock_(app, false);
@@ -783,7 +796,9 @@ static void capture_step_(gl_app_t *app)
         gl_app_post(app, GL_EV_CAPTURE_DONE, 0);
     } else if (st == GL_ERR_NO_STICK) {
         app->cur.flag_found = false;
-        app->cur.bearing_valid = false; /* a band-only bearing is logged, not aimed at */
+        /* a band-only bearing (GL_READ_TIER_BEARING) is not aimed at - and
+         * not logged either: a read without a flagstick writes no record */
+        app->cur.bearing_valid = false;
         gl_app_post(app, GL_EV_CAPTURE_NO_STICK, 0);
     } else {
         app->last_error = (uint16_t)st;
@@ -795,6 +810,24 @@ static void capture_step_(gl_app_t *app)
 /* ======================================================================= */
 /* solve, result screen, log                                                */
 /* ======================================================================= */
+
+/*
+ * The dialled distance belongs to ONE hole.  It is forgotten
+ *   - when a read ranges a flagstick (the cameras work here: whatever is
+ *     left in the DIST setting is from somewhere else), and
+ *   - when the marker goes to sleep (the next placement is another putt).
+ * It used to stay until the golfer dialled it back to "--": at the next
+ * hole every read that missed the flagstick then became, without a word, a
+ * flag-out result for the old distance.  Now such a read asks.
+ */
+static void forget_dialled_(gl_app_t *app)
+{
+    if (app->settings.manual_distance_cm != 0u) {
+        gl_settings_t s = app->settings;
+        s.manual_distance_cm = 0u;
+        (void)gl_app_set_settings(app, &s);
+    }
+}
 
 /*
  * The current read as the estimator wants it (device frame = read frame).
@@ -859,8 +892,10 @@ static void build_measurement_(const gl_app_t *app, gl_measurements_t *m)
         m->flag_base_visible = (c->base == (uint8_t)GL_VIS_BASE_VISIBLE);
         m->flag_top_visible = c->top_valid;
         m->flag_top_elev_rad = c->top_elev_rad;
-        m->n_horizon = (res->n_horizon <= GL_SOLVER_MAX_HORIZON) ? res->n_horizon
-                                                                  : (uint8_t)GL_SOLVER_MAX_HORIZON;
+        /* at most what the READ's arrays hold (the count used to be limited
+         * to the solver's 41 and the copy then ran off arrays of 32) */
+        m->n_horizon = (res->n_horizon <= GL_VIS_HORIZON_BINS) ? res->n_horizon
+                                                                : (uint8_t)GL_VIS_HORIZON_BINS;
         for (unsigned i = 0; i < m->n_horizon; i++) {
             m->horizon_az_rad[i] = res->horizon_az_rad[i];
             m->horizon_elev_rad[i] = res->horizon_elev_rad[i];
@@ -985,6 +1020,11 @@ static unsigned survey_ball_(const gl_app_t *app, bool *at_ball)
  * and two caps for an aim that is not a solution:
  *   <= 0.2  aim_source 2, the estimator's best effort (at most one box)
  *   =  0    aim_source 3, straight at the hole for want of anything
+ * and one for the flag-out fallback:
+ *   <= 0.09 flag missing: NO box.  The line is solved for the dialled
+ *           distance along the visor axis; its direction is the golfer's
+ *           pointing, which no sensor checked (the estimator's own score for
+ *           it was one box at 4.5 m, the same as a camera read of that putt)
  * A Survey result takes the camera factors of the read at the marker's
  * present placement.
  */
@@ -1013,6 +1053,9 @@ static float shown_confidence_(const gl_app_t *app)
     } else if (e->aim_source == (uint8_t)GL_AIM_BEST_EFFORT && conf > GL_APP_CONF_BEST_EFFORT_MAX) {
         conf = GL_APP_CONF_BEST_EFFORT_MAX;
     }
+    if (e->flag_missing && conf > GL_APP_CONF_FLAG_OUT_MAX) {
+        conf = GL_APP_CONF_FLAG_OUT_MAX;
+    }
     return gl_clampf(conf, 0.0f, 1.0f);
 }
 
@@ -1034,7 +1077,11 @@ static uint8_t note_(const gl_app_t *app)
     if (e->range_missing) {
         return (uint8_t)GL_UI_NOTE_NO_RANGE;
     }
-    if (e->aim_source == (uint8_t)GL_AIM_FROM_PLANE) {
+    if (e->aim_source == (uint8_t)GL_AIM_FROM_PLANE ||
+        (e->aim_source == (uint8_t)GL_AIM_FROM_PATCH && e->solve_status != (uint8_t)GL_SOLVE_OK &&
+         e->solve_status != (uint8_t)GL_SOLVE_PACE_LIMITED)) {
+        /* the secant plane's solution, or a kept near miss of the patch
+         * solve (within GL_APP_NEAR_MISS_M of the hole centre) */
         return (uint8_t)GL_UI_NOTE_APPROX;
     }
     if (e->solve_status == (uint8_t)GL_SOLVE_PACE_LIMITED) {
@@ -1042,6 +1089,9 @@ static uint8_t note_(const gl_app_t *app)
     }
     if (!e->fit_converged) {
         return (uint8_t)GL_UI_NOTE_FIT;
+    }
+    if (e->poor_horizon) {
+        return (uint8_t)GL_UI_NOTE_HORIZON; /* method B2 only */
     }
     if (c->flag_found && c->tier == (uint8_t)GL_READ_TIER_LEFT) {
         return (uint8_t)GL_UI_NOTE_ONE_CAMERA;
@@ -1090,7 +1140,16 @@ static void compose_view_(gl_app_t *app)
     /* the estimator's numbers; a distance nobody measured or dialled (the
      * estimator's 3 m default) is not shown as if it were known */
     v->distance_m = (assumed && !dialled) ? 0.0f : e->distance_m;
-    v->plays_like_m = (assumed && !dialled) ? 0.0f : e->plays_like_m;
+    /* "PLAYS": the flat putt that needs the same stroke.  The estimator's
+     * plays_like_m is the roll-out distance v0^2 / (2 a_r), which contains
+     * the PAST setting; a flat putt of length L is struck to roll L + PAST,
+     * so PAST is taken off (a dead-flat putt then plays its own length; it
+     * used to "play" 30 cm more). */
+    v->plays_like_m = 0.0f;
+    if (!(assumed && !dialled) && e->plays_like_m > app->solve_opt.past_m) {
+        v->plays_like_m = e->plays_like_m - app->solve_opt.past_m;
+    }
+    v->plays_uncertain = e->base_hidden;
     v->slope_pct = e->slope_pct;
     v->break_cups = e->break_cups;
     v->confidence = shown_confidence_(app);
@@ -1211,14 +1270,34 @@ static void solve_(gl_app_t *app, bool precision_reread)
         gl_motion_spin_end(&app->motion);
     }
     /* the solve needs the fast clock as much as the vision does: a typical
-     * estimate is 0.3 million instructions, the worst that could be
-     * constructed 173 million (README "Solver") */
+     * estimate is 0.3 million instructions, the step budget below allows
+     * 107 million (README "Solver") */
     clock_(app, true);
     build_measurement_(app, &app->meas_cur);
     gl_solver_default_options(opt);
     opt->past_m = gl_settings_past_m(&app->settings);
     opt->method = app->settings.method; /* B1 by default; B2 is a setting */
-    /* the grain reading is not used (gl_solver_default_options) */
+    /* The grain is NOT used by default: the GRAIN setting ships OFF, and
+     * gl_grain_estimate() then hands over zero strength.  Switched ON
+     * (experimental), the estimate - the grass type's strength along the
+     * fall line, or along the optical reading when that is valid - is used
+     * by the solve.  (GRAIN ON used to lengthen the read and change
+     * nothing.) */
+    opt->use_grain = (app->settings.grain_enable != 0u);
+    /* A patch iterate that passes within 5 mm of the hole centre IS the putt
+     * (the search stopped at a jump of the miss): it is kept, flagged, and
+     * the secant plane - which misses the hole on the fitted patch by
+     * decimetres in most of those cases - is not shown instead. */
+    opt->near_miss_m = GL_APP_NEAR_MISS_M;
+    /* The one deliberate difference from the reference: a budget on the
+     * work.  The costliest estimate found needs 0.63 million RK4 steps
+     * (4 s at 160 MHz, 14 s at 48 MHz at the pessimistic end of the timing
+     * model), the bound from the loop counters is six times that - beyond
+     * the 32 s watchdog without the PLL.  With the budget an estimate
+     * integrates at most 306 004 steps; a solve that is cut ends as what
+     * these putts end as anyway: NOT SOLVED, a tentative line. */
+    opt->max_steps = GL_APP_SOLVE_MAX_STEPS;
+    gl_hal_watchdog_kick(); /* the solve blocks the loop: start it with a fresh period */
     app->solve_drops = 1;
     app->solve_ball = 0;
     app->line_here = true;
@@ -1251,6 +1330,9 @@ static void solve_(gl_app_t *app, bool precision_reread)
     compose_view_(app);
     log_read_(app);
     app->reads_total++;
+    if (!app->est.flag_missing && !app->est.range_missing) {
+        forget_dialled_(app); /* (after the view: it has no use for it either) */
+    }
     gl_app_post(app, GL_EV_SOLVE_DONE, 0);
 }
 
@@ -1552,19 +1634,31 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
         solve_(app, (a & GL_ACT_PRECISION) != 0u);
     }
     if ((a & GL_ACT_ARM_SPIN) != 0u) {
-        app->spin_slope_raw = app->cur.slope_raw;
-        gl_motion_spin_begin(&app->motion, app->cur.up, app->cur.gyro_bias);
+        if (app->motion.spin_active) {
+            /* An abandoned spin of THIS read is still being integrated (see
+             * below): the angle goes on counting from the frame the cameras
+             * read in.  Only the report of a half turn is armed again. */
+            gl_motion_spin_rearm(&app->motion);
+        } else {
+            app->spin_slope_raw = app->cur.slope_raw;
+            gl_motion_spin_begin(&app->motion, app->cur.up, app->cur.gyro_bias);
+        }
     }
     if ((a & GL_ACT_SPIN_ABANDON) != 0u) {
         /* The Precision spin was not completed (time-out).  The single read
          * is shown again, but the marker may have been turned by any angle
-         * meanwhile: the screen is drawn for where it faces NOW. */
+         * meanwhile: the screen is drawn for where it faces NOW.
+         * The gyro integration is NOT stopped: if the golfer asks for the
+         * spin again, the half turn must still be measured from the frame of
+         * the read, not from wherever the marker was left.  (It used to
+         * restart from zero there, with the first read's slope: the same
+         * frame error as a second double tap on a "2X" result.)  It ends
+         * with the read: a new placement, sleep, or the combination. */
         if (app->motion.spin_active && app->view.have_result) {
             app->cur.view_yaw_rad = gl_spin_yaw(&app->motion.spin);
             app->cur.precision = false;
             compose_view_(app);
         }
-        gl_motion_spin_end(&app->motion);
     }
     if ((a & GL_ACT_CAL_ZERO_START) != 0u) {
         zero_start_(app);
@@ -1573,6 +1667,9 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
         app->redraw = true;
     }
     if ((a & GL_ACT_ENTER_SLEEP) != 0u) {
+        if (app->awake) {
+            forget_dialled_(app); /* while the flash is still awake */
+        }
         enter_sleep_(app);
     }
 }
@@ -1630,6 +1727,7 @@ gl_status_t gl_app_init(gl_app_t *app)
     gl_lcd_init(&app->lcd, NULL);
     gl_grain_fe_all_off();
     gl_power_init(&app->power);
+    app->vbus_acted = app->power.vbus;
     if (app->power.vbus) {
         /* booted in the cradle: the charger is already running (hardware
          * default); measure the cell before anything slower is done */
@@ -1650,6 +1748,9 @@ gl_status_t gl_app_init(gl_app_t *app)
             gl_log_mount(&app->log, &app->flash_if, GL_APP_LOG_BASE, GL_APP_LOG_SECTORS) == GL_OK;
         if (app->storage_ok) {
             load_store_(app);
+            /* a distance dialled before a reset is not this putt's (RAM
+             * only: the stored copy goes at the next change of the settings) */
+            app->settings.manual_distance_cm = 0u;
         } else if (first_err == GL_OK) {
             first_err = GL_ERR_CORRUPT;
         }
@@ -1753,6 +1854,15 @@ static void sleep_(gl_app_t *app)
             wait = (g > 0) ? (uint32_t)g : 1u;
         }
     }
+    /* Never sleep over a VBUS level that has not been dealt with: if it
+     * changed during this pass (spring-pin bounce, a marker lifted out while
+     * the loop was busy), the next pass handles it first - USB is not left
+     * started and CHG_INHIBIT is not left low into a sleep, not even one
+     * that the pending edge would end at once. */
+    gl_power_poll_pins(&app->power);
+    if (app->power.vbus != app->vbus_acted) {
+        return;
+    }
     /* Stop mode needs: no USB (48 MHz clock), no camera activity (DCMI,
      * XVCLK), and an EXTCOMIN output that keeps running in Stop 2 while the
      * display is on (PROVISIONAL) */
@@ -1779,6 +1889,7 @@ static void sleep_housekeeping_(gl_app_t *app, uint32_t now)
             imu_failed_(app, st, now);
         }
     }
+    /* (VBUS itself is looked at on EVERY wake-up, by gl_app_run_once) */
     if (!app->storage_mode && (app->sleep_ticks % GL_APP_SLEEP_BATT_EVERY) == 0u) {
         gl_power_poll_pins(&app->power);
         if (gl_power_measure(&app->power) == GL_OK && app->power.storage && !app->power.vbus) {
@@ -1847,8 +1958,14 @@ void gl_app_run_once(gl_app_t *app)
         gl_hal_watchdog_kick();
     }
 
-    /* 1. interrupt sources -> work */
-    if ((irq & (GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT)) != 0u) {
+    /* 1. interrupt sources -> work.  VBUS is acted on by its LEVEL: the
+     * pin is read at every pass (awake: every few milliseconds; asleep: at
+     * the 16 s housekeeping wake-up at the latest) and compared with the
+     * level last dealt with.  With the edge interrupt alone, one lost latch
+     * left the charger unsupervised for good, or the marker awake in the
+     * cradle state until the cell was flat. */
+    gl_power_poll_pins(&app->power);
+    if ((irq & (GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT)) != 0u || app->power.vbus != app->vbus_acted) {
         vbus_edge_(app, now);
     }
     if (app->vbus_pending && (int32_t)(now - app->vbus_settle_ms) >= 0) {
@@ -1875,14 +1992,25 @@ void gl_app_run_once(gl_app_t *app)
         }
         /* 2. timers */
         battery_service_(app, now);
-        if (app->power.vbus && (int32_t)(now - app->next_chg_ms) >= 0 && !app->capture_active &&
-            !app->tilt_active) {
-            charge_supervise_(app, now);
-        }
         if (app->zero.active && app->zero.step >= 3u &&
             (uint32_t)(now - app->zero.saved_at_ms) >= GL_APP_ZERO_SAVED_MS) {
             app->zero.active = false;
             gl_app_post(app, GL_EV_CAL_DONE, 0);
+        }
+    }
+    /* Charge supervision: every GL_APP_CHG_TEMP_PERIOD_MS for as long as
+     * VBUS is SEEN, awake or not (it used to hang on `awake`, which a lost
+     * edge never set).  And the staleness limit is a limit on the loop, not
+     * on the measurement: if the supervision does not come round, for
+     * whatever reason, the reading it left behind goes stale and the gate
+     * stops the charge ("unknown" is "stop"). */
+    if (app->power.vbus) {
+        if ((int32_t)(now - app->next_chg_ms) >= 0 && !app->capture_active && !app->tilt_active) {
+            charge_supervise_(app, now);
+        } else if (!app->power.inhibit &&
+                   (!app->cell_seen ||
+                    (uint32_t)(now - app->cell_temp_ms) > GL_APP_CELL_TEMP_MAX_AGE_MS)) {
+            charge_gate_(app, now);
         }
     }
     if (app->usb_on) {

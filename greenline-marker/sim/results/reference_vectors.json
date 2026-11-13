@@ -45461,5 +45461,2282 @@
    "path_length": 5.537921953509559,
    "n_steps": 431
   }
+ ],
+ "near_miss_estimator_cases": [
+  {
+   "id": 0,
+   "mode": "NEAR_MISS",
+   "tag": "2.6 m dying putt at the critical slope; the best effort shown without the rule is 159 mrad away",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.0,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 659.2329,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      -0.02790798,
+      -0.07873974
+     ],
+     "tilt_reads": 2,
+     "flag_found": true,
+     "flag_bearing": -0.3022965,
+     "flag_disparity": 5.058996,
+     "flag_low_elev": -0.001788236,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.09418,
+     "stick_height_rel_sigma": 0.15,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 1.519895,
+     "stimp_ft": 9.914974,
+     "user_distance": 2.370377
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.002858353815600781,
+     -0.083372173233246,
+     0.002227344491355278,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 2.6061807520701734,
+    "distance_sigma": 0.04121261613284807,
+    "range_stereo": 2.6061807520701734,
+    "range_mono": null,
+    "bearing": -0.3022965,
+    "stations": [
+     0.0
+    ],
+    "phi": -0.72212629804818,
+    "aim_azimuth_device": -1.02442279804818,
+    "v0": 2.080039174287745,
+    "plays_like": 3.904337854706391,
+    "break_m": -2.2956201305657697,
+    "break_cups": -21.2655871289094,
+    "slope_pct": 8.353922433772054,
+    "fall_line_azimuth": 1.532474058477901,
+    "dz_hole": 0.00011487355472191742,
+    "cross_slope_sigma": 0.003086449201805062,
+    "confidence": 0.3592500902925261,
+    "a_r": 0.5540712827088325,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.003200629030519219,
+     -0.08347788914890576
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 1.5686222582937839,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.0009651617438665092,
+    "n_rolls": 213
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": -0.8811731735733015,
+    "v0": 2.3516530132496674,
+    "confidence": 0.3592500902925261
+   }
+  },
+  {
+   "id": 1,
+   "mode": "NEAR_MISS",
+   "tag": "Survey of 2 drops, 3.7 m dying putt, slope at 0.91 of critical (best miss 3.3 mm); 106 mrad away without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.0,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 671.2563,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.0005933794,
+      -0.05123081
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.0976625,
+     "flag_disparity": 3.633067,
+     "flag_low_elev": -0.00276247,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.903607,
+     "stick_height_rel_sigma": 0.15,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 1.051431,
+     "stimp_ft": 13.82762,
+     "user_distance": null
+    },
+    {
+     "f_px": 671.2563,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.0003383062,
+      -0.05146199
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.04554189,
+     "flag_disparity": 5.694376,
+     "flag_low_elev": null,
+     "flag_base_visible": false,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.980347,
+     "stick_height_rel_sigma": 0.15,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 1.051431,
+     "stimp_ft": 13.82762,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.004781259706727828,
+     -0.05083278057393974,
+     0.0017947767050164678,
+     -0.0002839177929908242,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 3.6952596800444364,
+    "distance_sigma": 0.08136948049775986,
+    "range_stereo": 3.6952596800444364,
+    "range_mono": null,
+    "bearing": 0.0976625,
+    "stations": [
+     0.0,
+     1.3376482402659602
+    ],
+    "phi": -0.6015904322559474,
+    "aim_azimuth_device": -0.5039279322559475,
+    "v0": 1.9323767384234547,
+    "plays_like": 4.699415241436424,
+    "break_m": -2.5367003467552482,
+    "break_cups": -23.498845268691507,
+    "slope_pct": 5.123424628476977,
+    "fall_line_azimuth": 1.4615518731333141,
+    "dz_hole": -0.0054142084219432375,
+    "cross_slope_sigma": 0.0032818010939572487,
+    "confidence": 0.2168355146332761,
+    "a_r": 0.3972919679745846,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.005585931011470987,
+     -0.050928826484649456
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 0.6523898515625319,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.003309659703814382,
+    "n_rolls": 213
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": -0.7074233253267147,
+    "v0": 2.0466956006117396,
+    "confidence": 0.2168355146332761
+   }
+  },
+  {
+   "id": 2,
+   "mode": "NEAR_MISS",
+   "tag": "5.8 m dying putt, slope at 0.90 of critical; 86 mrad away without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.0,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 644.8692,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.01983588,
+      -0.04745301
+     ],
+     "tilt_reads": 2,
+     "flag_found": true,
+     "flag_bearing": -0.3027235,
+     "flag_disparity": 2.219912,
+     "flag_low_elev": -0.001087331,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.009097,
+     "stick_height_rel_sigma": 0.02,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 2.864519,
+     "stimp_ft": 13.29375,
+     "user_distance": 5.150526
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.004677509272140085,
+     -0.05114387265209603,
+     0.0015208608022998851,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 5.809862733297536,
+    "distance_sigma": 0.20937272228079443,
+    "range_stereo": 5.809862733297536,
+    "range_mono": null,
+    "bearing": -0.3027235,
+    "stations": [
+     0.0
+    ],
+    "phi": -0.5336467373037712,
+    "aim_azimuth_device": -0.8363702373037711,
+    "v0": 2.417361401223263,
+    "plays_like": 7.070391417970521,
+    "break_m": -3.432619012914119,
+    "break_cups": -31.798230781974237,
+    "slope_pct": 5.143199678638288,
+    "fall_line_azimuth": 1.477583789511538,
+    "dz_hole": -0.0015077350424840992,
+    "cross_slope_sigma": 0.005329366622082702,
+    "confidence": 0.10224821870037612,
+    "a_r": 0.4132470042091001,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.004787167605396143,
+     -0.051208723082618895
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 0.6024989580319478,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 8.714572567230386e-05,
+    "n_rolls": 212
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": -0.619694746159335,
+    "v0": 2.5226382561333236,
+    "confidence": 0.10224821870037612
+   }
+  },
+  {
+   "id": 3,
+   "mode": "NEAR_MISS",
+   "tag": "6.0 m, 30 cm past, above the critical slope; without the rule the secant plane is UNREACHABLE, best effort 80 mrad away",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.3,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 665.4628,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.02408974,
+      0.04895172
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.3750457,
+     "flag_disparity": 2.226699,
+     "flag_low_elev": -0.0002529965,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.212798,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 0.5684042,
+     "stimp_ft": 16.87711,
+     "user_distance": 6.017764
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.004225759679056017,
+     0.0542143900654805,
+     0.0015984491777343006,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 5.977123984876268,
+    "distance_sigma": 0.2147438512300502,
+    "range_stereo": 5.977123984876268,
+    "range_mono": null,
+    "bearing": 0.3750457,
+    "stations": [
+     0.0
+    ],
+    "phi": 0.6891115832376231,
+    "aim_azimuth_device": 1.0641572832376232,
+    "v0": 2.4452536629006407,
+    "plays_like": 8.707241742963523,
+    "break_m": 4.924215407228282,
+    "break_cups": 45.615705486135084,
+    "slope_pct": 5.455810172857922,
+    "fall_line_azimuth": -1.4885245231767021,
+    "dz_hole": 0.0032952170256948,
+    "cross_slope_sigma": 0.005800057579368858,
+    "confidence": 0.09358924196502412,
+    "a_r": 0.3433501476377953,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.004483531525204042,
+     0.054373563514712744
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 0.6776556997951345,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.000260405308981965,
+    "n_rolls": 214
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 2,
+    "phi": 0.7692601341079264,
+    "v0": 2.565809202316897,
+    "confidence": 0.09358924196502412
+   }
+  },
+  {
+   "id": 4,
+   "mode": "NEAR_MISS",
+   "tag": "4.3 m dying putt, slope at 0.86 of critical; without the rule the secant plane is solved, 76 mrad away",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.0,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 645.031,
+     "baseline": 0.02,
+     "h_cam": 0.0052,
+     "tilt": [
+      -0.01149327,
+      0.05202464
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.1154655,
+     "flag_disparity": 3.01046,
+     "flag_low_elev": -0.002668291,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.745454,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": -0.5936434,
+     "stimp_ft": 13.03683,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.0050660046947162635,
+     0.05284719151053281,
+     0.001598036537697481,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 4.2852653747267855,
+    "distance_sigma": 0.11387669325556321,
+    "range_stereo": 4.2852653747267855,
+    "range_mono": null,
+    "bearing": 0.1154655,
+    "stations": [
+     0.0
+    ],
+    "phi": 0.5791574558580982,
+    "aim_azimuth_device": 0.6946229558580983,
+    "v0": 2.113570078038092,
+    "plays_like": 5.300515264447265,
+    "break_m": 2.8024131861861887,
+    "break_cups": 25.960288894730787,
+    "slope_pct": 5.327906176372196,
+    "fall_line_azimuth": -1.4688344106073623,
+    "dz_hole": -0.007036403060345297,
+    "cross_slope_sigma": 0.004778389683750782,
+    "confidence": 0.1521830405356507,
+    "a_r": 0.42139096407675214,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.005423027311964554,
+     0.05300235086480774
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 0.654107689701457,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": -0.000321320923362514,
+    "n_rolls": 211
+   },
+   "without_rule": {
+    "aim_source": 1,
+    "solve_status": 0,
+    "phi": 0.6548090667219479,
+    "v0": 2.1971584650699225,
+    "confidence": 0.1521830405356507
+   }
+  },
+  {
+   "id": 5,
+   "mode": "NEAR_MISS",
+   "tag": "8.1 m, 2 cm past, slope at 0.94 of critical; 65 mrad away without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.02,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 656.5987,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      -0.003998653,
+      -0.0569569
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.01405457,
+     "flag_disparity": 1.621962,
+     "flag_low_elev": 0.0008543132,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.855908,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.1562364,
+     "grain_azimuth": 1.824868,
+     "stimp_ft": 12.86795,
+     "user_distance": 8.072689
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.004615479395034913,
+     -0.05672852227792472,
+     0.0014975471770092442,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 8.09635120921452,
+    "distance_sigma": 0.39933617232534524,
+    "range_stereo": 8.09635120921452,
+    "range_mono": null,
+    "bearing": 0.01405457,
+    "stations": [
+     0.0
+    ],
+    "phi": -0.548071709594051,
+    "aim_azimuth_device": -0.5340171395940511,
+    "v0": 2.9643284546729003,
+    "plays_like": 10.291407942850954,
+    "break_m": -4.942459794140556,
+    "break_cups": -45.784713238912055,
+    "slope_pct": 5.709708997334636,
+    "fall_line_azimuth": 1.4866518653782594,
+    "dz_hole": 0.01171424261526386,
+    "cross_slope_sigma": 0.006849389076539459,
+    "confidence": 0.06231181556909773,
+    "a_r": 0.4269213326291076,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.004798736461880167,
+     -0.0568950772193327
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 0.7222207521444162,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.00018284717696215314,
+    "n_rolls": 214
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": -0.6135071785173851,
+    "v0": 3.057323523341808,
+    "confidence": 0.06231181556909773
+   }
+  },
+  {
+   "id": 6,
+   "mode": "NEAR_MISS",
+   "tag": "Survey of 3 drops, 5.7 m, 10 cm past (best miss 2.2 mm); 52 mrad away without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.1,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 669.5251,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.01528486,
+      -0.07765037
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": -0.3227122,
+     "flag_disparity": 2.353977,
+     "flag_low_elev": 0.004702764,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.144171,
+     "stick_height_rel_sigma": 0.02,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 2.870099,
+     "stimp_ft": 10.02804,
+     "user_distance": null
+    },
+    {
+     "f_px": 669.5251,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.01768711,
+      -0.07409724
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": -0.3395447,
+     "flag_disparity": 5.746807,
+     "flag_low_elev": 0.007735892,
+     "flag_base_visible": false,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.168693,
+     "stick_height_rel_sigma": 0.02,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 2.870099,
+     "stimp_ft": 10.02804,
+     "user_distance": null
+    },
+    {
+     "f_px": 669.5251,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.01462532,
+      -0.0765374
+     ],
+     "tilt_reads": 1,
+     "flag_found": false,
+     "flag_bearing": null,
+     "flag_disparity": null,
+     "flag_low_elev": null,
+     "flag_base_visible": false,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.037466,
+     "stick_height_rel_sigma": 0.02,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 2.870099,
+     "stimp_ft": 10.02804,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     0.009467188913742406,
+     -0.07791497230201153,
+     -0.0013629529566116818,
+     0.0005965822685097346,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 5.68845914807154,
+    "distance_sigma": 0.19332250563438944,
+    "range_stereo": 5.68845914807154,
+    "range_mono": null,
+    "bearing": -0.3227122,
+    "stations": [
+     0.0,
+     3.3583822897396
+    ],
+    "phi": -0.6382849245832012,
+    "aim_azimuth_device": -0.9609971245832012,
+    "v0": 2.9993694519612126,
+    "plays_like": 8.210862297023084,
+    "break_m": -4.220162034487001,
+    "break_cups": -39.09367331622975,
+    "slope_pct": 7.914042523487284,
+    "fall_line_azimuth": 1.6991512685341508,
+    "dz_hole": 0.03180211477409863,
+    "cross_slope_sigma": 0.002955435476543027,
+    "confidence": 0.19038240883337865,
+    "a_r": 0.5478241373393729,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     0.010130195300078526,
+     -0.07848940087386809
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 1.4620807574246857,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.002237698124697712,
+    "n_rolls": 206
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": -0.5859569892627208,
+    "v0": 2.9326077286626426,
+    "confidence": 0.19038240883337865
+   }
+  },
+  {
+   "id": 7,
+   "mode": "NEAR_MISS",
+   "tag": "Survey of 3 drops, 14.3 m, 30 cm past (best miss 3.4 mm); without the rule the secant plane is solved, 52 mrad away",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.3,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 638.3207,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      0.006756436,
+      -0.06348936
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.3904441,
+     "flag_disparity": 0.8941093,
+     "flag_low_elev": -0.02082692,
+     "flag_base_visible": false,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.1209746,
+     "stick_height_est": 2.084387,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.3420712,
+     "grain_azimuth": -1.655862,
+     "stimp_ft": 11.3704,
+     "user_distance": 14.7825
+    },
+    {
+     "f_px": 638.3207,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      0.002915383,
+      -0.06503925
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.3762096,
+     "flag_disparity": 1.282293,
+     "flag_low_elev": -0.0235316,
+     "flag_base_visible": true,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.1861461,
+     "stick_height_est": 2.034271,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.3420712,
+     "grain_azimuth": -1.655862,
+     "stimp_ft": 11.3704,
+     "user_distance": null
+    },
+    {
+     "f_px": 638.3207,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      0.002495498,
+      -0.06611307
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.3957974,
+     "flag_disparity": 2.897667,
+     "flag_low_elev": -0.02559748,
+     "flag_base_visible": false,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.124974,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.3420712,
+     "grain_azimuth": -1.655862,
+     "stimp_ft": 11.3704,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.018190326568032645,
+     -0.06101363855880678,
+     -0.0005228895710054468,
+     -0.00010010130886006164,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 14.278359480211199,
+    "distance_sigma": 1.2775493537724034,
+    "range_stereo": 14.278359480211199,
+    "range_mono": null,
+    "bearing": 0.3904441,
+    "stations": [
+     0.0,
+     4.479691233250417,
+     9.872603401269071
+    ],
+    "phi": -0.9950168577111692,
+    "aim_azimuth_device": -0.6045727577111693,
+    "v0": 4.233806013183686,
+    "plays_like": 18.55027862225089,
+    "break_m": -21.99537290646385,
+    "break_cups": -203.7551913521431,
+    "slope_pct": 6.384785243554942,
+    "fall_line_azimuth": 1.2863716078565588,
+    "dz_hole": -0.3130291753158597,
+    "cross_slope_sigma": 0.002447477990161228,
+    "confidence": 0.06396447628908926,
+    "a_r": 0.48314943732891763,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": true,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.017916047678658457,
+     -0.06128265248998065
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 0.8410388574993474,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.003390938003225657,
+    "n_rolls": 200
+   },
+   "without_rule": {
+    "aim_source": 1,
+    "solve_status": 0,
+    "phi": -0.9430337236439097,
+    "v0": 4.087420311792593,
+    "confidence": 0.06396447628908926
+   }
+  },
+  {
+   "id": 8,
+   "mode": "NEAR_MISS",
+   "tag": "15 m, 10 cm past, slope at 0.89 of critical; without the rule the secant plane is solved, 48 mrad away",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.1,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 662.5319,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.007857151,
+      -0.04961724
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": -0.08808127,
+     "flag_disparity": 0.8589769,
+     "flag_low_elev": -0.001018177,
+     "flag_base_visible": true,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.1291206,
+     "stick_height_est": 1.818399,
+     "stick_height_rel_sigma": 0.15,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": -0.04358493,
+     "grain_azimuth": -0.6382148,
+     "stimp_ft": 13.68779,
+     "user_distance": 13.56333
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.003429545690832898,
+     -0.04996935471963434,
+     0.0003652271801963685,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 14.975592193230566,
+    "distance_sigma": 1.130984747678267,
+    "range_stereo": 15.426070247057863,
+    "range_mono": 13.89563490323926,
+    "bearing": -0.08808127,
+    "stations": [
+     0.0
+    ],
+    "phi": -0.5621370177584868,
+    "aim_azimuth_device": -0.6502182877584868,
+    "v0": 3.856785478345319,
+    "plays_like": 18.53092435840694,
+    "break_m": -9.433582873040685,
+    "break_cups": -87.38844717962654,
+    "slope_pct": 5.023549867428809,
+    "fall_line_azimuth": 1.5018264293086516,
+    "dz_hole": -0.010405027028082395,
+    "cross_slope_sigma": 0.008745276338901157,
+    "confidence": 0.02616799862204105,
+    "a_r": 0.40135057319002737,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.0034619909763355687,
+     -0.050116064745091185
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 0.5074477675165804,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.0008646334669257395,
+    "n_rolls": 232
+   },
+   "without_rule": {
+    "aim_source": 1,
+    "solve_status": 0,
+    "phi": -0.6098034063036198,
+    "v0": 3.9462333654894315,
+    "confidence": 0.02616799862204105
+   }
+  },
+  {
+   "id": 9,
+   "mode": "NEAR_MISS",
+   "tag": "11 m, 30 cm past, above the critical slope; 47 mrad away without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.3,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 644.2681,
+     "baseline": 0.02,
+     "h_cam": 0.0052,
+     "tilt": [
+      0.0009999138,
+      0.07473249
+     ],
+     "tilt_reads": 2,
+     "flag_found": true,
+     "flag_bearing": 0.1169984,
+     "flag_disparity": 1.169145,
+     "flag_low_elev": 0.005858581,
+     "flag_base_visible": false,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.1969697,
+     "stick_height_est": 2.099006,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": -1.25349,
+     "stimp_ft": 11.30146,
+     "user_distance": 10.33897
+    }
+   ],
+   "expected": {
+    "patch": [
+     0.009682151077009036,
+     0.07401101310458037,
+     -0.0006201708792629902,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 11.021183856578952,
+    "distance_sigma": 0.7541363205815499,
+    "range_stereo": 11.021183856578952,
+    "range_mono": null,
+    "bearing": 0.1169984,
+    "stations": [
+     0.0
+    ],
+    "phi": 0.6861112828238674,
+    "aim_azimuth_device": 0.8031096828238673,
+    "v0": 4.103195198678589,
+    "plays_like": 17.31775898556747,
+    "break_m": 9.024358663346959,
+    "break_cups": 83.59757909538637,
+    "slope_pct": 7.473917907769345,
+    "fall_line_azimuth": -1.7011738359022983,
+    "dz_hole": 0.06904377607827816,
+    "cross_slope_sigma": 0.007616589018069538,
+    "confidence": 0.04088245088512278,
+    "a_r": 0.48609669566628777,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": true,
+    "flag_missing": false,
+    "tilt_slopes": [
+     0.009716725350753935,
+     0.07410485906919698
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 1.1278794478624417,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": -0.00013296485954404654,
+    "n_rolls": 203
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": 0.6390998943664168,
+    "v0": 3.993723213383235,
+    "confidence": 0.04088245088512278
+   }
+  },
+  {
+   "id": 10,
+   "mode": "NEAR_MISS",
+   "tag": "Survey of 4 drops, 5.3 m, 10 cm past; 35 mrad away without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.1,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 675.0108,
+     "baseline": 0.02,
+     "h_cam": 0.0052,
+     "tilt": [
+      0.0103308,
+      0.08737396
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": -0.1204878,
+     "flag_disparity": 2.571214,
+     "flag_low_elev": null,
+     "flag_base_visible": false,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.794084,
+     "stick_height_rel_sigma": 0.15,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.05940923,
+     "grain_azimuth": 2.24027,
+     "stimp_ft": 8.9898,
+     "user_distance": null
+    },
+    {
+     "f_px": 675.0108,
+     "baseline": 0.02,
+     "h_cam": 0.0052,
+     "tilt": [
+      0.01617258,
+      0.09047373
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": -0.1613804,
+     "flag_disparity": 2.836669,
+     "flag_low_elev": 0.003246002,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.837454,
+     "stick_height_rel_sigma": 0.15,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.05940923,
+     "grain_azimuth": 2.24027,
+     "stimp_ft": 8.9898,
+     "user_distance": null
+    },
+    {
+     "f_px": 675.0108,
+     "baseline": 0.02,
+     "h_cam": 0.0052,
+     "tilt": [
+      0.01190054,
+      0.09043309
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": -0.06544413,
+     "flag_disparity": 12.95531,
+     "flag_low_elev": 0.001248365,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.826355,
+     "stick_height_rel_sigma": 0.15,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.05940923,
+     "grain_azimuth": 2.24027,
+     "stimp_ft": 8.9898,
+     "user_distance": 5.642499
+    },
+    {
+     "f_px": 675.0108,
+     "baseline": 0.02,
+     "h_cam": 0.0052,
+     "tilt": [
+      0.02186807,
+      0.09058723
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": -0.1746178,
+     "flag_disparity": 14.82661,
+     "flag_low_elev": 0.0003167918,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.844384,
+     "stick_height_rel_sigma": 0.15,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.05940923,
+     "grain_azimuth": 2.24027,
+     "stimp_ft": 8.9898,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     0.0006174853494107782,
+     0.08947058869032194,
+     0.001031744489918488,
+     0.0006121876413832152,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 5.250522126901923,
+    "distance_sigma": 0.16336320903361365,
+    "range_stereo": 5.250522126901923,
+    "range_mono": null,
+    "bearing": -0.1204878,
+    "stations": [
+     0.0,
+     0.4913429628894841,
+     4.208461689907362,
+     4.3399824957927216
+    ],
+    "phi": 0.658586781539841,
+    "aim_azimuth_device": 0.5380989815398409,
+    "v0": 3.0571422780859927,
+    "plays_like": 7.647053265205904,
+    "break_m": 4.063079465898348,
+    "break_cups": 37.6385314117494,
+    "slope_pct": 8.798257960938404,
+    "fall_line_azimuth": -1.5679987248147589,
+    "dz_hole": 0.017463677565602513,
+    "cross_slope_sigma": 0.0019014619660250368,
+    "confidence": 0.24053374233721572,
+    "a_r": 0.6110928343461173,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.00024613991786038257,
+     0.08798223530839869
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 2.028223962419094,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": -0.0009207052863574438,
+    "n_rolls": 215
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": 0.6938202151530005,
+    "v0": 3.107022739113177,
+    "confidence": 0.24053374233721572
+   }
+  },
+  {
+   "id": 11,
+   "mode": "NEAR_MISS",
+   "tag": "Survey of 3 drops, 6.9 m, 2 cm past: best miss 4.4 mm, just inside the 5 mm",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.02,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 655.6235,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      0.03753603,
+      0.05768046
+     ],
+     "tilt_reads": 2,
+     "flag_found": true,
+     "flag_bearing": -0.2047439,
+     "flag_disparity": 1.913527,
+     "flag_low_elev": 0.01557257,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.97296,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 1.969082,
+     "stimp_ft": 9.709456,
+     "user_distance": 7.222321
+    },
+    {
+     "f_px": 655.6235,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      0.02806599,
+      0.06495578
+     ],
+     "tilt_reads": 2,
+     "flag_found": true,
+     "flag_bearing": -0.1834613,
+     "flag_disparity": 9.641777,
+     "flag_low_elev": null,
+     "flag_base_visible": false,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.071226,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 1.969082,
+     "stimp_ft": 9.709456,
+     "user_distance": 7.248801
+    },
+    {
+     "f_px": 655.6235,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      0.03116302,
+      0.06381817
+     ],
+     "tilt_reads": 2,
+     "flag_found": true,
+     "flag_bearing": -0.2352132,
+     "flag_disparity": 10.80466,
+     "flag_low_elev": 0.008393946,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.955064,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 1.969082,
+     "stimp_ft": 9.709456,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     0.022743301360435137,
+     0.06396185576170837,
+     -0.00184677875327067,
+     0.0009209537647391899,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 6.852513708978239,
+    "distance_sigma": 0.2864872545400505,
+    "range_stereo": 6.852513708978239,
+    "range_mono": null,
+    "bearing": -0.2047439,
+    "stations": [
+     0.0,
+     5.492549669154459,
+     5.638919759700798
+    ],
+    "phi": 0.42569335682978227,
+    "aim_azimuth_device": 0.22094945682978226,
+    "v0": 3.267622196989936,
+    "plays_like": 9.435639859591902,
+    "break_m": 3.107058494545771,
+    "break_cups": 28.782385313068744,
+    "slope_pct": 6.881852231755997,
+    "fall_line_azimuth": -1.9429604396967022,
+    "dz_hole": 0.11248924098930244,
+    "cross_slope_sigma": 0.0019492839533973507,
+    "confidence": 0.1724607721447579,
+    "a_r": 0.5657991922724327,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     0.02502463378413256,
+     0.06410738427000864
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 1.6036765994656001,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.004443149010674694,
+    "n_rolls": 200
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": 0.4044399068045644,
+    "v0": 3.2331479900519233,
+    "confidence": 0.1724607721447579
+   }
+  },
+  {
+   "id": 12,
+   "mode": "NEAR_MISS",
+   "tag": "long Survey of 4 drops, 18.6 m dying putt on a gentle slope (0.13 of critical; best miss 2.4 mm)",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.0,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 646.0809,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      0.001443331,
+      -0.002246916
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.1279902,
+     "flag_disparity": 0.6934207,
+     "flag_low_elev": 0.01294423,
+     "flag_base_visible": false,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.1336368,
+     "stick_height_est": 2.098586,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": -2.29155,
+     "stimp_ft": 19.95401,
+     "user_distance": 16.8395
+    },
+    {
+     "f_px": 646.0809,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      0.01341883,
+      -0.007446385
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.1679252,
+     "flag_disparity": 1.032985,
+     "flag_low_elev": 0.01282072,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.172761,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": -2.29155,
+     "stimp_ft": 19.95401,
+     "user_distance": null
+    },
+    {
+     "f_px": 646.0809,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      0.01447437,
+      -0.01350914
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.2016604,
+     "flag_disparity": 2.271281,
+     "flag_low_elev": 0.01443758,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.165689,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": -2.29155,
+     "stimp_ft": 19.95401,
+     "user_distance": null
+    },
+    {
+     "f_px": 646.0809,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      0.01690477,
+      -0.0197155
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.1261851,
+     "flag_disparity": null,
+     "flag_low_elev": 0.01212925,
+     "flag_base_visible": false,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 2.180696,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": -2.29155,
+     "stimp_ft": 19.95401,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     0.0033653666077287122,
+     -0.0027060279968922655,
+     0.0007697870136974499,
+     -0.0010486693123373848,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 18.63460089956934,
+    "distance_sigma": 2.1498753526763004,
+    "range_stereo": 18.63460089956934,
+    "range_mono": null,
+    "bearing": 0.1279902,
+    "stations": [
+     0.0,
+     6.125592540299843,
+     12.945468643366782
+    ],
+    "phi": -0.10650932627436781,
+    "aim_azimuth_device": 0.02148087372563219,
+    "v0": 3.970230369194873,
+    "plays_like": 22.95430669379757,
+    "break_m": -1.9922981916500169,
+    "break_cups": -18.45574980685518,
+    "slope_pct": 0.2670549734907965,
+    "fall_line_azimuth": 2.013792400280607,
+    "dz_hole": 0.19636589905882115,
+    "cross_slope_sigma": 0.0023996930783146578,
+    "confidence": 0.038876273273352704,
+    "a_r": 0.3433501476377953,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": true,
+    "flag_missing": false,
+    "tilt_slopes": [
+     0.0011447264751273572,
+     -0.0024127654638939726
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 0.9465058135850861,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.002359280284657404,
+    "n_rolls": 230
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": -0.10670776286351097,
+    "v0": 3.954855642483117,
+    "confidence": 0.038876273273352704
+   }
+  },
+  {
+   "id": 13,
+   "mode": "NEAR_MISS",
+   "tag": "NOMINAL green: 8.7 m dying putt, slope at 0.17 of critical - the roll budget ends the search at 1e-9 m; without the rule the secant plane is solved",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.0,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 665.8501,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      -0.0007325192,
+      0.01494364
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.3943257,
+     "flag_disparity": 1.409656,
+     "flag_low_elev": 0.01115747,
+     "flag_base_visible": true,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.24715,
+     "stick_height_est": 2.06183,
+     "stick_height_rel_sigma": 0.02,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": -1.174487,
+     "stimp_ft": 7.052719,
+     "user_distance": 8.113426
+    }
+   ],
+   "expected": {
+    "patch": [
+     0.005208486260107843,
+     0.014037013509557335,
+     0.0015010561068070443,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 8.664597337612221,
+    "distance_sigma": 0.16004907104616578,
+    "range_stereo": 9.446987066348102,
+    "range_mono": 8.549976547872742,
+    "bearing": 0.3943257,
+    "stations": [
+     0.0
+    ],
+    "phi": 0.05659927103004968,
+    "aim_azimuth_device": 0.45092497103004975,
+    "v0": 3.86576199580933,
+    "plays_like": 9.592671852636832,
+    "break_m": 0.49093423732767716,
+    "break_cups": 4.547792842312896,
+    "slope_pct": 1.4961582831638123,
+    "fall_line_azimuth": -1.9161424384824164,
+    "dz_hole": 0.1014755151892486,
+    "cross_slope_sigma": 0.007085211048343185,
+    "confidence": 0.0888282052155112,
+    "a_r": 0.7789339632281854,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     0.005064830541917574,
+     0.014078226181221395
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 0,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 0.11683308067097797,
+    "fit_starts": 1
+   },
+   "kept": true,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": -2.147778483975817e-07,
+    "n_rolls": 200
+   },
+   "without_rule": {
+    "aim_source": 1,
+    "solve_status": 0,
+    "phi": 0.057362747044143875,
+    "v0": 3.8658434311064793,
+    "confidence": 0.0888282052155112
+   }
+  },
+  {
+   "id": 14,
+   "mode": "NEAR_MISS_CONTROL",
+   "tag": "CONTROL, not kept: 15 m dying putt, best miss 5.05 mm (just outside 5 mm): the estimate without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.0,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 665.154,
+     "baseline": 0.02,
+     "h_cam": 0.0052,
+     "tilt": [
+      0.01971647,
+      -0.07603277
+     ],
+     "tilt_reads": 2,
+     "flag_found": true,
+     "flag_bearing": 0.339832,
+     "flag_disparity": 0.8833814,
+     "flag_low_elev": -0.002379102,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.813778,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.0,
+     "grain_azimuth": 0.5602637,
+     "stimp_ft": 8.438372,
+     "user_distance": 14.76966
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.006730241210777057,
+     -0.0781574691726218,
+     0.0006168554487647591,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 15.05927111437936,
+    "distance_sigma": 1.3637843055676164,
+    "range_stereo": 15.05927111437936,
+    "range_mono": null,
+    "bearing": 0.339832,
+    "stations": [
+     0.0
+    ],
+    "phi": -0.5907621594498097,
+    "aim_azimuth_device": -0.2509301594498097,
+    "v0": 4.962804223359273,
+    "plays_like": 18.9158445589361,
+    "break_m": -10.09965149799319,
+    "break_cups": -93.55860581744501,
+    "slope_pct": 7.854757350252012,
+    "fall_line_azimuth": 1.484691049705954,
+    "dz_hole": -0.03140677989769261,
+    "cross_slope_sigma": 0.008518480598716,
+    "confidence": 0.03917858690957066,
+    "a_r": 0.6510263309326402,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.006755006285612462,
+     -0.07825657284353268
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 2,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 1.244319018358261,
+    "fit_starts": 1
+   },
+   "kept": false,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.005051935084787568,
+    "n_rolls": 221
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": -0.5907621594498097,
+    "v0": 4.962804223359273,
+    "confidence": 0.03917858690957066
+   }
+  },
+  {
+   "id": 15,
+   "mode": "NEAR_MISS_CONTROL",
+   "tag": "CONTROL, not kept: Survey of 3 drops, best miss 5.9 mm: the estimate without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.1,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 658.1238,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.004746539,
+      0.0815502
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.09574621,
+     "flag_disparity": 2.508161,
+     "flag_low_elev": 0.001835888,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.651067,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.3486415,
+     "grain_azimuth": 0.09071612,
+     "stimp_ft": 8.634654,
+     "user_distance": null
+    },
+    {
+     "f_px": 658.1238,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      0.0001624042,
+      0.08059229
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.05822247,
+     "flag_disparity": 3.083149,
+     "flag_low_elev": 0.001404558,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.674578,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.3486415,
+     "grain_azimuth": 0.09071612,
+     "stimp_ft": 8.634654,
+     "user_distance": 4.940501
+    },
+    {
+     "f_px": 658.1238,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      -0.005505291,
+      0.08292585
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": 0.1451239,
+     "flag_disparity": 25.94077,
+     "flag_low_elev": -0.006732226,
+     "flag_base_visible": true,
+     "flag_top_visible": false,
+     "flag_top_elev": null,
+     "stick_height_est": 1.641385,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.3486415,
+     "grain_azimuth": 0.09071612,
+     "stimp_ft": 8.634654,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     0.0031282159228124937,
+     0.08073225092977328,
+     -0.00012878237686093883,
+     0.00039089703962233934,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 5.2478592881397965,
+    "distance_sigma": 0.16738508534786395,
+    "range_stereo": 5.2478592881397965,
+    "range_mono": null,
+    "bearing": 0.09574621,
+    "stations": [
+     0.0,
+     0.9786929260859356,
+     4.740454303630855
+    ],
+    "phi": 0.5727408047385021,
+    "aim_azimuth_device": 0.668487014738502,
+    "v0": 2.954224133946137,
+    "plays_like": 6.8587442040930515,
+    "break_m": 3.384041156786693,
+    "break_cups": 31.348227482970753,
+    "slope_pct": 8.168821672994534,
+    "fall_line_azimuth": -1.6084042375702783,
+    "dz_hole": 0.014643101910939474,
+    "cross_slope_sigma": 0.002382465884549137,
+    "confidence": 0.23160047368859046,
+    "a_r": 0.6362272723614316,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     0.0030713990386210593,
+     0.08163045547137464
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 2,
+    "solve_status": 4,
+    "fit_converged": true,
+    "fit_cost": 1.4646882705531235,
+    "fit_starts": 1
+   },
+   "kept": false,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": -0.005911681525693753,
+    "n_rolls": 220
+   },
+   "without_rule": {
+    "aim_source": 2,
+    "solve_status": 4,
+    "phi": 0.5727408047385021,
+    "v0": 2.954224133946137,
+    "confidence": 0.23160047368859046
+   }
+  },
+  {
+   "id": 16,
+   "mode": "NEAR_MISS_CONTROL",
+   "tag": "CONTROL, not kept: 11.7 m dying putt, best miss 8.0 mm: the secant plane, PACE_LIMITED, as without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.0,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 639.0243,
+     "baseline": 0.02,
+     "h_cam": 0.00561,
+     "tilt": [
+      0.02135467,
+      0.0600392
+     ],
+     "tilt_reads": 1,
+     "flag_found": true,
+     "flag_bearing": -0.1216966,
+     "flag_disparity": 1.056479,
+     "flag_low_elev": 0.01226498,
+     "flag_base_visible": true,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.153668,
+     "stick_height_est": 1.608615,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.1612972,
+     "grain_azimuth": -2.132073,
+     "stimp_ft": 10.85672,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     0.013851746023356166,
+     0.062005488938742186,
+     -0.0002004547407469012,
+     0.0,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 11.659828758083622,
+    "distance_sigma": 0.5774825378674198,
+    "range_stereo": 12.097245662242223,
+    "range_mono": 11.278751019240822,
+    "bearing": -0.1216966,
+    "stations": [
+     0.0
+    ],
+    "phi": 0.43423513401286173,
+    "aim_azimuth_device": 0.31253853401286175,
+    "v0": 3.979347346284209,
+    "plays_like": 15.647145422575756,
+    "break_m": 5.407326660897656,
+    "break_cups": 50.091029744304365,
+    "slope_pct": 6.3723837513515305,
+    "fall_line_azimuth": -1.7908246167207256,
+    "dz_hole": 0.147882914598436,
+    "cross_slope_sigma": 0.008058346038354723,
+    "confidence": 0.042945801661040325,
+    "a_r": 0.5060093989901854,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     0.013908188328217025,
+     0.06218753705426633
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 1,
+    "solve_status": 1,
+    "fit_converged": true,
+    "fit_cost": 0.8110413578469274,
+    "fit_starts": 1
+   },
+   "kept": false,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": 0.00800242135607202,
+    "n_rolls": 229
+   },
+   "without_rule": {
+    "aim_source": 1,
+    "solve_status": 1,
+    "phi": 0.43423513401286173,
+    "v0": 3.979347346284209,
+    "confidence": 0.042945801661040325
+   }
+  },
+  {
+   "id": 17,
+   "mode": "NEAR_MISS_CONTROL",
+   "tag": "CONTROL, not kept: long Survey of 3 drops, 39.9 m, best miss 22 mm: the secant plane, as without the rule",
+   "method": "B1",
+   "config_overrides": {
+    "past": 0.3,
+    "near_miss_keep": 0.005
+   },
+   "measurements": [
+    {
+     "f_px": 646.0576,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      -0.008769243,
+      -0.005845523
+     ],
+     "tilt_reads": 2,
+     "flag_found": true,
+     "flag_bearing": -0.1516989,
+     "flag_disparity": 0.3218727,
+     "flag_low_elev": -0.01297055,
+     "flag_base_visible": true,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.03718478,
+     "stick_height_est": 1.998873,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.1129363,
+     "grain_azimuth": 0.7909581,
+     "stimp_ft": 14.56156,
+     "user_distance": null
+    },
+    {
+     "f_px": 646.0576,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      -0.009856232,
+      0.002698597
+     ],
+     "tilt_reads": 2,
+     "flag_found": true,
+     "flag_bearing": -0.1691512,
+     "flag_disparity": 0.3844719,
+     "flag_low_elev": -0.01413421,
+     "flag_base_visible": true,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.04340987,
+     "stick_height_est": 2.014209,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.1129363,
+     "grain_azimuth": 0.7909581,
+     "stimp_ft": 14.56156,
+     "user_distance": null
+    },
+    {
+     "f_px": 646.0576,
+     "baseline": 0.02,
+     "h_cam": 0.0056,
+     "tilt": [
+      -0.01299213,
+      0.011555
+     ],
+     "tilt_reads": 2,
+     "flag_found": false,
+     "flag_bearing": -0.09599301,
+     "flag_disparity": 1.274379,
+     "flag_low_elev": -0.007459097,
+     "flag_base_visible": false,
+     "flag_top_visible": true,
+     "flag_top_elev": 0.1626551,
+     "stick_height_est": 1.955937,
+     "stick_height_rel_sigma": 0.07,
+     "horizon_az": [],
+     "horizon_elev": [],
+     "grain_kappa": 0.1129363,
+     "grain_azimuth": 0.7909581,
+     "stimp_ft": 14.56156,
+     "user_distance": null
+    }
+   ],
+   "expected": {
+    "patch": [
+     -0.00824340885590231,
+     -0.006896577349564616,
+     -0.0002365567639102867,
+     0.0015402786204810094,
+     0.0
+    ],
+    "level_offsets": [
+     0.0,
+     0.0
+    ],
+    "distance": 39.86226259452996,
+    "distance_sigma": 2.693868238657643,
+    "range_stereo": 40.14367170623665,
+    "range_mono": 39.83945178581271,
+    "bearing": -0.1516989,
+    "stations": [
+     0.0,
+     5.009712130311584
+    ],
+    "phi": 0.299629459559983,
+    "aim_azimuth_device": 0.147930559559983,
+    "v0": 4.910715665931324,
+    "plays_like": 31.960257154372655,
+    "break_m": 12.314660704892571,
+    "break_cups": 114.07744979057499,
+    "slope_pct": 1.0538963987820529,
+    "fall_line_azimuth": 0.739651054552873,
+    "dz_hole": -0.5165452749492926,
+    "cross_slope_sigma": 0.007705850839771928,
+    "confidence": 0.010469683123577045,
+    "a_r": 0.37726743303634536,
+    "grain": [
+     0.0,
+     0.0
+    ],
+    "base_hidden": false,
+    "flag_missing": false,
+    "tilt_slopes": [
+     -0.0077851727823582155,
+     -0.007103579850005688
+    ],
+    "range_missing": false,
+    "poor_horizon": false,
+    "used_horizon": false,
+    "aim_source": 1,
+    "solve_status": 0,
+    "fit_converged": true,
+    "fit_cost": 0.1617872804139574,
+    "fit_starts": 1
+   },
+   "kept": false,
+   "patch_solve": {
+    "status": 4,
+    "status_name": "NO_CONVERGENCE",
+    "miss": -0.0223675045091153,
+    "n_rolls": 213
+   },
+   "without_rule": {
+    "aim_source": 1,
+    "solve_status": 0,
+    "phi": 0.299629459559983,
+    "v0": 4.910715665931324,
+    "confidence": 0.010469683123577045
+   }
+  }
  ]
 }

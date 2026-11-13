@@ -29,6 +29,14 @@ Survey with 2, 3 and 4 drops, the horizon stage), ``fallback_solver_cases``
 (aim problems for every ``SolveStatus``) and ``roll_cases`` (single rolls
 with the capture model).  ``schema_version`` stays 2: a reader of schema 2
 that ignores unknown keys is unaffected.
+
+Appended after the firmware review (phase 2), again without touching anything
+above: ``near_miss_estimator_cases`` - reads generated with
+``EstimatorConfig.near_miss_keep = 0.005`` (the firmware's setting; the
+default, and the setting of every other case, is 0 = off).  The key
+``estimator_config`` of the file does not list ``near_miss_keep``, so that
+the text of the file up to the appended group is unchanged; its value for a
+case of the new group is in that case's ``config_overrides``.
 """
 
 from __future__ import annotations
@@ -45,6 +53,7 @@ from . import estimator as es
 from . import physics as ph
 from . import sensors as se
 from .greens import GREEN_CLASSES, make_scenario
+from .refvectors_near_miss import NEAR_MISS_CASES
 
 __all__ = ["SCHEMA_VERSION", "reference_config", "build_reference_vectors", "write_reference_vectors", "main"]
 
@@ -582,6 +591,56 @@ def _fallback_estimator_cases(config: es.EstimatorConfig) -> List[dict]:
     return cases
 
 
+_NEAR_MISS_KEEP = 0.005  # [m] the firmware's setting of EstimatorConfig.near_miss_keep
+
+
+def _near_miss_estimator_cases(config: es.EstimatorConfig) -> List[dict]:
+    """Reads whose patch solve ends without a usable solution, estimated with
+    ``near_miss_keep`` on.  Layout of the fallback estimator cases, plus what
+    the patch solve returned (``patch_solve``) and what the estimate is
+    without the rule (``without_rule``)."""
+    cases: List[dict] = []
+    for entry in NEAR_MISS_CASES:
+        drops = [se.Measurements.from_dict(d) for d in entry["drops"]]
+        overrides = {"past": entry["past"], "near_miss_keep": _NEAR_MISS_KEEP}
+        cfg_off = replace(config, past=entry["past"])
+        cfg = replace(config, **overrides)
+        with np.errstate(all="ignore"):
+            est = es.estimate_batch([drops], "B1", cfg)[0]
+            off = es.estimate_batch([drops], "B1", cfg_off)[0]
+            sol = ph.solve_aim_quadratic_batch(
+                np.array([off.fit.coeffs]), np.array([off.fit.distance]), np.array([off.a_r]), np.array([off.grain]),
+                entry["past"], tol_miss=cfg.tol_miss, tol_pace=cfg.tol_pace,
+            )
+        kept = bool(est.aim_source == es.AIM_FROM_PATCH)
+        cases.append(
+            {
+                "id": len(cases),
+                "mode": "NEAR_MISS" if kept else "NEAR_MISS_CONTROL",
+                "tag": entry["tag"],
+                "method": "B1",
+                "config_overrides": overrides,
+                "measurements": [m.to_dict() for m in drops],
+                "expected": _fallback_estimate_record(est, est.fit),
+                "kept": kept,
+                "patch_solve": {
+                    "status": int(sol.status[0]),
+                    "status_name": _STATUS_NAMES[int(sol.status[0])],
+                    "miss": _num(sol.miss[0]),
+                    "n_rolls": int(sol.n_rolls[0]),
+                },
+                "without_rule": {
+                    "aim_source": int(off.aim_source),
+                    "solve_status": int(off.solve_status),
+                    "phi": _num(off.phi),
+                    "v0": _num(off.v0),
+                    "confidence": _num(off.confidence),
+                },
+            }
+        )
+    return cases
+
+
 def _fallback_solver_cases() -> List[dict]:
     rows: List[dict] = []
 
@@ -814,7 +873,9 @@ def build_reference_vectors(n_estimator: int = 240, n_solver: int = 120, seed: i
             "LINE_MISS_OFFSET": ph._LINE_MISS_OFFSET,
             "LINE_MISS_SLOPE": ph._LINE_MISS_SLOPE,
         },
-        "estimator_config": asdict(config),
+        # (near_miss_keep is a later addition with default 0 = off; it is left out here so
+        # that the file is unchanged up to the appended near_miss_estimator_cases)
+        "estimator_config": {k: v for k, v in asdict(config).items() if k != "near_miss_keep"},
         "solver_tolerances": {"tol_miss": _SOLVER_TOL, "tol_pace": _SOLVER_TOL},
         "estimator_cases": _estimator_cases(n_estimator, seed, config),
         "solver_cases": _solver_cases(n_solver, seed),
@@ -822,6 +883,8 @@ def build_reference_vectors(n_estimator: int = 240, n_solver: int = 120, seed: i
         "fallback_estimator_cases": _fallback_estimator_cases(config),
         "fallback_solver_cases": _fallback_solver_cases(),
         "roll_cases": _roll_cases(),
+        # appended after the firmware review (phase 2): EstimatorConfig.near_miss_keep = 0.005
+        "near_miss_estimator_cases": _near_miss_estimator_cases(config),
     }
 
 
@@ -1097,6 +1160,54 @@ def _fallback_md(data: dict) -> str:
     )
 
 
+_SCHEMA_MD_NEAR_MISS = """
+## Near-miss cases (appended after the firmware review, phase 2)
+
+`EstimatorConfig.near_miss_keep` (default 0 = off, the setting of every case
+above) makes the estimator keep the best iterate of the aim solve on the
+fitted patch when that solve ended without a usable solution but the iterate
+reaches the hole line within `near_miss_keep` of the hole centre:
+`aim_source` stays 0, `solve_status` reports how the solve ended, the
+confidence takes `conf_aim_fallback`, and the secant plane is not tried.
+The firmware runs with 5 mm. Why: near a jump of the lateral miss the
+bracketing search stops a fraction of a millimetre to a few millimetres from
+the centre and reports NO_CONVERGENCE; the secant-plane solution that
+replaced such an iterate misses the hole on the fitted patch by decimetres
+in most of those reads.
+
+| Key | Content |
+| --- | --- |
+| `near_miss_estimator_cases` | {n_nm} estimator cases with the layout of `fallback_estimator_cases`, generated with `config_overrides` = `past` and `near_miss_keep` = {keep:g}. Extra keys: `kept` (the rule applied), `patch_solve` (`status`, `miss` [m] and `n_rolls` of the solve on the fitted patch) and `without_rule` (`aim_source`, `solve_status`, `phi`, `v0`, `confidence` of the same read with the rule off) |
+
+The key `estimator_config` at the top of the file does not list
+`near_miss_keep` (it is 0 for every case outside this group), so that the
+file is unchanged, byte for byte, up to this appended group. The inputs are
+plain numbers in `greenline_sim/refvectors_near_miss.py`. The last
+{n_ctl} cases are controls: their best miss is outside {keep_mm:g} mm, and
+the estimate is the one without the rule.
+
+| id | drops | kept | best miss of the patch solve [mm] | trial rolls | aim_source, status | without the rule | aim moved by [mrad] | what it is |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+{listing}
+"""
+
+
+def _near_miss_md(data: dict) -> str:
+    nm = data["near_miss_estimator_cases"]
+    listing = "\n".join(
+        f"| {c['id']} | {len(c['measurements'])} | {'yes' if c['kept'] else 'no'} | "
+        f"{1e3 * c['patch_solve']['miss']:+.3f} | {c['patch_solve']['n_rolls']} | "
+        f"{c['expected']['aim_source']}, {_STATUS_NAMES[c['expected']['solve_status']]} | "
+        f"{c['without_rule']['aim_source']}, {_STATUS_NAMES[c['without_rule']['solve_status']]} | "
+        f"{1e3 * (c['expected']['phi'] - c['without_rule']['phi']):+.1f} | {c['tag']} |"
+        for c in nm
+    )
+    return _SCHEMA_MD_NEAR_MISS.format(
+        n_nm=len(nm), keep=_NEAR_MISS_KEEP, keep_mm=1e3 * _NEAR_MISS_KEEP,
+        n_ctl=sum(1 for c in nm if not c["kept"]), listing=listing,
+    )
+
+
 def write_reference_vectors(out_dir: str, n_estimator: int = 240, n_solver: int = 120, seed: int = 20261111) -> dict:
     """Write ``reference_vectors.json`` and ``REFERENCE_VECTORS.md`` into ``out_dir``."""
     data = build_reference_vectors(n_estimator, n_solver, seed)
@@ -1124,6 +1235,7 @@ def write_reference_vectors(out_dir: str, n_estimator: int = 240, n_solver: int 
     with open(os.path.join(out_dir, "REFERENCE_VECTORS.md"), "w") as fh:
         fh.write(text)
         fh.write(_fallback_md(data))
+        fh.write(_near_miss_md(data))
     return data
 
 
@@ -1133,6 +1245,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"wrote {len(data['estimator_cases'])} estimator and {len(data['solver_cases'])} solver cases to {out_dir}")
     print(f"      {len(data['fallback_estimator_cases'])} fallback estimator, {len(data['fallback_solver_cases'])} "
           f"fallback solver and {len(data['roll_cases'])} roll cases appended")
+    print(f"      {len(data['near_miss_estimator_cases'])} near-miss estimator cases appended")
     return 0
 
 

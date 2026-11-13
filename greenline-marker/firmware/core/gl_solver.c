@@ -6,9 +6,13 @@
  * operation order follow the reference.
  *
  *   fit the patch (gl_solver_fit.c)
- *   -> solve the putt on it (gl_solver_aim.c)
+ *   -> solve the putt on it (gl_solver_aim.c)        aim_source 0
+ *   -> not solved, but (option near_miss_m) the best iterate passes within
+ *      near_miss_m of the hole centre: keep it       aim_source 0, the
+ *      solve_status of the solve, fallback confidence
  *   -> not solvable: solve on the patch's secant plane (keeps the hole
  *      height and the mean cross slope)             aim_source 1
+ *      (not when the patch is a plane already: the same problem again)
  *   -> not solvable either: best iterate of that solve  aim_source 2
  *   -> nothing usable (zero distance): straight at flat pace  aim_source 3
  *   -> confidence score
@@ -41,6 +45,8 @@ void gl_solver_default_options(gl_solver_options_t *opt)
     opt->tol_pace_m = GLS_R(GL_SOLVER_DEFAULT_TOL_PACE_M);
     opt->lm_tol = GLS_R(GL_SOLVER_DEFAULT_LM_TOL);
     opt->lm_max_iter = (uint16_t)GL_SOLVER_DEFAULT_LM_MAX_ITER;
+    opt->near_miss_m = GLS_R(GL_SOLVER_DEFAULT_NEAR_MISS_M);
+    opt->max_steps = GL_SOLVER_DEFAULT_MAX_STEPS;
 }
 
 void gl_solver_measurements_init(gl_measurements_t *m)
@@ -188,7 +194,9 @@ static bool measurement_ok_(const gl_measurements_t *m)
 }
 
 /** One aim solve on the putt-frame patch `coeffs` (ball at the origin,
- *  hole at (dist, 0)); adds its rolls and steps to the estimate. */
+ *  hole at (dist, 0)); adds its rolls and steps to the estimate.  The step
+ *  budget (opt->max_steps, firmware only) is the estimate's: this solve is
+ *  told what the solves before it have spent. */
 static uint8_t solve_patch_(const gl_real_t *coeffs, gl_real_t dist, gl_real_t a_r, gl_real_t gx,
                             gl_real_t gy, const gl_solver_options_t *opt, gls_solve_res_t *res,
                             uint32_t *n_rolls, uint32_t *n_steps)
@@ -204,7 +212,7 @@ static uint8_t solve_patch_(const gl_real_t *coeffs, gl_real_t dist, gl_real_t a
     status = gls_solve_kernel(&sf, GLS_R(0.0), GLS_R(0.0), dist, GLS_R(0.0), a_r, gx * a_r,
                               gy * a_r, GLS_SQRT(GLS_R(2.0) * a_r * opt->past_m), GLS_DT, GLS_T_MAX,
                               GLS_R_MAX, opt->tol_miss_m, opt->tol_pace_m, GLS_PHI_MAX, GLS_V_MAX,
-                              (uint32_t)opt->max_rolls, res);
+                              (uint32_t)opt->max_rolls, opt->max_steps, *n_steps, res);
     *n_rolls += res->n_rolls;
     *n_steps += res->n_steps;
     return status;
@@ -229,6 +237,7 @@ static gl_status_t estimate_(const gl_measurements_t *drops, const uint8_t *orde
     uint32_t n_rolls = 0u, n_steps = 0u;
     gl_status_t st;
     bool finite;
+    bool near_kept = false;
 
     estimate_not_run_(out);
     if (opt == NULL) {
@@ -292,6 +301,18 @@ static gl_status_t estimate_(const gl_measurements_t *drops, const uint8_t *orde
             phi = sol.phi;
             v0 = sol.v0;
             source = (uint8_t)GL_AIM_FROM_PATCH;
+        } else if (opt->near_miss_m > GLS_R(0.0) && status != (uint8_t)GL_SOLVE_INVALID &&
+                   gls_finite(sol.phi) && gls_finite(sol.v0) && sol.v0 > GLS_R(0.0) &&
+                   GLS_FABS(sol.miss) <= opt->near_miss_m) {
+            /* Reference: EstimatorConfig.near_miss_keep.  The search stopped
+             * (a jump of the miss, the roll budget) with an iterate that
+             * passes this close to the hole centre: that IS the putt.  (A
+             * miss that is not a number - nothing reached the hole -
+             * compares false.)  The status of the solve is kept. */
+            phi = sol.phi;
+            v0 = sol.v0;
+            source = (uint8_t)GL_AIM_FROM_PATCH;
+            near_kept = true;
         } else {
             /* secant plane of the patch: keeps the hole height and the mean cross slope */
             gl_real_t plane[5];
@@ -303,7 +324,16 @@ static gl_status_t estimate_(const gl_measurements_t *drops, const uint8_t *orde
             if (!gls_finite(plane[0]) || !gls_finite(plane[1])) {
                 return GL_ERR_RANGE;
             }
-            status = solve_patch_(plane, dist, a_r, gx, gy, opt, &sol, &n_rolls, &n_steps);
+            /* A patch that IS a plane (a tilt-only fit: flag out, not ranged,
+             * method B0) has itself as its secant plane, exactly: the solve
+             * would be the same problem, with the same answer, at the same
+             * cost.  It is not repeated; `sol` already is its result.  (This
+             * halves the costliest estimates there are.  The reference
+             * solves twice and gets the same record.) */
+            if (!(fit->coeffs[2] == GLS_R(0.0) && fit->coeffs[3] == GLS_R(0.0) &&
+                  fit->coeffs[4] == GLS_R(0.0))) {
+                status = solve_patch_(plane, dist, a_r, gx, gy, opt, &sol, &n_rolls, &n_steps);
+            }
             if (status == (uint8_t)GL_SOLVE_OK || status == (uint8_t)GL_SOLVE_PACE_LIMITED) {
                 phi = sol.phi;
                 v0 = sol.v0;
@@ -321,7 +351,9 @@ static gl_status_t estimate_(const gl_measurements_t *drops, const uint8_t *orde
         conf = GLS_R(0.0);
         sigma_cross = GLS_NAN;
     } else {
-        conf = confidence_(fit, a_r, gls_hypot(gx, gy), source, opt, &sigma_lat);
+        /* a kept near miss is scored as a fallback */
+        conf = confidence_(fit, a_r, gls_hypot(gx, gy),
+                           near_kept ? (uint8_t)GL_AIM_FROM_PLANE : source, opt, &sigma_lat);
         sigma_cross = fit->cross_sigma_read;
     }
     /* slope and fall line at the ball: the tilt reading itself */

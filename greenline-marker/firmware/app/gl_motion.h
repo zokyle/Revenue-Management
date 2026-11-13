@@ -81,6 +81,10 @@ void gl_motion_dial_end(gl_motion_t *m);
  *  stays true if the marker is turned again afterwards, and if it then
  *  comes to rest at a half turn once more, GL_EV_SPIN_DONE is posted again. */
 void gl_motion_spin_begin(gl_motion_t *m, gl_vec3_t up, gl_vec3_t gyro_bias_rad_s);
+/** The spin is still being integrated (the angle counts from the frame it
+ *  was begun in): report a half turn at rest again, even if one was
+ *  reported before.  For a spin prompt that is shown a second time. */
+void gl_motion_spin_rearm(gl_motion_t *m);
 /** Stop integrating (the angle is no longer needed). */
 void gl_motion_spin_end(gl_motion_t *m);
 

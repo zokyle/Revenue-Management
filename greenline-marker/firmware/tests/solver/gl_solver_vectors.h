@@ -44,7 +44,8 @@ typedef struct {
 /** One estimator case. */
 typedef struct {
     uint16_t id;
-    uint8_t group;           /**< 0 = estimator_cases, 1 = fallback_estimator_cases */
+    uint8_t group;           /**< 0 = estimator_cases, 1 = fallback_estimator_cases,
+                                  2 = near_miss_estimator_cases */
     const char *mode;
     const char *tag;         /**< what a fallback case exercises ("" in group 0) */
     uint8_t method;          /**< gl_solver_method_t */
@@ -53,6 +54,11 @@ typedef struct {
     double tol_miss, tol_pace, lm_tol; /**< tolerances the reference used */
     uint16_t lm_max_iter;
     uint8_t lm_max_iter_overridden;    /**< the case sets its own iteration limit */
+    double near_miss;        /**< EstimatorConfig.near_miss_keep of the case (0 = off: groups 0, 1) */
+    uint8_t kept;            /**< group 2: the rule applied (the best iterate of the patch solve is the aim) */
+    double patch_miss;       /**< group 2: lateral miss of that iterate at the hole line [m] */
+    uint8_t without_source, without_status; /**< group 2: aim_source, solve_status with the rule off */
+    double without_phi, without_v0; /**< group 2: phi and v0 with the rule off */
     uint8_t n_drops;
     uint16_t first_meas;     /**< index of the drop at the ball in gl_vec_meas; the others follow */
     gl_vec_expected_t exp;
@@ -92,7 +98,7 @@ extern const unsigned gl_vec_n_horizon;
 extern const gl_vec_meas_t gl_vec_meas[];
 extern const unsigned gl_vec_n_meas;
 extern const gl_vec_est_case_t gl_vec_est[];
-extern const unsigned gl_vec_n_est, gl_vec_n_est_original;
+extern const unsigned gl_vec_n_est, gl_vec_n_est_original, gl_vec_n_est_near_first;
 extern const gl_vec_sol_case_t gl_vec_sol[];
 extern const unsigned gl_vec_n_sol, gl_vec_n_sol_original;
 extern const gl_vec_roll_case_t gl_vec_roll[];

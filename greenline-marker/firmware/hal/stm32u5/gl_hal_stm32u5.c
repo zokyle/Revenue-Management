@@ -244,10 +244,39 @@ void glh_irq_raise(uint32_t bit)
 /* Core clock in effect (gl_hal_delay_us scales with it). */
 static gl_clock_t clock_ = GL_CLOCK_SLOW;
 static uint32_t sysclk_hz_ = GLH_SYSCLK_HZ;
+/* false: the 32.768 kHz crystal did not start (or stopped).  The low-speed
+ * side then runs from LSI: the tick, the RTC and EXTCOMIN are about 2.4 %
+ * slow (LSI is nominally 32.000 kHz, and is not trimmed), MSIS is not
+ * locked.  DEGRADED but alive: gl_hal_init() reports GL_ERR_TIMEOUT once,
+ * the application shows it and carries on.  Stays false until the next
+ * reset.  BY INSPECTION ONLY, like everything in this file. */
+static bool lse_ok_ = true;
 
-static gl_status_t clocks_init_(void)
+static HAL_StatusTypeDef clocks_osc_(bool with_lse)
 {
     RCC_OscInitTypeDef osc;
+    /* LSE (32.768 kHz, 6 pF crystal: low drive) and MSIS 48 MHz locked to it */
+    memset(&osc, 0, sizeof(osc));
+    osc.OscillatorType = RCC_OSCILLATORTYPE_LSE | RCC_OSCILLATORTYPE_MSI | RCC_OSCILLATORTYPE_LSI |
+                         RCC_OSCILLATORTYPE_MSIK;
+    osc.LSEState = with_lse ? RCC_LSE_ON : RCC_LSE_OFF;
+    osc.LSIState = RCC_LSI_ON; /* independent watchdog; the low-speed clock without LSE */
+    osc.MSIState = RCC_MSI_ON;
+    osc.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+    osc.MSIClockRange = GLH_MSI_RANGE_48MHZ;
+    /* MSIK: the kernel clock of SPI1, SPI2 and the ADC, so that their
+     * timing does not move when the core clock is switched */
+    osc.MSIKState = RCC_MSIK_ON;
+    osc.MSIKClockRange = GLH_MSIK_RANGE_48MHZ;
+    osc.PLL.PLLState = RCC_PLL_NONE;
+    return HAL_RCC_OscConfig(&osc);
+}
+
+/* Returns GL_OK when the system clock tree is up - WITH OR WITHOUT the
+ * crystal (lse_ok_ says which).  GL_ERR_IO only if the internal oscillators
+ * themselves could not be configured. */
+static gl_status_t clocks_init_(void)
+{
     RCC_ClkInitTypeDef clk;
     RCC_PeriphCLKInitTypeDef pclk;
 
@@ -259,24 +288,19 @@ static gl_status_t clocks_init_(void)
     if (HAL_PWREx_ControlVoltageScaling(GLH_VOLTAGE_SCALE) != HAL_OK) {
         return GL_ERR_IO;
     }
-    /* LSE (32.768 kHz, 6 pF crystal: low drive) and MSIS 48 MHz locked to it */
-    memset(&osc, 0, sizeof(osc));
-    osc.OscillatorType = RCC_OSCILLATORTYPE_LSE | RCC_OSCILLATORTYPE_MSI | RCC_OSCILLATORTYPE_LSI |
-                         RCC_OSCILLATORTYPE_MSIK;
-    osc.LSEState = RCC_LSE_ON;
-    osc.LSIState = RCC_LSI_ON; /* independent watchdog */
-    osc.MSIState = RCC_MSI_ON;
-    osc.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
-    osc.MSIClockRange = GLH_MSI_RANGE_48MHZ;
-    /* MSIK: the kernel clock of SPI1, SPI2 and the ADC, so that their
-     * timing does not move when the core clock is switched */
-    osc.MSIKState = RCC_MSIK_ON;
-    osc.MSIKClockRange = GLH_MSIK_RANGE_48MHZ;
-    osc.PLL.PLLState = RCC_PLL_NONE;
-    if (HAL_RCC_OscConfig(&osc) != HAL_OK) {
+    /* The crystal is the one external part of the clock tree and the one
+     * that can fail to start (LSE_STARTUP_TIMEOUT, 5 s).  That must not take
+     * the device down: without a tick the application's first delay would
+     * never return.  Fall back to LSI and say so. */
+    if (lse_ok_ && clocks_osc_(true) != HAL_OK) {
+        lse_ok_ = false;
+    }
+    if (!lse_ok_ && clocks_osc_(false) != HAL_OK) {
         return GL_ERR_IO;
     }
-    HAL_RCCEx_EnableMSIPLLMode(); /* trim MSI against LSE */
+    if (lse_ok_) {
+        HAL_RCCEx_EnableMSIPLLMode(); /* trim MSI against LSE */
+    }
 
     memset(&clk, 0, sizeof(clk));
     clk.ClockType = RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 |
@@ -299,9 +323,9 @@ static gl_status_t clocks_init_(void)
     memset(&pclk, 0, sizeof(pclk));
     pclk.PeriphClockSelection = RCC_PERIPHCLK_LPTIM1 | RCC_PERIPHCLK_LPTIM34 | RCC_PERIPHCLK_RTC |
                                 RCC_PERIPHCLK_ADCDAC | RCC_PERIPHCLK_SPI1 | RCC_PERIPHCLK_SPI2;
-    pclk.Lptim1ClockSelection = RCC_LPTIM1CLKSOURCE_LSE;
-    pclk.Lptim34ClockSelection = RCC_LPTIM34CLKSOURCE_LSE;
-    pclk.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
+    pclk.Lptim1ClockSelection = lse_ok_ ? RCC_LPTIM1CLKSOURCE_LSE : RCC_LPTIM1CLKSOURCE_LSI;
+    pclk.Lptim34ClockSelection = lse_ok_ ? RCC_LPTIM34CLKSOURCE_LSE : RCC_LPTIM34CLKSOURCE_LSI;
+    pclk.RTCClockSelection = lse_ok_ ? RCC_RTCCLKSOURCE_LSE : RCC_RTCCLKSOURCE_LSI;
     pclk.AdcDacClockSelection = RCC_ADCDACCLKSOURCE_MSIK;
     pclk.Spi1ClockSelection = RCC_SPI1CLKSOURCE_MSIK;
     pclk.Spi2ClockSelection = RCC_SPI2CLKSOURCE_MSIK;
@@ -359,7 +383,11 @@ static gl_status_t clock_fast_(void)
     return GL_OK;
 }
 
-static void clock_slow_(void)
+/* Returns GL_ERR_IO if the switch back to MSIS did not take place: the core
+ * then STILL runs from the PLL in voltage range 1, and this module keeps
+ * saying so (clock_ stays FAST, the PLL and the range are left alone).  The
+ * application retries; it never enters Stop mode with the fast clock. */
+static gl_status_t clock_slow_(void)
 {
     RCC_OscInitTypeDef osc;
     RCC_ClkInitTypeDef clk;
@@ -373,7 +401,11 @@ static void clock_slow_(void)
     clk.APB2CLKDivider = RCC_HCLK_DIV1;
     clk.APB3CLKDivider = RCC_HCLK_DIV1;
     /* still in range 1 here: the latency of range 3 at 48 MHz is safe in both */
-    (void)HAL_RCC_ClockConfig(&clk, GLH_FLASH_LATENCY_48MHZ);
+    if (HAL_RCC_ClockConfig(&clk, GLH_FLASH_LATENCY_48MHZ) != HAL_OK) {
+        /* (the result used to be discarded: clock_ said SLOW, the PLL was
+         * switched off under the running core and the voltage lowered) */
+        return GL_ERR_IO;
+    }
     clock_ = GL_CLOCK_SLOW;
     sysclk_hz_ = GLH_SYSCLK_HZ;
     memset(&osc, 0, sizeof(osc));
@@ -381,6 +413,7 @@ static void clock_slow_(void)
     osc.PLL.PLLState = RCC_PLL_OFF;
     (void)HAL_RCC_OscConfig(&osc);
     (void)HAL_PWREx_ControlVoltageScaling(GLH_VOLTAGE_SCALE);
+    return GL_OK;
 }
 
 gl_status_t gl_hal_clock_set(gl_clock_t speed)
@@ -389,7 +422,7 @@ gl_status_t gl_hal_clock_set(gl_clock_t speed)
         return (clock_ == GL_CLOCK_FAST) ? GL_OK : clock_fast_();
     }
     if (clock_ == GL_CLOCK_FAST) {
-        clock_slow_();
+        return clock_slow_();
     }
     return GL_OK;
 }
@@ -422,10 +455,14 @@ static void dfu_check_(void)
          * would sit in the bootloader until the cell is flat.  The pin is
          * read as a plain input: nothing else is configured yet.
          * LIMIT: a marker left in a powered cradle whose host never issues
-         * a DFU "leave" stays in the bootloader, NOT charging (the charge
-         * enable is released), until it is lifted out and put back - a
-         * power cycle of VBUS alone does not reset the MCU.  README, open
-         * issues. */
+         * a DFU "leave" stays in the bootloader until it is lifted out and
+         * put back (a power cycle of VBUS alone does not reset the MCU) -
+         * and it KEEPS CHARGING there: with the rev C2 circuit the charger
+         * runs whenever VBUS is present, and in the ROM bootloader nobody
+         * watches the cell temperature (CHG_INHIBIT is high-Z after the
+         * reset).  The firmware only refuses to come here outside the
+         * charging window (gl_usb.c).  README, charger state table: NOT MET
+         * without hardware. */
         {
             const glh_pin_t *vb = &pin_[GL_PIN_VBUS_SENSE];
             GPIO_InitTypeDef g;
@@ -563,10 +600,19 @@ uint32_t gl_hal_tick_ms(void)
     return (uint32_t)((lse_ticks_() * 125u) >> 12);
 }
 
+/* Both delays have a BOUNDED EXIT that does not depend on the clock they
+ * measure with: a low-speed timer that does not count (crystal dead) or a
+ * cycle counter that was never enabled must cost time, never the device.
+ * (They used to wait on that one clock alone; gl_hal_init() returned early
+ * on a clock error, before the counter, the tick and the watchdog existed,
+ * and the application's first delay then never came back.) */
 void gl_hal_delay_ms(uint32_t ms)
 {
     const uint64_t end = lse_ticks_() + ((uint64_t)ms * GLH_LSE_HZ + 999u) / 1000u;
-    while (lse_ticks_() < end) {
+    /* second opinion: the HAL's SysTick time base (core clock), with margin */
+    const uint32_t t0 = HAL_GetTick();
+    const uint32_t limit = ms + ms / 8u + 2u;
+    while (lse_ticks_() < end && (uint32_t)(HAL_GetTick() - t0) < limit) {
         __WFI(); /* SysTick (1 ms) or any other interrupt ends the wait */
     }
 }
@@ -574,10 +620,13 @@ void gl_hal_delay_ms(uint32_t ms)
 void gl_hal_delay_us(uint32_t us)
 {
     /* DWT cycle counter: 48 cycles per microsecond with the slow clock, 160
-     * with the fast one (10000 us x 160 = 1.6e6 cycles: no overflow) */
+     * with the fast one (10000 us x 160 = 1.6e6 cycles: no overflow).  One
+     * pass of the loop takes several cycles, so with a counter that runs
+     * the pass limit is never reached; with one that does not, the wait
+     * ends after `cycles` passes (a few times too long, not for ever). */
     const uint32_t start = DWT->CYCCNT;
     const uint32_t cycles = us * (sysclk_hz_ / 1000000u);
-    while ((uint32_t)(DWT->CYCCNT - start) < cycles) {
+    for (uint32_t pass = 0; pass < cycles && (uint32_t)(DWT->CYCCNT - start) < cycles; pass++) {
     }
 }
 
@@ -948,13 +997,21 @@ uint32_t gl_hal_sleep(gl_sleep_mode_t mode)
         }
         __enable_irq(); /* the handler of whatever woke the core runs here */
     }
+    /* The HAL's time base first: the oscillator and clock set-up below waits
+     * on flags with HAL time-outs, which cannot expire while SysTick is
+     * suspended (it used to be resumed AFTER: a flag that never set ended in
+     * the watchdog). */
+    HAL_ResumeTick();
     if (stopped) {
         /* the core woke on MSIS (the wake-up clock): re-apply the clock
          * set-up.  Stop is only entered from the SLOW clock, so that is the
-         * state to restore. */
+         * state to restore.  NOT MEASURED: what this costs.  It runs after
+         * every Stop exit - up to 240 times a second while a result is
+         * shown - and the simulator's "Stop 2 for 99.5 %" does not include
+         * it; if it is expensive, restore only what Stop 2 loses (README,
+         * open issues). */
         (void)clocks_init_();
     }
-    HAL_ResumeTick();
     return irq_pending_;
 }
 
@@ -1622,20 +1679,65 @@ void gl_hal_extcomin_stop(void)
 /* system                                                                   */
 /* ======================================================================= */
 
+/*
+ * ORDER MATTERS, and nothing here may return before the application has what
+ * it relies on.  The application carries on after an error from this
+ * function by design ("a device that failed its start-up checks still
+ * runs"): so whatever fails, there must be a watchdog, pins in their safe
+ * states, a cycle counter and a tick.
+ *
+ *   1. the independent watchdog FIRST.  It needs only LSI, which the
+ *      hardware starts with it.  From here on a hang anywhere - in the clock
+ *      set-up below, in the application's start-up - ends in a reset after
+ *      32 s at the latest.  (It used to be started LAST, and a clock error
+ *      returned before it: the first delay of the application then waited
+ *      for ever on a counter that was never enabled, with no watchdog, and
+ *      in a cradle the default-on charger ran with nobody supervising.)
+ *   2. clocks.  A crystal that does not start is survived on LSI
+ *      (clocks_init_); an error of the internal oscillators leaves the core
+ *      on whatever clock it has (SystemCoreClock says which).
+ *   3. cycle counter, pins, RTC, tick - always.
+ * Returns the FIRST error; GL_ERR_TIMEOUT for "running without the crystal".
+ * A hang BEFORE step 1 (dfu_check_, HAL_Init) is not covered by the software
+ * start; the IWDG_SW option bit (hardware watchdog) would cover it and is a
+ * production decision (README).
+ */
 gl_status_t gl_hal_init(void)
 {
-    gl_status_t st;
+    gl_status_t st, first = GL_OK;
 
     dfu_check_(); /* may not return */
     if (HAL_Init() != HAL_OK) {
-        return GL_ERR_IO;
+        first = GL_ERR_IO; /* (the tick could not be set up; carry on) */
+    }
+    /* 1. independent watchdog, about 32 s; it keeps running in Stop mode,
+     * so the application wakes every 16 s to refresh it.  HAL_IWDG_Init()
+     * starts it with its first write; a time-out of the prescaler update
+     * that follows does not stop it. */
+    memset(&hiwdg_, 0, sizeof(hiwdg_));
+    hiwdg_.Instance = IWDG;
+    hiwdg_.Init.Prescaler = IWDG_PRESCALER_256;
+    hiwdg_.Init.Reload = GLH_IWDG_RELOAD;
+    hiwdg_.Init.Window = IWDG_WINDOW_DISABLE;
+    hiwdg_.Init.EWI = 0;
+    if (HAL_IWDG_Init(&hiwdg_) != HAL_OK && first == GL_OK) {
+        first = GL_ERR_IO;
     }
     reset_flags_ = read_reset_flags_();
+    /* 2. clocks */
     st = clocks_init_();
     if (st != GL_OK) {
-        return st;
+        /* not even the internal oscillators: stay on the clock there is */
+        SystemCoreClockUpdate();
+        sysclk_hz_ = (SystemCoreClock >= 1000000u) ? SystemCoreClock : 1000000u;
+        if (first == GL_OK) {
+            first = st;
+        }
+    } else if (!lse_ok_ && first == GL_OK) {
+        first = GL_ERR_TIMEOUT; /* running on LSI: degraded, reported */
     }
-    /* Instruction cache: the vision code is several million instructions
+    (void)HAL_IWDG_Refresh(&hiwdg_); /* the crystal's time-out is 5 s of the 32 */
+    /* 3. Instruction cache: the vision code is several million instructions
      * per strip; without the cache every flash access pays the wait states.
      * (1-way mode is the reset default; from memory.) */
     (void)HAL_ICACHE_Enable();
@@ -1686,22 +1788,16 @@ gl_status_t gl_hal_init(void)
 
     irq_enabled_ = 0;
     irq_pending_ = 0;
+    /* the tick does not depend on the RTC: both are attempted */
     st = rtc_init_();
-    if (st == GL_OK) {
-        st = tick_init_();
+    if (st != GL_OK && first == GL_OK) {
+        first = st;
     }
-    /* independent watchdog, about 32 s; it keeps running in Stop mode, so
-     * the application wakes every 16 s to refresh it */
-    memset(&hiwdg_, 0, sizeof(hiwdg_));
-    hiwdg_.Instance = IWDG;
-    hiwdg_.Init.Prescaler = IWDG_PRESCALER_256;
-    hiwdg_.Init.Reload = GLH_IWDG_RELOAD;
-    hiwdg_.Init.Window = IWDG_WINDOW_DISABLE;
-    hiwdg_.Init.EWI = 0;
-    if (HAL_IWDG_Init(&hiwdg_) != HAL_OK && st == GL_OK) {
-        st = GL_ERR_IO;
+    st = tick_init_();
+    if (st != GL_OK && first == GL_OK) {
+        first = st;
     }
-    return st;
+    return first;
 }
 
 uint32_t gl_hal_reset_reason(void)

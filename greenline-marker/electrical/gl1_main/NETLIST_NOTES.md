@@ -1,58 +1,154 @@
 # GL-1 main board - netlist notes
 
-Stage: **netlist, no copper**. Nothing has been built, nothing is routed, KiCad DRC has not
-been run (there is no board file yet). The part positions in `gl1_main_design.py` are a
-nominal, legal placement that exists only because the toolchain's checks need one; the layout
-step owns them.
+Stage: **netlist, no copper**. Nothing has been built and nothing is routed. KiCad's DRC has
+seen only the board WITHOUT tracks (stage `unrouted`: land patterns, courtyards, keep-outs,
+edge distances; 0 errors, every connection still open): that is not the DRC of a routed board.
+The part positions in `gl1_main_design.py` are a nominal, legal placement that exists only
+because the checks need one; the layout step owns them.
+
+The netlist implements DESIGN_SPEC rev D **with the amendments E1 to E16**. The ones that
+change the netlist: E1 (charger TI BQ25101 with a hardware thermistor input; the MCP73831, its
+PROG MOSFET and its gate divider are gone), E2 (two cell thermistors, Murata NCU15XH103F60RC),
+E3 (named LED parts), E4 (four top-side test points), and the stated order of the seven
+underside pads. E6 is the cradle board (`../gl1_cradle/CRADLE_NOTES.md`).
+
+This is the netlist **after two independent reviews** (circuit, and conformance with the
+specification and the mechanical model). Section 10 lists what changed and what the reviews
+found that the netlist cannot settle: one mechanical contract that is not met (J1, section
+5.1), one workaround for another package's check (section 5.2), and three things only the
+specification's owner can change (charger input headroom, VDDUSB before VDD with a dead cell,
+the series diode; section 8).
 
 Evidence levels used below, in the design file and in the BOM status column:
 
 - **RESEARCH** - seen in `docs/research/*.md` with status "confirmed". Not the manufacturer's datasheet.
 - **PINDATA** - read from ST's open pin data (`STM32U585RITx.xml`, `GPIO-STM32U5x_gpio_v1_0_Modes.xml`), re-checked by `check_pinmap.py` on every run.
-- **PROVISIONAL** - engineering memory or an unconfirmed extract. No datasheet was read for this work. Every number marked PROVISIONAL must be checked against the datasheet before boards are ordered.
+- **PROVISIONAL** - engineering memory or a web-search extract. No datasheet was read for this work. Every number marked PROVISIONAL must be checked against the datasheet before boards are ordered.
 
 ## 1. What is here and how to run it
 
 | File | What it is |
 |---|---|
 | `gl1_main_design.py` | the netlist as code: parts, nets, net classes, footprints, pin map, mechanical contract (read from `design/master_params.yaml`), nominal placement |
-| `check_pinmap.py` | proof of the pin map against ST's open pin data; exports `pinmap.json`; `--selftest` seeds 11 defects and requires each to be caught |
-| `pinmap.json` | the final pin map (signal, port pin, pad, mode, AF, pull, initial state, source, reason) |
-| `check_netlist_rules.py` | DESIGN_SPEC section 4, rule by rule, tested against the netlist (48 rows) |
-| `netlist_stage.py`, `build_netlist.py` | runner: toolchain checks, rule table, pin map, schematic with netlist round trip, exports |
-| `netlist_out/` | results of the last run: `checks.txt`, `spec_rules.md`, `pinmap_check.txt`, schematic sheets + PDF, `gl1_main-netlist.json`, `gl1_main-bom-status.csv`, `gl1_main-nominal-mechanical.json`, `netlist_summary.json` |
+| `check_pinmap.py` | proof of the pin map against ST's open pin data; exports `pinmap.json`; `--selftest` seeds 20 defects and requires each to be caught |
+| `pinmap.json` | the final pin map (signal, port pin, pad, mode, AF, pull, initial state, source, reason), with the verification result and the notes for the firmware |
+| `check_netlist_rules.py` | DESIGN_SPEC section 4, rule by rule, tested against the netlist, and the pin tables of the library-backed parts against the installed KiCad symbols; `--selftest` seeds 37 defects |
+| `netlist_stage.py`, `build_netlist.py` | runner: toolchain checks, rule table, pin map, schematic with netlist round trip, KiCad DRC of the board without tracks, exports |
+| `update_notes.py` | fills the generated tables of this file from the design (`--check` fails if one is stale) |
+| `netlist_out/` | results of the last run: `checks.txt`, `spec_rules.md`, `pinmap_check.txt`, schematic sheets + PDF, `unrouted/` (board file without tracks and `drc.json`), `gl1_main-netlist.json`, `gl1_main-bom-status.csv`, `gl1_main-nominal-mechanical.json`, `netlist_summary.json` |
 
 Run from `greenline-marker/` (the pin data directory is outside the repository; see `check_pinmap.py`):
 
     /usr/bin/python3 -B electrical/gl1_main/build_netlist.py --pindata <dir with the two ST files>
 
-Exit status 0 only if every stage passed. Without `--pindata` the pin map is checked against
-the installed KiCad symbol only and the result is reported as PARTIAL.
+Exit status 0 only if no stage failed. Without `--pindata` the pin map is checked against
+the installed KiCad symbol only and the result is reported as PARTIAL. Exit status 0 does
+**not** mean that nothing is open: the closing lines of the run and `netlist_summary.json`
+(`open_items`, `rules.open_not_met`, `rules.workarounds`, `rules.departures`) name the rows
+that are not a plain pass.
 
-Last run: 117 parts (105 on the BOM in 37 lines, 6 bare-copper parts: BT1, BT2, J2, FL1-FL3,
-6 fiducials), 96 nets, 393 pads on nets, 17 unconnected pins (5 unused balls per camera, the
-spare element of RN3 and RN6, U8 pin 4, U4 pins 10 and 11). Toolchain checks: 0 errors,
-0 warnings, nothing switched off. Spec rules: 48 of 48. Pin map: 195 checks passed, 0 failed,
-self-test 11 of 11. Schematic: 8 sheets, netlist round trip through kicad-cli equal to the
-model (96 nets, 393 pads, 108 components).
+Content of the netlist:
+
+<!-- BEGIN GENERATED: SUMMARY -->
+120 parts: 104 on the BOM (103 fitted, 1 not fitted), 10 bare-copper footprints (BT1, BT2, FL1, FL2, FL3, J2, TP1, TP2, TP3, TP4), 6 fiducials; 95 nets
+<!-- END GENERATED: SUMMARY -->
+
+17 pins are unconnected on purpose: 5 unused balls per camera, the spare element of RN3 and
+RN6 (two pins each), U8 pin 4, U4 pins 10 and 11.
 
 ## 2. Specification rule -> where it is in the netlist
 
-One row per statement of DESIGN_SPEC section 4 (rail table, the seventeen bullets numbered in
-the order they appear, the PCB paragraph). The table is generated by `check_netlist_rules.py`
-from the netlist; every row is a test that ran. Rule 8 (the pin map) is section 3.
+One row per statement of DESIGN_SPEC section 4 (rail table, the rules in the order they
+appear, the PCB paragraph). The table is generated by `check_netlist_rules.py` from the
+netlist; every row is a test that ran. The pin-map rule ("the netlist may change proposed
+pins; the netlist then wins and exports the final map") is section 3.
 
-<!-- RULES_TABLE -->
+A row has one of five results. **pass**: implemented as written. **departure**: the test
+passes, but the sentence is implemented differently from its letter (section 5). **open**: a
+contract that is NOT met and cannot be met inside this package; the row measures it
+(section 5.1). **workaround**: something done to get past a gap in another package (section
+5.2). **FAIL**: the netlist is not what the row describes. Only FAIL makes the run exit 1.
 
-Rule 8, "the netlist may change proposed pins for routing; the netlist then wins and exports
-the final map": `PINMAP` in `gl1_main_design.py`, exported to `pinmap.json`, proven by
-`check_pinmap.py` (section 3).
+<!-- BEGIN GENERATED: RULE_COUNTS -->
+**66 rows: 58 as specified; 6 departures from the letter of the spec (section 5): rail VDDUSB, cam 2d, grain c, grain d, E1 b, PCB c; 1 open - NOT met (section 5.1): PCB k2; 1 workaround (section 5.2): bare copper; 0 failed.**
+<!-- END GENERATED: RULE_COUNTS -->
 
-Parts of the rules that are firmware or process matters and cannot be seen in a netlist:
-camera-facing pins low or analog while V2V8_CAM is off (rule 1), one camera driving at a time
-(rule 2), 12 MHz on MCO (rule 3), HSI48 with clock recovery (rule 5), 32768 / 547 for EXTCOMIN
-(rule 6), the thermal adhesive on the NTC (rule 12), ENIG (the toolchain's stack-up default,
-written by the fabrication outputs of the layout step).
+<!-- BEGIN GENERATED: RULES -->
+| Rule | What DESIGN_SPEC section 4 says | Where it is in the netlist | Result |
+|---|---|---|---|
+| rail VBUS a | VBUS: cradle pad, 5 V; USBLC6-2SC6 clamps VBUS, D+, D- | net VBUS = J2.VBUS (pad 1), U10.VBUS, D17.A, C28, R15; USB_DM / USB_DP through U10 pins 1+6 / 3+4 *(ADDED: C28 100 nF at the VBUS pin of U10)* | pass |
+| rail VBUS b | Series Schottky from pad to charger; E6: a 30 V 0.5 A SOD-323 class part (Diodes B0530WS-7-F) | D17 (B0530WS-7-F, SOD-323): anode VBUS, cathode VBUS_D; U9.IN on VBUS_D | pass |
+| rail VBUS c | VBUS loads: BQ25101 IN, VBUS-sense divider | R15 / R16 (100k : 100k) from VBUS (the pad net) to VBUS_SENSE (PC13, WKUP2); U9.IN behind the Schottky: net VBUS_D = D17.K, U9.IN, C26, U11.VIN, C22 *(the divider values are this netlist's choice (the spec gives none))* | pass |
+| rail VBAT a | VBAT: cell + PCM; loads MCP1700-2.8 in, LP5907 in, battery divider | net VBAT = BT1, U9.OUT, U7.VIN, U8.IN, R17, C20, C24, C27, TP1 | pass |
+| rail VBAT b | 2 x 1 Mohm divider with 100 nF to an ADC pin | R17 / R18 1M, C29 100n on VBAT_SENSE = PA2 (ADC1_IN7) | pass |
+| rail VBAT c | The grain LEDs are driven from MCU pins on the 2.8 V rail, not from VBAT | every LED pin is on CP0..CP4; each CPn reaches only its 68 ohm resistor and LEDs | pass |
+| rail V2V8 a | V2V8 from MCP1700T-2802E/TT; 1 uF in, 1 uF out ceramic | U7: VIN VBAT (C20 1u), VOUT V2V8 (C21 1u) | pass |
+| rail V2V8 b | Loads: MCU VDD / VDDA / VBAT pin, IMU, LCD VDD / VDDA, flash | U1 pads 19, 32, 64, 1; VDDA through R1; U4.VDD, U4.VDDIO; J1.VDD, J1.VDDA; U6.VCC *(ADDED: C13 (flash), C30 / C31 (IMU) 100 nF, C32 1 uF at J1)* | pass |
+| rail V2V8 c | 100 nF per MCU supply pin plus 4.7 uF bulk | C1, C2, C3 (VDD), C4 (VBAT), C9 (VDDUSB) 100n; C5 4u7 on V2V8; C6 4u7 on VCAP *(ADDED: C6 on VCAP - not in the spec, needed by the internal regulator; value PROVISIONAL)* | pass |
+| rail V2V8 d | VDDA through 10 ohm with 1 uF + 10 nF | R1 10R from V2V8 to VDDA; C7 1u, C8 10n; U1.VDDA pad 13, VSSA to GND | pass |
+| rail VDDUSB | MCP1700T-3302E/TT fed from VBUS (after the Schottky); MCU VDDUSB pin only; 1 uF in, 1 uF out | U11: VIN VBUS_D (C22 2u2), VOUT VDDUSB (C23 2u2); net VDDUSB = U1 pad 48, U11.VOUT, C9, C23 *(DEVIATION: 2.2 uF nominal where the spec says 1 uF, so that about 1 uF is left under the DC bias of 5 V / 3.3 V (PROVISIONAL: no bias curve read). U11 has no enable: VDDUSB rises before VDD when a marker with a cell at its cut-off is docked - spec-inherited, NETLIST_NOTES section 8)* | **departure** |
+| rail V2V8_CAM a | LP5907MFX-2.8/NOPB, EN from MCU with 100k pull-down; 1 uF in, 1 uF out | U8: IN VBAT (C24), OUT V2V8_CAM (C25), EN = CAM_EN (PH0) with R10 100k to GND | pass |
+| rail V2V8_CAM b | Loads: both camera AVDD and DOVDD; camera DVDD pin: 1 uF to ground each | U2 / U3 AVDD, DOVDD on V2V8_CAM; C16, C19 1u on CAM_L_DVDD / CAM_R_DVDD *(ADDED: C14, C15, C17, C18 100 nF at the AVDD / DOVDD balls)* | pass |
+| cam 1 | SCCB pull-ups (2.2 kohm) go to V2V8_CAM, not V2V8 | R6 (CAM_SCL_L), R7 (CAM_SCL_R), R8 (CAM_SDA) to V2V8_CAM *('driven low or analog while the rail is off' is a firmware rule; every camera-facing pin is a GPIO or a DCMI / MCO pin that can be set analog)* | pass |
+| cam 2a | The two cameras share the 8 data lines, PCLK, HREF and VSYNC; every camera output joins the shared bus through a 220 ohm series resistor placed at that camera (three 4-element 0402-in-0804 arrays per camera, Panasonic EXB-28V221JX) | RN1-RN3 at U2, RN4-RN6 at U3: camera pin - A side, bus (CAM_D0..7, CAM_PCLK, CAM_HREF, CAM_VSYNC) - B side, element by element as in the table CAM_ARRAY_MAP (free for the layout step); the 12th element of each camera is unconnected; nominal placement: every array within 1.4 mm of its camera body | pass |
+| cam 2b | Each camera has its own SCCB clock line and its own PWDN line; SCCB data is shared | CAM_SCL_L (PC3) - U2.SIOC, CAM_SCL_R (PC0) - U3.SIOC, CAM_SDA (PC1) - both SIOD | pass |
+| cam 2c | XVCLK has a 33 ohm series resistor at the MCU | R9 33R between MCO (PA8) and CAM_XVCLK (both XVCLK balls) *(nominal placement: R9 is 7.6 mm from pad 41; nothing fits between the MCU and the battery, the layout step moves it as close as it can)* | pass |
+| cam 2d | Each PWDN line has a 1 kohm series resistor and must not use PA9, PA2 or PC10 | R4 1k: PC2 - U2.PWDN; R5 1k: PH3 - U3.PWDN *(DEVIATION: the right camera's PWDN shares the BOOT0 pad (R2 10k to ground is on its MCU side))* | **departure** |
+| cam 3 | XVCLK comes from the MCU MCO pin (PA8) | net MCO on U1 pad 41 (RCC_MCO, AF0) *(12 MHz is a firmware setting)* | pass |
+| cam 4 | DCMI pin assignment on LQFP-64; SPI1 MISO for the flash must be PB4 | PINMAP rows marked SPEC; check_pinmap.py section E parses the spec text | pass |
+| usb | USB: PA11 = D-, PA12 = D+, crystal-less; VDDUSB from its own 3.3 V regulator | USB_DM / USB_DP to J2 pads 2 / 3 through U10; no high-speed crystal in the netlist; U11 | pass |
+| lcd a | LCD: SPI clock and data plus an active-high chip select; DISP on a GPIO with pull-down; EXTCOMIN from LPTIM1 or LPTIM3, for example LPTIM1_CH1 on PB2; EXTMODE tied high | J1: SCLK SPI1_SCK (PB3), SI SPI1_MOSI (PB5), SCS LCD_SCS (PB10), EXTCOMIN PB2, DISP LCD_DISP (PB12), VDD / VDDA / EXTMODE V2V8, VSS / VSSA GND | pass |
+| lcd b | J1 is a TOP-contact connector (Hirose FH12A-10S-0.5SH(55), 2.0 mm high, on the FH12 land pattern); pin order 1 SCLK 2 SI 3 SCS 4 EXTCOMIN 5 DISP 6 VDDA 7 VDD 8 EXTMODE 9 VSS 10 VSSA | J1 FH12A-10S-0.5SH(55) on the KiCad FH12-10S land pattern, 2.0 mm; LCD_TAIL (tail pin -> function) is that order; every function is on exactly one pad *(the spec's pin order is the order on the TAIL (PROVISIONAL there); which pad a tail pin meets is row lcd c)* | pass |
+| lcd c | the LCD tail makes one U-fold under the glass, which turns its contacts upward. Which end of the tail is pin 1 is PROVISIONAL and must be read from the Sharp drawing: a wrong guess mirrors all ten pins | LCD_TAIL_PIN1_EDGE = 'left' (seen from the front, tail up; source: inference from public designs (docs/research/bom-verification-opto.md 3.1)), rear exit, 1 fold about x: tail pin 1 enters J1 at +x; measured on the placed J1: mouth toward -y, pad 1 at x = -2.25, pad 10 at +2.25 - tail pin n is on pad 11 - n (SCLK pad 10 at x = +2.25, VSSA pad 1) *(PROVISIONAL (release gate B16): the pin-1 edge is an inference from public designs (research), not the Sharp drawing; the row proves that the pad table follows from it and that the edge is the one the stated source gives, not that it is right)* | pass |
+| imu | IMU on its own SPI bus; INT1 (latched) to a wake-capable pin, INT2 to a second GPIO | SPI2_SCK / MOSI / MISO (PB13 / PB15 / PB14) and IMU_CS (PB1) connect U1 and U4 only; INT1 PA7 (WKUP8), INT2 PA5 *(that PA7 is a wake-up pin is proven by check_pinmap.py)* | pass |
+| flash | (section 3) SPI NOR flash on SPI1 with the LCD; MISO on PB4 | U6 MX25R6435F: CS PA10, SO PB4, SI PB5, SCLK PB3; WP# and HOLD# tied to V2V8 | pass |
+| clocks | No high-speed crystal | PH0 / PH1 are GPIO (CAM_PWR_EN, CHG_INHIBIT); the only crystal is Y1 | pass |
+| grain a | 16 LEDs charlieplexed on 5 MCU pins with one series resistor per pin (5 x 68 ohm), red and NIR LED of each pair antiparallel where possible | R23-R27 68R on PA9, PB0, PC12, PD2, PC10; D1-D16: 8 antiparallel red / NIR pairs on 8 of the 10 line pairs (GRAIN_PAIRS = the firmware's table) | pass |
+| grain b | Parts (E3): red Vishay VLMS1500-GS08 (0402); near-infrared ams OSRAM SFH 4053B (0402), alternative Inolux IN-S42CTQIR | D1, D3, ... D15: VLMS1500-GS08; D2, D4, ... D16: SFH 4053B (the alternative is named in the part description) | pass |
+| grain c | (YAML) eight LED pairs on a 5.2 mm radius about (0, -4), first at 22.5 degrees, 45 degrees apart, on the underside; red anode on the lower line (firmware table) | D(2k+1) red, D(2k+2) NIR at azimuth 22.5 + 45 k, 0.5 mm either side of the ring point; measured on the pads: inner pad = lower line, outer pad = higher line for all 16 *(DEVIATION: 1.00 mm between the two LEDs of a pair (mechanical model 0.90): two KiCad 0402 courtyards need 0.95)* | **departure** |
+| grain d | Photodiode cathode to the op-amp inverting input, 470 kohm + 10 pF feedback, non-inverting input at a mid-rail bias from a 2 x 100 kohm divider with 100 nF | PD1.K, R28 470k, C33 10p on PD_K = PA1 (OPAMP1_VINM); other ends on OPAMP_OUT = PA3; R29 (from LCD_DISP) / R30 100k, C34 100n on VBIAS = PA0 (OPAMP1_VINP); PD1.A to GND *(DEVIATION: the spec names neither the anode net nor the rail of the divider: anode to GND, divider fed from the LCD_DISP line so that it draws nothing asleep. ADDED: R31 150k from PA3 to V2V8 (PA3 is the ROM's USART2_RX))* | **departure** |
+| E1 a | Charger: TI BQ25101YFP (4.20 V, DSBGA-6, 0.4 mm ball pitch, all six balls on the perimeter); the ball map is PROVISIONAL and is kept in one marked table | U9 BQ25101YFPR on a generated 2 x 3 land pattern, 0.4 mm pitch; every pin of U9 comes from the table BQ25101_BALLS (OUT A1, IN A2, TS B1, ISET B2, CHG C1, VSS C2) | pass |
+| E1 b | IN from VBUS after the Schottky with 1 uF; OUT to the cell with 1 uF | U9.IN on VBUS_D with C26 2u2; U9.OUT on VBAT (BT1) with C27 2u2; U9.VSS to GND *(DEVIATION: 2.2 uF nominal where the spec says 1 uF (DC bias, see rail VDDUSB; PROVISIONAL). The charger's input has NEGATIVE headroom at the low end of a compliant USB source if its minimum operating input is 4.45 V (research, unverified) - spec-inherited, NETLIST_NOTES 4.1)* | **departure** |
+| E1 c | ISET resistor 6.81 kohm 1 % to ground (K = 135 A-ohm, so 19.8 mA) | R11 6k81 from CHG_ISET (U9.ISET) to GND: 135 / 6810 = 19.82 mA | pass |
+| E1 d | TS to a 10 kohm NTC at the cell | RT1 from CHG_TS (U9.TS) to GND; the only other thing on CHG_TS is the drain of Q1 | pass |
+| E1 e | CHG (open drain, low while charging) to an MCU input with a 100 kohm pull-up to V2V8 | CHG_STAT = U9.CHG, PA15, R13 100k to V2V8 (and the unfitted R14) | pass |
+| E1 f | Firmware stop: CHG_INHIBIT is an MCU push-pull output to the gate of a small N-MOSFET (for example onsemi BSS138, gate pulled down with 100 kohm) that pulls TS to ground | Q1 BSS138: gate CHG_INHIBIT (PH1) with R12 100k to GND, drain CHG_TS, source GND | pass |
+| E1 g | Fallback on the same footprint: BQ25100YFP ... the board carries an unpopulated resistor position from that ball to ground for it | R14 (0402, NOT FITTED) from CHG_STAT (ball C1) to GND *(value 6k04 (10 % termination, 20 % pre-charge) is PROVISIONAL; with the BQ25100 fitted R13 must be left out)* | pass |
+| E1 h | (E1) the MCP73831, its PROG MOSFET circuit and its gate divider are gone | no MCP73831, no 1N4148 on the status line, no net CHG_PROG*, no part on VBUS_D but the charger, the VDDUSB regulator and their capacitors | pass |
+| E2 a | Two 10 kohm NTCs (Murata NCU15XH103F60RC, 0402, B 3380 K) on the top side within 1 mm of the cell edge | RT1, RT2: NCU15XH103F60RC, top side; nominal placement RT1 0.23 mm, RT2 0.33 mm from the cell body *(the dab of thermal adhesive is an assembly step)* | pass |
+| E2 b | NTC1 goes from the charger TS ball to ground and belongs to the charger alone | RT1: CHG_TS - GND; no MCU pin on CHG_TS | pass |
+| E2 c | NTC2 is the MCU's: divider with 10.0 kohm 1 % from a GPIO (NTC_BIAS, driven only while measuring) to an ADC pin (NTC_SENSE) | R19 10k: NTC_BIAS (PC5) - NTC_SENSE (PC4, ADC1_IN13); RT2: NTC_SENSE - GND; nothing else on either net | pass |
+| reset | 100 kohm pull-down on the LCD chip select and on DISP; 100 kohm pull-ups to V2V8 on the flash and IMU chip selects | R21 (LCD_SCS), R22 (LCD_DISP) to GND; R3 (FLASH_CS), R20 (IMU_CS) to V2V8 *(LCD_DISP also carries the top of the grain bias divider (R29 + R30 = 200k more to ground))* | pass |
+| crystal | 32.768 kHz crystal on PC14 / PC15: Abracon ABS07-120-32.768KHZ-T with load capacitors sized for 6 pF | Y1 between OSC32_IN (PC14) and OSC32_OUT (PC15); C11, C12 6p8 to GND | pass |
+| boot nrst | BOOT0 (PH3) pulled down with 10 kohm; NRST with 100 nF | R2 10k from PH3 (net CAM_R_PWDN_MCU) to GND; C10 100n on NRST | pass |
+| pads | Test and service pads on the underside: VBUS, D-, D+, GND, SWDIO, SWCLK, NRST, in that order from x = -7.62 to +7.62 mm seen from above | J2 (bottom side): pad positions measured on the placed footprint, x = [-7.62, -5.08, -2.54, 0.0, 2.54, 5.08, 7.62], y = -17.0; nets left to right ['VBUS', 'USB_DM', 'USB_DP', 'GND', 'SWDIO', 'SWCLK', 'NRST'] *(seen from below with the visor away, VBUS is on the right: the same statement mirrored)* | pass |
+| E4 | Test points on the top side (E4), 1.0 mm bare round pads reachable by spring probes before the unit is closed: VBAT, V2V8, V2V8_CAM, GND | TP1 VBAT, TP2 V2V8, TP3 V2V8_CAM, TP4 GND: round dia 1.0 pads on F.Cu, mask open, no paste *(board test powers the board through BT1 / BT2 (the cell-lead pads))* | pass |
+| imu area | No copper pours or vias under the IMU body on the top layer; keep it away from the charger and regulators | rule area under_U4 on F.Cu (tracks, vias, pours); nominal placement: U4 to U9 14.3 mm, to U8 2.9, to U7 22.0, to U11 25.9 mm *('away' has no number in the spec: the test uses this file's own floor of 2.5 mm between bodies (the YAML's nominal part list has 2.85 mm between U4 and U8); the layout step owns the distances)* | pass |
+| PCB a | 4 layers, 0.8 mm, D-shaped outline (radius 21.1 mm, flat at y = 17.3 mm) | Design: layers 4, thickness 0.8, PathShape.d_shape from the YAML *(ENIG is the toolchain's stack-up default, written by the fabrication outputs of the layout step)* | pass |
+| PCB b | two non-plated locating holes at (14.35, 10.8) and (-14.35, 10.8, a 1.15 x 2.2 mm slot along x) | outline hole H1 dia 1.15 and NPTH slot | pass |
+| PCB c | through vias only, 0.25 mm drill, default 0.15 mm tracks with 0.127 mm clearance, and a fine net class of 0.10 mm track / 0.10 mm clearance used only to escape the camera BGAs; E7: fabricator acceptance of 0.100 mm is a release gate | rules GL1_4L_0.10mm; classes Default 0.15 / 0.127, Fine 0.10 / 0.10 and CamPower 0.15 / 0.10 (31 nets, each with a camera ball), fine areas round U2 and U3; fab note on E7 *(DEVIATION: CamPower (0.15 / 0.10) is a second class with the fine clearance for the camera supply balls, confined to the same areas)* | **departure** |
+| PCB d | provisional 5 x 5 footprint, 0.5 mm pitch, 0.20 mm pads | camera_footprint(): 25 round pads 0.20 mm on 0.5 mm, pad clearance 0.10 (OVM7692_BALLS) | pass |
+| PCB e | Vias tented and plugged on the underside, and no via at all inside the grain opening or the pad slot | via_tenting 'bottom', via_protection text; rule areas grain_opening_no_via, pad_slot_no_via | pass |
+| PCB f | Layer 2 solid ground | plane GND on In1.Cu (whole board, not routable) *(In2.Cu: V2V8 plane that is also a routing layer - the layout step may change this)* | pass |
+| PCB g | no part taller than 2.55 mm anywhere (cameras excepted), six 1.6 mm and two 2.2 mm post-foot keep-outs, nothing taller than 0.95 mm under each camera hood except the camera, nothing taller than 0.7 mm under the LCD flex tail behind the connector | 8 placement keep-outs post_foot_*; height limits free_height, camera_hood_U2 / U3, lcd_tail | pass |
+| PCB h | no soldered part above a ball foot or within 0.3 mm of its zone; under each ball foot the bottom side has a 2.5 mm circle with no via and no track and an unmasked 1.6 mm copper land | foot_zone_n_top (placement, dia 2.5 + 2 x 0.3), foot_zone_n (B.Cu: no track, no via, no pour), FL1-FL3: bare dia 1.6 pads WITHOUT a net (mask open, no paste) | pass |
+| PCB i | Two solder pads for the cell leads sit in the strip beyond the protection-board end of the cell | BT1 (+, VBAT), BT2 (-, GND): 1.5 x 2.4 pads inside battery.pads.zone | pass |
+| PCB j | Parts on the top side except the grain LEDs, photodiode and contact pads | bottom side: D1-D16, PD1 (fitted), J2, FL1-FL3, three fiducials (bare copper) | pass |
+| PCB k | The cameras, the LCD connector and the battery are fixed mechanical interfaces | U2, U3: body boxes equal the YAML boxes; battery_body placement keep-out from the YAML; J1: the footprint ANCHOR is on the YAML point (its body is row PCB k2) | pass |
+| PCB k2 | (YAML top_side_parts J1, fixed; tub_keepouts.lcd_tail) the mechanical model has J1 as a box 8.4 x 5.8 CENTRED on (0.0, -13.9): mouth at y = -16.8, where the LCD-tail keep-out (y -18.3 to -16.8, parts to 0.7 mm) ends | measured on the placed land pattern: body y -18.30 to -12.70 (the model: -16.80 to -11.00), rear face 1.50 mm behind the modelled mouth, 9.75 mm2 of the 2.0 mm body inside the tail keep-out; signal pads y -12.70 to -11.40, courtyard to -10.90, cell edge -10.20. The land pattern needs 6.90 mm from its rear face to the pad ends; the YAML leaves 6.60 mm between the mouth and the cell *(OPEN: NOT MET and not meetable with this land pattern: with the rear face on the YAML mouth the signal pads would end 0.30 mm inside the cell. The anchor stays on the YAML point (the only comparison mechanical/cad/board_import.py makes, and it passes); the LCD cannot be plugged in as modelled. Needs the YAML / mechanical owner (NETLIST_NOTES 5.1))* | **open** |
+| PCB l | (YAML pcb.component_edge_clearance) part bodies stay 0.2 mm inside the board edge | smallest distance from a part body to the board edge: 0.225 mm (U2), then 0.225 mm (U3) | pass |
+| pin tables | (task) the pin -> pad table of every library-backed part agrees with a second source | U7, U11, U8, U10, Q1, U6, U4 against the installed KiCad symbols (pad numbers, pin names, footprint); D17, D1-D16 against KiCad's pad 1 = cathode; RN1-RN6 against element n = pads n and 9 - n: all agree *(U6 is compared with the MX25R3235F of the same family and package, U4 with the LSM6DSM (spec: pin-compatible); U1 is proven by check_pinmap.py; U2 / U3, U9, PD1 and J1 have no second source: their tables are the PROVISIONAL ones)* | pass |
+| bare copper | (mechanical/cad/board_import.py, check D) every fitted bottom-side component lies inside the grain opening or the pad slot | marked 'not fitted' and therefore NOT tested by that check: FID4, FID5, FID6, FL1, FL2, FL3 - each one a board-only footprint with one netless pad, zero height, no pins; no other part without a BOM line carries the mark *(WORKAROUND: the three ball-foot lands (which the spec puts outside both openings) and the three bottom fiducials are bare copper; listed as fitted they fail that check with six rows. The mark changes no copper, BOM line, position row or assembly text (NETLIST_NOTES 5.2))* | **workaround** |
+| fiducials | (task) at least three global fiducials per side | FID1-FID3 top, FID4-FID6 bottom | pass |
+| E5 | Assembly (E5): lead-free (SAC305) reflow, RoHS-compliant parts; no conformal coating | fab note; no leaded part is named in the BOM | pass |
+| status | (task) every BOM part carries an evidence status | Part.fields['Status'] is RESEARCH or PROVISIONAL on all 104 BOM parts | pass |
+<!-- END GENERATED: RULES -->
+
+Parts of the rules that are firmware, test or process matters and cannot be seen in a netlist:
+camera-facing pins low or analog while V2V8_CAM is off, one camera driving at a time, 12 MHz
+on MCO, HSI48 with clock recovery, 32768 / 547 for EXTCOMIN, the thermal adhesive on the two
+NTCs, the board-test limits of E14 (2.8 V +-3 %, 3.3 V +-3 %, sleep current no more than
+25 uA at 3.8 V through the cell-lead pads), ENIG.
 
 ## 3. Pin map
 
@@ -62,207 +158,408 @@ written by the fabrication outputs of the layout step).
 |---|---|---|
 | A | the 64 pads of U1: pad number and pin name equal the package | PINDATA |
 | B | every row: the pad, and the alternate function with its AF number or the analog function exists on that pin | PINDATA |
-| C | IMU_INT1 is on a wake-up pin (PC5 = WKUP5); EXTI lines used once each; ADC channels exist (PA2 IN7, PC4 IN13, PA3 IN8); OPAMP1 pins are PA0 / PA1 / PA3 and are the only pads with those functions | PINDATA |
-| D | no pin used twice (52 rows on 51 pads: PH3 is the declared BOOT0 + CAM_PWR_EN pair); no I/O pad connected without a row; the 13 supply and reset pads are on their nets | netlist |
-| E | the 16 assignments fixed by the spec text (parsed from DESIGN_SPEC.md) are unchanged; PWDN not on PA9 / PA2 / PC10 and through 1 kohm; XVCLK through 33 ohm; SCCB pull-ups to V2V8_CAM | spec + netlist |
+| C | IMU_INT1 (PA7, WKUP8) and VBUS_SENSE (PC13, WKUP2) are wake-up pins on different wake-up lines; EXTI lines used once each (5, 7, 13, 15); ADC channels exist (PA2 IN7, PC4 IN13, PA3 IN8); OPAMP1 pins are PA0 / PA1 / PA3 and are the only pads with those functions | PINDATA |
+| D | no pin used twice (52 rows on 51 pads: PH3 is the declared BOOT0 + CAM_R_PWDN pair); no I/O pad connected without a row; the 13 supply and reset pads are on their nets | netlist |
+| E | the 16 assignments fixed by the spec text (parsed from DESIGN_SPEC.md) are unchanged; PWDN not on PA9 / PA2 / PC10 and through 1 kohm; XVCLK through 33 ohm; SCCB pull-ups to V2V8_CAM; the BOOT0 pad has 10 kohm to ground, no path to another rail and no output on its net | spec + netlist |
 | F | difference to `firmware/hal/stm32u5/gl_pins.h`; every change has a reason | header |
-| G | every pin the ROM bootloader drives or listens on: what is connected and why it does not react badly | **PROVISIONAL** pin list (memory of ST AN2606, not readable here); each function's existence on its pin is PINDATA |
+| G | every pin the ROM bootloader drives or listens on: what is connected and why it does not react badly; CAM_PWR_EN and CHG_INHIBIT are on no bootloader pin | **PROVISIONAL** pin list (memory of ST AN2606, not readable here; a web-search extract of a third-party copy agrees for USART1-3, I2C1-3, SPI1, FDCAN1); each function's existence on its pin is PINDATA |
 | H | second source: the installed KiCad symbol agrees | KiCad library |
+| I | the two UCPD1 CC pads (PA15, PB15) and their dead-battery control pads (PB5, PB14), found in the pin data, carry only signals from an allow-list with a stated reason: an input, or an alternate-function output into CMOS inputs; never an LED line or a signal that switches power. The pad with USB_OTG_FS_VBUS (PA9) is named in the notes for the firmware | which pads: PINDATA; what they do: **PROVISIONAL** (section 3.6) |
 
-All 51 I/O pads carry a signal. **There is no spare MCU pin.**
+All 51 I/O pads carry a signal. **There is no spare MCU pin**: 51 signals and the BOOT0 strap
+share 51 pads, so one signal has to sit on the BOOT0 pad (3.4).
 
 ### 3.2 The map
 
 U1 is assumed at rotation 270 deg (pads 1-16 on the edge that faces the cameras, 17-32 on the
-left, 33-48 toward the battery, 49-64 on the right); the proposed pins were chosen for that
-orientation. "Pull" is internal / external.
+left, 33-48 toward the battery, 49-64 on the right): the orientation of the toolchain demo and
+of the YAML's nominal part list. The proposed pins were chosen for that orientation: camera
+control on pads 5, 8-11 and 60, IMU on 21, 23, 27 and 34-36, flash on 43 and 55-57, LCD on
+28, 29, 33, grain LEDs on 26, 42, 51, 53 and 54, the charger on 6 and 50, the NTC on 24 and 25. "Pull" is internal / external.
 
-<!-- PIN_TABLE -->
+<!-- BEGIN GENERATED: PIN_TABLE -->
+| Pad | Pin | Signal | Net | Mode | Function | Pull (MCU / board) | Initial state | Source |
+|---|---|---|---|---|---|---|---|---|
+| 2 | PC13 | VBUS_SENSE | VBUS_SENSE | EXTI | GPIO (PWR_WKUP2) | none / divider 100k : 100k from VBUS | input | CHANGED (was PA9) |
+| 3 | PC14 | OSC32_IN | OSC32_IN | ANALOG | RCC_OSC32_IN | none | LSE | SPEC |
+| 4 | PC15 | OSC32_OUT | OSC32_OUT | ANALOG | RCC_OSC32_OUT | none | LSE | SPEC |
+| 5 | PH0 | CAM_PWR_EN | CAM_EN | OUT_PP | GPIO | none / 100k to GND | low (rail off) | CHANGED (was PD2) |
+| 6 | PH1 | CHG_INHIBIT | CHG_INHIBIT | OUT_PP | GPIO | none / 100k to GND | analog or low: charger on (its hardware default) | PROPOSED |
+| 8 | PC0 | CAM_R_SCL | CAM_SCL_R | SCCB_OD | GPIO | none / 2k2 to V2V8_CAM | low or analog while V2V8_CAM is off | CHANGED (was PA10) |
+| 9 | PC1 | CAM_SCCB_SDA | CAM_SDA | SCCB_OD | GPIO | none / 2k2 to V2V8_CAM | low or analog while V2V8_CAM is off | CHANGED (was PB5) |
+| 10 | PC2 | CAM_L_PWDN | CAM_L_PWDN_MCU | OUT_PP | GPIO | none / 1k series | low or analog while V2V8_CAM is off | CHANGED (was PH0) |
+| 11 | PC3 | CAM_L_SCL | CAM_SCL_L | SCCB_OD | GPIO | none / 2k2 to V2V8_CAM | low or analog while V2V8_CAM is off | CHANGED (was PB3) |
+| 14 | PA0 | OPAMP_VINP | VBIAS | ANALOG | OPAMP1_VINP | none | analog | SPEC |
+| 15 | PA1 | OPAMP_VINM | PD_K | ANALOG | OPAMP1_VINM | none | analog | SPEC |
+| 16 | PA2 | VBAT_SENSE | VBAT_SENSE | ANALOG | ADC1_IN7 | none | analog | PROPOSED |
+| 17 | PA3 | OPAMP_VOUT | OPAMP_OUT | ANALOG | OPAMP1_VOUT / ADC1_IN8 | none / 150k to V2V8 | analog | SPEC |
+| 20 | PA4 | CAM_HREF | CAM_HREF | AF | DCMI_HSYNC (AF10) | none | low or analog while V2V8_CAM is off | SPEC |
+| 21 | PA5 | IMU_INT2 | IMU_INT2 | EXTI | GPIO | none | input | CHANGED (was PC5) |
+| 22 | PA6 | CAM_PIXCLK | CAM_PCLK | AF | DCMI_PIXCLK (AF4) | none | low or analog while V2V8_CAM is off | SPEC |
+| 23 | PA7 | IMU_INT1 | IMU_INT1 | EXTI | GPIO (PWR_WKUP8) | none | input | CHANGED (was PC13) |
+| 24 | PC4 | NTC_SENSE | NTC_SENSE | ANALOG | ADC1_IN13 | none | analog | PROPOSED |
+| 25 | PC5 | NTC_BIAS | NTC_BIAS | OUT_PP | GPIO | none | analog; high only during an NTC conversion | CHANGED (was PH3) |
+| 26 | PB0 | GRAIN_CP1 | CP1_MCU | OUT_PP | GPIO | none / 68R series | analog (no LED lit) | CHANGED (was PC1) |
+| 27 | PB1 | IMU_CS | IMU_CS | OUT_PP | GPIO | none / 100k to V2V8 | high (not selected) | CHANGED (was PB12) |
+| 28 | PB2 | LCD_EXTCOMIN | LCD_EXTCOMIN | AF | LPTIM1_CH1 (AF1) | none | low until LPTIM1 runs | SPEC |
+| 29 | PB10 | LCD_SCS | LCD_SCS | OUT_PP | GPIO | none / 100k to GND | low (not selected) | PROPOSED |
+| 33 | PB12 | LCD_DISP | LCD_DISP | OUT_PP | GPIO | none / 100k to GND (and 200k: grain bias divider) | low (display off) | CHANGED (was PB1) |
+| 34 | PB13 | SPI2_SCK | SPI2_SCK | AF | SPI2_SCK (AF5) | none | low | PROPOSED |
+| 35 | PB14 | SPI2_MISO | SPI2_MISO | AF | SPI2_MISO (AF5) | none | input | PROPOSED |
+| 36 | PB15 | SPI2_MOSI | SPI2_MOSI | AF | SPI2_MOSI (AF5) | none | low | PROPOSED |
+| 37 | PC6 | CAM_D0 | CAM_D0 | AF | DCMI_D0 (AF10) | none | low or analog while V2V8_CAM is off | SPEC |
+| 38 | PC7 | CAM_D1 | CAM_D1 | AF | DCMI_D1 (AF10) | none | low or analog while V2V8_CAM is off | SPEC |
+| 39 | PC8 | CAM_D2 | CAM_D2 | AF | DCMI_D2 (AF10) | none | low or analog while V2V8_CAM is off | SPEC |
+| 40 | PC9 | CAM_D3 | CAM_D3 | AF | DCMI_D3 (AF4) | none | low or analog while V2V8_CAM is off | SPEC |
+| 41 | PA8 | CAM_XVCLK | MCO | AF | RCC_MCO (AF0) | none | low or analog while V2V8_CAM is off | SPEC |
+| 42 | PA9 | GRAIN_CP0 | CP0_MCU | OUT_PP | GPIO | none / 68R series | analog (no LED lit) | CHANGED (was PC0) |
+| 43 | PA10 | FLASH_CS | FLASH_CS | OUT_PP | GPIO | none / 100k to V2V8 | high (not selected) | CHANGED (was PA15) |
+| 44 | PA11 | USB_DM | USB_DM | AF | USB_OTG_FS_DM (AF10) | none | analog until USB starts | SPEC |
+| 45 | PA12 | USB_DP | USB_DP | AF | USB_OTG_FS_DP (AF10) | none | analog until USB starts | SPEC |
+| 46 | PA13 | SWDIO | SWDIO | AF | DEBUG_JTMS-SWDIO (AF0) | reset state (pull-up) | reset state | SPEC |
+| 49 | PA14 | SWCLK | SWCLK | AF | DEBUG_JTCK-SWCLK (AF0) | reset state (pull-down) | reset state | SPEC |
+| 50 | PA15 | CHG_STAT | CHG_STAT | EXTI | GPIO | none / 100k to V2V8 | input | CHANGED (was PB0) |
+| 51 | PC10 | GRAIN_CP4 | CP4_MCU | OUT_PP | GPIO | none / 68R series | analog (no LED lit) | PROPOSED |
+| 52 | PC11 | CAM_D4 | CAM_D4 | AF | DCMI_D4 (AF10) | none | low or analog while V2V8_CAM is off | SPEC |
+| 53 | PC12 | GRAIN_CP2 | CP2_MCU | OUT_PP | GPIO | none / 68R series | analog (no LED lit) | CHANGED (was PC2) |
+| 54 | PD2 | GRAIN_CP3 | CP3_MCU | OUT_PP | GPIO | none / 68R series | analog (no LED lit) | CHANGED (was PC3) |
+| 55 | PB3 | SPI1_SCK | SPI1_SCK | AF | SPI1_SCK (AF5) | none | low | CHANGED (was PA5) |
+| 56 | PB4 | SPI1_MISO | SPI1_MISO | AF | SPI1_MISO (AF5) | none | input | SPEC |
+| 57 | PB5 | SPI1_MOSI | SPI1_MOSI | AF | SPI1_MOSI (AF5) | none | low | CHANGED (was PA7) |
+| 58 | PB6 | CAM_D5 | CAM_D5 | AF | DCMI_D5 (AF10) | none | low or analog while V2V8_CAM is off | SPEC |
+| 59 | PB7 | CAM_VSYNC | CAM_VSYNC | AF | DCMI_VSYNC (AF10) | none | low or analog while V2V8_CAM is off | SPEC |
+| 60 | PH3 | BOOT0 | CAM_R_PWDN_MCU | STRAP | BOOT0 | 10k to GND | low at reset | SPEC |
+| 60 | PH3 | CAM_R_PWDN | CAM_R_PWDN_MCU | OUT_PP | GPIO | none / 10k to GND (BOOT0), 1k series | low or analog while V2V8_CAM is off | CHANGED (was PC12) |
+| 61 | PB8 | CAM_D6 | CAM_D6 | AF | DCMI_D6 (AF10) | none | low or analog while V2V8_CAM is off | SPEC |
+| 62 | PB9 | CAM_D7 | CAM_D7 | AF | DCMI_D7 (AF10) | none | low or analog while V2V8_CAM is off | SPEC |
+<!-- END GENERATED: PIN_TABLE -->
 
 Supply and reset pads: 1 VBAT, 19, 32, 64 VDD on V2V8; 13 VDDA; 12 VSSA, 18, 31, 47, 63 VSS on
 GND; 30 VCAP; 48 VDDUSB; 7 NRST.
 
-### 3.3 Pins changed from `gl_pins.h` (17)
+### 3.3 Pins changed from `gl_pins.h`
 
-<!-- CHANGED_TABLE -->
+<!-- BEGIN GENERATED: PIN_COUNTS -->
+52 rows: 24 SPEC, 8 PROPOSED (unchanged), 20 CHANGED. Unchanged PROPOSED pins: CHG_INHIBIT, GRAIN_CP4, LCD_SCS, NTC_SENSE, SPI2_MISO, SPI2_MOSI, SPI2_SCK, VBAT_SENSE.
+<!-- END GENERATED: PIN_COUNTS -->
 
-Unchanged PROPOSED pins: LCD_SCS PB10, LCD_DISP PB1, SPI2_SCK / MISO / MOSI PB13 / PB14 / PB15,
-IMU_CS PB12, GRAIN_CP4 PC10, VBAT_SENSE PA2, CHG_STAT PB0, CHG_INHIBIT PH1, NTC_SENSE PC4.
-The 19 SPEC rows are unchanged.
+<!-- BEGIN GENERATED: CHANGED_TABLE -->
+| Signal | gl_pins.h | Netlist | Reason |
+|---|---|---|---|
+| CAM_L_PWDN | PH0 | PC2 (pad 10) | PC2 sits next to CAM_L_SCL on the camera-facing edge; PH0 takes CAM_PWR_EN |
+| CAM_L_SCL | PB3 | PC3 (pad 11) | PB3 is needed for SPI1_SCK next to the flash; PC3 is the left end of the camera-facing edge |
+| CAM_PWR_EN | PD2 | PH0 (pad 5) | camera-facing edge; a static signal is the right neighbour for OSC32_OUT (pad 4); PD2 goes to the grain LEDs |
+| CAM_R_PWDN | PC12 | PH3 (pad 60) | the BOOT0 pad must carry one signal (51 signals, 51 I/O pads). PWDN of the right camera suits it: the pad is on the edge next to that camera, the net has no pull-up (BOOT0 stays low at every reset) and a static output does not mind the 10k; the firmware's proposal, NTC_BIAS, would be loaded by it |
+| CAM_R_SCL | PA10 | PC0 (pad 8) | PA10 is on the battery-facing edge; PC0 faces the cameras, PA10 takes FLASH_CS |
+| CAM_SCCB_SDA | PB5 | PC1 (pad 9) | PB5 is needed for SPI1_MOSI next to the flash; PC1 is in the middle of the camera-facing edge |
+| CHG_STAT | PB0 | PA15 (pad 50) | exchanged with GRAIN_CP1 (see there). An INPUT is what the UCPD1_CC1 pad can carry whatever its output stage is: its reset state (JTDI, internal pull-up) agrees with the 100 kohm pull-up, and a dead-battery pull-down before firmware sets UCPD_DBDIS only makes the line read 'charging' while nobody reads it |
+| FLASH_CS | PA15 | PA10 (pad 43) | PA10 is the ROM bootloader's USART1_RX: a pulled-up chip select is exactly the idle level it wants there, a floating charlieplex line is not. PA15 is no place for a chip select either: it is the UCPD1_CC1 pad, which gets a 5.1 kohm pull-down while PB5 (SPI1_MOSI, floating in reset) is high (PROVISIONAL) |
+| GRAIN_CP0 | PC0 | PA9 (pad 42) | PC0-PC3 face the cameras and carry SCCB / PWDN now; PA9, PC10, PC12, PD2 are the corner next to the LED ring |
+| GRAIN_CP1 | PC1 | PB0 (pad 26) | PC1 carries SCCB data now. The free pad at the LED corner, PA15, is the UCPD1_CC1 pad (PINDATA): a 5.1 kohm dead-battery pull-down appears on it while PB5 is high until firmware sets UCPD_DBDIS, and its output stage may be weaker than an ordinary pad's (ST's FT_c structure; both PROVISIONAL, DS13086 not read). Line 1 lights 8 of the 16 LEDs at 5 to 10 mA, so it sits on an ordinary pad instead: PB0, the nearest one with no ROM bootloader function, exchanged with CHG_STAT |
+| GRAIN_CP2 | PC2 | PC12 (pad 53) | see GRAIN_CP0 |
+| GRAIN_CP3 | PC3 | PD2 (pad 54) | see GRAIN_CP0 |
+| IMU_CS | PB12 | PB1 (pad 27) | PB12 is the ROM bootloader's SPI2 chip-select input and PB14 its SPI2 data output, wired to the IMU's SDO. If the ROM enables a pull-down on PB12 (the remembered AN2606 text says it does), the 100k pull-up loses, the IMU is selected and its SDO fights PB14. On PB1 (left edge, next to the IMU, no bootloader function) the pull-up always wins and SDO stays high-impedance |
+| IMU_INT1 | PC13 | PA7 (pad 23) | PA7 faces the IMU and is a wake-up pin (WKUP8); PC13 is on the far corner next to the crystal and takes VBUS_SENSE |
+| IMU_INT2 | PC5 | PA5 (pad 21) | PA5 faces the IMU. PA5 / PA7 are the ROM bootloader's SPI1 clock and data inputs: with both driven by the IMU they always have a defined level; PC5 takes NTC_BIAS |
+| LCD_DISP | PB1 | PB12 (pad 33) | exchanged with IMU_CS (see there): a line with a pull-DOWN is what the ROM bootloader's SPI2 chip-select input can carry without harm; pad 33 is on the way down to J1 |
+| NTC_BIAS | PH3 | PC5 (pad 25) | PH3 carries the 10k BOOT0 pull-down, which would load the ratiometric bias (0.28 mA more through the pin's output resistance, up to 0.4 K at 0 C); PC5 is the pad next to NTC_SENSE and no ROM bootloader pin |
+| SPI1_MOSI | PA7 | PB5 (pad 57) | see SPI1_SCK |
+| SPI1_SCK | PA5 | PB3 (pad 55) | PB3 / PB4 / PB5 are three adjacent pads on the edge that faces the flash; PA5 is on the opposite edge |
+| VBUS_SENSE | PA9 | PC13 (pad 2) | PA9 goes to the grain LEDs; PC13 is a wake-up pin, so the cradle can wake the marker from Shutdown (ship mode, E13), and a static signal is the right neighbour for OSC32_IN (pad 3); PC13 may only sink 3 mA: it is an input here |
+<!-- END GENERATED: CHANGED_TABLE -->
 
-### 3.4 ROM bootloader pins (pin list PROVISIONAL)
+Two rows change their meaning with E1 (`gl_pins.h` has not been regenerated since):
+**CHG_INHIBIT** (PH1, same pin) is now a push-pull output, HIGH = stop charging (gate of Q1);
+it was an open-drain line, LOW = stop. The firmware as it stands (`drivers/power.c`,
+`inhibit_()`: latch low, then open drain) therefore does nothing on this board: its own charge
+gate is inoperative until that function drives the pin high. **CHG_STAT** (now PA15) is the
+open-drain CHG output of the BQ25101 with 100 kohm to V2V8; it was the STAT output of the
+MCP73831 on PB0. CHG_PROG_EN does not exist.
 
-The bootloader runs only if BOOT0 is high at reset, the flash is empty, or firmware jumps to
-it. The camera rail is then off (U8.EN is on PH3 with R2 and R10 to ground, PH3 is not a
-bootloader pin).
+### 3.4 The BOOT0 pad
+
+PH3 is sampled as BOOT0 at reset and is an ordinary I/O afterwards. A signal can share it only
+if nothing on its net can lift the pad at reset. Candidates that pass: NTC_BIAS (the
+firmware's proposal), CAM_PWR_EN, CHG_INHIBIT and a PWDN line; a line with a pull-up (SCCB,
+chip selects, CHG_STAT) cannot (a watchdog reset during a read would boot the ROM), a
+charlieplex line would light an LED through the 10 kohm.
+
+The netlist puts **CAM_R_PWDN** there: pad 60 is on the package edge next to the right camera;
+the net is R2 (10 kohm to ground), R5 (1 kohm) and the camera's PWDN input, nothing else; a
+static output does not mind sourcing 0.28 mA into R2 while it is high (the camera rail is on
+then, 86 mA). The firmware's choice, NTC_BIAS, works but puts the 10 kohm across a ratiometric
+divider: (73 + 280) uA through an output resistance of up to 50 ohm is 17.7 mV, 0.53 K at 0 C
+instead of 0.11 K (PROVISIONAL output resistance). After a reset the node (about 20 pF)
+is at ground within a microsecond, long before BOOT0 is sampled. Firmware option: program the
+option bits so that the BOOT0 pin is ignored (nSWBOOT0 = 0, nBOOT0 = 1; PROVISIONAL).
+
+### 3.5 ROM bootloader pins (pin list PROVISIONAL)
+
+The bootloader runs only if the flash is empty or firmware jumps to it (there is no BOOT0 pad
+on the underside). The camera rail is then off: U8.EN is on PH0 with R10 to ground and PH0 is
+not a bootloader pin. The charger stays on: the gate of Q1 is on PH1 with R12 to ground, not
+a bootloader pin either.
 
 | Pin, bootloader function | Net | Why it is harmless |
 |---|---|---|
-| PA9 USART1_TX, PC10 USART3_TX (driven high) | GRAIN_CP0, GRAIN_CP4 | 68 ohm, then LEDs only; an LED needs a second line at low and the bootloader drives none of the five low |
+| PA9 USART1_TX, PC10 USART3_TX (driven high) | GRAIN_CP0, GRAIN_CP4 | 68 ohm, then LEDs only; an LED needs a second line at low and the bootloader drives none of the five low. The other three lines (PB0, PC12, PD2) have no bootloader function, no reset pull and no UCPD function, so nothing can pull one of them low. No charlieplex line is on a pin the bootloader listens on (such a line would float at an LED forward voltage) |
 | PA2 USART2_TX (driven) | VBAT_SENSE | resistor network only (R17, R18, C29): at most 4 uA |
 | PA6 SPI1_MISO, PB9 FDCAN1_TX (driven) | CAM_PIXCLK, CAM_D7 | into two unpowered camera pins through 220 ohm each. Bound with the camera rail held at 0 V and a 0.65 V diode: 19.5 mA from the pin (9.8 mA per camera pin); about 6 mA expected. This is the case the spec's 220 ohm resistors exist for; it is above the 8 mA the I/O levels are specified at and just under the 20 mA absolute maximum (both PROVISIONAL) |
-| PB14 SPI2_MISO (driven) | SPI2_MISO | U4.SDO only; IMU_CS is held high by R20, SDO is then not an output (PROVISIONAL) |
+| PB14 SPI2_MISO (driven) | SPI2_MISO | U4.SDO only. **IMU_CS is on PB1, not on PB12**: PB12 is the ROM's SPI2 chip-select input, and if the ROM enables a pull-down there (the remembered AN2606 text says it does on its SPI pins) a 100 kohm pull-up loses (0.6 to 1.0 V), the IMU is selected and its SDO fights PB14. On PB1 the pull-up always wins: SDO stays high-impedance (PROVISIONAL) |
+| PB12 SPI2_NSS | LCD_DISP | held low by R22; a pull-down of the ROM agrees with it |
+| PB13 SPI2_SCK, PB15 SPI2_MOSI | SPI2_SCK, SPI2_MOSI | inputs of the IMU only; nothing on the board drives them. They are held by the ROM's own pull-downs if it enables them (PROVISIONAL); a false sync of the ROM's SPI slave would need the byte 0x5A |
+| PA5 SPI1_SCK, PA7 SPI1_MOSI | IMU_INT2, IMU_INT1 | two push-pull outputs of the always-on IMU: defined levels whatever pull the ROM sets. The ROM's SPI slave reacts only to 0x5A on MOSI clocked by eight SCK edges. **Condition for the firmware: leave INT2 static before a jump to the ROM** |
+| PA4 SPI1_NSS, PB6, PB7, PB8, PC11 | CAM_HREF, CAM_D5, CAM_VSYNC, CAM_D6, CAM_D4 | end only on unpowered camera outputs: static, no edges (PROVISIONAL: ordinary protection diodes in the OVM7692) |
 | PA10 USART1_RX | FLASH_CS | idle high through R3 |
-| PA3 USART2_RX | OPAMP_OUT | idle high through R31 (added for this) |
-| PC11 USART3_RX, PA4, PB6, PB7, PB8 | CAM_D4, CAM_HREF, CAM_D5, CAM_VSYNC, CAM_D6 | end only on unpowered camera outputs: static, no edges (PROVISIONAL: ordinary protection diodes in the OVM7692) |
-| PA5 SPI1_SCK | NTC_BIAS | rests at ground through R19 + RT1 (20 kohm) and R29 + R30; no edges, so the SPI1 slave shifts nothing in whatever PA7 (IMU_INT2) does |
-| PB12 SPI2_NSS, PB13, PB15 | IMU_CS, SPI2_SCK, SPI2_MOSI | NSS held high by R20: an unselected slave ignores clock and data |
+| PA3 USART2_RX | OPAMP_OUT | idle high through R31 (150 kohm, added for this): 2.8 V in the dark, 2.0 V or more with the photodiode saturated by light (4.10) |
 | PB10 I2C2_SCL | LCD_SCS | held low by R21, static |
 | PC0 I2C3_SCL, PC1 I2C3_SDA | CAM_SCL_R, CAM_SDA | pulled to the unpowered camera rail through 2.2 kohm: static low |
 | PA11, PA12 USB | USB_DM, USB_DP | their purpose |
 
-Reset state of the JTAG pins: PA15 (JTDI, internal pull-up) is GRAIN_CP1 and PB4 (NJTRST,
-internal pull-up) is SPI1_MISO. A pulled-up charlieplex line lights nothing because no other
-line is low. Firmware must switch PA15, PB3, PB4 from JTAG to their functions (SWD only).
+Which pulls the ROM enables is not known. The verdicts hold for "pull-down on SPI pins,
+pull-up on USART pins, none on I2C pins" (AN2606 as remembered) and for no pulls at all.
+
+The firmware's generator (`tools/gen_pins.py`) has two rules: it refuses a PROPOSED
+camera-facing pin on a pin the bootloader **drives**, and it refuses CHG_INHIBIT, NTC_BIAS and
+NTC_SENSE on **any** bootloader pin. The netlist meets both as they are written: the two SCCB
+lines on PC0 / PC1 (the ROM's I2C3 pins, which it only listens on) pass the first rule
+unchanged. They are open-drain and pulled to a rail that is off, so nothing is driven into an
+unpowered camera. The camera-facing package edge has only five pins without any bootloader
+function (PC2, PC3, PH0, PH1, PC13); they carry CAM_L_PWDN, CAM_L_SCL, CAM_PWR_EN,
+CHG_INHIBIT and VBUS_SENSE.
+
+Reset state of the JTAG pins: PA15 (JTDI, internal pull-up) is CHG_STAT, where the pull-up
+agrees with R13, and PB4 (NJTRST, internal pull-up) is SPI1_MISO. Firmware must switch PA15,
+PB3, PB4 from JTAG to their functions (SWD only).
+
+### 3.6 The UCPD pads (what they do is PROVISIONAL)
+
+The pin data puts four functions of the USB Type-C port controller on pads this board uses
+for something else (check_pinmap section I finds them in the data):
+
+| Pad | UCPD function | Signal here |
+|---|---|---|
+| PA15 (50) | UCPD1_CC1 | CHG_STAT (input) |
+| PB15 (36) | UCPD1_CC2 | SPI2_MOSI |
+| PB5 (57) | UCPD1_DBCC1: dead-battery control of CC1 | SPI1_MOSI |
+| PB14 (35) | UCPD1_DBCC2: dead-battery control of CC2 | SPI2_MISO |
+
+From memory of ST's reference manual and data sheet (**not read**): after reset the
+"dead battery" behaviour is enabled, and a high level on a DBCC pad switches a 5.1 kohm
+pull-down onto its CC pad until firmware sets `UCPD_DBDIS` in `PWR_UCPDR`. The two CC pads
+are ST's FT_c pad structure; whether their output stage drives 5 to 10 mA like an ordinary
+pad's is not known here.
+
+What the netlist does about it, so that it is right whichever way those facts turn out:
+
+- **No LED line on a CC pad.** The first netlist had GRAIN_CP1 on PA15. Line 1 lights 8 of
+  the 16 LEDs; a weaker pad would drive them differently from the other eight, and a
+  5.1 kohm pull-down on the line (PB5 floats in reset and in the ROM bootloader) leaks
+  0.1 to 0.3 mA through LEDs of other azimuths. GRAIN_CP1 is now on PB0, an ordinary pad
+  without a bootloader function, and PA15 carries CHG_STAT, an input: a pull-down there
+  only makes the line read "charging" (27 uA through R13) while nobody reads it.
+- PB15 carries SPI2_MOSI, an alternate-function output into one CMOS input. With PB14 high
+  and the bit not set it would cost 2.8 V / 5.1 kohm = 0.55 mA while driven high, 20 times
+  the sleep limit: **the firmware must set UCPD_DBDIS before it configures any pin**
+  (section 7), and again after every wake-up that resets the PWR registers.
+- PA9, GRAIN_CP0, is also USB_OTG_FS_VBUS: the USB device must run with VBUS sensing off.
+
+### 3.7 Lines without a defined level in reset and in the ROM bootloader
+
+The spec asks for pulls on the four chip selects, DISP and the camera rail enable only, and
+the netlist has exactly those (plus R12, R13, R2, R31). These inputs of always-powered parts
+therefore float from reset until `gl_hal_init()` drives them, and for as long as the ROM
+bootloader runs (a firmware update, or a board that was never programmed):
+
+| Line | Floating input | Why no pull was added |
+|---|---|---|
+| LCD_EXTCOMIN (PB2) | LCD EXTCOMIN | DISP is held low by R22: the panel is off. A pull-down would cost 14 uA while the display runs (50 % duty) |
+| SPI1_SCK, SPI1_MOSI (PB3, PB5) | LCD SCLK / SI, flash SCLK / SI | both devices are deselected by R21 and R3 |
+| SPI2_SCK, SPI2_MOSI (PB13, PB15) | IMU SCL / SDA | the IMU's CS is high (R20), which is its I2C mode: random levels are not a valid address. If the ROM enables its SPI pull-downs the lines are low |
+| CAM_L_PWDN (PC2) | left camera PWDN through R4 | the camera is unpowered in reset; firmware sets PWDN before it switches the rail on. The right camera's line has the BOOT0 resistor R2, the left one has nothing: asymmetric, harmless |
+
+No damage mechanism is known; the cost is some extra supply current of parts whose data
+sheets were not read (PROVISIONAL), during a reset or an update. Four 100 kohm pull-downs
+(0402) would remove the question; they are **not fitted** because the spec asks for none
+and the board has no room to spare. The spec owner may decide otherwise. Firmware: give each
+of these lines its level first, and keep internal pull-downs on PB4 and PB14 (the MISO lines
+float between transfers).
 
 ## 4. Part values and the calculations behind them
 
 V2V8 = 2.8 V. MCU limits used (all PROVISIONAL, datasheet DS13086 not read): input high
 0.7 x VDD = 1.96 V, input low 0.3 x VDD = 0.84 V; output levels specified at 8 mA, absolute
 maximum 20 mA per pin; output resistance 15-50 ohm (25 typical); input leakage 150 nA worst
-case, a few nA at room temperature; internal pulls about 40 kohm.
+case, a few nA at room temperature; internal pulls about 40 kohm (25-55).
 
 ### 4.1 Supply chain in the cradle
 
-| Node | Value | Calculation |
+The marker draws about 30 mA from VBUS: 19.8 mA of charge current (which includes whatever
+the system takes from VBAT), up to 1 mA for the charger, up to 8 mA for VDDUSB (USB
+transceiver; both PROVISIONAL) and 25 uA for the sense divider. Between the cradle's USB
+connector and the charger lie the cable (0.5 ohm), the cradle's fuse (2 ohm typical, 5 ohm
+at most), two spring-pin contacts and the Schottky D17 (0.30 V typical, 0.35 V at most at
+30 mA). **Every one of these numbers is PROVISIONAL** (table `SUPPLY_CHAIN` in the design
+file); none was read from a data sheet.
+
+`docs/research/power.md` records the operating input range of the BQ2510x as **4.45 to
+6.45 V** (marked UNVERIFIED there). Against that figure:
+
+<!-- BEGIN GENERATED: SUPPLY_CHAIN -->
+| Case | USB source | at the VBUS pad | VBUS_D (charger IN, U11 in) | against 4.45 V |
+|---|---|---|---|---|
+| low limit of a compliant USB source, worst parts | 4.75 V | 4.58 V | 4.23 V | **-0.22 V** |
+| low limit of a compliant USB source, typical parts | 4.75 V | 4.67 V | 4.37 V | **-0.08 V** |
+| nominal source, worst parts | 5.00 V | 4.83 V | 4.48 V | **+0.03 V** |
+| nominal source, typical parts | 5.00 V | 4.92 V | 4.62 V | **+0.17 V** |
+| a legacy port that delivers 4.40 V, typical parts | 4.40 V | 4.32 V | 4.02 V | **-0.43 V** |
+<!-- END GENERATED: SUPPLY_CHAIN -->
+
+**The charger's input is below 4.45 V at the low end of a compliant USB source**, by 0.22 V
+with worst-case parts and still by 0.08 V with typical ones; a nominal 5.0 V source leaves
+0.03 to 0.17 V. The research already found that ONE Schottky leaves exactly 4.45 V from a
+4.75 V source; the cradle fuse of amendment E6 came later and takes the rest. What the
+charger does below its minimum input (stop, charge more slowly, or regulate its input) was
+not read: it may charge late, slowly or not at all on a weak source. It is not a safety
+problem; nothing is overstressed.
+
+This follows from the specification (series Schottky, cradle fuse) and **cannot be repaired
+in the netlist**: even with a fuse of 0 ohm, 4.75 V less 0.35 V is 4.40 V. For the spec
+owner (section 8): a Schottky with 0.2 V at 30 mA together with a fuse of about 1 ohm gives
+4.50 V; no series diode at all (the charger is rated for 30 V at its input and blocks
+reverse current, PROVISIONAL) gives 4.58 to 4.67 V. To be read in TI SLUSBV8 first: the minimum
+operating input, the input-detection threshold and any input-voltage regulation.
+Proposed board-test item (E14): with 4.75 V at the cradle's USB connector and the charger
+in fast charge, measure VBUS_D at C26. The limit would be the charger's minimum operating
+input (4.45 V, PROVISIONAL); by this table the reading will be 4.23 to 4.37 V, so the test
+fails as the chain stands. That is the point of the item.
+
+Other nodes: VBUS_D is 5.3 V at most (5.5 V source, charge finished, 0.2 V across D17).
+U11 (MCP1700-3.3) needs 3.3 V plus its drop-out (under 0.1 V at 8 mA) and takes 6 V at most
+(RESEARCH): 4.02 to 5.3 V is inside that.
+
+Capacitance on the 5 V side: C28 100 nF at U10 (pad side), C26 and C22 2.2 uF nominal at
+the charger and at U11: 4.5 uF nominal (about 2 uF effective at 5 V, 4.7) behind the cradle
+fuse, inside the 1-10 uF a USB device may show. Hot insertion charges them through the fuse
+and D17: a few amperes for a few microseconds, far below the surge rating of a 0.5 A
+Schottky by energy (PROVISIONAL).
+
+### 4.2 Charger (U9, R11, C26, C27, RT1, Q1, R12, R13, R14) - spec E1
+
+Ball map (PROVISIONAL, table `BQ25101_BALLS` in the design file; from web-search extracts of
+TI SLUSBV8C, not from the data sheet):
+
+<!-- BEGIN GENERATED: BQ25101_BALLS -->
+| Ball | Pin | Net |
 |---|---|---|
-| VBUS at the marker pad | 4.55-5.5 V | USB source 4.75-5.5 V less the cradle fuse: 30 mA x (1-6.5 ohm) = 0.03-0.20 V (fuse PROVISIONAL) |
-| VBUS_D (after D17) | 4.2 V worst, 4.64 V typical, 5.3 V at most | less the Schottky drop, 0.30-0.35 V at 30 mA (PROVISIONAL, not seen in research) |
-| charger supply margin | marginal at the worst corner | the MCP73831 wants 4.2 V + 0.3 V = 4.5 V for full regulation (PROVISIONAL). At 4.2 V on VBUS_D the cell stops slightly below 4.2 V; it is safe, the charge is just not quite full. Typical case 4.64 V is fine |
-| U11 input | 4.2-5.3 V | MCP1700-3.3 needs 3.3 V + dropout (under 0.1 V at 8 mA); 6 V maximum input (PROVISIONAL) |
-| marker load on VBUS | about 29 mA | 20.04 mA charge + 0.5 mA charger + up to 8 mA VDDUSB (USB transceiver, PROVISIONAL) + 27.5 uA sense divider + 2.5 uA gate divider + 33 uA STAT pull-up |
-
-Bypass on the 5 V side: C28 100 nF at U10 (pad side), C26 4.7 uF 10 V at the charger, C22 1 uF
-at U11: 5.8 uF total behind the fuse. Hot insertion charges them through the fuse (1 ohm or
-more) and D17: at most about 4.5 A decaying with a time constant of 6 us, far below the
-surge rating of a 0.5 A Schottky by energy (PROVISIONAL).
-
-### 4.2 Charger (U9, R11, Q1, R12, R13)
+| A1 | OUT | VBAT |
+| A2 | IN | VBUS_D |
+| B1 | TS | CHG_TS |
+| B2 | ISET | CHG_ISET |
+| C1 | CHG | CHG_STAT |
+| C2 | VSS | GND |
+<!-- END GENERATED: BQ25101_BALLS -->
 
 | Item | Value | Calculation |
 |---|---|---|
-| R11 | 49.9 kohm 1 % | I = 1000 V / R_PROG = 1000 / 49 900 = **20.04 mA** (formula RESEARCH). 0.47 C for the 43 mAh cell. Q1 in series adds under 0.1 kohm (0.2 %) |
-| preconditioning, termination | about 2 mA, about 1.5 mA | 10 % and 7.5 % of the charge current for the -2AC version (PROVISIONAL) |
-| R12, R13 | 1 Mohm, 1 Mohm | gate = VBUS_D / 2 = 2.10-2.65 V, above the 1.5 V maximum threshold of the BSS138 by 0.6 V or more; the PROG current is only 20 uA, so the FET is fully on. Divider current 2.5 uA from VBUS (never from the cell) |
-| leakage the gate tolerates | 1.2 uA | (2.10 - 1.5) V / 500 kohm. With the MCU powered the pin leaks 0.15 uA at most (75 mV) |
-| CHG_INHIBIT low | charger off | gate 0 V, PROG open (shutdown, PROVISIONAL); R12 then draws 5 uA from VBUS |
-| C26, C27 | 4.7 uF each | the charger's input and output capacitors (4.7 uF minimum, PROVISIONAL). C26 is the 10 V part: it sits on the 5 V node |
+| R11 | 6.81 kohm 1 % | I = K / R_ISET = 135 A-ohm / 6810 ohm = **19.82 mA** (K from the spec; the extract gives the allowed range 0.54-13.5 kohm, which is 250-10 mA with K = 135). 0.46 C for the 43 mAh cell |
+| termination, pre-charge | about 2 mA, about 4 mA | 10 % of the charge current, fixed on the BQ25101 (spec); pre-charge 20 % (PROVISIONAL) |
+| C26, C27 | 2.2 uF, 2.2 uF nominal (spec: 1 uF) | **departure**, 4.7: about 1 uF is left at 5 V and about 1.3 uF at 4.2 V (PROVISIONAL). The extract gives 1-10 uF for the input bypass |
+| RT1 (NTC1) | 10 kohm, B 3380 K | from TS to ground, spec. The charger sources a bias current into it and compares the voltage with its cold / cool / warm / hot thresholds: every threshold, the bias current and the fit to this NTC curve are PROVISIONAL (release gate of the spec) |
+| Q1, R12 | BSS138, 100 kohm | CHG_INHIBIT high (2.8 V) is 1.3 V above the 1.5 V maximum threshold: the channel (10 ohm or less, PROVISIONAL) holds TS within a millivolt of ground, which the charger reads as "disabled" ("pulling the pin low disables the IC", extract). CHG_INHIBIT low, analog or unpowered: R12 holds the gate at 0 V; the worst-case pin leakage of 150 nA lifts it 15 mV. Drive current 28 uA while inhibiting |
+| Q1 off, error on TS | under 0.3 K | drain leakage (0.5 uA maximum at 50 V, far less at 0.5 V; PROVISIONAL) against a TS bias current of about 50 uA (PROVISIONAL): under 1 % |
+| R13 | 100 kohm to V2V8 | spec. CHG low (charging): 28 uA, only while charging. CHG open: 2.8 V less the leakage of the pin (1 uA, PROVISIONAL) x 100 kohm = 2.7 V, above the 1.96 V input-high limit |
+| R14 | 6.04 kohm, **not fitted** | the spec's unpopulated position for the BQ25100 fallback, where ball C1 is the pre-charge / termination programming input. 6.04 kohm would give 10 % termination and 20 % pre-charge (PROVISIONAL, from memory). With the BQ25100 fitted R13 must be left out (it would add to the programming current) and PB0 carries no status |
 
-**The dead-cell case rests on one PROVISIONAL fact.** With the cell at its protection cut-off
-the MCU has no supply and its pins are unpowered. Charging starts only if PH1 (CHG_INHIBIT)
-does not clamp the gate node to the unpowered VDD. That is true for a 5 V tolerant ("FT")
-pin, which PH1 is believed to be; the pin structure is not in the open pin data and the
-datasheet was not read. If PH1 turns out to have a diode to VDD, move CHG_INHIBIT (there is
-no spare pin: swap with a signal on an FT pin) or put a small diode in series with the pin.
-A stiffer divider (100 kohm / 100 kohm) costs nothing in standby (it is on VBUS) and raises
-the tolerated leakage to 12 uA; the spec's 1 Mohm values were kept.
+What the charger does without firmware (spec E1): with the MCU unpowered, in reset, hung or in
+the ROM, Q1 is off and the charger follows NTC1 alone. A cell at its protection cut-off is
+recharged with no firmware.
 
-### 4.3 Charger status (D18, R14, R32) - departs from the spec
+Three things the netlist cannot settle (PROVISIONAL, see section 8): an **open NTC1** (a bad
+joint) is read by this charger family as "no thermistor" and puts it into a mode without
+temperature monitoring, timers and termination (extract: "floating TS pin or pulling high puts
+part in TTDM"); the charger **never sees its termination current** while the marker is awake
+in the cradle (the system takes more than 2 mA from the same node); and the leakage of the
+unpowered CHG pin through R13 is not known.
 
-The spec asks for "STAT to an MCU input with a 100 kohm pull-up to V2V8". Two problems
-(both PROVISIONAL, from memory of the MCP73831 datasheet):
+### 4.3 VBUS sense (R15, R16)
 
-1. The MCP73831 STAT output is tri-state, not open drain: low while charging, **driven high
-   to its own supply** (VBUS_D, about 4.6 V) when the charge is complete, high impedance in
-   shutdown. Wired directly it drives 4.6 V into a 2.8 V MCU pin.
-2. With the marker out of the cradle the charger is unpowered. A push-pull output conducts
-   from its pin to its unpowered supply, so a pull-up from the always-on rail would feed
-   V2V8 -> 100 kohm -> STAT -> VBUS_D -> the dividers to ground: about 7-8 uA for ever
-   (60-70 mAh per year from a 43 mAh cell).
+The rail table lists the "VBUS-sense divider" as a load of VBUS and gives no values. R15
+100 kohm from **VBUS, the pad net** (in front of the Schottky, as the table has it), R16
+100 kohm to ground: ratio 0.5. PC13 is a wake-up pin (WKUP2), so "wake when VBUS appears"
+(ship mode, E13) also works from Shutdown.
 
-Netlist: U9.STAT - D18 (1N4148WS, cathode at STAT) - CHG_STAT (PB0); R14 100 kohm from
-CHG_STAT to **VDDUSB** (3.3 V, present only in the cradle); R32 470 kohm from CHG_STAT to
-ground.
-
-| State | CHG_STAT | Calculation |
+| VBUS at the pad | VBUS_SENSE | |
 |---|---|---|
-| VBUS present, charging (STAT low) | about 0.5 V: low | diode drop at (3.3 - 0.5) V / 100 kohm = 28 uA, about 0.45 V at 25 C and 0.52 V at -10 C, plus the STAT low level (millivolts). Limit for a low: 0.84 V |
-| VBUS present, charge complete (STAT high) or inhibited (STAT open) | 2.72 V: high | D18 blocks; 3.3 V x 470 / 570. Limit for a high: 1.96 V; never above VDD |
-| VBUS absent | 0 V: low | VDDUSB is 0 V; R14 and R32 both pull down; no current from the cell |
+| 4.58 V (4.75 V source, worst cradle) | 2.29 V | 0.33 V above the 1.96 V input-high limit (0.27 V with V2V8 3 % high) |
+| 4.92 V (typical) | 2.46 V | |
+| 5.5 V (highest) | 2.75 V | below VDD: no current into the pin whatever its structure |
+| guaranteed high above | 3.92 V at the pad | 1.96 / 0.5 |
+| guaranteed low below | 1.68 V at the pad | 0.84 / 0.5 |
 
-A silicon diode, not a Schottky: with STAT at 4.6 V the reverse leakage of D18 flows into the
-82 kohm node; a Schottky's tens of uA when hot would lift it above VDD, the 1N4148's
-nanoamperes do not.
+Load 25 uA at 5 V, only in the cradle. Out of the cradle the pad net has 200 kohm to
+ground, which discharges C28 (100 nF) with a time constant of 20 ms: the exposed pad is at
+0 V a tenth of a second after undocking, and VBUS_SENSE is guaranteed low after at most
+22 ms (20 ms x ln(5 / 1.68)).
 
-Consequence for firmware: **CHG_STAT low means "charging" only while VBUS_SENSE is high**;
-with VBUS absent it reads low, not high as with the spec's pull-up.
+The first netlist had the divider behind the Schottky, on VBUS_D ("so that nothing loads
+the bare pad"). The review showed that this bought nothing (out of the cradle the pad is
+unpowered either way), made removal visible only after 0.4 s (0.8 s with the larger
+capacitors), and left C28 charged on an exposed pad. It is back where the rail table has it.
 
-### 4.4 VBUS sense (R15, R16)
+**VBUS_SENSE is not a measure of VDDUSB.** PC13 reads high above 1.68 to 3.92 V at the pad;
+U11 holds 3.3 V only with VBUS_D above about 3.4 V, and VBUS_D sits behind the diode with
+its own capacitors. On docking PC13 goes high about a millisecond before VDDUSB is up; on
+undocking VDDUSB falls below 3.0 V within about a millisecond under USB load (4.4 uF,
+8 mA) while PC13 still reads high for up to 22 ms. The firmware must therefore gate the
+USB-supply-valid bit on the MCU's own VDDUSB monitor as well (section 7).
 
-The spec asks for a "VBUS-sense divider" and gives no values. R15 82 kohm from VBUS_D,
-R16 100 kohm to ground: ratio 0.549.
+### 4.4 Battery voltage (R17, R18, C29) - spec values
 
-| VBUS_D | VBUS_SENSE | |
-|---|---|---|
-| 4.2 V (worst case in the cradle) | 2.31 V | 0.35 V above the 1.96 V input-high limit |
-| 4.64 V (typical) | 2.55 V | |
-| 5.3 V (highest) | 2.91 V | 0.11 V above VDD: within VDD + 0.3 V whatever the pin structure |
-| guaranteed high above | 3.57 V on VBUS_D | 1.96 / 0.549 |
-| guaranteed low below | 1.53 V on VBUS_D | 0.84 / 0.549 |
+1 Mohm / 1 Mohm, 100 nF: ratio 0.5, 2.1 V at 4.2 V. Current 2.1 uA at 4.2 V, 1.9 uA at 3.8 V:
+**17 mAh per year, continuously, from a 43 mAh cell** (it is in the firmware's sleep model).
+Source resistance 500 kohm: the ADC takes its sample charge from C29 (100 nF against about
+8 pF: 0.008 % droop), which recovers with 50 ms. Pin leakage through 500 kohm is the error
+term: 5 nA is 5 mV on the battery reading, the 150 nA worst case 150 mV.
 
-With 100 kohm / 100 kohm the worst case would be 2.10 V, only 0.14 V above the limit. Load
-27.5 uA at 5 V, from VBUS only. Source resistance 45 kohm. After the marker leaves the cradle
-VBUS_D decays through the two dividers (167 kohm, 5.7 uF: 0.95 s); VBUS_SENSE is guaranteed
-low at most about 1 s later (sooner in practice, the regulator and charger also load the
-node). The divider is behind the Schottky, as the spec's rail table has it.
+### 4.5 Cell temperature for the MCU (RT2, R19) - spec E2
 
-### 4.5 Battery voltage (R17, R18, C29) - spec values
+R19 10.0 kohm 1 % from NTC_BIAS (PC5) to NTC_SENSE (PC4, ADC1_IN13); RT2 10 kohm, B 3380 K to
+ground. The measurement is ratiometric (ADC reference = VDDA = V2V8 through 10 ohm).
 
-1 Mohm / 1 Mohm, 100 nF: ratio 0.5, 2.1 V at 4.2 V. Current 2.1 uA at 4.2 V, 1.85 uA at 3.7 V:
-**16 mAh per year, continuously, from a 43 mAh cell.** The spec has the divider permanently
-on VBAT; it is the largest static load the netlist itself adds to standby. Source resistance
-500 kohm: the ADC takes its sample charge from C29 (100 nF against about 8 pF: 0.008 % droop),
-which recovers with 50 ms. Pin leakage through 500 kohm is the error term: 5 nA is 5 mV on the
-battery reading, the 150 nA worst case 150 mV.
+| Cell | RT2 | NTC_SENSE / bias | Bias current | Sensitivity |
+|---|---|---|---|---|
+| 0 C | 28.2 kohm | 0.738 | 0.073 mA | 0.88 % of full scale per kelvin |
+| 25 C | 10.0 kohm | 0.500 | 0.140 mA | 0.95 % |
+| 45 C | 4.90 kohm | 0.329 | 0.188 mA | 0.74 % |
+| 60 C | 3.04 kohm | 0.233 | 0.215 mA | 0.54 % |
 
-### 4.6 Cell temperature (RT1, R19) - spec values
+R = 10 kohm x exp(3380 x (1/T - 1/298.15)); no R-T table was read (PROVISIONAL). Errors: the
+drop in the output resistance of PC5 (50 ohm at most) is 0.11 K at 0 C and 0.16 K at 60 C;
+tolerances of R19, RT2 and B add about 0.6 K. Source resistance at the ADC 2.3-7.4 kohm, no
+capacitor, so the node settles in microseconds after the bias goes high. Self-heating is nil
+(0.2 mW for milliseconds). NTC_BIAS feeds nothing else: it is "driven only while measuring",
+as the spec has it.
 
-R19 10.0 kohm 1 % from NTC_BIAS (PA5) to NTC_SENSE (PC4, ADC1_IN13); RT1 10 kohm, B 3380 K
-(the value the firmware uses; PROVISIONAL) to ground. The measurement is ratiometric
-(ADC reference = VDDA = V2V8 through 10 ohm).
-
-| Cell | RT1 | NTC_SENSE / bias | Bias current |
-|---|---|---|---|
-| 0 C | 28.2 kohm | 0.738 | 0.073 mA |
-| 25 C | 10.0 kohm | 0.500 | 0.140 mA |
-| 45 C | 4.90 kohm | 0.329 | 0.188 mA |
-
-Sensitivity 0.88 % of full scale per kelvin at 0 C and 0.74 % at 45 C (25 mV/K and 21 mV/K;
-a 12-bit step is 0.03 K). Errors: the drop in the output resistance of PA5 (50 ohm at most:
-9 mV at 45 C) is 0.11-0.15 K; tolerances of R19, RT1 and B add about 0.6 K. Source resistance
-at the ADC 3.3-7.4 kohm, no capacitor, so the node settles in microseconds after the bias
-goes high. Self-heating is nil (0.2 mW for milliseconds).
-
-Why NTC_BIAS left PH3: PH3 is BOOT0 and carries the 10 kohm pull-down; its 0.28 mA through
-the pin's output resistance would add 14 mV of bias drop, 0.4 K at 0 C on top of the above.
-
-### 4.7 Camera power enable on the BOOT0 pad (R2, R10)
-
-PH3 is sampled as BOOT0 at reset and is an ordinary output afterwards. R2 10 kohm (spec) to
-ground gives BOOT0 = 0; R10 100 kohm (spec, LP5907 EN pull-down) is on the same net and is
-now redundant; it is kept so that both spec rows are literally true and can be left out
-later. Driven high the pin sources 2.8 V / 9.09 kohm = 0.31 mA, only while the cameras are
-on. After a reset with the rail on, the node (about 20 pF) discharges through 9.09 kohm in
-0.2 us, long before BOOT0 is sampled. Firmware option: program the option bits so that the
-BOOT0 pin is ignored (nSWBOOT0 = 0, nBOOT0 = 1; PROVISIONAL); PH3 is then a plain GPIO.
-
-### 4.8 Cameras (R4-R9, RN1-RN6, C14-C19)
+### 4.6 Cameras (R4-R9, RN1-RN6, C14-C19, R2)
 
 | Item | Value | Calculation |
 |---|---|---|
 | RN1-RN6 | 220 ohm x 4, three arrays per camera | spec. Contention of two enabled outputs: 2.8 V / 440 ohm = **6.4 mA per line** (the spec's "about 6 mA"), 70 mA for all eleven for the 14 ms the spec gives. Edge at the MCU: 220 ohm x 15-25 pF = 3.3-5.5 ns, the same for clock and data. The twelfth element of each camera is unconnected |
 | R9 | 33 ohm at PA8 | spec. Source termination of the 12 MHz clock: with the pin's 20-25 ohm about the impedance of a 0.15 mm track over the ground plane |
 | R6, R7, R8 | 2.2 kohm to V2V8_CAM | spec. Sink current 1.27 mA; rise time constant 44 ns into 20 pF. Two clock lines because both cameras answer on the same address |
-| R4, R5 | 1 kohm | spec. Limits the current into an unpowered PWDN pin to (2.8 - 0.65) / 1 kohm = 2.2 mA if firmware gets rule 1 wrong |
+| R4, R5 | 1 kohm | spec. Limits the current into an unpowered PWDN pin to (2.8 - 0.65) / 1 kohm = 2.2 mA if firmware gets the "low while off" rule wrong |
+| R2 | 10 kohm | spec (BOOT0). On the MCU side of R5: 0.28 mA while PWDN of the right camera is driven high |
 | C16, C19 | 1 uF | spec: DVDD, internal 1.5 V regulator |
-| C14, C15, C17, C18 | 100 nF | **added**: one at each AVDD and DOVDD ball; the spec has only the regulator's 1 uF |
+| C14, C15, C17, C18 | 100 nF | **added**: one at each AVDD and DOVDD ball; the spec has only the regulator's 1 uF, which is up to 20 mm away |
+| R10 | 100 kohm | spec: LP5907 enable low until the MCU drives it. 150 nA of leakage moves it 15 mV |
 
-### 4.9 Regulators and decoupling
+### 4.7 Regulators and decoupling
 
 | Item | Value | Basis |
 |---|---|---|
 | C20, C21 | 1 uF | spec: U7 in, out |
-| C22, C23 | 1 uF | spec: U11 in, out |
+| C22, C23 | 2.2 uF nominal (spec: 1 uF) | **departure**: U11 in, out; see the table of effective values below |
 | C24, C25 | 1 uF | spec: U8 in, out |
 | C1, C2, C3 | 100 nF | spec: one per VDD pad (19, 32, 64) |
 | C4 | 100 nF | spec: VBAT pad 1 (on V2V8, there is no backup cell) |
@@ -276,15 +573,38 @@ BOOT0 pin is ignored (nSWBOOT0 = 0, nBOOT0 = 1; PROVISIONAL); PH3 is then a plai
 | C32 | 1 uF | **added**: LCD VDD / VDDA at J1 (the panel draws its refresh current in pulses; PROVISIONAL) |
 | C28 | 100 nF | **added**: VBUS pin of the ESD array U10 |
 
-### 4.10 Reset-state pulls (R3, R20, R21, R22) - spec values
+**Effective capacitance.** The capacitors are 0402 X5R parts rated 10 V (6.3 V for the
+4.7 uF). Such a part loses capacitance under DC bias: roughly 55 % of a 1 uF part is gone at
+5 V, 45 % at 4.2 V, 35 % at 3.3 V, 30 % at 2.8 V; a 2.2 uF 10 V part keeps about 0.9 to
+1.0 uF at 5 V. These are typical figures for the case size from memory, **PROVISIONAL**: no
+bias curve was read and the MPNs are from memory. The spec says "1 uF in, 1 uF out"; the
+netlist counts what is left:
+
+| Node | Capacitors | Bias | Effective (PROVISIONAL) | Who needs what |
+|---|---|---|---|---|
+| VBUS_D | C26, C22: 2 x 2.2 uF | up to 5.3 V | about 1.9 uF (0.9 uF with the spec's 2 x 1 uF) | charger input 1 uF, U11 input 1 uF |
+| VDDUSB | C23 2.2 uF, C9 100 nF | 3.3 V | about 1.5 uF (0.75 uF with 1 uF) | MCP1700 output: 1 uF for stability |
+| VBAT | C27 2.2 uF, C20, C24 1 uF | 4.2 V | about 2.4 uF (1.65 uF with 3 x 1 uF) | charger output 1 uF (it regulates into these alone when the cell's protection circuit is open); U7, U8 inputs |
+| V2V8 | C21, C32 1 uF, C5 4.7 uF, 100 nF x 7 | 2.8 V | about 4.5 uF | MCP1700 output: 1 uF |
+| V2V8_CAM | C25 1 uF, 100 nF x 4 | 2.8 V | about 1.1 uF | LP5907 output: 1 uF nominal, less effective allowed (RESEARCH: stable with 1 uF) |
+| VDDA | C7 1 uF, C8 10 nF | 2.8 V | about 0.7 uF | filter only |
+| camera DVDD | C16, C19 1 uF | 1.5 V | about 0.85 uF | spec: 1 uF |
+
+C22, C23, C26 and C27 are therefore 2.2 uF parts in the same 0402 footprint: a departure
+from the letter of the spec (section 5) that needs no board area. Everything is inside the
+ranges the regulators and the charger are said to accept (MCP1700 1 to 22 uF, charger
+1 to 10 uF; PROVISIONAL). To be closed with the bias curves of the parts actually bought.
+
+### 4.8 Reset-state pulls (R3, R20, R21, R22) - spec values
 
 100 kohm each. Against 1 uA of total leakage on the net (MCU pin plus the peripheral's input,
 PROVISIONAL) the level moves 0.1 V: the chip selects sit at 2.7 V or more (limit 1.96 V) or at
 0.1 V or less. With 20 pF they follow the rail within 2 us at power-up. Cost: 28 uA while the
 pin is driven against the pull, that is during a transfer (chip selects) and **while the
-display is on (R22 on DISP)**; nothing in sleep, where DISP is low.
+display is on** (R22 on DISP, plus 14 uA for the grain bias divider, 4.10); nothing in sleep,
+where DISP is low.
 
-### 4.11 Crystal (Y1, C11, C12)
+### 4.9 Crystal (Y1, C11, C12)
 
 Load capacitance 6 pF (RESEARCH). C11 = C12 = 2 x (CL - Cstray). With 2.5 pF of stray (pins
 and tracks; an assumption) that is 7.0 pF; fitted **6.8 pF** C0G +-0.25 pF, which gives
@@ -301,110 +621,228 @@ The pulling figure assumes a motional capacitance of 3.5 fF and C0 = 1.2 pF (PRO
 Measure at first power-up and change C11 / C12 or use the RTC calibration. Oscillation
 margin: gm_crit = 4 x ESR x (2 pi f)^2 x (C0 + CL)^2 = 4 x 55 kohm x (2 pi x 32768)^2 x
 (7.2 pF)^2 = 0.48 uA/V (0.62 with 70 kohm). The lowest LSE drive setting allows 0.5 uA/V and
-the next 0.75 (PROVISIONAL): **firmware should use the medium-low drive or higher.**
+the next 0.75 (PROVISIONAL, from another STM32 family): **firmware should use the medium-low
+drive or higher.** The two pads beside the crystal pins carry static signals (PC13
+VBUS_SENSE, PH0 CAM_PWR_EN).
 
-### 4.12 Grain LEDs (R23-R27, D1-D16)
+### 4.10 Grain sensor (R23-R31, C33, C34, D1-D16, PD1)
 
-Five lines, 68 ohm in each (spec). A lit LED has two of them in series, plus the output
+LEDs. Five lines, 68 ohm in each (spec). A lit LED has two of them in series, plus the output
 resistance of the sourcing and the sinking pin: I = (2.8 V - VF) / (136 ohm + 2 x Rpin).
 
-| LED | VF assumed | Typical (25 ohm per pin) | Highest (15 ohm, low VF, VDD +2 %) | Lowest (50 ohm, high VF, VDD -2 %) |
-|---|---|---|---|---|
-| red VLMS1500 | 1.85 V (1.70-2.40) | **5.1 mA** | 7.0 mA | 1.5 mA |
-| NIR SFH 4053 | 1.35 V (1.20-1.60) | **7.8 mA** | 10.0 mA | 4.8 mA |
+| LED | VF assumed | Spec's figure (no pin resistance) | Typical (25 ohm per pin) | Highest (15 ohm, low VF, VDD +3 %) | Lowest (50 ohm, high VF, VDD -3 %) |
+|---|---|---|---|---|---|
+| red VLMS1500 | 1.85 V at 5 mA (2.0 typ, 2.4 max at 20 mA: RESEARCH) | (2.8 - 2.0) / 136 = 5.9 mA | **5.1 mA** | 7.1 mA (VF 1.70) | 1.3 mA (VF 2.40) |
+| NIR SFH 4053B | 1.35 V at 10 mA (1.6 V at 70 mA for the SFH 4053: RESEARCH) | (2.8 - 1.45) / 136 = 9.9 mA | **7.8 mA** | 10.1 mA (VF 1.20) | 4.7 mA (VF 1.60) |
 
-The forward voltages are PROVISIONAL (no curve read). Against the MCU pin: typical currents
-are inside the 8 mA at which the output levels are specified; the NIR worst case is 10 mA,
-2 mA above that figure and half the 20 mA absolute maximum. The LEDs are pulsed, one at a
-time, so the total supply current of the MCU is not an issue. If the first boards show more
-than 8 mA on the NIR LEDs, 82 ohm brings the worst case to 8.6 mA; the spec's 68 ohm was kept.
+The forward voltages at these currents are PROVISIONAL (no curve read; the data sheet of the
+SFH 4053B has not been read at all). Against the MCU pin: typical currents are inside the
+8 mA at which the output levels are specified; the NIR worst case is 10 mA, 2 mA above that
+figure and half the 20 mA absolute maximum. All five lines are on ordinary pads (PA9, PB0,
+PC12, PD2, PC10), none on the two UCPD CC pads (3.6). The LEDs are pulsed, one at a time. If the first
+boards show more than 8 mA on the NIR LEDs, 82 ohm brings the worst case to 8.7 mA; the
+spec's 68 ohm was kept.
 
-Arrangement: ten line pairs exist, eight carry one red and one NIR LED antiparallel (all 16
-LEDs are antiparallel pairs; pairs CP0-CP3 and CP1-CP4 are unused). The red anode is on the
-lower-numbered line. Lines carry 3, 3, 4, 3, 3 pairs. The unlit partner sees the lit LED's
-forward voltage in reverse (1.85 V at most; 5 V allowed, PROVISIONAL). Sneak paths are two
-LEDs in series across the lit LED's forward voltage: at most 0.93 V per red or 0.68 V per NIR
-LED, below conduction.
+Arrangement: `GRAIN_PAIRS` is the firmware's own table (pairs on lines 0-1, 0-2, 0-3, 0-4,
+1-2, 1-3, 1-4, 2-3 at azimuth 22.5 + 45 k degrees; red anode on the lower line). All 16 LEDs
+are antiparallel pairs; lines 0 to 4 carry 4, 4, 3, 3 and 2 pairs; line pairs 2-4 and 3-4 are
+unused. The unlit partner sees the lit LED's forward voltage in reverse (2.4 V at most; 5 V
+allowed, PROVISIONAL). A sneak path is two LEDs in series through a
+floating line; beside a lit red LED (lower line a to higher line b) a path of two NIR LEDs
+would need a > c > b, which contradicts a < b: none exists, as the firmware's analysis says.
+On the board the lower line is the **inner** pad of both LEDs of a pair, so the inner pads
+form three runs (line 0: four pairs, line 1: three pairs, line 2: one pair) and only three
+nets must leave the inside of the ring on the bottom layer (no via is allowed in the opening).
 
-### 4.13 Photodiode amplifier (PD1, R28, C33, R29, R30, C34, R31)
-
-OPAMP1 of the MCU: VINP PA0, VINM PA1, VOUT PA3 (PINDATA), output read on ADC1_IN8.
+Photodiode amplifier. OPAMP1 of the MCU: VINP PA0, VINM PA1, VOUT PA3 (PINDATA), output read
+on ADC1_IN8.
 
 | Item | Value | Calculation |
 |---|---|---|
 | R28, C33 | 470 kohm, 10 pF | spec. Pole 1 / (2 pi x 470 kohm x 10 pF) = **33.9 kHz**, time constant 4.7 us, settled to 0.1 % in 33 us |
-| full scale | 2.8 uA | output from the 1.4 V bias up to about 2.7 V: 1.3 V / 470 kohm |
-| stability | 10 pF is enough | smallest feedback capacitor for 45 deg: sqrt(Cin / (2 pi R GBW)). Cin 60 pF (diode at 1.4 V reverse plus pins): 3.6 pF at 1.6 MHz, 7.0 pF in the low-power mode (0.42 MHz). Cin 100 pF: 4.6 and 9.0 pF. Bandwidths PROVISIONAL |
+| full scale | 2.8 uA | output from the 1.4 V bias up to about 2.7 V: 1.3 V / 470 kohm (the spec's "about 3 microamps") |
+| stability | 10 pF is enough | smallest feedback capacitor for 45 deg: sqrt(Cin / (2 pi R GBW)). Cin 60 pF (diode at 1.4 V reverse plus pins): 3.6 pF at 1.6 MHz, 7.0 pF in the low-power mode (0.42 MHz). Cin 100 pF: 4.6 and 9.0 pF. Bandwidths and capacitance PROVISIONAL |
 | R29, R30, C34 | 100 kohm, 100 kohm, 100 nF | spec values. Bias = half the divider supply = 1.4 V; source 50 kohm, time constant 5 ms |
-| PD1 anode | ground | the spec names only the cathode. The diode is reverse biased by 1.4 V (lower capacitance) and the photocurrent returns to ground, not through the 50 kohm bias node |
-| R31 | 1 Mohm to V2V8 | **added**: PA3 is the bootloader's USART2_RX and floats while the amplifier is off. Load on the amplifier 1.4 uA |
+| PD1 anode | ground | the spec names only the cathode. The diode is reverse biased by 1.4 V (lower capacitance) and the photocurrent returns to ground, not through the 50 kohm bias node. Dark current 0.2 nA typical (RESEARCH) is 0.1 mV |
+| R31 | 150 kohm to V2V8 | **added**: PA3 is the bootloader's USART2_RX and floats while the amplifier is off. See below. Load on the amplifier 9 uA at most |
 
-**The top of the bias divider (R29) is on the NTC_BIAS pin (PA5), not on V2V8.** From the
-always-on rail the divider would draw 14 uA for ever: 123 mAh per year, almost three charges
-of the cell. From the pin it draws nothing unless the pin is high. Firmware must drive PA5
-high **35 ms** (7 time constants, 0.1 %) before a grain measurement; 25 ms gives 1 %. Side
-effects: the NTC divider is powered during a grain measurement (0.07-0.19 mA) and the bias
-divider during an NTC conversion (14 uA); the extra bias drop on the NTC reading is 0.7 mV
-(0.01 K).
+**The top of the bias divider (R29) is on the LCD_DISP line (PB12), not on V2V8.** The spec
+does not say which rail feeds the divider. From the always-on rail it would draw 14 uA for
+ever: more than half of the 25 uA sleep limit of E14 on its own (the firmware's model of
+20.6 uA has no such term). No MCU pin is free for a bias enable. LCD_DISP is high whenever
+the display is on, which it is during every read, and low asleep; it is a static, low-impedance
+line (42 uA of load, 2 mV of drop). Consequences: 14 uA more while the display is on; DISP
+must have been high for **35 ms** (7 time constants, 0.1 %; 23 ms for 1 %) before a grain
+measurement, which the firmware's 25 ms analog settling time almost covers by itself; the
+reset level of DISP is unchanged (R22 in parallel with 200 kohm). The NTC_BIAS pin was the
+other candidate; it would have tied the grain bias to the NTC measurement (a charged C34
+reads as a "stuck" NTC line for 30 ms) and broken "driven only while measuring".
+The MCU's DAC can also bias OPAMP1 internally; the spec asks for the divider on PA0.
 
-Standby cost of R31: none in the dark. Light on the photodiode while the amplifier is off
-draws photocurrent from V2V8 through R31 + R28, bounded at 2.8 V / 1.47 Mohm = 1.9 uA.
+**R31 and light.** With OPAMP1 off there is a DC path V2V8 - R31 - PA3 - R28 (470 kohm) -
+PD_K - photodiode - ground. In the dark PA3 sits at 2.8 V. With light the photocurrent
+flows in that path, PA3 = 2.8 V - Iph x R31, until the diode saturates with PD_K at 0 to
+-0.4 V; from there PA3 = PD_K + (2.8 V - PD_K) x 470 / (470 + R31).
 
-### 4.14 Other parts
+| R31 | PA3 leaves the input-high level (1.96 V) at | PA3 with the diode saturated | Current while lit and asleep |
+|---|---|---|---|
+| 1 Mohm (first netlist) | 0.84 uA of photocurrent: room light | 0.62 to 0.90 V: at the input-low limit, toggling with lamp flicker | 1.9 to 2.2 uA |
+| **150 kohm** | never | 2.03 to 2.12 V (1.96 V at V2V8 -3 %, limit then 1.90 V) | 4.5 to 5.2 uA |
+
+With 1 Mohm the ROM's USART2_RX was low or toggling on a lit bench, which is the case R31
+was added to exclude. 150 kohm is the largest standard value that holds the input high for
+every photocurrent (201 kohm would do with PD_K at 0 V, 167 kohm at -0.4 V). The thresholds
+are the PROVISIONAL 0.7 / 0.3 x VDD.
+
+Cost: nothing in the dark. With light on the photodiode while the marker sleeps, up to
+5.2 uA instead of 2.2 uA. On turf or in a pocket the opening is dark; in the cradle it
+faces the drained basin. **The sleep-current test of E14 (25 uA) must be made with the
+underside dark**, on the bare board as well, or it reads up to 5 uA high. Firmware: leave
+PA3 analog while the amplifier is off (driven low it would draw 19 uA through R31).
+
+### 4.11 Other parts
 
 | Part | Choice | Basis |
 |---|---|---|
 | D17 B0530WS | series Schottky, anode at the pad | spec; RESEARCH part |
-| Q1 BSS138 | PROG return switch | spec; pin order G1 S2 D3 PROVISIONAL |
+| U10 USBLC6-2SC6 | VBUS pin on the pad side of D17 | the clamp has to protect the diode too |
 | U6 | WP# and HOLD# tied to V2V8 | single-bit SPI only |
 | U4 | SDx, SCx to ground, pins 10 and 11 open | mode 1 wiring; pins 2 and 3 PROVISIONAL |
 | J1 | EXTMODE to V2V8, mounting pads to ground | spec |
-| J2 | seven pads dia 1.8 on 2.54 mm, underside | YAML (the diameter is in the YAML as text only) |
+| J2 | seven pads dia 1.8 on 2.54 mm, underside, VBUS at x = -7.62 | spec, YAML (the diameter is in the YAML as text only) |
+| TP1-TP4 | bare round pads dia 1.0, top side: VBAT, V2V8, V2V8_CAM, GND | spec E4 |
 | BT1, BT2 | 1.5 x 2.4 mm pads, 0.7 mm gap | YAML; the gap is the mechanical model's number |
 | D+ / D- | no series resistors, no pull-up | embedded in the MCU (PROVISIONAL) |
 
-### 4.15 What the netlist adds to standby (marker out of the cradle, asleep)
+### 4.12 What the netlist adds to standby (marker out of the cradle, asleep)
 
 | Path | Current |
 |---|---|
-| battery divider R17 + R18 | 1.85 uA at 3.7 V (spec) |
+| battery divider R17 + R18 | 1.9 uA at 3.8 V (spec) |
 | U7 quiescent | 1.6 uA (RESEARCH) |
-| STAT pull-up, VBUS sense, gate divider | 0: all three hang on VBUS_D or VDDUSB |
-| grain bias divider | 0: on the NTC_BIAS pin |
-| chip-select and DISP pulls, CAM_EN pull-downs | 0 at their resting levels |
-| R31 | 0 in the dark, 1.9 uA at most with light on the photodiode |
-| charger, reverse from VBAT | 0.15-2 uA (PROVISIONAL) |
+| U9, battery leakage with no input | 0.075 uA (title of a data-sheet copy seen in the search: PROVISIONAL) |
+| U8 disabled | under 1 uA (RESEARCH) |
+| CHG pull-up R13 | 0 with the output open; the leakage of the unpowered pin is PROVISIONAL |
+| VBUS sense divider, U11 | 0: the pad net and VBUS_D are unpowered out of the cradle |
+| grain bias divider | 0: on LCD_DISP, which is low |
+| chip-select and DISP pulls, CAM_EN and gate pull-downs | 0 at their resting levels |
+| R31 | 0 in the dark, 5.2 uA at most with light on the photodiode (4.10) |
 
-The sleep currents of the MCU, IMU, LCD, flash and the cell's protection board are not
-netlist values and are not estimated here.
+The first two rows are the "regulator, battery divider" part of the firmware's 6.5 uA
+(the rest is the cell's protection circuit). The sleep currents of the MCU, IMU, LCD and
+flash are not netlist values and are not estimated here. Board test measures the sum through
+the cell-lead pads (E4, E14).
 
 ## 5. Departures from the specification
 
 | No. | Spec | Netlist | Why |
 |---|---|---|---|
-| 1 | STAT pull-up 100 kohm to V2V8 | D18 in series with STAT; R14 to VDDUSB; R32 470 kohm to ground | section 4.3: the output drives high to 4.6 V, and a pull-up from the always-on rail can leak through the unpowered charger. PROVISIONAL facts; if the datasheet shows an open-drain STAT without a path to VDD, D18 and R32 can go and R14 can return to V2V8 |
-| 2 | VDDUSB feeds the MCU VDDUSB pin only | it also feeds R14 (33 uA at most) | follows from 1 |
-| 3 | NTC_BIAS "driven only while measuring" | PA5 also feeds the grain bias divider and is high during grain measurements | section 4.13: 14 uA standby saved |
-| 4 | bias divider, rail not named | fed from PA5 | as 3 |
-| 5 | BOOT0 (PH3) pulled down with 10 kohm | PH3 is also CAM_PWR_EN; R10 is in parallel with R2 | section 4.7; frees a pin, keeps the 10 kohm away from the NTC bias |
-| 6 | (not in the spec) | D18, R32, R31, C6, C13, C14, C15, C17, C18, C28, C30, C31, C32 added; R15 / R16 values chosen | sections 4.3, 4.4, 4.8, 4.9, 4.13 |
-| 7 | fine class 0.10 / 0.10 for the camera escape | a second class "CamPower" (0.15 mm track, 0.10 mm clearance) for V2V8_CAM and the two DVDD nets | a supply ball needs the fine clearance to leave the BGA but not the thin track. Both classes are fine only inside the two fine areas round U2 and U3 |
-| 8 | "Layer 2 solid ground" | In1.Cu ground, whole board; In2.Cu is a V2V8 plane that may also carry tracks | the spec is silent on layer 3; the layout step decides |
-| 9 | 17 proposed pins of `gl_pins.h` | changed, section 3.3 | allowed by rule 8; the firmware header must be regenerated from `pinmap.json` |
-| 10 | LED pair as drawn by the mechanical model: 0.90 mm between the two LEDs | 1.00 mm | two KiCad 0402 LED courtyards need 0.95 mm |
-| 11 | "unmasked 1.6 mm copper land" under each ball foot | FL1-FL3: pads **without a net** | see below |
+| 1 | "mid-rail bias from a 2 x 100 kohm divider" (rail not named) | divider fed from LCD_DISP (PB12) | 4.10: from V2V8 it would take 14 uA of the 25 uA sleep limit; no pin is free for an enable |
+| 2 | photodiode anode not named | to ground | 4.10 |
+| 3 | BOOT0 (PH3) pulled down with 10 kohm | PH3 is also CAM_R_PWDN | 3.4: 51 signals on 51 pads; this net has no pull-up and the pad is next to the right camera |
+| 4 | (not in the spec) | C6, C13, C14, C15, C17, C18, C28, C30, C31, C32, R31 added; R15 / R16 values chosen | 4.3, 4.6, 4.7, 4.10 |
+| 5 | fine class 0.10 / 0.10 for the camera escape | a second class "CamPower" (0.15 mm track, 0.10 mm clearance) for V2V8_CAM and the two DVDD nets | a supply ball needs the fine clearance to leave the BGA but not the thin track. Both classes are fine only inside the two fine areas round U2 and U3 |
+| 6 | "Layer 2 solid ground" | In1.Cu ground, whole board; In2.Cu is a V2V8 plane that may also carry tracks | the spec is silent on layer 3; the layout step decides |
+| 7 | proposed pins of `gl_pins.h` | 20 changed, section 3.3 | allowed by the pin-map rule; the firmware header must be regenerated from `pinmap.json` |
+| 8 | LED pair as drawn by the mechanical model: 0.90 mm between the two LEDs | 1.00 mm | two KiCad 0402 LED courtyards need 0.95 mm |
+| 9 | "unmasked 1.6 mm copper land" under each ball foot | FL1-FL3: pads **without a net** | see below |
+| 10 | "1 uF in, 1 uF out"; "IN ... with 1 uF; OUT to the cell with 1 uF" | C22, C26 (VBUS_D), C23 (VDDUSB), C27 (charger output): **2.2 uF** nominal, same 0402 footprint | 4.7: a 1 uF 10 V 0402 keeps roughly half of its value at 5 V; with 2.2 uF about 1 uF is left where a regulator or the charger asks for it. PROVISIONAL, no bias curve read |
+| 11 | BQ25101YFP | order code BQ25101YFPR (reel; YFPT is the small reel) | suffix seen in the search results; PROVISIONAL |
+| 12 | "LCD connector pin order 1 SCLK ... 10 VSSA" | read as the order on the **tail**; tail pin n is on connector pad 11 - n (pad 1 = VSSA, pad 10 = SCLK) | section 6 and rule row "lcd c": with the U-fold and the mouth of J1 to the rear the evidence in the repository says the tail is mirrored against the land pattern. PROVISIONAL (release gate B16) |
+
+The first netlist had the VBUS-sense divider behind the Schottky; it is now on the pad net,
+as the rail table lists it (4.3), and is no departure any more.
 
 **The ball-foot lands are unconnected, not ground.** The contract forbids any track or via
 inside the 2.5 mm circle on the bottom side, so a land cannot be tied to anything without
-breaking it. The land has no electrical job: the ball bears on it through a film of epoxy
-(YAML: 0.02 mm). Left floating it also cannot carry current between a wet underside and a
-supply. One thing for the layout step: keep In2.Cu (V2V8) copper out from under the three
-lands, so that the nearest copper above a land is the ground plane.
+breaking it, and the toolchain does not need a net (a pad without a net is legal). The land
+has no electrical job: the ball bears on it through a film of epoxy (YAML: 0.02 mm). Left
+floating it also cannot carry current between a wet underside and a supply. One thing for
+the layout step: keep In2.Cu (V2V8) copper out from under the three lands, so that the
+nearest copper above a land is the ground plane.
 
 Nothing was relaxed, excluded or waived to get a clean report. The rule set is the
 toolchain's standard four-layer set with the minimum track and clearance set to the spec's
-0.10 mm (the spec's own fine class). Note that 0.10 mm is slightly under 4 mil (0.1016 mm):
-the fabricator must accept 0.10 mm or the fine class must become 0.1016 mm.
+0.100 mm (E7: 3.94 mil; the fabricator's written acceptance is a release gate and a fab note).
+
+### 5.1 OPEN: the LCD connector J1 is not where the mechanical model has it
+
+Rule row "PCB k2" (result **open**) measures this on every run.
+
+The YAML lists J1 as a fixed interface at (0, -13.9) with dx 8.4, dy 5.8 and the comment
+"mouth faces the rear (-y)". The mechanical model draws that as a box **centred** on the
+point: y from -16.8 to -11.0, the mouth on the rear edge at y = -16.8, which is also the
+rear edge of the LCD glass and the front edge of the LCD-tail keep-out (y -18.3 to -16.8,
+parts to 0.7 mm). The modelled flex tail leaves the glass there, folds once and enters the
+mouth at y = -16.8.
+
+The netlist puts the **anchor** of KiCad's FH12 land pattern on the point, because the
+anchor is the only thing `mechanical/cad/board_import.py` (check C) compares, and it passes.
+The body of that land pattern lies 1.6 mm behind its anchor (the toolchain's README names
+this footprint for it). Measured on the placed footprint:
+
+| | Mechanical model (YAML box) | Board (KiCad FH12 land pattern, anchor on the point) |
+|---|---|---|
+| body, y | -16.8 to -11.0 | -18.3 to -12.7 |
+| rear face = mouth | -16.8 | -18.3: **1.5 mm behind the modelled mouth** |
+| LCD-tail keep-out (y -18.3 to -16.8, x +-3.25) | free, the fold lives there | **covered completely by the 2.0 mm body** (9.75 mm2) |
+| signal pads, y | (not modelled) | -12.7 to -11.4 |
+| courtyard, front edge | | -10.9; the cell begins at -10.2 |
+
+So the LCD cannot be plugged in as modelled: the modelled fold passes through the connector
+body. No check sees it: J1 is exempt from the tail keep-out by the YAML ("J1 itself is
+exempt"), and board_import compares the anchor only.
+
+**The contract cannot be met as written either.** The land pattern needs 6.90 mm from its
+rear face to the far end of the signal pads (7.90 mm of courtyard). The YAML leaves 6.60 mm
+between the mouth (-16.8) and the cell (-10.2). With the rear face on the YAML mouth the
+signal pads would end at y = -9.9, 0.30 mm inside the cell, and the courtyard 0.8 mm
+inside the battery keep-out, which the toolchain's checks and KiCad's DRC reject.
+
+What is needed, from the YAML / mechanical owner: either re-model the tail for a mouth at
+y = -18.3 (the board edge is at y = -20.7 there and the tub wall at about -22, so a fold
+1.5 mm further back may fit, and the real tail is several millimetres longer than the
+modelled fold), or move the glass, the cell or both so that mouth + 6.9 mm of land pattern
++ a soldering clearance fits, or choose a shallower connector. Until that decision the
+netlist keeps J1 where it passes every existing check; **its position, and with it the
+ten signal pads, may move by up to 1.5 mm in y**. The layout step should not route to J1
+as if it were final.
+
+### 5.2 WORKAROUND: six bare-copper footprints carry the "not fitted" mark
+
+Rule row "bare copper" (result **workaround**).
+
+`mechanical/cad/board_import.py` (check D) requires every fitted bottom-side component of
+the board's mechanical JSON to lie inside the grain opening or the pad slot. The toolchain's
+mechanical JSON lists copper-only footprints as components. The three ball-foot lands
+FL1-FL3, which the spec itself puts outside both openings, and the three bottom fiducials
+FID4-FID6 are bare copper of zero height under the adhesive sheet; listed as fitted they
+fail that check with six rows "outside the grain opening and the pad slot".
+
+In the design they carry the "not fitted" mark (`BARE_BOTTOM_COPPER_NOT_FITTED = True`),
+which that check skips on the bottom side without a warning. **Those six features are
+therefore not tested by the mechanical import at all**, and its summary line ("18
+bottom-side parts inside the grain opening or the pad slot") does not count them. This is a
+flag used against its plain meaning to get past another package's acceptance test; it is
+kept because the alternative is a check that can never pass on a board the spec asks for,
+and it is bounded:
+
+- the rule row fails if any footprint other than these six carries the mark without being
+  a BOM part, or if one of the six is not a board-only footprint with one netless pad, zero
+  height and no pins (self-test: a test pad and an LED marked "not fitted" are both caught);
+- the mark changes no copper, no Gerber, no BOM line and no position row; the assembly
+  README of the toolchain lists as "DNP" only BOM parts, and lists every fiducial with its
+  coordinates whatever the mark (read in `gleda/outputs.py`). It does write a `DNP`
+  property onto these six footprints in the board file.
+
+Both ways were run on the nominal placement (2026-11-13, `python3 cad/board_import.py
+<file>` in `mechanical/`): with the mark exit 0, "95 top-side parts clear the tub by 0.25 mm
+or more (U2) ... 18 bottom-side parts inside the grain opening or the pad slot; 7 contact
+pads on the cradle pin axes"; without it exit 1, "FAILED (6)": FID4, FID5, FID6, FL1, FL2,
+FL3, each "outside the grain opening and the pad slot", and nothing else.
+
+To be removed when `board_import.py` ignores board-only footprints of zero height (or tests
+the lands against the foot zones). Set the flag to False to see the six rows.
 
 ## 6. PROVISIONAL items
 
@@ -412,61 +850,168 @@ Isolated in one table each in `gl1_main_design.py`, so that each can be correcte
 
 | Table | What is not known | Effect of an error |
 |---|---|---|
-| `OVM7692_BALLS`, `OVM7692_PITCH`, `OVM7692_PAD_D` | the whole ball map, the pitch and the pad size of the camera (a stand-in: the spec's "provisional 5 x 5, 0.5 mm, 0.20 mm") | both camera footprints and 28 nets |
-| `LCD_TAIL`, `LCD_TAIL_PIN1_AT_PAD1` | pin order of the LCD tail and which end is pin 1 after the U-fold | all ten pins of J1 mirrored |
+| `OVM7692_BALLS`, `OVM7692_PITCH`, `OVM7692_PAD_D` | the whole ball map, the pitch and the pad size of the camera (a stand-in: the spec's "provisional 5 x 5, 0.5 mm, 0.20 mm") | both camera footprints and 31 nets |
+| `BQ25101_BALLS`, `BQ25101_PITCH`, `BQ25101_PAD_D`, `BQ25101_BODY` | ball map and land pattern of the charger: from two web-search extracts of TI SLUSBV8C (C1 = CHG / PRE-TERM and C2 = VSS from ti.com's document viewer; the full map from a third-party copy), handedness of the drawing assumed | charger dead or reversed; six nets |
+| `LCD_TAIL`, `LCD_TAIL_PIN1_EDGE` (with `LCD_TAIL_FOLDS_ABOUT_X`, `J1_PAD1_X_SIGN_AT_ROT0`) | pin order on the LCD tail, and at which edge of the tail pin 1 is | all ten pins of J1 mirrored |
 | `VEMD8080_PADS` | land pattern of the photodiode and which pad is the anode | photodiode reversed or shorted |
+
+**The LCD tail: which way the fold maps.** `LCD_TAIL_PIN1_EDGE = "left"` is the one fact
+to read from the Sharp drawing (release gate B16): looking at the front of the display with
+the tail pointing up, away from the glass, is tail pin 1 at the left or at the right edge?
+"Left" is what the research supports, by inference: the contacts are on the rear face, and a
+public design plugs the tail straight into a bottom-contact FH12 on the KiCad land pattern
+with pad 1 = SCLK; in that land pattern pad 1 is at x = -2.25 with the mouth toward -y, so
+the tail travels +y with pin 1 at -x, the left edge when it points up. In the GL-1 the tail
+leaves the rear edge of the glass pointing -y, which puts pin 1 at **+x**; one U-fold about
+an axis parallel to x brings it back travelling +y with its contacts up (hence the
+top-contact FH12A) and pin 1 still at +x; J1 has its mouth to the rear and pad 1 at
+x = -2.25. Tail pin 1 therefore meets **pad 10**: the tail is mirrored against the land
+pattern, `LCD_TAIL_PIN1_AT_PAD1` is derived as False, and J1 is wired pad 1 = VSSA ...
+pad 10 = SCLK. The one top-contact design the research found is wired in that reverse order
+too. The first netlist had the straight order; with it VSSA / VSS would have sat on
+SPI1_SCK / SPI1_MOSI and VDD on EXTCOMIN. None of the public designs is confirmed as built,
+so this stays PROVISIONAL: if the drawing says "right", change that one word and all ten
+pads follow. The spec's sentence "LCD connector pin order: 1 SCLK ... 10 VSSA" should be
+reworded as the order on the tail.
 
 Others, by part:
 
 | Item | PROVISIONAL content |
 |---|---|
-| ROM bootloader | the list of pins it drives or listens on (memory of AN2606) |
-| U1 electrical | input thresholds, 8 mA / 20 mA output figures, leakage, output resistance, internal pull values; **5 V tolerant structure of PH1** (section 4.2), of PB0 and PC13; VCAP 4.7 uF; OPAMP1 bandwidths; LSE drive limits; option bits; embedded USB resistors; supply sequencing (section 8) |
+| ROM bootloader | the list of pins it drives or listens on and the pulls it enables (memory of AN2606; one weak search extract); the SPI sync byte (memory of AN4286) |
+| U1 electrical | input thresholds, 8 mA / 20 mA output figures, PC13 limited to 3 mA, leakage, output resistance, internal pull values, injection current; VCAP 4.7 uF; OPAMP1 bandwidths; LSE drive limits; option bits; embedded USB resistors; supply sequencing (section 8); the UCPD dead-battery pull-downs, UCPD_DBDIS and the output drive of the FT_c pads PA15 / PB15 (3.6); the VDDUSB monitor |
 | U2, U3 | besides the ball map: behaviour of PWDN and of the outputs when unpowered, protection diodes, SCCB address and sink current, decoupling |
-| U9 MCP73831 | tri-state STAT and its levels, termination and preconditioning ratios, 4.5 V supply requirement, shutdown with PROG open, reverse leakage, 4.7 uF capacitors |
-| U7, U11 MCP1700 | order codes -2802 and -3302 (from the spec, not seen), tolerance, 6 V maximum input |
+| U9 BQ25101 | besides the ball map: K = 135 A-ohm (spec), TS bias current and thresholds, behaviour with TS low (disabled) and TS open (TTDM), termination and pre-charge ratios, **minimum operating input (4.45 V in the research, unverified), input-detection threshold and any input-voltage regulation (4.1)**, input over-voltage threshold, battery leakage, leakage of the CHG pin, output capacitance needed with the cell disconnected, order code; R14 value for the BQ25100 |
+| U7, U11 MCP1700 | order codes -2802 and -3302 (from the spec and distributor listings in docs/sourcing.csv), tolerance, 6 V maximum input |
 | U8 LP5907 | EN threshold, output discharge resistance (230 ohm assumed in the bootloader estimate) |
-| Q1 BSS138 | order code, pin order, threshold, leakage |
-| D17, D18 | forward voltages; D18 order code |
-| D1-D16 | forward voltages, reverse rating; the generic KiCad 0402 LED land pattern and its polarity mark |
+| Q1 BSS138 | pin order, threshold, on-resistance at 2.8 V, leakage |
+| D17 | forward voltage at 30 mA (0.30 V typical, 0.35 V maximum assumed), reverse leakage |
+| D1-D16 | forward voltages, reverse rating; the SFH 4053B data sheet has not been read; the generic KiCad 0402 LED land pattern and its polarity mark |
 | Y1 | stray capacitance 2.5 pF, C0, motional capacitance, ESR; the KiCad land pattern is drawn for another maker's 3215 crystal |
-| RT1 | B value and tolerance (no R-T table read), stock |
-| U4 | wiring of pins 2 and 3; SDO high impedance when not selected; any power-on restriction on INT1 |
+| RT1, RT2 | B value and tolerance (no R-T table read), stock |
+| U4 | wiring of pins 2 and 3; SDO high impedance when not selected; state of INT1 / INT2 after power-on |
 | U6 | height; deep power-down current |
 | RN1-RN6 | stock, height, match of the KiCad convex 4 x 0402 land pattern |
-| J1 | top-contact FH12A on the FH12 land pattern (spec); LCD supply range 2.7-3.3 V (2.8 V - 2 % = 2.74 V) |
-| passives | every MPN of the 0402 resistors and capacitors is from memory |
+| J1 | top-contact FH12A on the FH12 land pattern (spec) and that it numbers its contacts like the FH12; its position (5.1); LCD supply range 2.7-3.3 V (2.8 V - 3 % = 2.72 V) |
+| passives | every MPN of the 0402 resistors and capacitors is from memory; the capacitance left under DC bias (4.7) |
 | J2, BT1, BT2 | pad diameter 1.8 mm (YAML text), pad gap 0.7 mm (mechanical model) |
-| placement | nominal; in it RT1 is within 1 mm of the cell edge and U8 is 5.6 mm from the IMU |
+| U6 | pin 7 is HOLD# or RESET# depending on the family member (tied high: inactive for both) |
+| placement | nominal; in it both NTCs are within 0.4 mm of the cell body, RT1 is 2.5 mm from the charger and U8 is 2.9 mm from the IMU |
 
-`netlist_out/gl1_main-bom-status.csv` carries the status of every BOM line: 29 PROVISIONAL,
-8 RESEARCH. The toolchain's own BOM has no status column; the status is also in each part's
+`netlist_out/gl1_main-bom-status.csv` carries the status of every BOM line (30 PROVISIONAL,
+7 RESEARCH). The toolchain's own BOM has no status column; the status is also in each part's
 `Status` field.
 
 ## 7. Consequences for the firmware
 
-1. Regenerate `gl_pins.h` from `pinmap.json`: 17 pins moved (section 3.3).
-2. CHG_STAT: low = charging only while VBUS_SENSE is high; reads low with VBUS absent (section 4.3).
-3. Drive NTC_BIAS (PA5) high 35 ms before a grain measurement and keep it high during it (section 4.13).
-4. CAM_PWR_EN is PH3, the BOOT0 pad (section 4.7).
-5. VBUS_SENSE is PC13 (WKUP2), IMU_INT1 is PC5 (WKUP5), IMU_INT2 is PA7; VBUS removal is seen up to about 1 s late (section 4.4).
-6. LSE drive: medium-low or higher (section 4.11).
-7. Switch PA15, PB3, PB4 away from JTAG.
-8. Charge termination: the charger ends the charge when its current falls to about 1.5 mA. A marker that is awake in the cradle draws more than that from the same node, so the charger may never report "complete". Firmware should end the charge itself with CHG_INHIBIT (time and voltage) and must not rely on CHG_STAT going high.
-9. Rule 1 now covers PC0, PC1, PC3 (SCCB) and PC2, PH0 (PWDN) besides the DCMI pins and PA8.
+The same list is exported in `pinmap.json` (`firmware_notes`), so that it travels with the
+map. Items 2 and 4 are not optional: until they are done the present firmware cannot stop a
+charge on this board and does not compile against the regenerated header.
 
-## 8. Observations for the spec owner, the layout step and the mechanical model
+<!-- BEGIN GENERATED: FIRMWARE_NOTES -->
+1. Regenerate gl_pins.h from pinmap.json (every row marked CHANGED moved).
+2. CHG_INHIBIT (PH1) is a PUSH-PULL output, HIGH = stop charging (it turns on Q1, which pulls the charger's TS input low); analog or low = charger on. The present firmware (drivers/power.c, inhibit_(): latch low, then open drain) does NOTHING on this board - the gate of Q1 never goes high - so the firmware's own 0 to 45 C charge gate is inoperative until inhibit_() drives the pin push-pull HIGH. Until then only the charger's hardware TS window acts.
+3. CHG_STAT is on PA15 (EXTI15): the BQ25101's open-drain CHG output with a 100 kohm pull-up to V2V8, low = charging, high = not charging, done or no VBUS. No internal pull is needed. With the BQ25100 fallback fitted every internal pull on PA15 must be off (it also has the JTDI pull-up until the firmware switches to SWD only).
+4. EXTI lines: IMU_INT1 PA7 = EXTI7 (WKUP8), IMU_INT2 PA5 = EXTI5, VBUS_SENSE PC13 = EXTI13 (WKUP2), CHG_STAT PA15 = EXTI15. hal/stm32u5/gl_hal_stm32u5.c hard-codes EXTI13 / 5 / 9 / 0 (vectors and compile-time asserts): three of the four must move.
+5. UCPD (PROVISIONAL, RM0456 / DS13086 not read): PA15 and PB15 are the UCPD1 CC pads, PB5 and PB14 their dead-battery control pads. After reset a high level on PB5 (SPI1_MOSI) switches a 5.1 kohm pull-down onto PA15, a high level on PB14 (SPI2_MISO) one onto PB15 (SPI2_MOSI: 0.55 mA while it is driven high). Set UCPD_DBDIS in PWR_UCPDR (HAL_PWREx_DisableUCPDDeadBattery) at the top of gl_hal_init(), before any pin is configured, and again after every wake-up that resets the PWR registers.
+6. PA9 is USB_OTG_FS_VBUS and carries GRAIN_CP0: run the USB device with VBUS sensing off and tell the core that the session is valid from VBUS_SENSE (register details PROVISIONAL).
+7. USB supply: set the USB-supply-valid bit only while BOTH VBUS_SENSE (PC13) is high AND the MCU's own VDDUSB monitor reports the supply ready; clear it on the falling edge of either. PC13 alone does not measure VDDUSB: on undocking VDDUSB can fall below 3.0 V within about a millisecond under USB load while PC13 still reads high for up to about 22 ms.
+8. VBUS_SENSE: divider 100 kohm : 100 kohm on the VBUS pad (not behind the Schottky). High is guaranteed above 3.92 V at the pad, low below 1.68 V; removal from the cradle is seen within about 22 ms.
+9. CAM_R_PWDN is on PH3, the BOOT0 pad (10 kohm to ground): it reads low at every reset; 0.28 mA flows into the pull-down while it is driven high.
+10. IMU_CS is PB1 and LCD_DISP is PB12 (exchanged: PB12 is the ROM bootloader's SPI2 chip-select input).
+11. Before a jump to the ROM bootloader leave the IMU with its INT2 output static (data-ready routing off): PA5 / PA7 are the ROM's SPI1 clock and data inputs.
+12. The grain bias divider hangs on LCD_DISP (PB12): DISP must have been high for 35 ms before a grain measurement. drivers/grain_frontend.c waits 25 ms after it enables the op-amp and does not look at the display: gl_grain_fe_power() must wait for, or refuse without, 35 ms of display-on time.
+13. Switch PA15, PB3, PB4 away from JTAG (SWD only).
+14. Every camera-facing pin low or analog while V2V8_CAM is off: PC0, PC1, PC3 (SCCB), PC2, PH3 (PWDN), the eleven DCMI pins and PA8.
+15. Lines without a board pull float while the MCU is in reset or in the ROM bootloader: LCD_EXTCOMIN (PB2), SPI1_SCK / SPI1_MOSI (PB3 / PB5), SPI2_SCK / SPI2_MOSI (PB13 / PB15), CAM_L_PWDN (PC2). gl_hal_init() must give each its level before anything else; keep an internal pull-down on PB4 and PB14 (the MISO lines float between transfers; PB14 is also UCPD1_DBCC2).
+16. PA3 (OPAMP1 output, the ROM's USART2_RX) is held high by R31, 150 kohm to V2V8, also with light on the photodiode. Leave PA3 analog while OPAMP1 is off: driven low it costs 19 uA.
+17. LSE drive: medium-low or higher (NETLIST_NOTES 4.9).
+<!-- END GENERATED: FIRMWARE_NOTES -->
 
-- **Supply sequencing, dead cell.** VDDUSB (3.3 V) comes straight from VBUS. With a cell at its cut-off, VDDUSB is up before VDD. ST restricts supplies that are above VDD while VDD is below 1 V (PROVISIONAL memory). It follows from the spec's rail table, not from this netlist; a 3.3 V regulator with an enable driven from V2V8 would remove it.
+Also: charge termination. A marker that is awake in the cradle draws more than the 2 mA
+termination current from the charger's output, so the charger may never report "complete"
+and holds 4.2 V. Firmware should end the charge itself with CHG_INHIBIT (time and voltage)
+and must not rely on CHG_STAT going high.
+
+## 8. For the spec owner, the mechanical owner and the layout step
+
+### 8.1 Three things only the specification can change
+
+- **VDDUSB comes up before VDD when a marker with a dead cell is docked.** U11 is a
+  three-pin regulator fed straight from VBUS_D (the spec's rail table). With the cell at its
+  protection cut-off V2V8 is 0 V; on docking VDDUSB reaches 3.3 V within about a millisecond
+  while VDD follows only after the charger has detected its input and restarted the cell
+  node (tens of milliseconds, PROVISIONAL). ST requires VDDUSB (and VDDA, VDDIO2) to stay
+  below VDD + 0.3 V while VDD is under 1 V (memory of DS13086, **PROVISIONAL**, not read).
+  If that is right, the rule is broken at every such docking, including the first docking
+  of a unit that arrives with a tripped protection circuit. The netlist does not change it:
+  the rail table names the part and its feed. Proposal for an amendment: make VDDUSB depend
+  on V2V8 - a 3.3 V regulator with an enable pin driven from V2V8 (same SOT-23-5 footprint
+  class as U8, one resistor), or a small load switch in U11's input gated by V2V8; two more
+  parts near U11 at most. Release gate until then: read the power-sequencing paragraph of
+  DS13086. The other paths into an unpowered MCU were walked and are benign: VBUS_SENSE
+  into PC13 is at most 2.75 V through 50 kohm, CHG is pulled low, not driven, and PA11 /
+  PA12 see only the host's pull-downs.
+- **Charger input headroom** (4.1): below the 4.45 V the research records at the low end of
+  a compliant USB source; spec-inherited (series Schottky plus the cradle fuse).
+- **The series diode.** With the charger's 30 V input rating and its reverse blocking (both
+  PROVISIONAL) the Schottky's remaining jobs are reverse polarity at the pads and keeping
+  the 4.4 uF of VBUS_D off the exposed pad. Whether that is worth 0.3 V is a spec decision.
+
+### 8.2 Observations
+
+- **Open NTC1 defeats the hardware temperature window.** By the search extract a floating TS pin puts the charger into its test mode (no temperature monitoring, no timers, no termination). A cracked joint on RT1 therefore removes the protection E1 exists for, silently. Board test should measure the TS voltage (about 0.5 V at 25 C, PROVISIONAL) at RT1; firmware can cross-check NTC2 against the charger's behaviour. To be confirmed in the data sheet.
 - **Exposed NRST pad.** NRST has only the MCU's internal pull-up (about 40 kohm) and 100 nF. A conductive film from the NRST pad to ground below about 17 kohm holds the MCU in reset. The spec asks for no external pull-up; none was added.
 - **No ESD parts on SWDIO, SWCLK, NRST** (the spec asks for clamps on VBUS, D+, D- only).
-- **R10 is redundant** with R2 (section 4.7).
-- **Mechanical check and bare bottom copper.** `mechanical/cad/board_import.py` (check D) treats every fitted bottom-side component as a body that must lie in the grain opening or the pad slot. The three ball-foot lands and the three bottom fiducials are bare copper outside both, so it fails with them marked fitted ("outside the grain opening and the pad slot", exit 1). In the design they are flagged not-fitted (`BARE_BOTTOM_COPPER_NOT_FITTED = True`); the check then passes on the nominal placement (exit 0). The flag changes no copper and no BOM line. The mechanical check should learn to ignore copper-only footprints.
-- **Layout.** R9 belongs at pad 41 of U1 and the six arrays at the cameras (spec). Keep U8, U9, U7, U11 away from U4 (rule 17). Keep V2V8 copper on In2.Cu out from under the foot lands (section 5).
+- **Inputs that float in reset and in the ROM bootloader** (3.7): no pull-downs were added; the spec owner may want four.
+- **Photodiode with the amplifier off.** In bright light the cathode node (PA1) is pulled below ground by the photodiode itself (to its open-circuit voltage, about 0.4 V) while OPAMP1 is off. The diode limits its own voltage, so the injection into PA1 should stay small; the pin's injection rating was not read. The sleep-current test must be made with the underside dark (4.10).
+- **BQ25100 fallback.** Fit R14, leave out R13, and CHG_STAT means nothing (4.2). On PA15 the JTDI pull-up (about 40 kohm, until firmware switches to SWD) then feeds the programming pin in reset and in the ROM bootloader.
 - **No spare MCU pin** (section 3.1).
+- **`docs/sourcing.csv` and `docs/SOURCING.md`** still list the old charger (MCP73831), the old NTC (NCP15) and the SFH 4053; they belong to another package. New in this netlist and not in them: the 2.2 uF capacitors, 150 kohm for R31, two 100 kohm for the VBUS divider (82 kohm is gone).
+
+### 8.3 Mechanical
+
+- **J1** (5.1): open; its position may move by up to 1.5 mm.
+- **Bare bottom copper and the mechanical import** (5.2): `board_import.py` should ignore board-only footprints of zero height, and compare J1 by its body, not by its anchor.
+- **The cell against soldered leads.** In the nominal placement the lead pads of U1 (pads 33 to 48) are 0.45 mm from the cell body and its courtyard 0.20 mm. The 13.4 mm courtyard sits between the cell (y -0.2) and the post-foot keep-outs (y 13.75): 0.55 mm of freedom in all, so 0.80 mm from pad copper to the cell is the most any placement can give. No tolerance on the cell's width or position is stated: the mechanical owner should give one.
+- **The cell's protection-board end.** The YAML has the protection board at the -x end of the 34 mm body; its length is provisional. An NTC beside that end reads the protection board, not the cell. Both NTCs are over the cell proper in the nominal placement (x = -6.6 and -9.4).
+- **LED pair pitch** 1.00 mm against the model's 0.90 mm (section 5, no. 8).
+
+### 8.4 For the layout step
+
+- **Free for the layout step.** Which of the twelve array elements of a camera carries which output is arbitrary: the table `CAM_ARRAY_MAP` in the design file may be permuted to untangle the BGA escape (and must be revisited when the real ball map replaces the stand-in). PROPOSED and CHANGED pins of the pin map may still move; `check_pinmap.py` then says what breaks. **Not** onto PA15 or PB15 with anything but an input or an alternate-function output into CMOS inputs (3.6).
+- **J1 is wired mirrored** against the first netlist: SCLK, SI, SCS, EXTCOMIN, DISP are on pads 10 to 6 (x = +2.25 to +0.25), VDDA, VDD, EXTMODE, VSS, VSSA on pads 5 to 1. PROVISIONAL; a correction from the Sharp drawing would mirror them back.
+- **Parts that still sit where their old nets were.** R24 (charlieplex line 1) now belongs at pad 26 of U1 (PB0, left edge); line 1 leaves from there, the other four from the corner at pads 42 and 51 to 54. R15 belongs at the VBUS pad end (U10 / D17 / J2 pad 1): the long run to PC13 should be the 100 kohm-limited VBUS_SENSE, not VBUS. CHG_STAT runs from U9 (lower left) to pad 50 (lower right): a static line, any layer.
+- **Placement constraints seen on the nominal placement.** U1: see 8.3. RT1 (the charger's NTC) is 2.5 mm from the charger U9, which dissipates up to about 46 mW; aim for 3 mm or more along the cell edge, because a warm NTC1 errs on the unsafe side at the cold limit (the E2 rule itself is met: RT1 0.23 mm, RT2 0.33 mm from the cell). Give the post-foot keep-out squares 0.2 mm to pad copper as well as to bodies (R4, R5, R10, C29 were at 0.18 to 0.19 mm and have been nudged). Camera bodies are 0.225 mm from the flat edge (rule row "PCB l", limit 0.2 mm).
+- **Layout.** R9 belongs at pad 41 of U1 and the six arrays at the cameras (spec); nothing fits between the MCU and the battery, so R9 sits at a corner of the package. Keep U8, U9, U7, U11 away from U4. Keep V2V8 copper on In2.Cu out from under the foot lands (section 5). The three inner LED runs and the two photodiode nets leave the ring on the bottom layer between the LED pairs. If the VDDUSB amendment of 8.1 is adopted, two more small parts are needed beside U11.
+- **The nominal placement is not a layout.** Two informational runs of the toolchain's router on the first netlist's placement (scratch directory, not part of this stage; 540 s with the default 3 mm escape window, 300 s with 1.75 mm) both stalled in the fan-out of the camera BGAs and made 29 and 18 of 302 connections. In the nominal placement the six resistor arrays and the camera capacitors sit inside the escape window, two arrays on the side of each camera that faces the MCU, and the element order of `CAM_ARRAY_MAP` is not matched to the ball positions. The spec wants the arrays at the cameras, so the layout step has to find where (the README's advice: keep the BGA sides that face the rest of the circuit clear) and in which element order; nothing in the netlist fixes either. The router was not run again after the review changes.
 
 ## 9. Not done
 
-- No datasheet was read; nothing outside the repository and ST's two open pin-data files was consulted.
-- No copper, no board file, no KiCad DRC: that is the layout step. "ERC" here means the toolchain's `checks.run_checks` (electrical rules, BOM fields, footprints, placement, decoupling) plus KiCad's netlist of the generated schematic compared with the model.
+- No datasheet was read. Outside the repository only ST's two open pin-data files (data, fetched from raw.githubusercontent.com/STMicroelectronics/STM32_open_pin_data, SHA-256 in `check_pinmap.py`) and three web searches were used, all on 2026-11-13 and all recorded as PROVISIONAL. What the search tool returned is an extract or a summary of a page, not the page:
+  - BQ25101 pin table and TS behaviour: ti.com/document-viewer/BQ25101/datasheet/pin_configuration_and_functions, ti.com/document-viewer/BQ25100/datasheet/pin_configuration_and_functions and .../detailed_description (SLUSBV8C; the pin table came back garbled: only "C1 CHG / PRE-TERM, C2 VSS", "floating TS or pulling high: TTDM; pulling low disables the IC", "R_ISET 0.54 to 13.5 kohm" were readable); dtsheet.com/model/4116777 (third-party copy for the BQ25101H: "OUT A1, IN A2, TS B1, ISET B2, CHG C1, VSS C2", "75 nA battery leakage").
+  - AN2606 pin list for the STM32U575: manualshive.com/ru/manual/st/stm32u575-series/1355565?page=21 (third-party copy: USART1 PA9 / PA10, USART2 PA2 / PA3, USART3 PC10 / PC11, I2C1 PB6 / PB7, I2C2 PB10 / PB11, I2C3 PC0 / PC1, SPI1 PA4-PA7, FDCAN1 PB8 / PB9); a community.st.com thread on AN2606 rev 70 that quotes "SPI1_MOSI ... push-pull, pull-down mode".
+- No copper and no routed board: that is the layout step. "ERC" here means the toolchain's `checks.run_checks` (electrical rules, BOM fields, footprints, placement, decoupling) plus KiCad's netlist of the generated schematic compared with the model. KiCad's DRC ran on the board without tracks only (0 errors, 2 warnings `isolated_copper` for the two planes nothing reaches yet; every connection is still open and counted as unconnected).
 - AN2606 could not be read; the bootloader part of the pin-map proof is PROVISIONAL.
+- The JEITA thresholds of the BQ25101 were not read against the NTC curve (release gate of the spec).
+- The review's doubts about data-sheet facts were NOT resolved, because no data sheet could be read: the charger's minimum input and what it does below it (4.1), ST's supply-sequencing rule (8.1), the UCPD dead-battery behaviour and the drive of the FT_c pads (3.6), the capacitance of the MLCCs under bias (4.7), the pin-1 edge of the LCD tail (section 6). Each is marked PROVISIONAL where it is used; where a cheap change made the netlist right for either answer (the LED line off PA15, 2.2 uF capacitors, 150 kohm for R31) it was made.
+
+## 10. What changed after the two netlist reviews
+
+| Review finding | What was done |
+|---|---|
+| LCD tail wired in the straight order although the repository's evidence says it is mirrored | J1 is wired mirrored (pad 1 = VSSA ... pad 10 = SCLK), derived from one PROVISIONAL fact, `LCD_TAIL_PIN1_EDGE`; rule row "lcd c" measures the chain on the placed footprint (section 6) |
+| charger input below its 4.45 V minimum at the low end of a USB source | table 4.1 redone against 4.45 V (negative margin shown); spec-inherited, escalated (8.1); proposed board-test value |
+| VDDUSB before VDD with a dead cell | not changed in the netlist (the rail table fixes U11); amendment proposed, release gate (8.1) |
+| PA15 / PB15 are UCPD CC pads, PB5 / PB14 their control pads | GRAIN_CP1 moved from PA15 to PB0, CHG_STAT from PB0 to PA15; check_pinmap section I; firmware notes on UCPD_DBDIS and on VBUS sensing (3.6) |
+| 1 uF 10 V 0402 loses half its value at 5 V | C22, C23, C26, C27 are 2.2 uF; effective values stated (4.7) |
+| four seeded defects passed every checker | pin tables of 30 library-backed parts compared with the installed KiCad symbols (row "pin tables"); R31's direction and value tested; the LCD chain tested; 17 more seeded defects, all caught. The reviewer's 32 text mutations of the design file were applied again to the file as it is now: all 32 are caught |
+| inputs without a level in reset and in the ROM | accepted and written down (3.7); no parts added |
+| VBUS_SENSE is not a measure of VDDUSB | firmware note; the divider is now on the pad net, removal is seen in 22 ms (4.3) |
+| J1 placed by its anchor, body 1.5 mm behind the model | cannot be met with this land pattern: open item with the numbers (5.1), rule row "PCB k2"; the "PCB k" row no longer claims it |
+| firmware must change before it matches the map | notes 2 and 4 of section 7 and `pinmap.json`: the present charge stop does nothing; three EXTI lines move |
+| R31 (1 Mohm) does not hold PA3 high in light | R31 is 150 kohm (4.10); the sleep-current test needs a dark underside |
+| VBUS-sense divider on VBUS_D instead of VBUS | moved to the pad net as the rail table has it, 100 kohm : 100 kohm (4.3) |
+| six bare-copper footprints flagged "not fitted" | kept, bounded by a rule row and reported as a workaround (5.2) |
+| little margin at the cell, the charger and two post feet | RT1 moved 2.5 mm from the charger, four parts nudged to 0.2 mm from the post-foot squares; U1 against the cell is a constraint for the layout and the mechanical owner (8.3, 8.4) |
+| documentation slips | five results instead of pass / fail with a count line (section 2); "PCB k" corrected; the gen_pins sentence corrected (3.5); the YAML's component edge clearance is now a rule row ("PCB l") |

@@ -162,6 +162,25 @@ const uint8_t *gl_gfx_row(const gl_gfx_t *g, int y)
     return &g->px[y * GL_GFX_STRIDE];
 }
 
+void gl_gfx_rotate_180(gl_gfx_t *g)
+{
+    /* pixel (x, y) <-> (127 - x, 127 - y): byte i <-> byte (last - i), each
+     * with its bits in reverse order.  The clip circle is centred on the
+     * screen, so a clipped picture stays inside it. */
+    for (unsigned i = 0; i < GL_GFX_BYTES / 2u; i++) {
+        uint8_t a = g->px[i];
+        uint8_t b = g->px[GL_GFX_BYTES - 1u - i];
+        a = (uint8_t)(((a & 0xF0u) >> 4) | ((a & 0x0Fu) << 4));
+        a = (uint8_t)(((a & 0xCCu) >> 2) | ((a & 0x33u) << 2));
+        a = (uint8_t)(((a & 0xAAu) >> 1) | ((a & 0x55u) << 1));
+        b = (uint8_t)(((b & 0xF0u) >> 4) | ((b & 0x0Fu) << 4));
+        b = (uint8_t)(((b & 0xCCu) >> 2) | ((b & 0x33u) << 2));
+        b = (uint8_t)(((b & 0xAAu) >> 1) | ((b & 0x55u) << 1));
+        g->px[i] = b;
+        g->px[GL_GFX_BYTES - 1u - i] = a;
+    }
+}
+
 unsigned gl_gfx_count_black(const gl_gfx_t *g)
 {
     unsigned n = 0;
@@ -481,10 +500,16 @@ void gl_gfx_aim_line_styled(gl_gfx_t *g, float aim_rad, float ball_az_rad, float
         local.pixels = gl_gfx_line_angle(g, bx, by, aim_rad, half_width_px,
                                          tentative ? &tent : &solid, GL_INK_BLACK);
     } else {
+        /* The true line leaves the aperture: the PARALLEL through the screen
+         * centre, in the style the true line would have had (the direction
+         * is what the golfer copies; solid stays solid, tentative stays
+         * tentative). */
         local.on_screen = false;
-        const gl_gfx_line_style_t dashes = { 6.0f, 4.0f, false };
+        const gl_gfx_line_style_t solid = { 0.0f, 0.0f, true };
+        const gl_gfx_line_style_t tent = { GL_GFX_AIM_TENTATIVE_DASH_PX,
+                                           GL_GFX_AIM_TENTATIVE_GAP_PX, true };
         local.pixels = gl_gfx_line_angle(g, GL_GFX_CENTRE_F, GL_GFX_CENTRE_F, aim_rad,
-                                         half_width_px, &dashes, GL_INK_BLACK);
+                                         half_width_px, tentative ? &tent : &solid, GL_INK_BLACK);
     }
     if (info != NULL) {
         *info = local;

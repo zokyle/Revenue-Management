@@ -16,6 +16,15 @@
  * aim search makes at most 1 + 30 + 80 pace solves and checks the roll
  * budget (max_rolls) before each one after the first, so one aim solve
  * rolls at most max_rolls + 120 balls of at most 6004 RK4 steps each.
+ *
+ * STEP BUDGET (firmware only; the reference has none).  The bound above is
+ * 1.9 million RK4 steps per solve.  With gl_solver_options_t.max_steps the
+ * steps themselves are budgeted: the budget is checked before EVERY trial
+ * roll, so a solve integrates at most max_steps + 6004 steps.  When it runs
+ * out, the search stops where it is and the solve ends NO_CONVERGENCE with
+ * the best iterate it had - what the putts that cost this much end as
+ * anyway.  With max_steps = 0 this file is the reference, statement by
+ * statement.
  */
 #include "gl_solver_priv.h"
 
@@ -26,6 +35,9 @@ typedef struct {
     gl_real_t dist;
     gl_real_t vh2;              /* target arrival speed squared */
     uint32_t n_steps;           /* RK4 steps of all trials so far */
+    uint32_t max_steps;         /* step budget, 0 = none */
+    uint32_t steps_used;        /* ... of which this much was spent before this solve */
+    bool budget_spent;          /* a trial was refused: the budget is used up */
 } trial_ctx_t;
 
 /**
@@ -48,6 +60,13 @@ static gl_real_t trial_(trial_ctx_t *c, gl_real_t phi, gl_real_t e0, gl_real_t *
     const gl_real_t dy = c->uy * cph + c->ux * sph;
     gls_roll_out_t o;
 
+    if (c->max_steps != 0u && c->steps_used + c->n_steps >= c->max_steps) {
+        /* out of budget: nothing is rolled.  The callers look at
+         * budget_spent before they use the value. */
+        c->budget_spent = true;
+        *y = GLS_R(0.0);
+        return GLS_R(0.0);
+    }
     gls_roll(&c->roll, c->sx, c->sy, v0 * dx, v0 * dy, &o);
     c->n_steps += o.n_step;
     if (o.crossed) {
@@ -70,6 +89,16 @@ typedef struct {
     uint8_t flag;     /* GLS_PACE_* */
     uint32_t n;       /* trial rolls used */
 } pace_t;
+
+/** The step budget ran out inside a pace solve: nothing of it is used. */
+static void pace_cut_(pace_t *out, gl_real_t e, uint32_t n)
+{
+    out->e = e;
+    out->g = GLS_NAN;
+    out->y = GLS_NAN;
+    out->flag = (uint8_t)GLS_PACE_CUT;
+    out->n = n;
+}
 
 /**
  * Inner solve (reference: _solve_pace): launch energy giving the target
@@ -98,6 +127,10 @@ static void solve_pace_(trial_ctx_t *c, gl_real_t phi, gl_real_t e_guess, gl_rea
         e = e_max;
     }
     g = trial_(c, phi, e, &y);
+    if (c->budget_spent) {
+        pace_cut_(out, e, n);
+        return;
+    }
     n++;
     if (GLS_FABS(g) <= tol_g) {
         out->e = e;
@@ -180,6 +213,10 @@ static void solve_pace_(trial_ctx_t *c, gl_real_t phi, gl_real_t e_guess, gl_rea
             }
         }
         g = trial_(c, phi, e_new, &y);
+        if (c->budget_spent) {
+            pace_cut_(out, e_new, n);
+            return;
+        }
         n++;
         if (GLS_FABS(g) <= tol_g) {
             out->e = e_new;
@@ -236,6 +273,10 @@ static void solve_pace_(trial_ctx_t *c, gl_real_t phi, gl_real_t e_guess, gl_rea
             }
         }
         g = trial_(c, phi, e, &y);
+        if (c->budget_spent) {
+            pace_cut_(out, e, n);
+            return;
+        }
         n++;
         if (GLS_FABS(g) <= tol_g) {
             out->e = e;
@@ -281,7 +322,8 @@ uint8_t gls_solve_kernel(const gl_quad_surface_t *sf, gl_real_t sx, gl_real_t sy
                          gl_real_t hy, gl_real_t a_r, gl_real_t agx, gl_real_t agy, gl_real_t v_h,
                          gl_real_t dt, gl_real_t t_max, gl_real_t r_max, gl_real_t tol_y,
                          gl_real_t tol_dist, gl_real_t phi_max, gl_real_t v_max,
-                         uint32_t max_rolls, gls_solve_res_t *res)
+                         uint32_t max_rolls, uint32_t max_steps, uint32_t steps_used,
+                         gls_solve_res_t *res)
 {
     const gl_real_t dist = GLS_SQRT((hx - sx) * (hx - sx) + (hy - sy) * (hy - sy));
     trial_ctx_t c;
@@ -307,6 +349,7 @@ uint8_t gls_solve_kernel(const gl_quad_surface_t *sf, gl_real_t sx, gl_real_t sy
     res->vhole = GLS_NAN;
     res->n_rolls = 0u;
     res->n_steps = 0u;
+    res->budget_spent = false;
     if (!(dist > GLS_R(1e-6)) || !(a_r > GLS_R(0.0)) || !(v_h >= GLS_R(0.0)) ||
         !(dt > GLS_R(0.0))) {
         return (uint8_t)GL_SOLVE_INVALID;
@@ -344,6 +387,9 @@ uint8_t gls_solve_kernel(const gl_quad_surface_t *sf, gl_real_t sx, gl_real_t sy
     c.dist = dist;
     c.vh2 = vh2;
     c.n_steps = 0u;
+    c.max_steps = max_steps;
+    c.steps_used = steps_used;
+    c.budget_spent = false;
 
     /* Energy balance gives the launch energy almost exactly (path ~ straight):
      *   v0^2 = v_h^2 + 2 a_r D + 2 (5/7) G (z_hole - z_ball) - 2 a_grain . (hole - ball) */
@@ -392,8 +438,13 @@ uint8_t gls_solve_kernel(const gl_quad_surface_t *sf, gl_real_t sx, gl_real_t sy
     b_y = y;
     b_g = g;
     b_pf = pf;
-    have_best = (pf != (uint8_t)GLS_PACE_UNREACHABLE);
-    if (pf == (uint8_t)GLS_PACE_UNREACHABLE) {
+    have_best = (pf != (uint8_t)GLS_PACE_UNREACHABLE && pf != (uint8_t)GLS_PACE_CUT);
+    if (pf == (uint8_t)GLS_PACE_CUT) {
+        /* (step budget, firmware only) not one aim was tried to the end:
+         * the planar first guess at the energy-balance speed */
+        status = (int)GL_SOLVE_NO_CONVERGENCE;
+        b_e = e0;
+    } else if (pf == (uint8_t)GLS_PACE_UNREACHABLE) {
         status = (int)GL_SOLVE_UNREACHABLE;
         b_e = e0; /* nothing reached the hole: fall back to the energy-balance estimate */
     } else if (GLS_FABS(y) <= tol_y) {
@@ -460,6 +511,11 @@ uint8_t gls_solve_kernel(const gl_quad_surface_t *sf, gl_real_t sx, gl_real_t sy
             p_new = -phi_max;
         }
         solve_pace_(&c, p_new, e, tol_g, e_min, e_max, &pc);
+        if (pc.flag == (uint8_t)GLS_PACE_CUT) { /* step budget: keep the best so far */
+            n_tot += pc.n;
+            status = (int)GL_SOLVE_NO_CONVERGENCE;
+            break;
+        }
         e = pc.e;
         g = pc.g;
         y = pc.y;
@@ -539,6 +595,10 @@ uint8_t gls_solve_kernel(const gl_quad_surface_t *sf, gl_real_t sx, gl_real_t sy
             }
             e_start = e_lo + (e_hi - e_lo) * (phi - p_lo) / width;
             solve_pace_(&c, phi, e_start, tol_g, e_min, e_max, &pc);
+            if (pc.flag == (uint8_t)GLS_PACE_CUT) { /* step budget: NO_CONVERGENCE, best so far */
+                n_tot += pc.n;
+                break;
+            }
             e = pc.e;
             g = pc.g;
             y = pc.y;
@@ -590,6 +650,7 @@ uint8_t gls_solve_kernel(const gl_quad_surface_t *sf, gl_real_t sx, gl_real_t sy
     res->v0 = GLS_SQRT(b_e);
     res->n_rolls = n_tot;
     res->n_steps = c.n_steps;
+    res->budget_spent = c.budget_spent;
     if (have_best) {
         const gl_real_t v2 = b_g + vh2;
         res->miss = b_y;
@@ -606,7 +667,8 @@ bool gls_options_ok(const gl_solver_options_t *opt)
            gls_finite(opt->tol_miss_m) && opt->tol_miss_m >= GLS_R(0.0) &&
            gls_finite(opt->tol_pace_m) && opt->tol_pace_m >= GLS_R(0.0) &&
            gls_finite(opt->lm_tol) && opt->lm_tol >= GLS_R(0.0) &&
-           opt->lm_max_iter <= GL_SOLVER_LM_MAX_ITER_LIMIT;
+           opt->lm_max_iter <= GL_SOLVER_LM_MAX_ITER_LIMIT &&
+           gls_finite(opt->near_miss_m) && opt->near_miss_m >= GLS_R(0.0);
 }
 
 gl_status_t gl_solver_solve_aim(const gl_quad_surface_t *surface, gl_rvec2_t start, gl_rvec2_t hole,
@@ -647,7 +709,7 @@ gl_status_t gl_solver_solve_aim(const gl_quad_surface_t *surface, gl_rvec2_t sta
     status = gls_solve_kernel(surface, start.x, start.y, hole.x, hole.y, a_r_mps2,
                               grain.x * a_r_mps2, grain.y * a_r_mps2, v_h, GLS_DT, GLS_T_MAX,
                               GLS_R_MAX, opt->tol_miss_m, opt->tol_pace_m, GLS_PHI_MAX, GLS_V_MAX,
-                              (uint32_t)opt->max_rolls, &res);
+                              (uint32_t)opt->max_rolls, opt->max_steps, 0u, &res);
     if (status != (uint8_t)GL_SOLVE_INVALID) {
         /* Absurd but finite inputs (a curvature of 1e30 /m ...) take the
          * arithmetic out of the finite range; a launch that is not a number

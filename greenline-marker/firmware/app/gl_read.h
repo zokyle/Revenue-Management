@@ -108,7 +108,10 @@ typedef struct {
     uint8_t groups_ok;            /**< L R R L groups that entered the disparity */
     uint8_t groups_tried;
     uint8_t strips_captured;
-    uint8_t n_candidates;         /**< band candidates */
+    uint8_t n_candidates;         /**< band candidates (after the shoulders of strong lines
+                                       have been dropped) */
+    uint8_t n_shoulders;          /**< band "lines" dropped as the shoulder of a much stronger
+                                       line inside their own template width */
     uint8_t n_probed;             /**< candidates examined with an L R R L group of their own */
     float cand_score;             /**< score of the candidate followed */
     float band_noise;             /**< pixel noise of the band, grey rms */

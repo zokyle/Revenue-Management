@@ -405,18 +405,29 @@ GL_TEST(test_aim_line_off_screen_fallback)
     GL_CHECK(info.offset_px > 61.0f);
     GL_CHECK_NEAR(info.chord_px, 0.0, 1e-6);
     GL_CHECK(info.pixels > 100);
-    /* the dashed substitute is parallel to the aim direction, through the centre */
+    /* the substitute is parallel to the aim direction, through the centre */
     double fit = fit_angle(&g, &mx, &my, &npx);
     GL_CHECK_NEAR(ang_diff_mod_pi(fit, 20.0 * 3.14159265 / 180.0) * 57.29578, 0.0, 0.6);
     GL_CHECK_NEAR(mx, 63.5, 1.0);
     GL_CHECK_NEAR(my, 63.5, 1.0);
-    /* it is dashed: fewer pixels than the solid line would have */
+    /* It has the STYLE of the line it stands for.  The solid aim line gives a
+     * solid parallel (as many pixels as a plain solid line, give or take the
+     * edge dithering); the tentative one gives the long dashes, 9 on / 7 off.
+     * (It used to be a third style, 6 / 4 dashes, for both: a solved aim off
+     * the screen looked like "not a solution".) */
     {
-        unsigned dashed = info.pixels;
+        const unsigned sub_solid = info.pixels;
+        unsigned sub_tent, solid;
         gl_gfx_init(&g);
-        unsigned solid = gl_gfx_line_angle(&g, 63.5f, 63.5f, 20.0f * GL_DEG2RAD_F, 3.0f, NULL,
-                                           GL_INK_BLACK);
-        GL_CHECK(dashed < solid * 3 / 4 && dashed > solid * 2 / 5);
+        gl_gfx_aim_line_styled(&g, 20.0f * GL_DEG2RAD_F, 0.0f, 3.0f, true, &info);
+        GL_CHECK(!info.on_screen);
+        sub_tent = info.pixels;
+        fit = fit_angle(&g, &mx, &my, &npx);
+        GL_CHECK_NEAR(ang_diff_mod_pi(fit, 20.0 * 3.14159265 / 180.0) * 57.29578, 0.0, 0.8);
+        gl_gfx_init(&g);
+        solid = gl_gfx_line_angle(&g, 63.5f, 63.5f, 20.0f * GL_DEG2RAD_F, 3.0f, NULL, GL_INK_BLACK);
+        GL_CHECK(sub_solid > solid * 19 / 20 && sub_solid < solid * 21 / 20);
+        GL_CHECK(sub_tent < solid * 13 / 20 && sub_tent > solid * 9 / 20);
     }
     /* negative side */
     gl_gfx_init(&g);
@@ -708,6 +719,44 @@ GL_TEST(test_extreme_integer_arguments)
            "no pixel outside the aperture, no guard byte changed\n", calls);
 }
 
+/* gl_gfx_rotate_180(): pixel (x, y) <-> (127 - x, 127 - y); twice = nothing. */
+GL_TEST(test_rotate_180)
+{
+    static gl_gfx_t a, b;
+    unsigned bad = 0;
+    gl_gfx_init(&a);
+    gl_gfx_set_clip(&a, false);
+    /* an asymmetric picture: single pixels in the corners, text, a line */
+    gl_gfx_pixel(&a, 0, 0, GL_INK_BLACK);
+    gl_gfx_pixel(&a, 127, 0, GL_INK_BLACK);
+    gl_gfx_pixel(&a, 5, 127, GL_INK_BLACK);
+    gl_gfx_pixel(&a, 8, 3, GL_INK_BLACK);
+    (void)gl_gfx_text(&a, 10, 20, "<2.9 CUP 7", 1, GL_INK_BLACK);
+    (void)gl_gfx_text(&a, 3, 70, "GL-1", 2, GL_INK_BLACK);
+    (void)gl_gfx_line_angle(&a, 40.0f, 90.0f, 0.3f, 2.0f, NULL, GL_INK_BLACK);
+    b = a;
+    gl_gfx_rotate_180(&b);
+    for (int y = 0; y < 128; y++) {
+        for (int x = 0; x < 128; x++) {
+            bad += (gl_gfx_get(&a, x, y) != gl_gfx_get(&b, 127 - x, 127 - y)) ? 1u : 0u;
+        }
+    }
+    GL_CHECK_EQ(bad, 0);
+    GL_CHECK(!gl_gfx_get(&b, 127, 127) && !gl_gfx_get(&b, 0, 127) && !gl_gfx_get(&b, 122, 0) &&
+             !gl_gfx_get(&b, 119, 124));
+    GL_CHECK_EQ(gl_gfx_count_black(&a), gl_gfx_count_black(&b));
+    GL_CHECK(memcmp(a.px, b.px, sizeof(a.px)) != 0);
+    gl_gfx_rotate_180(&b);
+    GL_CHECK_MEM(a.px, b.px, sizeof(a.px));
+    /* a picture drawn under the round clip stays inside it */
+    gl_gfx_init(&a);
+    gl_gfx_set_clip(&a, true);
+    gl_gfx_rect(&a, 0, 0, 128, 128, GL_INK_BLACK);
+    b = a;
+    gl_gfx_rotate_180(&b);
+    GL_CHECK_MEM(a.px, b.px, sizeof(a.px)); /* the aperture is symmetric about the centre */
+}
+
 int main(void)
 {
     GL_RUN(test_format_and_bit_order);
@@ -722,5 +771,6 @@ int main(void)
     GL_RUN(test_changed_rows);
     GL_RUN(test_shapes);
     GL_RUN(test_extreme_integer_arguments);
+    GL_RUN(test_rotate_180);
     return gl_test_summary();
 }

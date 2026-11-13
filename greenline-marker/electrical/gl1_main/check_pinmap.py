@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """Proof of the GL-1 pin map against ST's open pin data, and its export.
 
-    /usr/bin/python3 -I -B electrical/gl1_main/check_pinmap.py --pindata DIR [--export] [--report FILE]
+    /usr/bin/python3 -I -B electrical/gl1_main/check_pinmap.py --pindata DIR [--export] [--selftest] [--report FILE]
 
 DIR holds the two DATA files of github.com/STMicroelectronics/STM32_open_pin_data
 (raw.githubusercontent.com/STMicroelectronics/STM32_open_pin_data/master/...):
@@ -23,25 +23,37 @@ What is proven for every MCU pin of the netlist (``gl1_main_design.py``):
  B  every row of PINMAP sits on the pad the netlist connects, the alternate
     function it names exists on that pin with that AF number, analog
     functions (ADC channel, OPAMP1 pins, LSE) exist on that pin;
- C  IMU_INT1 is on a wake-up pin (PWR_WKUPx); the EXTI lines in use are distinct;
+ C  IMU_INT1 and VBUS_SENSE are on wake-up pins (PWR_WKUPx) of two different
+    wake-up lines; the EXTI lines in use are distinct; the ADC channels exist;
+    the OPAMP1 pins are the only pads with those functions;
  D  no pin is used twice (the BOOT0 pad is the one declared exception), no
     I/O pad is connected without a PINMAP row, the supply pads are on their rails;
  E  the rows DESIGN_SPEC fixes are where the spec text puts them (the spec is
     parsed), PWDN is not on PA9 / PA2 / PC10, XVCLK leaves PA8 through 33 ohm,
-    EXTCOMIN is an LPTIM1 / LPTIM3 channel, SPI1_MISO is PB4;
+    EXTCOMIN is an LPTIM1 / LPTIM3 channel, SPI1_MISO is PB4, the BOOT0 pad
+    has its 10 kohm to ground and no path to any other rail;
  F  the difference to firmware/hal/stm32u5/gl_pins.h is exactly the rows
     marked CHANGED, each with its old pin and a reason;
  G  ROM bootloader: every pin the bootloader drives or listens on (table
     below, PROVISIONAL: from memory of ST AN2606, the note could not be read)
     is connected only to things on an explicit allow-list, each derived from
-    the netlist.  That the PERIPHERAL FUNCTION exists on each of those pins is
-    verified from the pin data; that the ROM uses it is not.
+    the netlist; the camera rail enable and the charger inhibit are on no
+    bootloader pin at all.  That the PERIPHERAL FUNCTION exists on each of
+    those pins is verified from the pin data; that the ROM uses it is not.
+ I  pads with a second life of their own: the two UCPD1 CC pads and their two
+    dead-battery control pads (found in the pin data, not typed in) carry only
+    signals from an allow-list with a stated reason, and never an output that
+    has to source or sink LED current; the pad with USB_OTG_FS_VBUS is named
+    in the notes for the firmware.  What the UCPD pads DO is PROVISIONAL.
 
 ``--selftest`` seeds defects into the pin map (a wrong AF number, PWDN on
 PC10, an SCCB line on a pin the bootloader drives, the wake-up input on a pin
 that is none, an ADC input on a pin without ADC, one pad used twice, a moved
-SPEC row, an undeclared change, a swapped pad name, the PA3 pull removed) and
-requires each of them to be caught.
+SPEC row, an undeclared change, an IMU output on a UART receive pin, the IMU
+chip select on the ROM's SPI2 chip-select pin, the charger inhibit or the
+camera rail enable on a bootloader pin, a charlieplex line on a bootloader
+input, a swapped pad name, the PA3 pull and the BOOT0 pull-down removed, an LED
+line or a rail enable on a UCPD CC pad) and requires each of them to be caught.
 
 Exit status 0: every check passed (PARTIAL in fallback mode is still 0, and
 is printed in capitals).  Exit status 1: a check failed.  ``--export`` writes
@@ -66,8 +78,9 @@ import gl1_main_design as G                   # noqa: E402
 
 MCU_XML = "STM32U585RITx.xml"
 GPIO_XML = "GPIO-STM32U5x_gpio_v1_0_Modes.xml"
-#: SHA-256 of the files this map was first checked with (2026-11-11).  Another
-#: hash is not an error (ST updates the data); it is printed.
+#: SHA-256 of the files this map was checked with (fetched 2026-11-11, fetched
+#: again and found identical 2026-11-13).  Another hash is not an error (ST
+#: updates the data); it is printed.
 REFERENCE_SHA256 = {
     MCU_XML: "369bb06cf9794840572c58a6a058d68aa285466a49f9a4c731534bf43c7d8325",
     GPIO_XML: "253229fd2510d58784118e5793eb54b4042cdb16951997b7a0cf8f1b5429ea49",
@@ -83,6 +96,11 @@ SPEC_MD = os.path.join(ROOT, "design", "DESIGN_SPEC.md")
 #:      "listen": input or open-drain line the ROM samples while it looks for
 #:      its host interface.  firmware/hal/stm32u5/gl_pins.h carries the same
 #: table (GL_PINS_BOOTLOADER_TABLE); section F compares the two.
+#: A second, weak source (web-search extract of 2026-11-13 from a third-party
+#: copy of the STM32U575 pages of AN2606, manualshive.com/ru/manual/st/
+#: stm32u575-series/1355565?page=21) lists the same pins for USART1-3, I2C1-3,
+#: SPI1 and FDCAN1.  SPI2, the USB pins, the direction of each pin and the
+#: pulls the ROM enables were NOT in that extract.
 BOOTLOADER_PINS = {
     "PA9": ("USART1_TX", "drive"), "PA10": ("USART1_RX", "listen"),
     "PA2": ("USART2_TX", "drive"), "PA3": ("USART2_RX", "listen"),
@@ -103,6 +121,11 @@ BOOTLOADER_MAY_DRIVE_LOW = ("PA6", "PB14")
 #: spec section 4: "must not use a pin that the ROM bootloader drives as an
 #: output (the USART transmit pins PA9, PA2 and PC10 ...)"
 SPEC_PWDN_FORBIDDEN = ("PA9", "PA2", "PC10")
+#: signals that switch power.  A pull the ROM may enable on one of its
+#: listening pins (which pulls it enables is not known) could move them, so
+#: they must be on no bootloader pin, driven or listening.
+POWER_CONTROL = (("CAM_PWR_EN", "switch the camera rail on"),
+                 ("CHG_INHIBIT", "switch the charger off"))
 
 VDD = 2.8                                     # V2V8
 #: PROVISIONAL (memory of DS13086): absolute maximum output current of one I/O
@@ -112,7 +135,87 @@ GROUND = ("GND",)
 ALWAYS_ON = ("V2V8", "VDDA")
 CAMERA_RAIL = ("V2V8_CAM", "CAM_L_DVDD", "CAM_R_DVDD")
 OTHER_RAILS = ("VBAT", "VBUS", "VBUS_D", "VDDUSB")
+RAILS = GROUND + ALWAYS_ON + CAMERA_RAIL + OTHER_RAILS
 CAMERAS = ("U2", "U3")
+
+#: PROVISIONAL (memory of ST RM0456 / DS13086 and of what STM32CubeMX generates;
+#: neither document was read).  After reset the "dead battery" behaviour of the
+#: USB Type-C port controller is enabled: a HIGH level on UCPD1_DBCC1 switches a
+#: 5.1 kohm pull-down (Rd) onto UCPD1_CC1, a high level on UCPD1_DBCC2 one onto
+#: UCPD1_CC2, until firmware sets UCPD_DBDIS in PWR_UCPDR.  The two CC pads are
+#: ST's "FT_c" pad structure; whether their output stage drives like an ordinary
+#: pad's at 5 to 10 mA is not known here.  Which pads carry these four functions
+#: is PINDATA (section I finds them in the data).
+UCPD_CC = ("UCPD1_CC1", "UCPD1_CC2")
+UCPD_DBCC = {"UCPD1_DBCC1": "UCPD1_CC1", "UCPD1_DBCC2": "UCPD1_CC2"}
+#: signal -> why it may sit on a UCPD pad.  A row on such a pad that is not
+#: listed here fails section I: a person has to look at it.
+UCPD_PAD_REASONS = {
+    "CHG_STAT": "an INPUT (open-drain CHG of the charger, 100 kohm to V2V8): nothing depends on the pad's "
+                "output stage; a dead-battery pull-down before UCPD_DBDIS is set only makes it read "
+                "'charging' (27 uA through the pull-up) while nobody reads it",
+    "SPI2_MOSI": "an alternate-function output into one CMOS input of the IMU (microamperes); a dead-battery "
+                 "pull-down while PB14 is high costs 2.8 V / 5.1 kohm = 0.55 mA only while the line is "
+                 "driven high, and holds the floating line low in reset",
+    "SPI1_MOSI": "dead-battery control pad of PA15: it floats in reset and in the ROM bootloader (no board "
+                 "pull, by the spec), so the pull-down on PA15 may or may not be there - PA15 carries an "
+                 "input for that reason",
+    "SPI2_MISO": "dead-battery control pad of PB15: the IMU's SDO, high-impedance while the IMU is not "
+                 "selected; firmware keeps an internal pull-down on it between transfers",
+}
+#: modes that never drive a load from the pad
+INPUT_MODES = ("EXTI", "IN", "ANALOG")
+
+#: what the firmware has to do because of this pin map (exported to pinmap.json;
+#: NETLIST_NOTES.md section 7 is the same list with the reasons)
+FIRMWARE_NOTES = [
+    "Regenerate gl_pins.h from pinmap.json (every row marked CHANGED moved).",
+    "CHG_INHIBIT (PH1) is a PUSH-PULL output, HIGH = stop charging (it turns on Q1, which pulls the "
+    "charger's TS input low); analog or low = charger on. The present firmware (drivers/power.c, "
+    "inhibit_(): latch low, then open drain) does NOTHING on this board - the gate of Q1 never goes "
+    "high - so the firmware's own 0 to 45 C charge gate is inoperative until inhibit_() drives the pin "
+    "push-pull HIGH. Until then only the charger's hardware TS window acts.",
+    "CHG_STAT is on PA15 (EXTI15): the BQ25101's open-drain CHG output with a 100 kohm pull-up to V2V8, "
+    "low = charging, high = not charging, done or no VBUS. No internal pull is needed. With the BQ25100 "
+    "fallback fitted every internal pull on PA15 must be off (it also has the JTDI pull-up until the "
+    "firmware switches to SWD only).",
+    "EXTI lines: IMU_INT1 PA7 = EXTI7 (WKUP8), IMU_INT2 PA5 = EXTI5, VBUS_SENSE PC13 = EXTI13 (WKUP2), "
+    "CHG_STAT PA15 = EXTI15. hal/stm32u5/gl_hal_stm32u5.c hard-codes EXTI13 / 5 / 9 / 0 (vectors and "
+    "compile-time asserts): three of the four must move.",
+    "UCPD (PROVISIONAL, RM0456 / DS13086 not read): PA15 and PB15 are the UCPD1 CC pads, PB5 and PB14 "
+    "their dead-battery control pads. After reset a high level on PB5 (SPI1_MOSI) switches a 5.1 kohm "
+    "pull-down onto PA15, a high level on PB14 (SPI2_MISO) one onto PB15 (SPI2_MOSI: 0.55 mA while it is "
+    "driven high). Set UCPD_DBDIS in PWR_UCPDR (HAL_PWREx_DisableUCPDDeadBattery) at the top of "
+    "gl_hal_init(), before any pin is configured, and again after every wake-up that resets the PWR "
+    "registers.",
+    "PA9 is USB_OTG_FS_VBUS and carries GRAIN_CP0: run the USB device with VBUS sensing off and tell the "
+    "core that the session is valid from VBUS_SENSE (register details PROVISIONAL).",
+    "USB supply: set the USB-supply-valid bit only while BOTH VBUS_SENSE (PC13) is high AND the MCU's own "
+    "VDDUSB monitor reports the supply ready; clear it on the falling edge of either. PC13 alone does "
+    "not measure VDDUSB: on undocking VDDUSB can fall below 3.0 V within about a millisecond under USB "
+    "load while PC13 still reads high for up to about 22 ms.",
+    "VBUS_SENSE: divider 100 kohm : 100 kohm on the VBUS pad (not behind the Schottky). High is "
+    "guaranteed above 3.92 V at the pad, low below 1.68 V; removal from the cradle is seen within about "
+    "22 ms.",
+    "CAM_R_PWDN is on PH3, the BOOT0 pad (10 kohm to ground): it reads low at every reset; 0.28 mA flows "
+    "into the pull-down while it is driven high.",
+    "IMU_CS is PB1 and LCD_DISP is PB12 (exchanged: PB12 is the ROM bootloader's SPI2 chip-select input).",
+    "Before a jump to the ROM bootloader leave the IMU with its INT2 output static (data-ready "
+    "routing off): PA5 / PA7 are the ROM's SPI1 clock and data inputs.",
+    "The grain bias divider hangs on LCD_DISP (PB12): DISP must have been high for 35 ms before a grain "
+    "measurement. drivers/grain_frontend.c waits 25 ms after it enables the op-amp and does not look at "
+    "the display: gl_grain_fe_power() must wait for, or refuse without, 35 ms of display-on time.",
+    "Switch PA15, PB3, PB4 away from JTAG (SWD only).",
+    "Every camera-facing pin low or analog while V2V8_CAM is off: PC0, PC1, PC3 (SCCB), PC2, PH3 "
+    "(PWDN), the eleven DCMI pins and PA8.",
+    "Lines without a board pull float while the MCU is in reset or in the ROM bootloader: LCD_EXTCOMIN "
+    "(PB2), SPI1_SCK / SPI1_MOSI (PB3 / PB5), SPI2_SCK / SPI2_MOSI (PB13 / PB15), CAM_L_PWDN (PC2). "
+    "gl_hal_init() must give each its level before anything else; keep an internal pull-down on PB4 and "
+    "PB14 (the MISO lines float between transfers; PB14 is also UCPD1_DBCC2).",
+    "PA3 (OPAMP1 output, the ROM's USART2_RX) is held high by R31, 150 kohm to V2V8, also with light on "
+    "the photodiode. Leave PA3 analog while OPAMP1 is off: driven low it costs 19 uA.",
+    "LSE drive: medium-low or higher (NETLIST_NOTES 4.9).",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +358,7 @@ def read_spec_dcmi(path=SPEC_MD):
 # netlist helpers
 # ---------------------------------------------------------------------------
 def ohms(value):
-    """'68R' -> 68, '2k2' -> 2200, '49k9' -> 49900, '1M' -> 1e6, '4x220R' -> 220."""
+    """'68R' -> 68, '2k2' -> 2200, '6k81' -> 6810, '1M' -> 1e6, '4x220R' -> 220."""
     v = value.split("x")[-1].strip()
     m = re.match(r"^(\d+)([RkM])(\d*)$", v)
     if not m:
@@ -265,6 +368,9 @@ def ohms(value):
 
 
 class Netlist:
+    """Connectivity of the FITTED circuit: parts marked not fitted (DNP) are
+    left out, so an unpopulated resistor position does not count as a pull."""
+
     def __init__(self, design):
         self.d = design
         self.parts = design.parts_by_ref
@@ -277,7 +383,9 @@ class Netlist:
         return self.pin_net.get((ref, pin))
 
     def nodes(self, net):
-        return list(self.d.nets[net].nodes) if net in self.d.nets else []
+        if net not in self.d.nets:
+            return []
+        return [n for n in self.d.nets[net].nodes if not self.parts[n[0]].dnp]
 
     def other_side(self, ref, pin):
         """For a series element: (resistance, net on the other terminal) or None."""
@@ -293,11 +401,11 @@ class Netlist:
         return None
 
     def pulls(self, net):
-        """[(resistance, rail)] of resistors from ``net`` straight to a rail or ground."""
+        """[(resistance, rail, ref)] of fitted resistors from ``net`` straight to a rail or ground."""
         out = []
         for ref, pin in self.nodes(net):
             o = self.other_side(ref, pin)
-            if o and o[1] in GROUND + ALWAYS_ON + CAMERA_RAIL + OTHER_RAILS:
+            if o and o[1] in RAILS:
                 out.append((o[0], o[1], ref))
         return out
 
@@ -319,11 +427,16 @@ class Netlist:
                     out.append((ref, pin, r, path))
                 elif o[1] is None:
                     continue
-                elif o[1] in GROUND + ALWAYS_ON + CAMERA_RAIL + OTHER_RAILS:
+                elif o[1] in RAILS:
                     out.append(("rail:" + o[1], "", r + (o[0] or 0.0), path + (ref,)))
                 elif depth < limit and ref not in path:
                     stack.append((o[1], r + (o[0] or 0.0), path + (ref,), depth + 1))
         return out
+
+    def drivers(self, terms):
+        """The output pins among the terminals of reach()."""
+        return [(t[0], t[1]) for t in terms if not t[0].startswith("rail:")
+                and self.parts[t[0]].pins[t[1]].etype in ("output", "open_drain", "power_out")]
 
 
 # ---------------------------------------------------------------------------
@@ -429,12 +542,21 @@ def run(pindata, design, rep):
                 rep.check(m.group(0) in sigs, "%s: %s exists on the pin" % (where, m.group(0)))
 
     # ---- C: wake-up, EXTI, ADC, OPAMP ----------------------------------------------------
-    rep.section("C  wake-up pin, EXTI lines, ADC channels, OPAMP1")
+    rep.section("C  wake-up pins, EXTI lines, ADC channels, OPAMP1")
     by_sig = {r["signal"]: r for r in rows}
-    wk = [s for s in pindata.signals(by_sig["IMU_INT1"]["pin"]) if s.startswith("PWR_WKUP")]
-    rep.check(bool(wk), "IMU_INT1 on %s is a wake-up pin (%s)" % (by_sig["IMU_INT1"]["pin"], ", ".join(wk)))
-    wk = [s for s in pindata.signals(by_sig["VBUS_SENSE"]["pin"]) if s.startswith("PWR_WKUP")]
-    rep.note("VBUS_SENSE on %s: %s" % (by_sig["VBUS_SENSE"]["pin"], ", ".join(wk) or "not a wake-up pin"))
+    wk_lines = {}
+    for sig, why in (("IMU_INT1", "spec: INT1 to a wake-capable pin"),
+                     ("VBUS_SENSE", "ship mode (E13) can then use Shutdown and wake when VBUS appears")):
+        pin = by_sig[sig]["pin"]
+        wk = sorted(s for s in pindata.signals(pin) if s.startswith("PWR_WKUP"))
+        named = re.search(r"PWR_WKUP\d", by_sig[sig]["function"])
+        rep.check(bool(wk) and named is not None and named.group(0) in wk,
+                  "%s on %s is a wake-up pin (%s) - %s" % (sig, pin, ", ".join(wk) or "none", why),
+                  "PINMAP names %s" % (named.group(0) if named else "no wake-up line"))
+        wk_lines[sig] = named.group(0) if named else None
+    rep.check(wk_lines["IMU_INT1"] != wk_lines["VBUS_SENSE"],
+              "the two wake-up sources use different wake-up lines (%s, %s)"
+              % (wk_lines["IMU_INT1"], wk_lines["VBUS_SENSE"]))
     exti = {}
     for r in rows:
         if r["mode"] == "EXTI":
@@ -513,11 +635,22 @@ def run(pindata, design, rep):
     fn = by_sig["LCD_EXTCOMIN"]["function"]
     rep.check(re.match(r"LPTIM[13]_CH\d$", fn) is not None,
               "EXTCOMIN is %s: an LPTIM1 / LPTIM3 output (they run in Stop 2)" % fn)
-    for sig, pin_name in (("CAM_L_SCL", "SIOC"), ("CAM_R_SCL", "SIOC"), ("CAM_SCCB_SDA", "SIOD")):
+    for sig in ("CAM_L_SCL", "CAM_R_SCL", "CAM_SCCB_SDA"):
         net = by_sig[sig]["net"]
         pulls = nl.pulls(net)
         rep.check(len(pulls) == 1 and pulls[0][1] == "V2V8_CAM" and abs(pulls[0][0] - 2200.0) < 1e-6,
                   "%s (%s): one 2.2 kohm pull-up, to V2V8_CAM" % (sig, by_sig[sig]["pin"]), "%s" % pulls)
+    # BOOT0: 10 kohm to ground and nothing on the net that could lift it at reset
+    b0 = by_sig["BOOT0"]
+    b0_terms = nl.reach(b0["net"])
+    b0_rails = [t for t in b0_terms if t[0].startswith("rail:")]
+    b0_out = nl.drivers(b0_terms)
+    partner = [r["signal"] for r in rows if r["pin"] == b0["pin"] and r["signal"] != "BOOT0"]
+    rep.check(len(b0_rails) == 1 and b0_rails[0][0] == "rail:GND" and abs(b0_rails[0][2] - 10e3) < 1e-6
+              and not b0_out,
+              "BOOT0 (%s, shared with %s): 10 kohm to ground, no path to any other rail and no output on "
+              "its net - low at every reset" % (b0["pin"], " + ".join(partner) or "nothing"),
+              "rails %s, outputs %s" % ([(t[0], t[2]) for t in b0_rails], b0_out))
 
     # ---- F: against the firmware header ----------------------------------------------------------
     rep.section("F  difference to firmware/hal/stm32u5/gl_pins.h")
@@ -543,6 +676,8 @@ def run(pindata, design, rep):
             changed.append((sig, pin, r["pin"], r["reason"]))
     extra = sorted(s for s in by_sig if s not in gl_rows)
     rep.note("rows of PINMAP that gl_pins.h does not list (service pins): %s" % ", ".join(extra))
+    rep.note("new meaning with DESIGN_SPEC E1 (gl_pins.h not yet regenerated): CHG_INHIBIT (same pin) is a "
+             "push-pull output, HIGH = stop; CHG_STAT (moved) is the BQ25101's open-drain CHG output")
     stale = [r["signal"] for r in rows if r["source"] == "CHANGED" and r["signal"] not in gl_rows]
     rep.check(not stale, "every CHANGED row has a row in gl_pins.h to differ from", ", ".join(stale))
     if gl_boot:
@@ -552,25 +687,38 @@ def run(pindata, design, rep):
 
     # ---- G: ROM bootloader pins ---------------------------------------------------------------------
     rep.section("G  pins the ROM bootloader drives or listens on")
-    rep.prov("the list of bootloader pins is from memory of ST AN2606 (not readable here); "
-             "only the existence of each peripheral function on its pin is verified below")
+    rep.prov("the list of bootloader pins is from memory of ST AN2606 (not readable here; a web-search "
+             "extract of a third-party copy agrees for USART1-3, I2C1-3, SPI1, FDCAN1); only the "
+             "existence of each peripheral function on its pin is verified below")
     on_package = {e["name"] for e in pindata.pads.values()}
     for pin, (fn, role) in sorted(BOOTLOADER_PINS.items()):
         if pin not in on_package:
             rep.ok("%-5s %-14s: the pin does not exist on LQFP-64" % (pin, fn))
             continue
         rep.check(fn in pindata.signals(pin), "%-5s %-14s exists on the pin (pin data)" % (pin, fn))
+    # signals that switch power are on no bootloader pin at all
+    for sig, effect in POWER_CONTROL:
+        pin = by_sig[sig]["pin"]
+        rep.check(pin not in BOOTLOADER_PINS,
+                  "%s is on %s, no bootloader pin: no pull or level of the ROM can %s" % (sig, pin, effect),
+                  "%s is the bootloader's %s" % (pin, BOOTLOADER_PINS.get(pin, ("?",))[0]))
     # the camera rail must be off while the bootloader runs
     en = by_sig["CAM_PWR_EN"]
     en_pulls = [p for p in nl.pulls(en["net"]) if p[1] == "GND"]
-    cam_off = bool(en_pulls) and en["pin"] not in BOOTLOADER_PINS and nl.net("U8", "EN") == en["net"]
+    cam_off = bool(en_pulls) and en["pin"] not in BOOTLOADER_PINS and nl.net("U8", "EN") == en["net"] \
+        and not [p for p in nl.pulls(en["net"]) if p[1] != "GND"]
     rep.check(cam_off, "camera rail is off in the bootloader: U8.EN on %s (not a bootloader pin) with "
-              "pull-down(s) %s" % (en["pin"], ", ".join("%s %g ohm" % (p[2], p[0]) for p in en_pulls)))
+              "pull-down(s) %s and no pull-up" % (en["pin"], ", ".join("%s %g ohm" % (p[2], p[0]) for p in en_pulls)))
+    inh = by_sig["CHG_INHIBIT"]
+    inh_pulls = nl.pulls(inh["net"])
+    rep.check(nl.net("Q1", "G") == inh["net"] and bool(inh_pulls) and all(p[1] == "GND" for p in inh_pulls),
+              "charger stays on in the bootloader: Q1 gate on %s with pull-down %s and no pull-up"
+              % (inh["pin"], ", ".join("%s %g ohm" % (p[2], p[0]) for p in inh_pulls)))
     cp_pins = {by_sig["GRAIN_CP%d" % i]["pin"] for i in range(5)}
     rep.check(not (cp_pins & set(BOOTLOADER_MAY_DRIVE_LOW)),
               "no charlieplex line is on a pin the bootloader may drive LOW (%s): with every other line "
               "high or floating no LED has a current path" % ", ".join(BOOTLOADER_MAY_DRIVE_LOW))
-    net_of_pin = {r["pin"]: r for r in rows}
+    net_of_pin = {r["pin"]: r for r in rows if r["signal"] != "BOOT0"}
     for pin, (fn, role) in sorted(BOOTLOADER_PINS.items()):
         if pin not in on_package:
             continue
@@ -583,7 +731,81 @@ def run(pindata, design, rep):
         (rep.ok if verdict else rep.fail)(text)
     rep.prov("OVM7692 pins are assumed to have ordinary protection diodes to their (unpowered) "
              "supply: a line that ends only on unpowered camera pins then sits below a diode drop")
-    rep.prov("whether the ROM enables pull-ups on its receive pins is not known; no verdict above relies on it")
+    rep.prov("which pulls the ROM enables is not known (AN2606 as remembered: pull-down on the SPI pins, "
+             "pull-up on the USART pins, none on the I2C pins). The verdicts above hold for that set and for "
+             "no pulls at all. A 40 kohm pull AGAINST a 100 kohm board resistor could only come from a "
+             "pull-down on a USART receive pin (PA3, PA10: a break condition on a UART nobody uses) or a "
+             "pull-up on I2C2_SCL (PB10: the LCD is selected and receives no clock); neither loads an output")
+    rep.prov("SPI protocol of the ROM (sync byte 0x5A on MOSI clocked by SCK): memory of ST AN4286")
+
+    # ---- I: UCPD pads and the OTG VBUS pad --------------------------------------------------------------
+    rep.section("I  pads with a second life: UCPD1 CC / dead-battery control, USB_OTG_FS_VBUS")
+    rep.prov("what the UCPD pads do is from memory of ST RM0456 / DS13086 (not read): after reset a HIGH "
+             "level on a DBCC pad switches a 5.1 kohm pull-down onto its CC pad until firmware sets "
+             "UCPD_DBDIS; the CC pads are ST's FT_c structure, whose output drive is not known here. "
+             "WHICH pads these are is read from the pin data")
+    row_on = {r["pin"]: r for r in rows if r["signal"] != "BOOT0"}
+    cp_signals = {"GRAIN_CP%d" % i for i in range(5)}
+    power = {s for s, _e in POWER_CONTROL}
+    found = {}
+    for fn in UCPD_CC + tuple(UCPD_DBCC):
+        owners = sorted(e["name"] for e in pindata.pads.values() if fn in e["signals"])
+        found[fn] = owners
+        rep.check(len(owners) == 1, "%s is on exactly one pad of this package (%s)" % (fn, ", ".join(owners) or "none"))
+    for fn in UCPD_CC:
+        for pin in found[fn]:
+            r = row_on.get(pin)
+            if r is None:
+                rep.ok("%-5s %-12s: pad not connected" % (pin, fn))
+                continue
+            sig = r["signal"]
+            where = "%-5s %-12s %-12s" % (pin, fn, sig)
+            if sig in cp_signals or sig in power:
+                rep.fail("%s: %s on the %s pad - a 5.1 kohm pull-down can appear on it before firmware runs, "
+                         "and the pad's output drive is not known (FT_c)" % (where, "an LED line" if sig in cp_signals
+                                                                              else "a signal that switches power", fn))
+                continue
+            terms = nl.reach(r["net"])
+            if r["mode"] in INPUT_MODES:
+                good, kind = True, "an input (%s)" % r["mode"]
+            elif r["mode"] == "AF":
+                loads = [t_ for t_ in terms if not t_[0].startswith("rail:")]
+                rails = [t_ for t_ in terms if t_[0].startswith("rail:") and t_[2] < 10e3]
+                good = (bool(loads) and not rails and
+                        all(nl.parts[t_[0]].pins[t_[1]].etype == "input" for t_ in loads))
+                kind = "an alternate-function output into CMOS inputs only (%s)" % ", ".join(
+                    "%s.%s" % (t_[0], t_[1]) for t_ in loads)
+            else:
+                good, kind = False, "a %s output" % r["mode"]
+            reason = UCPD_PAD_REASONS.get(sig)
+            rep.check(good and reason is not None, "%s: %s - %s" % (where, kind, reason or "NO REASON GIVEN"),
+                      "a signal on the %s pad must be an input or an AF output into CMOS inputs, and be listed "
+                      "in UCPD_PAD_REASONS" % fn)
+    for fn, cc in UCPD_DBCC.items():
+        for pin in found[fn]:
+            r = row_on.get(pin)
+            if r is None:
+                rep.ok("%-5s %-12s: pad not connected" % (pin, fn))
+                continue
+            sig = r["signal"]
+            reason = UCPD_PAD_REASONS.get(sig)
+            cc_rows = [row_on[q]["signal"] for q in found[cc] if q in row_on]
+            pulls = nl.pulls(r["net"])
+            level = ("held by %s" % ", ".join("%s %g ohm to %s" % (q[2], q[0], q[1]) for q in pulls) if pulls
+                     else "no board pull: it floats until firmware drives it")
+            rep.check(reason is not None and sig not in power,
+                      "%-5s %-12s %-12s controls the pull-down on %s (%s); %s - %s"
+                      % (pin, fn, sig, ", ".join(found[cc]), ", ".join(cc_rows) or "not connected", level,
+                         reason or "NO REASON GIVEN"),
+                      "a signal on a dead-battery control pad must be listed in UCPD_PAD_REASONS")
+    rep.check(any("UCPD_DBDIS" in n for n in FIRMWARE_NOTES),
+              "the notes for the firmware tell it to set UCPD_DBDIS before any pin is configured")
+    vb = sorted(e["name"] for e in pindata.pads.values() if "USB_OTG_FS_VBUS" in e["signals"])
+    for pin in vb:
+        r = row_on.get(pin)
+        rep.check(r is None or any(pin in n and "VBUS sensing off" in n for n in FIRMWARE_NOTES),
+                  "%-5s USB_OTG_FS_VBUS carries %s: the notes for the firmware say that the USB device must "
+                  "run with VBUS sensing off" % (pin, r["signal"] if r else "nothing"))
     return changed
 
 
@@ -592,11 +814,9 @@ def bootloader_verdict(nl, by_sig, pin, role, row, cam_off, cp_pins):
     netlist-derived case; anything else fails so that a later pin change has
     to be looked at by a person."""
     net = row["net"]
-    sig = row["signal"]
     terms = nl.reach(net)
     refs = sorted({t[0] for t in terms})
     cam_terms = [t for t in terms if t[0] in CAMERAS]
-    other = [t for t in terms if t[0] not in CAMERAS]
     pulls = nl.pulls(net)
 
     def cam_rail_only(ts):
@@ -618,11 +838,11 @@ def bootloader_verdict(nl, by_sig, pin, role, row, cam_off, cp_pins):
             bound = n * (VDD - 0.65) / rmin * 1e3          # rail held at 0 V, silicon diode
             likely = n * (VDD - 0.65) / (rmin + n * 230.0) * 1e3
             return bound <= IO_ABS_MAX_MA, (
-                "driven into %d unpowered camera pins through %g ohm each (spec rule 2). Bound with the "
-                "camera rail held at 0 V and a 0.65 V protection diode: %.1f mA from the pin, %.1f mA "
-                "into each camera pin; about %.0f mA expected with the rail floating up through a "
-                "230 ohm discharge path. PROVISIONAL: the %g mA absolute maximum of one I/O, the diode "
-                "and the discharge path; above the 8 mA the I/O levels are specified at"
+                "driven into %d unpowered camera pins through %g ohm each (the spec's 220 ohm arrays exist "
+                "for this). Bound with the camera rail held at 0 V and a 0.65 V protection diode: %.1f mA "
+                "from the pin, %.1f mA into each camera pin; about %.0f mA expected with the rail floating "
+                "up through a 230 ohm discharge path. PROVISIONAL: the %g mA absolute maximum of one I/O, "
+                "the diode and the discharge path; above the 8 mA the I/O levels are specified at"
                 % (n, rmin, bound, bound / n, likely, IO_ABS_MAX_MA))
         if direct_rail:
             return True, ("pulled to the unpowered camera rail through %s: static low, no edge; an internal "
@@ -635,8 +855,11 @@ def bootloader_verdict(nl, by_sig, pin, role, row, cam_off, cp_pins):
     # ---- charlieplex lines --------------------------------------------------------------------
     if pin in cp_pins:
         leds = all(t[0].startswith("D") and nl.parts[t[0]].value.startswith("LED") for t in terms)
-        return leds, ("%s: 68 ohm, then LEDs only; current needs a second line at LOW and the "
-                      "bootloader drives none of the five low" % ("driven high" if role == "drive" else "input"))
+        if role != "drive":
+            return False, ("a charlieplex line on a pin the bootloader LISTENS on: the line has no defined "
+                           "level (it floats at an LED forward voltage below the line the ROM drives high)")
+        return leds, ("driven high: 68 ohm, then LEDs only; current needs a second line at LOW and the "
+                      "bootloader drives none of the five low")
     # ---- dividers and pulled lines ------------------------------------------------------------
     parts_on_net = sorted({ref for ref, _p in nl.nodes(net) if ref != "U1"})
     kinds = {nl.parts[ref].ref_prefix for ref in parts_on_net}
@@ -646,16 +869,12 @@ def bootloader_verdict(nl, by_sig, pin, role, row, cam_off, cp_pins):
             return rmin >= 10e3, ("driven into a resistor network only (%s); lowest resistance to a rail "
                                   "%g ohm: at most %.3f mA" % (", ".join(parts_on_net), rmin, 4.2 / rmin * 1e3))
         if {(t[0], t[1]) for t in terms} == {("U4", "SDO")}:
-            cs_up = [p for p in nl.pulls(nl.net("U4", "CS")) if p[1] in ALWAYS_ON]
-            return bool(cs_up), (
-                "driven into U4.SDO only; IMU_CS has a pull-up (%s): the IMU is not selected, its SDO pin "
-                "is not an output (PROVISIONAL: LSM6DSV16X datasheet not read)"
-                % ", ".join("%s %g ohm" % (p[2], p[0]) for p in cs_up))
+            ok, text = imu_never_selected(nl, by_sig)
+            return ok, "driven into U4.SDO only; " + text
         return False, "driven pin on an unclassified net: %s" % refs
     # role == "listen": the line must rest at a level that does not move by itself
     static = [p for p in pulls if p[1] in GROUND + ALWAYS_ON]
-    drivers = [(t[0], t[1]) for t in terms
-               if not t[0].startswith("rail:") and nl.parts[t[0]].pins[t[1]].etype in ("output", "open_drain", "power_out")]
+    drivers = nl.drivers(terms)
     fn = BOOTLOADER_PINS[pin][0]
     spi = fn.split("_")[0] if fn.startswith("SPI") else None
 
@@ -665,24 +884,37 @@ def bootloader_verdict(nl, by_sig, pin, role, row, cam_off, cp_pins):
     def rests(net_name):
         """The resistive path of a net to ground / an always-on rail, if no output is on it."""
         ts = nl.reach(net_name)
-        if any(not t[0].startswith("rail:") and nl.parts[t[0]].pins[t[1]].etype in ("output", "open_drain")
-               for t in ts):
+        if nl.drivers(ts):
             return None
         rails = [t for t in ts if t[0].startswith("rail:") and t[0][5:] in GROUND + ALWAYS_ON]
         return min(rails, key=lambda q: q[2]) if rails else None
 
-    if drivers and spi and fn.endswith("_MOSI"):
-        sck = by_sig_by_pin(by_sig, bl_pin(spi + "_SCK"))
-        level = rests(sck["net"]) if sck else None
-        return level is not None, (
-            "%s is driven by %s (push-pull; it can move if the IMU was left configured); harmless only "
-            "because the bootloader's %s_SCK (%s = %s) rests at %s through %g ohm with no driver: "
-            "without clock edges an SPI slave shifts nothing in"
-            % (fn, ", ".join("%s.%s" % dd for dd in drivers), spi, bl_pin(spi + "_SCK"),
-               sck["signal"] if sck else "?", level[0][5:] if level else "?", level[2] if level else float("nan"))
-            if level is not None else
-            "%s is driven by %s and the bootloader's %s_SCK line has no resting level"
-            % (fn, drivers, spi))
+    if drivers and spi and fn.endswith(("_SCK", "_MOSI")):
+        # clock or data input of the ROM's SPI slave driven by an output of an always-on IC
+        other_fn = spi + ("_MOSI" if fn.endswith("_SCK") else "_SCK")
+        other = by_sig_by_pin(by_sig, bl_pin(other_fn))
+        o_terms = nl.reach(other["net"]) if other else []
+        o_drivers = nl.drivers(o_terms)
+        ic = drivers[0][0]
+        one_ic = (len(terms) == 1 and len(drivers) == 1 and len(o_terms) == 1 and len(o_drivers) == 1
+                  and o_drivers[0][0] == ic and nl.net(ic, "VDD") in ALWAYS_ON)
+        if one_ic:
+            return True, (
+                "driven by %s.%s, the companion line %s (%s) by %s.%s: two push-pull outputs of the "
+                "always-on IMU, so both inputs of the ROM's SPI slave have a defined level whatever pull the "
+                "ROM sets. The slave reacts only to the byte 0x5A on MOSI clocked by eight SCK edges: INT1 "
+                "would have to toggle in that pattern in step with INT2. CONDITION for the firmware: leave "
+                "INT2 static before a jump to the ROM (after power-on both outputs are inactive: PROVISIONAL)"
+                % (ic, drivers[0][1], other_fn, bl_pin(other_fn), o_drivers[0][0], o_drivers[0][1]))
+        if fn.endswith("_MOSI"):
+            level = rests(other["net"]) if other else None
+            if level is not None:
+                return True, (
+                    "%s is driven by %s; harmless because the bootloader's %s (%s = %s) rests at %s through "
+                    "%g ohm with no driver: without clock edges an SPI slave shifts nothing in"
+                    % (fn, ", ".join("%s.%s" % dd for dd in drivers), other_fn, bl_pin(other_fn),
+                       other["signal"], level[0][5:], level[2]))
+        return False, "an output that can move is on the bootloader's %s: %s" % (fn, drivers)
     if drivers:
         return False, "an output that can move is on a bootloader receive line: %s" % drivers
     if static:
@@ -694,21 +926,36 @@ def bootloader_verdict(nl, by_sig, pin, role, row, cam_off, cp_pins):
         t = min(to_rail, key=lambda q: q[2])
         return True, "rests at %s through %g ohm (%s); no driver on the line" % (
             t[0][5:], t[2], " + ".join(t[3]))
-    if spi and fn.endswith(("_SCK", "_MOSI")):
-        nss = by_sig_by_pin(by_sig, bl_pin(spi + "_NSS"))
-        up = [p for p in (nl.pulls(nss["net"]) if nss else []) if p[1] in ALWAYS_ON]
-        return bool(up), (
-            "no defined level (input of %s only), but the bootloader's %s_NSS (%s = %s) is held high by "
-            "%s: an unselected SPI slave ignores clock and data"
-            % (", ".join(sorted({t[0] for t in terms})), spi, bl_pin(spi + "_NSS"),
-               nss["signal"] if nss else "?", ", ".join("%s %g ohm" % (p[2], p[0]) for p in up))
-            if up else "no defined level, and the bootloader's %s_NSS line is not held inactive" % spi)
+    if spi and fn.endswith(("_SCK", "_MOSI")) and {t[0] for t in terms} == {"U4"}:
+        ok, text = imu_never_selected(nl, by_sig)
+        return ok, (
+            "input of U4 only: nothing on the board drives it. " + text + ". The ROM's own %s slave has "
+            "no clock source on the board; its two inputs are held only by the pull-downs the ROM is said "
+            "to enable on its SPI pins (PROVISIONAL), and a false sync would need the byte 0x5A" % spi)
     return False, "no defined level and no reason why that is harmless: %s" % refs
+
+
+def imu_never_selected(nl, by_sig):
+    """(True, why) if the IMU's chip select is held high by a pull-up on a pin
+    the ROM bootloader has no function on - then no pull or level of the ROM
+    can select the IMU, and its SDO stays high-impedance."""
+    cs = by_sig["IMU_CS"]
+    cs_up = [p for p in nl.pulls(nl.net("U4", "CS")) if p[1] in ALWAYS_ON]
+    cs_down = [p for p in nl.pulls(nl.net("U4", "CS")) if p[1] not in ALWAYS_ON]
+    if cs["pin"] in BOOTLOADER_PINS:
+        return False, ("IMU_CS is on %s, the bootloader's %s: a pull-down of the ROM there (about 40 kohm) "
+                       "beats the board's pull-up, selects the IMU and lets its SDO fight the ROM's SPI2 "
+                       "data output" % (cs["pin"], BOOTLOADER_PINS[cs["pin"]][0]))
+    if not cs_up or cs_down:
+        return False, "IMU_CS has no pull-up to an always-on rail"
+    return True, ("IMU_CS is on %s (no bootloader function) with pull-up %s: the IMU is never selected, "
+                  "its SDO is high-impedance (PROVISIONAL: LSM6DSV16X datasheet not read)"
+                  % (cs["pin"], ", ".join("%s %g ohm" % (p[2], p[0]) for p in cs_up)))
 
 
 def by_sig_by_pin(by_sig, pin):
     for r in by_sig.values():
-        if r["pin"] == pin:
+        if r["pin"] == pin and r["signal"] != "BOOT0":
             return r
     return None
 
@@ -738,20 +985,29 @@ def export(path, pindata, design, rep, changed, partial):
             for ref, colour, _x, _y, _rot, az, a, c in G.led_positions()]
     data = {
         "design": design.name, "mcu": "STM32U585RIT6", "package": "LQFP-64",
+        "spec": "DESIGN_SPEC rev D with amendments E1 to E16",
         "u1_rotation_assumed_deg": G.U1_ROTATION,
         "status": "NETLIST STAGE - nothing built; the layout step may still move PROPOSED / CHANGED pins",
         "verification": {
             "checks_passed": not rep.fails, "partial": partial, "source": pindata.source,
             "data_sha256": pindata.hashes, "failures": rep.fails,
             "provisional": rep.provisional + [
-                "bootloader pin table: memory of ST AN2606",
-                "FT / TT structure of the pins (CHG_INHIBIT on PH1 needs a pin without a diode to VDD): "
-                "not in the open pin data, datasheet DS13086 not read"],
+                "electrical limits of the pins (thresholds, 8 mA / 20 mA, PC13 limited to 3 mA sink, "
+                "injection current) are from memory of DS13086, not read"],
         },
+        "ucpd_pads": {fn: [e["name"] for e in pindata.pads.values() if fn in e["signals"]]
+                      for fn in UCPD_CC + tuple(UCPD_DBCC)},
+        "ucpd_pad_reasons": UCPD_PAD_REASONS,
         "pins": rows,
         "supply_pads": supply,
         "changed_from_gl_pins_h": [{"signal": s, "from": a, "to": b, "reason": why}
                                    for s, a, b, why in changed],
+        "same_pin_new_meaning": {
+            "CHG_INHIBIT": "push-pull output, HIGH = stop charging (gate of Q1, which pulls the charger's "
+                           "TS input low); was open drain, LOW = stop",
+            "CHG_STAT": "open-drain CHG output of the BQ25101 with 100 kohm to V2V8 (and moved from PB0 "
+                        "to PA15); was the STAT output of the MCP73831"},
+        "firmware_notes": FIRMWARE_NOTES,
         "grain_leds": leds,
         "extcomin_lse_ticks": 547,
     }
@@ -779,19 +1035,29 @@ def _set(sig, index, value):
     return mutate
 
 
-#: (what is seeded, mutation of PINMAP or None, text that must appear in a failure)
+#: (what is seeded, mutation of PINMAP or the name of a design mutation, text that must appear in a failure)
 SELFTEST = [
     ("DCMI_D3 given AF10 instead of AF4", _set("CAM_D3", 5, 10), "CAM_D3"),
     ("CAM_L_PWDN moved to PC10 (bootloader USART3_TX)", _swap("CAM_L_PWDN", "GRAIN_CP4"), "CAM_L_PWDN on PC10"),
     ("CAM_R_SCL moved to PA9 (bootloader USART1_TX)", _swap("CAM_R_SCL", "GRAIN_CP0"), "DRIVEN into camera pins"),
-    ("IMU_INT1 moved to PB0 (no wake-up function)", _swap("IMU_INT1", "CHG_STAT"), "IMU_INT1"),
+    ("IMU_INT1 moved to PA15 (no wake-up function)", _swap("IMU_INT1", "CHG_STAT"), "IMU_INT1"),
     ("VBAT_SENSE moved to PH1 (no ADC channel)", _swap("VBAT_SENSE", "CHG_INHIBIT"), "VBAT_SENSE"),
     ("NTC_BIAS put on PC4, the pad of NTC_SENSE", _set("NTC_BIAS", 1, "PC4"), "used twice"),
     ("SPEC row CAM_D4 moved to PC12", _swap("CAM_D4", "GRAIN_CP2"), "CAM_D4"),
     ("SPI1_SCK marked PROPOSED although it moved", _set("SPI1_SCK", 8, "PROPOSED"), "SPI1_SCK"),
     ("IMU_INT2 moved to PA10 (bootloader USART1_RX)", _swap("IMU_INT2", "FLASH_CS"), "an output that can move"),
+    ("IMU_CS moved back to PB12 (bootloader SPI2_NSS)", _swap("IMU_CS", "LCD_DISP"), "IMU_CS is on PB12"),
+    ("CHG_INHIBIT moved to PB10 (bootloader I2C2_SCL)", _swap("CHG_INHIBIT", "LCD_SCS"), "CHG_INHIBIT is on PB10"),
+    ("CAM_PWR_EN moved to PA9 (bootloader USART1_TX)", _swap("CAM_PWR_EN", "GRAIN_CP0"), "CAM_PWR_EN is on PA9"),
+    ("GRAIN_CP1 moved to PA10 (bootloader USART1_RX)", _swap("GRAIN_CP1", "FLASH_CS"), "LISTENS"),
     ("pad names of pads 8 and 9 swapped in the netlist", "pads", "pad 8"),
-    ("R31 (pull on PA3 / USART2_RX) removed", "r31", "PA3"),
+    ("R31 (pull on PA3 / USART2_RX) removed", "R31", "PA3"),
+    ("R2 (BOOT0 pull-down) removed", "R2", "BOOT0"),
+    ("GRAIN_CP1 moved back to PA15 (UCPD1_CC1)", _swap("GRAIN_CP1", "CHG_STAT"), "an LED line on the UCPD1_CC1 pad"),
+    ("CAM_PWR_EN moved to PB15 (UCPD1_CC2)", _swap("CAM_PWR_EN", "SPI2_MOSI"),
+     "a signal that switches power on the UCPD1_CC2 pad"),
+    ("NTC_BIAS (a GPIO output) moved to PA15 (UCPD1_CC1)", _swap("NTC_BIAS", "CHG_STAT"), "must be an input or an AF output"),
+    ("IMU_CS moved to PB14 (UCPD1_DBCC2, no reason given)", _swap("IMU_CS", "SPI2_MISO"), "dead-battery control pad"),
 ]
 
 
@@ -812,10 +1078,10 @@ def selftest(pindata):
             rep = Report()
             try:
                 design = G.gl1_main_design()
-                if mutation == "r31":
-                    design.parts[:] = [p for p in design.parts if p.ref != "R31"]
+                if mutation in ("R31", "R2"):
+                    design.parts[:] = [p for p in design.parts if p.ref != mutation]
                     for net in design.nets.values():
-                        net.nodes[:] = [n for n in net.nodes if n[0] != "R31"]
+                        net.nodes[:] = [n for n in net.nodes if n[0] != mutation]
                 run(pindata, design, rep)
             except Exception as exc:                 # a defect that breaks the build is caught too
                 rep.fails.append("%s: %s" % (type(exc).__name__, exc))

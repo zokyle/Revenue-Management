@@ -74,6 +74,11 @@ bool gl_gfx_get(const gl_gfx_t *g, int x, int y);
 /** The 16 bytes of line y (0..127) in LCD bit order. */
 const uint8_t *gl_gfx_row(const gl_gfx_t *g, int y);
 
+/** Turn the whole picture by 180 degrees about the screen centre: pixel
+ *  (x, y) goes to (127 - x, 127 - y).  For a marker that faces away from the
+ *  golfer (after the half turn of a Precision Read). */
+void gl_gfx_rotate_180(gl_gfx_t *g);
+
 /** Number of black pixels on the whole screen (tests, diagnostics). */
 unsigned gl_gfx_count_black(const gl_gfx_t *g);
 
@@ -180,9 +185,10 @@ typedef struct {
  *
  * If the line's chord inside the clip circle is shorter than
  * GL_GFX_AIM_MIN_CHORD_PX (aim more than about 13.5 deg off the visor axis)
- * the true line is NOT drawn; instead a DASHED parallel line through the
- * screen centre is drawn, info->on_screen is false, and the caller should
- * add an arrow on the side given by the sign of info->offset_px.
+ * the true line is NOT drawn; instead the PARALLEL line through the screen
+ * centre is drawn in the same style (the direction is what the golfer
+ * copies) and info->on_screen is false; info->offset_px still tells on
+ * which side of the centre the true line passes.
  */
 void gl_gfx_aim_line(gl_gfx_t *g, float aim_rad, float half_width_px, gl_gfx_aim_info_t *info);
 
@@ -212,7 +218,8 @@ void gl_gfx_aim_line_at(gl_gfx_t *g, float aim_rad, float ball_az_rad, float hal
  * the hole for want of anything better) and must not look like one: the
  * true line through the ball position is drawn in long dashes (edge
  * dithering kept, so its direction is still readable).  The substitute for
- * a line that leaves the aperture is the same in both styles.
+ * a line that leaves the aperture (the parallel through the screen centre)
+ * has the style of the line it stands for: solid or tentative.
  */
 void gl_gfx_aim_line_styled(gl_gfx_t *g, float aim_rad, float ball_az_rad, float half_width_px,
                             bool tentative, gl_gfx_aim_info_t *info);

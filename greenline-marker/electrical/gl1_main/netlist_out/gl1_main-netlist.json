@@ -1,8 +1,8 @@
 {
  "counts": {
-  "nets": 96,
-  "pads_on_nets": 393,
-  "parts": 117
+  "nets": 95,
+  "pads_on_nets": 396,
+  "parts": 120
  },
  "design": "gl1_main",
  "netclasses": {
@@ -219,14 +219,12 @@
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U1.PH3",
-    "R2.1",
+    "U1.PH0",
     "R10.1",
     "U8.EN"
    ],
    "pads": [
-    "U1.60",
-    "R2.1",
+    "U1.5",
     "R10.1",
     "U8.3"
    ],
@@ -778,11 +776,13 @@
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U1.PH0",
+    "U1.PH3",
+    "R2.1",
     "R5.1"
    ],
    "pads": [
-    "U1.5",
+    "U1.60",
+    "R2.1",
     "R5.1"
    ],
    "planes": [],
@@ -924,14 +924,12 @@
    "no_route": false,
    "nodes": [
     "U1.PH1",
-    "R12.2",
-    "R13.1",
+    "R12.1",
     "Q1.G"
    ],
    "pads": [
     "U1.6",
-    "R12.2",
-    "R13.1",
+    "R12.1",
     "Q1.1"
    ],
    "planes": [],
@@ -939,38 +937,19 @@
    "priority": 0,
    "width": null
   },
-  "CHG_PROG": {
+  "CHG_ISET": {
    "layers": null,
    "max_vias": null,
-   "name": "CHG_PROG",
+   "name": "CHG_ISET",
    "netclass": "Default",
    "no_route": false,
    "nodes": [
     "R11.1",
-    "U9.PROG"
+    "U9.ISET"
    ],
    "pads": [
     "R11.1",
-    "U9.5"
-   ],
-   "planes": [],
-   "power_flag": false,
-   "priority": 0,
-   "width": null
-  },
-  "CHG_PROG_SW": {
-   "layers": null,
-   "max_vias": null,
-   "name": "CHG_PROG_SW",
-   "netclass": "Default",
-   "no_route": false,
-   "nodes": [
-    "R11.2",
-    "Q1.D"
-   ],
-   "pads": [
-    "R11.2",
-    "Q1.3"
+    "U9.B2"
    ],
    "planes": [],
    "power_flag": false,
@@ -984,35 +963,37 @@
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U1.PB0",
+    "U1.PA15",
+    "R13.1",
     "R14.1",
-    "R32.1",
-    "D18.A"
+    "U9.CHG"
    ],
    "pads": [
-    "U1.26",
+    "U1.50",
+    "R13.1",
     "R14.1",
-    "R32.1",
-    "D18.2"
+    "U9.C1"
    ],
    "planes": [],
    "power_flag": false,
    "priority": 0,
    "width": null
   },
-  "CHG_STAT_RAW": {
+  "CHG_TS": {
    "layers": null,
    "max_vias": null,
-   "name": "CHG_STAT_RAW",
+   "name": "CHG_TS",
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U9.STAT",
-    "D18.K"
+    "U9.TS",
+    "Q1.D",
+    "RT1.1"
    ],
    "pads": [
-    "U9.1",
-    "D18.1"
+    "U9.B1",
+    "Q1.3",
+    "RT1.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -1027,21 +1008,25 @@
    "no_route": false,
    "nodes": [
     "R23.2",
+    "D1.A",
+    "D2.K",
     "D3.A",
     "D4.K",
-    "D13.A",
-    "D14.K",
-    "D15.A",
-    "D16.K"
+    "D5.A",
+    "D6.K",
+    "D7.A",
+    "D8.K"
    ],
    "pads": [
     "R23.2",
+    "D1.2",
+    "D2.1",
     "D3.2",
     "D4.1",
-    "D13.2",
-    "D14.1",
-    "D15.2",
-    "D16.1"
+    "D5.2",
+    "D6.1",
+    "D7.2",
+    "D8.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -1075,21 +1060,25 @@
    "no_route": false,
    "nodes": [
     "R24.2",
+    "D1.K",
+    "D2.A",
     "D9.A",
     "D10.K",
     "D11.A",
     "D12.K",
-    "D15.K",
-    "D16.A"
+    "D13.A",
+    "D14.K"
    ],
    "pads": [
     "R24.2",
+    "D1.1",
+    "D2.2",
     "D9.2",
     "D10.1",
     "D11.2",
     "D12.1",
-    "D15.1",
-    "D16.2"
+    "D13.2",
+    "D14.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -1103,11 +1092,11 @@
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U1.PA15",
+    "U1.PB0",
     "R24.1"
    ],
    "pads": [
-    "U1.50",
+    "U1.26",
     "R24.1"
    ],
    "planes": [],
@@ -1123,25 +1112,21 @@
    "no_route": false,
    "nodes": [
     "R25.2",
-    "D5.A",
-    "D6.K",
-    "D7.A",
-    "D8.K",
-    "D11.K",
-    "D12.A",
-    "D13.K",
-    "D14.A"
+    "D3.K",
+    "D4.A",
+    "D9.K",
+    "D10.A",
+    "D15.A",
+    "D16.K"
    ],
    "pads": [
     "R25.2",
-    "D5.2",
-    "D6.1",
-    "D7.2",
-    "D8.1",
-    "D11.1",
-    "D12.2",
-    "D13.1",
-    "D14.2"
+    "D3.1",
+    "D4.2",
+    "D9.1",
+    "D10.2",
+    "D15.2",
+    "D16.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -1175,21 +1160,21 @@
    "no_route": false,
    "nodes": [
     "R26.2",
-    "D1.A",
-    "D2.K",
-    "D7.K",
-    "D8.A",
-    "D9.K",
-    "D10.A"
+    "D5.K",
+    "D6.A",
+    "D11.K",
+    "D12.A",
+    "D15.K",
+    "D16.A"
    ],
    "pads": [
     "R26.2",
-    "D1.2",
-    "D2.1",
-    "D7.1",
-    "D8.2",
-    "D9.1",
-    "D10.2"
+    "D5.1",
+    "D6.2",
+    "D11.1",
+    "D12.2",
+    "D15.1",
+    "D16.2"
    ],
    "planes": [],
    "power_flag": false,
@@ -1223,21 +1208,17 @@
    "no_route": false,
    "nodes": [
     "R27.2",
-    "D1.K",
-    "D2.A",
-    "D3.K",
-    "D4.A",
-    "D5.K",
-    "D6.A"
+    "D7.K",
+    "D8.A",
+    "D13.K",
+    "D14.A"
    ],
    "pads": [
     "R27.2",
-    "D1.1",
-    "D2.2",
-    "D3.1",
-    "D4.2",
-    "D5.1",
-    "D6.2"
+    "D7.1",
+    "D8.2",
+    "D13.1",
+    "D14.2"
    ],
    "planes": [],
    "power_flag": false,
@@ -1320,8 +1301,9 @@
     "R10.2",
     "C26.2",
     "C27.2",
-    "R13.2",
-    "R32.2",
+    "R11.2",
+    "R12.2",
+    "R14.2",
     "C28.2",
     "R16.2",
     "R18.2",
@@ -1348,8 +1330,9 @@
     "U8.GND",
     "U9.VSS",
     "Q1.S",
-    "U10.GND",
     "RT1.2",
+    "RT2.2",
+    "U10.GND",
     "BT2.1",
     "U4.GND1",
     "U4.GND2",
@@ -1359,7 +1342,8 @@
     "J1.VSSA",
     "J1.MP",
     "PD1.A",
-    "J2.GND"
+    "J2.GND",
+    "TP4.1"
    ],
    "pads": [
     "C1.2",
@@ -1391,8 +1375,9 @@
     "R10.2",
     "C26.2",
     "C27.2",
-    "R13.2",
-    "R32.2",
+    "R11.2",
+    "R12.2",
+    "R14.2",
     "C28.2",
     "R16.2",
     "R18.2",
@@ -1418,20 +1403,22 @@
     "U7.1",
     "U11.1",
     "U8.2",
-    "U9.2",
+    "U9.C2",
     "Q1.2",
-    "U10.2",
     "RT1.2",
+    "RT2.2",
+    "U10.2",
     "BT2.1",
     "U4.6",
     "U4.7",
     "U4.2",
     "U4.3",
-    "J1.9",
-    "J1.10",
+    "J1.2",
+    "J1.1",
     "J1.MP",
     "PD1.5",
-    "J2.4"
+    "J2.4",
+    "TP4.1"
    ],
    "planes": [
     "In1.Cu"
@@ -1447,12 +1434,12 @@
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U1.PB12",
+    "U1.PB1",
     "R20.1",
     "U4.CS"
    ],
    "pads": [
-    "U1.33",
+    "U1.27",
     "R20.1",
     "U4.12"
    ],
@@ -1468,11 +1455,11 @@
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U1.PC5",
+    "U1.PA7",
     "U4.INT1"
    ],
    "pads": [
-    "U1.25",
+    "U1.23",
     "U4.4"
    ],
    "planes": [],
@@ -1487,11 +1474,11 @@
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U1.PA7",
+    "U1.PA5",
     "U4.INT2"
    ],
    "pads": [
-    "U1.23",
+    "U1.21",
     "U4.9"
    ],
    "planes": [],
@@ -1506,14 +1493,16 @@
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U1.PB1",
+    "U1.PB12",
     "R22.1",
+    "R29.1",
     "J1.DISP"
    ],
    "pads": [
-    "U1.27",
+    "U1.33",
     "R22.1",
-    "J1.5"
+    "R29.1",
+    "J1.6"
    ],
    "planes": [],
    "power_flag": false,
@@ -1532,7 +1521,7 @@
    ],
    "pads": [
     "U1.28",
-    "J1.4"
+    "J1.7"
    ],
    "planes": [],
    "power_flag": false,
@@ -1553,7 +1542,7 @@
    "pads": [
     "U1.29",
     "R21.1",
-    "J1.3"
+    "J1.8"
    ],
    "planes": [],
    "power_flag": false,
@@ -1607,14 +1596,12 @@
    "netclass": "Default",
    "no_route": false,
    "nodes": [
-    "U1.PA5",
-    "R19.1",
-    "R29.1"
+    "U1.PC5",
+    "R19.1"
    ],
    "pads": [
-    "U1.21",
-    "R19.1",
-    "R29.1"
+    "U1.25",
+    "R19.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -1630,12 +1617,12 @@
    "nodes": [
     "U1.PC4",
     "R19.2",
-    "RT1.1"
+    "RT2.1"
    ],
    "pads": [
     "U1.24",
     "R19.2",
-    "RT1.1"
+    "RT2.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -1769,7 +1756,7 @@
    "pads": [
     "U1.57",
     "U6.5",
-    "J1.2"
+    "J1.9"
    ],
    "planes": [],
    "power_flag": false,
@@ -1790,7 +1777,7 @@
    "pads": [
     "U1.55",
     "U6.6",
-    "J1.1"
+    "J1.10"
    ],
    "planes": [],
    "power_flag": false,
@@ -1954,6 +1941,7 @@
     "C13.1",
     "R3.2",
     "C21.1",
+    "R13.2",
     "C30.1",
     "C31.1",
     "R20.2",
@@ -1971,7 +1959,8 @@
     "U4.VDDIO",
     "J1.VDDA",
     "J1.VDD",
-    "J1.EXTMODE"
+    "J1.EXTMODE",
+    "TP2.1"
    ],
    "pads": [
     "C1.1",
@@ -1983,6 +1972,7 @@
     "C13.1",
     "R3.2",
     "C21.1",
+    "R13.2",
     "C30.1",
     "C31.1",
     "R20.2",
@@ -1998,9 +1988,10 @@
     "U7.2",
     "U4.8",
     "U4.5",
-    "J1.6",
-    "J1.7",
-    "J1.8"
+    "J1.5",
+    "J1.4",
+    "J1.3",
+    "TP2.1"
    ],
    "planes": [
     "In2.Cu"
@@ -2028,7 +2019,8 @@
     "U2.DOVDD",
     "U3.AVDD",
     "U3.DOVDD",
-    "U8.OUT"
+    "U8.OUT",
+    "TP3.1"
    ],
    "pads": [
     "C14.1",
@@ -2043,7 +2035,8 @@
     "U2.D1",
     "U3.D5",
     "U3.D1",
-    "U8.5"
+    "U8.5",
+    "TP3.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -2063,8 +2056,9 @@
     "R17.1",
     "U7.VIN",
     "U8.IN",
-    "U9.VBAT",
-    "BT1.1"
+    "U9.OUT",
+    "BT1.1",
+    "TP1.1"
    ],
    "pads": [
     "C20.1",
@@ -2073,8 +2067,9 @@
     "R17.1",
     "U7.3",
     "U8.1",
-    "U9.3",
-    "BT1.1"
+    "U9.A1",
+    "BT1.1",
+    "TP1.1"
    ],
    "planes": [],
    "power_flag": true,
@@ -2135,12 +2130,14 @@
    "no_route": false,
    "nodes": [
     "C28.1",
+    "R15.1",
     "D17.A",
     "U10.VBUS",
     "J2.VBUS"
    ],
    "pads": [
     "C28.1",
+    "R15.1",
     "D17.2",
     "U10.5",
     "J2.1"
@@ -2159,19 +2156,15 @@
    "nodes": [
     "C22.1",
     "C26.1",
-    "R12.1",
-    "R15.1",
     "U11.VIN",
-    "U9.VDD",
+    "U9.IN",
     "D17.K"
    ],
    "pads": [
     "C22.1",
     "C26.1",
-    "R12.1",
-    "R15.1",
     "U11.3",
-    "U9.4",
+    "U9.A2",
     "D17.1"
    ],
    "planes": [],
@@ -2252,14 +2245,12 @@
     "U1.VDDUSB",
     "C9.1",
     "C23.1",
-    "R14.2",
     "U11.VOUT"
    ],
    "pads": [
     "U1.48",
     "C9.1",
     "C23.1",
-    "R14.2",
     "U11.2"
    ],
    "planes": [],
@@ -2650,7 +2641,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "GRM155R61A225KE95D",
    "pins": {
     "1": {
      "net": "VBUS_D",
@@ -2667,14 +2658,14 @@
      "type": "passive"
     }
    },
-   "value": "1u"
+   "value": "2u2"
   },
   "C23": {
    "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "GRM155R61A225KE95D",
    "pins": {
     "1": {
      "net": "VDDUSB",
@@ -2691,7 +2682,7 @@
      "type": "passive"
     }
    },
-   "value": "1u"
+   "value": "2u2"
   },
   "C24": {
    "dnp": false,
@@ -2746,7 +2737,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A475MEAAD",
+   "mpn": "GRM155R61A225KE95D",
    "pins": {
     "1": {
      "net": "VBUS_D",
@@ -2763,14 +2754,14 @@
      "type": "passive"
     }
    },
-   "value": "4u7"
+   "value": "2u2"
   },
   "C27": {
    "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R60J475ME47D",
+   "mpn": "GRM155R61A225KE95D",
    "pins": {
     "1": {
      "net": "VBAT",
@@ -2787,7 +2778,7 @@
      "type": "passive"
     }
    },
-   "value": "4u7"
+   "value": "2u2"
   },
   "C28": {
    "dnp": false,
@@ -3133,14 +3124,14 @@
    "mpn": "VLMS1500-GS08",
    "pins": {
     "A": {
-     "net": "CP3",
+     "net": "CP0",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP4",
+     "net": "CP1",
      "pads": [
       "1"
      ],
@@ -3154,10 +3145,10 @@
    "footprint": "LED_SMD:LED_0402_1005Metric",
    "group": "grain",
    "in_bom": true,
-   "mpn": "SFH 4053",
+   "mpn": "SFH 4053B",
    "pins": {
     "A": {
-     "net": "CP3",
+     "net": "CP2",
      "pads": [
       "2"
      ],
@@ -3188,7 +3179,7 @@
      "type": "passive"
     },
     "K": {
-     "net": "CP2",
+     "net": "CP3",
      "pads": [
       "1"
      ],
@@ -3202,10 +3193,10 @@
    "footprint": "LED_SMD:LED_0402_1005Metric",
    "group": "grain",
    "in_bom": true,
-   "mpn": "SFH 4053",
+   "mpn": "SFH 4053B",
    "pins": {
     "A": {
-     "net": "CP2",
+     "net": "CP3",
      "pads": [
       "2"
      ],
@@ -3229,14 +3220,14 @@
    "mpn": "VLMS1500-GS08",
    "pins": {
     "A": {
-     "net": "CP0",
+     "net": "CP1",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP2",
+     "net": "CP4",
      "pads": [
       "1"
      ],
@@ -3250,17 +3241,17 @@
    "footprint": "LED_SMD:LED_0402_1005Metric",
    "group": "grain",
    "in_bom": true,
-   "mpn": "SFH 4053",
+   "mpn": "SFH 4053B",
    "pins": {
     "A": {
-     "net": "CP2",
+     "net": "CP4",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP0",
+     "net": "CP1",
      "pads": [
       "1"
      ],
@@ -3277,14 +3268,14 @@
    "mpn": "VLMS1500-GS08",
    "pins": {
     "A": {
-     "net": "CP0",
+     "net": "CP2",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP1",
+     "net": "CP3",
      "pads": [
       "1"
      ],
@@ -3298,17 +3289,17 @@
    "footprint": "LED_SMD:LED_0402_1005Metric",
    "group": "grain",
    "in_bom": true,
-   "mpn": "SFH 4053",
+   "mpn": "SFH 4053B",
    "pins": {
     "A": {
-     "net": "CP1",
+     "net": "CP3",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP0",
+     "net": "CP2",
      "pads": [
       "1"
      ],
@@ -3341,46 +3332,22 @@
    },
    "value": "B0530WS"
   },
-  "D18": {
-   "dnp": false,
-   "footprint": "Diode_SMD:D_SOD-323",
-   "group": "power",
-   "in_bom": true,
-   "mpn": "1N4148WS-7-F",
-   "pins": {
-    "A": {
-     "net": "CHG_STAT",
-     "pads": [
-      "2"
-     ],
-     "type": "passive"
-    },
-    "K": {
-     "net": "CHG_STAT_RAW",
-     "pads": [
-      "1"
-     ],
-     "type": "passive"
-    }
-   },
-   "value": "1N4148WS"
-  },
   "D2": {
    "dnp": false,
    "footprint": "LED_SMD:LED_0402_1005Metric",
    "group": "grain",
    "in_bom": true,
-   "mpn": "SFH 4053",
+   "mpn": "SFH 4053B",
    "pins": {
     "A": {
-     "net": "CP4",
+     "net": "CP1",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP3",
+     "net": "CP0",
      "pads": [
       "1"
      ],
@@ -3404,7 +3371,7 @@
      "type": "passive"
     },
     "K": {
-     "net": "CP4",
+     "net": "CP2",
      "pads": [
       "1"
      ],
@@ -3418,10 +3385,10 @@
    "footprint": "LED_SMD:LED_0402_1005Metric",
    "group": "grain",
    "in_bom": true,
-   "mpn": "SFH 4053",
+   "mpn": "SFH 4053B",
    "pins": {
     "A": {
-     "net": "CP4",
+     "net": "CP2",
      "pads": [
       "2"
      ],
@@ -3445,14 +3412,14 @@
    "mpn": "VLMS1500-GS08",
    "pins": {
     "A": {
-     "net": "CP2",
+     "net": "CP0",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP4",
+     "net": "CP3",
      "pads": [
       "1"
      ],
@@ -3466,17 +3433,17 @@
    "footprint": "LED_SMD:LED_0402_1005Metric",
    "group": "grain",
    "in_bom": true,
-   "mpn": "SFH 4053",
+   "mpn": "SFH 4053B",
    "pins": {
     "A": {
-     "net": "CP4",
+     "net": "CP3",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP2",
+     "net": "CP0",
      "pads": [
       "1"
      ],
@@ -3493,14 +3460,14 @@
    "mpn": "VLMS1500-GS08",
    "pins": {
     "A": {
-     "net": "CP2",
+     "net": "CP0",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP3",
+     "net": "CP4",
      "pads": [
       "1"
      ],
@@ -3514,17 +3481,17 @@
    "footprint": "LED_SMD:LED_0402_1005Metric",
    "group": "grain",
    "in_bom": true,
-   "mpn": "SFH 4053",
+   "mpn": "SFH 4053B",
    "pins": {
     "A": {
-     "net": "CP3",
+     "net": "CP4",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "K": {
-     "net": "CP2",
+     "net": "CP0",
      "pads": [
       "1"
      ],
@@ -3548,7 +3515,7 @@
      "type": "passive"
     },
     "K": {
-     "net": "CP3",
+     "net": "CP2",
      "pads": [
       "1"
      ],
@@ -3648,21 +3615,21 @@
     "DISP": {
      "net": "LCD_DISP",
      "pads": [
-      "5"
+      "6"
      ],
      "type": "passive"
     },
     "EXTCOMIN": {
      "net": "LCD_EXTCOMIN",
      "pads": [
-      "4"
+      "7"
      ],
      "type": "passive"
     },
     "EXTMODE": {
      "net": "V2V8",
      "pads": [
-      "8"
+      "3"
      ],
      "type": "passive"
     },
@@ -3676,49 +3643,49 @@
     "SCLK": {
      "net": "SPI1_SCK",
      "pads": [
-      "1"
+      "10"
      ],
      "type": "passive"
     },
     "SCS": {
      "net": "LCD_SCS",
      "pads": [
-      "3"
+      "8"
      ],
      "type": "passive"
     },
     "SI": {
      "net": "SPI1_MOSI",
      "pads": [
-      "2"
+      "9"
      ],
      "type": "passive"
     },
     "VDD": {
      "net": "V2V8",
      "pads": [
-      "7"
+      "4"
      ],
      "type": "passive"
     },
     "VDDA": {
      "net": "V2V8",
      "pads": [
-      "6"
+      "5"
      ],
      "type": "passive"
     },
     "VSS": {
      "net": "GND",
      "pads": [
-      "9"
+      "2"
      ],
      "type": "passive"
     },
     "VSSA": {
      "net": "GND",
      "pads": [
-      "10"
+      "1"
      ],
      "type": "passive"
     }
@@ -3822,7 +3789,7 @@
    "mpn": "BSS138LT1G",
    "pins": {
     "D": {
-     "net": "CHG_PROG_SW",
+     "net": "CHG_TS",
      "pads": [
       "3"
      ],
@@ -3898,55 +3865,31 @@
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "RC0402FR-0749K9L",
+   "mpn": "RC0402FR-076K81L",
    "pins": {
     "1": {
-     "net": "CHG_PROG",
+     "net": "CHG_ISET",
      "pads": [
       "1"
      ],
      "type": "passive"
     },
     "2": {
-     "net": "CHG_PROG_SW",
+     "net": "GND",
      "pads": [
       "2"
      ],
      "type": "passive"
     }
    },
-   "value": "49k9"
+   "value": "6k81"
   },
   "R12": {
    "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "RC0402FR-071ML",
-   "pins": {
-    "1": {
-     "net": "VBUS_D",
-     "pads": [
-      "1"
-     ],
-     "type": "passive"
-    },
-    "2": {
-     "net": "CHG_INHIBIT",
-     "pads": [
-      "2"
-     ],
-     "type": "passive"
-    }
-   },
-   "value": "1M"
-  },
-  "R13": {
-   "dnp": false,
-   "footprint": "Resistor_SMD:R_0402_1005Metric",
-   "group": "power",
-   "in_bom": true,
-   "mpn": "RC0402FR-071ML",
+   "mpn": "RC0402FR-07100KL",
    "pins": {
     "1": {
      "net": "CHG_INHIBIT",
@@ -3963,9 +3906,9 @@
      "type": "passive"
     }
    },
-   "value": "1M"
+   "value": "100k"
   },
-  "R14": {
+  "R13": {
    "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "group": "power",
@@ -3980,7 +3923,7 @@
      "type": "passive"
     },
     "2": {
-     "net": "VDDUSB",
+     "net": "V2V8",
      "pads": [
       "2"
      ],
@@ -3989,15 +3932,39 @@
    },
    "value": "100k"
   },
+  "R14": {
+   "dnp": true,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "RC0402FR-076K04L",
+   "pins": {
+    "1": {
+     "net": "CHG_STAT",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "6k04"
+  },
   "R15": {
    "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "RC0402FR-0782KL",
+   "mpn": "RC0402FR-07100KL",
    "pins": {
     "1": {
-     "net": "VBUS_D",
+     "net": "VBUS",
      "pads": [
       "1"
      ],
@@ -4011,7 +3978,7 @@
      "type": "passive"
     }
    },
-   "value": "82k"
+   "value": "100k"
   },
   "R16": {
    "dnp": false,
@@ -4117,7 +4084,7 @@
    "mpn": "RC0402FR-0710KL",
    "pins": {
     "1": {
-     "net": "CAM_EN",
+     "net": "CAM_R_PWDN_MCU",
      "pads": [
       "1"
      ],
@@ -4357,7 +4324,7 @@
    "mpn": "RC0402FR-07100KL",
    "pins": {
     "1": {
-     "net": "NTC_BIAS",
+     "net": "LCD_DISP",
      "pads": [
       "1"
      ],
@@ -4426,7 +4393,7 @@
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "group": "grain",
    "in_bom": true,
-   "mpn": "RC0402FR-071ML",
+   "mpn": "RC0402FR-07150KL",
    "pins": {
     "1": {
      "net": "OPAMP_OUT",
@@ -4443,31 +4410,7 @@
      "type": "passive"
     }
    },
-   "value": "1M"
-  },
-  "R32": {
-   "dnp": false,
-   "footprint": "Resistor_SMD:R_0402_1005Metric",
-   "group": "power",
-   "in_bom": true,
-   "mpn": "RC0402FR-07470KL",
-   "pins": {
-    "1": {
-     "net": "CHG_STAT",
-     "pads": [
-      "1"
-     ],
-     "type": "passive"
-    },
-    "2": {
-     "net": "GND",
-     "pads": [
-      "2"
-     ],
-     "type": "passive"
-    }
-   },
-   "value": "470k"
+   "value": "150k"
   },
   "R4": {
    "dnp": false,
@@ -5014,7 +4957,31 @@
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "NCP15XH103F03RC",
+   "mpn": "NCU15XH103F60RC",
+   "pins": {
+    "1": {
+     "net": "CHG_TS",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "NTC 10k"
+  },
+  "RT2": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "NCU15XH103F60RC",
    "pins": {
     "1": {
      "net": "NTC_SENSE",
@@ -5032,6 +4999,74 @@
     }
    },
    "value": "NTC 10k"
+  },
+  "TP1": {
+   "dnp": false,
+   "footprint": "gleda:TestPad_D1mm",
+   "group": "service",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {
+    "1": {
+     "net": "VBAT",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "VBAT"
+  },
+  "TP2": {
+   "dnp": false,
+   "footprint": "gleda:TestPad_D1mm",
+   "group": "service",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {
+    "1": {
+     "net": "V2V8",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "V2V8"
+  },
+  "TP3": {
+   "dnp": false,
+   "footprint": "gleda:TestPad_D1mm",
+   "group": "service",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {
+    "1": {
+     "net": "V2V8_CAM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "V2V8_CAM"
+  },
+  "TP4": {
+   "dnp": false,
+   "footprint": "gleda:TestPad_D1mm",
+   "group": "service",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {
+    "1": {
+     "net": "GND",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "GND"
   },
   "U1": {
    "dnp": false,
@@ -5097,7 +5132,7 @@
      "type": "bidir"
     },
     "PA15": {
-     "net": "CP1_MCU",
+     "net": "CHG_STAT",
      "pads": [
       "50"
      ],
@@ -5125,7 +5160,7 @@
      "type": "bidir"
     },
     "PA5": {
-     "net": "NTC_BIAS",
+     "net": "IMU_INT2",
      "pads": [
       "21"
      ],
@@ -5139,7 +5174,7 @@
      "type": "bidir"
     },
     "PA7": {
-     "net": "IMU_INT2",
+     "net": "IMU_INT1",
      "pads": [
       "23"
      ],
@@ -5160,14 +5195,14 @@
      "type": "bidir"
     },
     "PB0": {
-     "net": "CHG_STAT",
+     "net": "CP1_MCU",
      "pads": [
       "26"
      ],
      "type": "bidir"
     },
     "PB1": {
-     "net": "LCD_DISP",
+     "net": "IMU_CS",
      "pads": [
       "27"
      ],
@@ -5181,7 +5216,7 @@
      "type": "bidir"
     },
     "PB12": {
-     "net": "IMU_CS",
+     "net": "LCD_DISP",
      "pads": [
       "33"
      ],
@@ -5342,7 +5377,7 @@
      "type": "bidir"
     },
     "PC5": {
-     "net": "IMU_INT1",
+     "net": "NTC_BIAS",
      "pads": [
       "25"
      ],
@@ -5384,7 +5419,7 @@
      "type": "bidir"
     },
     "PH0": {
-     "net": "CAM_R_PWDN_MCU",
+     "net": "CAM_EN",
      "pads": [
       "5"
      ],
@@ -5398,7 +5433,7 @@
      "type": "bidir"
     },
     "PH3": {
-     "net": "CAM_EN",
+     "net": "CAM_R_PWDN_MCU",
      "pads": [
       "60"
      ],
@@ -6197,48 +6232,55 @@
   },
   "U9": {
    "dnp": false,
-   "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+   "footprint": "gleda:BQ25101_YFP_DSBGA6_P0.4_PROVISIONAL",
    "group": "power",
    "in_bom": true,
-   "mpn": "MCP73831T-2ACI/OT",
+   "mpn": "BQ25101YFPR",
    "pins": {
-    "PROG": {
-     "net": "CHG_PROG",
+    "CHG": {
+     "net": "CHG_STAT",
      "pads": [
-      "5"
-     ],
-     "type": "passive"
-    },
-    "STAT": {
-     "net": "CHG_STAT_RAW",
-     "pads": [
-      "1"
+      "C1"
      ],
      "type": "open_drain"
     },
-    "VBAT": {
+    "IN": {
+     "net": "VBUS_D",
+     "pads": [
+      "A2"
+     ],
+     "type": "power_in"
+    },
+    "ISET": {
+     "net": "CHG_ISET",
+     "pads": [
+      "B2"
+     ],
+     "type": "passive"
+    },
+    "OUT": {
      "net": "VBAT",
      "pads": [
-      "3"
+      "A1"
      ],
      "type": "power_out"
     },
-    "VDD": {
-     "net": "VBUS_D",
+    "TS": {
+     "net": "CHG_TS",
      "pads": [
-      "4"
+      "B1"
      ],
-     "type": "power_in"
+     "type": "passive"
     },
     "VSS": {
      "net": "GND",
      "pads": [
-      "2"
+      "C2"
      ],
      "type": "power_in"
     }
    },
-   "value": "MCP73831"
+   "value": "BQ25101"
   },
   "Y1": {
    "dnp": false,

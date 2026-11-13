@@ -9,8 +9,8 @@
 #ifndef GL_APP_CFG_H
 #define GL_APP_CFG_H
 
-#define GL_APP_FW_VERSION 0x0001u /* major << 8 | minor: 0.1, phase 1 */
-#define GL_APP_FW_BUILD 20261111u
+#define GL_APP_FW_VERSION 0x0002u /* major << 8 | minor: 0.2, phase 2 after its review */
+#define GL_APP_FW_BUILD 20261113u
 #define GL_APP_HW_REV 3u          /* 'C' */
 
 /* ---- stillness, motion, gestures (IMU at 240 Hz, 32-sample blocks) -------- */
@@ -71,6 +71,9 @@
 #define GL_APP_MAX_STATIC_SIGMA_PX 0.5f
 /** Two band lines closer than this disturb each other's measurement. */
 #define GL_APP_NEIGHBOUR_PX 20.0f
+/** A band line inside whose own template width a line this many times
+ *  stronger lies is that line's shoulder, not an object (gl_read.c). */
+#define GL_APP_SHOULDER_SCORE_RATIO 4.0f
 /** Length of stick, up from its lowest visible point, used for the
  *  disparity (DESIGN: lowest 0.3-0.5 m). */
 #define GL_APP_SEGMENT_LENGTH_M 0.4f
@@ -132,6 +135,17 @@
 #define GL_APP_CONF_AMBIGUOUS 0.6f
 #define GL_APP_CONF_FIT_NOT_DONE 0.7f
 #define GL_APP_CONF_BEST_EFFORT_MAX 0.2f
+#define GL_APP_CONF_FLAG_OUT_MAX 0.09f        /* flag-out: below the first box (0.1) */
+/* gl_solver_options_t.near_miss_m: a best iterate of the patch solve this
+ * close to the hole centre is the aim (a tenth of the hole radius). */
+#define GL_APP_NEAR_MISS_M 0.005f
+/* gl_solver_options_t.max_steps: RK4 steps one estimate may integrate (plus
+ * one roll of at most 6004).  A typical read needs 1000, the costliest
+ * solve that still ENDED WITH A RESULT in 40 000 random reads 303 000; the
+ * costliest without the budget 629 000.  351 host instructions per step:
+ * 105 million instructions, 1.0 to 2.0 s at 160 MHz, 3.3 to 6.6 s at 48 MHz
+ * with the timing model's 1.5 to 3 cycles per instruction (NOT MEASURED). */
+#define GL_APP_SOLVE_MAX_STEPS 300000u
 /** How long "SAVED" stays on the screen after a zeroing. */
 #define GL_APP_ZERO_SAVED_MS 1500u
 /** Largest device bias a zeroing may store (rise/run); more means the

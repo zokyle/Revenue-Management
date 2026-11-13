@@ -280,7 +280,7 @@
    "footprint": "Fuse:Fuse_0603_1608Metric",
    "group": "usb",
    "in_bom": true,
-   "mpn": "MF-FSMF010X-2",
+   "mpn": "MF-FSMF020X-2",
    "pins": {
     "1": {
      "net": "VBUS_IN",
@@ -297,7 +297,7 @@
      "type": "passive"
     }
    },
-   "value": "PTC 0.1A"
+   "value": "PTC 0.2A"
   },
   "FID1": {
    "dnp": false,
@@ -355,7 +355,7 @@
   },
   "J1": {
    "dnp": false,
-   "footprint": "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal",
+   "footprint": "gl1_cradle_fp:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal_GL1",
    "group": "usb",
    "in_bom": true,
    "mpn": "USB4105-GF-A",

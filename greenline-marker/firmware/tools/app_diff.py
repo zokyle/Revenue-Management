@@ -81,10 +81,11 @@ def main(argv):
 
     base = replace(es.EstimatorConfig(), tol_miss=1e-9, tol_pace=1e-9, lm_tol=1e-10, lm_max_iter=200)
 
-    def run(drops, ball, method, past):
+    def run(drops, ball, method, past, use_grain, near_miss):
         ms = [Measurements.from_dict(d) for d in drops]
         ordered = [ms[ball]] + [m for i, m in enumerate(ms) if i != ball]  # the reference: ball first
-        return es.estimate_batch([ordered], METHODS[method], replace(base, past=past))[0]
+        cfg = replace(base, past=past, use_grain=bool(use_grain), near_miss_keep=near_miss)
+        return es.estimate_batch([ordered], METHODS[method], cfg)[0]
 
     bad = 0
     n = 0
@@ -98,8 +99,11 @@ def main(argv):
                 continue
             rec = json.loads(line)
             n += 1
-            est = run(rec["drops"], rec["ball_index"], rec["method"], rec["past"])
-            tru = run(rec["truth"], rec["ball_index"], rec["method"], rec["past"]) if rec["truth"] else None
+            # the options of the application's call (the step budget is not one of the
+            # reference's: a solve it cuts short would show as a difference of class)
+            opts = (rec["method"], rec["past"], rec.get("use_grain", 0), rec.get("near_miss", 0.0))
+            est = run(rec["drops"], rec["ball_index"], *opts)
+            tru = run(rec["truth"], rec["ball_index"], *opts) if rec["truth"] else None
             why = []
             ref = {
                 "phi": est.phi, "aim_azimuth_device": est.aim_azimuth_device, "v0": est.v0,
@@ -157,13 +161,17 @@ def main(argv):
                 if abs(dd) > DISPLAY_TOL_MRAD * 1e-3:
                     why.append("drawn aim %.2f mrad from the reference" % (1000 * dd))
                 # a SOLID line only for a solution (by the reference) of a putt whose distance was
-                # measured or dialled; the firmware reports what its pixels are
+                # measured or dialled AND whose flagstick the cameras saw: a flag-out result (the
+                # visor axis taken for the line to the hole) is tentative whatever was dialled
+                # (phase-2 review); the firmware reports what its pixels are
                 ball = rec["drops"][rec["ball_index"]]
                 known = not (est.flag_missing or est.range_missing) or ball.get("user_distance") is not None
-                if bool(rec["view"].get("dashed")) != (not (solved and known)):
+                firm = solved and known and not est.flag_missing
+                if bool(rec["view"].get("dashed")) != (not firm):
                     why.append("line drawn %s, the reference says %s" %
                                ("dashed" if rec["view"].get("dashed") else "solid",
-                                "solved, distance known" if (solved and known) else "not a solution / distance unknown"))
+                                "solved, flag seen, distance known" if firm
+                                else "not a solution / flag out / distance unknown"))
                 if rec["view"].get("dashed"):
                     dtxt += " dashed"
             sh = rec["shown"]

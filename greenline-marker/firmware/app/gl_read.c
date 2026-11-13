@@ -236,6 +236,43 @@ static gl_status_t finish_nothing_(gl_read_t *r, gl_read_why_t why, bool bearing
     return GL_ERR_NO_STICK;
 }
 
+/*
+ * A strong line also answers the WIDEST line template a few columns to its
+ * side.  Measured on the simulator: a flagstick 2.6 to 4.4 px wide (2.25 to
+ * 3.75 m away), score 140 to 170, gives a second "line" of template width
+ * 13 px, score 7 to 15, 8.6 to 9.1 px beside itself.  That shoulder is not
+ * an object - the wide template simply still covers the stick - but it used
+ * to be probed like one: one L R R L group for it, one for the stick, then
+ * the read.  8 strips and their analysis: 0.7 s of camera rail and 0.6 s to
+ * the result on a third of the reads between 2.25 and 4.5 m (review).
+ *
+ * A candidate is dropped here if a much stronger one lies inside its own
+ * template: |x - x_strong| <= its template width, and its score is less than
+ * 1 / GL_APP_SHOULDER_SCORE_RATIO of the strong one's.  Two real objects
+ * this close would not be measurable separately anyway (GL_APP_NEIGHBOUR_PX);
+ * a second pole of comparable strength, or one further away than its own
+ * width, is kept.
+ */
+static void drop_shoulders_(gl_vis_band_result_t *band, uint8_t *dropped)
+{
+    unsigned n = 0;
+    *dropped = 0;
+    for (unsigned i = 0; i < (unsigned)band->n_cand; i++) {
+        bool shoulder = false;
+        for (unsigned j = 0; j < (unsigned)band->n_cand && !shoulder; j++) {
+            shoulder = (j != i) &&
+                       band->cand[j].score >= GL_APP_SHOULDER_SCORE_RATIO * band->cand[i].score &&
+                       fabsf(band->cand[i].x - band->cand[j].x) <= band->cand[i].width_px;
+        }
+        if (shoulder) {
+            (*dropped)++;
+        } else {
+            band->cand[n++] = band->cand[i]; /* order kept: strongest first */
+        }
+    }
+    band->n_cand = (uint8_t)n;
+}
+
 static gl_status_t band_done_(gl_read_t *r)
 {
     gl_status_t st;
@@ -247,6 +284,7 @@ static gl_status_t band_done_(gl_read_t *r)
     st = gl_vis_band_analyse(&r->cur, &r->band_work, &r->band);
     gl_hal_trace(GL_TRACE_VISION_BAND, (uint32_t)r->cur.width * r->cur.height);
     r->progress++;
+    drop_shoulders_(&r->band, &r->result.n_shoulders);
     r->result.n_candidates = r->band.n_cand;
     r->result.band_noise = r->band.stats.noise_sigma;
     /* turf-horizon samples as angles relative to gravity */
@@ -709,6 +747,13 @@ static gl_status_t probe_done_(gl_read_t *r)
     return start_candidate_(r, best);
 }
 
+/* The verdict on what the first group shows of a lone candidate. */
+static bool first_group_is_bad_(const gl_read_t *r)
+{
+    gl_vis_disparity_t d;
+    return verdict_(r, &d) == V_BAD;
+}
+
 /* A strip of the group has been captured.  Nothing is analysed here: the
  * next strip is armed at once, so that the four exposures of the group are
  * spaced by the sensors' own frame timing (the analysis of one strip can
@@ -770,8 +815,14 @@ static gl_status_t analyse_step_(gl_read_t *r)
         return probe_done_(r);
     }
     /* the first group shows no line in the left camera: there will be none
-     * in the others either; do not keep the cameras on for nothing */
-    if (last_group || (group_k0 == 0u && r->n_left == 0u)) {
+     * in the others either; do not keep the cameras on for nothing.  The
+     * same if the first group already says that the line is not a flagstick
+     * (too wide, too short, not at its disparity): seven more groups would
+     * measure the same object.  A lone candidate used to be read in full
+     * before it was judged, where one of several was judged after its first
+     * group; since the shoulders of a strong line are no longer candidates
+     * (drop_shoulders_) a trunk or a post is usually a lone candidate. */
+    if (last_group || (group_k0 == 0u && (r->n_left == 0u || first_group_is_bad_(r)))) {
         return finish_(r);
     }
     r->k = (uint16_t)(group_k0 + 4u);

@@ -385,3 +385,49 @@ fields of `expected` (`level_offsets`, `range_*`, `stations`, `tilt_slopes`,
 | 30 | 2 OUT_OF_BOUNDS | no | 1385 | fast green (Stimp 14), 12 m over a crown: runs away down the far side (OUT_OF_BOUNDS) |
 | 31 | 0 STOPPED | no | 433 | fast green (Stimp 14), 12 m across a gentle slope |
 | 32 | 0 STOPPED | no | 431 | bowl: the ball swings back through the hole line |
+
+## Near-miss cases (appended after the firmware review, phase 2)
+
+`EstimatorConfig.near_miss_keep` (default 0 = off, the setting of every case
+above) makes the estimator keep the best iterate of the aim solve on the
+fitted patch when that solve ended without a usable solution but the iterate
+reaches the hole line within `near_miss_keep` of the hole centre:
+`aim_source` stays 0, `solve_status` reports how the solve ended, the
+confidence takes `conf_aim_fallback`, and the secant plane is not tried.
+The firmware runs with 5 mm. Why: near a jump of the lateral miss the
+bracketing search stops a fraction of a millimetre to a few millimetres from
+the centre and reports NO_CONVERGENCE; the secant-plane solution that
+replaced such an iterate misses the hole on the fitted patch by decimetres
+in most of those reads.
+
+| Key | Content |
+| --- | --- |
+| `near_miss_estimator_cases` | 18 estimator cases with the layout of `fallback_estimator_cases`, generated with `config_overrides` = `past` and `near_miss_keep` = 0.005. Extra keys: `kept` (the rule applied), `patch_solve` (`status`, `miss` [m] and `n_rolls` of the solve on the fitted patch) and `without_rule` (`aim_source`, `solve_status`, `phi`, `v0`, `confidence` of the same read with the rule off) |
+
+The key `estimator_config` at the top of the file does not list
+`near_miss_keep` (it is 0 for every case outside this group), so that the
+file is unchanged, byte for byte, up to this appended group. The inputs are
+plain numbers in `greenline_sim/refvectors_near_miss.py`. The last
+4 cases are controls: their best miss is outside 5 mm, and
+the estimate is the one without the rule.
+
+| id | drops | kept | best miss of the patch solve [mm] | trial rolls | aim_source, status | without the rule | aim moved by [mrad] | what it is |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 1 | yes | +0.965 | 213 | 0, NO_CONVERGENCE | 2, NO_CONVERGENCE | +159.0 | 2.6 m dying putt at the critical slope; the best effort shown without the rule is 159 mrad away |
+| 1 | 2 | yes | +3.310 | 213 | 0, NO_CONVERGENCE | 2, NO_CONVERGENCE | +105.8 | Survey of 2 drops, 3.7 m dying putt, slope at 0.91 of critical (best miss 3.3 mm); 106 mrad away without the rule |
+| 2 | 1 | yes | +0.087 | 212 | 0, NO_CONVERGENCE | 2, NO_CONVERGENCE | +86.0 | 5.8 m dying putt, slope at 0.90 of critical; 86 mrad away without the rule |
+| 3 | 1 | yes | +0.260 | 214 | 0, NO_CONVERGENCE | 2, UNREACHABLE | -80.1 | 6.0 m, 30 cm past, above the critical slope; without the rule the secant plane is UNREACHABLE, best effort 80 mrad away |
+| 4 | 1 | yes | -0.321 | 211 | 0, NO_CONVERGENCE | 1, OK | -75.7 | 4.3 m dying putt, slope at 0.86 of critical; without the rule the secant plane is solved, 76 mrad away |
+| 5 | 1 | yes | +0.183 | 214 | 0, NO_CONVERGENCE | 2, NO_CONVERGENCE | +65.4 | 8.1 m, 2 cm past, slope at 0.94 of critical; 65 mrad away without the rule |
+| 6 | 3 | yes | +2.238 | 206 | 0, NO_CONVERGENCE | 2, NO_CONVERGENCE | -52.3 | Survey of 3 drops, 5.7 m, 10 cm past (best miss 2.2 mm); 52 mrad away without the rule |
+| 7 | 3 | yes | +3.391 | 200 | 0, NO_CONVERGENCE | 1, OK | -52.0 | Survey of 3 drops, 14.3 m, 30 cm past (best miss 3.4 mm); without the rule the secant plane is solved, 52 mrad away |
+| 8 | 1 | yes | +0.865 | 232 | 0, NO_CONVERGENCE | 1, OK | +47.7 | 15 m, 10 cm past, slope at 0.89 of critical; without the rule the secant plane is solved, 48 mrad away |
+| 9 | 1 | yes | -0.133 | 203 | 0, NO_CONVERGENCE | 2, NO_CONVERGENCE | +47.0 | 11 m, 30 cm past, above the critical slope; 47 mrad away without the rule |
+| 10 | 4 | yes | -0.921 | 215 | 0, NO_CONVERGENCE | 2, NO_CONVERGENCE | -35.2 | Survey of 4 drops, 5.3 m, 10 cm past; 35 mrad away without the rule |
+| 11 | 3 | yes | +4.443 | 200 | 0, NO_CONVERGENCE | 2, NO_CONVERGENCE | +21.3 | Survey of 3 drops, 6.9 m, 2 cm past: best miss 4.4 mm, just inside the 5 mm |
+| 12 | 4 | yes | +2.359 | 230 | 0, NO_CONVERGENCE | 2, NO_CONVERGENCE | +0.2 | long Survey of 4 drops, 18.6 m dying putt on a gentle slope (0.13 of critical; best miss 2.4 mm) |
+| 13 | 1 | yes | -0.000 | 200 | 0, NO_CONVERGENCE | 1, OK | -0.8 | NOMINAL green: 8.7 m dying putt, slope at 0.17 of critical - the roll budget ends the search at 1e-9 m; without the rule the secant plane is solved |
+| 14 | 1 | no | +5.052 | 221 | 2, NO_CONVERGENCE | 2, NO_CONVERGENCE | +0.0 | CONTROL, not kept: 15 m dying putt, best miss 5.05 mm (just outside 5 mm): the estimate without the rule |
+| 15 | 3 | no | -5.912 | 220 | 2, NO_CONVERGENCE | 2, NO_CONVERGENCE | +0.0 | CONTROL, not kept: Survey of 3 drops, best miss 5.9 mm: the estimate without the rule |
+| 16 | 1 | no | +8.002 | 229 | 1, PACE_LIMITED | 1, PACE_LIMITED | +0.0 | CONTROL, not kept: 11.7 m dying putt, best miss 8.0 mm: the secant plane, PACE_LIMITED, as without the rule |
+| 17 | 3 | no | -22.368 | 213 | 1, OK | 1, OK | +0.0 | CONTROL, not kept: long Survey of 3 drops, 39.9 m, best miss 22 mm: the secant plane, as without the rule |

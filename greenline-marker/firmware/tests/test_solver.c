@@ -22,12 +22,17 @@
  */
 #include <stdlib.h>
 
+#include "gl_config.h"
 #include "gl_solver.h"
 #include "gl_solver_run.h"
 #include "gl_test.h"
 
 #define PI 3.14159265358979323846
-/** One step of the aim line on the display: 0.94 degree (DESIGN_SPEC). */
+/** A YARDSTICK, not the resolution of the firmware's line: the step in which
+ * the reference's Monte Carlo quantises the displayed aim (2 / 122 rad = 0.94
+ * degree, one pixel at the rim of the aperture; sim/greenline_sim/
+ * montecarlo.py).  The firmware's dithered line reproduces an aim to 0.05
+ * degree rms (tests/test_gfx.c, README "Display"). */
 #define DISPLAY_STEP_MRAD (0.94 * PI / 180.0 * 1e3)
 #define CUP_M 0.10795
 
@@ -642,8 +647,9 @@ GL_TEST(test_single_precision_estimator_deviation)
         print_row_("plays-like distance [mm]", &dev_.plays_mm, 1.5, "");
         m_dz = summarise_(&dev_.dz_mm, &med, &p99);
         print_row_("height of the hole [mm]", &dev_.dz_mm, 3e-4, "");
-        printf("      the aim line on the display moves in %.2f mrad (0.94 degree) steps: the largest single-precision\n"
-               "      error of the aim direction is %.3f mrad = %.4f of one step (median %.4f of one step)\n",
+        printf("      yardstick: one step of the reference's display model is %.2f mrad (0.94 degree; the firmware's\n"
+               "      line is finer, 0.05 degree rms): the largest single-precision error of the aim direction is\n"
+               "      %.3f mrad = %.4f of one step (median %.4f of one step)\n",
                DISPLAY_STEP_MRAD, m_aim, m_aim / DISPLAY_STEP_MRAD, dev_.aim_mrad.v[dev_.aim_mrad.n / 2u] / DISPLAY_STEP_MRAD);
         printf("      work: %.1f trial rolls and %.0f RK4 steps per read on average, at most %lu rolls / %lu steps; "
                "at most %lu fit iterations\n",
@@ -694,7 +700,7 @@ GL_TEST(test_single_precision_fallback_cases)
     v0.n = 0u;
     pt.n = 0u;
     conf.n = 0u;
-    for (unsigned i = gl_vec_n_est_original; i < gl_vec_n_est; i++) {
+    for (unsigned i = gl_vec_n_est_original; i < gl_vec_n_est_near_first; i++) {
         const gl_vec_est_case_t *c = &gl_vec_est[i];
         gl_vec_est_result_t r;
         gl_vec32_estimate(c, GL_VEC_TOL_DEFAULT, 0, &r);
@@ -1051,6 +1057,481 @@ GL_TEST(test_rolls_and_steps_are_bounded)
            (unsigned long)worst_iter);
 }
 
+/* ====================================================================================== */
+/* phase-2 review                                                                         */
+/* ====================================================================================== */
+
+/* The reference's near_miss_keep (gl_solver_options_t.near_miss_m): the 18
+ * appended cases.  The double build has already been compared with the
+ * reference field by field (test_double_reproduces_every_estimator_vector);
+ * here: what the rule does, measured by rolling the aims in double precision
+ * on the fitted patch, and what the single build makes of the same reads. */
+GL_TEST(test_near_miss_cases)
+{
+    unsigned n_kept = 0u, n_ctl = 0u, off_misses = 0u, off_short = 0u, single_holes = 0u, single_src0 = 0u;
+    double worst_kept_mm = 0.0, worst_move_mrad = 0.0, worst_single_mm = 0.0;
+
+    GL_CHECK_EQ(gl_vec_n_est - gl_vec_n_est_near_first, 18);
+    printf("    id kept | reference with the rule: class, lateral of its aim at the hole | without the rule: class, "
+           "lateral | aim moved | single build (firmware tolerances): class, lateral\n");
+    for (unsigned i = gl_vec_n_est_near_first; i < gl_vec_n_est; i++) {
+        const gl_vec_est_case_t *c = &gl_vec_est[i];
+        gl_vec_est_case_t off = *c;
+        gl_vec_est_result_t r, r_off, r32;
+        double lat = NAN, sp = NAN, lat_off = NAN, lat32 = NAN;
+        int crossed, crossed_off, crossed32;
+
+        GL_CHECK_EQ(c->group, 2);
+        GL_CHECK_NEAR(c->near_miss, 0.005, 0.0);
+        gl_vec64_estimate(c, GL_VEC_TOL_CASE, 0, &r);
+        off.near_miss = 0.0;
+        gl_vec64_estimate(&off, GL_VEC_TOL_CASE, 0, &r_off);
+        gl_vec32_estimate(c, GL_VEC_TOL_DEFAULT, 0, &r32);
+        GL_CHECK_EQ(r.status, ST_OK);
+        GL_CHECK_EQ(r_off.status, ST_OK);
+        GL_CHECK_EQ(r32.status, ST_OK);
+        /* the double build without the rule is the reference without the rule */
+        GL_CHECK_EQ(r_off.aim_source, c->without_source);
+        GL_CHECK_EQ(r_off.solve_status, c->without_status);
+        GL_CHECK_NEAR(r_off.phi, c->without_phi, 1e-9 + 1e-9 * fabs(c->without_phi));
+        GL_CHECK_NEAR(r_off.v0, c->without_v0, 1e-9 * c->without_v0);
+        /* the rule never touches the fit */
+        for (int k = 0; k < 5; k++) {
+            GL_CHECK(r.patch[k] == r_off.patch[k]);
+        }
+        crossed = gl_vec64_roll_patch(r.patch, r.distance, r.a_r, r.grain, r.phi, r.v0, &lat, &sp);
+        crossed_off = gl_vec64_roll_patch(r_off.patch, r_off.distance, r_off.a_r, r_off.grain, r_off.phi, r_off.v0,
+                                          &lat_off, &sp);
+        crossed32 = gl_vec64_roll_patch(r32.patch, r32.distance, r32.a_r, r32.grain, r32.phi, r32.v0, &lat32, &sp);
+        if (c->kept) {
+            n_kept++;
+            /* kept: the patch iterate is the aim, flagged by the status of the solve */
+            GL_CHECK_EQ(r.aim_source, 0);
+            GL_CHECK(r.solve_status == 2u || r.solve_status == 3u || r.solve_status == 4u);
+            GL_CHECK(r_off.aim_source == 1u || r_off.aim_source == 2u);
+            GL_CHECK(fabs(c->patch_miss) <= 0.005);
+            /* and it does what it says: within 5 mm of the hole centre on the fitted patch */
+            GL_CHECK(crossed);
+            GL_CHECK(fabs(lat) <= 0.005 + 1e-6);
+            GL_CHECK_NEAR(lat, c->patch_miss, 1e-6);
+            /* scored as a fallback, like the aim it replaces */
+            GL_CHECK_NEAR(r.confidence, r_off.confidence, 1e-12);
+            worst_kept_mm = (1e3 * fabs(lat) > worst_kept_mm) ? 1e3 * fabs(lat) : worst_kept_mm;
+            if (1e3 * angle_diff(r.phi, r_off.phi) > worst_move_mrad) {
+                worst_move_mrad = 1e3 * angle_diff(r.phi, r_off.phi);
+            }
+            if (!crossed_off) {
+                off_short++;
+            } else if (fabs(lat_off) > (double)GL_SOLVER_HOLE_RADIUS_M) {
+                off_misses++;
+            }
+            /* single precision, firmware tolerances, the rule on: an aim on the patch */
+            single_src0 += (r32.aim_source == 0u) ? 1u : 0u;
+            if (crossed32 && fabs(lat32) <= 0.0055) {
+                single_holes++;
+            }
+            if (r32.aim_source == 0u && crossed32 && 1e3 * fabs(lat32) > worst_single_mm) {
+                worst_single_mm = 1e3 * fabs(lat32);
+            }
+        } else {
+            n_ctl++;
+            /* control: outside 5 mm, the estimate is the one without the rule */
+            GL_CHECK(fabs(c->patch_miss) > 0.005);
+            GL_CHECK_EQ(r.aim_source, r_off.aim_source);
+            GL_CHECK_EQ(r.solve_status, r_off.solve_status);
+            GL_CHECK(r.phi == r_off.phi && r.v0 == r_off.v0 && r.confidence == r_off.confidence);
+        }
+        printf("    %2u %-4s | (%u, %-14s) ", c->id, c->kept ? "yes" : "no", r.aim_source, STATUS_NAME[r.solve_status]);
+        if (crossed) {
+            printf("%+9.2f mm", 1e3 * lat);
+        } else {
+            printf("  short     ");
+        }
+        printf(" | (%u, %-14s) ", r_off.aim_source, STATUS_NAME[r_off.solve_status]);
+        if (crossed_off) {
+            printf("%+9.1f mm", 1e3 * lat_off);
+        } else {
+            printf("  short     ");
+        }
+        printf(" | %7.1f mrad | (%u, %-14s) ", 1e3 * angle_diff(r.phi, r_off.phi), r32.aim_source,
+               STATUS_NAME[r32.solve_status]);
+        if (crossed32) {
+            printf("%+8.2f mm\n", 1e3 * lat32);
+        } else {
+            printf("  short\n");
+        }
+    }
+    printf("    %u kept, %u controls.  Kept aims pass at most %.2f mm from the hole centre on the fitted patch; the "
+           "aims they replace (rule off) miss by more than the hole radius in %u and do not reach the hole line in "
+           "%u of the %u; the aim moves by up to %.0f mrad (%.1f steps of the simulation's display model).\n",
+           n_kept, n_ctl, worst_kept_mm, off_misses, off_short, n_kept, worst_move_mrad,
+           worst_move_mrad / DISPLAY_STEP_MRAD);
+    printf("    single build with the firmware's tolerances and the rule on: aim on the patch (aim_source 0) in %u "
+           "of the %u, passing within 5.5 mm in %u (worst of those on the patch %.2f mm)\n",
+           single_src0, n_kept, single_holes, worst_single_mm);
+    GL_CHECK_EQ(n_kept, 14);
+    GL_CHECK_EQ(n_ctl, 4);
+    /* what the rule is for: most of the replaced aims do not hole the putt on the patch */
+    GL_CHECK(off_misses + off_short >= 9u);
+    /* PINNED from this run: the looser tolerances of the single build solve
+     * or keep 13 of the 14 on the patch */
+    GL_CHECK(single_src0 >= 12u);
+    GL_CHECK(single_holes >= 12u);
+}
+
+/* A placement as the review's worst-case searches built it. */
+static void wc_meas_(gl_vec_meas_t *m, double tilt_x, double tilt_y, double stimp, double bearing, double stereo_m,
+                     double dialled_m, double low_elev)
+{
+    memset(m, 0, sizeof(*m));
+    m->f_px = 657.0;
+    m->baseline = 0.02;
+    m->h_cam = (double)GL_CFG_CAM_AXIS_HEIGHT_M;
+    m->tilt[0] = (double)(float)tilt_x;
+    m->tilt[1] = (double)(float)tilt_y;
+    m->tilt_reads = 1u;
+    m->flag_found = 1u;
+    m->flag_bearing = (double)(float)bearing;
+    m->flag_disparity = (stereo_m > 0.0) ? (double)(float)(657.0 * 0.02 / stereo_m) : GL_VEC_NAN;
+    m->flag_low_elev = (double)(float)low_elev;
+    m->flag_top_elev = GL_VEC_NAN;
+    m->stick_height_est = (double)2.1f;
+    m->stick_height_rel_sigma = (double)0.05f;
+    m->grain_kappa = 0.0;
+    m->grain_azimuth = 0.0;
+    m->stimp_ft = stimp;
+    m->user_distance = (dialled_m > 0.0) ? (double)(0.01f * (float)floor(dialled_m * 100.0 + 0.5)) : GL_VEC_NAN;
+}
+
+/* Review: the costliest estimate is 0.62 million RK4 steps, not 0.5; nothing
+ * but loop counters bounds it, and it blocks the main loop.  Two things:
+ *   - a patch that IS a plane (flag out, not ranged) was solved a second time
+ *     as "its secant plane": the same problem at twice the cost;
+ *   - gl_solver_options_t.max_steps: a budget on the work itself. */
+GL_TEST(test_step_budget_and_the_plane_solved_once)
+{
+    gl_vec_meas_t w1, w2;
+    gl_vec_est_result_t r, rb, r64;
+    const double stimp = 12.5, a_r = 1.83 * 1.83 / (2.0 * stimp * 0.3048), crit = a_r / (5.0 / 7.0 * 9.80665);
+    const double b = 0.33910485203911905, sx = -0.89850998513005353 * crit, sy = -0.27816065634007064 * crit;
+    const uint32_t budget = 300000u;
+    uint32_t worst_vec[2] = { 0u, 0u }, worst_result[2] = { 0u, 0u };
+    unsigned differ = 0u, over[2] = { 0u, 0u };
+
+    /* W1: 30 m dialled, down a slope at 0.90 of critical (the safety review's search, seed 21) */
+    wc_meas_(&w1, sx * cos(b) - sy * sin(b), sx * sin(b) + sy * cos(b), stimp, b, -1.0, 29.985267577435099,
+             0.024216351276332825 - 0.0056 / 29.985267577435099);
+    gl_vec32_estimate_meas(&w1, 1u, NULL, NULL, 0u, (double)0.38f, 0.0, 0u, 0, &r);
+    printf("    W1, 30 m dialled, down a slope at 0.90 of critical (a tilt-only plane): status %d, aim_source %u, %s, "
+           "%lu trial rolls, %lu RK4 steps (the review measured 424 rolls, 619 822 steps: the plane solved twice)\n",
+           r.status, r.aim_source, STATUS_NAME[r.solve_status], (unsigned long)r.n_rolls, (unsigned long)r.n_steps);
+    GL_CHECK_EQ(r.status, ST_OK);
+    GL_CHECK(r.range_missing);
+    GL_CHECK_EQ(r.aim_source, 2);
+    GL_CHECK_EQ(r.solve_status, 4);
+    GL_CHECK(r.n_rolls <= GL_SOLVER_DEFAULT_MAX_ROLLS + 120u); /* ONE aim solve */
+    GL_CHECK(r.n_steps > 250000u && r.n_steps < 340000u);
+    /* the same record in double: also one solve, and the same class */
+    gl_vec64_estimate_meas(&w1, 1u, NULL, NULL, 0u, (double)0.38f, 0.0, 0u, 1, &r64);
+    GL_CHECK(r64.n_rolls <= GL_SOLVER_DEFAULT_MAX_ROLLS + 120u);
+
+    /* W2: 26 m by stereo, method B1, a fitted patch (the safety review's search, seed 11) */
+    wc_meas_(&w2, 0.0041603158475774019, -0.06771927674515206, 12.0, -0.3758663894382302, 26.014521134960443, -1.0,
+             -0.023759670697298448 - 0.0056 / 26.014521134960443);
+    gl_vec32_estimate_meas(&w2, 1u, NULL, NULL, 0u, (double)0.64f, 0.0, 0u, 0, &r);
+    gl_vec32_estimate_meas(&w2, 1u, NULL, NULL, 0u, (double)0.64f, 0.0, budget, 0, &rb);
+    printf("    W2, 26 m by stereo, method B1: without a budget (%u, %s) after %lu rolls and %lu RK4 steps; with a "
+           "budget of %lu steps (%u, %s) after %lu rolls and %lu steps\n", r.aim_source, STATUS_NAME[r.solve_status],
+           (unsigned long)r.n_rolls, (unsigned long)r.n_steps, (unsigned long)budget, rb.aim_source,
+           STATUS_NAME[rb.solve_status], (unsigned long)rb.n_rolls, (unsigned long)rb.n_steps);
+    GL_CHECK_EQ(r.status, ST_OK);
+    GL_CHECK(r.n_steps > 500000u); /* the costliest estimate anybody found: 0.58 million */
+    GL_CHECK(r.n_rolls > GL_SOLVER_DEFAULT_MAX_ROLLS + 120u && r.n_rolls <= 2u * (GL_SOLVER_DEFAULT_MAX_ROLLS + 120u));
+    GL_CHECK_EQ(rb.status, ST_OK);
+    GL_CHECK(rb.n_steps <= budget + 6004u);
+    GL_CHECK(rb.n_steps >= budget);
+    GL_CHECK_EQ(rb.aim_source, 2);
+    GL_CHECK_EQ(rb.solve_status, 4);
+    GL_CHECK(isfinite(rb.phi) && isfinite(rb.v0) && rb.v0 > 0.0 && isfinite(rb.confidence));
+    /* the fit is not part of the budget */
+    for (int k = 0; k < 5; k++) {
+        GL_CHECK(rb.patch[k] == r.patch[k]);
+    }
+    /* (the double build on the same record: whatever it ends as - near the
+     * critical slope the class is not stable between the precisions - it
+     * keeps to the budget) */
+    gl_vec64_estimate_meas(&w2, 1u, NULL, NULL, 0u, (double)0.64f, 0.0, budget, 1, &r64);
+    GL_CHECK(r64.status == ST_OK && r64.n_steps <= budget + 6004u);
+
+    /* a budget of one step: one roll, then the planar first guess of the secant plane */
+    gl_vec32_estimate_meas(&w2, 1u, NULL, NULL, 0u, (double)0.64f, 0.0, 1u, 0, &rb);
+    printf("    W2 with a budget of 1 step: status %d, (%u, %s), %lu roll(s), %lu steps, aim %+.1f mrad at %.2f m/s\n",
+           rb.status, rb.aim_source, STATUS_NAME[rb.solve_status], (unsigned long)rb.n_rolls,
+           (unsigned long)rb.n_steps, 1e3 * rb.phi, rb.v0);
+    GL_CHECK_EQ(rb.status, ST_OK);
+    GL_CHECK(rb.n_steps <= 6004u && rb.n_rolls <= 1u);
+    GL_CHECK_EQ(rb.aim_source, 2);
+    GL_CHECK_EQ(rb.solve_status, 4);
+    GL_CHECK(isfinite(rb.phi) && fabs(rb.phi) <= 0.6 + 1e-6 && isfinite(rb.v0) && rb.v0 > 0.0);
+
+    /* The budget changes nothing where it is not reached: every vector case
+     * (both builds) gives the same record with and without it. */
+    for (unsigned i = 0; i < gl_vec_n_est; i++) {
+        gl_vec_est_result_t a, bb;
+        for (int dbl = 0; dbl < 2; dbl++) {
+            if (dbl) {
+                gl_vec64_set_max_steps(0u);
+                gl_vec64_estimate(&gl_vec_est[i], GL_VEC_TOL_CASE, 0, &a);
+                gl_vec64_set_max_steps(budget);
+                gl_vec64_estimate(&gl_vec_est[i], GL_VEC_TOL_CASE, 0, &bb);
+                gl_vec64_set_max_steps(0u);
+            } else {
+                gl_vec32_set_max_steps(0u);
+                gl_vec32_estimate(&gl_vec_est[i], GL_VEC_TOL_DEFAULT, 0, &a);
+                gl_vec32_set_max_steps(budget);
+                gl_vec32_estimate(&gl_vec_est[i], GL_VEC_TOL_DEFAULT, 0, &bb);
+                gl_vec32_set_max_steps(0u);
+            }
+            worst_vec[dbl] = (a.n_steps > worst_vec[dbl]) ? a.n_steps : worst_vec[dbl];
+            if (a.status == ST_OK && a.aim_source <= 1u && a.n_steps > worst_result[dbl]) {
+                worst_result[dbl] = a.n_steps; /* the costliest estimate that ENDS WITH A RESULT */
+            }
+            if (a.n_steps < budget) {
+                differ += (memcmp(&a, &bb, sizeof(a)) != 0) ? 1u : 0u;
+            } else {
+                over[dbl]++;
+                GL_CHECK(bb.n_steps <= budget + 6004u);
+                GL_CHECK(bb.status == ST_OK);
+            }
+        }
+    }
+    printf("    all %u estimator vectors with and without the budget of %lu steps: %u records differ among those "
+           "that stay inside it\n      single build, firmware tolerances: costliest %lu steps, costliest with a "
+           "result (aim_source 0 or 1) %lu, over the budget %u\n      double build, the reference's 1e-9 m:      "
+           "costliest %lu steps, costliest with a result %lu, over the budget %u\n",
+           gl_vec_n_est, (unsigned long)budget, differ, (unsigned long)worst_vec[0],
+           (unsigned long)worst_result[0], over[0], (unsigned long)worst_vec[1], (unsigned long)worst_result[1],
+           over[1]);
+    GL_CHECK_EQ(differ, 0);
+    /* the firmware's build never needs the budget for a read that has a result */
+    GL_CHECK(worst_result[0] < budget);
+}
+
+/* Review: absurd but finite inputs whose SQUARES leave the range gave GL_OK
+ * (a weight 1 / sigma^2 became 0 or infinite and one range channel silently
+ * replaced the fusion, or the fused distance became not-a-number and the
+ * read "not ranged" at the 3 m default) where the reference raises
+ * OverflowError.  They are refused now: GL_ERR_RANGE, the flagged record. */
+GL_TEST(test_absurd_inputs_are_refused)
+{
+    gl_vec_meas_t m, base;
+    gl_vec_est_result_t r;
+
+    memset(&base, 0, sizeof(base));
+    base.f_px = 657.0;
+    base.baseline = 0.02;
+    base.h_cam = 0.0056;
+    base.tilt[0] = 0.012;
+    base.tilt[1] = -0.018;
+    base.tilt_reads = 1u;
+    base.flag_found = 1u;
+    base.flag_bearing = 0.05;
+    base.flag_disparity = 657.0 * 0.02 / 9.76;
+    base.flag_low_elev = -0.0005;
+    base.flag_base_visible = 1u;
+    base.flag_top_visible = 1u; /* both range channels: stereo and the stick's angular height */
+    base.flag_top_elev = 0.198;
+    base.stick_height_est = 1.96;
+    base.stick_height_rel_sigma = 0.07;
+    base.stimp_ft = 10.0;
+    base.user_distance = GL_VEC_NAN;
+
+    /* the record itself is a good read in both builds */
+    gl_vec64_estimate_meas(&base, 1u, NULL, NULL, 0u, 0.30, 0.0, 0u, 0, &r);
+    GL_CHECK(r.status == ST_OK && fabs(r.distance - 9.754) < 0.01 && !r.range_missing);
+    gl_vec32_estimate_meas(&base, 1u, NULL, NULL, 0u, 0.30, 0.0, 0u, 0, &r);
+    GL_CHECK(r.status == ST_OK && fabs(r.distance - 9.754) < 0.01 && !r.range_missing);
+
+    /* double: the reference raises OverflowError for both */
+    m = base;
+    m.stick_height_rel_sigma = 1e300;
+    gl_vec64_estimate_meas(&m, 1u, NULL, NULL, 0u, 0.30, 0.0, 0u, 0, &r);
+    printf("    double, stick_height_rel_sigma 1e300: status %d (GL_ERR_RANGE is %d); the review found GL_OK at "
+           "9.76 m\n", r.status, (int)GL_ERR_RANGE);
+    GL_CHECK_EQ(r.status, GL_ERR_RANGE);
+    GL_CHECK(r.distance == 0.0 && r.confidence == 0.0 && r.aim_source == 3u && r.solve_status == 255u);
+    m = base;
+    m.stick_height_est = 1e300;
+    gl_vec64_estimate_meas(&m, 1u, NULL, NULL, 0u, 0.30, 0.0, 0u, 0, &r);
+    GL_CHECK_EQ(r.status, GL_ERR_RANGE);
+
+    /* single: the same mechanism at 1e20 / 1e-20 */
+    m = base;
+    m.stick_height_est = 1e-20;
+    gl_vec32_estimate_meas(&m, 1u, NULL, NULL, 0u, 0.30, 0.0, 0u, 0, &r);
+    printf("    single, stick height 1e-20 m with a valid stereo range: status %d; the review found GL_OK, \"not "
+           "ranged\", 3 m\n", r.status);
+    GL_CHECK_EQ(r.status, GL_ERR_RANGE);
+    GL_CHECK(r.distance == 0.0 && r.confidence == 0.0 && !r.range_missing);
+    m = base;
+    m.f_px = 1e20;
+    gl_vec32_estimate_meas(&m, 1u, NULL, NULL, 0u, 0.30, 0.0, 0u, 0, &r);
+    GL_CHECK_EQ(r.status, GL_ERR_RANGE);
+    m = base;
+    m.stick_height_rel_sigma = 1e20;
+    gl_vec32_estimate_meas(&m, 1u, NULL, NULL, 0u, 0.30, 0.0, 0u, 0, &r);
+    GL_CHECK_EQ(r.status, GL_ERR_RANGE);
+    /* a large but honest uncertainty is not refused: the stereo channel carries the read */
+    m = base;
+    m.stick_height_rel_sigma = 1e6;
+    gl_vec32_estimate_meas(&m, 1u, NULL, NULL, 0u, 0.30, 0.0, 0u, 0, &r);
+    GL_CHECK(r.status == ST_OK && fabs(r.distance - 9.76) < 0.02);
+}
+
+/* A read of a 0.71 m putt with a ragged horizon (the numerical reviewer's
+ * random case 18370; the inputs are single-precision numbers).  Method B2
+ * fits a silhouette offset of 0.25 to it. */
+static const double lm_case_az_[41] = {
+    -0.33921441435813904, -0.3222537040710449, -0.3052929639816284, -0.2883322536945343,
+    -0.2713715434074402, -0.2544108033180237, -0.23745009303092957, -0.22048936784267426,
+    -0.20352864265441895, -0.18656793236732483, -0.16960720717906952, -0.1526464819908142,
+    -0.1356857717037201, -0.11872504651546478, -0.10176432132720947, -0.08480360358953476,
+    -0.06784288585186005, -0.050882160663604736, -0.03392144292593002, -0.01696072146296501,
+    -5.551115123125783e-17, 0.01696072146296501, 0.03392144292593002, 0.050882160663604736,
+    0.06784288585186005, 0.08480360358953476, 0.10176432132720947, 0.11872504651546478,
+    0.1356857717037201, 0.1526464819908142, 0.16960720717906952, 0.18656793236732483,
+    0.20352864265441895, 0.22048936784267426, 0.23745009303092957, 0.2544108033180237,
+    0.2713715434074402, 0.2883322536945343, 0.3052929639816284, 0.3222537040710449,
+    0.33921441435813904,
+};
+static const double lm_case_elev_[41] = {
+    0.13625656068325043, 0.14582544565200806, 0.15591326355934143, 0.1667328029870987,
+    0.17399203777313232, 0.18480171263217926, 0.19111713767051697, 0.2056199014186859,
+    0.21807269752025604, 0.22482721507549286, 0.2359381467103958, 0.24371857941150665,
+    0.2533462643623352, 0.2563876211643219, 0.26988762617111206, 0.2793503403663635,
+    0.28466132283210754, 0.29180198907852173, 0.30328306555747986, 0.306207537651062,
+    0.3125811815261841, 0.3269171714782715, 0.33329713344573975, 0.33792975544929504,
+    0.34184449911117554, 0.3480716049671173, 0.3521045744419098, 0.3610825538635254,
+    0.36219683289527893, 0.37216565012931824, 0.371392160654068, 0.38206300139427185,
+    0.3830956220626831, 0.3914870321750641, 0.3913764953613281, 0.3970252275466919,
+    0.39364147186279297, 0.40240615606307983, 0.3971598446369171, 0.40131935477256775,
+    0.40628960728645325,
+};
+static const gl_vec_meas_t lm_case_meas_ = {
+    .f_px = 670.6603393554688, .baseline = 0.019999999552965164, .h_cam = 0.005200000014156103, .tilt = { -0.0018872296204790473, 0.0027647956740111113 },
+    .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+    .flag_bearing = -0.09991660714149475, .flag_disparity = 18.456220626831055, .flag_low_elev = 0.0012588519603013992, .flag_top_elev = GL_VEC_NAN,
+    .stick_height_est = 1.9416768550872803, .stick_height_rel_sigma = 0.019999999552965164, .n_horizon = 41, .horizon_first = 0,
+    .grain_kappa = 0.0, .grain_azimuth = 0.6735798716545105, .stimp_ft = 10.138413429260254, .user_distance = GL_VEC_NAN
+};
+
+/* Review: in single precision a horizon fit that HAD converged was reported
+ * "not converged" (60 iterations of an equal-cost flip-flop between two
+ * neighbouring numbers) whenever a fitted parameter was so large that its
+ * spacing exceeded the convergence tolerance: here the silhouette offset,
+ * 0.25, whose neighbours are 3e-8 apart = 3e-5 in the scaled units of
+ * lm_tol = 1e-5.  The application then showed "FIT NOT DONE" and took 0.7 of
+ * the confidence. */
+GL_TEST(test_horizon_fit_converges_at_the_resolution_of_its_parameters)
+{
+    gl_vec_est_result_t r32, r64;
+    gl_vec32_estimate_meas(&lm_case_meas_, 1u, lm_case_az_, lm_case_elev_, 2u, 0.30, 0.0, 0u, 0, &r32);
+    gl_vec64_estimate_meas(&lm_case_meas_, 1u, lm_case_az_, lm_case_elev_, 2u, 0.30, 0.0, 0u, 1, &r64);
+    printf("    horizon fit, silhouette offset 0.25: single precision converged %u after %lu iterations (the "
+           "review: not converged, 60); double with the same tolerances converged %u after %lu; patch d %.8f / "
+           "%.8f, e %.8f / %.8f\n", r32.fit_converged, (unsigned long)r32.n_iter, r64.fit_converged,
+           (unsigned long)r64.n_iter, r32.patch[3], r64.patch[3], r32.patch[4], r64.patch[4]);
+    GL_CHECK(r32.status == ST_OK && r64.status == ST_OK);
+    GL_CHECK(r32.used_horizon && r64.used_horizon);
+    GL_CHECK(r64.fit_converged);
+    GL_CHECK(r32.fit_converged);
+    GL_CHECK(r32.n_iter <= 20u);
+    GL_CHECK_NEAR(r32.patch[3], r64.patch[3], 2e-7);
+    GL_CHECK_NEAR(r32.patch[4], r64.patch[4], 2e-7);
+    /* the double build is not touched by the change: 9 iterations, as the review traced */
+    GL_CHECK_EQ(r64.n_iter, 9);
+}
+
+/* Review: the margins quoted for the single-precision tolerances (tol_miss =
+ * 10 x the roll noise) were measured on the putts of the reference vectors
+ * (up to 12 m, pace 0.15 m and more).  The roll noise grows with the length
+ * of the roll and as the ball dies at the hole.  Planes with slopes up to
+ * 0.6 of critical, paces 0.05 to 0.9 m: the tight double solution is rolled
+ * in single and in double precision, by distance. */
+GL_TEST(test_single_precision_roll_noise_by_distance)
+{
+    static const double lo[4] = { 0.3, 6.0, 15.0, 25.0 }, hi[4] = { 6.0, 15.0, 25.0, 40.0 };
+    static const double paces[5] = { 0.05, 0.15, 0.30, 0.45, 0.90 };
+    static samples_t lat;
+    const double tol_miss = (double)GL_SOLVER_SINGLE_TOL_MISS_M;
+    double max_by_bin[4];
+    unsigned above[4];
+
+    lcg_ = 20261113u;
+    printf("    |single - double| lateral position at the hole line of the same launch, by putt length "
+           "(tol_miss %.0e m):\n", tol_miss);
+    for (int bin = 0; bin < 4; bin++) {
+        unsigned n_launch = 0u;
+        double med, p99;
+        lat.n = 0u;
+        above[bin] = 0u;
+        for (int k = 0; k < 700; k++) {
+            gl_vec_sol_case_t c;
+            gl_vec_sol_result_t s;
+            const double stimp = 7.0 + 7.0 * lcg_uniform_();
+            const double a_r = 1.83 * 1.83 / (2.0 * stimp * 0.3048);
+            const double crit = a_r / (5.0 / 7.0 * 9.80665);
+            const double mag = 0.6 * crit * sqrt(lcg_uniform_());
+            const double az = 2.0 * PI * lcg_uniform_();
+            double c64[5], g64[2] = { 0.0, 0.0 }, l32, s32, l64, s64;
+            memset(&c, 0, sizeof(c));
+            c.coeffs[0] = (double)(float)(mag * cos(az));
+            c.coeffs[1] = (double)(float)(mag * sin(az));
+            c.distance = (double)(float)(lo[bin] + (hi[bin] - lo[bin]) * lcg_uniform_());
+            c.stimp_ft = stimp;
+            c.a_r = (double)(float)a_r;
+            c.past = paces[(int)(5.0 * lcg_uniform_()) % 5];
+            c.tol_miss = 1e-9;
+            c.tol_pace = 1e-9;
+            c.max_rolls = 1000u;
+            gl_vec64_solve(&c, GL_VEC_TOL_CASE, &s);
+            if (s.status != ST_OK || s.solve_status != 0u) {
+                continue;
+            }
+            memcpy(c64, c.coeffs, sizeof(c64));
+            /* both kernels are given the launch as a single-precision number */
+            if (gl_vec32_roll_patch(c64, c.distance, c.a_r, g64, (double)(float)s.phi, (double)(float)s.v0, &l32,
+                                    &s32) &&
+                gl_vec64_roll_patch(c64, c.distance, c.a_r, g64, (double)(float)s.phi, (double)(float)s.v0, &l64,
+                                    &s64)) {
+                add_(&lat, fabs(l32 - l64));
+                above[bin] += (fabs(l32 - l64) > tol_miss / 5.0) ? 1u : 0u;
+                n_launch++;
+            }
+        }
+        max_by_bin[bin] = summarise_(&lat, &med, &p99);
+        printf("      %4.1f to %4.1f m: %3u launches, median %.1e m, 99 %% %.1e m, max %.2e m = %.2f x tol_miss; "
+               "above tol_miss / 5 in %u\n", lo[bin], hi[bin], n_launch, med, p99, max_by_bin[bin],
+               max_by_bin[bin] / tol_miss, above[bin]);
+        GL_CHECK(n_launch > 300u);
+    }
+    /* up to 6 m the stated margin holds: the noise is below a fifth of the tolerance */
+    GL_CHECK(max_by_bin[0] * 5.0 <= tol_miss);
+    GL_CHECK_EQ(above[0], 0);
+    /* NOT MET beyond: PINNED with what this run measures.  From 15 m on the
+     * worst launch differs by MORE than a fifth of the tolerance (beyond 25 m
+     * by more than the tolerance itself): there the tolerance is inside the
+     * noise of the roll, and a solve can end NO_CONVERGENCE for no other
+     * reason.  (A tolerance that grows with the distance would be a change
+     * of the solver's contract: open issue, README.) */
+    printf("    the margin \"tol_miss = 5 x the roll noise\" is asserted up to 6 m and holds up to 15 m in this run;\n"
+           "    NOT MET from 15 m on (pinned: see the figures above)\n");
+    GL_CHECK(max_by_bin[1] <= 4.0 * tol_miss);
+    GL_CHECK(max_by_bin[2] * 5.0 > tol_miss);
+    GL_CHECK(max_by_bin[3] * 5.0 > tol_miss);
+    GL_CHECK(max_by_bin[3] <= 20.0 * tol_miss);
+}
+
 int main(void)
 {
     GL_RUN(test_api_and_sizes);
@@ -1064,5 +1545,10 @@ int main(void)
     GL_RUN(test_vectors_reach_every_aim_source_and_status);
     GL_RUN(test_hostile_inputs_give_defined_results);
     GL_RUN(test_rolls_and_steps_are_bounded);
+    GL_RUN(test_near_miss_cases);
+    GL_RUN(test_step_budget_and_the_plane_solved_once);
+    GL_RUN(test_absurd_inputs_are_refused);
+    GL_RUN(test_horizon_fit_converges_at_the_resolution_of_its_parameters);
+    GL_RUN(test_single_precision_roll_noise_by_distance);
     return gl_test_summary();
 }

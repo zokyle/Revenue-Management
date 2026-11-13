@@ -34,6 +34,8 @@ typedef struct {
     double past;
     int tight;               /**< 1: the tolerances of the reference vectors (1e-9 m, 1e-10,
                                   200 iterations); 0: the reference's defaults (1e-5, 1e-9, 60) */
+    int use_grain;           /**< EstimatorConfig.use_grain (the GRAIN setting) */
+    double near_miss;        /**< EstimatorConfig.near_miss_keep [m] (the application: 0.005) */
 } gl_ref_opt_t;
 
 typedef struct {

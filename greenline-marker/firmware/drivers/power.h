@@ -61,6 +61,17 @@
 
 #include "gl_types.h"
 
+/** The circuit this driver is written for: rev C2 of the phase-2 brief.
+ *  CHG_INHIBIT is an OPEN-DRAIN pin and LOW stops the charger (0 here); the
+ *  charger has no temperature input of its own (0).  DESIGN_SPEC has since
+ *  been amended (rev D, E1: BQ25101 with its own NTC input, CHG_INHIBIT
+ *  push-pull, HIGH = stop).  hal/stm32u5/gl_pins.h carries what the
+ *  specification's text says (GL_PINS_SPEC_CHG_INHIBIT_ACTIVE_HIGH); the two
+ *  are compared by tests/test_pins.c.  On an E1 board THIS DRIVER'S STOP
+ *  STOPS NOTHING (the pin is never driven high). */
+#define GL_POWER_CHG_INHIBIT_ACTIVE_HIGH 0
+#define GL_POWER_CHARGER_HAS_NTC_INPUT 0
+
 /** Why a cell-temperature reading is not valid. */
 typedef enum {
     GL_NTC_OK = 0,

@@ -27,10 +27,10 @@ B  pin map rows: pad, alternate function, analog function
   ok    CAM_L_PWDN    PC2   pad 10: OUT_PP on an I/O pad
   ok    CAM_SCCB_SDA  PC1   pad  9: SCCB_OD on an I/O pad
   ok    CAM_R_SCL     PC0   pad  8: SCCB_OD on an I/O pad
-  ok    CAM_R_PWDN    PH0   pad  5: OUT_PP on an I/O pad
-  ok    CAM_PWR_EN    PH3   pad 60: OUT_PP on an I/O pad
+  ok    CAM_R_PWDN    PH3   pad 60: OUT_PP on an I/O pad
+  ok    CAM_PWR_EN    PH0   pad  5: OUT_PP on an I/O pad
   ok    LCD_SCS       PB10  pad 29: OUT_PP on an I/O pad
-  ok    LCD_DISP      PB1   pad 27: OUT_PP on an I/O pad
+  ok    LCD_DISP      PB12  pad 33: OUT_PP on an I/O pad
   ok    LCD_EXTCOMIN  PB2   pad 28: LPTIM1_CH1 = AF1
   ok    SPI1_SCK      PB3   pad 55: SPI1_SCK = AF5
   ok    SPI1_MISO     PB4   pad 56: SPI1_MISO = AF5
@@ -39,12 +39,12 @@ B  pin map rows: pad, alternate function, analog function
   ok    SPI2_SCK      PB13  pad 34: SPI2_SCK = AF5
   ok    SPI2_MOSI     PB15  pad 36: SPI2_MOSI = AF5
   ok    SPI2_MISO     PB14  pad 35: SPI2_MISO = AF5
-  ok    IMU_CS        PB12  pad 33: OUT_PP on an I/O pad
-  ok    IMU_INT1      PC5   pad 25: EXTI on an I/O pad
-  ok    IMU_INT1      PC5   pad 25: PWR_WKUP5 exists on the pin
-  ok    IMU_INT2      PA7   pad 23: EXTI on an I/O pad
+  ok    IMU_CS        PB1   pad 27: OUT_PP on an I/O pad
+  ok    IMU_INT1      PA7   pad 23: EXTI on an I/O pad
+  ok    IMU_INT1      PA7   pad 23: PWR_WKUP8 exists on the pin
+  ok    IMU_INT2      PA5   pad 21: EXTI on an I/O pad
   ok    GRAIN_CP0     PA9   pad 42: OUT_PP on an I/O pad
-  ok    GRAIN_CP1     PA15  pad 50: OUT_PP on an I/O pad
+  ok    GRAIN_CP1     PB0   pad 26: OUT_PP on an I/O pad
   ok    GRAIN_CP2     PC12  pad 53: OUT_PP on an I/O pad
   ok    GRAIN_CP3     PD2   pad 54: OUT_PP on an I/O pad
   ok    GRAIN_CP4     PC10  pad 51: OUT_PP on an I/O pad
@@ -52,11 +52,11 @@ B  pin map rows: pad, alternate function, analog function
   ok    OPAMP_VINM    PA1   pad 15: analog OPAMP1_VINM
   ok    OPAMP_VOUT    PA3   pad 17: analog OPAMP1_VOUT + ADC1_IN8
   ok    VBAT_SENSE    PA2   pad 16: analog ADC1_IN7
-  ok    CHG_STAT      PB0   pad 26: EXTI on an I/O pad
-  ok    CHG_INHIBIT   PH1   pad  6: OUT_OD on an I/O pad
+  ok    CHG_STAT      PA15  pad 50: EXTI on an I/O pad
+  ok    CHG_INHIBIT   PH1   pad  6: OUT_PP on an I/O pad
   ok    VBUS_SENSE    PC13  pad  2: EXTI on an I/O pad
   ok    VBUS_SENSE    PC13  pad  2: PWR_WKUP2 exists on the pin
-  ok    NTC_BIAS      PA5   pad 21: OUT_PP on an I/O pad
+  ok    NTC_BIAS      PC5   pad 25: OUT_PP on an I/O pad
   ok    NTC_SENSE     PC4   pad 24: analog ADC1_IN13
   ok    USB_DM        PA11  pad 44: USB_OTG_FS_DM = AF10
   ok    USB_DP        PA12  pad 45: USB_OTG_FS_DP = AF10
@@ -66,11 +66,12 @@ B  pin map rows: pad, alternate function, analog function
   ok    OSC32_OUT     PC15  pad  4: analog RCC_OSC32_OUT
   ok    BOOT0         PH3   pad 60: the pad is the BOOT0 pad (PH3-BOOT0)
 
-C  wake-up pin, EXTI lines, ADC channels, OPAMP1
-------------------------------------------------
-  ok    IMU_INT1 on PC5 is a wake-up pin (PWR_WKUP5)
-        VBUS_SENSE on PC13: PWR_WKUP2
-  ok    EXTI lines are used once each: EXTI0 CHG_STAT, EXTI5 IMU_INT1, EXTI7 IMU_INT2, EXTI13 VBUS_SENSE
+C  wake-up pins, EXTI lines, ADC channels, OPAMP1
+-------------------------------------------------
+  ok    IMU_INT1 on PA7 is a wake-up pin (PWR_WKUP8) - spec: INT1 to a wake-capable pin
+  ok    VBUS_SENSE on PC13 is a wake-up pin (PWR_WKUP2) - ship mode (E13) can then use Shutdown and wake when VBUS appears
+  ok    the two wake-up sources use different wake-up lines (PWR_WKUP8, PWR_WKUP2)
+  ok    EXTI lines are used once each: EXTI5 IMU_INT2, EXTI7 IMU_INT1, EXTI13 VBUS_SENSE, EXTI15 CHG_STAT
   ok    VBAT_SENSE on PA2: ADC1_IN7 exists
   ok    NTC_SENSE on PC4: ADC1_IN13 exists
   ok    OPAMP_VOUT on PA3: ADC1_IN8 exists
@@ -80,7 +81,7 @@ C  wake-up pin, EXTI lines, ADC channels, OPAMP1
 
 D  every pad accounted for
 --------------------------
-  ok    PH3 carries CAM_PWR_EN + BOOT0: the declared strap + GPIO pair
+  ok    PH3 carries CAM_R_PWDN + BOOT0: the declared strap + GPIO pair
   ok    no pin is used twice (52 rows on 51 pads)
   ok    no I/O pad is connected without a PINMAP row
   ok    all 51 I/O pads carry a signal (no spare pad)
@@ -107,13 +108,14 @@ E  rows fixed by DESIGN_SPEC section 4 (spec text parsed)
   ok    USB_DP: PA12 pad 45 as in the spec
   ok    CAM_L_PWDN on PC2: not PA9 / PA2 / PC10 and not a pin the bootloader drives
   ok    CAM_L_PWDN reaches U2.PWDN through 1 kohm
-  ok    CAM_R_PWDN on PH0: not PA9 / PA2 / PC10 and not a pin the bootloader drives
+  ok    CAM_R_PWDN on PH3: not PA9 / PA2 / PC10 and not a pin the bootloader drives
   ok    CAM_R_PWDN reaches U3.PWDN through 1 kohm
   ok    XVCLK: PA8 (RCC_MCO) through 33 ohm to both cameras
   ok    EXTCOMIN is LPTIM1_CH1: an LPTIM1 / LPTIM3 output (they run in Stop 2)
   ok    CAM_L_SCL (PC3): one 2.2 kohm pull-up, to V2V8_CAM
   ok    CAM_R_SCL (PC0): one 2.2 kohm pull-up, to V2V8_CAM
   ok    CAM_SCCB_SDA (PC1): one 2.2 kohm pull-up, to V2V8_CAM
+  ok    BOOT0 (PH3, shared with CAM_R_PWDN): 10 kohm to ground, no path to any other rail and no output on its net - low at every reset
 
 F  difference to firmware/hal/stm32u5/gl_pins.h
 -----------------------------------------------
@@ -129,27 +131,27 @@ F  difference to firmware/hal/stm32u5/gl_pins.h
   ok    CAM_L_PWDN    PH0 -> PC2 CHANGED, reason given
   ok    CAM_L_SCL     PB3 -> PC3 CHANGED, reason given
   ok    CAM_PIXCLK    PA6   unchanged (SPEC)
-  ok    CAM_PWR_EN    PD2 -> PH3 CHANGED, reason given
-  ok    CAM_R_PWDN    PC12 -> PH0 CHANGED, reason given
+  ok    CAM_PWR_EN    PD2 -> PH0 CHANGED, reason given
+  ok    CAM_R_PWDN    PC12 -> PH3 CHANGED, reason given
   ok    CAM_R_SCL     PA10 -> PC0 CHANGED, reason given
   ok    CAM_SCCB_SDA  PB5 -> PC1 CHANGED, reason given
   ok    CAM_VSYNC     PB7   unchanged (SPEC)
   ok    CAM_XVCLK     PA8   unchanged (SPEC)
   ok    CHG_INHIBIT   PH1   unchanged (PROPOSED)
-  ok    CHG_STAT      PB0   unchanged (PROPOSED)
+  ok    CHG_STAT      PB0 -> PA15 CHANGED, reason given
   ok    FLASH_CS      PA15 -> PA10 CHANGED, reason given
   ok    GRAIN_CP0     PC0 -> PA9 CHANGED, reason given
-  ok    GRAIN_CP1     PC1 -> PA15 CHANGED, reason given
+  ok    GRAIN_CP1     PC1 -> PB0 CHANGED, reason given
   ok    GRAIN_CP2     PC2 -> PC12 CHANGED, reason given
   ok    GRAIN_CP3     PC3 -> PD2 CHANGED, reason given
   ok    GRAIN_CP4     PC10  unchanged (PROPOSED)
-  ok    IMU_CS        PB12  unchanged (PROPOSED)
-  ok    IMU_INT1      PC13 -> PC5 CHANGED, reason given
-  ok    IMU_INT2      PC5 -> PA7 CHANGED, reason given
-  ok    LCD_DISP      PB1   unchanged (PROPOSED)
+  ok    IMU_CS        PB12 -> PB1 CHANGED, reason given
+  ok    IMU_INT1      PC13 -> PA7 CHANGED, reason given
+  ok    IMU_INT2      PC5 -> PA5 CHANGED, reason given
+  ok    LCD_DISP      PB1 -> PB12 CHANGED, reason given
   ok    LCD_EXTCOMIN  PB2   unchanged (SPEC)
   ok    LCD_SCS       PB10  unchanged (PROPOSED)
-  ok    NTC_BIAS      PH3 -> PA5 CHANGED, reason given
+  ok    NTC_BIAS      PH3 -> PC5 CHANGED, reason given
   ok    NTC_SENSE     PC4   unchanged (PROPOSED)
   ok    OPAMP_VINM    PA1   unchanged (SPEC)
   ok    OPAMP_VINP    PA0   unchanged (SPEC)
@@ -165,12 +167,13 @@ F  difference to firmware/hal/stm32u5/gl_pins.h
   ok    VBAT_SENSE    PA2   unchanged (PROPOSED)
   ok    VBUS_SENSE    PA9 -> PC13 CHANGED, reason given
         rows of PINMAP that gl_pins.h does not list (service pins): BOOT0, OSC32_IN, OSC32_OUT, SWCLK, SWDIO
+        new meaning with DESIGN_SPEC E1 (gl_pins.h not yet regenerated): CHG_INHIBIT (same pin) is a push-pull output, HIGH = stop; CHG_STAT (moved) is the BQ25101's open-drain CHG output
   ok    every CHANGED row has a row in gl_pins.h to differ from
   ok    the bootloader table here equals GL_PINS_BOOTLOADER_TABLE of gl_pins.h (both from memory of AN2606)
 
 G  pins the ROM bootloader drives or listens on
 -----------------------------------------------
-  PROV  the list of bootloader pins is from memory of ST AN2606 (not readable here); only the existence of each peripheral function on its pin is verified below
+  PROV  the list of bootloader pins is from memory of ST AN2606 (not readable here; a web-search extract of a third-party copy agrees for USART1-3, I2C1-3, SPI1, FDCAN1); only the existence of each peripheral function on its pin is verified below
   ok    PA10  USART1_RX      exists on the pin (pin data)
   ok    PA11  USB_OTG_FS_DM  exists on the pin (pin data)
   ok    PA12  USB_OTG_FS_DP  exists on the pin (pin data)
@@ -195,68 +198,98 @@ G  pins the ROM bootloader drives or listens on
   ok    PC1   I2C3_SDA       exists on the pin (pin data)
   ok    PC10  USART3_TX      exists on the pin (pin data)
   ok    PC11  USART3_RX      exists on the pin (pin data)
-  ok    camera rail is off in the bootloader: U8.EN on PH3 (not a bootloader pin) with pull-down(s) R2 10000 ohm, R10 100000 ohm
+  ok    CAM_PWR_EN is on PH0, no bootloader pin: no pull or level of the ROM can switch the camera rail on
+  ok    CHG_INHIBIT is on PH1, no bootloader pin: no pull or level of the ROM can switch the charger off
+  ok    camera rail is off in the bootloader: U8.EN on PH0 (not a bootloader pin) with pull-down(s) R10 100000 ohm and no pull-up
+  ok    charger stays on in the bootloader: Q1 gate on PH1 with pull-down R12 100000 ohm and no pull-up
   ok    no charlieplex line is on a pin the bootloader may drive LOW (PA6, PB14): with every other line high or floating no LED has a current path
   ok    PA10  USART1_RX     listen FLASH_CS    : held high by R3 (100000 ohm to V2V8); no driver on the line
   ok    PA11  USB_OTG_FS_DM listen USB_DM      : USB line to the ESD array and the cradle pad only
   ok    PA12  USB_OTG_FS_DP listen USB_DP      : USB line to the ESD array and the cradle pad only
   ok    PA2   USART2_TX     drive  VBAT_SENSE  : driven into a resistor network only (C29, R17, R18); lowest resistance to a rail 1e+06 ohm: at most 0.004 mA
-  ok    PA3   USART2_RX     listen OPAMP_VOUT  : held high by R31 (1e+06 ohm to V2V8); no driver on the line
+  ok    PA3   USART2_RX     listen OPAMP_VOUT  : held high by R31 (150000 ohm to V2V8); no driver on the line
   ok    PA4   SPI1_NSS      listen CAM_HREF    : ends only on unpowered camera outputs (through 220 ohm): clamped below a diode drop, static low
-  ok    PA5   SPI1_SCK      listen NTC_BIAS    : rests at GND through 20000 ohm (R19 + RT1); no driver on the line
-  ok    PA6   SPI1_MISO     drive  CAM_PIXCLK  : driven into 2 unpowered camera pins through 220 ohm each (spec rule 2). Bound with the camera rail held at 0 V and a 0.65 V protection diode: 19.5 mA from the pin, 9.8 mA into each camera pin; about 6 mA expected with the rail floating up through a 230 ohm discharge path. PROVISIONAL: the 20 mA absolute maximum of one I/O, the diode and the discharge path; above the 8 mA the I/O levels are specified at
-  ok    PA7   SPI1_MOSI     listen IMU_INT2    : SPI1_MOSI is driven by U4.INT2 (push-pull; it can move if the IMU was left configured); harmless only because the bootloader's SPI1_SCK (PA5 = NTC_BIAS) rests at GND through 20000 ohm with no driver: without clock edges an SPI slave shifts nothing in
+  ok    PA5   SPI1_SCK      listen IMU_INT2    : driven by U4.INT2, the companion line SPI1_MOSI (PA7) by U4.INT1: two push-pull outputs of the always-on IMU, so both inputs of the ROM's SPI slave have a defined level whatever pull the ROM sets. The slave reacts only to the byte 0x5A on MOSI clocked by eight SCK edges: INT1 would have to toggle in that pattern in step with INT2. CONDITION for the firmware: leave INT2 static before a jump to the ROM (after power-on both outputs are inactive: PROVISIONAL)
+  ok    PA6   SPI1_MISO     drive  CAM_PIXCLK  : driven into 2 unpowered camera pins through 220 ohm each (the spec's 220 ohm arrays exist for this). Bound with the camera rail held at 0 V and a 0.65 V protection diode: 19.5 mA from the pin, 9.8 mA into each camera pin; about 6 mA expected with the rail floating up through a 230 ohm discharge path. PROVISIONAL: the 20 mA absolute maximum of one I/O, the diode and the discharge path; above the 8 mA the I/O levels are specified at
+  ok    PA7   SPI1_MOSI     listen IMU_INT1    : driven by U4.INT1, the companion line SPI1_SCK (PA5) by U4.INT2: two push-pull outputs of the always-on IMU, so both inputs of the ROM's SPI slave have a defined level whatever pull the ROM sets. The slave reacts only to the byte 0x5A on MOSI clocked by eight SCK edges: INT1 would have to toggle in that pattern in step with INT2. CONDITION for the firmware: leave INT2 static before a jump to the ROM (after power-on both outputs are inactive: PROVISIONAL)
   ok    PA9   USART1_TX     drive  GRAIN_CP0   : driven high: 68 ohm, then LEDs only; current needs a second line at LOW and the bootloader drives none of the five low
   ok    PB10  I2C2_SCL      listen LCD_SCS     : held low by R21 (100000 ohm to GND); no driver on the line
-  ok    PB12  SPI2_NSS      listen IMU_CS      : held high by R20 (100000 ohm to V2V8); no driver on the line
-  ok    PB13  SPI2_SCK      listen SPI2_SCK    : no defined level (input of U4 only), but the bootloader's SPI2_NSS (PB12 = IMU_CS) is held high by R20 100000 ohm: an unselected SPI slave ignores clock and data
-  ok    PB14  SPI2_MISO     drive  SPI2_MISO   : driven into U4.SDO only; IMU_CS has a pull-up (R20 100000 ohm): the IMU is not selected, its SDO pin is not an output (PROVISIONAL: LSM6DSV16X datasheet not read)
-  ok    PB15  SPI2_MOSI     listen SPI2_MOSI   : no defined level (input of U4 only), but the bootloader's SPI2_NSS (PB12 = IMU_CS) is held high by R20 100000 ohm: an unselected SPI slave ignores clock and data
+  ok    PB12  SPI2_NSS      listen LCD_DISP    : held low by R22 (100000 ohm to GND); no driver on the line
+  ok    PB13  SPI2_SCK      listen SPI2_SCK    : input of U4 only: nothing on the board drives it. IMU_CS is on PB1 (no bootloader function) with pull-up R20 100000 ohm: the IMU is never selected, its SDO is high-impedance (PROVISIONAL: LSM6DSV16X datasheet not read). The ROM's own SPI2 slave has no clock source on the board; its two inputs are held only by the pull-downs the ROM is said to enable on its SPI pins (PROVISIONAL), and a false sync would need the byte 0x5A
+  ok    PB14  SPI2_MISO     drive  SPI2_MISO   : driven into U4.SDO only; IMU_CS is on PB1 (no bootloader function) with pull-up R20 100000 ohm: the IMU is never selected, its SDO is high-impedance (PROVISIONAL: LSM6DSV16X datasheet not read)
+  ok    PB15  SPI2_MOSI     listen SPI2_MOSI   : input of U4 only: nothing on the board drives it. IMU_CS is on PB1 (no bootloader function) with pull-up R20 100000 ohm: the IMU is never selected, its SDO is high-impedance (PROVISIONAL: LSM6DSV16X datasheet not read). The ROM's own SPI2 slave has no clock source on the board; its two inputs are held only by the pull-downs the ROM is said to enable on its SPI pins (PROVISIONAL), and a false sync would need the byte 0x5A
   ok    PB6   I2C1_SCL      listen CAM_D5      : ends only on unpowered camera outputs (through 220 ohm): clamped below a diode drop, static low
   ok    PB7   I2C1_SDA      listen CAM_VSYNC   : ends only on unpowered camera outputs (through 220 ohm): clamped below a diode drop, static low
   ok    PB8   FDCAN1_RX     listen CAM_D6      : ends only on unpowered camera outputs (through 220 ohm): clamped below a diode drop, static low
-  ok    PB9   FDCAN1_TX     drive  CAM_D7      : driven into 2 unpowered camera pins through 220 ohm each (spec rule 2). Bound with the camera rail held at 0 V and a 0.65 V protection diode: 19.5 mA from the pin, 9.8 mA into each camera pin; about 6 mA expected with the rail floating up through a 230 ohm discharge path. PROVISIONAL: the 20 mA absolute maximum of one I/O, the diode and the discharge path; above the 8 mA the I/O levels are specified at
+  ok    PB9   FDCAN1_TX     drive  CAM_D7      : driven into 2 unpowered camera pins through 220 ohm each (the spec's 220 ohm arrays exist for this). Bound with the camera rail held at 0 V and a 0.65 V protection diode: 19.5 mA from the pin, 9.8 mA into each camera pin; about 6 mA expected with the rail floating up through a 230 ohm discharge path. PROVISIONAL: the 20 mA absolute maximum of one I/O, the diode and the discharge path; above the 8 mA the I/O levels are specified at
   ok    PC0   I2C3_SCL      listen CAM_R_SCL   : pulled to the unpowered camera rail through 2200 ohm: static low, no edge; an internal pull-up of the ROM would feed at most 0.11 mA into that rail through the resistor
   ok    PC1   I2C3_SDA      listen CAM_SCCB_SDA: pulled to the unpowered camera rail through 2200 ohm: static low, no edge; an internal pull-up of the ROM would feed at most 0.11 mA into that rail through the resistor
   ok    PC10  USART3_TX     drive  GRAIN_CP4   : driven high: 68 ohm, then LEDs only; current needs a second line at LOW and the bootloader drives none of the five low
   ok    PC11  USART3_RX     listen CAM_D4      : ends only on unpowered camera outputs (through 220 ohm): clamped below a diode drop, static low
   PROV  OVM7692 pins are assumed to have ordinary protection diodes to their (unpowered) supply: a line that ends only on unpowered camera pins then sits below a diode drop
-  PROV  whether the ROM enables pull-ups on its receive pins is not known; no verdict above relies on it
+  PROV  which pulls the ROM enables is not known (AN2606 as remembered: pull-down on the SPI pins, pull-up on the USART pins, none on the I2C pins). The verdicts above hold for that set and for no pulls at all. A 40 kohm pull AGAINST a 100 kohm board resistor could only come from a pull-down on a USART receive pin (PA3, PA10: a break condition on a UART nobody uses) or a pull-up on I2C2_SCL (PB10: the LCD is selected and receives no clock); neither loads an output
+  PROV  SPI protocol of the ROM (sync byte 0x5A on MOSI clocked by SCK): memory of ST AN4286
+
+I  pads with a second life: UCPD1 CC / dead-battery control, USB_OTG_FS_VBUS
+----------------------------------------------------------------------------
+  PROV  what the UCPD pads do is from memory of ST RM0456 / DS13086 (not read): after reset a HIGH level on a DBCC pad switches a 5.1 kohm pull-down onto its CC pad until firmware sets UCPD_DBDIS; the CC pads are ST's FT_c structure, whose output drive is not known here. WHICH pads these are is read from the pin data
+  ok    UCPD1_CC1 is on exactly one pad of this package (PA15)
+  ok    UCPD1_CC2 is on exactly one pad of this package (PB15)
+  ok    UCPD1_DBCC1 is on exactly one pad of this package (PB5)
+  ok    UCPD1_DBCC2 is on exactly one pad of this package (PB14)
+  ok    PA15  UCPD1_CC1    CHG_STAT    : an input (EXTI) - an INPUT (open-drain CHG of the charger, 100 kohm to V2V8): nothing depends on the pad's output stage; a dead-battery pull-down before UCPD_DBDIS is set only makes it read 'charging' (27 uA through the pull-up) while nobody reads it
+  ok    PB15  UCPD1_CC2    SPI2_MOSI   : an alternate-function output into CMOS inputs only (U4.SDA) - an alternate-function output into one CMOS input of the IMU (microamperes); a dead-battery pull-down while PB14 is high costs 2.8 V / 5.1 kohm = 0.55 mA only while the line is driven high, and holds the floating line low in reset
+  ok    PB5   UCPD1_DBCC1  SPI1_MOSI    controls the pull-down on PA15 (CHG_STAT); no board pull: it floats until firmware drives it - dead-battery control pad of PA15: it floats in reset and in the ROM bootloader (no board pull, by the spec), so the pull-down on PA15 may or may not be there - PA15 carries an input for that reason
+  ok    PB14  UCPD1_DBCC2  SPI2_MISO    controls the pull-down on PB15 (SPI2_MOSI); no board pull: it floats until firmware drives it - dead-battery control pad of PB15: the IMU's SDO, high-impedance while the IMU is not selected; firmware keeps an internal pull-down on it between transfers
+  ok    the notes for the firmware tell it to set UCPD_DBDIS before any pin is configured
+  ok    PA9   USB_OTG_FS_VBUS carries GRAIN_CP0: the notes for the firmware say that the USB device must run with VBUS sensing off
 
 H  second source: the installed KiCad symbol
 --------------------------------------------
   ok    the KiCad symbol STM32U585RITx has the same 64 pad names
 
-changed from gl_pins.h (17):
-  CAM_L_PWDN    PH0   -> PC2   PC2 is on the left half of the camera-facing edge; PH0 goes to the right camera
-  CAM_L_SCL     PB3   -> PC3   PB3 is needed for SPI1_SCK next to the flash; PC3 faces the cameras
-  CAM_PWR_EN    PD2   -> PH3   takes the BOOT0 pad instead of NTC_BIAS: the 10k BOOT0 pull-down would load the ratiometric NTC bias (0.28 mA extra through the pin's on-resistance, about 0.5 K error at 0 C); a rail enable does not care
-  CAM_R_PWDN    PC12  -> PH0   camera-facing edge, right half; a quasi-static signal is the right neighbour for OSC32_OUT (pad 4)
+changed from gl_pins.h (20):
+  CAM_L_PWDN    PH0   -> PC2   PC2 sits next to CAM_L_SCL on the camera-facing edge; PH0 takes CAM_PWR_EN
+  CAM_L_SCL     PB3   -> PC3   PB3 is needed for SPI1_SCK next to the flash; PC3 is the left end of the camera-facing edge
+  CAM_PWR_EN    PD2   -> PH0   camera-facing edge; a static signal is the right neighbour for OSC32_OUT (pad 4); PD2 goes to the grain LEDs
+  CAM_R_PWDN    PC12  -> PH3   the BOOT0 pad must carry one signal (51 signals, 51 I/O pads). PWDN of the right camera suits it: the pad is on the edge next to that camera, the net has no pull-up (BOOT0 stays low at every reset) and a static output does not mind the 10k; the firmware's proposal, NTC_BIAS, would be loaded by it
   CAM_R_SCL     PA10  -> PC0   PA10 is on the battery-facing edge; PC0 faces the cameras, PA10 takes FLASH_CS
-  CAM_SCCB_SDA  PB5   -> PC1   PB5 is needed for SPI1_MOSI next to the flash; PC1 faces the cameras
-  FLASH_CS      PA15  -> PA10  PA10 is the ROM bootloader's USART1_RX: the chip-select pull-up keeps it at idle-high during the detection phase; PA15 goes to the grain LEDs
-  GRAIN_CP0     PC0   -> PA9   PC0-PC3 face the cameras and carry SCCB / PWDN now; PA9, PA15, PC10, PC12, PD2 are the corner next to the LED ring
-  GRAIN_CP1     PC1   -> PA15  see GRAIN_CP0
+  CAM_SCCB_SDA  PB5   -> PC1   PB5 is needed for SPI1_MOSI next to the flash; PC1 is in the middle of the camera-facing edge
+  CHG_STAT      PB0   -> PA15  exchanged with GRAIN_CP1 (see there). An INPUT is what the UCPD1_CC1 pad can carry whatever its output stage is: its reset state (JTDI, internal pull-up) agrees with the 100 kohm pull-up, and a dead-battery pull-down before firmware sets UCPD_DBDIS only makes the line read 'charging' while nobody reads it
+  FLASH_CS      PA15  -> PA10  PA10 is the ROM bootloader's USART1_RX: a pulled-up chip select is exactly the idle level it wants there, a floating charlieplex line is not. PA15 is no place for a chip select either: it is the UCPD1_CC1 pad, which gets a 5.1 kohm pull-down while PB5 (SPI1_MOSI, floating in reset) is high (PROVISIONAL)
+  GRAIN_CP0     PC0   -> PA9   PC0-PC3 face the cameras and carry SCCB / PWDN now; PA9, PC10, PC12, PD2 are the corner next to the LED ring
+  GRAIN_CP1     PC1   -> PB0   PC1 carries SCCB data now. The free pad at the LED corner, PA15, is the UCPD1_CC1 pad (PINDATA): a 5.1 kohm dead-battery pull-down appears on it while PB5 is high until firmware sets UCPD_DBDIS, and its output stage may be weaker than an ordinary pad's (ST's FT_c structure; both PROVISIONAL, DS13086 not read). Line 1 lights 8 of the 16 LEDs at 5 to 10 mA, so it sits on an ordinary pad instead: PB0, the nearest one with no ROM bootloader function, exchanged with CHG_STAT
   GRAIN_CP2     PC2   -> PC12  see GRAIN_CP0
   GRAIN_CP3     PC3   -> PD2   see GRAIN_CP0
-  IMU_INT1      PC13  -> PC5   PC5 faces the IMU and is a wake-up pin (WKUP5); PC13 is on the far corner next to the crystal
-  IMU_INT2      PC5   -> PA7   PC5 is taken by IMU_INT1; PA7 is on the same edge (and is WKUP8)
-  NTC_BIAS      PH3   -> PA5   PH3 carries the 10k BOOT0 pull-down, which would load the bias (see CAM_PWR_EN); PA5 is two pads from NTC_SENSE
+  IMU_CS        PB12  -> PB1   PB12 is the ROM bootloader's SPI2 chip-select input and PB14 its SPI2 data output, wired to the IMU's SDO. If the ROM enables a pull-down on PB12 (the remembered AN2606 text says it does), the 100k pull-up loses, the IMU is selected and its SDO fights PB14. On PB1 (left edge, next to the IMU, no bootloader function) the pull-up always wins and SDO stays high-impedance
+  IMU_INT1      PC13  -> PA7   PA7 faces the IMU and is a wake-up pin (WKUP8); PC13 is on the far corner next to the crystal and takes VBUS_SENSE
+  IMU_INT2      PC5   -> PA5   PA5 faces the IMU. PA5 / PA7 are the ROM bootloader's SPI1 clock and data inputs: with both driven by the IMU they always have a defined level; PC5 takes NTC_BIAS
+  LCD_DISP      PB1   -> PB12  exchanged with IMU_CS (see there): a line with a pull-DOWN is what the ROM bootloader's SPI2 chip-select input can carry without harm; pad 33 is on the way down to J1
+  NTC_BIAS      PH3   -> PC5   PH3 carries the 10k BOOT0 pull-down, which would load the ratiometric bias (0.28 mA more through the pin's output resistance, up to 0.4 K at 0 C); PC5 is the pad next to NTC_SENSE and no ROM bootloader pin
   SPI1_MOSI     PA7   -> PB5   see SPI1_SCK
   SPI1_SCK      PA5   -> PB3   PB3 / PB4 / PB5 are three adjacent pads on the edge that faces the flash; PA5 is on the opposite edge
-  VBUS_SENSE    PA9   -> PC13  PA9 goes to the grain LEDs; PC13 is a wake-up pin (cradle insertion can wake from Shutdown) and a static signal is the right neighbour for OSC32_IN (pad 3); PC13 may only sink 3 mA: it is an input here
+  VBUS_SENSE    PA9   -> PC13  PA9 goes to the grain LEDs; PC13 is a wake-up pin, so the cradle can wake the marker from Shutdown (ship mode, E13), and a static signal is the right neighbour for OSC32_IN (pad 3); PC13 may only sink 3 mA: it is an input here
 
-RESULT: PASS - 195 checks passed, 0 failed; 3 PROVISIONAL statements above
+RESULT: PASS - 211 checks passed, 0 failed; 5 PROVISIONAL statements above
 
-SELF-TEST: 11 seeded defects, 11 caught, 0 missed
+SELF-TEST: 20 seeded defects, 20 caught, 0 missed
   caught  DCMI_D3 given AF10 instead of AF4 -> 2 failure(s), e.g. CAM_D3        PC9   pad 40: DCMI_D3 = AF10 - data says AF4
   caught  CAM_L_PWDN moved to PC10 (bootloader USART3_TX) -> 2 failure(s), e.g. CAM_L_PWDN on PC10: not PA9 / PA2 / PC10 and not a pin the bootloader drives
-  caught  CAM_R_SCL moved to PA9 (bootloader USART1_TX) -> 2 failure(s), e.g. PA9   USART1_TX     drive  CAM_R_SCL   : DRIVEN into camera pins through only 0 ohm
-  caught  IMU_INT1 moved to PB0 (no wake-up function) -> 3 failure(s), e.g. IMU_INT1      PB0   pad 26: PWR_WKUP5 exists on the pin
-  caught  VBAT_SENSE moved to PH1 (no ADC channel) -> 5 failure(s), e.g. VBAT_SENSE    PH1   pad  6: analog ADC1_IN7 - missing on the pin: ADC1_IN7
-  caught  NTC_BIAS put on PC4, the pad of NTC_SENSE -> 5 failure(s), e.g. no pin is used twice (52 rows on 50 pads)
-  caught  SPEC row CAM_D4 moved to PC12 -> 3 failure(s), e.g. CAM_D4        PC12  pad 53: DCMI_D4 is not a function of PC12
+  caught  CAM_R_SCL moved to PA9 (bootloader USART1_TX) -> 3 failure(s), e.g. PA9   USART1_TX     drive  CAM_R_SCL   : DRIVEN into camera pins through only 0 ohm
+  caught  IMU_INT1 moved to PA15 (no wake-up function) -> 5 failure(s), e.g. IMU_INT1      PA15  pad 50: PWR_WKUP8 exists on the pin
+  caught  VBAT_SENSE moved to PH1 (no ADC channel) -> 6 failure(s), e.g. VBAT_SENSE    PH1   pad  6: analog ADC1_IN7 - missing on the pin: ADC1_IN7
+  caught  NTC_BIAS put on PC4, the pad of NTC_SENSE -> 4 failure(s), e.g. no pin is used twice (52 rows on 50 pads)
+  caught  SPEC row CAM_D4 moved to PC12 -> 4 failure(s), e.g. CAM_D4        PC12  pad 53: DCMI_D4 is not a function of PC12
   caught  SPI1_SCK marked PROPOSED although it moved -> 1 failure(s), e.g. SPI1_SCK      PA5 -> PB3 CHANGED, reason given - PINMAP says source PROPOSED, was PA5; gl_pins.h source PROPOS
   caught  IMU_INT2 moved to PA10 (bootloader USART1_RX) -> 1 failure(s), e.g. PA10  USART1_RX     listen IMU_INT2    : an output that can move is on a bootloader receive line: [('U4', 'INT
+  caught  IMU_CS moved back to PB12 (bootloader SPI2_NSS) -> 5 failure(s), e.g. PB13  SPI2_SCK      listen SPI2_SCK    : input of U4 only: nothing on the board drives it. IMU_CS is on PB12, 
+  caught  CHG_INHIBIT moved to PB10 (bootloader I2C2_SCL) -> 3 failure(s), e.g. CHG_INHIBIT is on PB10, no bootloader pin: no pull or level of the ROM can switch the charger off - PB10 is th
+  caught  CAM_PWR_EN moved to PA9 (bootloader USART1_TX) -> 12 failure(s), e.g. CAM_PWR_EN is on PA9, no bootloader pin: no pull or level of the ROM can switch the camera rail on - PA9 is th
+  caught  GRAIN_CP1 moved to PA10 (bootloader USART1_RX) -> 1 failure(s), e.g. PA10  USART1_RX     listen GRAIN_CP1   : a charlieplex line on a pin the bootloader LISTENS on: the line has n
   caught  pad names of pads 8 and 9 swapped in the netlist -> 5 failure(s), e.g. pad 8: netlist PC1, data PC0
   caught  R31 (pull on PA3 / USART2_RX) removed -> 1 failure(s), e.g. PA3   USART2_RX     listen OPAMP_VOUT  : no defined level and no reason why that is harmless: ['C33', 'PD1']
+  caught  R2 (BOOT0 pull-down) removed -> 1 failure(s), e.g. BOOT0 (PH3, shared with CAM_R_PWDN): 10 kohm to ground, no path to any other rail and no output on its net - l
+  caught  GRAIN_CP1 moved back to PA15 (UCPD1_CC1) -> 2 failure(s), e.g. PA15  UCPD1_CC1    GRAIN_CP1   : an LED line on the UCPD1_CC1 pad - a 5.1 kohm pull-down can appear on it befo
+  caught  CAM_PWR_EN moved to PB15 (UCPD1_CC2) -> 14 failure(s), e.g. PB15  UCPD1_CC2    CAM_PWR_EN  : a signal that switches power on the UCPD1_CC2 pad - a 5.1 kohm pull-down can 
+  caught  NTC_BIAS (a GPIO output) moved to PA15 (UCPD1_CC1) -> 2 failure(s), e.g. PA15  UCPD1_CC1    NTC_BIAS    : a OUT_PP output - NO REASON GIVEN - a signal on the UCPD1_CC1 pad must be an 
+  caught  IMU_CS moved to PB14 (UCPD1_DBCC2, no reason given) -> 6 failure(s), e.g. PB14  UCPD1_DBCC2  IMU_CS       controls the pull-down on PB15 (SPI2_MOSI); held by R20 100000 ohm to V2V8 - N

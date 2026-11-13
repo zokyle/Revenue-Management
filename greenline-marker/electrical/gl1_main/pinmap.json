@@ -2,6 +2,7 @@
  "design": "gl1_main",
  "mcu": "STM32U585RIT6",
  "package": "LQFP-64",
+ "spec": "DESIGN_SPEC rev D with amendments E1 to E16",
  "u1_rotation_assumed_deg": 270.0,
  "status": "NETLIST STAGE - nothing built; the layout step may still move PROPOSED / CHANGED pins",
  "verification": {
@@ -14,12 +15,33 @@
   },
   "failures": [],
   "provisional": [
-   "the list of bootloader pins is from memory of ST AN2606 (not readable here); only the existence of each peripheral function on its pin is verified below",
+   "the list of bootloader pins is from memory of ST AN2606 (not readable here; a web-search extract of a third-party copy agrees for USART1-3, I2C1-3, SPI1, FDCAN1); only the existence of each peripheral function on its pin is verified below",
    "OVM7692 pins are assumed to have ordinary protection diodes to their (unpowered) supply: a line that ends only on unpowered camera pins then sits below a diode drop",
-   "whether the ROM enables pull-ups on its receive pins is not known; no verdict above relies on it",
-   "bootloader pin table: memory of ST AN2606",
-   "FT / TT structure of the pins (CHG_INHIBIT on PH1 needs a pin without a diode to VDD): not in the open pin data, datasheet DS13086 not read"
+   "which pulls the ROM enables is not known (AN2606 as remembered: pull-down on the SPI pins, pull-up on the USART pins, none on the I2C pins). The verdicts above hold for that set and for no pulls at all. A 40 kohm pull AGAINST a 100 kohm board resistor could only come from a pull-down on a USART receive pin (PA3, PA10: a break condition on a UART nobody uses) or a pull-up on I2C2_SCL (PB10: the LCD is selected and receives no clock); neither loads an output",
+   "SPI protocol of the ROM (sync byte 0x5A on MOSI clocked by SCK): memory of ST AN4286",
+   "what the UCPD pads do is from memory of ST RM0456 / DS13086 (not read): after reset a HIGH level on a DBCC pad switches a 5.1 kohm pull-down onto its CC pad until firmware sets UCPD_DBDIS; the CC pads are ST's FT_c structure, whose output drive is not known here. WHICH pads these are is read from the pin data",
+   "electrical limits of the pins (thresholds, 8 mA / 20 mA, PC13 limited to 3 mA sink, injection current) are from memory of DS13086, not read"
   ]
+ },
+ "ucpd_pads": {
+  "UCPD1_CC1": [
+   "PA15"
+  ],
+  "UCPD1_CC2": [
+   "PB15"
+  ],
+  "UCPD1_DBCC1": [
+   "PB5"
+  ],
+  "UCPD1_DBCC2": [
+   "PB14"
+  ]
+ },
+ "ucpd_pad_reasons": {
+  "CHG_STAT": "an INPUT (open-drain CHG of the charger, 100 kohm to V2V8): nothing depends on the pad's output stage; a dead-battery pull-down before UCPD_DBDIS is set only makes it read 'charging' (27 uA through the pull-up) while nobody reads it",
+  "SPI2_MOSI": "an alternate-function output into one CMOS input of the IMU (microamperes); a dead-battery pull-down while PB14 is high costs 2.8 V / 5.1 kohm = 0.55 mA only while the line is driven high, and holds the floating line low in reset",
+  "SPI1_MOSI": "dead-battery control pad of PA15: it floats in reset and in the ROM bootloader (no board pull, by the spec), so the pull-down on PA15 may or may not be there - PA15 carries an input for that reason",
+  "SPI2_MISO": "dead-battery control pad of PB15: the IMU's SDO, high-impedance while the IMU is not selected; firmware keeps an internal pull-down on it between transfers"
  },
  "pins": [
   {
@@ -30,11 +52,11 @@
    "mode": "EXTI",
    "function": "GPIO (PWR_WKUP2)",
    "af": null,
-   "pull": "none / divider 82k : 100k",
+   "pull": "none / divider 100k : 100k from VBUS",
    "initial_state": "input",
    "source": "CHANGED",
    "changed_from": "PA9",
-   "reason": "PA9 goes to the grain LEDs; PC13 is a wake-up pin (cradle insertion can wake from Shutdown) and a static signal is the right neighbour for OSC32_IN (pad 3); PC13 may only sink 3 mA: it is an input here",
+   "reason": "PA9 goes to the grain LEDs; PC13 is a wake-up pin, so the cradle can wake the marker from Shutdown (ship mode, E13), and a static signal is the right neighbour for OSC32_IN (pad 3); PC13 may only sink 3 mA: it is an input here",
    "wakeup": [
     "PWR_WKUP2"
    ],
@@ -76,18 +98,18 @@
    "bootloader": null
   },
   {
-   "signal": "CAM_R_PWDN",
+   "signal": "CAM_PWR_EN",
    "port_pin": "PH0",
    "pad": 5,
-   "net": "CAM_R_PWDN_MCU",
+   "net": "CAM_EN",
    "mode": "OUT_PP",
    "function": "GPIO",
    "af": null,
-   "pull": "none / 1k series",
-   "initial_state": "driven low while V2V8_CAM is off",
+   "pull": "none / 100k to GND",
+   "initial_state": "low (rail off)",
    "source": "CHANGED",
-   "changed_from": "PC12",
-   "reason": "camera-facing edge, right half; a quasi-static signal is the right neighbour for OSC32_OUT (pad 4)",
+   "changed_from": "PD2",
+   "reason": "camera-facing edge; a static signal is the right neighbour for OSC32_OUT (pad 4); PD2 goes to the grain LEDs",
    "wakeup": [],
    "adc": [],
    "bootloader": null
@@ -97,11 +119,11 @@
    "port_pin": "PH1",
    "pad": 6,
    "net": "CHG_INHIBIT",
-   "mode": "OUT_OD",
+   "mode": "OUT_PP",
    "function": "GPIO",
    "af": null,
-   "pull": "none / 1M to VBUS_D, 1M to GND",
-   "initial_state": "released (analog): charger on",
+   "pull": "none / 100k to GND",
+   "initial_state": "analog or low: charger on (its hardware default)",
    "source": "PROPOSED",
    "changed_from": null,
    "reason": "",
@@ -118,7 +140,7 @@
    "function": "GPIO",
    "af": null,
    "pull": "none / 2k2 to V2V8_CAM",
-   "initial_state": "driven low while V2V8_CAM is off",
+   "initial_state": "low or analog while V2V8_CAM is off",
    "source": "CHANGED",
    "changed_from": "PA10",
    "reason": "PA10 is on the battery-facing edge; PC0 faces the cameras, PA10 takes FLASH_CS",
@@ -140,10 +162,10 @@
    "function": "GPIO",
    "af": null,
    "pull": "none / 2k2 to V2V8_CAM",
-   "initial_state": "driven low while V2V8_CAM is off",
+   "initial_state": "low or analog while V2V8_CAM is off",
    "source": "CHANGED",
    "changed_from": "PB5",
-   "reason": "PB5 is needed for SPI1_MOSI next to the flash; PC1 faces the cameras",
+   "reason": "PB5 is needed for SPI1_MOSI next to the flash; PC1 is in the middle of the camera-facing edge",
    "wakeup": [],
    "adc": [
     "ADC1_IN2"
@@ -162,10 +184,10 @@
    "function": "GPIO",
    "af": null,
    "pull": "none / 1k series",
-   "initial_state": "driven low while V2V8_CAM is off",
+   "initial_state": "low or analog while V2V8_CAM is off",
    "source": "CHANGED",
    "changed_from": "PH0",
-   "reason": "PC2 is on the left half of the camera-facing edge; PH0 goes to the right camera",
+   "reason": "PC2 sits next to CAM_L_SCL on the camera-facing edge; PH0 takes CAM_PWR_EN",
    "wakeup": [],
    "adc": [
     "ADC1_IN3"
@@ -181,10 +203,10 @@
    "function": "GPIO",
    "af": null,
    "pull": "none / 2k2 to V2V8_CAM",
-   "initial_state": "driven low while V2V8_CAM is off",
+   "initial_state": "low or analog while V2V8_CAM is off",
    "source": "CHANGED",
    "changed_from": "PB3",
-   "reason": "PB3 is needed for SPI1_SCK next to the flash; PC3 faces the cameras",
+   "reason": "PB3 is needed for SPI1_SCK next to the flash; PC3 is the left end of the camera-facing edge",
    "wakeup": [],
    "adc": [
     "ADC1_IN4"
@@ -265,7 +287,7 @@
    "mode": "ANALOG",
    "function": "OPAMP1_VOUT / ADC1_IN8",
    "af": null,
-   "pull": "none / 1M to V2V8",
+   "pull": "none / 150k to V2V8",
    "initial_state": "analog",
    "source": "SPEC",
    "changed_from": null,
@@ -306,18 +328,18 @@
    ]
   },
   {
-   "signal": "NTC_BIAS",
+   "signal": "IMU_INT2",
    "port_pin": "PA5",
    "pad": 21,
-   "net": "NTC_BIAS",
-   "mode": "OUT_PP",
+   "net": "IMU_INT2",
+   "mode": "EXTI",
    "function": "GPIO",
    "af": null,
    "pull": "none",
-   "initial_state": "analog; high only during an NTC conversion or a grain measurement (it also feeds the grain bias divider R29)",
+   "initial_state": "input",
    "source": "CHANGED",
-   "changed_from": "PH3",
-   "reason": "PH3 carries the 10k BOOT0 pull-down, which would load the bias (see CAM_PWR_EN); PA5 is two pads from NTC_SENSE",
+   "changed_from": "PC5",
+   "reason": "PA5 faces the IMU. PA5 / PA7 are the ROM bootloader's SPI1 clock and data inputs: with both driven by the IMU they always have a defined level; PC5 takes NTC_BIAS",
    "wakeup": [
     "PWR_WKUP6"
    ],
@@ -354,18 +376,18 @@
    ]
   },
   {
-   "signal": "IMU_INT2",
+   "signal": "IMU_INT1",
    "port_pin": "PA7",
    "pad": 23,
-   "net": "IMU_INT2",
+   "net": "IMU_INT1",
    "mode": "EXTI",
-   "function": "GPIO",
+   "function": "GPIO (PWR_WKUP8)",
    "af": null,
    "pull": "none",
    "initial_state": "input",
    "source": "CHANGED",
-   "changed_from": "PC5",
-   "reason": "PC5 is taken by IMU_INT1; PA7 is on the same edge (and is WKUP8)",
+   "changed_from": "PC13",
+   "reason": "PA7 faces the IMU and is a wake-up pin (WKUP8); PC13 is on the far corner next to the crystal and takes VBUS_SENSE",
    "wakeup": [
     "PWR_WKUP8"
    ],
@@ -397,18 +419,18 @@
    "bootloader": null
   },
   {
-   "signal": "IMU_INT1",
+   "signal": "NTC_BIAS",
    "port_pin": "PC5",
    "pad": 25,
-   "net": "IMU_INT1",
-   "mode": "EXTI",
-   "function": "GPIO (PWR_WKUP5)",
+   "net": "NTC_BIAS",
+   "mode": "OUT_PP",
+   "function": "GPIO",
    "af": null,
    "pull": "none",
-   "initial_state": "input",
+   "initial_state": "analog; high only during an NTC conversion",
    "source": "CHANGED",
-   "changed_from": "PC13",
-   "reason": "PC5 faces the IMU and is a wake-up pin (WKUP5); PC13 is on the far corner next to the crystal",
+   "changed_from": "PH3",
+   "reason": "PH3 carries the 10k BOOT0 pull-down, which would load the ratiometric bias (0.28 mA more through the pin's output resistance, up to 0.4 K at 0 C); PC5 is the pad next to NTC_SENSE and no ROM bootloader pin",
    "wakeup": [
     "PWR_WKUP5"
    ],
@@ -418,18 +440,18 @@
    "bootloader": null
   },
   {
-   "signal": "CHG_STAT",
+   "signal": "GRAIN_CP1",
    "port_pin": "PB0",
    "pad": 26,
-   "net": "CHG_STAT",
-   "mode": "EXTI",
+   "net": "CP1_MCU",
+   "mode": "OUT_PP",
    "function": "GPIO",
    "af": null,
-   "pull": "none / 100k to VDDUSB, 470k to GND",
-   "initial_state": "input",
-   "source": "PROPOSED",
-   "changed_from": null,
-   "reason": "",
+   "pull": "none / 68R series",
+   "initial_state": "analog (no LED lit)",
+   "source": "CHANGED",
+   "changed_from": "PC1",
+   "reason": "PC1 carries SCCB data now. The free pad at the LED corner, PA15, is the UCPD1_CC1 pad (PINDATA): a 5.1 kohm dead-battery pull-down appears on it while PB5 is high until firmware sets UCPD_DBDIS, and its output stage may be weaker than an ordinary pad's (ST's FT_c structure; both PROVISIONAL, DS13086 not read). Line 1 lights 8 of the 16 LEDs at 5 to 10 mA, so it sits on an ordinary pad instead: PB0, the nearest one with no ROM bootloader function, exchanged with CHG_STAT",
    "wakeup": [],
    "adc": [
     "ADC1_IN15"
@@ -437,18 +459,18 @@
    "bootloader": null
   },
   {
-   "signal": "LCD_DISP",
+   "signal": "IMU_CS",
    "port_pin": "PB1",
    "pad": 27,
-   "net": "LCD_DISP",
+   "net": "IMU_CS",
    "mode": "OUT_PP",
    "function": "GPIO",
    "af": null,
-   "pull": "none / 100k to GND",
-   "initial_state": "low (display off)",
-   "source": "PROPOSED",
-   "changed_from": null,
-   "reason": "",
+   "pull": "none / 100k to V2V8",
+   "initial_state": "high (not selected)",
+   "source": "CHANGED",
+   "changed_from": "PB12",
+   "reason": "PB12 is the ROM bootloader's SPI2 chip-select input and PB14 its SPI2 data output, wired to the IMU's SDO. If the ROM enables a pull-down on PB12 (the remembered AN2606 text says it does), the 100k pull-up loses, the IMU is selected and its SDO fights PB14. On PB1 (left edge, next to the IMU, no bootloader function) the pull-up always wins and SDO stays high-impedance",
    "wakeup": [
     "PWR_WKUP4"
    ],
@@ -501,18 +523,18 @@
    ]
   },
   {
-   "signal": "IMU_CS",
+   "signal": "LCD_DISP",
    "port_pin": "PB12",
    "pad": 33,
-   "net": "IMU_CS",
+   "net": "LCD_DISP",
    "mode": "OUT_PP",
    "function": "GPIO",
    "af": null,
-   "pull": "none / 100k to V2V8",
-   "initial_state": "high (not selected)",
-   "source": "PROPOSED",
-   "changed_from": null,
-   "reason": "",
+   "pull": "none / 100k to GND (and 200k: grain bias divider)",
+   "initial_state": "low (display off)",
+   "source": "CHANGED",
+   "changed_from": "PB1",
+   "reason": "exchanged with IMU_CS (see there): a line with a pull-DOWN is what the ROM bootloader's SPI2 chip-select input can carry without harm; pad 33 is on the way down to J1",
    "wakeup": [],
    "adc": [],
    "bootloader": [
@@ -679,7 +701,7 @@
    "initial_state": "analog (no LED lit)",
    "source": "CHANGED",
    "changed_from": "PC0",
-   "reason": "PC0-PC3 face the cameras and carry SCCB / PWDN now; PA9, PA15, PC10, PC12, PD2 are the corner next to the LED ring",
+   "reason": "PC0-PC3 face the cameras and carry SCCB / PWDN now; PA9, PC10, PC12, PD2 are the corner next to the LED ring",
    "wakeup": [],
    "adc": [],
    "bootloader": [
@@ -699,7 +721,7 @@
    "initial_state": "high (not selected)",
    "source": "CHANGED",
    "changed_from": "PA15",
-   "reason": "PA10 is the ROM bootloader's USART1_RX: the chip-select pull-up keeps it at idle-high during the detection phase; PA15 goes to the grain LEDs",
+   "reason": "PA10 is the ROM bootloader's USART1_RX: a pulled-up chip select is exactly the idle level it wants there, a floating charlieplex line is not. PA15 is no place for a chip select either: it is the UCPD1_CC1 pad, which gets a 5.1 kohm pull-down while PB5 (SPI1_MOSI, floating in reset) is high (PROVISIONAL)",
    "wakeup": [],
    "adc": [],
    "bootloader": [
@@ -782,18 +804,18 @@
    "bootloader": null
   },
   {
-   "signal": "GRAIN_CP1",
+   "signal": "CHG_STAT",
    "port_pin": "PA15",
    "pad": 50,
-   "net": "CP1_MCU",
-   "mode": "OUT_PP",
+   "net": "CHG_STAT",
+   "mode": "EXTI",
    "function": "GPIO",
    "af": null,
-   "pull": "none / 68R series",
-   "initial_state": "analog (no LED lit)",
+   "pull": "none / 100k to V2V8",
+   "initial_state": "input",
    "source": "CHANGED",
-   "changed_from": "PC1",
-   "reason": "see GRAIN_CP0",
+   "changed_from": "PB0",
+   "reason": "exchanged with GRAIN_CP1 (see there). An INPUT is what the UCPD1_CC1 pad can carry whatever its output stage is: its reset state (JTDI, internal pull-up) agrees with the 100 kohm pull-up, and a dead-battery pull-down before firmware sets UCPD_DBDIS only makes the line read 'charging' while nobody reads it",
    "wakeup": [],
    "adc": [],
    "bootloader": null
@@ -973,7 +995,7 @@
    "signal": "BOOT0",
    "port_pin": "PH3",
    "pad": 60,
-   "net": "CAM_EN",
+   "net": "CAM_R_PWDN_MCU",
    "mode": "STRAP",
    "function": "BOOT0",
    "af": null,
@@ -987,18 +1009,18 @@
    "bootloader": null
   },
   {
-   "signal": "CAM_PWR_EN",
+   "signal": "CAM_R_PWDN",
    "port_pin": "PH3",
    "pad": 60,
-   "net": "CAM_EN",
+   "net": "CAM_R_PWDN_MCU",
    "mode": "OUT_PP",
    "function": "GPIO",
    "af": null,
-   "pull": "none / 100k + 10k (BOOT0) to GND",
-   "initial_state": "low (rail off)",
+   "pull": "none / 10k to GND (BOOT0), 1k series",
+   "initial_state": "low or analog while V2V8_CAM is off",
    "source": "CHANGED",
-   "changed_from": "PD2",
-   "reason": "takes the BOOT0 pad instead of NTC_BIAS: the 10k BOOT0 pull-down would load the ratiometric NTC bias (0.28 mA extra through the pin's on-resistance, about 0.5 K error at 0 C); a rail enable does not care",
+   "changed_from": "PC12",
+   "reason": "the BOOT0 pad must carry one signal (51 signals, 51 I/O pads). PWDN of the right camera suits it: the pad is on the edge next to that camera, the net has no pull-up (BOOT0 stays low at every reset) and a static output does not mind the 10k; the firmware's proposal, NTC_BIAS, would be loaded by it",
    "wakeup": [],
    "adc": [],
    "bootloader": null
@@ -1118,25 +1140,25 @@
    "signal": "CAM_L_PWDN",
    "from": "PH0",
    "to": "PC2",
-   "reason": "PC2 is on the left half of the camera-facing edge; PH0 goes to the right camera"
+   "reason": "PC2 sits next to CAM_L_SCL on the camera-facing edge; PH0 takes CAM_PWR_EN"
   },
   {
    "signal": "CAM_L_SCL",
    "from": "PB3",
    "to": "PC3",
-   "reason": "PB3 is needed for SPI1_SCK next to the flash; PC3 faces the cameras"
+   "reason": "PB3 is needed for SPI1_SCK next to the flash; PC3 is the left end of the camera-facing edge"
   },
   {
    "signal": "CAM_PWR_EN",
    "from": "PD2",
-   "to": "PH3",
-   "reason": "takes the BOOT0 pad instead of NTC_BIAS: the 10k BOOT0 pull-down would load the ratiometric NTC bias (0.28 mA extra through the pin's on-resistance, about 0.5 K error at 0 C); a rail enable does not care"
+   "to": "PH0",
+   "reason": "camera-facing edge; a static signal is the right neighbour for OSC32_OUT (pad 4); PD2 goes to the grain LEDs"
   },
   {
    "signal": "CAM_R_PWDN",
    "from": "PC12",
-   "to": "PH0",
-   "reason": "camera-facing edge, right half; a quasi-static signal is the right neighbour for OSC32_OUT (pad 4)"
+   "to": "PH3",
+   "reason": "the BOOT0 pad must carry one signal (51 signals, 51 I/O pads). PWDN of the right camera suits it: the pad is on the edge next to that camera, the net has no pull-up (BOOT0 stays low at every reset) and a static output does not mind the 10k; the firmware's proposal, NTC_BIAS, would be loaded by it"
   },
   {
    "signal": "CAM_R_SCL",
@@ -1148,25 +1170,31 @@
    "signal": "CAM_SCCB_SDA",
    "from": "PB5",
    "to": "PC1",
-   "reason": "PB5 is needed for SPI1_MOSI next to the flash; PC1 faces the cameras"
+   "reason": "PB5 is needed for SPI1_MOSI next to the flash; PC1 is in the middle of the camera-facing edge"
+  },
+  {
+   "signal": "CHG_STAT",
+   "from": "PB0",
+   "to": "PA15",
+   "reason": "exchanged with GRAIN_CP1 (see there). An INPUT is what the UCPD1_CC1 pad can carry whatever its output stage is: its reset state (JTDI, internal pull-up) agrees with the 100 kohm pull-up, and a dead-battery pull-down before firmware sets UCPD_DBDIS only makes the line read 'charging' while nobody reads it"
   },
   {
    "signal": "FLASH_CS",
    "from": "PA15",
    "to": "PA10",
-   "reason": "PA10 is the ROM bootloader's USART1_RX: the chip-select pull-up keeps it at idle-high during the detection phase; PA15 goes to the grain LEDs"
+   "reason": "PA10 is the ROM bootloader's USART1_RX: a pulled-up chip select is exactly the idle level it wants there, a floating charlieplex line is not. PA15 is no place for a chip select either: it is the UCPD1_CC1 pad, which gets a 5.1 kohm pull-down while PB5 (SPI1_MOSI, floating in reset) is high (PROVISIONAL)"
   },
   {
    "signal": "GRAIN_CP0",
    "from": "PC0",
    "to": "PA9",
-   "reason": "PC0-PC3 face the cameras and carry SCCB / PWDN now; PA9, PA15, PC10, PC12, PD2 are the corner next to the LED ring"
+   "reason": "PC0-PC3 face the cameras and carry SCCB / PWDN now; PA9, PC10, PC12, PD2 are the corner next to the LED ring"
   },
   {
    "signal": "GRAIN_CP1",
    "from": "PC1",
-   "to": "PA15",
-   "reason": "see GRAIN_CP0"
+   "to": "PB0",
+   "reason": "PC1 carries SCCB data now. The free pad at the LED corner, PA15, is the UCPD1_CC1 pad (PINDATA): a 5.1 kohm dead-battery pull-down appears on it while PB5 is high until firmware sets UCPD_DBDIS, and its output stage may be weaker than an ordinary pad's (ST's FT_c structure; both PROVISIONAL, DS13086 not read). Line 1 lights 8 of the 16 LEDs at 5 to 10 mA, so it sits on an ordinary pad instead: PB0, the nearest one with no ROM bootloader function, exchanged with CHG_STAT"
   },
   {
    "signal": "GRAIN_CP2",
@@ -1181,22 +1209,34 @@
    "reason": "see GRAIN_CP0"
   },
   {
+   "signal": "IMU_CS",
+   "from": "PB12",
+   "to": "PB1",
+   "reason": "PB12 is the ROM bootloader's SPI2 chip-select input and PB14 its SPI2 data output, wired to the IMU's SDO. If the ROM enables a pull-down on PB12 (the remembered AN2606 text says it does), the 100k pull-up loses, the IMU is selected and its SDO fights PB14. On PB1 (left edge, next to the IMU, no bootloader function) the pull-up always wins and SDO stays high-impedance"
+  },
+  {
    "signal": "IMU_INT1",
    "from": "PC13",
-   "to": "PC5",
-   "reason": "PC5 faces the IMU and is a wake-up pin (WKUP5); PC13 is on the far corner next to the crystal"
+   "to": "PA7",
+   "reason": "PA7 faces the IMU and is a wake-up pin (WKUP8); PC13 is on the far corner next to the crystal and takes VBUS_SENSE"
   },
   {
    "signal": "IMU_INT2",
    "from": "PC5",
-   "to": "PA7",
-   "reason": "PC5 is taken by IMU_INT1; PA7 is on the same edge (and is WKUP8)"
+   "to": "PA5",
+   "reason": "PA5 faces the IMU. PA5 / PA7 are the ROM bootloader's SPI1 clock and data inputs: with both driven by the IMU they always have a defined level; PC5 takes NTC_BIAS"
+  },
+  {
+   "signal": "LCD_DISP",
+   "from": "PB1",
+   "to": "PB12",
+   "reason": "exchanged with IMU_CS (see there): a line with a pull-DOWN is what the ROM bootloader's SPI2 chip-select input can carry without harm; pad 33 is on the way down to J1"
   },
   {
    "signal": "NTC_BIAS",
    "from": "PH3",
-   "to": "PA5",
-   "reason": "PH3 carries the 10k BOOT0 pull-down, which would load the bias (see CAM_PWR_EN); PA5 is two pads from NTC_SENSE"
+   "to": "PC5",
+   "reason": "PH3 carries the 10k BOOT0 pull-down, which would load the ratiometric bias (0.28 mA more through the pin's output resistance, up to 0.4 K at 0 C); PC5 is the pad next to NTC_SENSE and no ROM bootloader pin"
   },
   {
    "signal": "SPI1_MOSI",
@@ -1214,78 +1254,101 @@
    "signal": "VBUS_SENSE",
    "from": "PA9",
    "to": "PC13",
-   "reason": "PA9 goes to the grain LEDs; PC13 is a wake-up pin (cradle insertion can wake from Shutdown) and a static signal is the right neighbour for OSC32_IN (pad 3); PC13 may only sink 3 mA: it is an input here"
+   "reason": "PA9 goes to the grain LEDs; PC13 is a wake-up pin, so the cradle can wake the marker from Shutdown (ship mode, E13), and a static signal is the right neighbour for OSC32_IN (pad 3); PC13 may only sink 3 mA: it is an input here"
   }
+ ],
+ "same_pin_new_meaning": {
+  "CHG_INHIBIT": "push-pull output, HIGH = stop charging (gate of Q1, which pulls the charger's TS input low); was open drain, LOW = stop",
+  "CHG_STAT": "open-drain CHG output of the BQ25101 with 100 kohm to V2V8 (and moved from PB0 to PA15); was the STAT output of the MCP73831"
+ },
+ "firmware_notes": [
+  "Regenerate gl_pins.h from pinmap.json (every row marked CHANGED moved).",
+  "CHG_INHIBIT (PH1) is a PUSH-PULL output, HIGH = stop charging (it turns on Q1, which pulls the charger's TS input low); analog or low = charger on. The present firmware (drivers/power.c, inhibit_(): latch low, then open drain) does NOTHING on this board - the gate of Q1 never goes high - so the firmware's own 0 to 45 C charge gate is inoperative until inhibit_() drives the pin push-pull HIGH. Until then only the charger's hardware TS window acts.",
+  "CHG_STAT is on PA15 (EXTI15): the BQ25101's open-drain CHG output with a 100 kohm pull-up to V2V8, low = charging, high = not charging, done or no VBUS. No internal pull is needed. With the BQ25100 fallback fitted every internal pull on PA15 must be off (it also has the JTDI pull-up until the firmware switches to SWD only).",
+  "EXTI lines: IMU_INT1 PA7 = EXTI7 (WKUP8), IMU_INT2 PA5 = EXTI5, VBUS_SENSE PC13 = EXTI13 (WKUP2), CHG_STAT PA15 = EXTI15. hal/stm32u5/gl_hal_stm32u5.c hard-codes EXTI13 / 5 / 9 / 0 (vectors and compile-time asserts): three of the four must move.",
+  "UCPD (PROVISIONAL, RM0456 / DS13086 not read): PA15 and PB15 are the UCPD1 CC pads, PB5 and PB14 their dead-battery control pads. After reset a high level on PB5 (SPI1_MOSI) switches a 5.1 kohm pull-down onto PA15, a high level on PB14 (SPI2_MISO) one onto PB15 (SPI2_MOSI: 0.55 mA while it is driven high). Set UCPD_DBDIS in PWR_UCPDR (HAL_PWREx_DisableUCPDDeadBattery) at the top of gl_hal_init(), before any pin is configured, and again after every wake-up that resets the PWR registers.",
+  "PA9 is USB_OTG_FS_VBUS and carries GRAIN_CP0: run the USB device with VBUS sensing off and tell the core that the session is valid from VBUS_SENSE (register details PROVISIONAL).",
+  "USB supply: set the USB-supply-valid bit only while BOTH VBUS_SENSE (PC13) is high AND the MCU's own VDDUSB monitor reports the supply ready; clear it on the falling edge of either. PC13 alone does not measure VDDUSB: on undocking VDDUSB can fall below 3.0 V within about a millisecond under USB load while PC13 still reads high for up to about 22 ms.",
+  "VBUS_SENSE: divider 100 kohm : 100 kohm on the VBUS pad (not behind the Schottky). High is guaranteed above 3.92 V at the pad, low below 1.68 V; removal from the cradle is seen within about 22 ms.",
+  "CAM_R_PWDN is on PH3, the BOOT0 pad (10 kohm to ground): it reads low at every reset; 0.28 mA flows into the pull-down while it is driven high.",
+  "IMU_CS is PB1 and LCD_DISP is PB12 (exchanged: PB12 is the ROM bootloader's SPI2 chip-select input).",
+  "Before a jump to the ROM bootloader leave the IMU with its INT2 output static (data-ready routing off): PA5 / PA7 are the ROM's SPI1 clock and data inputs.",
+  "The grain bias divider hangs on LCD_DISP (PB12): DISP must have been high for 35 ms before a grain measurement. drivers/grain_frontend.c waits 25 ms after it enables the op-amp and does not look at the display: gl_grain_fe_power() must wait for, or refuse without, 35 ms of display-on time.",
+  "Switch PA15, PB3, PB4 away from JTAG (SWD only).",
+  "Every camera-facing pin low or analog while V2V8_CAM is off: PC0, PC1, PC3 (SCCB), PC2, PH3 (PWDN), the eleven DCMI pins and PA8.",
+  "Lines without a board pull float while the MCU is in reset or in the ROM bootloader: LCD_EXTCOMIN (PB2), SPI1_SCK / SPI1_MOSI (PB3 / PB5), SPI2_SCK / SPI2_MOSI (PB13 / PB15), CAM_L_PWDN (PC2). gl_hal_init() must give each its level before anything else; keep an internal pull-down on PB4 and PB14 (the MISO lines float between transfers; PB14 is also UCPD1_DBCC2).",
+  "PA3 (OPAMP1 output, the ROM's USART2_RX) is held high by R31, 150 kohm to V2V8, also with light on the photodiode. Leave PA3 analog while OPAMP1 is off: driven low it costs 19 uA.",
+  "LSE drive: medium-low or higher (NETLIST_NOTES 4.9)."
  ],
  "grain_leds": [
   {
    "ref": "D1",
    "colour": "red",
    "azimuth_deg": 22.5,
-   "anode_line": "GRAIN_CP3",
-   "cathode_line": "GRAIN_CP4"
+   "anode_line": "GRAIN_CP0",
+   "cathode_line": "GRAIN_CP1"
   },
   {
    "ref": "D2",
    "colour": "NIR",
    "azimuth_deg": 22.5,
-   "anode_line": "GRAIN_CP4",
-   "cathode_line": "GRAIN_CP3"
+   "anode_line": "GRAIN_CP1",
+   "cathode_line": "GRAIN_CP0"
   },
   {
    "ref": "D3",
    "colour": "red",
    "azimuth_deg": 67.5,
    "anode_line": "GRAIN_CP0",
-   "cathode_line": "GRAIN_CP4"
+   "cathode_line": "GRAIN_CP2"
   },
   {
    "ref": "D4",
    "colour": "NIR",
    "azimuth_deg": 67.5,
-   "anode_line": "GRAIN_CP4",
+   "anode_line": "GRAIN_CP2",
    "cathode_line": "GRAIN_CP0"
   },
   {
    "ref": "D5",
    "colour": "red",
    "azimuth_deg": 112.5,
-   "anode_line": "GRAIN_CP2",
-   "cathode_line": "GRAIN_CP4"
+   "anode_line": "GRAIN_CP0",
+   "cathode_line": "GRAIN_CP3"
   },
   {
    "ref": "D6",
    "colour": "NIR",
    "azimuth_deg": 112.5,
-   "anode_line": "GRAIN_CP4",
-   "cathode_line": "GRAIN_CP2"
+   "anode_line": "GRAIN_CP3",
+   "cathode_line": "GRAIN_CP0"
   },
   {
    "ref": "D7",
    "colour": "red",
    "azimuth_deg": 157.5,
-   "anode_line": "GRAIN_CP2",
-   "cathode_line": "GRAIN_CP3"
+   "anode_line": "GRAIN_CP0",
+   "cathode_line": "GRAIN_CP4"
   },
   {
    "ref": "D8",
    "colour": "NIR",
    "azimuth_deg": 157.5,
-   "anode_line": "GRAIN_CP3",
-   "cathode_line": "GRAIN_CP2"
+   "anode_line": "GRAIN_CP4",
+   "cathode_line": "GRAIN_CP0"
   },
   {
    "ref": "D9",
    "colour": "red",
    "azimuth_deg": 202.5,
    "anode_line": "GRAIN_CP1",
-   "cathode_line": "GRAIN_CP3"
+   "cathode_line": "GRAIN_CP2"
   },
   {
    "ref": "D10",
    "colour": "NIR",
    "azimuth_deg": 202.5,
-   "anode_line": "GRAIN_CP3",
+   "anode_line": "GRAIN_CP2",
    "cathode_line": "GRAIN_CP1"
   },
   {
@@ -1293,42 +1356,42 @@
    "colour": "red",
    "azimuth_deg": 247.5,
    "anode_line": "GRAIN_CP1",
-   "cathode_line": "GRAIN_CP2"
+   "cathode_line": "GRAIN_CP3"
   },
   {
    "ref": "D12",
    "colour": "NIR",
    "azimuth_deg": 247.5,
-   "anode_line": "GRAIN_CP2",
+   "anode_line": "GRAIN_CP3",
    "cathode_line": "GRAIN_CP1"
   },
   {
    "ref": "D13",
    "colour": "red",
    "azimuth_deg": 292.5,
-   "anode_line": "GRAIN_CP0",
-   "cathode_line": "GRAIN_CP2"
+   "anode_line": "GRAIN_CP1",
+   "cathode_line": "GRAIN_CP4"
   },
   {
    "ref": "D14",
    "colour": "NIR",
    "azimuth_deg": 292.5,
-   "anode_line": "GRAIN_CP2",
-   "cathode_line": "GRAIN_CP0"
+   "anode_line": "GRAIN_CP4",
+   "cathode_line": "GRAIN_CP1"
   },
   {
    "ref": "D15",
    "colour": "red",
    "azimuth_deg": 337.5,
-   "anode_line": "GRAIN_CP0",
-   "cathode_line": "GRAIN_CP1"
+   "anode_line": "GRAIN_CP2",
+   "cathode_line": "GRAIN_CP3"
   },
   {
    "ref": "D16",
    "colour": "NIR",
    "azimuth_deg": 337.5,
-   "anode_line": "GRAIN_CP1",
-   "cathode_line": "GRAIN_CP0"
+   "anode_line": "GRAIN_CP3",
+   "cathode_line": "GRAIN_CP2"
   }
  ],
  "extcomin_lse_ticks": 547

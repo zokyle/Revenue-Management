@@ -6,8 +6,9 @@
 ``DIR`` is the directory with ST's open pin data (see ``check_pinmap.py``;
 without it the pin map is checked against the KiCad symbol only and the
 result is PARTIAL).  Everything is written to ``electrical/gl1_main/netlist_out/``
-(``--out``); ``pinmap.json`` is written next to this file.  Exit status 0 only
-if every stage passed.  See ``netlist_stage.py`` for what the stages are.
+(``--out``); ``pinmap.json`` is written next to this file and the generated
+tables of ``NETLIST_NOTES.md`` are refreshed (``update_notes.py``).  Exit status 0
+only if every stage passed.  See ``netlist_stage.py`` for what the stages are.
 """
 import argparse
 import os
@@ -20,6 +21,7 @@ if HERE not in sys.path:
 import gl1_main_design as G           # noqa: E402
 import check_netlist_rules            # noqa: E402
 import netlist_stage                  # noqa: E402
+import update_notes                   # noqa: E402
 
 
 def main(argv=None):
@@ -33,8 +35,12 @@ def main(argv=None):
            "--selftest", "--report", os.path.join(args.out, "pinmap_check.txt")]
     if args.pindata:
         cmd += ["--pindata", args.pindata]
-    return netlist_stage.run(G.gl1_main_design(), args.out, rules=check_netlist_rules.rules,
+    code = netlist_stage.run(G.gl1_main_design(), args.out, rules=check_netlist_rules.rules,
+                             rules_selftest=check_netlist_rules.selftest,
                              pinmap_cmd=cmd, title="GL-1 main board")
+    if code == 0:                         # keep the generated tables of NETLIST_NOTES.md in step
+        update_notes.main(["--board", "main"])
+    return code
 
 
 if __name__ == "__main__":

@@ -637,13 +637,22 @@ static void check_case_(const case_t *c, const stat_t *s)
          * search for the stick is widened by 3 px per second elapsed since
          * the band was exposed (GL_APP_SWAY_ALLOW_PX_PER_S), the band's
          * analysis now takes its 0.18 s, and the post 14 px beside the stick
-         * comes into reach: 3 of these 8 reads give a disparity (7 with
-         * computation for nothing); of 64 reads 11 (34), and none at the
-         * high factor.  With the allowance set to 0 the compute time makes
-         * no difference (34 of 64 at every factor).  Pinned: */
-        GL_CHECK(100 * s->n_stereo < c->min_stereo_pct * s->n);
-        printf("    NOT MET with compute time: %s gives a disparity in %d of %d reads (%d %% demanded)\n",
-               c->name, s->n_stereo, s->n, c->min_stereo_pct);
+         * comes into reach.  Eight reads are too few to pin this (3 or 4 of
+         * them give a disparity, as the frames fall): the scene is read 64
+         * times here.  Measured: 26 of 64 at the nominal factor (34 with
+         * computation for nothing, 27 at the low factor, none at the high
+         * one).  It was 11 of 64 before the shoulders of strong lines were
+         * dropped from the band's list (gl_read.c): each of them cost this
+         * scene another 0.3 s.  With the allowance set to 0 the compute time
+         * makes no difference (34 of 64 at every factor).  Pinned: */
+        stat_t s64;
+        run_case_(c->name, c->fn, c->variant, 64, &s64);
+        GL_CHECK(100 * s64.n_stereo < c->min_stereo_pct * s64.n);
+        GL_CHECK(100 * s64.n_stereo >= 25 * s64.n); /* (and not worse than it was measured) */
+        GL_CHECK_EQ(s64.n_wrong_unflagged, 0);
+        GL_CHECK_EQ(s64.n_gross, 0);
+        printf("    NOT MET with compute time: %s gives a disparity in %d of %d reads (%d %% demanded); "
+               "%d of the first %d\n", c->name, s64.n_stereo, s64.n, c->min_stereo_pct, s->n_stereo, s->n);
     } else {
         GL_CHECK(100 * s->n_stereo >= c->min_stereo_pct * s->n);
     }
@@ -905,6 +914,12 @@ GL_TEST(test_no_flagstick)
          * these scenes is stated in the README and bounded here */
         GL_CHECK(20 * n_false <= n_reads);
         GL_CHECK(10 * n_bearing <= n_reads);
+        /* Review (time to the line, camera-rail time): an object that is not
+         * a flagstick is given up after its FIRST group, also when it is the
+         * only line of the band.  Measured: 1017 ms; 1650 ms when a lone
+         * candidate was read in full before it was judged; 1863 ms with the
+         * shoulder rule and without the early verdict. */
+        GL_CHECK(rail < 1250.0);
     }
 }
 

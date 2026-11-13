@@ -5,12 +5,12 @@
  *
  * Reference vectors of the Python reference (sim/greenline_sim) as C data in
  * double precision, for the host tests only (tests/test_solver.c).
- * Source: schema 2, seed 20261111, sha256 1328708039e87035dc7e64a1389824f40f98f073c1c8598162666f9166fb4b60.
- * 240 + 82 estimator cases, 120 + 32 solver cases, 33 rolls.
+ * Source: schema 2, seed 20261111, sha256 92ca422e5eee20f1233f71caf57e572292624fd94eff3dd78caca6baf0371531.
+ * 240 + 82 + 18 estimator cases, 120 + 32 solver cases, 33 rolls.
  */
 #include "gl_solver_vectors.h"
 
-const char gl_vec_source_sha256[] = "1328708039e87035dc7e64a1389824f40f98f073c1c8598162666f9166fb4b60";
+const char gl_vec_source_sha256[] = "92ca422e5eee20f1233f71caf57e572292624fd94eff3dd78caca6baf0371531";
 const double gl_vec_const_g = 9.80665;
 const double gl_vec_const_hole_r = 0.053975;
 const double gl_vec_const_dt = 0.02;
@@ -3350,14 +3350,190 @@ const gl_vec_meas_t gl_vec_meas[] = {
       .flag_bearing = 0.1, .flag_disparity = GL_VEC_NAN, .flag_low_elev = 0.005029958, .flag_top_elev = GL_VEC_NAN,
       .stick_height_est = 1.96, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
       .grain_kappa = 0.0, .grain_azimuth = 0.0, .stimp_ft = 10.0, .user_distance = 1e-06 },
+    { .f_px = 659.2329, .baseline = 0.02, .h_cam = 0.0056, .tilt = { -0.02790798, -0.07873974 },
+      .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = -0.3022965, .flag_disparity = 5.058996, .flag_low_elev = -0.001788236, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.09418, .stick_height_rel_sigma = 0.15, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 1.519895, .stimp_ft = 9.914974, .user_distance = 2.370377 },
+    { .f_px = 671.2563, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.0005933794, -0.05123081 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.0976625, .flag_disparity = 3.633067, .flag_low_elev = -0.00276247, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.903607, .stick_height_rel_sigma = 0.15, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 1.051431, .stimp_ft = 13.82762, .user_distance = GL_VEC_NAN },
+    { .f_px = 671.2563, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.0003383062, -0.05146199 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 0, .flag_top_visible = 0,
+      .flag_bearing = 0.04554189, .flag_disparity = 5.694376, .flag_low_elev = GL_VEC_NAN, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.980347, .stick_height_rel_sigma = 0.15, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 1.051431, .stimp_ft = 13.82762, .user_distance = GL_VEC_NAN },
+    { .f_px = 644.8692, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.01983588, -0.04745301 },
+      .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = -0.3027235, .flag_disparity = 2.219912, .flag_low_elev = -0.001087331, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.009097, .stick_height_rel_sigma = 0.02, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 2.864519, .stimp_ft = 13.29375, .user_distance = 5.150526 },
+    { .f_px = 665.4628, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.02408974, 0.04895172 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.3750457, .flag_disparity = 2.226699, .flag_low_elev = -0.0002529965, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.212798, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 0.5684042, .stimp_ft = 16.87711, .user_distance = 6.017764 },
+    { .f_px = 645.031, .baseline = 0.02, .h_cam = 0.0052, .tilt = { -0.01149327, 0.05202464 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.1154655, .flag_disparity = 3.01046, .flag_low_elev = -0.002668291, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.745454, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = -0.5936434, .stimp_ft = 13.03683, .user_distance = GL_VEC_NAN },
+    { .f_px = 656.5987, .baseline = 0.02, .h_cam = 0.0056, .tilt = { -0.003998653, -0.0569569 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.01405457, .flag_disparity = 1.621962, .flag_low_elev = 0.0008543132, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.855908, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.1562364, .grain_azimuth = 1.824868, .stimp_ft = 12.86795, .user_distance = 8.072689 },
+    { .f_px = 669.5251, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.01528486, -0.07765037 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = -0.3227122, .flag_disparity = 2.353977, .flag_low_elev = 0.004702764, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.144171, .stick_height_rel_sigma = 0.02, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 2.870099, .stimp_ft = 10.02804, .user_distance = GL_VEC_NAN },
+    { .f_px = 669.5251, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.01768711, -0.07409724 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 0, .flag_top_visible = 0,
+      .flag_bearing = -0.3395447, .flag_disparity = 5.746807, .flag_low_elev = 0.007735892, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.168693, .stick_height_rel_sigma = 0.02, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 2.870099, .stimp_ft = 10.02804, .user_distance = GL_VEC_NAN },
+    { .f_px = 669.5251, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.01462532, -0.0765374 },
+      .tilt_reads = 1, .flag_found = 0, .flag_base_visible = 0, .flag_top_visible = 0,
+      .flag_bearing = GL_VEC_NAN, .flag_disparity = GL_VEC_NAN, .flag_low_elev = GL_VEC_NAN, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.037466, .stick_height_rel_sigma = 0.02, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 2.870099, .stimp_ft = 10.02804, .user_distance = GL_VEC_NAN },
+    { .f_px = 638.3207, .baseline = 0.02, .h_cam = 0.00561, .tilt = { 0.006756436, -0.06348936 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 0, .flag_top_visible = 1,
+      .flag_bearing = 0.3904441, .flag_disparity = 0.8941093, .flag_low_elev = -0.02082692, .flag_top_elev = 0.1209746,
+      .stick_height_est = 2.084387, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.3420712, .grain_azimuth = -1.655862, .stimp_ft = 11.3704, .user_distance = 14.7825 },
+    { .f_px = 638.3207, .baseline = 0.02, .h_cam = 0.00561, .tilt = { 0.002915383, -0.06503925 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 1,
+      .flag_bearing = 0.3762096, .flag_disparity = 1.282293, .flag_low_elev = -0.0235316, .flag_top_elev = 0.1861461,
+      .stick_height_est = 2.034271, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.3420712, .grain_azimuth = -1.655862, .stimp_ft = 11.3704, .user_distance = GL_VEC_NAN },
+    { .f_px = 638.3207, .baseline = 0.02, .h_cam = 0.00561, .tilt = { 0.002495498, -0.06611307 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 0, .flag_top_visible = 0,
+      .flag_bearing = 0.3957974, .flag_disparity = 2.897667, .flag_low_elev = -0.02559748, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.124974, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.3420712, .grain_azimuth = -1.655862, .stimp_ft = 11.3704, .user_distance = GL_VEC_NAN },
+    { .f_px = 662.5319, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.007857151, -0.04961724 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 1,
+      .flag_bearing = -0.08808127, .flag_disparity = 0.8589769, .flag_low_elev = -0.001018177, .flag_top_elev = 0.1291206,
+      .stick_height_est = 1.818399, .stick_height_rel_sigma = 0.15, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = -0.04358493, .grain_azimuth = -0.6382148, .stimp_ft = 13.68779, .user_distance = 13.56333 },
+    { .f_px = 644.2681, .baseline = 0.02, .h_cam = 0.0052, .tilt = { 0.0009999138, 0.07473249 },
+      .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 0, .flag_top_visible = 1,
+      .flag_bearing = 0.1169984, .flag_disparity = 1.169145, .flag_low_elev = 0.005858581, .flag_top_elev = 0.1969697,
+      .stick_height_est = 2.099006, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = -1.25349, .stimp_ft = 11.30146, .user_distance = 10.33897 },
+    { .f_px = 675.0108, .baseline = 0.02, .h_cam = 0.0052, .tilt = { 0.0103308, 0.08737396 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 0, .flag_top_visible = 0,
+      .flag_bearing = -0.1204878, .flag_disparity = 2.571214, .flag_low_elev = GL_VEC_NAN, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.794084, .stick_height_rel_sigma = 0.15, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.05940923, .grain_azimuth = 2.24027, .stimp_ft = 8.9898, .user_distance = GL_VEC_NAN },
+    { .f_px = 675.0108, .baseline = 0.02, .h_cam = 0.0052, .tilt = { 0.01617258, 0.09047373 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = -0.1613804, .flag_disparity = 2.836669, .flag_low_elev = 0.003246002, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.837454, .stick_height_rel_sigma = 0.15, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.05940923, .grain_azimuth = 2.24027, .stimp_ft = 8.9898, .user_distance = GL_VEC_NAN },
+    { .f_px = 675.0108, .baseline = 0.02, .h_cam = 0.0052, .tilt = { 0.01190054, 0.09043309 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = -0.06544413, .flag_disparity = 12.95531, .flag_low_elev = 0.001248365, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.826355, .stick_height_rel_sigma = 0.15, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.05940923, .grain_azimuth = 2.24027, .stimp_ft = 8.9898, .user_distance = 5.642499 },
+    { .f_px = 675.0108, .baseline = 0.02, .h_cam = 0.0052, .tilt = { 0.02186807, 0.09058723 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = -0.1746178, .flag_disparity = 14.82661, .flag_low_elev = 0.0003167918, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.844384, .stick_height_rel_sigma = 0.15, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.05940923, .grain_azimuth = 2.24027, .stimp_ft = 8.9898, .user_distance = GL_VEC_NAN },
+    { .f_px = 655.6235, .baseline = 0.02, .h_cam = 0.0056, .tilt = { 0.03753603, 0.05768046 },
+      .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = -0.2047439, .flag_disparity = 1.913527, .flag_low_elev = 0.01557257, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.97296, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 1.969082, .stimp_ft = 9.709456, .user_distance = 7.222321 },
+    { .f_px = 655.6235, .baseline = 0.02, .h_cam = 0.0056, .tilt = { 0.02806599, 0.06495578 },
+      .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 0, .flag_top_visible = 0,
+      .flag_bearing = -0.1834613, .flag_disparity = 9.641777, .flag_low_elev = GL_VEC_NAN, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.071226, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 1.969082, .stimp_ft = 9.709456, .user_distance = 7.248801 },
+    { .f_px = 655.6235, .baseline = 0.02, .h_cam = 0.0056, .tilt = { 0.03116302, 0.06381817 },
+      .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = -0.2352132, .flag_disparity = 10.80466, .flag_low_elev = 0.008393946, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.955064, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 1.969082, .stimp_ft = 9.709456, .user_distance = GL_VEC_NAN },
+    { .f_px = 646.0809, .baseline = 0.02, .h_cam = 0.0056, .tilt = { 0.001443331, -0.002246916 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 0, .flag_top_visible = 1,
+      .flag_bearing = 0.1279902, .flag_disparity = 0.6934207, .flag_low_elev = 0.01294423, .flag_top_elev = 0.1336368,
+      .stick_height_est = 2.098586, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = -2.29155, .stimp_ft = 19.95401, .user_distance = 16.8395 },
+    { .f_px = 646.0809, .baseline = 0.02, .h_cam = 0.0056, .tilt = { 0.01341883, -0.007446385 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.1679252, .flag_disparity = 1.032985, .flag_low_elev = 0.01282072, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.172761, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = -2.29155, .stimp_ft = 19.95401, .user_distance = GL_VEC_NAN },
+    { .f_px = 646.0809, .baseline = 0.02, .h_cam = 0.0056, .tilt = { 0.01447437, -0.01350914 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.2016604, .flag_disparity = 2.271281, .flag_low_elev = 0.01443758, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.165689, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = -2.29155, .stimp_ft = 19.95401, .user_distance = GL_VEC_NAN },
+    { .f_px = 646.0809, .baseline = 0.02, .h_cam = 0.0056, .tilt = { 0.01690477, -0.0197155 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 0, .flag_top_visible = 0,
+      .flag_bearing = 0.1261851, .flag_disparity = GL_VEC_NAN, .flag_low_elev = 0.01212925, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 2.180696, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = -2.29155, .stimp_ft = 19.95401, .user_distance = GL_VEC_NAN },
+    { .f_px = 665.8501, .baseline = 0.02, .h_cam = 0.0056, .tilt = { -0.0007325192, 0.01494364 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 1,
+      .flag_bearing = 0.3943257, .flag_disparity = 1.409656, .flag_low_elev = 0.01115747, .flag_top_elev = 0.24715,
+      .stick_height_est = 2.06183, .stick_height_rel_sigma = 0.02, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = -1.174487, .stimp_ft = 7.052719, .user_distance = 8.113426 },
+    { .f_px = 665.154, .baseline = 0.02, .h_cam = 0.0052, .tilt = { 0.01971647, -0.07603277 },
+      .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.339832, .flag_disparity = 0.8833814, .flag_low_elev = -0.002379102, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.813778, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.0, .grain_azimuth = 0.5602637, .stimp_ft = 8.438372, .user_distance = 14.76966 },
+    { .f_px = 658.1238, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.004746539, 0.0815502 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.09574621, .flag_disparity = 2.508161, .flag_low_elev = 0.001835888, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.651067, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.3486415, .grain_azimuth = 0.09071612, .stimp_ft = 8.634654, .user_distance = GL_VEC_NAN },
+    { .f_px = 658.1238, .baseline = 0.02, .h_cam = 0.00561, .tilt = { 0.0001624042, 0.08059229 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.05822247, .flag_disparity = 3.083149, .flag_low_elev = 0.001404558, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.674578, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.3486415, .grain_azimuth = 0.09071612, .stimp_ft = 8.634654, .user_distance = 4.940501 },
+    { .f_px = 658.1238, .baseline = 0.02, .h_cam = 0.00561, .tilt = { -0.005505291, 0.08292585 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 0,
+      .flag_bearing = 0.1451239, .flag_disparity = 25.94077, .flag_low_elev = -0.006732226, .flag_top_elev = GL_VEC_NAN,
+      .stick_height_est = 1.641385, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.3486415, .grain_azimuth = 0.09071612, .stimp_ft = 8.634654, .user_distance = GL_VEC_NAN },
+    { .f_px = 639.0243, .baseline = 0.02, .h_cam = 0.00561, .tilt = { 0.02135467, 0.0600392 },
+      .tilt_reads = 1, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 1,
+      .flag_bearing = -0.1216966, .flag_disparity = 1.056479, .flag_low_elev = 0.01226498, .flag_top_elev = 0.153668,
+      .stick_height_est = 1.608615, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.1612972, .grain_azimuth = -2.132073, .stimp_ft = 10.85672, .user_distance = GL_VEC_NAN },
+    { .f_px = 646.0576, .baseline = 0.02, .h_cam = 0.0056, .tilt = { -0.008769243, -0.005845523 },
+      .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 1,
+      .flag_bearing = -0.1516989, .flag_disparity = 0.3218727, .flag_low_elev = -0.01297055, .flag_top_elev = 0.03718478,
+      .stick_height_est = 1.998873, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.1129363, .grain_azimuth = 0.7909581, .stimp_ft = 14.56156, .user_distance = GL_VEC_NAN },
+    { .f_px = 646.0576, .baseline = 0.02, .h_cam = 0.0056, .tilt = { -0.009856232, 0.002698597 },
+      .tilt_reads = 2, .flag_found = 1, .flag_base_visible = 1, .flag_top_visible = 1,
+      .flag_bearing = -0.1691512, .flag_disparity = 0.3844719, .flag_low_elev = -0.01413421, .flag_top_elev = 0.04340987,
+      .stick_height_est = 2.014209, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.1129363, .grain_azimuth = 0.7909581, .stimp_ft = 14.56156, .user_distance = GL_VEC_NAN },
+    { .f_px = 646.0576, .baseline = 0.02, .h_cam = 0.0056, .tilt = { -0.01299213, 0.011555 },
+      .tilt_reads = 2, .flag_found = 0, .flag_base_visible = 0, .flag_top_visible = 1,
+      .flag_bearing = -0.09599301, .flag_disparity = 1.274379, .flag_low_elev = -0.007459097, .flag_top_elev = 0.1626551,
+      .stick_height_est = 1.955937, .stick_height_rel_sigma = 0.07, .n_horizon = 0, .horizon_first = 3371,
+      .grain_kappa = 0.1129363, .grain_azimuth = 0.7909581, .stimp_ft = 14.56156, .user_distance = GL_VEC_NAN },
 };
-const unsigned gl_vec_n_meas = 440u;
+const unsigned gl_vec_n_meas = 475u;
 
-/* estimator_cases, then fallback_estimator_cases */
+/* estimator_cases, then fallback_estimator_cases, then near_miss_estimator_cases */
 const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 0, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 0,
       .exp = {
         .patch = { -0.00500294377803189, 0.006601961537734512, -0.0037367606645965067, 0.0, 0.0 },
@@ -3373,6 +3549,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 1, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 1,
       .exp = {
         .patch = { -0.012130234024016341, -0.008562147539639853, -0.0031573981198100456, -0.0006083527673223075, 0.0013108460172183533 },
@@ -3388,6 +3565,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 2, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 2,
       .exp = {
         .patch = { -0.004535089775198906, 0.014298334719512803, 0.0, 0.0, 0.0 },
@@ -3403,6 +3581,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 3, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 3,
       .exp = {
         .patch = { 0.008290206814495996, 0.01330817966879975, -0.0027134333884549565, 0.0, 0.0 },
@@ -3418,6 +3597,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 4, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 4,
       .exp = {
         .patch = { -0.0027672773661964133, 0.011615105090738728, 0.0009154753570463468, -0.0011349020291145909, 0.0 },
@@ -3433,6 +3613,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 5, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 7,
       .exp = {
         .patch = { -0.021478338389833793, -0.009635240826459177, -0.0016324984021936408, -0.001658648344596932, -0.013895923290945522 },
@@ -3448,6 +3629,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 6, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 8,
       .exp = {
         .patch = { -0.0011662153301871684, 0.020953160875417348, -0.0012851936443687409, 0.0, 0.0 },
@@ -3463,6 +3645,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 7, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 9,
       .exp = {
         .patch = { -0.02614018193718454, -0.00404699113803801, 0.0, 0.0, 0.0 },
@@ -3478,6 +3661,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 8, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 10,
       .exp = {
         .patch = { 0.009697201128722513, -0.001783817457346385, -0.000120406002524691, -0.0012658341553717413, 0.0 },
@@ -3493,6 +3677,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 9, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 12,
       .exp = {
         .patch = { -0.002208273269975616, -0.026994358374324557, 0.002071266435775194, 0.0011225593741501624, 0.0006173526926321538 },
@@ -3508,6 +3693,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 10, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 13,
       .exp = {
         .patch = { -0.0047675688781872085, -0.0025657349520963523, 0.0001400364163046428, 0.0, 0.0 },
@@ -3523,6 +3709,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 11, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 14,
       .exp = {
         .patch = { -0.017291975959756532, -0.00991438213523729, -0.0008605663712826094, -0.0024418966516950016, 0.015510978706094131 },
@@ -3538,6 +3725,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 12, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 15,
       .exp = {
         .patch = { -0.010143118027782673, 0.000972466487542839, 0.0, 0.0, 0.0 },
@@ -3553,6 +3741,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 13, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 16,
       .exp = {
         .patch = { -0.02851637986174896, 0.010534747831446513, -0.0008918334006787125, 0.0, 0.0 },
@@ -3568,6 +3757,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 14, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 17,
       .exp = {
         .patch = { 0.01572318919059026, -0.004416963060627961, 0.00022105167074952455, -0.00045727124708775285, 0.0 },
@@ -3583,6 +3773,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 15, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 20,
       .exp = {
         .patch = { 0.01796375561023733, 0.008069984016901188, -0.0009130676869494176, 0.0005982700242674514, 0.003408815700663925 },
@@ -3598,6 +3789,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 16, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 21,
       .exp = {
         .patch = { 0.011778229031406564, -0.0051455973977785705, -0.0004051263121623145, 0.0, 0.0 },
@@ -3613,6 +3805,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 17, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 22,
       .exp = {
         .patch = { -0.012491838847584577, 0.006903192732861619, 0.0, 0.0, 0.0 },
@@ -3628,6 +3821,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 18, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 23,
       .exp = {
         .patch = { 0.02055662704323573, -0.003130225357682285, -0.0020080781585133348, 0.0004201991647232401, 0.0 },
@@ -3643,6 +3837,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 19, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 25,
       .exp = {
         .patch = { -0.03458201292481941, -0.024124199175318967, -0.001038434213171199, 0.005286269366457247, -0.01140994623404547 },
@@ -3658,6 +3853,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 20, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 26,
       .exp = {
         .patch = { -0.00637961349444689, -0.007535472997819718, 0.00015029055543232367, 0.0, 0.0 },
@@ -3673,6 +3869,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 21, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 27,
       .exp = {
         .patch = { 0.028486818386734263, 0.007325908023342417, 0.0, 0.0003961256438542546, -0.0017378260899783664 },
@@ -3688,6 +3885,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 22, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 28,
       .exp = {
         .patch = { -0.00039729451148514446, -0.0019708334627116446, 0.0, 0.0, 0.0 },
@@ -3703,6 +3901,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 23, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 29,
       .exp = {
         .patch = { -0.059303197124326044, -0.007230828426965245, 0.005214071748103305, 0.0, 0.0 },
@@ -3718,6 +3917,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 24, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 30,
       .exp = {
         .patch = { -0.0038028860821338576, -0.015801432667697058, 0.0037777626178176296, -0.00020946389882979093, 0.0 },
@@ -3733,6 +3933,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 25, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 33,
       .exp = {
         .patch = { 0.0023165648268970167, -0.010854341569762102, 0.0029184986829657263, -2.799130729829156e-05, 0.003860463244084069 },
@@ -3748,6 +3949,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 26, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 34,
       .exp = {
         .patch = { -0.023297006488089005, 0.012281534892419656, -0.0022153545303431215, 0.0, 0.0 },
@@ -3763,6 +3965,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 27, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 35,
       .exp = {
         .patch = { -0.0015080250229663442, 0.016611905907270616, 0.0, 0.0, 0.0 },
@@ -3778,6 +3981,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 28, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 36,
       .exp = {
         .patch = { 0.001238714841306478, 0.012901407378857173, -0.0005309170954125272, 0.0018712347419279991, 0.0 },
@@ -3793,6 +3997,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 29, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 38,
       .exp = {
         .patch = { 0.005270989080998805, 0.002834020321441678, -0.0037468226433396046, 0.005388220072425968, -0.006754263483991465 },
@@ -3808,6 +4013,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 30, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 39,
       .exp = {
         .patch = { 0.005179597775898851, -0.02399693627166515, -0.0008732580608311045, 0.0, 0.0 },
@@ -3823,6 +4029,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 31, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 40,
       .exp = {
         .patch = { 0.014423270432886444, -0.014986844277910373, -0.0006801962626346767, -0.006995680396820697, -0.009753118738929655 },
@@ -3838,6 +4045,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 32, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 41,
       .exp = {
         .patch = { 0.01633706945937352, -0.004746553697948782, 0.0, 0.0, 0.0 },
@@ -3853,6 +4061,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 33, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 42,
       .exp = {
         .patch = { -0.008912140386906528, 0.008868427694666538, 0.0007563242165645722, 0.0, 0.0 },
@@ -3868,6 +4077,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 34, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 43,
       .exp = {
         .patch = { 0.034839620653267865, -0.0213630049852257, -0.005418225290138635, 0.000550573874552425, 0.0 },
@@ -3883,6 +4093,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 35, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 46,
       .exp = {
         .patch = { -0.019521290362874276, 0.003437755496920677, 0.003757617663093756, -0.0011941961110291924, 0.0003550003045968652 },
@@ -3898,6 +4109,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 36, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 47,
       .exp = {
         .patch = { -0.010987115021837295, 0.004542132558054734, 0.0015508753753751437, 0.0, 0.0 },
@@ -3913,6 +4125,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 37, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 48,
       .exp = {
         .patch = { -0.006395278420691982, -0.01803470257477908, 0.0, 0.0, 0.0 },
@@ -3928,6 +4141,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 38, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 49,
       .exp = {
         .patch = { 0.016729038750672907, 0.015629737796743128, 0.001616929860809763, -0.00319494702016186, 0.0 },
@@ -3943,6 +4157,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 39, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 51,
       .exp = {
         .patch = { 0.012553107627057351, -0.009930979629805074, 0.0005652799394406429, -0.0053797037070770146, -0.01736471244556788 },
@@ -3958,6 +4173,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 40, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 52,
       .exp = {
         .patch = { 0.012851174015050638, -0.003188507730662756, -0.00044112854983569086, 0.0, 0.0 },
@@ -3973,6 +4189,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 41, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 53,
       .exp = {
         .patch = { 0.0009454652545534276, 0.009426451374205563, 0.0, 0.0, 0.0 },
@@ -3988,6 +4205,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 42, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 54,
       .exp = {
         .patch = { -0.026361397213265848, 0.009759559580527963, 0.0, 0.0, 0.0 },
@@ -4003,6 +4221,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 43, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 55,
       .exp = {
         .patch = { 0.0009106290012335618, 0.0020919890259304035, -7.081969346077001e-05, 0.0, 0.0 },
@@ -4018,6 +4237,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 44, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 56,
       .exp = {
         .patch = { -0.013876826941208491, 0.0029537953693521204, 0.00015823539133280964, 0.0001790570507263196, 0.0 },
@@ -4033,6 +4253,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 45, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 59,
       .exp = {
         .patch = { -0.0062965656767872535, 0.008138224222977476, 0.0, 0.0002220433892982454, -4.826374477829839e-05 },
@@ -4048,6 +4269,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 46, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 60,
       .exp = {
         .patch = { 0.01606787522310397, -0.006333341419577829, 0.0008965221689535008, 0.0, 0.0 },
@@ -4063,6 +4285,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 47, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 61,
       .exp = {
         .patch = { 0.01205162851863758, 0.005355680770650688, 0.0, 0.0, 0.0 },
@@ -4078,6 +4301,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 48, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 62,
       .exp = {
         .patch = { 0.0001730650137735748, -0.006502027929944091, 0.0004185200582483244, -3.264409076397375e-05, 0.0 },
@@ -4093,6 +4317,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 49, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 64,
       .exp = {
         .patch = { -0.014671843644787345, 0.023138186351431177, 0.0007572609109186847, -0.001507678425867537, -0.001638071628020029 },
@@ -4108,6 +4333,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 50, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 65,
       .exp = {
         .patch = { 0.00762809045708904, 0.006638801278977483, 0.001430995346554867, 0.0, 0.0 },
@@ -4123,6 +4349,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 51, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 66,
       .exp = {
         .patch = { -0.0032060426037053163, -0.002072273184310245, 0.004314565540083067, -0.00015425041770697405, -0.0019668224993384057 },
@@ -4138,6 +4365,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 52, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 67,
       .exp = {
         .patch = { -0.0031243920582421404, 0.006998129636711339, 0.0, 0.0, 0.0 },
@@ -4153,6 +4381,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 53, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 68,
       .exp = {
         .patch = { -0.03140698637169437, -0.001813140681584542, 0.0026126541286178016, 0.0, 0.0 },
@@ -4168,6 +4397,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 54, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 69,
       .exp = {
         .patch = { 0.008103493114713742, 0.002743943355749724, 0.002744722018505589, 0.003875647212574255, 0.0 },
@@ -4183,6 +4413,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 55, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 72,
       .exp = {
         .patch = { 0.012825578854568922, 0.007212108268932691, -0.003915991064574869, 0.002327252192642136, 0.003855039261095101 },
@@ -4198,6 +4429,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 56, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 73,
       .exp = {
         .patch = { -0.005313560719152357, -0.0003402940008961813, 0.00040695828412720046, 0.0, 0.0 },
@@ -4213,6 +4445,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 57, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 74,
       .exp = {
         .patch = { -0.00846289112542697, -0.017101717636906412, 0.0, 0.0, 0.0 },
@@ -4228,6 +4461,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 58, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 75,
       .exp = {
         .patch = { -0.01962260560400378, -0.026337133613375575, -0.0014515326189048032, 0.0026370512070246067, 0.0 },
@@ -4243,6 +4477,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 59, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 77,
       .exp = {
         .patch = { -0.005453018371481494, -0.018709591606722042, -0.0005003886915773816, 0.0035131553233513657, -0.023300924886962986 },
@@ -4258,6 +4493,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 60, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 78,
       .exp = {
         .patch = { 0.0028269292595062734, 0.006952170892282711, 0.0006520411201305369, 0.0, 0.0 },
@@ -4273,6 +4509,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 61, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 79,
       .exp = {
         .patch = { -0.021946120834138983, -0.0073418567695209035, 0.0009081647290729155, 0.0005979108905031543, 0.0004775529927387778 },
@@ -4288,6 +4525,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 62, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 80,
       .exp = {
         .patch = { -0.006703018916190632, 0.001845357275237822, 0.0, 0.0, 0.0 },
@@ -4303,6 +4541,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 63, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 81,
       .exp = {
         .patch = { -0.014125687441269585, 0.014843014898200257, 0.005968844949387715, 0.0, 0.0 },
@@ -4318,6 +4557,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 64, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 82,
       .exp = {
         .patch = { 0.00011477272113068912, -0.007477331215777962, 4.353683829954632e-05, 0.00030119343555731575, 0.0 },
@@ -4333,6 +4573,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 65, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 85,
       .exp = {
         .patch = { 0.0013290892576317537, 0.02805069488776797, -0.0007176094518703736, 0.003192604574816172, -0.0012376934019535466 },
@@ -4348,6 +4589,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 66, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 86,
       .exp = {
         .patch = { 0.022635051084842747, -0.0004346647518543198, 0.0, 0.0, 0.0 },
@@ -4363,6 +4605,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 67, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 87,
       .exp = {
         .patch = { -0.002667039965427337, -0.013077297551907157, 0.0, 0.0, 0.0 },
@@ -4378,6 +4621,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 68, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 88,
       .exp = {
         .patch = { -0.0005723361184258869, -0.007915114328177328, 0.00012019414203909027, 0.0008278270340272653, 0.0 },
@@ -4393,6 +4637,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 69, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 90,
       .exp = {
         .patch = { -0.02763672032546491, 0.014714882968141779, 0.0005162281066413438, -0.0002818872600339806, -0.001030729291948194 },
@@ -4408,6 +4653,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 70, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 91,
       .exp = {
         .patch = { 0.01946533320895084, 0.0137833013360726, 0.0, 0.0, 0.0 },
@@ -4423,6 +4669,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 71, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 92,
       .exp = {
         .patch = { -0.005372510917843996, 0.006676603616839751, -0.000508822417764191, -0.004314261984821852, -0.015027984980506883 },
@@ -4438,6 +4685,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 72, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 93,
       .exp = {
         .patch = { -0.012607984113239342, 0.026405530882521067, 0.0, 0.0, 0.0 },
@@ -4453,6 +4701,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 73, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 94,
       .exp = {
         .patch = { -0.001525017319931518, 0.010453785366452611, 0.0036642387335078922, 0.0, 0.0 },
@@ -4468,6 +4717,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 74, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 95,
       .exp = {
         .patch = { 0.006008124604426666, -0.01472698374676312, 0.0005028632613693383, 0.0015728070948664102, 0.0 },
@@ -4483,6 +4733,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 75, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 98,
       .exp = {
         .patch = { 0.0005698220163354034, -0.009707633310462547, 7.175807077559063e-05, 0.006995863829879022, -0.02128694563327355 },
@@ -4498,6 +4749,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 76, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 99,
       .exp = {
         .patch = { -0.011958102602610897, -0.022882686174808327, -0.00020192311837001744, 0.0, 0.0 },
@@ -4513,6 +4765,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 77, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 100,
       .exp = {
         .patch = { -0.024778611508476604, -0.0049797135160866285, 0.0, 0.0, 0.0 },
@@ -4528,6 +4781,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 78, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 101,
       .exp = {
         .patch = { 0.009046211857282336, 0.02581011574406139, -0.001402892203058555, 0.0008448377275919145, 0.0 },
@@ -4543,6 +4797,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 79, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 103,
       .exp = {
         .patch = { -0.008869481784467077, -0.008056388176199716, -0.0008722694298215118, 0.006845810428454634, -0.009566097681204398 },
@@ -4558,6 +4813,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 80, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 104,
       .exp = {
         .patch = { 0.024535459604869702, -0.004787901413308709, 0.0003003035525587286, 0.0, 0.0 },
@@ -4573,6 +4829,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 81, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 105,
       .exp = {
         .patch = { -0.009959704062193727, -0.015267700484640432, -0.001365359379244814, 0.000785175773425718, -0.004028828065320478 },
@@ -4588,6 +4845,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 82, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 106,
       .exp = {
         .patch = { 0.034201116683181584, 0.005508610178598487, 0.0, 0.0, 0.0 },
@@ -4603,6 +4861,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 83, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 107,
       .exp = {
         .patch = { 0.012754574549339386, -0.015467146205183697, 0.0003404287806596759, 0.0, 0.0 },
@@ -4618,6 +4877,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 84, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 108,
       .exp = {
         .patch = { -0.026380132789169324, -0.006219318226602138, 0.0005348812828625913, -0.0006766602386525317, 0.0 },
@@ -4633,6 +4893,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 85, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 111,
       .exp = {
         .patch = { -0.013887865866694644, -0.0005157215833944684, 0.0006756305887419575, 0.00026190567356490393, 0.0027768080257827934 },
@@ -4648,6 +4909,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 86, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 112,
       .exp = {
         .patch = { -0.0018513491095353161, 0.016900698820112404, -0.0024783787349498118, 0.0, 0.0 },
@@ -4663,6 +4925,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 87, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 113,
       .exp = {
         .patch = { -0.04282367267769975, 0.024617315147409398, 0.0, 0.0, 0.0 },
@@ -4678,6 +4941,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 88, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 114,
       .exp = {
         .patch = { 0.0026359599595822555, 0.02724241843638498, -0.0001556998024059628, -0.0004785451305651146, 0.0 },
@@ -4693,6 +4957,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 89, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 116,
       .exp = {
         .patch = { -0.018416386826628616, -0.0017448383802932325, 0.00150836295825367, 0.001457168577849736, 0.0010592951531845465 },
@@ -4708,6 +4973,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 90, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 117,
       .exp = {
         .patch = { 0.004972047589973526, 0.02954175904406692, -0.00012248979233480198, 0.0, 0.0 },
@@ -4723,6 +4989,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 91, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 118,
       .exp = {
         .patch = { -0.01667015392733928, 4.443453626483038e-05, 0.0, -0.0014383941298365403, -0.0025102306220627494 },
@@ -4738,6 +5005,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 92, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 119,
       .exp = {
         .patch = { 0.02064846442180932, -0.014781634448116391, 0.0, 0.0, 0.0 },
@@ -4753,6 +5021,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 93, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 120,
       .exp = {
         .patch = { 0.008671028891816819, 0.010989583235401452, 0.0002929209439872998, 0.0, 0.0 },
@@ -4768,6 +5037,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 94, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 121,
       .exp = {
         .patch = { -0.0011185210380253935, 0.019319778570882126, 0.00042153581160670297, -0.00016891720828876542, 0.0 },
@@ -4783,6 +5053,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 95, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 124,
       .exp = {
         .patch = { -0.010935097292156767, -0.0009717748793769831, -0.0012020723951068962, 0.002468733124593299, -0.0044857038043831085 },
@@ -4798,6 +5069,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 96, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 125,
       .exp = {
         .patch = { -0.010807947871274084, -0.00167951709909071, 0.0014132245796159317, 0.0, 0.0 },
@@ -4813,6 +5085,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 97, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 126,
       .exp = {
         .patch = { -0.0027696429502500463, 0.009286604846282088, 0.0, 0.0, 0.0 },
@@ -4828,6 +5101,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 98, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 127,
       .exp = {
         .patch = { -0.016372406570597523, 0.010260613412748712, -0.0028039563405823325, -0.0023290292714254245, 0.0 },
@@ -4843,6 +5117,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 99, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 129,
       .exp = {
         .patch = { 0.021494402258247038, -0.017351713978807873, -0.003942722312084222, 0.002666539456202216, -0.0017806644057250986 },
@@ -4858,6 +5133,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 100, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 130,
       .exp = {
         .patch = { -0.004749111070079412, -0.008664971394858995, 0.0014661324500643987, 0.0, 0.0 },
@@ -4873,6 +5149,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 101, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 131,
       .exp = {
         .patch = { 0.009131320962998225, 0.011991560002848477, 0.0, 0.0, 0.0 },
@@ -4888,6 +5165,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 102, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 132,
       .exp = {
         .patch = { -0.011620149947482773, 0.015111201973644267, 0.0, 0.0, 0.0 },
@@ -4903,6 +5181,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 103, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 133,
       .exp = {
         .patch = { 0.004103741508946714, 0.018465393073578463, -0.0011681583798797892, 0.0, 0.0 },
@@ -4918,6 +5197,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 104, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 134,
       .exp = {
         .patch = { -0.00862567516043975, 0.002930460878304115, -0.00012119008196389137, -0.0006045848406088482, 0.0 },
@@ -4933,6 +5213,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 105, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 137,
       .exp = {
         .patch = { 0.0061668329760554315, -0.009528939921296551, -0.0005489306539567359, 0.0022098916365644165, 0.0002977459361849451 },
@@ -4948,6 +5229,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 106, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 138,
       .exp = {
         .patch = { -0.011107452954090788, -0.025762006895598058, -0.000883031555004531, 0.0, 0.0 },
@@ -4963,6 +5245,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 107, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 139,
       .exp = {
         .patch = { 0.01827703150764088, -0.010998565306941321, 0.0, 0.0, 0.0 },
@@ -4978,6 +5261,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 108, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 140,
       .exp = {
         .patch = { 0.009999270607691116, -0.005113058628189994, -0.0006512469764873934, -0.0001764055570132221, 0.0 },
@@ -4993,6 +5277,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 109, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 142,
       .exp = {
         .patch = { -0.009150591567502836, 0.01420056662768372, 0.0005797020088001552, -4.5384470673890336e-05, 3.1812208405477506e-05 },
@@ -5008,6 +5293,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 110, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 143,
       .exp = {
         .patch = { -0.011993597213831439, -0.012676028847339246, -0.00012294141695696055, 0.0, 0.0 },
@@ -5023,6 +5309,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 111, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 144,
       .exp = {
         .patch = { -0.03879515111207897, 0.01790801254924004, 0.003896893074304838, -0.0012996863437356727, 0.0014236243296183188 },
@@ -5038,6 +5325,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 112, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 145,
       .exp = {
         .patch = { 0.006963578220120704, -0.012200760171188683, 0.0, 0.0, 0.0 },
@@ -5053,6 +5341,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 113, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 146,
       .exp = {
         .patch = { 0.004395969626319446, 0.011023325143879846, 7.345817210579161e-05, 0.0, 0.0 },
@@ -5068,6 +5357,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 114, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 147,
       .exp = {
         .patch = { -0.0005082058017094932, 0.015697590045463193, 0.0005426391448932847, 6.791348459152333e-05, 0.0 },
@@ -5083,6 +5373,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 115, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 150,
       .exp = {
         .patch = { -0.001138271409645487, -0.009694466731672634, -0.0005242698316933555, -0.0008585838714744945, -0.0017041288158191911 },
@@ -5098,6 +5389,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 116, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 151,
       .exp = {
         .patch = { 0.007266563094814685, 0.008208357746855655, 0.00029205927759069083, 0.0, 0.0 },
@@ -5113,6 +5405,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 117, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 152,
       .exp = {
         .patch = { -0.01417809915980089, 0.009820666236565011, 0.0, 0.0, 0.0 },
@@ -5128,6 +5421,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 118, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 153,
       .exp = {
         .patch = { 0.002126107312316402, 0.004267560032912227, 9.505310442235809e-05, -0.00011571975780211401, 0.0 },
@@ -5143,6 +5437,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 119, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 155,
       .exp = {
         .patch = { 0.0029827246686119704, 0.02050888354611959, 0.0, 0.0001421604156512544, -0.0006672584636724143 },
@@ -5158,6 +5453,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 120, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 156,
       .exp = {
         .patch = { -0.01084531313770492, -0.006953226533961881, -0.000272351681842813, 0.0, 0.0 },
@@ -5173,6 +5469,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 121, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 157,
       .exp = {
         .patch = { -0.008967904048838921, 0.010501016248770123, 0.00014085137478435567, -0.0003410815534731191, -0.0018693625872936862 },
@@ -5188,6 +5485,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 122, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 158,
       .exp = {
         .patch = { -0.01792251230830377, 0.018715402173855984, 0.0, 0.0, 0.0 },
@@ -5203,6 +5501,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 123, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 159,
       .exp = {
         .patch = { 0.02600253505556038, -0.001851069481359922, -0.0009762889239011555, 0.0, 0.0 },
@@ -5218,6 +5517,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 124, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 160,
       .exp = {
         .patch = { -0.00590172745478167, 0.010931631159948607, 0.00024029838580940762, 0.001765461747167207, 0.0 },
@@ -5233,6 +5533,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 125, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 163,
       .exp = {
         .patch = { 0.007461287291617892, 0.0025677533365042206, -0.0032181614014058038, 0.0038397972654445594, -0.002866674610065969 },
@@ -5248,6 +5549,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 126, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 164,
       .exp = {
         .patch = { 0.010760122684910738, -0.019458414835221805, -0.0007028760574997958, 0.0, 0.0 },
@@ -5263,6 +5565,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 127, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 165,
       .exp = {
         .patch = { -0.02510773033315032, 0.005433736843070828, 0.0, 0.0, 0.0 },
@@ -5278,6 +5581,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 128, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 166,
       .exp = {
         .patch = { 0.008915764273365136, -0.006315127399481721, 0.00026909697228146446, -0.0007774382557678215, 0.0 },
@@ -5293,6 +5597,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 129, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 168,
       .exp = {
         .patch = { -0.0036301164471792564, 0.01386968050164758, -0.0008620281097370457, 0.00032110192665246447, -0.0006256756826403215 },
@@ -5308,6 +5613,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 130, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 169,
       .exp = {
         .patch = { 0.020821156368221787, 0.02117777861650146, -0.0028314563966037273, 0.0, 0.0 },
@@ -5323,6 +5629,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 131, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 170,
       .exp = {
         .patch = { 0.009408754002010671, -0.013352916063946396, -0.0008861100734282305, -0.005010581100657381, -0.0021572507831288923 },
@@ -5338,6 +5645,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 132, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 171,
       .exp = {
         .patch = { -0.010457445691479399, -0.001924734914032564, 0.0, 0.0, 0.0 },
@@ -5353,6 +5661,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 133, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 172,
       .exp = {
         .patch = { -0.008850041978512196, -0.008873792611640929, -0.00019211066818305587, 0.0, 0.0 },
@@ -5368,6 +5677,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 134, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 173,
       .exp = {
         .patch = { -0.03831035474796219, 0.017280185474103014, 0.00403017292964869, 0.0006287732243908384, 0.0 },
@@ -5383,6 +5693,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 135, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 176,
       .exp = {
         .patch = { -0.012697929576904004, 0.015103984307622411, -0.0015080478351987626, 0.00039289320410832915, 0.0021366112362355117 },
@@ -5398,6 +5709,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 136, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 177,
       .exp = {
         .patch = { -0.01314470286107947, 0.0033206892843526546, 0.00016301733762012985, 0.0, 0.0 },
@@ -5413,6 +5725,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 137, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 178,
       .exp = {
         .patch = { -0.00012083039239428324, -0.01794638453950354, 0.0, 0.0, 0.0 },
@@ -5428,6 +5741,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 138, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 179,
       .exp = {
         .patch = { 0.0232515558606843, 0.0007451751127611312, 0.0017587995844199269, 0.0020914635707739966, 0.0 },
@@ -5443,6 +5757,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 139, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 181,
       .exp = {
         .patch = { -0.03993072312579887, 0.0012080804362736887, 0.00010874543098516035, 0.00031500771149081084, -0.0026687784244106617 },
@@ -5458,6 +5773,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 140, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 182,
       .exp = {
         .patch = { -0.013283682448568913, 0.006280708294371329, 0.0005618433578250914, 0.0, 0.0 },
@@ -5473,6 +5789,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 141, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 183,
       .exp = {
         .patch = { 0.0062538070601903, 0.011524664639390393, 0.0, 0.0001426200469853274, -0.0009077068656114316 },
@@ -5488,6 +5805,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 142, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 184,
       .exp = {
         .patch = { 0.01828871058387408, -0.013910765272040375, 0.0, 0.0, 0.0 },
@@ -5503,6 +5821,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 143, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 185,
       .exp = {
         .patch = { 0.012981001459240265, 0.00707103698033836, 0.0, 0.0, 0.0 },
@@ -5518,6 +5837,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 144, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 186,
       .exp = {
         .patch = { 0.007358540326759844, 0.0012511802784463638, -0.0003041558586905355, 0.00047876649827990376, 0.0 },
@@ -5533,6 +5853,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 145, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 189,
       .exp = {
         .patch = { 0.008743536141595452, -0.00762802367735568, -0.0007877058216944678, 0.0011564602370712168, -0.0021916995657180562 },
@@ -5548,6 +5869,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 146, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 190,
       .exp = {
         .patch = { 0.0005733336318619012, -0.021733679637733126, 9.529867124583499e-05, 0.0, 0.0 },
@@ -5563,6 +5885,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 147, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 191,
       .exp = {
         .patch = { 0.005766561366664998, 0.001385831617493932, 0.0, 0.0, 0.0 },
@@ -5578,6 +5901,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 148, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 192,
       .exp = {
         .patch = { -0.007165883577683628, 0.006550839865531218, -0.00012991660131677097, -0.0001743179622956802, 0.0 },
@@ -5593,6 +5917,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 149, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 194,
       .exp = {
         .patch = { 0.012120257977069204, 0.004930601555969901, -0.0028517851020694956, -0.0022583662607092983, 0.0011566232695897083 },
@@ -5608,6 +5933,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 150, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 195,
       .exp = {
         .patch = { 0.0049965017852851784, -0.021048259288307336, -0.000435992760040605, 0.0, 0.0 },
@@ -5623,6 +5949,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 151, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 196,
       .exp = {
         .patch = { 0.003773357481624663, -0.009827990495528202, 0.0003852623866974231, -0.0005742401905676511, 0.0017375619591582247 },
@@ -5638,6 +5965,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 152, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 197,
       .exp = {
         .patch = { -0.0022967652260159274, -0.004376767353236444, 0.0, 0.0, 0.0 },
@@ -5653,6 +5981,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 153, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 198,
       .exp = {
         .patch = { 0.004736785528031149, 0.005805323625639746, 0.0007084889940244823, 0.0, 0.0 },
@@ -5668,6 +5997,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 154, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 199,
       .exp = {
         .patch = { -0.009281554433850167, 0.011235592956333706, -0.0015645005779141435, 0.00215617062354342, 0.0 },
@@ -5683,6 +6013,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 155, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 202,
       .exp = {
         .patch = { -0.022692051158108274, -0.0032241988864132242, 0.003617856308062615, -0.000522543160350224, 0.004348026007816226 },
@@ -5698,6 +6029,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 156, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 203,
       .exp = {
         .patch = { 0.0006530148938887913, -0.006761683129529933, 0.0007627010558836093, 0.0, 0.0 },
@@ -5713,6 +6045,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 157, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 204,
       .exp = {
         .patch = { -0.0086626491394712, -0.007932330553604247, 0.0, 0.0, 0.0 },
@@ -5728,6 +6061,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 158, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 205,
       .exp = {
         .patch = { -0.019531566794681876, -0.006739524445657607, 0.0011174212858482027, -0.0005463843750358068, 0.0 },
@@ -5743,6 +6077,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 159, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 207,
       .exp = {
         .patch = { 0.01755524950489346, -0.0019888848424690422, -0.001424201939078812, -0.001937054929951449, -0.0007001075843535861 },
@@ -5758,6 +6093,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 160, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 208,
       .exp = {
         .patch = { -0.0033983417408216575, 0.009015878667272983, -0.000822384327222642, 0.0, 0.0 },
@@ -5773,6 +6109,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 161, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 209,
       .exp = {
         .patch = { -0.0037520332788732167, -0.008785779510623043, -0.0004917554023452268, -0.0007258081516512196, -0.003551263484006689 },
@@ -5788,6 +6125,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 162, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 210,
       .exp = {
         .patch = { -0.021250157648961078, -0.016982900513936944, 0.0, 0.0, 0.0 },
@@ -5803,6 +6141,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 163, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 211,
       .exp = {
         .patch = { 0.005071044800570194, 0.016975272479043412, 0.0006513232751729558, 0.0, 0.0 },
@@ -5818,6 +6157,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 164, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 212,
       .exp = {
         .patch = { 0.012478489552992593, -0.0009348382905414633, -0.00036971219933490824, -3.018711159825729e-05, 0.0 },
@@ -5833,6 +6173,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 165, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 215,
       .exp = {
         .patch = { -0.0009873368472685198, 0.007183600597170505, 0.0, 0.00021164516450631102, -0.0017548270849232718 },
@@ -5848,6 +6189,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 166, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 216,
       .exp = {
         .patch = { -0.003263247769925412, -0.007601217774956879, 0.0004220933411083819, 0.0, 0.0 },
@@ -5863,6 +6205,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 167, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 217,
       .exp = {
         .patch = { 0.011422152520800819, -0.02336975563729247, 0.0, 0.0, 0.0 },
@@ -5878,6 +6221,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 168, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 218,
       .exp = {
         .patch = { 0.013736845500385326, 0.0044522660489784175, 0.001699019859639138, -0.0010240595591369502, 0.0 },
@@ -5893,6 +6237,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 169, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 220,
       .exp = {
         .patch = { -0.002325159313580521, -0.003076536800498884, -0.0007179468619053749, 0.0012578591451003142, 0.0020383701886289136 },
@@ -5908,6 +6253,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 170, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 221,
       .exp = {
         .patch = { 0.022021725111873672, -0.022323571791519795, -0.00652768084097656, 0.0, 0.0 },
@@ -5923,6 +6269,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 171, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 222,
       .exp = {
         .patch = { -0.012928702056528102, 0.015353929748717108, -0.0005751773223629059, -0.0065206518438651224, -0.02404141346706213 },
@@ -5938,6 +6285,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 172, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 223,
       .exp = {
         .patch = { 0.01397166103934912, 0.004047249449167241, 0.0, 0.0, 0.0 },
@@ -5953,6 +6301,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 173, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 224,
       .exp = {
         .patch = { 0.006107982386219318, 0.004017370323502417, -0.003372593817141692, 0.0, 0.0 },
@@ -5968,6 +6317,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 174, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 225,
       .exp = {
         .patch = { 0.004887499070467006, 0.029533448485247086, 0.005956627384436935, -0.007784495023320737, 0.0 },
@@ -5983,6 +6333,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 175, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 228,
       .exp = {
         .patch = { -0.008652185667948583, 0.01178594736393935, -0.0004946673421824305, -0.003821452188385745, 0.001957430847639933 },
@@ -5998,6 +6349,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 176, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 229,
       .exp = {
         .patch = { -0.00881375568648401, -0.004745756279006803, -0.0032040509484372605, 0.0, 0.0 },
@@ -6013,6 +6365,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 177, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 230,
       .exp = {
         .patch = { 0.0019673410220078734, -0.0026876813241707917, 0.0, 0.0, 0.0 },
@@ -6028,6 +6381,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 178, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 231,
       .exp = {
         .patch = { -0.011268723138993839, 0.0018474425251219586, 0.0052248465163454326, 0.004113477191491048, 0.0 },
@@ -6043,6 +6397,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 179, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 233,
       .exp = {
         .patch = { 0.004602194448645381, 0.0031619277806811553, -0.00036495061652300464, -0.001716722089667345, -0.0011973573821799268 },
@@ -6058,6 +6413,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 180, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 234,
       .exp = {
         .patch = { -0.015466143547966743, 0.0025859360764222883, -0.000185321378044997, 0.0, 0.0 },
@@ -6073,6 +6429,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 181, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 235,
       .exp = {
         .patch = { -0.010211463006060937, 0.003396334107315972, 0.0, 0.0001655748914291383, 0.0026642591830991014 },
@@ -6088,6 +6445,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 182, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 236,
       .exp = {
         .patch = { -0.02025314694687517, 0.043715246564985134, 0.0, 0.0, 0.0 },
@@ -6103,6 +6461,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 183, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 237,
       .exp = {
         .patch = { 0.018423604142672204, -0.00386411965291676, -0.00022721880621246854, 0.0, 0.0 },
@@ -6118,6 +6477,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 184, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 238,
       .exp = {
         .patch = { -0.014617932860075586, 0.012892488564695976, 0.0002106873165196313, -0.0006470749860801409, 0.0 },
@@ -6133,6 +6493,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 185, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 241,
       .exp = {
         .patch = { -0.0021766786523870125, 0.003210423031529783, 0.001900644517847103, 0.0007619213825685628, 0.0012724969886750575 },
@@ -6148,6 +6509,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 186, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 242,
       .exp = {
         .patch = { -0.025907218636839147, -0.023224387403876175, 0.005012438948842868, 0.0, 0.0 },
@@ -6163,6 +6525,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 187, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 243,
       .exp = {
         .patch = { 0.031753927496375525, 0.0458632496464498, 0.0, 0.0, 0.0 },
@@ -6178,6 +6541,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 188, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 244,
       .exp = {
         .patch = { -0.014853371353307651, -0.008303387743246281, 0.00031168938980451725, 0.0002954393027703105, 0.0 },
@@ -6193,6 +6557,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 189, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 246,
       .exp = {
         .patch = { -0.011308410330333519, 0.005064499726145075, 0.0011917110899828192, -0.000585675559150463, 0.00073173212510985 },
@@ -6208,6 +6573,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 190, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 247,
       .exp = {
         .patch = { 0.0310832816888163, -0.009449239833413683, -0.0005296865816601094, 0.0, 0.0 },
@@ -6223,6 +6589,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 191, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 248,
       .exp = {
         .patch = { -0.0010272475488597788, -0.00725354468113499, -0.0006821706330438283, 0.000923528526761821, 0.0037270848023926574 },
@@ -6238,6 +6605,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 192, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 249,
       .exp = {
         .patch = { 0.011191961150059913, -0.011489060829378454, 0.0, 0.0, 0.0 },
@@ -6253,6 +6621,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 193, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 250,
       .exp = {
         .patch = { -0.0020082419590487155, 0.000762263748496222, 0.0003303346762291032, 0.0, 0.0 },
@@ -6268,6 +6637,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 194, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 251,
       .exp = {
         .patch = { 0.011749430923276235, -0.001858918196279074, 0.0, 0.0, 0.0 },
@@ -6283,6 +6653,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 195, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 254,
       .exp = {
         .patch = { -0.011993815571043714, 0.008847949906825069, -0.0017477521219399492, -0.0007772028797808919, 0.0007974446915751425 },
@@ -6298,6 +6669,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 196, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 255,
       .exp = {
         .patch = { 0.008053256886207982, -0.014956166626974387, -0.0005830500093506163, 0.0, 0.0 },
@@ -6313,6 +6685,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 197, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 256,
       .exp = {
         .patch = { -0.003347024973287245, 0.004677621663935955, 0.0, 0.0, 0.0 },
@@ -6328,6 +6701,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 198, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 257,
       .exp = {
         .patch = { -0.015359069204057569, -0.01624223241376718, 0.005858385852472745, 0.0019287401177241813, 0.0 },
@@ -6343,6 +6717,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 199, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 259,
       .exp = {
         .patch = { 0.009486499649811232, 0.0006935940814706494, 0.002402042659899864, 0.001574141320952828, -0.01903488017874478 },
@@ -6358,6 +6733,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 200, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 260,
       .exp = {
         .patch = { 0.0171012191107185, 0.0032801077298738024, -5.592878045368005e-05, 0.0, 0.0 },
@@ -6373,6 +6749,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 201, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 261,
       .exp = {
         .patch = { 0.012971877039004136, 0.004113799411439686, -0.0020203291559638278, -0.0019700422414845173, -0.0006847030027127808 },
@@ -6388,6 +6765,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 202, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 262,
       .exp = {
         .patch = { 0.0063719617242531095, 0.013230195224710821, 0.0, 0.0, 0.0 },
@@ -6403,6 +6781,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 203, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 263,
       .exp = {
         .patch = { -0.004336226370491946, 0.020353601698400586, -0.0013208864320740125, 0.0, 0.0 },
@@ -6418,6 +6797,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 204, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 264,
       .exp = {
         .patch = { -0.019904627836084852, -0.0014922636942821099, 0.0, 0.0, 0.0 },
@@ -6433,6 +6813,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 205, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 267,
       .exp = {
         .patch = { 0.005631256494754093, -0.005567197963140043, -0.0006809965931895528, 0.0012554292785500424, -5.328487583132033e-05 },
@@ -6448,6 +6829,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 206, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 268,
       .exp = {
         .patch = { 0.02042965460165862, -0.01035956265023496, -0.001055851369473148, 0.0, 0.0 },
@@ -6463,6 +6845,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 207, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 269,
       .exp = {
         .patch = { 0.060576753187362074, -0.02529152622345469, 0.0, 0.0, 0.0 },
@@ -6478,6 +6861,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 208, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 270,
       .exp = {
         .patch = { -0.008021709909227967, -0.016562711727646912, -0.00026301336723415393, -0.0003481995215204606, 0.0 },
@@ -6493,6 +6877,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 209, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 272,
       .exp = {
         .patch = { -0.0018288165611841877, 0.007924183984248543, 0.0011989111530614491, -0.0001810619443260434, 0.0006037686840867837 },
@@ -6508,6 +6893,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 210, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 273,
       .exp = {
         .patch = { 0.0005219034533786621, -0.008422185887835068, -0.0029671069712558797, 0.0, 0.0 },
@@ -6523,6 +6909,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 211, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 274,
       .exp = {
         .patch = { 0.012032475963892881, 0.006618570115321442, 0.000272382543858833, 0.0009034893761816183, -0.004109317610586188 },
@@ -6538,6 +6925,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 212, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 275,
       .exp = {
         .patch = { 0.0012039533097685136, -0.020734021490691774, 0.0, 0.0, 0.0 },
@@ -6553,6 +6941,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 213, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 276,
       .exp = {
         .patch = { -0.005620693162474476, -0.006059750475837033, 0.0014479259841713745, 0.0, 0.0 },
@@ -6568,6 +6957,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 214, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 277,
       .exp = {
         .patch = { 0.02543526428296534, -0.0023097667958401425, -0.0015749798982580491, 0.0015704214875621155, 0.0 },
@@ -6583,6 +6973,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 215, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 280,
       .exp = {
         .patch = { 0.01166282593332366, 0.00048604523613109975, 0.00011269990787772531, 0.0013085218203497243, -0.004426531176080417 },
@@ -6598,6 +6989,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 216, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 281,
       .exp = {
         .patch = { -0.012571848522835896, 0.026366511966119485, 0.0016984802700399843, 0.0, 0.0 },
@@ -6613,6 +7005,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 217, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 282,
       .exp = {
         .patch = { 0.009612704481474502, 0.012963261080683212, 0.0, 0.0, 0.0 },
@@ -6628,6 +7021,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 218, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 283,
       .exp = {
         .patch = { 0.009738932696298557, -0.01091150663581849, 0.0030914362743474305, -0.0001620711144896481, 0.0 },
@@ -6643,6 +7037,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 219, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 285,
       .exp = {
         .patch = { -0.005883122882017617, 0.012215402204274963, 0.002658959014165359, 0.0014905167092764417, -0.0024576555382123224 },
@@ -6658,6 +7053,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 220, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 286,
       .exp = {
         .patch = { 0.00682951639265988, 0.02478260927437075, -0.00012009193350453155, 0.0, 0.0 },
@@ -6673,6 +7069,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 221, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 287,
       .exp = {
         .patch = { -0.0070851547559995865, -0.0030590417450864498, 0.001065146111761377, -0.0006627764158494415, 0.002353848670758605 },
@@ -6688,6 +7085,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 222, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 288,
       .exp = {
         .patch = { -0.0007447043164279252, -0.015262310169455477, 0.0, 0.0, 0.0 },
@@ -6703,6 +7101,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 223, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 289,
       .exp = {
         .patch = { 0.0022574526104774946, 0.032568521335092006, -0.002416332419060073, 0.0, 0.0 },
@@ -6718,6 +7117,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 224, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 290,
       .exp = {
         .patch = { -0.022532661244967164, 0.013347589564450155, -0.00031861194945742956, -0.00016052522704966782, 0.0 },
@@ -6733,6 +7133,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 225, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 293,
       .exp = {
         .patch = { 0.006708357100148199, -0.013369563027401093, 0.0004262187578207183, 0.0009295344028716456, 0.0010012751550947574 },
@@ -6748,6 +7149,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 226, .group = 0, .mode = "B1_GRAIN",
       .tag = "",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 294,
       .exp = {
         .patch = { 0.009166766490819978, 0.012770480076292987, 0.001449339624577313, 0.0, 0.0 },
@@ -6763,6 +7165,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 227, .group = 0, .mode = "FLAG_OUT",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 295,
       .exp = {
         .patch = { 0.04602320229918215, 0.009821149336215074, 0.0, 0.0, 0.0 },
@@ -6778,6 +7181,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 228, .group = 0, .mode = "SURVEY2",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 296,
       .exp = {
         .patch = { 0.026010163447591914, 0.009000114729603262, -8.260795240477068e-05, -0.00036462235022350606, 0.0 },
@@ -6793,6 +7197,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 229, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 298,
       .exp = {
         .patch = { -0.00979791206928006, 3.831931433710365e-05, 0.0009616779801100973, -0.0005697194125017824, 0.0008565806083986469 },
@@ -6808,6 +7213,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 230, .group = 0, .mode = "B1",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 299,
       .exp = {
         .patch = { -0.0056456287869735165, -0.021148424208603828, -0.0002179260506652619, 0.0, 0.0 },
@@ -6823,6 +7229,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 231, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 300,
       .exp = {
         .patch = { -0.011970398323535572, -3.247012620590559e-05, -0.00037321155429463154, 0.006464316276382744, -0.012967376706978935 },
@@ -6838,6 +7245,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 232, .group = 0, .mode = "B0",
       .tag = "",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 301,
       .exp = {
         .patch = { -0.022875674937409343, 0.015724183456992447, 0.0, 0.0, 0.0 },
@@ -6853,6 +7261,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 233, .group = 0, .mode = "PRECISION",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 302,
       .exp = {
         .patch = { 0.0038966292989122612, -0.0019411879408856494, 0.0002891347348584591, 0.0, 0.0 },
@@ -6868,6 +7277,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 234, .group = 0, .mode = "SURVEY3",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 303,
       .exp = {
         .patch = { -0.027326461655300706, 0.0011105236750966123, 0.0030443275866567517, 0.000611358082038457, 0.0 },
@@ -6883,6 +7293,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 235, .group = 0, .mode = "B2",
       .tag = "",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 306,
       .exp = {
         .patch = { 0.015260672128827816, -0.010599993673006246, 0.0, 0.0017870375573847829, -0.0063370240610403925 },
@@ -6898,6 +7309,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 236, .group = 0, .mode = "RANGE_MISSING",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 307,
       .exp = {
         .patch = { 0.014084140383304997, -0.019436787978419006, 0.0, 0.0, 0.0 },
@@ -6913,6 +7325,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 237, .group = 0, .mode = "RANGE_MISSING",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 308,
       .exp = {
         .patch = { -0.0012266553864536962, 0.011342961593461896, 0.0, 0.0, 0.0 },
@@ -6928,6 +7341,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 238, .group = 0, .mode = "RANGE_MISSING",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 309,
       .exp = {
         .patch = { 0.00812195440880162, -0.01734658058723572, 0.0, 0.0, 0.0 },
@@ -6943,6 +7357,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 239, .group = 0, .mode = "RANGE_MISSING",
       .tag = "",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 310,
       .exp = {
         .patch = { -0.032201081611717655, -0.0037652697426029252, 0.0, 0.0, 0.0 },
@@ -6958,6 +7373,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 0, .group = 1, .mode = "FLAG_MISSING",
       .tag = "flag not found, dialled distance 4.2 m: tilt-only plane along the visor axis",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 311,
       .exp = {
         .patch = { 0.012, -0.018, 0.0, 0.0, 0.0 },
@@ -6973,6 +7389,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 1, .group = 1, .mode = "FLAG_MISSING",
       .tag = "flag not found, nothing dialled: default distance 3 m",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 312,
       .exp = {
         .patch = { 0.012, -0.018, 0.0, 0.0, 0.0 },
@@ -6988,6 +7405,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 2, .group = 1, .mode = "FLAG_MISSING",
       .tag = "flag_found false although the flag fields are filled in: they are ignored",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 313,
       .exp = {
         .patch = { 0.012, -0.018, 0.0, 0.0, 0.0 },
@@ -7003,6 +7421,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 3, .group = 1, .mode = "FLAG_MISSING",
       .tag = "flag bearing not a number: counts as flag not found",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 314,
       .exp = {
         .patch = { 0.012, -0.018, 0.0, 0.0, 0.0 },
@@ -7018,6 +7437,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 4, .group = 1, .mode = "FLAG_MISSING",
       .tag = "method B2 with a horizon but no flag: the horizon is not used",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 315,
       .exp = {
         .patch = { 0.012, -0.018, 0.0, 0.0, 0.0 },
@@ -7033,6 +7453,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 5, .group = 1, .mode = "FLAG_MISSING",
       .tag = "method B0, flag not found, Precision Read, dialled distance 2.5 m",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 316,
       .exp = {
         .patch = { 0.012, -0.018, 0.0, 0.0, 0.0 },
@@ -7048,6 +7469,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 6, .group = 1, .mode = "RANGE_MISSING",
       .tag = "flag found, disparity not a number, top not visible: bearing kept, default distance",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 317,
       .exp = {
         .patch = { 0.009758883899045846, -0.019307101932836624, 0.0, 0.0, 0.0 },
@@ -7063,6 +7485,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 7, .group = 1, .mode = "RANGE_MISSING",
       .tag = "flag found but not ranged, dialled distance 6.5 m along the measured bearing",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 318,
       .exp = {
         .patch = { 0.01548864917391957, -0.015103037666881473, 0.0, 0.0, 0.0 },
@@ -7078,6 +7501,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 8, .group = 1, .mode = "RANGE_MISSING",
       .tag = "disparity 0.2 px (below the accepted 0.25), top visible but base hidden: no range channel",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 319,
       .exp = {
         .patch = { 0.012, -0.018, 0.0, 0.0, 0.0 },
@@ -7093,6 +7517,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 9, .group = 1, .mode = "RANGE_MISSING",
       .tag = "method B2 with a horizon, flag not ranged: tilt-only plane, horizon not used",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 320,
       .exp = {
         .patch = { 0.011085378077867386, -0.01857725471835753, 0.0, 0.0, 0.0 },
@@ -7108,6 +7533,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 10, .group = 1, .mode = "RANGE",
       .tag = "range from the angular height only (no disparity; top and base visible), 9 m",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 321,
       .exp = {
         .patch = { 0.004022879526603706, 0.010967798543476352, 0.00034029025443626636, 0.0, 0.0 },
@@ -7123,6 +7549,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 11, .group = 1, .mode = "RANGE",
       .tag = "stereo and angular height fused, 9 m (the disparity reads 9.4 m)",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 322,
       .exp = {
         .patch = { 0.004020864892436327, 0.010967798543476352, 0.0003289549128924085, 0.0, 0.0 },
@@ -7138,6 +7565,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 12, .group = 1, .mode = "RANGE",
       .tag = "top visible but base hidden: stereo only, hole height only bounded",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 323,
       .exp = {
         .patch = { 0.003988290379445946, 0.010967798543476352, 0.0, 0.0, 0.0 },
@@ -7153,6 +7581,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 13, .group = 1, .mode = "RANGE",
       .tag = "learned stick height with 2 % sigma dominates the fusion, 12 m",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 324,
       .exp = {
         .patch = { -0.005991072482222097, 0.008973653353753379, -0.00011275066477845165, 0.0, 0.0 },
@@ -7168,6 +7597,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 14, .group = 1, .mode = "RANGE",
       .tag = "dialled distance present but the cameras range the flag: the dialled value is not used",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 325,
       .exp = {
         .patch = { 0.01125273692494727, -0.017947306707506758, -0.0031137876378897348, 0.0, 0.0 },
@@ -7183,6 +7613,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 15, .group = 1, .mode = "BASE",
       .tag = "base hidden, bound active: the sight line lies below the tilt plane at the hole",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 326,
       .exp = {
         .patch = { 0.019265140180298495, 0.009970725948614867, -0.003696443423063486, 0.0, 0.0 },
@@ -7198,6 +7629,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 16, .group = 1, .mode = "BASE",
       .tag = "base hidden, bound inactive: the sight line lies above the tilt plane at the hole",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 327,
       .exp = {
         .patch = { 0.019941451897288277, 0.009970725948644139, 0.0, 0.0, 0.0 },
@@ -7213,6 +7645,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 17, .group = 1, .mode = "BASE",
       .tag = "no elevation of the stick (not a number): tilt rows and priors only",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 328,
       .exp = {
         .patch = { 0.019941451897288277, 0.009970725948644139, 0.0, 0.0, 0.0 },
@@ -7228,6 +7661,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 18, .group = 1, .mode = "BASE",
       .tag = "hole height far off the tilt plane (0.25 m in 6 m): Huber outlier row",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 329,
       .exp = {
         .patch = { -0.007477646330436445, 0.0049853629743074335, 0.01635138506771048, 0.0, 0.0 },
@@ -7243,6 +7677,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 19, .group = 1, .mode = "METHOD",
       .tag = "method B0 with flag and range: plane from the tilt only",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 330,
       .exp = {
         .patch = { 0.010523155984186324, -0.01890140704107722, 0.0, 0.0, 0.0 },
@@ -7258,6 +7693,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 20, .group = 1, .mode = "METHOD",
       .tag = "method STRAIGHT with flag and range: straight at flat pace",
       .method = 3, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 331,
       .exp = {
         .patch = { 0.010523155984186324, -0.01890140704107722, 0.0, 0.0, 0.0 },
@@ -7273,6 +7709,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 21, .group = 1, .mode = "METHOD",
       .tag = "method STRAIGHT, flag not found, dialled distance 5.5 m",
       .method = 3, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 332,
       .exp = {
         .patch = { 0.012, -0.018, 0.0, 0.0, 0.0 },
@@ -7288,6 +7725,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 22, .group = 1, .mode = "PRECISION",
       .tag = "Precision Read (two tilt reads), B1",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 333,
       .exp = {
         .patch = { 0.011656825107125625, -0.017977204904181497, -0.0033150186865720153, 0.0, 0.0 },
@@ -7303,6 +7741,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 23, .group = 1, .mode = "PRECISION",
       .tag = "Precision Read, base hidden",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 334,
       .exp = {
         .patch = { 0.014833905150640333, 0.01997467211575722, -0.0026019476156713597, 0.0, 0.0 },
@@ -7318,6 +7757,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 24, .group = 1, .mode = "OPTION",
       .tag = "flag bearing 3.1 rad: the aim azimuth wraps",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 335,
       .exp = {
         .patch = { -0.01089093963755961, 0.017434277716344357, 0.00791349663539225, 0.0, 0.0 },
@@ -7333,6 +7773,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 25, .group = 1, .mode = "OPTION",
       .tag = "grain used, strength 0.4 clipped to 0.25",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 336,
       .exp = {
         .patch = { 0.01125273692494727, -0.017947306707506758, -0.0031137876378897348, 0.0, 0.0 },
@@ -7348,6 +7789,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 26, .group = 1, .mode = "OPTION",
       .tag = "grain used, negative strength clipped to 0",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 337,
       .exp = {
         .patch = { 0.01125273692494727, -0.017947306707506758, -0.0031137876378897348, 0.0, 0.0 },
@@ -7363,6 +7805,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 27, .group = 1, .mode = "OPTION",
       .tag = "grain used but its azimuth is not a number: solved without grain",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 338,
       .exp = {
         .patch = { 0.01125273692494727, -0.017947306707506758, -0.0031137876378897348, 0.0, 0.0 },
@@ -7378,6 +7821,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 28, .group = 1, .mode = "OPTION",
       .tag = "grain used, flag bearing 0.3 rad: the grain is rotated into the putt frame",
       .method = 0, .use_grain = 1, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 339,
       .exp = {
         .patch = { 0.000880313459505613, 0.0038101593287133213, -0.0019565085568782393, 0.0, 0.0 },
@@ -7393,6 +7837,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 29, .group = 1, .mode = "OPTION",
       .tag = "green speed 3 ft entered: clipped to 5",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 340,
       .exp = {
         .patch = { 0.01125273692494727, -0.017947306707506758, -0.0031137876378897348, 0.0, 0.0 },
@@ -7408,6 +7853,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 30, .group = 1, .mode = "OPTION",
       .tag = "green speed 20 ft entered: clipped to 16",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 341,
       .exp = {
         .patch = { 0.01125273692494727, -0.017947306707506758, -0.0031137876378897348, 0.0, 0.0 },
@@ -7423,6 +7869,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 31, .group = 1, .mode = "OPTION",
       .tag = "pace: 0.6 m past the hole",
       .method = 0, .use_grain = 0, .past = 0.6, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 342,
       .exp = {
         .patch = { 0.01125273692494727, -0.017947306707506758, -0.0031137876378897348, 0.0, 0.0 },
@@ -7438,6 +7885,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 32, .group = 1, .mode = "OPTION",
       .tag = "pace: the putt that dies at the hole (past 0) on a gentle cross slope",
       .method = 0, .use_grain = 0, .past = 0.0, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 343,
       .exp = {
         .patch = { 4.336270169177116e-11, 0.009970725948644139, 1.4220094355996921e-10, 0.0, 0.0 },
@@ -7453,6 +7901,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 33, .group = 1, .mode = "OPTION",
       .tag = "short putt, 0.4 m",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 344,
       .exp = {
         .patch = { 0.00999363633579747, 0.019941451897288277, 1.0017504924067613e-05, 0.0, 0.0 },
@@ -7468,6 +7917,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 34, .group = 1, .mode = "OPTION",
       .tag = "long putt, 25 m (stereo only)",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 345,
       .exp = {
         .patch = { 0.011964973650273983, 0.00598243556916892, 2.8014417075496233e-06, 0.0, 0.0 },
@@ -7483,6 +7933,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 35, .group = 1, .mode = "HORIZON",
       .tag = "B2, 41 horizon samples of a twisted patch",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 346,
       .exp = {
         .patch = { 0.00937570001932905, -0.014531782311022144, 0.0017049663168129617, 0.002229847786981679, -0.0013748357141654902 },
@@ -7498,6 +7949,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 36, .group = 1, .mode = "HORIZON",
       .tag = "B2, only 4 valid horizon samples: horizon not used",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 347,
       .exp = {
         .patch = { 0.00937570001932905, -0.014531782311022144, 0.0017049663168129617, 0.0, 0.0 },
@@ -7513,6 +7965,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 37, .group = 1, .mode = "HORIZON",
       .tag = "B2, exactly 5 valid horizon samples",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 348,
       .exp = {
         .patch = { 0.00937570001932905, -0.014531782311022144, 0.0017049663168129617, 0.0021731760109782645, -0.0012045928454647462 },
@@ -7528,6 +7981,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 38, .group = 1, .mode = "HORIZON",
       .tag = "B2, mounds behind 18 of 41 samples: poor horizon",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 349,
       .exp = {
         .patch = { 0.00937570001932905, -0.014531782311022144, 0.0017049663168129617, -0.0002361895956342321, -0.005823426328084571 },
@@ -7543,6 +7997,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 39, .group = 1, .mode = "HORIZON",
       .tag = "B2, base hidden",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 350,
       .exp = {
         .patch = { 0.00911574547993756, -0.014531782311064804, 0.0, 0.004125903093118773, -0.012585835088474188 },
@@ -7558,6 +8013,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 40, .group = 1, .mode = "HORIZON",
       .tag = "B2, crowned patch (the horizon is the crest on every ray), silhouette 3 mrad high",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 351,
       .exp = {
         .patch = { 0.0029443568059211367, 0.006350712964990256, -0.0037320084902697664, -0.0022924943584735824, -0.004086343559371747 },
@@ -7573,6 +8029,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 41, .group = 1, .mode = "HORIZON",
       .tag = "B2, 9 horizon samples, Precision Read",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 352,
       .exp = {
         .patch = { 0.009246228843108835, -0.014555990627771291, 0.0017480442014510603, 0.0021952065283845157, -0.0005986321218879866 },
@@ -7588,6 +8045,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 42, .group = 1, .mode = "HORIZON",
       .tag = "B2, one horizon azimuth is not a number: the horizon stage cannot run (its cost is not a number), the Quick-Read patch is kept and the fit is reported as not converged",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 353,
       .exp = {
         .patch = { 0.00937570001932905, -0.014531782311022144, 0.0017049663168129617, 0.0, 0.0 },
@@ -7603,6 +8061,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 43, .group = 1, .mode = "NOT_CONVERGED",
       .tag = "B1 stopped after 1 iteration",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 1, .lm_max_iter_overridden = 1,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 354,
       .exp = {
         .patch = { 0.019029540549476604, 0.009970728875727294, -0.004974531499109265, 0.0, 0.0 },
@@ -7618,6 +8077,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 44, .group = 1, .mode = "NOT_CONVERGED",
       .tag = "B1, base hidden with the bound active, stopped after 2 iterations",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 2, .lm_max_iter_overridden = 1,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 355,
       .exp = {
         .patch = { 0.01926507562060701, 0.009970725948644139, -0.0036964166084895796, 0.0, 0.0 },
@@ -7633,6 +8093,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 45, .group = 1, .mode = "NOT_CONVERGED",
       .tag = "B2 stopped after 2 iterations per start",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 2, .lm_max_iter_overridden = 1,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 356,
       .exp = {
         .patch = { 0.009375714203493795, -0.014531782311064804, 0.0017049614147542536, 6.231880557704696e-05, -0.0006796099539187398 },
@@ -7648,6 +8109,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 46, .group = 1, .mode = "NOT_CONVERGED",
       .tag = "Survey of 3 drops stopped after 1 iteration",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 1, .lm_max_iter_overridden = 1,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 357,
       .exp = {
         .patch = { 0.01225762414143162, -0.019154464338389826, 0.001915027487917459, 0.0034644480978807297, 0.0 },
@@ -7663,6 +8125,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 47, .group = 1, .mode = "NOT_CONVERGED",
       .tag = "iteration limit 0: the tilt plane itself",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 0, .lm_max_iter_overridden = 1,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 360,
       .exp = {
         .patch = { 0.02, 0.01, 0.0, 0.0, 0.0 },
@@ -7678,6 +8141,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 48, .group = 1, .mode = "SURVEY2",
       .tag = "Survey, 2 drops",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 361,
       .exp = {
         .patch = { 0.010325886122735401, 0.013985227387398517, 0.0018702761491461266, -0.0033156694623349605, 0.0 },
@@ -7693,6 +8157,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 49, .group = 1, .mode = "SURVEY3",
       .tag = "Survey, 3 drops",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 363,
       .exp = {
         .patch = { -0.011780380142587287, 0.01927094607215854, 0.002947611869514888, -0.004802939818618693, 0.0 },
@@ -7708,6 +8173,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 50, .group = 1, .mode = "SURVEY4",
       .tag = "Survey, 4 drops",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 4, .first_meas = 366,
       .exp = {
         .patch = { 0.005943557764192667, -0.011723309412227679, -0.0014902951444158488, 0.002945841347052627, 0.0 },
@@ -7723,6 +8189,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 51, .group = 1, .mode = "SURVEY4",
       .tag = "Survey, 4 drops, Precision Read at every drop",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 4, .first_meas = 370,
       .exp = {
         .patch = { 0.005956147920475039, -0.01180577574831523, -0.0014923558111065458, 0.002961537815383472, 0.0 },
@@ -7738,6 +8205,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 52, .group = 1, .mode = "SURVEY4",
       .tag = "Survey, 4 drops, the third did not find the flag: 3 used",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 4, .first_meas = 374,
       .exp = {
         .patch = { 0.008044499038165127, 0.01015061060597514, 0.0009901840795463394, 0.0019431150068385194, 0.0 },
@@ -7753,6 +8221,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 53, .group = 1, .mode = "SURVEY3",
       .tag = "Survey, 3 drops, the second not ranged: 2 used",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 378,
       .exp = {
         .patch = { 0.008055270917177632, 0.010173596332129874, 0.000987795495042148, 0.0019403443860457378, 0.0 },
@@ -7768,6 +8237,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 54, .group = 1, .mode = "SURVEY3",
       .tag = "Survey, 3 drops: one ranged further than the ball (station clipped to 0), one 0.2 m from the hole",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 381,
       .exp = {
         .patch = { 0.006876298722584767, 0.013034568042192954, 0.0014863560151128238, 0.0010278042572993706, 0.0 },
@@ -7783,6 +8253,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 55, .group = 1, .mode = "SURVEY2",
       .tag = "Survey, the drop at the ball did not find the flag: tilt-only from that drop",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 384,
       .exp = {
         .patch = { 0.008, 0.01, 0.0, 0.0, 0.0 },
@@ -7798,6 +8269,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 56, .group = 1, .mode = "SURVEY3",
       .tag = "Survey, 3 drops: base hidden at the second, no stick elevation at the third",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 386,
       .exp = {
         .patch = { 0.014701932431280703, -0.009495657170449798, -0.0019161547245515529, 0.002838718510743142, 0.0 },
@@ -7813,6 +8285,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 57, .group = 1, .mode = "SURVEY3",
       .tag = "Survey, 3 drops, method B2 with the horizon of the drop at the ball",
       .method = 2, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 389,
       .exp = {
         .patch = { 0.00983890970972161, -0.01413201238825638, 0.0015428788334544792, 0.0021945235269227917, -0.0016663721380972653 },
@@ -7828,6 +8301,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 58, .group = 1, .mode = "SURVEY3",
       .tag = "Survey, 3 drops, method B0: only the drop at the ball is used",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 392,
       .exp = {
         .patch = { -0.012, 0.02, 0.0, 0.0, 0.0 },
@@ -7843,6 +8317,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 59, .group = 1, .mode = "SURVEY3",
       .tag = "Survey, 3 drops, the second read far off the line with a different tilt (cross-talk sigmas, Huber)",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 395,
       .exp = {
         .patch = { 0.010151728936222376, 0.007724226795180056, -1.3169284952996895e-05, -0.00017963062535477872, 0.0 },
@@ -7858,6 +8333,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 60, .group = 1, .mode = "STEEP",
       .tag = "downhill 7 % at Stimp 13 (steeper than the green can hold): PACE_LIMITED on the patch",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 398,
       .exp = {
         .patch = { -0.06980497520381802, 0.0, -6.488900937166955e-05, 0.0, 0.0 },
@@ -7873,6 +8349,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 61, .group = 1, .mode = "STEEP",
       .tag = "Survey of a patch that steepens downhill: PACE_LIMITED on the patch",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 399,
       .exp = {
         .patch = { -0.038408704369120514, -0.028468246567586352, -0.01906339549995853, 0.011927593974648133, 0.0 },
@@ -7888,6 +8365,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 62, .group = 1, .mode = "STEEP",
       .tag = "10 m downhill, crowned: NO_BRACKET at this tolerance, best iterate (a knife edge: with a pace tolerance of 1e-3 m the patch solve ends PACE_LIMITED instead)",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 401,
       .exp = {
         .patch = { -0.056772630087138856, -0.00299121778458446, -0.010237760534862, 0.0, 0.0 },
@@ -7903,6 +8381,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 63, .group = 1, .mode = "STEEP",
       .tag = "cross slope 6 % at Stimp 13, just holdable: solved, aim 0.65 rad",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 402,
       .exp = {
         .patch = { 7.593652329560971e-12, 0.059824355691864825, 4.980316551365154e-11, 0.0, 0.0 },
@@ -7918,6 +8397,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 64, .group = 1, .mode = "STEEP",
       .tag = "twisted patch (Survey, 4 drops): not solvable, solved on its secant plane",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 4, .first_meas = 403,
       .exp = {
         .patch = { 0.046845343988238225, -0.02008419157861265, -0.011329292808861064, -0.012709023295884135, 0.0 },
@@ -7933,6 +8413,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 65, .group = 1, .mode = "STEEP",
       .tag = "twisted patch (Survey, 3 drops): not solvable, solved on its secant plane",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 3, .first_meas = 407,
       .exp = {
         .patch = { 0.0038850968447839357, -0.06350137938290797, -0.0008553825568103, -0.00805384051983612, 0.0 },
@@ -7948,6 +8429,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 66, .group = 1, .mode = "STEEP",
       .tag = "twisted patch (Survey, 4 drops), 8 m: solved on its secant plane",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 4, .first_meas = 410,
       .exp = {
         .patch = { 0.010827310246775187, -0.02131942078577519, -0.002258476301621652, 0.012779744950796222, 0.0 },
@@ -7963,6 +8445,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 67, .group = 1, .mode = "STEEP",
       .tag = "steep uphill twisted patch: secant plane, PACE_LIMITED there",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 4, .first_meas = 414,
       .exp = {
         .patch = { 0.12583783270301765, -0.08315223097412626, 0.0009484224180560405, -0.005471674273171425, 0.0 },
@@ -7978,6 +8461,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 68, .group = 1, .mode = "STEEP",
       .tag = "uphill twisted patch, 8 m: secant plane, PACE_LIMITED there",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 418,
       .exp = {
         .patch = { 0.07249743928698224, -0.034713396038404974, 0.005473861699055491, -0.00895763618787814, 0.0 },
@@ -7993,6 +8477,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 69, .group = 1, .mode = "STEEP",
       .tag = "cross slope 7.5 % at Stimp 13: UNREACHABLE on patch and plane, best iterate",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 420,
       .exp = {
         .patch = { -2.0622141579899673e-12, 0.07478044461483103, -1.803311074516495e-11, 0.0, 0.0 },
@@ -8008,6 +8493,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 70, .group = 1, .mode = "STEEP",
       .tag = "cross slope 9 % at Stimp 10, method B0: UNREACHABLE, best iterate",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 421,
       .exp = {
         .patch = { 0.0, 0.09, 0.0, 0.0, 0.0 },
@@ -8023,6 +8509,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 71, .group = 1, .mode = "STEEP",
       .tag = "Survey, 4 drops, cross slope 6.4 % at Stimp 13: UNREACHABLE, best iterate",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 4, .first_meas = 422,
       .exp = {
         .patch = { -0.008971976442915355, -0.06380258969087518, 0.00019478507096994897, -0.0005276816463994317, 0.0 },
@@ -8038,6 +8525,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 72, .group = 1, .mode = "STEEP",
       .tag = "unreachable hole: 18 m above the marker at 12 m (launch speed limit 15 m/s)",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 426,
       .exp = {
         .patch = { 1.47829637142481, 0.0, 0.0036152107848722117, 0.0, 0.0 },
@@ -8053,6 +8541,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 73, .group = 1, .mode = "STEEP",
       .tag = "absurd tilt reading (50 % cross slope), 3 m: UNREACHABLE, best iterate",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 427,
       .exp = {
         .patch = { 4.3362514870528925e-11, 0.4985362974307433, 1.4220106991015394e-10, 0.0, 0.0 },
@@ -8068,6 +8557,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 74, .group = 1, .mode = "STEEP",
       .tag = "downhill 6.5 % with 3 % cross slope at Stimp 13: NO_BRACKET, best iterate",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 428,
       .exp = {
         .patch = { -0.0648226634226156, 0.029912177845844597, -7.07507487469736e-05, 0.0, 0.0 },
@@ -8083,6 +8573,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 75, .group = 1, .mode = "STEEP",
       .tag = "10 m downhill crowned patch with cross slope: NO_BRACKET, best iterate",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 429,
       .exp = {
         .patch = { -0.06001536518478752, 0.036891686009875004, -0.012987141878283781, 0.0, 0.0 },
@@ -8098,6 +8589,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 76, .group = 1, .mode = "STEEP",
       .tag = "3 m downhill crowned patch with cross slope: NO_BRACKET, best iterate",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 430,
       .exp = {
         .patch = { -0.055943952166632116, 0.03988290379445947, -0.010163063575534634, 0.0, 0.0 },
@@ -8113,6 +8605,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 77, .group = 1, .mode = "STEEP",
       .tag = "Survey, 2 drops, cross slope near the limit: NO_CONVERGENCE at this tolerance, best iterate (a knife edge: with tolerances of 2e-4 m / 1e-3 m the secant plane is solved, PACE_LIMITED)",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 2, .first_meas = 431,
       .exp = {
         .patch = { 0.03609791251106536, -0.06996957834715614, -0.002751029549392455, -0.0031786501252127216, 0.0 },
@@ -8128,6 +8621,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 78, .group = 1, .mode = "STEEP",
       .tag = "Survey, 4 drops, strong twist: NO_CONVERGENCE, best iterate",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 4, .first_meas = 433,
       .exp = {
         .patch = { 0.006621186157405555, -0.013249810430493081, 0.009049969081590647, -0.01375870550577146, 0.0 },
@@ -8143,6 +8637,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 79, .group = 1, .mode = "STEEP",
       .tag = "3 m, 8.4 % cross slope uphill at Stimp 12: NO_CONVERGENCE, best iterate",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 437,
       .exp = {
         .patch = { 0.04682993639610156, 0.08375409796836489, 0.006433010646409035, 0.0, 0.0 },
@@ -8158,6 +8653,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 80, .group = 1, .mode = "ZERO_DISTANCE",
       .tag = "flag not found, dialled distance 5e-7 m: the solve is INVALID, straight at flat pace",
       .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 438,
       .exp = {
         .patch = { 0.012, -0.018, 0.0, 0.0, 0.0 },
@@ -8173,6 +8669,7 @@ const gl_vec_est_case_t gl_vec_est[] = {
     { .id = 81, .group = 1, .mode = "ZERO_DISTANCE",
       .tag = "flag found but not ranged, dialled distance 1e-6 m (not above the solver's limit): INVALID, straight at flat pace",
       .method = 1, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.0, .kept = 0, .patch_miss = GL_VEC_NAN, .without_source = 0, .without_status = 0, .without_phi = GL_VEC_NAN, .without_v0 = GL_VEC_NAN,
       .n_drops = 1, .first_meas = 439,
       .exp = {
         .patch = { 0.010143048483693403, -0.0191080759747664, 0.0, 0.0, 0.0 },
@@ -8185,9 +8682,298 @@ const gl_vec_est_case_t gl_vec_est[] = {
         .grain = { 0.0, 0.0 }, .tilt_slopes = { 0.010143048483693403, -0.0191080759747664 }, .fit_cost = 0.0,
         .base_hidden = 0, .flag_missing = 0, .range_missing = 1, .poor_horizon = 0, .used_horizon = 0,
         .fit_converged = 1, .aim_source = 3, .solve_status = 5, .fit_starts = 0 } },
+    { .id = 0, .group = 2, .mode = "NEAR_MISS",
+      .tag = "2.6 m dying putt at the critical slope; the best effort shown without the rule is 159 mrad away",
+      .method = 0, .use_grain = 0, .past = 0.0, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 0.0009651617438665092, .without_source = 2, .without_status = 4, .without_phi = -0.8811731735733015, .without_v0 = 2.3516530132496674,
+      .n_drops = 1, .first_meas = 440,
+      .exp = {
+        .patch = { -0.002858353815600781, -0.083372173233246, 0.002227344491355278, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 2.6061807520701734, .distance_sigma = 0.04121261613284807,
+        .range_stereo = 2.6061807520701734, .range_mono = GL_VEC_NAN, .bearing = -0.3022965,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = -0.72212629804818, .aim_azimuth_device = -1.02442279804818, .v0 = 2.080039174287745, .plays_like = 3.904337854706391,
+        .break_m = -2.2956201305657697, .break_cups = -21.2655871289094, .slope_pct = 8.353922433772054, .fall_line_azimuth = 1.532474058477901,
+        .dz_hole = 0.00011487355472191742, .cross_slope_sigma = 0.003086449201805062, .confidence = 0.3592500902925261, .a_r = 0.5540712827088325,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.003200629030519219, -0.08347788914890576 }, .fit_cost = 1.5686222582937839,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 1, .group = 2, .mode = "NEAR_MISS",
+      .tag = "Survey of 2 drops, 3.7 m dying putt, slope at 0.91 of critical (best miss 3.3 mm); 106 mrad away without the rule",
+      .method = 0, .use_grain = 0, .past = 0.0, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 0.003309659703814382, .without_source = 2, .without_status = 4, .without_phi = -0.7074233253267147, .without_v0 = 2.0466956006117396,
+      .n_drops = 2, .first_meas = 441,
+      .exp = {
+        .patch = { -0.004781259706727828, -0.05083278057393974, 0.0017947767050164678, -0.0002839177929908242, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 3.6952596800444364, .distance_sigma = 0.08136948049775986,
+        .range_stereo = 3.6952596800444364, .range_mono = GL_VEC_NAN, .bearing = 0.0976625,
+        .n_stations = 2, .stations = { 0.0, 1.3376482402659602, 0.0, 0.0 },
+        .phi = -0.6015904322559474, .aim_azimuth_device = -0.5039279322559475, .v0 = 1.9323767384234547, .plays_like = 4.699415241436424,
+        .break_m = -2.5367003467552482, .break_cups = -23.498845268691507, .slope_pct = 5.123424628476977, .fall_line_azimuth = 1.4615518731333141,
+        .dz_hole = -0.0054142084219432375, .cross_slope_sigma = 0.0032818010939572487, .confidence = 0.2168355146332761, .a_r = 0.3972919679745846,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.005585931011470987, -0.050928826484649456 }, .fit_cost = 0.6523898515625319,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 2, .group = 2, .mode = "NEAR_MISS",
+      .tag = "5.8 m dying putt, slope at 0.90 of critical; 86 mrad away without the rule",
+      .method = 0, .use_grain = 0, .past = 0.0, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 8.714572567230386e-05, .without_source = 2, .without_status = 4, .without_phi = -0.619694746159335, .without_v0 = 2.5226382561333236,
+      .n_drops = 1, .first_meas = 443,
+      .exp = {
+        .patch = { -0.004677509272140085, -0.05114387265209603, 0.0015208608022998851, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 5.809862733297536, .distance_sigma = 0.20937272228079443,
+        .range_stereo = 5.809862733297536, .range_mono = GL_VEC_NAN, .bearing = -0.3027235,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = -0.5336467373037712, .aim_azimuth_device = -0.8363702373037711, .v0 = 2.417361401223263, .plays_like = 7.070391417970521,
+        .break_m = -3.432619012914119, .break_cups = -31.798230781974237, .slope_pct = 5.143199678638288, .fall_line_azimuth = 1.477583789511538,
+        .dz_hole = -0.0015077350424840992, .cross_slope_sigma = 0.005329366622082702, .confidence = 0.10224821870037612, .a_r = 0.4132470042091001,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.004787167605396143, -0.051208723082618895 }, .fit_cost = 0.6024989580319478,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 3, .group = 2, .mode = "NEAR_MISS",
+      .tag = "6.0 m, 30 cm past, above the critical slope; without the rule the secant plane is UNREACHABLE, best effort 80 mrad away",
+      .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 0.000260405308981965, .without_source = 2, .without_status = 2, .without_phi = 0.7692601341079264, .without_v0 = 2.565809202316897,
+      .n_drops = 1, .first_meas = 444,
+      .exp = {
+        .patch = { -0.004225759679056017, 0.0542143900654805, 0.0015984491777343006, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 5.977123984876268, .distance_sigma = 0.2147438512300502,
+        .range_stereo = 5.977123984876268, .range_mono = GL_VEC_NAN, .bearing = 0.3750457,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = 0.6891115832376231, .aim_azimuth_device = 1.0641572832376232, .v0 = 2.4452536629006407, .plays_like = 8.707241742963523,
+        .break_m = 4.924215407228282, .break_cups = 45.615705486135084, .slope_pct = 5.455810172857922, .fall_line_azimuth = -1.4885245231767021,
+        .dz_hole = 0.0032952170256948, .cross_slope_sigma = 0.005800057579368858, .confidence = 0.09358924196502412, .a_r = 0.3433501476377953,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.004483531525204042, 0.054373563514712744 }, .fit_cost = 0.6776556997951345,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 4, .group = 2, .mode = "NEAR_MISS",
+      .tag = "4.3 m dying putt, slope at 0.86 of critical; without the rule the secant plane is solved, 76 mrad away",
+      .method = 0, .use_grain = 0, .past = 0.0, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = -0.000321320923362514, .without_source = 1, .without_status = 0, .without_phi = 0.6548090667219479, .without_v0 = 2.1971584650699225,
+      .n_drops = 1, .first_meas = 445,
+      .exp = {
+        .patch = { -0.0050660046947162635, 0.05284719151053281, 0.001598036537697481, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 4.2852653747267855, .distance_sigma = 0.11387669325556321,
+        .range_stereo = 4.2852653747267855, .range_mono = GL_VEC_NAN, .bearing = 0.1154655,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = 0.5791574558580982, .aim_azimuth_device = 0.6946229558580983, .v0 = 2.113570078038092, .plays_like = 5.300515264447265,
+        .break_m = 2.8024131861861887, .break_cups = 25.960288894730787, .slope_pct = 5.327906176372196, .fall_line_azimuth = -1.4688344106073623,
+        .dz_hole = -0.007036403060345297, .cross_slope_sigma = 0.004778389683750782, .confidence = 0.1521830405356507, .a_r = 0.42139096407675214,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.005423027311964554, 0.05300235086480774 }, .fit_cost = 0.654107689701457,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 5, .group = 2, .mode = "NEAR_MISS",
+      .tag = "8.1 m, 2 cm past, slope at 0.94 of critical; 65 mrad away without the rule",
+      .method = 0, .use_grain = 0, .past = 0.02, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 0.00018284717696215314, .without_source = 2, .without_status = 4, .without_phi = -0.6135071785173851, .without_v0 = 3.057323523341808,
+      .n_drops = 1, .first_meas = 446,
+      .exp = {
+        .patch = { -0.004615479395034913, -0.05672852227792472, 0.0014975471770092442, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 8.09635120921452, .distance_sigma = 0.39933617232534524,
+        .range_stereo = 8.09635120921452, .range_mono = GL_VEC_NAN, .bearing = 0.01405457,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = -0.548071709594051, .aim_azimuth_device = -0.5340171395940511, .v0 = 2.9643284546729003, .plays_like = 10.291407942850954,
+        .break_m = -4.942459794140556, .break_cups = -45.784713238912055, .slope_pct = 5.709708997334636, .fall_line_azimuth = 1.4866518653782594,
+        .dz_hole = 0.01171424261526386, .cross_slope_sigma = 0.006849389076539459, .confidence = 0.06231181556909773, .a_r = 0.4269213326291076,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.004798736461880167, -0.0568950772193327 }, .fit_cost = 0.7222207521444162,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 6, .group = 2, .mode = "NEAR_MISS",
+      .tag = "Survey of 3 drops, 5.7 m, 10 cm past (best miss 2.2 mm); 52 mrad away without the rule",
+      .method = 0, .use_grain = 0, .past = 0.1, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 0.002237698124697712, .without_source = 2, .without_status = 4, .without_phi = -0.5859569892627208, .without_v0 = 2.9326077286626426,
+      .n_drops = 3, .first_meas = 447,
+      .exp = {
+        .patch = { 0.009467188913742406, -0.07791497230201153, -0.0013629529566116818, 0.0005965822685097346, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 5.68845914807154, .distance_sigma = 0.19332250563438944,
+        .range_stereo = 5.68845914807154, .range_mono = GL_VEC_NAN, .bearing = -0.3227122,
+        .n_stations = 2, .stations = { 0.0, 3.3583822897396, 0.0, 0.0 },
+        .phi = -0.6382849245832012, .aim_azimuth_device = -0.9609971245832012, .v0 = 2.9993694519612126, .plays_like = 8.210862297023084,
+        .break_m = -4.220162034487001, .break_cups = -39.09367331622975, .slope_pct = 7.914042523487284, .fall_line_azimuth = 1.6991512685341508,
+        .dz_hole = 0.03180211477409863, .cross_slope_sigma = 0.002955435476543027, .confidence = 0.19038240883337865, .a_r = 0.5478241373393729,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { 0.010130195300078526, -0.07848940087386809 }, .fit_cost = 1.4620807574246857,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 7, .group = 2, .mode = "NEAR_MISS",
+      .tag = "Survey of 3 drops, 14.3 m, 30 cm past (best miss 3.4 mm); without the rule the secant plane is solved, 52 mrad away",
+      .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 0.003390938003225657, .without_source = 1, .without_status = 0, .without_phi = -0.9430337236439097, .without_v0 = 4.087420311792593,
+      .n_drops = 3, .first_meas = 450,
+      .exp = {
+        .patch = { -0.018190326568032645, -0.06101363855880678, -0.0005228895710054468, -0.00010010130886006164, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 14.278359480211199, .distance_sigma = 1.2775493537724034,
+        .range_stereo = 14.278359480211199, .range_mono = GL_VEC_NAN, .bearing = 0.3904441,
+        .n_stations = 3, .stations = { 0.0, 4.479691233250417, 9.872603401269071, 0.0 },
+        .phi = -0.9950168577111692, .aim_azimuth_device = -0.6045727577111693, .v0 = 4.233806013183686, .plays_like = 18.55027862225089,
+        .break_m = -21.99537290646385, .break_cups = -203.7551913521431, .slope_pct = 6.384785243554942, .fall_line_azimuth = 1.2863716078565588,
+        .dz_hole = -0.3130291753158597, .cross_slope_sigma = 0.002447477990161228, .confidence = 0.06396447628908926, .a_r = 0.48314943732891763,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.017916047678658457, -0.06128265248998065 }, .fit_cost = 0.8410388574993474,
+        .base_hidden = 1, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 8, .group = 2, .mode = "NEAR_MISS",
+      .tag = "15 m, 10 cm past, slope at 0.89 of critical; without the rule the secant plane is solved, 48 mrad away",
+      .method = 0, .use_grain = 0, .past = 0.1, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 0.0008646334669257395, .without_source = 1, .without_status = 0, .without_phi = -0.6098034063036198, .without_v0 = 3.9462333654894315,
+      .n_drops = 1, .first_meas = 453,
+      .exp = {
+        .patch = { -0.003429545690832898, -0.04996935471963434, 0.0003652271801963685, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 14.975592193230566, .distance_sigma = 1.130984747678267,
+        .range_stereo = 15.426070247057863, .range_mono = 13.89563490323926, .bearing = -0.08808127,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = -0.5621370177584868, .aim_azimuth_device = -0.6502182877584868, .v0 = 3.856785478345319, .plays_like = 18.53092435840694,
+        .break_m = -9.433582873040685, .break_cups = -87.38844717962654, .slope_pct = 5.023549867428809, .fall_line_azimuth = 1.5018264293086516,
+        .dz_hole = -0.010405027028082395, .cross_slope_sigma = 0.008745276338901157, .confidence = 0.02616799862204105, .a_r = 0.40135057319002737,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.0034619909763355687, -0.050116064745091185 }, .fit_cost = 0.5074477675165804,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 9, .group = 2, .mode = "NEAR_MISS",
+      .tag = "11 m, 30 cm past, above the critical slope; 47 mrad away without the rule",
+      .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = -0.00013296485954404654, .without_source = 2, .without_status = 4, .without_phi = 0.6390998943664168, .without_v0 = 3.993723213383235,
+      .n_drops = 1, .first_meas = 454,
+      .exp = {
+        .patch = { 0.009682151077009036, 0.07401101310458037, -0.0006201708792629902, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 11.021183856578952, .distance_sigma = 0.7541363205815499,
+        .range_stereo = 11.021183856578952, .range_mono = GL_VEC_NAN, .bearing = 0.1169984,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = 0.6861112828238674, .aim_azimuth_device = 0.8031096828238673, .v0 = 4.103195198678589, .plays_like = 17.31775898556747,
+        .break_m = 9.024358663346959, .break_cups = 83.59757909538637, .slope_pct = 7.473917907769345, .fall_line_azimuth = -1.7011738359022983,
+        .dz_hole = 0.06904377607827816, .cross_slope_sigma = 0.007616589018069538, .confidence = 0.04088245088512278, .a_r = 0.48609669566628777,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { 0.009716725350753935, 0.07410485906919698 }, .fit_cost = 1.1278794478624417,
+        .base_hidden = 1, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 10, .group = 2, .mode = "NEAR_MISS",
+      .tag = "Survey of 4 drops, 5.3 m, 10 cm past; 35 mrad away without the rule",
+      .method = 0, .use_grain = 0, .past = 0.1, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = -0.0009207052863574438, .without_source = 2, .without_status = 4, .without_phi = 0.6938202151530005, .without_v0 = 3.107022739113177,
+      .n_drops = 4, .first_meas = 455,
+      .exp = {
+        .patch = { 0.0006174853494107782, 0.08947058869032194, 0.001031744489918488, 0.0006121876413832152, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 5.250522126901923, .distance_sigma = 0.16336320903361365,
+        .range_stereo = 5.250522126901923, .range_mono = GL_VEC_NAN, .bearing = -0.1204878,
+        .n_stations = 4, .stations = { 0.0, 0.4913429628894841, 4.208461689907362, 4.3399824957927216 },
+        .phi = 0.658586781539841, .aim_azimuth_device = 0.5380989815398409, .v0 = 3.0571422780859927, .plays_like = 7.647053265205904,
+        .break_m = 4.063079465898348, .break_cups = 37.6385314117494, .slope_pct = 8.798257960938404, .fall_line_azimuth = -1.5679987248147589,
+        .dz_hole = 0.017463677565602513, .cross_slope_sigma = 0.0019014619660250368, .confidence = 0.24053374233721572, .a_r = 0.6110928343461173,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.00024613991786038257, 0.08798223530839869 }, .fit_cost = 2.028223962419094,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 11, .group = 2, .mode = "NEAR_MISS",
+      .tag = "Survey of 3 drops, 6.9 m, 2 cm past: best miss 4.4 mm, just inside the 5 mm",
+      .method = 0, .use_grain = 0, .past = 0.02, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 0.004443149010674694, .without_source = 2, .without_status = 4, .without_phi = 0.4044399068045644, .without_v0 = 3.2331479900519233,
+      .n_drops = 3, .first_meas = 459,
+      .exp = {
+        .patch = { 0.022743301360435137, 0.06396185576170837, -0.00184677875327067, 0.0009209537647391899, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 6.852513708978239, .distance_sigma = 0.2864872545400505,
+        .range_stereo = 6.852513708978239, .range_mono = GL_VEC_NAN, .bearing = -0.2047439,
+        .n_stations = 3, .stations = { 0.0, 5.492549669154459, 5.638919759700798, 0.0 },
+        .phi = 0.42569335682978227, .aim_azimuth_device = 0.22094945682978226, .v0 = 3.267622196989936, .plays_like = 9.435639859591902,
+        .break_m = 3.107058494545771, .break_cups = 28.782385313068744, .slope_pct = 6.881852231755997, .fall_line_azimuth = -1.9429604396967022,
+        .dz_hole = 0.11248924098930244, .cross_slope_sigma = 0.0019492839533973507, .confidence = 0.1724607721447579, .a_r = 0.5657991922724327,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { 0.02502463378413256, 0.06410738427000864 }, .fit_cost = 1.6036765994656001,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 12, .group = 2, .mode = "NEAR_MISS",
+      .tag = "long Survey of 4 drops, 18.6 m dying putt on a gentle slope (0.13 of critical; best miss 2.4 mm)",
+      .method = 0, .use_grain = 0, .past = 0.0, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = 0.002359280284657404, .without_source = 2, .without_status = 4, .without_phi = -0.10670776286351097, .without_v0 = 3.954855642483117,
+      .n_drops = 4, .first_meas = 462,
+      .exp = {
+        .patch = { 0.0033653666077287122, -0.0027060279968922655, 0.0007697870136974499, -0.0010486693123373848, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 18.63460089956934, .distance_sigma = 2.1498753526763004,
+        .range_stereo = 18.63460089956934, .range_mono = GL_VEC_NAN, .bearing = 0.1279902,
+        .n_stations = 3, .stations = { 0.0, 6.125592540299843, 12.945468643366782, 0.0 },
+        .phi = -0.10650932627436781, .aim_azimuth_device = 0.02148087372563219, .v0 = 3.970230369194873, .plays_like = 22.95430669379757,
+        .break_m = -1.9922981916500169, .break_cups = -18.45574980685518, .slope_pct = 0.2670549734907965, .fall_line_azimuth = 2.013792400280607,
+        .dz_hole = 0.19636589905882115, .cross_slope_sigma = 0.0023996930783146578, .confidence = 0.038876273273352704, .a_r = 0.3433501476377953,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { 0.0011447264751273572, -0.0024127654638939726 }, .fit_cost = 0.9465058135850861,
+        .base_hidden = 1, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 13, .group = 2, .mode = "NEAR_MISS",
+      .tag = "NOMINAL green: 8.7 m dying putt, slope at 0.17 of critical - the roll budget ends the search at 1e-9 m; without the rule the secant plane is solved",
+      .method = 0, .use_grain = 0, .past = 0.0, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 1, .patch_miss = -2.147778483975817e-07, .without_source = 1, .without_status = 0, .without_phi = 0.057362747044143875, .without_v0 = 3.8658434311064793,
+      .n_drops = 1, .first_meas = 466,
+      .exp = {
+        .patch = { 0.005208486260107843, 0.014037013509557335, 0.0015010561068070443, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 8.664597337612221, .distance_sigma = 0.16004907104616578,
+        .range_stereo = 9.446987066348102, .range_mono = 8.549976547872742, .bearing = 0.3943257,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = 0.05659927103004968, .aim_azimuth_device = 0.45092497103004975, .v0 = 3.86576199580933, .plays_like = 9.592671852636832,
+        .break_m = 0.49093423732767716, .break_cups = 4.547792842312896, .slope_pct = 1.4961582831638123, .fall_line_azimuth = -1.9161424384824164,
+        .dz_hole = 0.1014755151892486, .cross_slope_sigma = 0.007085211048343185, .confidence = 0.0888282052155112, .a_r = 0.7789339632281854,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { 0.005064830541917574, 0.014078226181221395 }, .fit_cost = 0.11683308067097797,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 0, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 14, .group = 2, .mode = "NEAR_MISS_CONTROL",
+      .tag = "CONTROL, not kept: 15 m dying putt, best miss 5.05 mm (just outside 5 mm): the estimate without the rule",
+      .method = 0, .use_grain = 0, .past = 0.0, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 0, .patch_miss = 0.005051935084787568, .without_source = 2, .without_status = 4, .without_phi = -0.5907621594498097, .without_v0 = 4.962804223359273,
+      .n_drops = 1, .first_meas = 467,
+      .exp = {
+        .patch = { -0.006730241210777057, -0.0781574691726218, 0.0006168554487647591, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 15.05927111437936, .distance_sigma = 1.3637843055676164,
+        .range_stereo = 15.05927111437936, .range_mono = GL_VEC_NAN, .bearing = 0.339832,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = -0.5907621594498097, .aim_azimuth_device = -0.2509301594498097, .v0 = 4.962804223359273, .plays_like = 18.9158445589361,
+        .break_m = -10.09965149799319, .break_cups = -93.55860581744501, .slope_pct = 7.854757350252012, .fall_line_azimuth = 1.484691049705954,
+        .dz_hole = -0.03140677989769261, .cross_slope_sigma = 0.008518480598716, .confidence = 0.03917858690957066, .a_r = 0.6510263309326402,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.006755006285612462, -0.07825657284353268 }, .fit_cost = 1.244319018358261,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 2, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 15, .group = 2, .mode = "NEAR_MISS_CONTROL",
+      .tag = "CONTROL, not kept: Survey of 3 drops, best miss 5.9 mm: the estimate without the rule",
+      .method = 0, .use_grain = 0, .past = 0.1, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 0, .patch_miss = -0.005911681525693753, .without_source = 2, .without_status = 4, .without_phi = 0.5727408047385021, .without_v0 = 2.954224133946137,
+      .n_drops = 3, .first_meas = 468,
+      .exp = {
+        .patch = { 0.0031282159228124937, 0.08073225092977328, -0.00012878237686093883, 0.00039089703962233934, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 5.2478592881397965, .distance_sigma = 0.16738508534786395,
+        .range_stereo = 5.2478592881397965, .range_mono = GL_VEC_NAN, .bearing = 0.09574621,
+        .n_stations = 3, .stations = { 0.0, 0.9786929260859356, 4.740454303630855, 0.0 },
+        .phi = 0.5727408047385021, .aim_azimuth_device = 0.668487014738502, .v0 = 2.954224133946137, .plays_like = 6.8587442040930515,
+        .break_m = 3.384041156786693, .break_cups = 31.348227482970753, .slope_pct = 8.168821672994534, .fall_line_azimuth = -1.6084042375702783,
+        .dz_hole = 0.014643101910939474, .cross_slope_sigma = 0.002382465884549137, .confidence = 0.23160047368859046, .a_r = 0.6362272723614316,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { 0.0030713990386210593, 0.08163045547137464 }, .fit_cost = 1.4646882705531235,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 2, .solve_status = 4, .fit_starts = 1 } },
+    { .id = 16, .group = 2, .mode = "NEAR_MISS_CONTROL",
+      .tag = "CONTROL, not kept: 11.7 m dying putt, best miss 8.0 mm: the secant plane, PACE_LIMITED, as without the rule",
+      .method = 0, .use_grain = 0, .past = 0.0, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 0, .patch_miss = 0.00800242135607202, .without_source = 1, .without_status = 1, .without_phi = 0.43423513401286173, .without_v0 = 3.979347346284209,
+      .n_drops = 1, .first_meas = 471,
+      .exp = {
+        .patch = { 0.013851746023356166, 0.062005488938742186, -0.0002004547407469012, 0.0, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 11.659828758083622, .distance_sigma = 0.5774825378674198,
+        .range_stereo = 12.097245662242223, .range_mono = 11.278751019240822, .bearing = -0.1216966,
+        .n_stations = 1, .stations = { 0.0, 0.0, 0.0, 0.0 },
+        .phi = 0.43423513401286173, .aim_azimuth_device = 0.31253853401286175, .v0 = 3.979347346284209, .plays_like = 15.647145422575756,
+        .break_m = 5.407326660897656, .break_cups = 50.091029744304365, .slope_pct = 6.3723837513515305, .fall_line_azimuth = -1.7908246167207256,
+        .dz_hole = 0.147882914598436, .cross_slope_sigma = 0.008058346038354723, .confidence = 0.042945801661040325, .a_r = 0.5060093989901854,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { 0.013908188328217025, 0.06218753705426633 }, .fit_cost = 0.8110413578469274,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 1, .solve_status = 1, .fit_starts = 1 } },
+    { .id = 17, .group = 2, .mode = "NEAR_MISS_CONTROL",
+      .tag = "CONTROL, not kept: long Survey of 3 drops, 39.9 m, best miss 22 mm: the secant plane, as without the rule",
+      .method = 0, .use_grain = 0, .past = 0.3, .tol_miss = 1e-09, .tol_pace = 1e-09, .lm_tol = 1e-10, .lm_max_iter = 200, .lm_max_iter_overridden = 0,
+      .near_miss = 0.005, .kept = 0, .patch_miss = -0.0223675045091153, .without_source = 1, .without_status = 0, .without_phi = 0.299629459559983, .without_v0 = 4.910715665931324,
+      .n_drops = 3, .first_meas = 472,
+      .exp = {
+        .patch = { -0.00824340885590231, -0.006896577349564616, -0.0002365567639102867, 0.0015402786204810094, 0.0 },
+        .level_offsets = { 0.0, 0.0 }, .distance = 39.86226259452996, .distance_sigma = 2.693868238657643,
+        .range_stereo = 40.14367170623665, .range_mono = 39.83945178581271, .bearing = -0.1516989,
+        .n_stations = 2, .stations = { 0.0, 5.009712130311584, 0.0, 0.0 },
+        .phi = 0.299629459559983, .aim_azimuth_device = 0.147930559559983, .v0 = 4.910715665931324, .plays_like = 31.960257154372655,
+        .break_m = 12.314660704892571, .break_cups = 114.07744979057499, .slope_pct = 1.0538963987820529, .fall_line_azimuth = 0.739651054552873,
+        .dz_hole = -0.5165452749492926, .cross_slope_sigma = 0.007705850839771928, .confidence = 0.010469683123577045, .a_r = 0.37726743303634536,
+        .grain = { 0.0, 0.0 }, .tilt_slopes = { -0.0077851727823582155, -0.007103579850005688 }, .fit_cost = 0.1617872804139574,
+        .base_hidden = 0, .flag_missing = 0, .range_missing = 0, .poor_horizon = 0, .used_horizon = 0,
+        .fit_converged = 1, .aim_source = 1, .solve_status = 0, .fit_starts = 1 } },
 };
-const unsigned gl_vec_n_est = 322u;
+const unsigned gl_vec_n_est = 340u;
 const unsigned gl_vec_n_est_original = 240u;
+const unsigned gl_vec_n_est_near_first = 322u;
 
 /* solver_cases, then fallback_solver_cases */
 const gl_vec_sol_case_t gl_vec_sol[] = {

@@ -45,11 +45,15 @@
  * most max_rolls + 120 trial rolls (reference: the budget is checked
  * between pace solves, each of which uses at most 121), one roll at most
  * 6004 RK4 steps, an estimate at most two aim solves (the patch, then its
- * secant plane); the fit at most lm_max_iter x 25 residual evaluations per
- * start, 6 starts at most.  gl_aim_solution_t.n_steps and
- * gl_estimate_t.n_steps report the RK4 steps actually spent (the cost
- * driver: a typical read needs about 1000, the costliest one that could be
- * constructed 0.5 million; README "Solver").
+ * secant plane - which is not solved again when the patch IS a plane); the
+ * fit at most lm_max_iter x 25 residual evaluations per start, 6 starts at
+ * most.  gl_aim_solution_t.n_steps and gl_estimate_t.n_steps report the RK4
+ * steps actually spent (the cost driver: a typical read needs about 1000;
+ * the costliest estimate found with the reference's limits alone needs 0.58
+ * million, the bound from the counters is 3.84 million; README "Solver").
+ * gl_solver_options_t.max_steps puts a budget on the steps themselves: an
+ * estimate then integrates at most max_steps + 6004 steps.  The application
+ * sets it (GL_APP_SOLVE_MAX_STEPS); the default is none, as in the reference.
  *
  * MEMORY.  No heap, no recursion, no mutable statics.  The fit needs a caller-
  * supplied work area (gl_solver_work_t, 6160 bytes in single precision);
@@ -96,7 +100,7 @@ typedef gl_vec2_t gl_rvec2_t;
 #endif
 
 /** Version of the ported solver (0 was the phase-1 stub).  0x00MMmmpp. */
-#define GL_SOLVER_VERSION 0x00020000u
+#define GL_SOLVER_VERSION 0x00020100u
 
 /** Samples of the turf horizon across the field (reference: n_horizon = 41). */
 #define GL_SOLVER_MAX_HORIZON 41u
@@ -177,6 +181,23 @@ typedef struct {
     uint16_t lm_max_iter;   /**< fit: Levenberg-Marquardt iteration limit per start (reference
                                  60); at most GL_SOLVER_LM_MAX_ITER_LIMIT.  A fit that reaches
                                  it returns its last iterate with fit_converged false */
+    gl_real_t near_miss_m;  /**< reference: EstimatorConfig.near_miss_keep.  0 (default): off.
+                                 Positive: when the solve on the fitted patch ends without a
+                                 solution but its best iterate reaches the hole line within
+                                 this lateral distance of the hole centre, that iterate IS the
+                                 aim: aim_source stays GL_AIM_FROM_PATCH, solve_status says how
+                                 the solve ended (NO_BRACKET, NO_CONVERGENCE, UNREACHABLE), the
+                                 confidence takes the fallback factor, and the secant plane is
+                                 not tried.  The application runs with 5 mm */
+    uint32_t max_steps;     /**< FIRMWARE ONLY (the reference has no such limit).  0 (default):
+                                 none.  Otherwise the budget of RK4 steps for the aim solves of
+                                 one estimate (or of one gl_solver_solve_aim call), checked
+                                 before every trial roll: at most max_steps + 6004 steps are
+                                 integrated.  When it runs out the solve in progress ends
+                                 GL_SOLVE_NO_CONVERGENCE with its best iterate so far, and a
+                                 secant-plane solve that has no budget left returns its planar
+                                 first guess (aim_source GL_AIM_BEST_EFFORT either way unless a
+                                 near miss is kept) */
 } gl_solver_options_t;
 
 /* Default tolerances of the two builds.
@@ -190,10 +211,26 @@ typedef struct {
  * asserted by tests/test_solver.c):
  *   tol_miss 2e-4 m   10 x the largest difference between a single- and a
  *                     double-precision roll of the same launch (2.1e-5 m
- *                     lateral at the hole line);
+ *                     lateral at the hole line) FOR THE PUTTS OF THE
+ *                     REFERENCE VECTORS: up to 12 m, pace 0.15 m and more.
+ *                     The roll noise grows with the length of the roll and
+ *                     as the ball dies at the hole.  Measured by distance on
+ *                     planes up to 0.6 of the critical slope, paces 0.05 to
+ *                     0.9 m (tests/test_solver.c, test_single_precision_
+ *                     roll_noise_by_distance): at most 0.03 x tol_miss up to
+ *                     6 m and 0.12 x up to 15 m - the margin holds; 1.1 x at
+ *                     15 to 25 m and 13 x at 25 to 40 m - NOT MET there (the
+ *                     firmware accepts dialled distances to 30 m and ranges
+ *                     to 40 m).  A tolerance inside the noise does not buy
+ *                     accuracy, only NO_CONVERGENCE on some long putts; the
+ *                     review found the aim source different from the tight
+ *                     reference in 2 of 1054 long Survey reads and in none
+ *                     of 16361 others.  A tolerance that grows with the
+ *                     distance would be a change of the contract (README,
+ *                     open issues);
  *   tol_pace 1e-3 m   as the energy tolerance 2 a_r tol_pace, 5 x (Stimp 16)
  *                     to 17 x (Stimp 5) the largest such difference of the
- *                     squared arrival speed (1.3e-4 m^2/s^2);
+ *                     squared arrival speed (1.3e-4 m^2/s^2), same putts;
  *   lm_tol   1e-5     in units of 1e-2 (slopes) and 1e-3 /m (curvatures).
  *                     Bounded on both sides: at 1e-6 single-precision fits
  *                     start to end on the iteration limit, and from 3e-5 on
@@ -214,7 +251,11 @@ typedef struct {
 #define GL_SOLVER_DEFAULT_TOL_PACE_M GL_SOLVER_SINGLE_TOL_PACE_M
 #define GL_SOLVER_DEFAULT_LM_TOL GL_SOLVER_SINGLE_LM_TOL
 #endif
-#define GL_SOLVER_DEFAULT_PAST_M 0.30f
+/* (a double constant, cast to the real type where it is used: the double
+ * build must have the reference's 0.30, not the float nearest to it) */
+#define GL_SOLVER_DEFAULT_PAST_M 0.30
+#define GL_SOLVER_DEFAULT_NEAR_MISS_M 0.0 /* off: the reference's default */
+#define GL_SOLVER_DEFAULT_MAX_STEPS 0u    /* none: the reference has no step budget */
 #define GL_SOLVER_DEFAULT_MAX_ROLLS 200u
 #define GL_SOLVER_DEFAULT_LM_MAX_ITER 60u
 
@@ -234,7 +275,10 @@ typedef enum {
 
 /** Where the aim of an estimate comes from (reference: aim_source). */
 typedef enum {
-    GL_AIM_FROM_PATCH = 0,   /**< solved on the fitted quadratic patch */
+    GL_AIM_FROM_PATCH = 0,   /**< solved on the fitted quadratic patch (solve_status OK or
+                                  PACE_LIMITED), or - only with near_miss_m > 0 - the best
+                                  iterate of that solve, kept because it passes within
+                                  near_miss_m of the hole centre (any other solve_status) */
     GL_AIM_FROM_PLANE = 1,   /**< patch not solvable: solved on its secant plane */
     GL_AIM_BEST_EFFORT = 2,  /**< neither solvable: best iterate of the plane solve */
     GL_AIM_STRAIGHT = 3      /**< no usable solution at all: straight at flat pace */
@@ -378,7 +422,8 @@ typedef struct {
 uint32_t gl_solver_version(void);
 
 /** Reference defaults: past 0.30 m, 200 rolls, method B1, grain not used,
- *  60 fit iterations; tolerances GL_SOLVER_DEFAULT_TOL_* / _LM_TOL. */
+ *  60 fit iterations, no near-miss rule, no step budget; tolerances
+ *  GL_SOLVER_DEFAULT_TOL_* / _LM_TOL. */
 void gl_solver_default_options(gl_solver_options_t *opt);
 
 /**
@@ -397,6 +442,17 @@ void gl_solver_measurements_init(gl_measurements_t *m);
  * default distance), aim_source 1..3 with the solve_status that caused it,
  * fit_converged false.  Every real of the output is then finite, except
  * distance_sigma_m and cross_slope_sigma where NaN means "unknown".
+ *
+ * NOT STABLE NEAR THE CRITICAL SLOPE.  Where the slope along the path
+ * exceeds about 0.9 of the critical one (a_r / ((5/7) g): the slope a ball
+ * no longer stops on), the miss is not a continuous function of the aim.
+ * There a change of one micro-radian of an input can move the result by
+ * more than a display step or into another (aim_source, solve_status) class
+ * (measured: 0.1 % of reads at 0.80-0.85 of critical, 3.4 % at 0.95-1.00,
+ * 12.8 % above 1.03; none below 0.55).  The best iterate of a failed solve
+ * (aim_source 2) is whatever the search last had; only its class is
+ * defined.  This is the reference's behaviour; the display marks such
+ * results (README "The solver: decisions and open points").
  *
  * Returns GL_ERR_PARAM for an input no placement produces (NULL pointer;
  * f_px or baseline_m not finite and positive; h_cam_m or the tilt not

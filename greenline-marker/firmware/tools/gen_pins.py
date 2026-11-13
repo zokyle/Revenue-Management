@@ -196,6 +196,26 @@ def spec_extcomin_ticks(text):
     return int(m.group(1)) if m else None
 
 
+def spec_charger(text):
+    """What DESIGN_SPEC says about stopping the charger, read from its text:
+    (inhibit_active_high, charger_has_ntc_input), or None if neither wording
+    is found.
+
+      rev C2 (the phase-2 brief): MCP73831, no temperature input; CHG_INHIBIT
+          an open-drain MCU pin, LOW = stop charging            -> (0, 0)
+      rev D amendment E1: BQ25101 with its own thermistor input; CHG_INHIBIT
+          a push-pull output to the gate of an N-MOSFET that pulls TS to
+          ground: HIGH = stop                                    -> (1, 1)
+    """
+    flat = " ".join(text.split())
+    if ("CHG_INHIBIT is an MCU push-pull output to the gate of a small N-MOSFET" in flat
+            and "pulls TS to ground" in flat):
+        return 1, 1 if "BQ25101" in flat else 0
+    if re.search(r"CHG_INHIBIT \(open drain, low = stop", flat):
+        return 0, 0
+    return None
+
+
 def check(spec_text):
     facts = spec_facts(spec_text)
     errors = []
@@ -264,6 +284,10 @@ def check(spec_text):
         if (port, pin) in boot_any:
             errors.append("%s is on P%s%d, a ROM bootloader pin (%s)" %
                           (name, port, pin, boot_any[(port, pin)]))
+    # the charger sentence: its wording decides what CHG_INHIBIT must do
+    if spec_charger(spec_text) is None:
+        errors.append("DESIGN_SPEC no longer says how CHG_INHIBIT stops the charger in a wording this "
+                      "generator knows (spec_charger): the parser, drivers/power.c and the simulator need a look")
     # rev C2: EXTCOMIN divider and the pull resistors of the reset state
     if spec_extcomin_ticks(spec_text) is None:
         errors.append("DESIGN_SPEC no longer states the EXTCOMIN divider as '(32768 / N;'")
@@ -422,6 +446,19 @@ def generate(spec_text):
     w("")
     w("/* EXTCOMIN: LSE ticks per period, read from DESIGN_SPEC (\"32768 / N\"). */")
     w("#define GL_PINS_EXTCOMIN_LSE_TICKS %d" % spec_extcomin_ticks(spec_text))
+    w("")
+    chg = spec_charger(spec_text)
+    w("/* How DESIGN_SPEC says the firmware stops the charger, READ FROM ITS TEXT (a")
+    w(" * change of that sentence makes this file stale, and `make test` says so).")
+    w(" *   ACTIVE_HIGH 0, NTC_INPUT 0: rev C2 - MCP73831 without a temperature input,")
+    w(" *       CHG_INHIBIT an open-drain pin, LOW = stop.  THIS IS WHAT drivers/power.c")
+    w(" *       AND THE SIMULATOR IMPLEMENT (the phase-2 brief).")
+    w(" *   ACTIVE_HIGH 1, NTC_INPUT 1: rev D amendment E1 - BQ25101 with its own")
+    w(" *       thermistor input, CHG_INHIBIT push-pull to an N-MOSFET gate, HIGH = stop.")
+    w(" * If these say 1 the specification has moved on and the driver has not:")
+    w(" * tests/test_pins.c pins the difference as NOT MET (README, open issues). */")
+    w("#define GL_PINS_SPEC_CHG_INHIBIT_ACTIVE_HIGH %d" % chg[0])
+    w("#define GL_PINS_SPEC_CHARGER_HAS_NTC_INPUT %d" % chg[1])
     w("")
     w("#endif /* GL_PINS_H */")
     return "\n".join(out) + "\n"

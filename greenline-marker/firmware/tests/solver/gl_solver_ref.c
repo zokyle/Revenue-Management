@@ -59,6 +59,9 @@ void gl_ref_estimate(const gl_ref_meas_t *drops, unsigned n, unsigned ball, cons
     gl_solver_default_options(&o); /* the double build: the reference's own defaults */
     o.method = (uint8_t)opt->method;
     o.past_m = opt->past;
+    o.use_grain = opt->use_grain != 0;
+    o.near_miss_m = opt->near_miss;
+    /* (no step budget: that is the firmware's own limit, not the reference's) */
     if (opt->tight != 0) {
         o.tol_miss_m = 1e-9;
         o.tol_pace_m = 1e-9;

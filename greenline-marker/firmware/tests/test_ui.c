@@ -63,7 +63,7 @@ GL_TEST(test_table_is_well_formed)
         GL_CHECK(t[i].state < GL_UI_STATE_COUNT || t[i].state == GL_UI_ANY);
         GL_CHECK(t[i].event > GL_EV_NONE && t[i].event < GL_EV_COUNT);
         GL_CHECK(t[i].next < GL_UI_STATE_COUNT);
-        GL_CHECK(t[i].guard <= GL_G_ITEM_ZERO_YES);
+        GL_CHECK(t[i].guard <= GL_G_DIST_PROMPT_MOVED);
         /* no two rows with the same (state, event, guard): the table is
          * deterministic by construction, not by row order alone */
         for (size_t j = i + 1; j < n; j++) {
@@ -1338,6 +1338,230 @@ GL_TEST(test_render_with_hostile_view_values)
            renders);
 }
 
+/* ---- phase-2 review: the rows added to the table --------------------------- */
+
+/* A second double tap on a Precision result goes on to the Survey; it never
+ * arms another spin (the marker has been turned since its cameras read). */
+GL_TEST(test_double_tap_on_a_precision_result_is_a_survey)
+{
+    uint32_t a;
+    fresh();
+    wake_up();
+    quick_read();
+    a = ev(GL_EV_DOUBLE_TAP, 0);
+    GL_CHECK(a & GL_ACT_ARM_SPIN);
+    STATE_IS(GL_UI_PRECISION_WAIT_SPIN);
+    GL_CHECK(ev(GL_EV_SPIN_DONE, 0) & GL_ACT_START_TILT);
+    STATE_IS(GL_UI_READ_TILT);
+    GL_CHECK_EQ(ui.read_kind, GL_READ_PRECISION);
+    a = ev(GL_EV_TILT_DONE, 0);
+    GL_CHECK((a & GL_ACT_START_SOLVE) && (a & GL_ACT_PRECISION));
+    (void)ev(GL_EV_SOLVE_DONE, 0);
+    STATE_IS(GL_UI_SHOW_RESULT);
+    /* the second double tap */
+    a = ev(GL_EV_DOUBLE_TAP, 0);
+    GL_CHECK((a & GL_ACT_ARM_SPIN) == 0u);
+    GL_CHECK(a & GL_ACT_SURVEY_STORE);
+    STATE_IS(GL_UI_SURVEY_NEXT_DROP);
+    GL_CHECK_EQ(ui.survey_count, 1);
+    /* ending the Survey there and tapping again still arms no spin: the
+     * result shown is the same spun read */
+    a = ev(GL_EV_DOUBLE_TAP, 0);
+    GL_CHECK(a & GL_ACT_SURVEY_RESET);
+    STATE_IS(GL_UI_SHOW_RESULT);
+    a = ev(GL_EV_DOUBLE_TAP, 0);
+    GL_CHECK((a & GL_ACT_ARM_SPIN) == 0u);
+    STATE_IS(GL_UI_SURVEY_NEXT_DROP);
+    /* an ABANDONED spin leaves a Quick result: the spin may be asked for again */
+    fresh();
+    wake_up();
+    quick_read();
+    (void)ev(GL_EV_DOUBLE_TAP, 0);
+    STATE_IS(GL_UI_PRECISION_WAIT_SPIN);
+    now += 21000;
+    GL_CHECK(gl_ui_tick(&ui, now) & GL_ACT_SPIN_ABANDON);
+    STATE_IS(GL_UI_SHOW_RESULT);
+    GL_CHECK(ev(GL_EV_DOUBLE_TAP, 0) & GL_ACT_ARM_SPIN);
+    STATE_IS(GL_UI_PRECISION_WAIT_SPIN);
+    /* a new placement makes the next result a Quick one again */
+    fresh();
+    wake_up();
+    quick_read();
+    (void)ev(GL_EV_DOUBLE_TAP, 0);
+    (void)ev(GL_EV_SPIN_DONE, 0);
+    (void)ev(GL_EV_TILT_DONE, 0);
+    (void)ev(GL_EV_SOLVE_DONE, 0);
+    GL_CHECK(ev(GL_EV_MOTION, 0) & GL_ACT_NEW_READ);
+    STATE_IS(GL_UI_WAIT_STILL);
+    quick_read();
+    GL_CHECK(ev(GL_EV_DOUBLE_TAP, 0) & GL_ACT_ARM_SPIN);
+}
+
+/* The distance prompt (no flagstick seen): picking the marker up and putting
+ * it down again is a new read; it used to be ignored for 30 s. */
+GL_TEST(test_distance_prompt_is_left_by_re_placing)
+{
+    uint32_t a;
+    fresh();
+    wake_up();
+    (void)ev(GL_EV_STILL, 0);
+    (void)ev(GL_EV_TILT_DONE, 0);
+    a = ev(GL_EV_CAPTURE_NO_STICK, 0);
+    GL_CHECK(a & GL_ACT_DIAL_BEGIN);
+    STATE_IS(GL_UI_SETTINGS_DIAL);
+    GL_CHECK(ui.dist_prompt);
+    GL_CHECK_EQ(ui.item, GL_ITEM_DISTANCE);
+    /* lying still: nothing happens (a STILL that was already under way) */
+    GL_CHECK_EQ(ev(GL_EV_STILL, 0), 0u);
+    STATE_IS(GL_UI_SETTINGS_DIAL);
+    /* picked up ... */
+    a = ev(GL_EV_MOTION, 0);
+    GL_CHECK_EQ(a, GL_ACT_WATCH_STILL);
+    STATE_IS(GL_UI_SETTINGS_DIAL);
+    /* ... and put down: a new Quick Read, the prompt gone, nothing saved */
+    a = ev(GL_EV_STILL, 0);
+    GL_CHECK((a & GL_ACT_START_TILT) && (a & GL_ACT_NEW_READ));
+    GL_CHECK((a & GL_ACT_SAVE_SETTINGS) == 0u);
+    STATE_IS(GL_UI_READ_TILT);
+    GL_CHECK(!ui.dist_prompt);
+    GL_CHECK_EQ(ui.read_kind, GL_READ_QUICK);
+    GL_CHECK_EQ(ui.edit.manual_distance_cm, 0);
+
+    /* the golfer who dials: upright, roll, flat - FLAT saves, as before */
+    fresh();
+    wake_up();
+    (void)ev(GL_EV_STILL, 0);
+    (void)ev(GL_EV_TILT_DONE, 0);
+    (void)ev(GL_EV_CAPTURE_NO_STICK, 0);
+    (void)ev(GL_EV_MOTION, 0);
+    (void)ev(GL_EV_UPRIGHT, 0);
+    (void)ev(GL_EV_DIAL_STEP, 9);
+    GL_CHECK(ui.edit.manual_distance_cm != 0u);
+    a = ev(GL_EV_FLAT, 0);
+    GL_CHECK(a & GL_ACT_SAVE_SETTINGS);
+    STATE_IS(GL_UI_WAIT_STILL);
+    GL_CHECK(ui.saved.manual_distance_cm != 0u);
+    GL_CHECK(ev(GL_EV_STILL, 0) & GL_ACT_START_TILT); /* the STILL that follows the FLAT */
+
+    /* an ordinary visit to the dial (not the prompt) has no such exit */
+    fresh();
+    wake_up();
+    GL_CHECK(ev(GL_EV_UPRIGHT, 0) & GL_ACT_DIAL_BEGIN);
+    STATE_IS(GL_UI_SETTINGS_DIAL);
+    GL_CHECK(!ui.dist_prompt);
+    GL_CHECK_EQ(ev(GL_EV_MOTION, 0), 0u);
+    GL_CHECK_EQ(ev(GL_EV_STILL, 0), 0u);
+    STATE_IS(GL_UI_SETTINGS_DIAL);
+}
+
+/* The result screen of a marker that faces away from the hole is the screen
+ * of one that faces it, turned round; the texts are the same strings. */
+GL_TEST(test_result_screen_is_turned_round_with_the_marker)
+{
+    static gl_gfx_t g1, g2;
+    gl_ui_view_t v, w;
+    gl_ui_result_text_t t;
+    static const float yaw[5] = { 3.10f, -3.0f, 2.2f, -1.7f, 3.14159f };
+
+    fresh();
+    wake_up();
+    quick_read();
+    memset(&v, 0, sizeof(v));
+    v.have_result = true;
+    v.solved = true;
+    v.line_here = true;
+    v.flag_found = true;
+    v.precision = true;
+    v.distance_m = 6.0f;
+    v.plays_like_m = 6.4f;
+    v.plays_uncertain = true;
+    v.slope_pct = 2.0f;
+    v.break_cups = 2.9f;
+    v.confidence = 0.4f;
+    v.battery_pct = 80;
+    for (unsigned k = 0; k < 5u; k++) {
+        unsigned differ = 0;
+        /* the marker has been turned by yaw[k] since the read */
+        v.aim_rad = gl_wrap_pi(0.10f - yaw[k]);
+        v.fall_line_rad = gl_wrap_pi(-1.3f - yaw[k]);
+        v.ball_az_rad = gl_wrap_pi(-yaw[k]);
+        gl_gfx_init(&g1);
+        gl_ui_render(&ui, &v, &g1);
+        /* the same putt on a marker turned by yaw - pi: within 90 degrees of facing the hole */
+        w = v;
+        w.aim_rad = gl_wrap_pi(v.aim_rad - GL_PI_F);
+        w.fall_line_rad = gl_wrap_pi(v.fall_line_rad - GL_PI_F);
+        w.ball_az_rad = gl_wrap_pi(v.ball_az_rad - GL_PI_F);
+        GL_CHECK(fabsf(w.ball_az_rad) <= 0.5f * GL_PI_F);
+        gl_gfx_init(&g2);
+        gl_ui_render(&ui, &w, &g2);
+        for (int y = 0; y < 128; y++) {
+            for (int x = 0; x < 128; x++) {
+                differ += (gl_gfx_get(&g1, x, y) != gl_gfx_get(&g2, 127 - x, 127 - y)) ? 1u : 0u;
+                if (!gl_gfx_get(&g1, x, y)) {
+                    GL_CHECK(gl_gfx_in_clip(&g1, x, y)); /* still inside the aperture */
+                }
+            }
+        }
+        GL_CHECK_EQ(differ, 0);
+        GL_CHECK(gl_gfx_count_black(&g1) > 600u);
+    }
+    /* facing the hole (within 90 degrees): drawn as it always was, and the
+     * two pictures are NOT each other's rotation (the text is upright in both) */
+    v.aim_rad = 0.10f;
+    v.fall_line_rad = -1.3f;
+    v.ball_az_rad = 0.0f;
+    gl_gfx_init(&g1);
+    gl_ui_render(&ui, &v, &g1);
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.brk, "<2.9 CUP") == 0);
+    GL_CHECK(strcmp(t.plays, "PLAYS 21.0FT?") == 0);
+    GL_CHECK(strcmp(t.mode, "2X") == 0);
+    /* the break label is where it is drawn for an upright screen: a white
+     * box with the glyphs at y = 92 */
+    {
+        unsigned black = 0;
+        for (int y = 92; y < 92 + GL_FONT_H; y++) {
+            for (int x = 64 - 24; x < 64 + 24; x++) {
+                black += gl_gfx_get(&g1, x, y) ? 0u : 1u;
+            }
+        }
+        GL_CHECK(black > 40u && black < 160u);
+    }
+}
+
+/* The notes added by the review, and "PLAYS" with its question mark. */
+GL_TEST(test_notes_of_the_review)
+{
+    gl_ui_view_t v;
+    gl_ui_result_text_t t;
+    GL_CHECK(strcmp(gl_ui_note_text(GL_UI_NOTE_HORIZON), "POOR HORIZON") == 0);
+    GL_CHECK(strcmp(gl_ui_note_text(GL_UI_NOTE_NO_SOLUTION), "NO SOLUTION") == 0);
+    GL_CHECK(strcmp(gl_ui_note_text(GL_UI_NOTE_COUNT), "") == 0);
+    for (unsigned n = 1; n < GL_UI_NOTE_COUNT; n++) {
+        /* every message fits its buffer and the aperture at the message line */
+        GL_CHECK(strlen(gl_ui_note_text((gl_ui_note_t)n)) <= 15u);
+        GL_CHECK(strlen(gl_ui_note_text((gl_ui_note_t)n)) > 0u);
+    }
+    fresh();
+    memset(&v, 0, sizeof(v));
+    v.have_result = true;
+    v.solved = true;
+    v.line_here = true;
+    v.flag_found = true;
+    v.distance_m = 29.87f; /* the longest dial distance, in feet: 98.0FT */
+    v.plays_like_m = 31.0f;
+    v.plays_uncertain = true;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.plays, "PLAYS 101.7FT?") == 0);
+    v.plays_uncertain = false;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.plays, "PLAYS 101.7FT") == 0);
+    v.note = (uint8_t)GL_UI_NOTE_HORIZON;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.note, "POOR HORIZON") == 0);
+}
+
 int main(void)
 {
     GL_RUN(test_table_is_well_formed);
@@ -1358,5 +1582,9 @@ int main(void)
     GL_RUN(test_result_screen_shows_the_aim_line);
     GL_RUN(test_result_screen_messages_and_tentative_line);
     GL_RUN(test_render_with_hostile_view_values);
+    GL_RUN(test_double_tap_on_a_precision_result_is_a_survey);
+    GL_RUN(test_distance_prompt_is_left_by_re_placing);
+    GL_RUN(test_result_screen_is_turned_round_with_the_marker);
+    GL_RUN(test_notes_of_the_review);
     return gl_test_summary();
 }

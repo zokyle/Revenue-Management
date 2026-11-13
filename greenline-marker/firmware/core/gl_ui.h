@@ -12,35 +12,52 @@
  *   place the marker        -> wakes, waits for stillness, reads, shows the line
  *   pick up and re-place    -> new read
  *   double tap on a result  -> Precision Read prompt: spin the marker 180
- *                              degrees in place, it re-reads and combines
- *   double tap again        -> Survey: the shown read becomes drop 1; move
+ *                              degrees in place, it re-reads and combines.
+ *                              ONCE per placement: the result is then drawn
+ *                              turned round, upright for the golfer behind
+ *                              the ball (the marker faces away from the
+ *                              hole).  Turning the marker back by hand is a
+ *                              new placement: a new Quick Read.
+ *   double tap again        -> Survey (on the spin prompt, or on a Precision
+ *                              result): the shown read becomes drop 1; move
  *                              the marker along the line, each placement
  *                              adds a drop (up to 4); double tap ends it.
  *                              The putt is the one from the drop FARTHEST
  *                              from the flagstick (the ball).  The aim line
- *                              is drawn only while the marker lies there
- *                              (start at the ball, or come back to it for
- *                              the last drop); at any other drop the screen
- *                              shows the numbers and "PUT AT BALL".
- *   what a result shows     -> distance, "PLAYS" distance, slope with the
+ *                              is drawn only while the marker lies there:
+ *                              COME BACK TO THE BALL for the last drop; at
+ *                              any other drop the screen shows the numbers
+ *                              and "PUT AT BALL".
+ *   what a result shows     -> distance, "PLAYS" distance (the flat putt
+ *                              that needs the same stroke; "?" if the hole
+ *                              height is only bounded), slope with the
  *                              fall-line arrow, break in cups with the side,
  *                              confidence boxes, and ONE plain message when
- *                              something is not as usual (gl_ui_note_t).  An
- *                              aim that is not a solution of the putt is
- *                              drawn DASHED with "BREAK ?", never as a
- *                              normal line.
+ *                              something is not as usual (gl_ui_note_t).
+ *                              The line is SOLID for a solution of a putt
+ *                              whose distance and direction were measured;
+ *                              DASHED (tentative) for an aim that is not a
+ *                              solution ("BREAK ?"), for an assumed
+ *                              distance, and for the flag-out fallback.  An
+ *                              aim more than 13.5 degrees off the marker's
+ *                              axis is drawn parallel through the screen
+ *                              centre, in the same style.
  *   hold upright on edge    -> settings; roll like a knob to change the
  *                              value, double tap for the next item, lay
  *                              flat to confirm
- *   no flagstick found      -> flag-out fallback: asks for the distance
- *                              (dial); re-place the marker pointing at the
- *                              hole and it shows a tilt-only line along the
- *                              visor axis with low confidence.  The dialled
- *                              distance stays in the settings until changed
- *                              ("--" = none); it is used ONLY when the
- *                              cameras give no range (no flagstick, or a
- *                              flagstick that could not be ranged) and is
- *                              then shown with a question mark.
+ *   no flagstick found      -> asks for the distance ("NO FLAG", the DIST
+ *                              dial).  Putting the marker down again WITHOUT
+ *                              dialling reads again (the flagstick may be in
+ *                              view now).  With a distance dialled it is the
+ *                              flag-out fallback: point the visor at the
+ *                              hole; a tilt-only line along the visor axis,
+ *                              DASHED, with an empty confidence bar - its
+ *                              direction is the golfer's pointing.  The
+ *                              dialled distance belongs to ONE hole: it is
+ *                              used only when the cameras give no range, is
+ *                              shown with a question mark, and is forgotten
+ *                              when a read ranges a flagstick and when the
+ *                              marker goes to sleep.
  *   in the cradle           -> USB screen (charging, data).  The cradle
  *                              takes the marker one way round only and
  *                              holds it down; nothing is calibrated there.
@@ -144,7 +161,9 @@ typedef enum {
     GL_G_HAS_MANUAL_DIST,    /**< settings hold a manual distance */
     GL_G_MOVED,              /**< motion was seen since the state was entered */
     GL_G_USB,                /**< VBUS present */
-    GL_G_ITEM_ZERO_YES       /**< dial is on the "ZERO" item with value YES */
+    GL_G_ITEM_ZERO_YES,      /**< dial is on the "ZERO" item with value YES */
+    GL_G_DIST_PROMPT,        /**< the dial was opened to ask for the distance (no flagstick seen) */
+    GL_G_DIST_PROMPT_MOVED   /**< ... and the marker has been picked up since */
 } gl_ui_guard_t;
 
 typedef struct {
@@ -234,6 +253,7 @@ typedef enum {
     GL_UI_NOTE_NONE = 0,
     GL_UI_NOTE_AMBIGUOUS,    /**< "2 LINES SEEN": another line also passed as a flagstick */
     GL_UI_NOTE_ONE_CAMERA,   /**< "1 CAMERA": left camera only, not checked against a disparity */
+    GL_UI_NOTE_HORIZON,      /**< "POOR HORIZON": method B2, the turf horizon did not fit the patch */
     GL_UI_NOTE_FIT,          /**< "FIT NOT DONE": the fit stopped on its iteration limit */
     GL_UI_NOTE_PACE,         /**< "PACE LIMIT": through the hole, but cannot arrive as slowly as set */
     GL_UI_NOTE_APPROX,       /**< "APPROX": solved on the secant plane of the fitted patch */
@@ -260,15 +280,21 @@ typedef struct {
     bool flag_found;
     bool precision;          /**< result of a spin-and-reread */
     bool distance_assumed;   /**< the distance is the dialled or the default one (shown "?") */
+    bool plays_uncertain;    /**< the base of the stick was hidden: the hole height is only
+                                  bounded, the plays-like distance is shown with a "?" */
     uint8_t note;            /**< gl_ui_note_t */
     uint8_t drop;            /**< Survey: number of the drop this result was taken at (1..4);
                                   0 = not a Survey */
     float aim_rad;           /**< aim line direction in the marker's CURRENT frame, CCW from forward */
     float ball_az_rad;       /**< direction from the marker centre to the ball centre, CCW from
                                   forward: 0 normally; near pi after the 180-degree spin of a
-                                  Precision Read (the marker then faces away from the hole) */
+                                  Precision Read (the marker then faces away from the hole).
+                                  More than 90 degrees either way: the result screen is drawn
+                                  turned round, upright for the golfer behind the ball */
     float distance_m;        /**< to the hole; <= 0 = unknown */
-    float plays_like_m;      /**< flat-green distance with the same launch speed; <= 0 = none */
+    float plays_like_m;      /**< the FLAT putt that needs the same stroke: the estimator's
+                                  roll-out distance v0^2 / (2 a_r) less the PAST setting, so a
+                                  dead-flat putt plays its own length; <= 0 = none */
     float slope_pct;         /**< slope magnitude at the ball */
     float fall_line_rad;     /**< downhill direction, marker frame, CCW from forward */
     float break_cups;        /**< + = aim left of the hole */
@@ -286,7 +312,7 @@ typedef struct {
 /** The strings of the result screen, as drawn ("" = not drawn). */
 typedef struct {
     char distance[12];       /**< "19.6FT", "6.0M?", "--" */
-    char plays[16];          /**< "PLAYS 21.3FT" */
+    char plays[16];          /**< "PLAYS 21.3FT", "PLAYS 21.3FT?" (hole height only bounded) */
     char note[16];           /**< gl_ui_note_text(), or the Survey prompt */
     char slope[8];           /**< "2.3%" */
     char brk[12];            /**< "<2.5 CUP", "2.5 CUP>", "STRAIGHT", "BREAK ?" */

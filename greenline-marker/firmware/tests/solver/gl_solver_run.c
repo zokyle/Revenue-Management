@@ -105,37 +105,19 @@ static void tolerances_(gl_solver_options_t *opt, gl_vec_tol_t tol, double tol_m
 
 /* ---- vector cases -------------------------------------------------------------- */
 
-void GLV(estimate)(const gl_vec_est_case_t *c, gl_vec_tol_t tol, int ball_last, gl_vec_est_result_t *out)
-{
-    gl_measurements_t drops[GL_SOLVER_MAX_DROPS];
-    gl_solver_options_t opt;
-    gl_estimate_t est;
-    const gl_patch_fit_t *fit = &work_.fit;
-    const unsigned n = c->n_drops;
-    gl_status_t st;
+/* step budget of the estimates that follow (0 = none, the reference) */
+static uint32_t max_steps_;
 
-    memset(out, 0, sizeof(*out));
-    tolerances_(&opt, tol, c->tol_miss, c->tol_pace, c->lm_tol, c->lm_max_iter,
-                c->lm_max_iter_overridden != 0u);
-    opt.past_m = R(c->past);
-    opt.method = c->method;
-    opt.use_grain = c->use_grain != 0u;
-    if (n == 1u && !ball_last) {
-        to_meas_(&gl_vec_meas[c->first_meas], &drops[0]);
-        st = gl_solver_estimate(&drops[0], &opt, &work_, &est);
-    } else if (!ball_last) {
-        for (unsigned i = 0; i < n; i++) {
-            to_meas_(&gl_vec_meas[c->first_meas + i], &drops[i]);
-        }
-        st = gl_solver_estimate_survey(drops, n, 0u, &opt, &work_, &est);
-    } else {
-        /* the drop at the ball last, the others before it in their order */
-        for (unsigned i = 1u; i < n; i++) {
-            to_meas_(&gl_vec_meas[c->first_meas + i], &drops[i - 1u]);
-        }
-        to_meas_(&gl_vec_meas[c->first_meas], &drops[n - 1u]);
-        st = gl_solver_estimate_survey(drops, n, n - 1u, &opt, &work_, &est);
-    }
+void GLV(set_max_steps)(uint32_t max_steps)
+{
+    max_steps_ = max_steps;
+}
+
+/* gl_estimate_t and the fit record of the call just made -> the result record */
+static void fill_(gl_status_t st, const gl_estimate_t *est_p, gl_vec_est_result_t *out)
+{
+    const gl_estimate_t est = *est_p;
+    const gl_patch_fit_t *fit = &work_.fit;
     out->status = (int)st;
     out->phi = (double)est.phi_rad;
     out->aim_azimuth_device = (double)est.aim_azimuth_device_rad;
@@ -189,6 +171,97 @@ void GLV(estimate)(const gl_vec_est_case_t *c, gl_vec_tol_t tol, int ball_last, 
     out->used_horizon = fit->used_horizon ? 1u : 0u;
     out->fit_starts = fit->n_starts;
     out->n_iter = fit->n_iter;
+}
+
+void GLV(estimate)(const gl_vec_est_case_t *c, gl_vec_tol_t tol, int ball_last, gl_vec_est_result_t *out)
+{
+    gl_measurements_t drops[GL_SOLVER_MAX_DROPS];
+    gl_solver_options_t opt;
+    gl_estimate_t est;
+    const unsigned n = c->n_drops;
+    gl_status_t st;
+
+    memset(out, 0, sizeof(*out));
+    tolerances_(&opt, tol, c->tol_miss, c->tol_pace, c->lm_tol, c->lm_max_iter,
+                c->lm_max_iter_overridden != 0u);
+    opt.past_m = R(c->past);
+    opt.method = c->method;
+    opt.use_grain = c->use_grain != 0u;
+    opt.near_miss_m = R(c->near_miss);
+    opt.max_steps = max_steps_;
+    if (n == 1u && !ball_last) {
+        to_meas_(&gl_vec_meas[c->first_meas], &drops[0]);
+        st = gl_solver_estimate(&drops[0], &opt, &work_, &est);
+    } else if (!ball_last) {
+        for (unsigned i = 0; i < n; i++) {
+            to_meas_(&gl_vec_meas[c->first_meas + i], &drops[i]);
+        }
+        st = gl_solver_estimate_survey(drops, n, 0u, &opt, &work_, &est);
+    } else {
+        /* the drop at the ball last, the others before it in their order */
+        for (unsigned i = 1u; i < n; i++) {
+            to_meas_(&gl_vec_meas[c->first_meas + i], &drops[i - 1u]);
+        }
+        to_meas_(&gl_vec_meas[c->first_meas], &drops[n - 1u]);
+        st = gl_solver_estimate_survey(drops, n, n - 1u, &opt, &work_, &est);
+    }
+    fill_(st, &est, out);
+}
+
+void GLV(estimate_meas)(const gl_vec_meas_t *v, unsigned n, const double *hz_az, const double *hz_elev,
+                        unsigned method, double past, double near_miss, uint32_t max_steps, int single_tol,
+                        gl_vec_est_result_t *out)
+{
+    gl_measurements_t drops[GL_SOLVER_MAX_DROPS];
+    gl_solver_options_t opt;
+    gl_estimate_t est;
+    gl_status_t st;
+
+    memset(out, 0, sizeof(*out));
+    gl_solver_default_options(&opt);
+    if (single_tol) {
+        opt.tol_miss_m = R(GL_SOLVER_SINGLE_TOL_MISS_M);
+        opt.tol_pace_m = R(GL_SOLVER_SINGLE_TOL_PACE_M);
+        opt.lm_tol = R(GL_SOLVER_SINGLE_LM_TOL);
+    }
+    opt.method = (uint8_t)method;
+    opt.past_m = R(past);
+    opt.near_miss_m = R(near_miss);
+    opt.max_steps = max_steps;
+    if (n == 0u || n > GL_SOLVER_MAX_DROPS) {
+        out->status = (int)GL_ERR_PARAM;
+        return;
+    }
+    for (unsigned i = 0; i < n; i++) {
+        gl_vec_meas_t one = v[i];
+        const unsigned n_h = one.n_horizon;
+        one.n_horizon = 0u; /* (the horizon of an ad-hoc placement is not in the generated tables) */
+        to_meas_(&one, &drops[i]);
+        if (i == 0u && hz_az != NULL && hz_elev != NULL && n_h <= GL_SOLVER_MAX_HORIZON) {
+            drops[0].n_horizon = (uint8_t)n_h;
+            for (unsigned k = 0; k < n_h; k++) {
+                drops[0].horizon_az_rad[k] = R(hz_az[k]);
+                drops[0].horizon_elev_rad[k] = R(hz_elev[k]);
+            }
+        }
+    }
+    if (n == 1u) {
+        st = gl_solver_estimate(&drops[0], &opt, &work_, &est);
+    } else {
+        st = gl_solver_estimate_survey(drops, n, 0u, &opt, &work_, &est);
+    }
+    fill_(st, &est, out);
+}
+
+void GLV(default_options)(double out[4], uint32_t *max_steps)
+{
+    gl_solver_options_t opt;
+    gl_solver_default_options(&opt);
+    out[0] = (double)opt.past_m;
+    out[1] = (double)opt.near_miss_m;
+    out[2] = (double)opt.tol_miss_m;
+    out[3] = (double)opt.lm_tol;
+    *max_steps = opt.max_steps;
 }
 
 void GLV(solve)(const gl_vec_sol_case_t *c, gl_vec_tol_t tol, gl_vec_sol_result_t *out)
@@ -338,6 +411,14 @@ static gl_real_t range_(gl_real_t lo, gl_real_t hi)
 }
 
 /** A value chosen to break things. */
+#ifdef GL_SOLVER_DOUBLE
+#define SQUARE_OVERFLOWS 1e300
+#define SQUARE_UNDERFLOWS 1e-200
+#else
+#define SQUARE_OVERFLOWS 1e20f
+#define SQUARE_UNDERFLOWS 1e-23f
+#endif
+
 static gl_real_t nasty_(void)
 {
     static const double table[] = {
@@ -345,11 +426,17 @@ static gl_real_t nasty_(void)
         3.14159265358979, -3.14159265358979, 1.5707963267948966, 100.0, -100.0, 1e6, -1e6,
         1e12, 1e-12, 0.5, -0.5, 16.0, 5.0, 4.999, 0.02, 657.0, 41.0, 1e-3, 3.0, 1e4,
     };
-    const uint32_t k = rnd_() % 44u;
+    const uint32_t k = rnd_() % 47u;
     if (k < 33u) {
         return R(table[k]);
     }
     switch (k) {
+    /* numbers whose SQUARE leaves the range of the real type (the review
+     * found weights 1 / sigma^2 that became 0 or infinite and passed as
+     * results): 1e20 / 1e-23 in single precision, 1e300 / 1e-200 in double */
+    case 44u: return R(SQUARE_OVERFLOWS);
+    case 45u: return -R(SQUARE_OVERFLOWS);
+    case 46u: return R(SQUARE_UNDERFLOWS);
     case 33u: return R(NAN);
     case 34u: return R(INFINITY);
     case 35u: return -R(INFINITY);
@@ -826,7 +913,15 @@ unsigned GLV(api_checks)(char *why, unsigned why_len)
     gl_solver_default_options(NULL); /* NULL is safe */
     gl_solver_measurements_init(NULL);
     gl_solver_default_options(&opt);
-    API_CHECK(opt.past_m == R(0.30f) && opt.max_rolls == 200u && opt.lm_max_iter == 60u);
+    /* the reference's 0.30: exactly that double in the comparison build (it
+     * used to be the float nearest to it, 0.30000001192092896, there too) */
+#ifdef GL_SOLVER_DOUBLE
+    API_CHECK(opt.past_m == 0.30);
+#else
+    API_CHECK(opt.past_m == 0.30f);
+#endif
+    API_CHECK(opt.max_rolls == 200u && opt.lm_max_iter == 60u);
+    API_CHECK(opt.near_miss_m == R(0.0) && opt.max_steps == 0u); /* off, as in the reference */
     API_CHECK(opt.method == (uint8_t)GL_SOLVER_METHOD_B1 && !opt.use_grain);
     API_CHECK(opt.tol_miss_m == R(GL_SOLVER_DEFAULT_TOL_MISS_M) &&
               opt.tol_pace_m == R(GL_SOLVER_DEFAULT_TOL_PACE_M) && opt.lm_tol == R(GL_SOLVER_DEFAULT_LM_TOL));

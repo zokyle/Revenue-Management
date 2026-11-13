@@ -83,10 +83,13 @@ GL_TEST(test_complete_quick_read)
     printf("    marker at rest at 1.60 s; result on the screen at %.2f s (%.2f s after coming to "
            "rest); camera part %.2f s\n", (double)t_result_ms / 1000.0,
            (double)t_result_ms / 1000.0 - 1.6, (double)(t_result_ms - t_capture_ms) / 1000.0);
-    /* NOT MET: "about three seconds" (DESIGN_SPEC) and the 4.0 s this test
-     * allowed while the simulator charged no computation (3.45 s then).  With
-     * the vision and the estimate charged their run time at the nominal
-     * factor: 4.43 s (4.13 s .. 4.82 s for the low .. high factor, test 1b). */
+    /* The read time.  DESIGN_SPEC said "about three seconds" when this test
+     * was written; its amendment E15 restates the figure from this firmware's
+     * timing model (4.1 to 4.8 s after the marker comes to rest; a model, not
+     * a measurement).  NOT MET: the 4.0 s this test allowed while the
+     * simulator charged no computation (3.45 s then).  With the vision and
+     * the estimate charged their run time at the nominal factor: 4.43 s
+     * (4.13 s .. 4.82 s for the low .. high factor, test 1b). */
     GL_CHECK(t_result_ms >= 1600u + 4300u && t_result_ms < 1600u + 4600u);
 
     /* ---- the camera rail ---- */

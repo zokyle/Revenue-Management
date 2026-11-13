@@ -17,6 +17,7 @@
   "top_side": 11
  },
  "design": "gl1_cradle",
+ "open_items": [],
  "passed": true,
  "stage": "netlist (no copper)",
  "stages": {
@@ -30,15 +31,23 @@
   "exports": {
    "bom_lines": 7,
    "bom_lines_by_status": {
-    "PROVISIONAL": 5,
-    "RESEARCH": 2
+    "PROVISIONAL": 6,
+    "RESEARCH": 1
    },
    "passed": true
   },
   "rules": {
+   "as_specified": 13,
+   "departures": [
+    "USB-C land"
+   ],
    "failed": [],
+   "open_not_met": [],
    "passed": true,
-   "rows": 11
+   "rows": 14,
+   "selftest_defects": 14,
+   "selftest_missed": 0,
+   "workarounds": []
   },
   "schematic": {
    "components_compared": 14,
@@ -50,6 +59,14 @@
    "problems": [],
    "round_trip_ok": true,
    "sheets": 3
+  },
+  "unrouted": {
+   "errors": 0,
+   "errors_by_type": {},
+   "passed": true,
+   "tampered": [],
+   "unconnected": 29,
+   "warnings_by_type": {}
   }
  }
 }

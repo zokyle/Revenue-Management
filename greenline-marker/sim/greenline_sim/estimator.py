@@ -301,6 +301,21 @@ class EstimatorConfig:
         Multipliers applied to the confidence score when the corresponding
         flag is raised.  (A missing flag already lowers the score through
         ``sigma_hand_bearing``; its multiplier is therefore close to 1.)
+    near_miss_keep : float [m]
+        ``0.0`` (default): off - the behaviour of every published result and
+        of every reference vector outside the ``near_miss_estimator_cases``.
+        Positive: when the aim solve on the fitted patch ends without a
+        usable solution but its best iterate reaches the hole line within
+        this lateral distance of the hole centre, that iterate IS the aim
+        (``aim_source`` stays ``AIM_FROM_PATCH``, ``solve_status`` reports
+        how the solve ended, the confidence takes ``conf_aim_fallback``) and
+        the secant plane is not tried.  Why: near a jump of the lateral miss
+        (a ball that just does or does not die on a slope) the bracketing
+        search stops a fraction of a millimetre to a few millimetres from
+        the centre and reports NO_CONVERGENCE; the secant-plane solution
+        that used to replace such an iterate misses the hole ON THE FITTED
+        PATCH by decimetres in most of those cases (firmware review, phase
+        2: 52 of 69 reads).  The firmware runs with 5 mm.
     """
 
     sigma_seat: float = 2.5e-3
@@ -351,6 +366,7 @@ class EstimatorConfig:
     conf_range_missing: float = 0.5
     conf_poor_horizon: float = 0.8
     conf_aim_fallback: float = 0.7
+    near_miss_keep: float = 0.0
 
 
 # --------------------------------------------------------------------------
@@ -1492,6 +1508,7 @@ def estimate_batch(
     v0 = np.sqrt(2.0 * a_r * (dist + config.past))  # flat-green pace
     source = np.full(n, AIM_STRAIGHT, dtype=int)
     status = np.full(n, int(SolveStatus.OK), dtype=int)
+    near = np.zeros(n, dtype=bool)  # kept near misses of the patch solve (near_miss_keep)
 
     if method != "STRAIGHT":
         coeffs = np.array([f.coeffs for f in fits]).reshape(n, 5)
@@ -1502,7 +1519,22 @@ def estimate_batch(
         v0[good] = sol.v0[good]
         source[good] = AIM_FROM_PATCH
         status[:] = sol.status
-        bad = np.nonzero(~good)[0]
+        if config.near_miss_keep > 0.0:
+            # a best iterate of the PATCH solve that passes within near_miss_keep of
+            # the hole centre is kept (see EstimatorConfig): NaN compares False
+            with np.errstate(invalid="ignore"):
+                near = (
+                    ~good
+                    & (sol.status != int(SolveStatus.INVALID))
+                    & np.isfinite(sol.phi)
+                    & np.isfinite(sol.v0)
+                    & (sol.v0 > 0.0)
+                    & (np.abs(sol.miss) <= config.near_miss_keep)
+                )
+            phi[near] = sol.phi[near]
+            v0[near] = sol.v0[near]
+            source[near] = AIM_FROM_PATCH
+        bad = np.nonzero(~good & ~near)[0]
         if bad.size:
             # secant plane of the patch: keeps the hole height and the mean cross slope
             plane = np.zeros((bad.size, 5))
@@ -1524,7 +1556,9 @@ def estimate_batch(
             conf, sigma_cross = 0.0, math.nan
             fit_out = None
         else:
-            conf, sigma_cross = _confidence(f, float(a_r[i]), float(np.hypot(grain[i, 0], grain[i, 1])), int(source[i]), config)
+            # a kept near miss is scored as a fallback (conf_aim_fallback)
+            conf_source = AIM_FROM_PLANE if near[i] else int(source[i])
+            conf, sigma_cross = _confidence(f, float(a_r[i]), float(np.hypot(grain[i, 0], grain[i, 1])), conf_source, config)
             fit_out = f
         # slope and fall line at the ball: the tilt reading itself
         t_x, t_y = float(f.tilt_slopes[0]), float(f.tilt_slopes[1])

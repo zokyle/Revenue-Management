@@ -67,6 +67,11 @@ void gl_motion_spin_begin(gl_motion_t *m, gl_vec3_t up, gl_vec3_t gyro_bias_rad_
     m->spin_reported = false;
 }
 
+void gl_motion_spin_rearm(gl_motion_t *m)
+{
+    m->spin_reported = false;
+}
+
 void gl_motion_spin_end(gl_motion_t *m)
 {
     m->spin_active = false;

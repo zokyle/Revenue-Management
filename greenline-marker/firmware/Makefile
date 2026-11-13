@@ -6,7 +6,9 @@
 #   make asan    the same under -fsanitize=address,undefined
 #   make cross   compile core/, drivers/ and app/ (NOT hal/stm32u5, NOT hal/host)
 #                with arm-none-eabi-gcc for the Cortex-M33 and print the size
-#                table, the largest stack frames and the forbidden-symbol check
+#                table, the largest stack frames, the forbidden-symbol check
+#                (on the objects AND on a link probe against the toolchain's
+#                libm / libc) and the fused-instruction check
 #   make config  regenerate core/gl_config.h, core/gl_font_data.c,
 #                hal/stm32u5/gl_pins.h and tests/solver/gl_solver_vectors.c
 #   make diff    NOT part of `make test`: build the solver as shared libraries
@@ -61,7 +63,12 @@ else
 Q := @
 endif
 
-WARN     := -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror
+# -ffp-contract=off: no fused multiply-add anywhere.  The solver's single-
+# precision results are compared with the reference operation by operation;
+# a contracted a * b + c rounds once instead of twice.  -std=c99 implies it
+# with gcc, -std=gnu99 does not: it is stated, and `make cross` checks the
+# objects for fused instructions.
+WARN     := -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -ffp-contract=off
 # Extra checks for firmware code (core, drivers, app): no silent double
 # arithmetic, no variable-length arrays, every global function declared.
 FW_WARN  := -Wdouble-promotion -Wvla -Wmissing-prototypes -Wstrict-prototypes -Wundef
@@ -191,7 +198,7 @@ $(XBUILD)/%.o: %.c
 
 cross: config-check $(XOBJ)
 	@echo "$(CROSS_CC) $(CROSS_FLAGS)"
-	@sh tools/cross_report.sh "$(CROSS)" $(XOBJ)
+	@PYTHON="$(PYTHON)" sh tools/cross_report.sh "$(CROSS)" $(XOBJ)
 
 # ---- the STM32 backend against the vendor's headers (compile only) ---------
 # hal/stm32u5/gl_hal_stm32u5.c is written against ST's STM32U5 HAL.  No vendor

@@ -77,10 +77,23 @@ typedef struct {
     uint32_t prefix##_version(void);                                                                \
     /** sizeof of gl_solver_work_t, gl_measurements_t, gl_estimate_t in this build. */              \
     unsigned prefix##_sizeof(unsigned which);                                                       \
+    /** Step budget (gl_solver_options_t.max_steps) of the prefix##_estimate calls that follow;      \
+     *  0 = none (the reference, and the state at start-up). */                                     \
+    void prefix##_set_max_steps(uint32_t max_steps);                                                \
     /** One estimator case.  `ball_last`: hand the drops over with the one at the ball LAST and     \
      *  ball_index = n - 1 (the result must not depend on it).  */                                  \
     void prefix##_estimate(const gl_vec_est_case_t *c, gl_vec_tol_t tol, int ball_last,             \
                            gl_vec_est_result_t *out);                                               \
+    /** One estimate of `n` placements written in the test (the one at the ball first; method B1   \
+     *  = 0, B0 = 1, B2 = 2), with the default tolerances of the build, or the single-precision     \
+     *  ones if `single_tol`.  hz_az / hz_elev: the horizon samples of the placement at the ball    \
+     *  (m[0].n_horizon of them) or NULL. */                                                        \
+    void prefix##_estimate_meas(const gl_vec_meas_t *m, unsigned n, const double *hz_az,            \
+                                const double *hz_elev, unsigned method, double past,                \
+                                double near_miss, uint32_t max_steps, int single_tol,               \
+                                gl_vec_est_result_t *out);                                          \
+    /** gl_solver_default_options(): past, near_miss, tol_miss, lm_tol and the step budget. */      \
+    void prefix##_default_options(double out[4], uint32_t *max_steps);                              \
     void prefix##_solve(const gl_vec_sol_case_t *c, gl_vec_tol_t tol, gl_vec_sol_result_t *out);    \
     void prefix##_roll(const gl_vec_roll_case_t *c, gl_vec_roll_result_t *out);                     \
     /** Roll the launch (phi, v0) on a putt-frame patch, hole at (dist, 0): the trial the solver    \

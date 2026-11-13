@@ -80,6 +80,15 @@ static const gl_ui_transition_t table_[] = {
     /* ---- SHOW_RESULT ---- */
     T(GL_UI_SHOW_RESULT, GL_EV_DOUBLE_TAP, GL_G_SURVEY_ACTIVE, GL_UI_SHOW_RESULT,
       GL_ACT_SURVEY_RESET | GL_ACT_REDRAW),
+    /* The Precision Read is offered ONCE per placement.  After a re-read the
+     * marker has been turned since its cameras saw the flagstick: a second
+     * double tap goes on to the Survey (what the spin prompt offers for a
+     * second double tap anyway), it never arms another spin.  (It used to,
+     * with the first read's slope and a gyro angle counted from the turned
+     * marker: the half turn back then cancelled the slope to "0.0 %,
+     * STRAIGHT, 2X".) */
+    T(GL_UI_SHOW_RESULT, GL_EV_DOUBLE_TAP, GL_G_PRECISION_REREAD, GL_UI_SURVEY_NEXT_DROP,
+      GL_ACT_SURVEY_STORE | GL_ACT_REDRAW),
     T(GL_UI_SHOW_RESULT, GL_EV_DOUBLE_TAP, GL_G_ALWAYS, GL_UI_PRECISION_WAIT_SPIN,
       GL_ACT_ARM_SPIN | GL_ACT_REDRAW),
     T(GL_UI_SHOW_RESULT, GL_EV_MOTION, GL_G_SURVEY_ROOM, GL_UI_SURVEY_NEXT_DROP,
@@ -122,6 +131,15 @@ static const gl_ui_transition_t table_[] = {
       GL_ACT_SAVE_SETTINGS | GL_ACT_CAL_ZERO_START | GL_ACT_REDRAW),
     T(GL_UI_SETTINGS_DIAL, GL_EV_FLAT, GL_G_ALWAYS, GL_UI_WAIT_STILL,
       GL_ACT_SAVE_SETTINGS | GL_ACT_WATCH_STILL | GL_ACT_NEW_READ | GL_ACT_REDRAW),
+    /* The distance PROMPT (no flagstick seen) is reached with the marker
+     * lying on the green.  Picking it up and putting it down again - without
+     * ever standing it upright - is a new placement: read again.  (It used
+     * to be ignored: the prompt could only be left through the dial or,
+     * after 30 s, into sleep.)  A golfer who did stand it upright and rolled
+     * it gets FLAT first (row above), which saves what he dialled. */
+    T(GL_UI_SETTINGS_DIAL, GL_EV_MOTION, GL_G_DIST_PROMPT, GL_UI_SETTINGS_DIAL, GL_ACT_WATCH_STILL),
+    T(GL_UI_SETTINGS_DIAL, GL_EV_STILL, GL_G_DIST_PROMPT_MOVED, GL_UI_READ_TILT,
+      GL_ACT_START_TILT | GL_ACT_NEW_READ | GL_ACT_REDRAW),
     T(GL_UI_SETTINGS_DIAL, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_SLEEP,
       GL_ACT_ENTER_SLEEP | GL_ACT_SURVEY_RESET),
 
@@ -254,6 +272,8 @@ static bool guard_(const gl_ui_t *ui, uint8_t guard)
     case GL_G_USB: return ui->usb;
     case GL_G_ITEM_ZERO_YES:
         return ui->item == GL_UI_ITEM_ZERO && ui->dial_value != 0;
+    case GL_G_DIST_PROMPT: return ui->dist_prompt;
+    case GL_G_DIST_PROMPT_MOVED: return ui->dist_prompt && ui->moved;
     default: return false;
     }
 }
@@ -327,6 +347,7 @@ uint32_t gl_ui_dispatch(gl_ui_t *ui, gl_ui_event_t ev, int32_t arg, uint32_t now
         if (from != (uint8_t)GL_UI_SETTINGS_DIAL) {
             ui->saved = ui->edit; /* snapshot, restored if the dial is abandoned */
             ui->dist_prompt = (ev == GL_EV_CAPTURE_NO_STICK);
+            ui->moved = false;
             ui->item = (uint8_t)(ui->dist_prompt ? GL_ITEM_DISTANCE : GL_ITEM_STIMP);
             ui->dial_value = item_value_(ui);
         } else if (ev == GL_EV_DOUBLE_TAP) {
@@ -339,6 +360,8 @@ uint32_t gl_ui_dispatch(gl_ui_t *ui, gl_ui_event_t ev, int32_t arg, uint32_t now
             } else {
                 ui->dial_value = (arg != 0) ? 1 : 0;
             }
+        } else if (ev == GL_EV_MOTION) {
+            ui->moved = true; /* the distance prompt: the marker was picked up */
         }
     }
     if (from == (uint8_t)GL_UI_SETTINGS_DIAL && row->next != (uint8_t)GL_UI_SETTINGS_DIAL) {
@@ -423,8 +446,8 @@ static void battery_small_(gl_gfx_t *g, const gl_ui_view_t *v, int y)
 const char *gl_ui_note_text(gl_ui_note_t note)
 {
     static const char *const text[GL_UI_NOTE_COUNT] = {
-        "", "2 LINES SEEN", "1 CAMERA", "FIT NOT DONE", "PACE LIMIT", "APPROX", "NO RANGE",
-        "NO FLAG", "NOT SOLVED", "NO SOLUTION"
+        "", "2 LINES SEEN", "1 CAMERA", "POOR HORIZON", "FIT NOT DONE", "PACE LIMIT", "APPROX",
+        "NO RANGE", "NO FLAG", "NOT SOLVED", "NO SOLUTION"
     };
     return ((unsigned)note < (unsigned)GL_UI_NOTE_COUNT) ? text[note] : "";
 }
@@ -456,7 +479,13 @@ void gl_ui_result_text(const gl_ui_t *ui, const gl_ui_view_t *v, gl_ui_result_te
     if (v->solved && v->plays_like_m > 0.0f) {
         gl_fmt_append(t->plays, sizeof(t->plays), "PLAYS ");
         n = strlen(t->plays);
-        gl_settings_format_distance(&ui->edit, v->plays_like_m, t->plays + n, sizeof(t->plays) - n);
+        gl_settings_format_distance(&ui->edit, v->plays_like_m, t->plays + n,
+                                    sizeof(t->plays) - n - 1u);
+        if (v->plays_uncertain) {
+            /* the base of the stick was hidden: the height of the hole, and
+             * with it the pace, is only bounded */
+            gl_fmt_append(t->plays, sizeof(t->plays), "?");
+        }
     }
     /* the one plain message */
     if (!v->line_here) {
@@ -504,20 +533,21 @@ static void screen_result_(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g
     if (v->line_here) {
         /* 1. the aim line: the backward extension of the start line through
          * the ball.  Solid for a solution of the putt the golfer has; long
-         * dashes for anything less: an aim that is not a solution, or one
-         * solved for a distance that nobody measured or dialled (exactly the
-         * cases in which the break is not quoted either). */
+         * dashes (TENTATIVE) for anything less:
+         *   - an aim that is not a solution;
+         *   - one solved for a distance that nobody measured or dialled (the
+         *     break is not quoted then either);
+         *   - the flag-out fallback: the line is solved for the dialled
+         *     distance, but its direction hangs on how well the golfer
+         *     pointed the visor at the hole (2 degrees off are 1.4 cups at
+         *     4.5 m) - the "low-confidence indicator" DESIGN_SPEC asks for.
+         * A line that would leave the aperture (aim more than about 13.5
+         * degrees off the marker's axis) is drawn PARALLEL through the screen
+         * centre in the same style: the direction is what the golfer copies.
+         * (There used to be an arrow marking the side the true line lies on;
+         * for an aim to the left it pointed right.) */
         gl_gfx_aim_line_styled(g, v->aim_rad, v->ball_az_rad, 3.0f,
-                               !v->solved || !(v->distance_m > 0.0f), &info);
-        if (!info.on_screen) {
-            /* the true line passes outside the aperture: the dashed line shows
-             * its direction, the arrow the side it lies on */
-            if (info.offset_px > 0.0f) {
-                gl_gfx_arrow(g, 96.0f, 64.0f, -0.5f * GL_PI_F, 16.0f, 7.0f, 1.5f, GL_INK_BLACK);
-            } else {
-                gl_gfx_arrow(g, 32.0f, 64.0f, 0.5f * GL_PI_F, 16.0f, 7.0f, 1.5f, GL_INK_BLACK);
-            }
-        }
+                               !v->solved || !(v->distance_m > 0.0f) || !v->flag_found, &info);
     }
     /* 2. distance (top), 3. plays-like distance, 4. the message */
     label_(g, CX, 12, t.distance, 1);
@@ -582,7 +612,14 @@ static void screen_settings_(const gl_ui_t *ui, gl_gfx_t *g)
         }
     }
     text_(g, 82, "ROLL TO SET", 1);
-    text_(g, 94, "FLAT = OK", 1);
+    if (ui->dist_prompt) {
+        /* asked because no flagstick was seen: say so, and that putting the
+         * marker down again (flagstick in view now) reads again */
+        text_(g, 10, "NO FLAG", 1);
+        text_(g, 94, "OR PLACE AGAIN", 1);
+    } else {
+        text_(g, 94, "FLAT = OK", 1);
+    }
     /* position within the menu */
     for (unsigned i = 0; i < GL_UI_ITEM_COUNT; i++) {
         int x = CX - (int)GL_UI_ITEM_COUNT * 3 + (int)i * 6;
@@ -626,7 +663,23 @@ void gl_ui_render(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g)
         text_(g, 52, "SOLVE", 2);
         break;
     case GL_UI_SHOW_RESULT:
-        screen_result_(ui, v, g);
+        if (v->have_result && fabsf(v->ball_az_rad) > 0.5f * GL_PI_F) {
+            /* The marker faces away from the hole (the half turn of a
+             * Precision Read): the golfer behind the ball looks at the
+             * screen from its "top".  Draw what a marker facing the hole
+             * would show - every angle referred to the opposite direction -
+             * and turn the picture round: line and fall-line arrow lie
+             * where they did, text and the '<' / '>' of the break are the
+             * right way up and on the right side FOR HIM. */
+            gl_ui_view_t t = *v;
+            t.aim_rad = gl_wrap_pi(v->aim_rad - GL_PI_F);
+            t.fall_line_rad = gl_wrap_pi(v->fall_line_rad - GL_PI_F);
+            t.ball_az_rad = gl_wrap_pi(v->ball_az_rad - GL_PI_F);
+            screen_result_(ui, &t, g);
+            gl_gfx_rotate_180(g);
+        } else {
+            screen_result_(ui, v, g);
+        }
         break;
     case GL_UI_PRECISION_WAIT_SPIN:
         /* three-quarter ring with an arrow head: "turn me round" */

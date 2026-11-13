@@ -100,7 +100,7 @@ def make_types(real):
         _fields_ = [
             ("past_m", real), ("max_rolls", ctypes.c_uint16), ("method", ctypes.c_uint8),
             ("use_grain", ctypes.c_bool), ("tol_miss_m", real), ("tol_pace_m", real), ("lm_tol", real),
-            ("lm_max_iter", ctypes.c_uint16),
+            ("lm_max_iter", ctypes.c_uint16), ("near_miss_m", real), ("max_steps", ctypes.c_uint32),
         ]
 
     class Surface(ctypes.Structure):
@@ -512,19 +512,22 @@ def run_vectors(solver, path, verbose=False):
     groups = [("estimator_cases", "solver_cases")]
     if "fallback_estimator_cases" in data:
         groups.append(("fallback_estimator_cases", "fallback_solver_cases"))
+    if "near_miss_estimator_cases" in data:
+        groups.append(("near_miss_estimator_cases", None))
     for est_key, sol_key in groups:
         worst_all, worst_name, n = 0.0, "", 0
         stats = {}
         for case in data[est_key]:
             over = dict(cfg)
             over.update(case["config_overrides"])
+            near = float(over.get("near_miss_keep", 0.0))  # (not in estimator_config: 0 outside the near-miss group)
             if solver.double:
                 opt = solver.options(case["method"], past_m=over["past"], use_grain=over["use_grain"],
                                      tol_miss_m=over["tol_miss"], tol_pace_m=over["tol_pace"],
-                                     lm_tol=over["lm_tol"], lm_max_iter=over["lm_max_iter"])
+                                     lm_tol=over["lm_tol"], lm_max_iter=over["lm_max_iter"], near_miss_m=near)
             else:  # the single build with its own tolerances: the strict rule does not apply (see test_solver.c)
                 opt = solver.options(case["method"], past_m=over["past"], use_grain=over["use_grain"],
-                                     lm_max_iter=case["config_overrides"].get("lm_max_iter"))
+                                     lm_max_iter=case["config_overrides"].get("lm_max_iter"), near_miss_m=near)
             st, est, fit = solver.estimate(case["measurements"], opt)
             n += 1
             if st != GL_OK:
@@ -554,7 +557,7 @@ def run_vectors(solver, path, verbose=False):
                 print(f"    max |diff| {k:24s} {stats[k]:.3e}")
         worst_all, worst_name, n = 0.0, "", 0
         status_bad = 0
-        for case in (data[sol_key] if solver.double else []):
+        for case in (data[sol_key] if (solver.double and sol_key is not None) else []):
             opt = solver.options("B1", past_m=case["past"], tol_miss_m=tol["tol_miss"], tol_pace_m=tol["tol_pace"],
                                  max_rolls=case.get("max_rolls"))
             st, sol = solver.solve_aim(case["coeffs"], (0.0, 0.0), (case["distance"], 0.0), case["a_r"],
@@ -583,7 +586,7 @@ def run_vectors(solver, path, verbose=False):
                 if ex > 1.0:
                     bad += 1
                     print(f"  {sol_key}[{case['id']}] ({case['tag']}): {name} is {ex:.3g} x the allowed difference")
-        if solver.double:
+        if solver.double and sol_key is not None:
             print(f"{sol_key}: {n} cases, {status_bad} status mismatches, worst difference {worst_all:.3g} x allowed "
                   f"({worst_name})")
     return bad
@@ -603,8 +606,10 @@ _EXTREME = {
     "flag_disparity": (NAN, math.inf, 0.0, -1.0, 0.2, 0.25, 0.2500001, 1e-12, 1e6, 1e12),
     "flag_low_elev": (NAN, math.inf, -math.inf, 1.5, -1.5, 0.3, -0.3, 1.5707963267948966, 0.0),
     "flag_top_elev": (NAN, math.inf, 1.5, -0.2, 0.0, 1.5707963267948966),
-    "stick_height_est": (NAN, math.inf, 0.0, -1.96, 1e-6, 100.0),
-    "stick_height_rel_sigma": (NAN, math.inf, 0.0, -0.07, 10.0),
+    # (1e300 / 1e20 / 1e-20 / 1e-200: numbers whose SQUARE leaves the range of a double or
+    # of a float - the review found weights 1 / sigma^2 that became 0 or infinite)
+    "stick_height_est": (NAN, math.inf, 0.0, -1.96, 1e-6, 100.0, 1e300, 1e20, 1e-20, 1e-200),
+    "stick_height_rel_sigma": (NAN, math.inf, 0.0, -0.07, 10.0, 1e300, 1e20, 1e-20, 1e-200),
     "grain_kappa": (NAN, math.inf, -1.0, 0.0, 0.25, 0.3, 5.0),
     "grain_azimuth": (NAN, math.inf, 100.0, -7.0),
     "stimp_ft": (NAN, math.inf, -math.inf, 0.0, -10.0, 1.0, 4.999, 16.001, 1e6),
@@ -698,6 +703,9 @@ def random_estimator_case(rng, es, Measurements, hostile):
         past=float(rng.choice([0.30, 0.30, 0.15, 0.45, 0.0, 1.0])), use_grain=bool(rng.random() < 0.25),
         tol_miss=1e-9 if tight else 1e-5, tol_pace=1e-9 if tight else 1e-5, lm_tol=1e-10 if tight else 1e-9,
         lm_max_iter=int(rng.choice([200 if tight else 60, 1, 2, 5], p=[0.94, 0.02, 0.02, 0.02])),
+        # EstimatorConfig.near_miss_keep / gl_solver_options_t.near_miss_m: off (the
+        # reference's default), the firmware's 5 mm, or another value
+        near_miss=float(rng.choice([0.0, 0.005, 0.02, 1e-4], p=[0.55, 0.35, 0.05, 0.05])),
     )
     ball_index = int(rng.integers(0, n_drops))
     order = list(range(1, n_drops))
@@ -726,13 +734,17 @@ def float_exact(v):
 
 
 def c_chain_on_patch(solver, patch, dist, a_r, grain, o):
-    """The estimator's solve chain (patch, else secant plane, else best
-    iterate) run with the C solver on a GIVEN patch: (aim_source,
-    solve_status, phi, v0).  Used to show that a disagreement comes from the
-    fitted patch alone."""
+    """The estimator's solve chain (patch, else its kept near miss, else
+    secant plane, else best iterate) run with the C solver on a GIVEN patch:
+    (aim_source, solve_status, phi, v0).  Used to show that a disagreement
+    comes from the fitted patch alone."""
     opt = solver.options("B1", past_m=o["past"], tol_miss_m=o["tol_miss"], tol_pace_m=o["tol_pace"])
     _, sol = solver.solve_aim(list(patch), (0.0, 0.0), (dist, 0.0), a_r, list(grain), opt)
     if sol["status"] in (0, 1):
+        return 0, sol["status"], sol["phi_rad"], sol["v0_mps"]
+    near = o.get("near_miss", 0.0)
+    if (near > 0.0 and sol["status"] != 5 and math.isfinite(sol["phi_rad"]) and math.isfinite(sol["v0_mps"])
+            and sol["v0_mps"] > 0.0 and abs(sol["miss_m"]) <= near):
         return 0, sol["status"], sol["phi_rad"], sol["v0_mps"]
     plane = [patch[0] + 0.5 * patch[2] * dist, patch[1] + 0.5 * patch[3] * dist, 0.0, 0.0, 0.0]
     _, sol = solver.solve_aim(plane, (0.0, 0.0), (dist, 0.0), a_r, list(grain), opt)
@@ -784,7 +796,7 @@ def run_random_estimates(solver, n, seed, hostile, es, Measurements, max_print=4
                      lm_max_iter=o["lm_max_iter"] if o["lm_max_iter"] < 10 else int(own.lm_max_iter))
         cfg = dataclasses.replace(es.EstimatorConfig(), past=o["past"], use_grain=o["use_grain"],
                                   tol_miss=o["tol_miss"], tol_pace=o["tol_pace"], lm_tol=o["lm_tol"],
-                                  lm_max_iter=o["lm_max_iter"])
+                                  lm_max_iter=o["lm_max_iter"], near_miss_keep=o["near_miss"])
         # ---- reference
         ref, err = None, None
         try:
@@ -801,10 +813,12 @@ def run_random_estimates(solver, n, seed, hostile, es, Measurements, max_print=4
         # ---- C
         if solver.double:
             opt = solver.options(method, past_m=o["past"], use_grain=o["use_grain"], tol_miss_m=o["tol_miss"],
-                                 tol_pace_m=o["tol_pace"], lm_tol=o["lm_tol"], lm_max_iter=o["lm_max_iter"])
+                                 tol_pace_m=o["tol_pace"], lm_tol=o["lm_tol"], lm_max_iter=o["lm_max_iter"],
+                                 near_miss_m=o["near_miss"])
         else:  # the single build runs with its own default tolerances
             opt = solver.options(method, past_m=o["past"], use_grain=o["use_grain"],
-                                 lm_max_iter=o["lm_max_iter"] if o["lm_max_iter"] < 10 else None)
+                                 lm_max_iter=o["lm_max_iter"] if o["lm_max_iter"] < 10 else None,
+                                 near_miss_m=o["near_miss"])
         arr = [drops[j] for j in order]
         st, est, fit = solver.estimate(arr, opt, ball_index=ball_index, survey=(len(arr) > 1 or rng.random() < 0.1))
         flagged = (est["solve_status"] == SOLVE_NOT_RUN and est["aim_source"] == 3 and est["confidence"] == 0.0
@@ -827,6 +841,11 @@ def run_random_estimates(solver, n, seed, hostile, es, Measurements, max_print=4
                     printed += 1
                     print(f"  DISAGREEMENT {tag}: C status {st}, the reference returns an estimate "
                           f"(distance {ref['distance']:.6g}, phi {ref['phi']:.6g})")
+                    for k_d, m_d in enumerate(drops):
+                        d_d = m_d.to_dict()
+                        d_d.pop("horizon_az", None)
+                        d_d.pop("horizon_elev", None)
+                        print(f"      placement {k_d}: {d_d}")
             continue
         crec = c_estimate_record(est, fit)
         ok_fin = record_is_finite(crec, method == "STRAIGHT")
@@ -872,7 +891,8 @@ def run_random_estimates(solver, n, seed, hostile, es, Measurements, max_print=4
                 cfg_t = dataclasses.replace(cfg, tol_miss=1e-9, tol_pace=1e-9, lm_tol=1e-10,
                                             lm_max_iter=max(o["lm_max_iter"], 200) if o["lm_max_iter"] >= 10 else o["lm_max_iter"])
                 opt_t = solver.options(method, past_m=o["past"], use_grain=o["use_grain"], tol_miss_m=1e-9,
-                                       tol_pace_m=1e-9, lm_tol=1e-10, lm_max_iter=cfg_t.lm_max_iter)
+                                       tol_pace_m=1e-9, lm_tol=1e-10, lm_max_iter=cfg_t.lm_max_iter,
+                                       near_miss_m=o["near_miss"])
                 try:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore")

@@ -92,6 +92,10 @@
 #define GLS_PACE_OK 0
 #define GLS_PACE_LIMITED 1
 #define GLS_PACE_UNREACHABLE 2
+/* single precision only: a fit step of at most this many spacings of the
+ * parameter it moves is "no step" (gl_solver_fit.c, fit_lm_) */
+#define GLS_LM_STEP_ULPS GLS_R(4.0)
+#define GLS_PACE_CUT 3 /* firmware only: the step budget ran out during the pace solve */
 
 /* ---- EstimatorConfig (estimator.py) ---------------------------------------- */
 
@@ -199,16 +203,24 @@ typedef struct {
     gl_real_t phi, v0, miss, vhole;
     uint32_t n_rolls;
     uint32_t n_steps;
+    bool budget_spent;  /* the step budget ran out: the solve was cut short */
 } gls_solve_res_t;
 
 #define gls_solve_kernel GLS_NAME(solve_kernel)
 
-/** Reference: _solve_kernel.  Returns a gl_solve_status_t. */
+/** Reference: _solve_kernel.  Returns a gl_solve_status_t.
+ *  `max_steps` (0 = none; NOT in the reference): budget of RK4 steps, of
+ *  which `steps_used` are spent already (by an earlier solve of the same
+ *  estimate); checked before every trial roll.  When it runs out the solve
+ *  ends GL_SOLVE_NO_CONVERGENCE with the best iterate it had
+ *  (res->budget_spent); with nothing left at the start that is the planar
+ *  first guess, and nothing is rolled. */
 uint8_t gls_solve_kernel(const gl_quad_surface_t *sf, gl_real_t sx, gl_real_t sy, gl_real_t hx,
                          gl_real_t hy, gl_real_t a_r, gl_real_t agx, gl_real_t agy, gl_real_t v_h,
                          gl_real_t dt, gl_real_t t_max, gl_real_t r_max, gl_real_t tol_y,
                          gl_real_t tol_dist, gl_real_t phi_max, gl_real_t v_max,
-                         uint32_t max_rolls, gls_solve_res_t *res);
+                         uint32_t max_rolls, uint32_t max_steps, uint32_t steps_used,
+                         gls_solve_res_t *res);
 
 /* ---- fit (gl_solver_fit.c) ---------------------------------------------------- */
 

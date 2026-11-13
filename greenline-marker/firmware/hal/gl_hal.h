@@ -275,8 +275,9 @@ uint32_t gl_hal_sleep(gl_sleep_mode_t mode);
 /**
  * DESIGN_SPEC section 4 (rev C2): no high-speed crystal; the MCU runs from
  * its internal oscillators.  During a read the PLL raises the core clock to
- * 160 MHz (the vision needs about 145 million instructions per read, a
- * worst-case putt solve more), otherwise it runs slowly or sleeps in Stop 2.
+ * 160 MHz (the vision needs 58 to 88 million instructions per read, the
+ * costliest putt solve found 221 million), otherwise it runs slowly or sleeps
+ * in Stop 2.
  */
 typedef enum {
     GL_CLOCK_SLOW = 0, /**< the base clock of the backend (STM32: MSIS, no PLL) */
@@ -299,7 +300,10 @@ typedef enum {
  *    survive Stop mode; a backend may treat it as GL_SLEEP_IDLE).
  *
  * Returns GL_ERR_IO if the PLL did not lock: the clock is then still SLOW
- * and everything works, only slower.
+ * and everything works, only slower.  Returns GL_ERR_IO also if a switch
+ * BACK to GL_CLOCK_SLOW did not take place: the clock is then still FAST
+ * (gl_hal_clock_get() says so); the caller must not assume otherwise - it
+ * stays out of GL_SLEEP_STOP and tries again.
  */
 gl_status_t gl_hal_clock_set(gl_clock_t speed);
 

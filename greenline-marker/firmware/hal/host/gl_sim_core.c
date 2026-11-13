@@ -89,6 +89,7 @@ static struct {
     uint8_t clock;
     uint64_t clock_fast_since;
     unsigned clock_fail;
+    unsigned clock_fail_slow;
     uint8_t mcu_mode;            /* SIM_MCU_RUN / _IDLE / _STOP: for the supply model */
     /* irq */
     uint32_t irq_enabled, irq_pending;
@@ -926,6 +927,11 @@ gl_clock_t gl_sim_clock(void)
     return (gl_clock_t)S.clock;
 }
 
+void gl_sim_clock_fail_slow(unsigned count)
+{
+    S.clock_fail_slow = count;
+}
+
 void gl_sim_clock_fail(unsigned count)
 {
     S.clock_fail = count;
@@ -1260,6 +1266,10 @@ gl_status_t gl_hal_clock_set(gl_clock_t speed)
         S.clock_fast_since = S.now_us;
         S.stats.clock_to_fast++;
     } else if (speed != GL_CLOCK_FAST && before == (uint8_t)GL_CLOCK_FAST) {
+        if (S.clock_fail_slow > 0u) {
+            S.clock_fail_slow--;
+            return GL_ERR_IO; /* the switch back did not take place: still fast */
+        }
         S.stats.clock_fast_us += S.now_us - S.clock_fast_since;
         S.clock = (uint8_t)GL_CLOCK_SLOW;
         S.stats.clock_to_slow++;
