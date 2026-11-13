@@ -1,4 +1,4 @@
-# GreenLine GL-1 — master design specification (rev D, EVT1, with amendments E1 to E16)
+# GreenLine GL-1 — master design specification (rev D, EVT1, with amendments E1 to E22)
 
 This file records every architecture decision. `master_params.yaml` holds the numbers that the
 mechanical CAD and the PCB layout must share; `check_layout.py` verifies them. Where this file
@@ -29,6 +29,14 @@ Amendments after rev D (each is worked into the text below and marked with its n
 | E14 | Sleep current and rail limits stated | No limits existed |
 | E15 | Read time restated from the firmware timing model | "About three seconds" was older than the firmware |
 | E16 | Baffle-ring tape 0.10 to 0.145 mm | No opaque black tape of exactly 0.13 mm was found |
+| E17 | Guaranteed upward camera field restated as 14.0 degrees, defined at the loosest locating fit (0.125 mm: hole +0.05, spigot -0.05, spigots checked with a no-go gauge) with the roof at -10 C; the model gives 14.03 there. Test gate 2 bars move to +13.0 and -13.0 degrees. The stick top then enters the field at about 8.4 m on a worst-case unit (8.1 m before) | The 14.5 degree figure held only at the nominal 0.075 mm fit: the ordinary +0.05 mm hole tolerance alone took it to 14.496 |
+| E18 | Legend print rules: line and space 0.15 mm or more, text 1.0 mm or more, ink 0.03 mm or less, none within dia 8.5 of a foot or 0.75 mm of the outline. Every fixture that takes the outer face as its reference bears on bare mask (gauge plate on three bosses, seat plate on three pads next to the feet, bridge depth gauge). Each statement block holds 88 characters; text that does not fit goes in the user guide and on the packaging | Legend ink under a flat plate would shift the ball protrusion by up to 0.03 mm and tilt the base-face zero by about 0.8 mrad |
+| E19 | Quarter-wave trial film is dia 23.4 mm with a clocking flat (4.3 mm long at y 11.5), 0.11 mm or less with its adhesive | A round film carried no axis reference, and at dia 24.0 the placement chain could put it under the glass tape |
+| E20 | Base-plate thickness accepted from 0.78 mm (FR-4) and 0.84 mm (PA12); ball diameter tolerance of grade 100 taken as +-0.0127 mm (to be confirmed against the ball standard) | An oversize ball left 0.007 mm of epoxy over its land at the old lower limits, against 0.02 required |
+| E21 | Baffle-ring height = measured plate thickness + 0.15 - tape thickness; rings are printed 1.10 mm high and lapped | The earlier rule (plate + 0.02) was only right for one tape thickness |
+| E22 | Display rotation in its pocket is up to about 1.2 degrees (computed 1.19); cell fixing adhesive 0.06 mm or less | Corrects E12's "about 1 degree"; no tape of 0.05 mm was found |
+
+E17 to E22 come from the enclosure review of 2026-11-13. They are decided here and enter `master_params.yaml` and the CAD together at the next revision letter, so that the mechanical checks, which assert the YAML values, never run against a half-changed file. Until then the YAML still carries 14.5 degrees, [0.76, 0.90] / [0.83, 0.92], the plate + 0.02 ring rule and 0.05 mm, and the enclosure package records the same changes as proposals P1 to P9 (`mechanical/PROPOSED_PARAM_CHANGES.md`, part C). P6 (U11 0.2 mm inboard) is settled by the board placement.
 
 
 ## 1. What the product is

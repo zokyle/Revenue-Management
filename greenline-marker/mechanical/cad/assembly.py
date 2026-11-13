@@ -5,6 +5,11 @@ separate baffle ring) under the plain names, and the parts of the ALTERNATIVE bu
 0.13 mm sheet, seal joint, ball pottings, grain potting) under the same names with the suffix "_pa12" and group "alt".
 variant_view(parts) gives the alternative build as a complete assembly under the plain names.
 
+Amendments E9 and E11: build_parts() also returns the OPTIONAL retarder film under the cover glass (group "option": an EVT
+trial part, not in the primary build) and the two calibration seat plates (group "fixture": factory fixtures, drawing
+GL1-050).  They are exported like every part, checked by their own rows (check 2) and their own check (18), and are not
+part of the interference, mass, seal or assembly checks of the marker.
+
 Public API (used by checks.py, the drawings and the renders):
     build_parts()            -> dict name -> PartInfo (shape is a cadquery Workplane in the assembly frame)
     variant_view(parts)      -> the alternative build (PA12 base plate) under the plain part names
@@ -30,6 +35,8 @@ ALT_SUFFIX = "_" + P.BASE_ALT
 PRINTED = ("tub", "cradle", "baffle_ring", "base_plate" + ALT_SUFFIX)     # MJF parts with a print file (the FR-4 plate is a fabricated part)
 BASE_SPECIFIC = ["base_plate", "pcb_adhesive", "seal_bead", "grain_potting"] + [f"ball_epoxy_{i + 1}" for i in range(len(P.BALL_XY))]
 PRIMARY_ONLY = ["baffle_ring", "baffle_adhesive"]                         # the PA12 plate carries its baffle itself
+EXTRA_GROUPS = ("alt", "option", "fixture")                               # not part of the primary assembly (marker seated in the cradle)
+GROUP_LABEL = {"puck": "primary", "cradle": "primary", "alt": "alternative", "option": "optional (EVT trial)", "fixture": "fixture"}
 
 
 @dataclass
@@ -39,10 +46,12 @@ class PartInfo:
     color: tuple            # r, g, b, a  (0..1)
     material: str
     density: float          # g/cm3 (PROVISIONAL typical values, used for the mass estimate)
-    group: str              # "puck", "cradle" or "alt" (parts of the alternative base-plate build)
-    kind: str               # "printed" | "fabricated" | "purchased" | "adhesive" | "reference"
+    group: str              # "puck", "cradle", "alt" (alternative base-plate build), "option" (EVT trial part) or "fixture"
+    kind: str               # "printed" | "fabricated" | "purchased" | "adhesive" | "reference" | "fixture"
     desc: str = ""
 
+
+BALL_DENSITY = 8.0       # 316 stainless (E8; silicon nitride would be 3.2): three balls of 0.52 mm3, no effect on the mass in two decimals
 
 # name: (builder, colour rgba, material, density g/cm3, group, kind, description)
 def _base_catalog(group):
@@ -72,8 +81,8 @@ def _catalog():
         c[n] = base[n]
     c["main_pcb"] = (PT.main_pcb, (0.05, 0.40, 0.18, 1), "FR-4 + parts (envelope)", 2.2, "puck", "purchased", "main PCB assembly, part boxes from the YAML")
     c["baffle_ring"] = (PT.baffle_ring, (0.10, 0.10, 0.11, 1), "MJF PA12, dyed black, not vapor smoothed", 1.01, "puck", "printed", "GL1-013 grain baffle ring")
-    c["baffle_adhesive"] = (PT.baffle_adhesive, (0.20, 0.20, 0.20, 0.9), f"opaque black double-coated tape {P.BAFFLE_PSA_T} mm, die-cut annulus (PROVISIONAL)", 1.0, "puck", "adhesive",
-                            "adhesive annulus under the baffle ring")
+    c["baffle_adhesive"] = (PT.baffle_adhesive, (0.20, 0.20, 0.20, 0.9), f"opaque black double-coated tape, {min(P.BAFFLE_TAPE_RANGE)} to {max(P.BAFFLE_TAPE_RANGE)} mm as available "
+                            f"(modelled {P.BAFFLE_PSA_T}), die-cut annulus (PROVISIONAL)", 1.0, "puck", "adhesive", "adhesive annulus under the baffle ring")
     c["grain_potting"] = base["grain_potting"]
     for s in ("L", "R"):
         c[f"camera_{s}"] = (lambda s=s: PT.camera(s), (0.25, 0.25, 0.30, 1), "OVM7692-RYAA cube", 2.5, "puck", "purchased", f"camera cube {s}")
@@ -89,18 +98,26 @@ def _catalog():
     c["cover_glass"] = (PT.cover_glass, (0.75, 0.90, 0.98, 0.35), "mineral glass crystal 28.0 x 1.0 (EVT, not step-proof)", 2.5, "puck", "purchased", "cover glass")
     c["cover_tape"] = (PT.cover_tape, (0.95, 0.85, 0.35, 0.8), f"3M 9472LE transfer tape ring {P.CG_TAPE_T} mm, dia {P.CG_D} / {P.MECH['cover_tape_id']}", 1.0, "puck", "adhesive",
                        "cover-glass tape ring")
+    c["retarder_film"] = (PT.retarder_film, (0.80, 0.70, 0.95, 0.45), f"quarter-wave retarder film with laminating adhesive, about {P.RETARDER_T} mm, dia {P.RETARDER_D} "
+                          "(E9, EVT trial; PROVISIONAL, no part number)", 1.2, "option", "purchased", "OPTIONAL retarder film on the underside of the cover glass")
     c["battery"] = (PT.battery, (0.72, 0.72, 0.76, 1), "LiPo GM201030-PCB", 2.1, "puck", "purchased", "battery body (no swell)")
     for i in range(2):
         c[f"battery_lead_{i + 1}"] = (lambda i=i: PT.battery_lead(i), (0.80, 0.45, 0.30, 1), "cell lead + solder joint, envelope to the YAML joint height", 1.5, "puck",
                                       "reference", f"battery lead {i + 1} and its joint (envelope)")
     c["foam_pad"] = (PT.foam_pad, (0.35, 0.35, 0.35, 0.9), "PU foam 0.3 (e.g. Poron) PROVISIONAL", 0.32, "puck", "purchased", "foam pad under the LCD")
     for i in range(len(P.BALL_XY)):
-        c[f"ball_{i + 1}"] = (lambda i=i: PT.ball(i), (0.85, 0.86, 0.90, 1), "stainless ball 1.0 mm", 7.9, "puck", "purchased", f"foot ball {i + 1}")
+        c[f"ball_{i + 1}"] = (lambda i=i: PT.ball(i), (0.85, 0.86, 0.90, 1), f"ball dia {P.BALL_D}: {P.Y['base_plate']['feet']['material']}", BALL_DENSITY, "puck", "purchased",
+                              f"foot ball {i + 1}")
         c[f"ball_epoxy_{i + 1}"] = base[f"ball_epoxy_{i + 1}"]
     c["vent"] = (PT.vent, (0.95, 0.95, 0.95, 1), "Gore VE80205 ePTFE vent (PROVISIONAL)", 0.9, "puck", "purchased", "adhesive vent")
     c["cradle"] = (PT.cradle, (0.30, 0.32, 0.36, 1), "MJF PA12 (the latch is sized for PA12)", 1.01, "cradle", "printed", "GL1-020 cradle body with lip and latch")
     c["cradle_pcb"] = (PT.cradle_pcb, (0.05, 0.35, 0.50, 1), "FR-4 1.6", 1.85, "cradle", "purchased", "cradle PCB 30 x 22")
     c["usb_receptacle"] = (PT.usb_receptacle, (0.80, 0.80, 0.82, 1), "GCT USB4105 (PROVISIONAL envelope)", 2.0, "cradle", "purchased", "USB-C receptacle")
+    steel = "hardened, stabilised tool steel, seat faces lapped (fixture, drawing GL1-050)"
+    c["cal_seat_plate"] = (PT.cal_seat_plate, (0.62, 0.64, 0.68, 1), steel, 7.8, "fixture", "fixture", "GL1-050 item 1: base-face seat plate (three seat pads with ball pockets per nest)")
+    c["cal_plain_plate"] = (PT.cal_plain_plate, (0.62, 0.64, 0.68, 1), steel, 7.8, "fixture", "fixture", "GL1-050 item 2: ball seat plate (plain lapped face), in its own frame: top face z = 0")
+    c["gauge_plate"] = (PT.ball_gauge_plate, (0.62, 0.64, 0.68, 1), "hardened tool steel, boss tops ground in one plane, gauge holes reamed (fixture, detail on GL1-011 sheet 1)", 7.8,
+                             "fixture", "fixture", "ball gauge plate of assembly step 2: three bosses with reamed gauge holes (the base plate lies on it outer face down)")
     return c
 
 
@@ -134,8 +151,8 @@ def build_parts(only=None, verbose=False, alt=True):
 
 
 def primary(parts):
-    """The primary build only (without the group "alt")."""
-    return OrderedDict((n, i) for n, i in parts.items() if i.group != "alt")
+    """The primary build only (without the alternative base-plate parts, the optional part and the fixtures)."""
+    return OrderedDict((n, i) for n, i in parts.items() if i.group not in EXTRA_GROUPS)
 
 
 def variant_view(parts):
@@ -144,7 +161,7 @@ def variant_view(parts):
     out.  The PartInfo objects keep their own names (= export file names).  Use inside `with P.base_variant(P.BASE_ALT):`."""
     out = OrderedDict()
     for n, i in parts.items():
-        if i.group == "alt" or n in PRIMARY_ONLY:
+        if i.group in EXTRA_GROUPS or n in PRIMARY_ONLY:
             continue
         a = parts.get(n + ALT_SUFFIX)
         out[n] = dataclasses.replace(a, group="puck") if a is not None else i

@@ -1,4 +1,4 @@
-"""GL-1 board import: the real circuit board against the mechanical model (rev D, for the integration step).
+"""GL-1 board import: the real circuit board against the mechanical model (rev D as amended, for the integration step).
 
 The board toolchain (electrical/tools/gleda/outputs.py, mechanical_data) writes <design>-mechanical.json: board outline
 (exact contours and a polygon), NPTH holes, slots / cut-outs, keep-outs, height limits and every placed component with
@@ -17,9 +17,11 @@ before the board exists.  When it exists, the check verifies on the solids of th
   B  every component must be on side "top" or "bottom".  Every top-side part: body clear of the tub solid by at least
      PART_CLR, clear of the post-foot keep-out squares, not taller than tub_keepouts.camera_hoods.max_part_height inside a
      hood zone (the camera itself is exempt), not taller than tub_keepouts.free_height_above_pcb anywhere (cameras exempt),
-     not over a ball-foot zone, inside the board keep-in, not inside the battery body, not on a battery-lead pad, clear of
-     the LCD flex tail (J1 exempt); the two battery-lead pads inside battery.pads.zone (they are checked against the tub as
-     joints battery.pads.joint_max_height tall).  Parts marked DNP are tested too: what they would violate is a warning;
+     not over a ball-foot zone and at least tub_keepouts.foot_zones.part_margin from it (N7), inside the board keep-in, not
+     inside the battery body, not on a battery-lead pad, not taller than tub_keepouts.lcd_tail.max_part_height inside the
+     LCD-tail zone (N10) and clear of the modelled LCD flex tail (J1 exempt); the two battery-lead pads inside
+     battery.pads.zone (they are checked against the tub as joints battery.pads.joint_max_height tall).  Parts marked DNP
+     are tested too: what they would violate is a warning;
   C  the fixed mechanical interfaces are where the YAML has them: both cameras, the LCD connector J1, the battery body;
   D  nothing on the bottom side lies outside the grain opening or the pad slot, and what is inside the grain opening
      clears the baffle ring and the wall and is covered by the potting;
@@ -195,9 +197,9 @@ def synthetic_board():
 
 def seeded(defect):
     """synthetic_board() with one defect, for the self-test: 'tall_under_hood', 'part_on_post_foot', 'part_over_foot_zone',
-    'hole_moved', 'pads_shifted', 'bottom_part_outside', and the malformed or edge-case boards 'outline_rectangle' (same
-    bounds, no arc, stated tolerance 10), 'bad_side', 'polygon_hole_only', 'part_in_tail_path', 'dnp_tall_under_hood'
-    (the last one must PASS with a warning)."""
+    'hole_moved', 'pads_shifted', 'bottom_part_outside', 'part_near_foot_zone' (N7), 'tall_in_tail_zone' (N10), and the
+    malformed or edge-case boards 'outline_rectangle' (same bounds, no arc, stated tolerance 10), 'bad_side',
+    'polygon_hole_only', 'part_in_tail_path', 'dnp_tall_under_hood' (the last one must PASS with a warning)."""
     d = copy.deepcopy(synthetic_board())
     cx = P.CAM_XY["R"][0]
     if defect == "tall_under_hood":                 # a 1.5 mm part beside camera R, inside its hood zone but clear of the skirt wall in plan
@@ -232,6 +234,11 @@ def seeded(defect):
     elif defect == "part_in_tail_path":              # a 2.5 mm part behind the mouth of J1, where the LCD tail folds
         j1 = next(q for q in P.TOP_PARTS if q["ref"] == "J1")
         d["components"].append(_comp("C905", "top", 0.0, j1["y"] - j1["dy"] / 2 - 0.7, 1.0, 0.5, 2.5, "seeded:tall"))
+    elif defect == "part_near_foot_zone":            # an 0402 0.15 mm behind ball-foot zone 3 (inside the 0.3 mm margin of N7, not over the zone, clear of the battery)
+        fx, fy = P.FOOT_ZONES[2]
+        d["components"].append(_comp("C907", "top", fx, fy - P.FOOT_ZONE_D / 2 - 0.15 - 0.25, 1.0, 0.5, 0.55, "seeded:C_0402"))
+    elif defect == "tall_in_tail_zone":              # a part 0.02 mm taller than the LCD-tail keep-out allows, under the fold; it still clears the MODELLED tail by more than FLEX_CLR
+        d["components"].append(_comp("C908", "top", 0.0, 0.5 * (P.KO_TAIL["y"][0] + P.KO_TAIL["y"][1]), 0.6, 0.3, P.KO_TAIL["max_part_height"] + 0.02, "seeded:tall_0201"))
     elif defect == "dnp_tall_under_hood":            # not fitted: must pass, with a warning
         c = _comp("C906", "top", cx - 2.3, P.KO_HOOD_Y0 + 0.0, 1.0, 0.5, 2.5, "seeded:tall")
         c["dnp"] = True
@@ -252,7 +259,8 @@ def check_board(parts, path=None, data=None):
             return dict(passed=True, skipped=True, summary="skipped: no board file", tables=[], warnings=[],
                         notes=[f"looked for {path} (written by the board toolchain: electrical/tools/gleda/outputs.py, mechanical_data)",
                                "when the file exists this check verifies outline, hole and slot against the YAML, every top-side part against the tub solid "
-                               f"({PART_CLR} mm), the post feet, the hood zones ({P.KO_HOOD_MAX_H} mm), the free height ({P.PCB_FREE_H} mm) and the ball-foot zones, "
+                               f"({PART_CLR} mm), the post feet, the hood zones ({P.KO_HOOD_MAX_H} mm), the free height ({P.PCB_FREE_H} mm), the ball-foot zones with their "
+                               f"{P.FOOT_PART_MARGIN} mm margin and the LCD-tail keep-out ({P.KO_TAIL['max_part_height']} mm), "
                                "the bottom side against the grain opening and the pad slot, and the contact pads against the cradle pins",
                                "the check itself is proven by the self-test (cad/selftest.py): a board built from the YAML passes; a tall part under a hood, a part "
                                "on a post foot, a part over a foot zone, a moved hole, a shifted pad row, a bottom-side part outside the openings, a rectangular outline that "
@@ -265,7 +273,7 @@ def check_board(parts, path=None, data=None):
     else:
         source = f"data passed in ({data.get('design', '?')})"
     fails, warns, notes = [], [], []
-    S = {n: A.solid_of(i) for n, i in parts.items() if i.group != "alt"}
+    S = {n: A.solid_of(i) for n, i in parts.items() if i.group not in A.EXTRA_GROUPS}
     tub = S["tub"]
     brd = data["board"]
     comps = [c for c in data.get("components", [])]
@@ -342,6 +350,7 @@ def check_board(parts, path=None, data=None):
     squares = [(n, sbox(x0, y0, x1, y1)) for n, x0, x1, y0, y1 in P.ko_post_squares()]
     hoods = {s: sbox(cx - P.KO_HOOD_HW, P.KO_HOOD_Y0, cx + P.KO_HOOD_HW, P.KO_HOOD_Y1) for s, (cx, _) in P.CAM_XY.items()}
     zones = [(i + 1, Point(fx, fy).buffer(P.FOOT_ZONE_D / 2, 128)) for i, (fx, fy) in enumerate(P.FOOT_ZONES)]
+    tail_zone = sbox(-P.KO_TAIL["half_w"], P.KO_TAIL["y"][0], P.KO_TAIL["half_w"], P.KO_TAIL["y"][1])
     keep_in = _dshape(P.PCB_R, P.PCB_FLAT, 720).buffer(-P.PCB_EDGE_CLR)
     b = P.BAT
     bat_poly = sbox(b["x"] - b["dx"] / 2, b["y"] - b["dy"] / 2, b["x"] + b["dx"] / 2, b["y"] + b["dy"] / 2)
@@ -402,6 +411,10 @@ def check_board(parts, path=None, data=None):
         for i, z in zones:
             if z.intersects(pg):
                 why.append(f"over ball-foot zone {i} ({z.intersection(pg).area:.2f} mm2)")
+            elif z.distance(pg) < P.FOOT_PART_MARGIN - 2e-3:
+                why.append(f"{z.distance(pg):.3f} mm to ball-foot zone {i} (< {P.FOOT_PART_MARGIN}, YAML foot_zones.part_margin)")
+        if c is not j1c and not tab and tail_zone.intersection(pg).area > 1e-6 and h_eff > P.KO_TAIL["max_part_height"] + 1e-9:
+            why.append(f"{h_eff} mm tall inside the LCD-tail keep-out (limit {P.KO_TAIL['max_part_height']}, YAML tub_keepouts.lcd_tail)")
         if not keep_in.buffer(1e-6).contains(pg):
             why.append(f"outside the board keep-in ({P.PCB_EDGE_CLR} mm from the edge) by {pg.difference(keep_in).area:.2f} mm2")
         if tab:
@@ -545,8 +558,9 @@ def check_board(parts, path=None, data=None):
               f"B-rep minimum distance, required {PART_CLR} mm. Battery-lead pads are checked as joints {P.BAT_JOINT_H} mm tall",
               f"post feet: the YAML keep-out squares ({P.KO_POST_SIZE} mm, posts B {P.KO_LOC_SIZE} mm) with {POST_CLR} mm; hood zones: camera x +-{P.KO_HOOD_HW}, y {P.KO_HOOD_Y0} to "
               f"{P.KO_HOOD_Y1}, parts to {P.KO_HOOD_MAX_H} mm (camera exempt); free height {P.PCB_FREE_H} mm; ball-foot zones dia {P.FOOT_ZONE_D}",
-              f"LCD flex tail: every top-side part except J1 must stay {FLEX_CLR} mm from the modelled tail (one U-fold behind the mouth of J1; the tail geometry is PROVISIONAL, "
-              "so this test moves with it); the YAML has no keep-out for the tail yet (proposal N10)",
+              f"LCD flex tail: YAML tub_keepouts.lcd_tail (N10): no part taller than {P.KO_TAIL['max_part_height']} mm inside x +-{P.KO_TAIL['half_w']}, y {P.KO_TAIL['y'][0]} to {P.KO_TAIL['y'][1]} "
+              f"(J1 exempt); in addition every top-side part except J1 must stay {FLEX_CLR} mm from the modelled tail (one U-fold behind the mouth of J1). The tail geometry is PROVISIONAL",
+              f"ball-foot zones: no soldered part over a zone and none within {P.FOOT_PART_MARGIN} mm of it (YAML foot_zones.part_margin, N7); the battery body is exempt",
               "a component whose side is neither 'top' nor 'bottom' fails; parts marked DNP are tested like fitted parts and what they would violate is reported as a warning",
               f"bottom side: bodies must lie inside the grain opening (dia {P.GRAIN_D} at ({P.GRAIN_X}, {P.GRAIN_Y})) or the pad slot ({P.PAD_SLOT_L} x {P.PAD_HOLE_D} at y {P.PAD_Y}); "
               "a contact-row footprint is tested by its round pads, not by its body rectangle",

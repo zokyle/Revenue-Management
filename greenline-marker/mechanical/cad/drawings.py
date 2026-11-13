@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """GL-1 dimensioned drawings (PDF + SVG per sheet, DXF of the 2D profiles), generated from the CAD solids.
 
-    python3 cad/drawings.py           # writes drawings/GL1-001 ... GL1-020 (.pdf, _sheetN.svg) and drawings/dxf/*.dxf
+    python3 cad/drawings.py           # writes drawings/GL1-001 ... GL1-050 (.pdf, _sheetN.svg), drawings/dxf/*.dxf, drawings/fab/*
     python3 cad/drawings.py GL1-011   # only the drawings whose number is named (no DXF), for a quick look
 
 Views are hidden-line projections (OCC HLR) and true boolean sections of the same solids that are exported to STEP.
@@ -58,7 +58,7 @@ def draw_section(view, parts, names, axis, value, clip=None, lw=0.45):
     out = {}
     order = sorted(names, key=lambda n: 0 if n in ("tub", "base_plate", "cradle") else 1)
     for n in order:
-        if n not in parts or parts[n].group == "alt":
+        if n not in parts or parts[n].group in A.EXTRA_GROUPS:      # alternative build, optional part, fixtures: drawn only where asked for
             continue
         g = G.section_polys(A.solid_of(parts[n]), axis, value)
         if clip is not None:
@@ -235,6 +235,10 @@ def gl1_002(parts):
     clip = (ya, -0.25, yb, T + 0.15)
     gd = draw_section(d, parts, puck, "x", 0.0, clip=clip, lw=0.55)
     d.frame(*clip)
+    if "retarder_film" in parts:                               # OPTIONAL part (E9, EVT trial): outline only, dashed
+        gr = G.section_polys(A.solid_of(parts["retarder_film"]), "x", 0.0).intersection(sbox(*clip))
+        if not gr.is_empty:
+            d.fill(gr, fc="#e4d6f7", ec="#6a3fb0", lw=0.5, zorder=9)
     lev = [(0.0, "base plane"), (P.GRAIN_FILL_Z, "potting"), (P.BASE_T, ""), (P.PCB_Z0, ""), (P.PCB_Z1, ""), (P.BAT["z1"], ""), (P.FOAM_Z0, ""), (P.LCD_Z0, ""), (P.LCD_Z1, ""), (P.BOND_Z, ""),
            (P.RECESS_FLOOR_Z, ""), (P.CG_Z0, ""), (P.CG_Z1, ""), (P.T, "top"),
            (P.BAT["z1"] + P.BAT_SWELL, "")]
@@ -248,6 +252,7 @@ def gl1_002(parts):
            ((-11.4, 0.5 * (P.BOND_Z + P.RECESS_FLOOR_Z)), f"roof ledge {fmt(P.ROOF_LEDGE_T)}  (z {fmt(P.BOND_Z)} to {fmt(P.RECESS_FLOOR_Z)}), aperture Ø{fmt(P.APERTURE_D)}"),
            ((-13.2, 0.5 * (P.RECESS_FLOOR_Z + P.CG_Z0)), f"transfer-tape ring {fmt(P.CG_TAPE_T)}  (Ø{fmt(P.CG_D)} / Ø{fmt(M['cover_tape_id'])})"),
            ((-9.5, 0.5 * (P.CG_Z0 + P.CG_Z1)), f"cover glass {fmt(P.CG_T)}  (top at z {fmt(P.CG_Z1)}, {fmt(P.CG_BELOW_FLUSH)} below flush)"),
+           ((-8.9, 0.5 * (P.RETARDER_Z0 + P.RETARDER_Z1)), f"OPTIONAL retarder film {fmt(P.RETARDER_T)}, Ø{fmt(P.RETARDER_D)} (E9 trial; note 8)"),
            ((-14.7, 0.5 * (P.BOND_Z + P.T)), f"thick roof ring {fmt(P.T - P.BOND_Z)}  (z {fmt(P.BOND_Z)} to {fmt(P.T)}) round the recess Ø{fmt(P.RECESS_D)} x {fmt(P.RECESS_DEPTH)}"),
            ((-9.0, 0.5 * (P.PCB_Z0 + P.PCB_Z1)), f"main PCB {fmt(P.PCB_T)}  (z {fmt(P.PCB_Z0)} to {fmt(P.PCB_Z1)})"),
            ((-10.4, 0.5 * (P.PSA_Z0 + P.PSA_Z1)), f"adhesive sheet {fmt(P.PSA_T)}  (z {fmt(P.PSA_Z0)} to {fmt(P.PSA_Z1)}), die cut"),
@@ -275,6 +280,11 @@ def gl1_002(parts):
         f"7. Grain opening: clear potting from the PCB down to z {fmt(P.GRAIN_FILL_Z)}",
         f"   at most (shown); accepted z {fmt(P.potting_window()[0])} to {fmt(P.potting_window()[1])}. The crest of the",
         "   baffle ring GL1-013 is never covered by the potting.",
+        f"8. OPTIONAL (E9, EVT trial): quarter-wave film Ø{fmt(P.RETARDER_D)} x {fmt(P.RETARDER_T)}",
+        f"   on the glass underside, inside the Ø{fmt(M['cover_tape_id'])} bore of the tape",
+        f"   ring; {fmt(P.RETARDER_LEDGE_GAP, 2)} above the roof ledge outside the aperture,",
+        f"   {fmt(P.RETARDER_Z0 - P.LCD_Z1)} above the LCD. Clocking flat {P.RETARDER_FLAT_LEN:.1f} long toward",
+        f"   the visor (y = {fmt(P.RETARDER_FLAT_Y)}): die cut GL1-035.",
     ], fs=6.0, title="NOTES")
     sheets.append(sh)
     # ------------------------------------------------------------------ sheet 2: B-B on x = camera R
@@ -363,7 +373,7 @@ def gl1_002(parts):
         f"   seats {fmt(P.WIN_LANDS[0], 2)} (sides) / {fmt(P.WIN_LANDS[1], 2)} (sill) / {fmt(P.WIN_LANDS[2], 2)} (top).",
         "   Sealed by a frame of thixotropic adhesive round",
         "   its edge: side gaps, top bead, sill fillet. Nothing",
-        "   is wicked behind the glass (D30).",
+        "   is wicked behind the glass (YAML bond_line 0).",
     ], fs=6.0, title="NOTES")
     sheets.append(sh)
     return _save("GL1-002_sections", sheets)
@@ -432,7 +442,7 @@ def gl1_010(parts):
         sx_ = (P.LOC_ROUND if x0 > 0 else P.LOC_SLOT)[0]
         rows.append([name, co(x0), co(x1), co(y0), co(y1), f"{fmt(x1 - x0)} x {fmt(y1 - y0)}", f"({co(sx_)}, {co(P.LOC_ROUND[1])})" if loc else "-"])
     sh.table(262, 142, rows, [11, 16, 16, 16, 16, 19, 28], fs=5.6)
-    sh.note(388, 142, ["All posts: PCB top", f"(z {fmt(P.PCB_Z1)}) to the roof.", "Feet lie inside the", "YAML keep-out", "squares (check 12);", f"posts B: {fmt(P.KO_LOC_SIZE)} square,", f"foot cut back to", f"|x| >= {fmt(P.LCD_POCKET_X)} for", "the LCD glass (D29)."], fs=5.2)
+    sh.note(388, 142, ["All posts: PCB top", f"(z {fmt(P.PCB_Z1)}) to the roof.", "Feet lie inside the", "YAML keep-out", "squares (check 12);", f"posts B: {fmt(P.KO_LOC_SIZE)} square,", f"foot {fmt(P.LOC_FOOT[0])} x {fmt(P.LOC_FOOT[1])}, inner", f"face |x| = {fmt(P.LCD_POCKET_X)} (YAML", "foot as built, N1)."], fs=5.2)
     sh.note(16, 71, [
         "1. Material HP 3D High Reusability PA 12, Multi Jet Fusion, dyed black, chemical vapor smoothing. Print roof-down (cosmetic top on the bed side, cavity open upward).",
         f"2. Minimum wall {fmt(P.MIN_WALL)} mm by design. Recorded exceptions: the {fmt(P.THIN_STRIP_T)} mm strip behind each window recess (D04, accepted), the feet of chamfered",
@@ -524,9 +534,10 @@ def gl1_010(parts):
 # ==============================================================================================
 # GL1-011 base plate, routed FR-4 (fabrication drawing); GL1-012 printed PA12 alternative; GL1-013 baffle ring
 # ==============================================================================================
-def _ball_foot_detail(sh, parts, origin_xy, title, title_xy, label_y=(192, 246), sd=20.0):
-    """Section through ball foot 1 as assembled (ball, two-stage potting, adhesive-sheet hole, PCB) with the gauge plate
-    dashed.  Uses the ACTIVE base variant; `parts` must hold that variant under the plain names."""
+def _ball_foot_detail(sh, parts, origin_xy, title, title_xy, label_y=(192, 246), sd=20.0, gauge=None):
+    """Section through ball foot 1 as assembled (ball, two-stage potting, adhesive-sheet hole, PCB) with the boss of the
+    ball gauge plate under it (`gauge` = the gauge-plate solid; its true section, outlined in the fixture colour).  Uses
+    the ACTIVE base variant; `parts` must hold that variant under the plain names."""
     (b1x, b1y) = P.BALL_XY[0]
     y0, y1 = b1y - 1.75, b1y + 1.75
     z0, z1 = -0.45, 1.95
@@ -535,22 +546,23 @@ def _ball_foot_detail(sh, parts, origin_xy, title, title_xy, label_y=(192, 246),
     draw_section(d, parts, ["base_plate", "pcb_adhesive", "main_pcb", "ball_epoxy_1", "ball_1"], "x", 0.0, clip=clip, lw=0.55)
     d.frame(*clip)
     d.centerline((b1y, z0), (b1y, z1), ext=0)
-    pk = math.sqrt((P.BALL_D / 2) ** 2 - (P.BALL_D / 2 - P.BALL_PROT) ** 2)   # the ball sits on the rim of a hole of this radius
-    gp = np.array([(y0, 0.0), (b1y - pk, 0.0), (b1y - pk, -0.3), (b1y + pk, -0.3), (b1y + pk, 0.0), (y1, 0.0)])
-    d.lines([gp], lw=0.5, color="#b06000", ls=(0, (5, 2.5)), zorder=16)
+    pk = P.GAUGE_HOLE_D / 2                                    # the ball sits on the rim of a hole of this radius
+    if gauge is not None:                                     # the boss of the gauge plate under the foot, from the fixture solid
+        gg = G.section_polys(gauge, "x", 0.0).intersection(sbox(*clip))
+        d.fill(gg, fc="#f3e3c8", ec="#b06000", hatch="////", lw=0.5, zorder=2, hatch_color="#c9a56a")
     d.levels([(-P.BALL_PROT, "ball lowest point"), (0.0, "base plane"), (P.BASE_T, "plate top"), (P.BALL_TOP_Z, "ball top"),
               (P.PCB_Z0, "PCB underside"), (P.PCB_Z1, "PCB top")], y0, side="left", x_text=d.X(y0) - 7, fs=6.0, min_gap=3.6)
     d.dim_h(b1y - P.BALL_HOLE_D / 2, b1y + P.BALL_HOLE_D / 2, 0, 0, 0, at=d.Y(z0) - 4, prefix="Ø", suffix=" through hole", text_side="left", nd=2)
     d.dim_h(b1y - P.PSA_FOOT_HOLE_D / 2, b1y + P.PSA_FOOT_HOLE_D / 2, P.PSA_Z1, P.PSA_Z1, 0, at=d.Y(z1) + 3.5, prefix="Ø", suffix=" hole in the adhesive sheet")
     s1, s2 = P.epoxy_volumes()
-    labs = [((b1y + 0.2, P.BALL_Z - 0.1), f"ball Ø{fmt(P.BALL_D)} stainless,\n{fmt(P.BALL_PROT)} below the base plane"),
+    labs = [((b1y + 0.2, P.BALL_Z - 0.1), f"ball Ø{fmt(P.BALL_D)}, {fmt(P.BALL_PROT)} below the base plane:\n316 stainless grade 100 or better,\nor Si3N4; NEVER 440C (E8)"),
             ((b1y + 0.5 * (P.BALL_D + P.BALL_HOLE_D) / 2, 0.45), f"stage 1 epoxy ({s1:.2f} mm3): fills the\nhole, flush with the base plane"),
             ((b1y + 0.8, P.BASE_T + 0.5 * P.PSA_T), f"stage 2 epoxy ({s2:.2f} mm3) in the sheet\nhole: ball bears on its Ø{fmt(P.FOOT_LAND_D)} land"),
             ((b1y + 1.4, 0.5 * (P.PSA_Z0 + P.PSA_Z1)), f"adhesive sheet {fmt(P.PSA_T)}"),
             ((b1y + 1.5, 0.3), f"base plate {fmt(P.BASE_T)}"),
             ((b1y + 1.5, 1.4), "main PCB"),
-            ((b1y + 1.1, -0.0), f"dashed: gauge plate (fixture),\nreamed Ø{fmt(2 * pk, 2)} hole, ball on its rim")]
-    d.label_column(labs, d.X(y1) + 6, side="right", fs=5.7, min_gap=6.4, y_min=label_y[0], y_max=label_y[1])
+            ((b1y + 1.1, -0.2), f"gauge plate (fixture, GL1-050 item 3):\nboss Ø{fmt(P.GAUGE['boss_od'])}, reamed Ø{fmt(2 * pk, 2)} hole, ball on\nits rim; plate on its 3 bosses only")]
+    d.label_column(labs, d.X(y1) + 6, side="right", fs=5.7, min_gap=7.4, y_min=label_y[0], y_max=label_y[1])
     return pk
 
 
@@ -570,7 +582,7 @@ def gl1_011(parts):
     acc = v["accept"]
     d_mask = P.BALL_HOLE_D + M["fr4_mask_relief"]
     import fabdata as FD
-    sh = Sheet("GL1-011", "Base plate, FR-4 - FABRICATION DRAWING", 1, 1, part="base plate (primary build)", material="FR-4 0.80 mm, matte black solder mask both sides, NO COPPER",
+    sh = Sheet("GL1-011", "Base plate, FR-4 - FABRICATION DRAWING", 1, 2, part="base plate (primary build)", material="FR-4 0.80 mm, matte black solder mask both sides, NO COPPER",
                process="PCB fabricator: routed outline + cut-outs, drilled NPTH", tolerance=f"routed +-{tol_o}, drilled +-{tol_h}, thickness +-{tol_t}",
                scale="4:1 / 20:1", params_rev=P.REV)
     R, F = P.BASE_R, P.BASE_FLAT
@@ -628,7 +640,7 @@ def gl1_011(parts):
             ["Rout: outline", "1", f"R{fmt(R)}, flat at y = {co(F)}", f"+-{tol_o}", "arc centre (0, 0)", "-"],
             ["Mask relief at T1", "3 + 3", f"Ø{fmt(d_mask, 2)} opening, both faces", "+-0.05", "on the T1 holes", "-"],
             ["Thickness over mask", "-", f"{fmt(P.BASE_T)}", f"+-{tol_t}", "-", "no copper"]]
-    sh.table(262, 214, rows, [27, 7, 37, 29, 33, 15], fs=5.3)
+    sh.table(262, 214, rows, [27, 7, 36, 28, 32, 15], fs=5.3)
     rows = [["Web / edge distance (measured on the model)", "mm"]]
     names = {}
     for h in holes:
@@ -647,22 +659,131 @@ def gl1_011(parts):
     sh.note(344, 180, [f"Smallest internal radius: R{fmt(rs)} (slot ends).", "No internal corner below R0.5; no drilled",
                        "relief needed. A router bit of Ø2.0 or", "smaller makes every feature.",
                        f"Smallest web {fmt(min(h.distance(pg.exterior) for h in holes), 2)} mm."], fs=5.5)
-    pk = _ball_foot_detail(sh, parts, (292, 92), "FOR INFORMATION (not a fabrication detail): hole T1.1 in use   16:1", (262, 149), label_y=(90, 136), sd=16.0)
+    pk = _ball_foot_detail(sh, parts, (292, 92), "FOR INFORMATION (not for fabrication): hole T1.1 in use, on the gauge plate   16:1", (262, 149), label_y=(84, 140), sd=16.0,
+                           gauge=A.solid_of(parts["gauge_plate"]))
     sh.note(16, 68, [
         f"1. MATERIAL: FR-4 glass-epoxy laminate, NO COPPER on any layer (unclad or fully etched): a mechanical plate, not a circuit. FINISHED THICKNESS OVER THE SOLDER MASK {fmt(P.BASE_T)} +-{tol_t} mm.",
         f"   Choose the laminate for that finished thickness and state the build-up in the quote (a 0.8 mm copper-clad laminate ends near 0.75 without its copper). We use plates from {acc[0]:.2f} to {acc[1]:.2f} mm.",
-        f"2. SOLDER MASK: matte black, both faces, full coverage EXCEPT a round relief Ø{fmt(d_mask, 2)} at each hole T1 on both faces: no mask on the hole wall or rim (or drill after mask). NO legend, date code or marking.",
+        f"2. SOLDER MASK: matte black, both faces, full coverage EXCEPT a round relief Ø{fmt(d_mask, 2)} at each hole T1 on both faces: no mask on the hole wall or rim (or drill after mask). LEGEND on the underside only: sheet 2. No date code.",
         f"3. OUTLINE AND CUT-OUTS: routed, +-{tol_o}. No V-score. Supply individually routed pieces. If panelised: break-off tabs ONLY on the flat (y = {co(F)}), mouse bites recessed into the outline by at most",
         f"   {fmt(M['fr4_tab_recess_max'])} mm, no nub proud of the outline anywhere. NO tab on the round part: it drops into a bore with {fmt(P.CLR)} mm radial clearance and carries a {fmt(P.BASE_R - P.LAND_RI)} mm seal land.",
-        f"4. HOLES T1: 3 x Ø{fmt(P.BALL_HOLE_D, 2)} +-{tol_h}, drilled, non-plated, free of mask; position +-{tol_h} to each other, +-{tol_o} to the outline. They take Ø{fmt(P.BALL_D)} steel balls (detail, for information).",
+        f"4. HOLES T1: 3 x Ø{fmt(P.BALL_HOLE_D, 2)} +-{tol_h}, drilled, non-plated, free of mask; position +-{tol_h} to each other, +-{tol_o} to the outline. They take Ø{fmt(P.BALL_D)} balls of 316 stainless (grade 100 or better) or silicon nitride, never 440C (E8; detail, for information).",
         f"5. CORNERS: slot ends full radius R{fmt(rs)}; no internal corner below R0.5. The two external corners at the ends of the flat are sharp (break edge 0.1 max).",
         "6. FLATNESS: bow and twist 0.5 % maximum (0.2 mm over the part). Edges free of burrs and loose fibres. Both faces are bonding faces: no release agent, mask fully cured, parts clean.",
-        f"7. DATA (mm, same origin): drawings/fab/{FD.FILES['profile']} (Gerber: outline + routed cut-outs), {FD.FILES['mask_top'].split('-')[-1]} / {FD.FILES['mask_bottom'].split('-')[-1]} (mask layers), {FD.FILES['drill'].split('-')[-1]} (Excellon, NPTH);",
+        f"7. DATA (mm, same origin): drawings/fab/{FD.FILES['profile']} (Gerber: outline + routed cut-outs), {FD.FILES['mask_top'].split('-')[-1]} / {FD.FILES['mask_bottom'].split('-')[-1]} (mask), {FD.FILES['legend_bottom'].split('-')[-1]} (legend, sheet 2), {FD.FILES['drill'].split('-')[-1]} (Excellon, NPTH);",
         "   drawings/dxf/GL1-011_base_plate_FR4_fab.dxf (layers OUTLINE_ROUT, ROUT_OPENING_D13p0, ROUT_SLOT_17p44x2p2, DRILL_NPTH_D1p10); export/step/base_plate.step.",
         f"8. Datum: origin = centre of the R{fmt(R)} arc; +x to the right and +y toward the flat in this view (seen on the top face). The part is symmetric about the y axis.",
         "9. To report with the first articles: thickness over the mask, hole diameters, outline. PROVISIONAL - not released. Nominal CAD dimensions (design/master_params.yaml rev D); checked by check 15 of the build.",
     ], fs=5.7, title="NOTES FOR THE FABRICATOR")
-    return _save("GL1-011_base_plate_FR4", [sh])
+    return _save("GL1-011_base_plate_FR4", [sh, _gl1_011_legend(parts)])
+
+
+def _gl1_011_legend(parts):
+    """Sheet 2 of GL1-011: the legend of the outer face (spec amendment E10), drawn as it is READ (seen from below, visor at
+    the top), with the keep-clear zones.  Blocks, strokes and zones come from cad/legend.py; the distances from the shapes."""
+    import legend as L
+    import fabdata as FD
+    from shapely.geometry import Polygon as SPoly
+    from shapely import affinity
+    v_ = P.BASE
+    clear, edge = M["legend_clear"], M["legend_edge_margin"]
+    sh = Sheet("GL1-011", "Base plate, FR-4 - LEGEND of the outer face", 2, 2, part="base plate (primary build)", material="white legend print on the black mask, or laser mark",
+               process="PCB fabricator: legend on the UNDERSIDE only", tolerance=f"legend to outline +-0.15; line >= {M['legend_stroke']}, text >= {M['legend_min_text_h']}",
+               scale="4:1", params_rev=P.REV)
+    sc = 4.0
+    R, F = P.BASE_R, P.BASE_FLAT
+    v = sh.view((106, 166), sc, "VIEW ON THE OUTER FACE (underside, as the legend is READ): seen from below, visor flat at the top   4:1   (+x of the part is to the LEFT)", (16, 270))
+    mir = lambda g: affinity.scale(g, xfact=-1.0, yfact=1.0, origin=(0, 0))
+    pg, holes = _plate_profile(parts)
+    face = mir(pg)
+    v.fill(face, fc="#f3f4f6", ec="k", lw=0.8)
+    v.centerline((-R - 2, 0), (R + 2, 0)); v.centerline((0, -R - 2), (0, F + 2))
+    # keep-clear zones (dashed), seat zones (dash-dot), edge margin
+    feats = L.feature_shapes()
+    for nm, g in feats.items():
+        v.lines([np.asarray(mir(g.buffer(clear, 64)).exterior.coords)], lw=0.35, color="#1a3f8f", ls=(0, (4, 2)), zorder=8)
+    for z in L.seat_zones():
+        v.lines([np.asarray(mir(z).exterior.coords)], lw=0.35, color="#b0208a", ls=(0, (8, 2, 1.5, 2)), zorder=8)
+    from shapely.geometry import Point as SPoint
+    for (bx_, by_) in P.BALL_XY:                               # where fixtures bear: gauge-plate boss / seat pad (same diameter), bridge-gauge foot
+        v.lines([np.asarray(mir(SPoint(bx_, by_).buffer(P.GAUGE["boss_od"] / 2, 64)).exterior.coords)], lw=0.3, color="#b06000", ls=(0, (2, 1.5)), zorder=8)
+        v.lines([np.asarray(mir(SPoint(bx_, by_).buffer(P.BRIDGE["foot_od"] / 2, 64)).exterior.coords)], lw=0.3, color="#b06000", ls=(0, (2, 1.5)), zorder=8)
+    v.lines([np.asarray(mir(SPoly(pg.exterior).buffer(-edge)).exterior.coords)], lw=0.3, color="#1a3f8f", ls=(0, (1.5, 2)), zorder=8)
+    # the legend itself: every stroke with its true width at this scale
+    blks = L.blocks()
+    for b in blks:
+        for pl, w in L.block_strokes(b):
+            v.lines([np.asarray(pl)], lw=w * sc / D.PT, color="k", zorder=12)
+    # dimensions: the serial box and one statement block, and the positions of the three text lines
+    ser = next(b for b in blks if b["name"] == "serial")
+    s1 = next(b for b in blks if b["name"] == "statements_1")
+    u0, v0, u1, v1 = ser["rect"]
+    v.dim_h(u0, u1, v0, v0, -9.0, suffix=" serial box (inside)")
+    v.dim_v(v0, v1, u1, u1, 9.0, text_side="right", suffix=" inside")
+    a0, b0, a1, b1 = s1["rect"]
+    v.dim_h(a0, a1, b1, b1, 0, at=v.Y(F) + 9, suffix=" statements block")
+    v.dim_v(b0, b1, a1, a1, 0, at=v.X(R) + 5, text_side="right")
+    v.dim_h(0, a0, b0, b0, 0, at=v.Y(-R) - 7, suffix=" centre line to block")
+    lab = []
+    for b in blks:
+        e = L.block_extent(b)
+        txt = {"maker": f"MAKER: placeholder text, h {fmt(b.get('h', 0))}", "model": f"MODEL \"GL-1\", h {fmt(b.get('h', 0))}, line {fmt(b['stroke'])}",
+               "practice": f"\"PRACTICE DEVICE\", h {fmt(b.get('h', 0))}", "statements_1": "block reserved for the statements\n(docs/COMPLIANCE.md): frame and\ntext are placeholders",
+               "statements_2": "second statements block\n(mirror image)", "serial": "serial-number box: number marked\nper unit inside the frame\n(laser or ink-jet)"}[b["name"]]
+        anchor = (e[2], 0.5 * (e[1] + e[3])) if b["name"] != "statements_2" else (e[2] - 1.0, e[3])
+        lab.append((anchor, txt))
+    lab += [((-P.BALL_XY[2][0] + P.CAL_LEGEND_ZONE_D / 2 * 0.71, P.BALL_XY[2][1] + P.CAL_LEGEND_ZONE_D / 2 * 0.71), f"dash-dot: no legend inside Ø{fmt(P.CAL_LEGEND_ZONE_D)}\nround each hole T1. Brown: where fixtures\nbear (Ø{fmt(P.GAUGE['boss_od'])} boss / seat pad, Ø{fmt(P.BRIDGE['foot_od'])} gauge foot)"),
+            (((P.GRAIN_R + clear) * 0.71, P.GRAIN_Y - (P.GRAIN_R + clear) * 0.71), f"dashed: {fmt(clear)} from the round opening,\nthe slot, the holes T1 and their\nmask reliefs: no legend inside"),
+            ((0.0 + 2.0, P.BALL_XY[0][1]), f"hole T1.1 (x 0, y {co(P.BALL_XY[0][1])})\nwith its mask relief")]
+    v.label_column(lab, 204, side="right", fs=5.6, min_gap=11.0, y_min=84, y_max=250)
+    _triad(sh, 26, 86, (-1, 0), (0, 1), lx="+x", ly="+y")
+    # tables: blocks, and the keep-clear distances of the legend as drawn
+    ink = L.geometry(blks)
+    per = L.geometry(blks, by_block=True)
+    rows = [["Block", "Drawn (placeholder)", "u0, v0 .. u1, v1 as read", "Text h / line", "Room at text h 1.0"]]
+    for b in blks:
+        e = L.block_extent(b)
+        cap = L.capacity(b) if b["kind"] == "frame" else None
+        rows.append([b["name"], (b["text"] if b["kind"] == "text" else "frame + " + " / ".join(b["label"])), f"{co(e[0], 2)}, {co(e[1], 2)} .. {co(e[2], 2)}, {co(e[3], 2)}",
+                     f"{fmt(b['h'] if b['kind'] == 'text' else b['label_h'])} / {fmt(b['stroke'])}", (f"{cap[1]} lines x {cap[0]} char." if cap else "-")])
+    rows[0][-1] = f"Room at text h {fmt(M['legend_min_text_h'])}"
+    y = sh.table(262, 262, rows, [20, 38, 42, 17, 29], fs=4.8, row_h=3.6)
+    rows = [["Legend ink to (as drawn, computed)", "mm", "required"]]
+    for nm, g in feats.items():
+        rows.append([nm, fmt(ink.distance(g), 2), f">= {fmt(clear)} (YAML)"])
+    rows.append(["routed outline", fmt(pg.exterior.distance(ink), 2), f">= {fmt(edge)}"])
+    rows.append([f"seat zones Ø{fmt(P.CAL_LEGEND_ZONE_D)} round the holes T1", fmt(min(ink.distance(z) for z in L.seat_zones()), 2), "> 0 (outside)"])
+    rows.append(["fixture footprints with their play (gauge-plate boss, seat pad, bridge foot)", fmt(min(ink.distance(g) for g in L.fixture_footprints().values()), 2), f">= {fmt(M['legend_registration'])}"])
+    rows.append([f"space between letters at text h {fmt(M['legend_min_text_h'])} (pitch {L.advance(M['legend_min_text_h']):.3f})", fmt(L.letter_gap(M['legend_min_text_h']), 2), f">= {fmt(M['legend_min_gap'])}"])
+    y = sh.table(262, y - 5, rows, [76, 14, 40], fs=5.0, row_h=3.6)
+    cap_all = sum(L.capacity(b)[0] * L.capacity(b)[1] for b in blks if b["name"].startswith("statements"))
+    sh.note(262, y - 5, [
+        "1. LEGEND ON THE UNDERSIDE ONLY (the face that rests on the turf; 'bottom' in the",
+        f"   data: {FD.FILES['legend_bottom']}). Like every bottom layer the file is",
+        "   given as seen from the top face: the text is mirrored in the file and reads",
+        "   correctly on the part, as drawn here. No legend on the top (PCB) face.",
+        "2. PROCESS: white legend print on the black mask, cured; or laser marking of the",
+        f"   same artwork. Line width {fmt(M['legend_stroke'])} or more, text height {fmt(M['legend_min_text_h'])} or more, clear space between",
+        f"   letters and between any two pieces of ink {fmt(M['legend_min_gap'])} or more (to be confirmed with the",
+        f"   quote). Print thickness {fmt(M['legend_ink_t'])} typical, {fmt(M['legend_ink_t_max'])} maximum.",
+        f"3. KEEP CLEAR: no legend within {fmt(clear)} mm of the holes T1 and their mask reliefs,",
+        f"   the round opening and the slot (dashed), within {fmt(edge)} of the outline (dotted),",
+        f"   or inside Ø{fmt(P.CAL_LEGEND_ZONE_D)} round each hole T1 (dash-dot). Three fixtures bear on BARE MASK",
+        "   there (brown): the bosses of the ball gauge plate, the seat pads of GL1-050 and",
+        "   the feet of the bridge gauge that takes every depth reading on this face. Nothing",
+        "   may rest on the legend. Check 15 measures all of it on the legend layer read back.",
+        "4. PLACEHOLDERS: 'MAKER NAME', the two STATEMENTS frames and their labels stand",
+        "   for text that is not frozen (docs/COMPLIANCE.md rows 5 and 33). The final text",
+        f"   goes inside the same frames; the frames themselves are then not printed. Room: about {cap_all}",
+        f"   characters at {fmt(M['legend_min_text_h'])} mm in the two blocks ({L.capacity(s1)[1]} lines of {L.capacity(s1)[0]} each, pitch {L.advance(M['legend_min_text_h']):.3f}): the short",
+        "   FCC sentence fits, the full two-condition statement does not (compliance checklist).",
+        f"5. SERIAL-NUMBER BOX: frame {fmt(u1 - u0)} x {fmt(v1 - v0)} mm inside, line {fmt(ser['stroke'])}; 'S/N' printed. The number itself",
+        "   is marked per unit by us inside the frame, after test gate 1 (assembly step 13):",
+        f"   laser preferred; an ink mark {fmt(M['legend_ink_t_max'])} thick at most. The box lies outside the seat zones.",
+        "6. PA12 alternative plate GL1-012: the same content and positions, laser-marked.",
+        "7. PROVISIONAL - not released. Nothing has been built.",
+    ], fs=5.3, title="NOTES - LEGEND")
+    return sh
 
 
 def gl1_012(parts):
@@ -705,7 +826,7 @@ def gl1_012(parts):
         v.label_column(lab, 198, side="right", fs=5.9, min_gap=7.6, y_min=92, y_max=246)
         v.cut_line((0, 12.6), (0, F + 1.2), "H", ext=0.5, arrow_dir=(-1, 0), fs=7.5)
         _triad(sh, 20, 92, (1, 0), (0, 1))
-        pk = _ball_foot_detail(sh, vp, (290, 204), "DETAIL H - ball foot 1 as assembled (x = 0), PA12 build   20:1", (262, 272))
+        pk = _ball_foot_detail(sh, vp, (290, 204), "DETAIL H - ball foot 1 as assembled (x = 0), PA12 build   20:1", (262, 272), gauge=A.solid_of(parts["gauge_plate"]))
         rows = [["Feature", "Qty", "Size", "Position (x, y)"],
                 ["Outline", "1", f"R{fmt(R)}, flat y {co(F)}", "centre (0, 0)"],
                 ["Grain opening", "1", f"Ø{fmt(P.GRAIN_D)} through", f"({co(gx)}, {co(gy)})"],
@@ -718,9 +839,9 @@ def gl1_012(parts):
         sh.note(262, 114, [
             f"1. ALTERNATIVE to GL1-011 (routed FR-4, the primary plate): for an all-printed build and for the EVT comparison of thermal and humidity",
             f"   tilt drift. Plate {fmt(P.BASE_T)} mm with a {fmt(P.PSA_T)} mm adhesive sheet: the PCB underside stays at z = {fmt(P.PCB_Z0)}; seal joint {fmt(P.BEAD_T)} mm.",
-            f"2. Ball feet: the print cannot hold a {fmt(P.BALL_PROT)} mm protrusion. Clamp the plate flat on a gauge plate with three reamed",
-            f"   Ø{fmt(2 * pk, 2)} holes, drop the balls in (each seats on the rim of its hole, {fmt(P.BALL_PROT)} proud), pot them from this",
-            "   side, cure. At lamination the sheet holes are filled with epoxy as well (README assembly sequence).",
+            f"2. Ball feet (Ø{fmt(P.BALL_D)}: 316 stainless grade 100 or better, or silicon nitride; never 440C, E8): the print cannot hold a {fmt(P.BALL_PROT)} mm",
+            f"   protrusion. Clamp the plate on the three bosses of the gauge plate (reamed Ø{fmt(2 * pk, 2)} holes), drop the balls in (each seats on",
+            f"   the rim of its hole, {fmt(P.BALL_PROT)} proud), pot them from this side, cure. At lamination the sheet holes are filled with epoxy as well.",
             f"3. The baffle ring is part of the plate here (the FR-4 build uses the separate ring GL1-013). The grain opening is potted clear",
             f"   after lamination, in four compartments: surface z {P.potting_window()[0]:.2f} to {P.potting_window()[1]:.2f} (target {P.potting_window()[2]:.3f}), never nearer the base plane than z {fmt(P.GRAIN_FILL_Z)}.",
             f"4. The top face is the bonding face for the adhesive sheet and the seal land (r {fmt(P.LAND_RI)} to {fmt(R)}). Plain edge: no notch.",
@@ -729,6 +850,9 @@ def gl1_012(parts):
             f"   (below {P.BASE['accept'][0]:.2f} the ball would touch its land through the {fmt(P.PSA_T)} sheet); order about twice the quantity needed. Flatness",
             f"   0.3 mm free state is OUR target after flattening (between plates under a weight, warm; time and temperature to be found on",
             f"   first articles), not a bureau requirement. We ream the three foot holes to Ø{fmt(P.BALL_HOLE_D)}.",
+            f"7. LEGEND (E10): the content and positions of GL1-011 sheet 2 (maker, GL-1, PRACTICE DEVICE, statement blocks, serial box),",
+            f"   LASER-MARKED on the underside (nothing is printed on PA12; no ink height): {fmt(M['legend_clear'])} mm clear of the foot holes, the opening and the slot,",
+            f"   none inside Ø{fmt(P.CAL_LEGEND_ZONE_D)} round each foot hole. Contrast of a laser mark on dyed black PA12: to be tried on first articles.",
         ], fs=5.9, title="NOTES")
         return _save("GL1-012_base_plate_PA12_alternative", [sh])
 
@@ -761,7 +885,7 @@ def gl1_013(parts):
     k.dim_v(P.BAFFLE_RING_Z0, P.BAFFLE_RING_Z1, gx + ro, gx + ro, 7, text_side="right", suffix=f" +{plus:.2f} / -{minus:.2f} lapped")
     k.dim_h(gx + ri, gx + ro, P.BAFFLE_RING_Z1, P.BAFFLE_RING_Z1, 6, text_side="right")
     k.leader((gx + ri + 0.15, P.BAFFLE_RING_Z1), "bonding face (to the adhesive annulus)", -16, 16, ha="left", color=C_DIM, fs=5.8)
-    k.leader((gx + 0.5 * (ri + ro), P.BAFFLE_RING_Z0), "crest (free face, lapped): never covered by the potting", -6, -9, ha="left", color=C_DIM, fs=5.8)
+    k.leader((gx + 0.5 * (ri + ro), P.BAFFLE_RING_Z0), "crest (free face, as printed): never potted over", -6, -9, ha="left", color=C_DIM, fs=5.8)
     # as assembled: section y = gy through the grain opening
     sa = 11.0
     x0, x1, z0, z1 = gx - 7.6, gx + 7.6, -0.35, 2.0
@@ -776,7 +900,7 @@ def gl1_013(parts):
     pdx = P.PD["dx"] / 2
     labs = [((gx, P.PCB_Z0 - 0.25), f"photodiode {fmt(P.PD['dx'])} x {fmt(P.PD['dy'])} x {fmt(P.PD['h'])}"),
             ((gx + 0.5 * (ri + ro), 0.45), f"baffle ring Ø{fmt(2 * ro)} / Ø{fmt(2 * ri)} x {fmt(P.BAFFLE_RING_H, 2)}"),
-            ((gx + 0.5 * (ri + ro), 0.5 * (P.BAFFLE_RING_Z1 + P.PCB_Z0)), f"adhesive annulus {fmt(P.BAFFLE_PSA_T)}"),
+            ((gx + 0.5 * (ri + ro), 0.5 * (P.BAFFLE_RING_Z1 + P.PCB_Z0)), f"black tape annulus, drawn {fmt(P.BAFFLE_PSA_T)}"),
             ((gx + 0.5 * (ro + P.GRAIN_R), 0.3), f"clear potting, shown at its limit z {fmt(P.GRAIN_FILL_Z)}"),
             ((gx + P.GRAIN_R + 0.6, 0.4), f"base plate {fmt(P.BASE_T)} (FR-4)"),
             ((gx + P.GRAIN_R + 0.6, 0.5 * (P.PSA_Z0 + P.PSA_Z1)), f"adhesive sheet {fmt(P.PSA_T)}"),
@@ -793,8 +917,15 @@ def gl1_013(parts):
     sh.table(262, 266, rows, [66, 60], fs=5.6)
     rows = [["Item", "Qty", "Size", "Material"],
             ["Baffle ring", "1", f"Ø{fmt(2 * ro)} / Ø{fmt(2 * ri)} x {fmt(P.BAFFLE_RING_H, 2)} lapped", f"MJF PA12, dyed black; printed {fmt(P.BAFFLE_RING_PRINT_H, 2)} high"],
-            ["Adhesive annulus", "1", f"Ø{fmt(2 * ro)} / Ø{fmt(2 * ri)} x {fmt(P.BAFFLE_PSA_T)}", "OPAQUE BLACK double-coated tape (dxf GL1-034)"]]
-    sh.table(262, 226, rows, [26, 8, 40, 60], fs=5.6)
+            ["Adhesive annulus", "1", f"Ø{fmt(2 * ro)} / Ø{fmt(2 * ri)} x {min(P.BAFFLE_TAPE_RANGE):g} to {max(P.BAFFLE_TAPE_RANGE):g}", "OPAQUE BLACK double-coated tape (dxf GL1-034)"]]
+    y_ = sh.table(262, 226, rows, [26, 8, 40, 60], fs=5.6)
+    v0 = P.BASE_VARIANTS[P.BASE_PRIMARY]
+    rows = [["Tape (E16)", "Finished ring height", f"for a {fmt(v0['thickness'])} plate", f"plates {v0['accept'][0]:.2f} .. {v0['accept'][1]:.2f}", "crest z"]]
+    for tape in sorted({min(P.BAFFLE_TAPE_RANGE), P.BAFFLE_PSA_T, max(P.BAFFLE_TAPE_RANGE)}):
+        rows.append([f"{tape:g}" + (" (drawn)" if abs(tape - P.BAFFLE_PSA_T) < 1e-9 else ""), f"t + {P.BAFFLE_RING_RULE:.2f} - {tape:g} = t + {P.BAFFLE_RING_RULE - tape:.3f}", f"{P.baffle_ring_height(None, tape):.3f}",
+                     f"{P.baffle_ring_height(v0['accept'][0], tape):.3f} .. {P.baffle_ring_height(v0['accept'][1], tape):.3f}", f"{crr['matched'][0]:.2f} .. {crr['matched'][1]:.2f}"])
+    sh.ax.text(262, y_ - 4.5, f"RING HEIGHT BY TAPE: t = measured plate thickness; height +{plus:.2f} / -{minus:.2f}", fontsize=6.4, fontweight="bold", va="bottom", ha="left")
+    sh.table(262, y_ - 5.5, rows, [22, 44, 24, 30, 20], fs=5.4)
     # the print file: a sprued set
     sp = M["ring_sprue"]
     pv_ = sh.view((208, 70), 2.0, f"PRINT FILE (baffle_ring_print): sprued set of {sp['n']} rings, each {fmt(P.BAFFLE_RING_PRINT_H, 2)} high   2:1", (160, 112))
@@ -809,16 +940,17 @@ def gl1_013(parts):
         "1. Light baffle between the grain LEDs and the photodiode of the FR-4 build. (The printed PA12 base",
         "   plate GL1-012 carries the same ring itself, on three spokes.)",
         f"2. PRINTED {fmt(P.BAFFLE_RING_PRINT_H, 2)} high as a sprued set (print file). WE cut the rings off, trim the gate",
-        f"   flush and LAP the bonding face in a pocket gauge to the finished height {fmt(P.BAFFLE_RING_H, 2)} +{plus:.2f} / -{minus:.2f}",
-        f"   for a base plate of {fmt(P.BASE_T)} mm. For a plate lot of measured thickness t (over the mask) the",
-        f"   finished height is t + {P.baffle_ring_height(0.0):.2f}: the crest then ends z {crr['matched'][0]:.2f} to {crr['matched'][1]:.2f} above the base plane",
-        f"   and can never stand proud of it. (Lapped to {fmt(P.BAFFLE_RING_H, 2)} regardless of the plate it could end at",
-        f"   z {crr['unmatched'][0]:.2f} to {crr['unmatched'][1]:.2f}.) The crest is the as-printed face.",
+        f"   flush and LAP the bonding face in a pocket gauge. Finished height = measured plate thickness t",
+        f"   (over the mask) + {P.BAFFLE_RING_RULE:.2f} - thickness of the black tape used (E16: {min(P.BAFFLE_TAPE_RANGE):g} to {max(P.BAFFLE_TAPE_RANGE):g} as available),",
+        f"   +{plus:.2f} / -{minus:.2f}: {fmt(P.BAFFLE_RING_H, 2)} for a {fmt(P.BASE_T)} plate and a {P.BAFFLE_PSA_T:g} tape (drawn). The crest then ends",
+        f"   z {crr['matched'][0]:.2f} to {crr['matched'][1]:.2f} above the base plane and can never stand proud of it. (Lapped to",
+        f"   {fmt(P.BAFFLE_RING_H, 2)} regardless of the plate it could end at z {crr['unmatched'][0]:.2f} to {crr['unmatched'][1]:.2f}.) The crest is the as-printed face.",
         f"3. Wall {fmt(P.BAFFLE_WALL)} mm (the printing minimum). Order two sets.",
         "4. ASSEMBLY, before the base plate is laminated: PCB component-side down in the lamination jig on",
         "   its two sprung pins; annulus onto the ring; the ring tool, registered on the same two pins, places",
         f"   the ring round the photodiode ({fmt(min(ri - P.PD_HALF_DIAG, P.LED_R_IN - ro), 2)} mm to the photodiode corners and to the LEDs). After",
-        f"   lamination: crest between the base plane and {fmt(P.BAFFLE_CREST_MAX_Z, 2)} mm inside it (depth gauge). Then the",
+        f"   lamination: crest between the base plane and {fmt(P.BAFFLE_CREST_MAX_Z, 2)} mm inside it, read with the BRIDGE",
+        "   GAUGE on its three feet round the ball feet (bare mask; never from the legend). Then the",
         f"   opening is potted clear: surface from the crest to {fmt(M['grain_fill_below_crest'], 2)} inside it, never nearer the base",
         f"   plane than z {fmt(P.GRAIN_FILL_Z)} (README, steps 11 and 12).",
         "5. Ring and annulus black and opaque at the LED wavelengths, low fluorescence: light-leak test",
@@ -826,6 +958,212 @@ def gl1_013(parts):
         "6. PROVISIONAL - not released. Nothing has been built.",
     ], fs=5.7, title="NOTES")
     return _save("GL1-013_baffle_ring", [sh])
+
+
+
+# ==============================================================================================
+# GL1-050 calibration seat plates (fixtures of the two-seat level zero, spec amendment E11)
+# ==============================================================================================
+def gl1_050(parts):
+    """Simple dimensioned drawing of the two calibration seat plates: item 1, the BASE-FACE seat plate (three seat pads with
+    clearance pockets for the ball feet per nest) and item 2, the plain BALL seat plate.  Plan views are drawn with the long
+    side of the plate horizontal: page x = plate y - centre, page y = -plate x (nest A on the left, its visor toward the fence).
+    Sheet 1: plans, requirements, notes.  Sheet 2: section through a pocket and the fence with the marker seated, pocket
+    detail, table of positions."""
+    from shapely.geometry import Polygon as SPoly
+    c = P.CAL
+    cx0, cy0 = P.CAL_CENTRE
+    seat, plain = parts["cal_seat_plate"], parts["cal_plain_plate"]
+    turn = lambda info: A.solid_of(info).translate(cq_vec(-cx0, -cy0, 0)).rotate(cq_vec(0, 0, 0), cq_vec(0, 0, 1), -90)
+    T = lambda x, y: (y - cy0, -(x - cx0))                     # plate frame -> plan view
+    TB = lambda x, y: T(*P.cal_nest_b(x, y))
+    hx, hy, th = c["plate"][0] / 2, c["plate"][1] / 2, c["plate"][2]
+    head = dict(part="fixtures: 1 base-face seat plate, 2 ball seat plate, 3 ball gauge plate", material="tool steel, hardened 58-62 HRC, stabilised; seat faces lapped",
+                process="ground, pockets milled, seat faces lapped; fence and pins fitted", tolerance="+-0.1 unless stated; seat faces: see table", params_rev=P.REV)
+    balls = list(P.BALL_XY)
+    r_cap = math.sqrt(max(0.0, (P.BALL_D / 2) ** 2 - (P.BALL_D / 2 - (P.BALL_PROT + M["tol_ball_set"])) ** 2))
+    fa, fb = P.CAL_FENCE_Y0 - cy0, P.CAL_FENCE_Y1 - cy0       # the two datum faces in the plan (x of the view)
+    tubsec = G.section_polys(A.solid_of(parts["tub"]), "z", 0.5 * (c["fence_relief"][1] + c["fence_h"]), 2e-3)
+    ring = np.asarray(SPoly(max(getattr(tubsec, "geoms", [tubsec]), key=lambda g_: g_.area).exterior).exterior.coords)
+    # ================================================================== sheet 1: plans
+    trim_r, trim_y = P.BASE_R - M["legend_edge_margin"], P.BASE_FLAT - M["legend_edge_margin"]     # pads 2, 3 end on this radius about the nest centre; pad 1 on this line
+    sh = Sheet("GL1-050", "Calibration seat plates and ball gauge plate (fixtures)", 1, 2, scale="2:1 / 1:1", **head)
+    sc = 2.0
+    v = sh.view((135, 176), sc, "ITEM 1 - BASE-FACE SEAT PLATE, plan   2:1   (the marker is shown dash-dot in both nests)", (16, 272))
+    v.hlr([turn(seat)], "top", chord_tol=0.004)
+    v.centerline((-hy - 2, 0), (hy + 2, 0))
+    for f_ in (T, TB):
+        v.lines([np.array([f_(x, y) for x, y in ring])], lw=0.45, color="#7a3fb0", ls=(0, (9, 2, 1.5, 2)), zorder=9)
+        v.cross(f_(0.0, 0.0), 3.0)
+        for (bx, by) in balls:
+            v.cross(f_(bx, by), 2.0)
+    yt, yb_ = v.Y(hx), v.Y(-hx)
+    p1, p2, p3 = (T(*b) for b in balls)
+    pinA, pinB = T(*P.CAL_PIN_XY), TB(*P.CAL_PIN_XY)
+    v.dim_h(fa, fb, hx, hx, 0, at=yt + 4.5, suffix=" fence", text_side="right")
+    v.dim_h(p1[0], fa, p1[1], hx, 0, at=yt + 10.5, text_side="left", suffix=" pocket 1 from datum face A")
+    v.dim_h(p2[0], fa, p2[1], hx, 0, at=yt + 16.5, suffix=" pockets 2, 3 from datum face A")
+    v.dim_h(T(0, 0)[0], fa, 0, -hx, 0, at=yb_ - 5, suffix=" nest centre from datum face A")
+    v.dim_h(-hy, hy, -hx, -hx, 0, at=yb_ - 12)
+    v.dim_v(-hx, hx, -hy, -hy, 0, at=v.X(-hy) - 6)
+    v.dim_v(p3[1], p2[1], p3[0], p2[0], 0, at=v.X(p2[0]) - 9, suffix=" pockets 2 - 3")
+    v.dim_v(0, pinA[1], T(0, 0)[0], pinA[0], 0, at=v.X(pinA[0]) + 8, text_side="right", suffix=" pin")
+    b1, b2 = TB(*balls[0]), TB(*balls[1])
+    v.dia(b1, c["pad_od"] / 2, 62, off=17, text=f"seat pad Ø{fmt(c['pad_od'])} (x6), trimmed {fmt(M['legend_edge_margin'])}\ninside the base-plate outline")
+    k3 = trim_r / math.hypot(*balls[2])
+    v.leader(T(balls[2][0] * k3, balls[2][1] * k3), f"pads 2, 3: outer edge on R{fmt(trim_r)}\nabout the nest centre", -6, -13, ha="right", color=C_DIM, fs=5.8)
+    v.leader(T(1.6, trim_y), f"pad 1: straight front edge,\n{fmt(P.CAL_FENCE_Y0 - trim_y)} from its datum face", -9, -10, ha="right", color=C_DIM, fs=5.8)
+    v.dia(b2, c["pocket_dia"] / 2, 20, off=9, text=f"pocket Ø{fmt(c['pocket_dia'])} x {fmt(c['pocket_depth'])} deep (x6)")
+    v.leader(pinB, f"side stop pin Ø{fmt(c['pin_dia'])}, {fmt(c['pin_h'])} above\nthe seat plane (x2)", 9, -7, ha="left", color=C_DIM, fs=5.8)
+    v.leader((0.5 * (fa + fb), -c["fence_len"] / 2 + 4.0), f"datum fence {fmt(c['fence_t'])} x {fmt(c['fence_len'])}: datum faces A (left)\nand B (right), undercut {fmt(c['fence_relief'][0])} x {fmt(c['fence_relief'][1])} at their foot", -6, -8.5, ha="right", color=C_DIM, fs=5.8)
+    v.leader((T(0, 0)[0] - 6.0, -11.0), f"top face outside the pads:\n{fmt(c['relief'])} below the seat plane", 5, -6, ha="left", color=C_DIM, fs=5.8)
+    v.ax.text(v.X(T(0, 0)[0]) - 12, v.Y(9.0), "NEST A\nvisor toward\nthe fence  →", fontsize=6.2, ha="center", va="center", color="#7a3fb0", fontweight="bold")
+    v.ax.text(v.X(TB(0, 0)[0]) + 14, v.Y(-9.0), "NEST B\n←  marker turned 180°", fontsize=6.2, ha="center", va="center", color="#7a3fb0", fontweight="bold")
+    v.cut_line((T(0, 11.4)[0], 0.0), (T(0, 28.0)[0], 0.0), "A", ext=0.5, arrow_dir=(0, 1), fs=8)
+    # item 2, plan 1:1
+    q = sh.view((332, 226), 1.0, "ITEM 2 - BALL SEAT PLATE, plan   1:1", (262, 272))
+    q.hlr([turn(plain)], "top", chord_tol=0.01)
+    for f_ in (T, TB):
+        q.lines([np.array([f_(x, y) for x, y in ring])], lw=0.4, color="#7a3fb0", ls=(0, (9, 2, 1.5, 2)), zorder=9)
+        for (bx, by) in balls:
+            q.cross(f_(bx, by), 1.6)
+    q.leader(T(*balls[1]), "plain lapped face: the three balls\nstand on it (no pads, no pockets)", 4, -27, ha="left", color=C_DIM, fs=5.6)
+    q.leader((0.5 * (fa + fb), -c["fence_len"] / 2 + 2.0), "fence and stop pins as item 1", 8, -6.5, ha="left", color=C_DIM, fs=5.6)
+    rows = [["Requirement", "Value"],
+            ["blank, both items", f"{fmt(c['plate'][0])} x {fmt(c['plate'][1])} x {fmt(th)} (seat plane to underside)"],
+            ["item 1: the six pad tops in one plane", f"{c['coplanar']:.3f} (lapped together); Ra 0.1"],
+            ["item 2: flatness of the top face", f"{c['flat_plain']:.3f} over each nest, 0.002 overall; Ra 0.1"],
+            ["fence: faces A and B square to the seat plane, parallel", f"{fmt(c['fence_square'])}"],
+            ["pocket (item 1)", f"Ø{fmt(c['pocket_dia'])} +0.1 / 0 x {fmt(c['pocket_depth'])} +0.1 / 0, flat bottom"],
+            ["seat pad (item 1)", f"Ø{fmt(c['pad_od'])}, {fmt(c['relief'])} +-0.05 proud of the top face"],
+            ["seat pad trim (item 1)", f"pads 2, 3: R{fmt(trim_r)} about the nest centre; pad 1: straight, {fmt(P.CAL_FENCE_Y0 - trim_y)} from its datum face"],
+            ["pocket and pin positions (table on sheet 2)", "+-0.05 from the datum face and the centre line"],
+            ["underside", "ground; parallelism to the seat plane not functional"]]
+    yq = sh.table(262, 181, rows, [70, 76], fs=5.2, row_h=3.7)
+    sh.note(262, yq - 4, [
+        "1. Fixtures for the factory level zero on TWO SEATS (DESIGN_SPEC section 6, E11).",
+        "   Item 1: the marker rests on its BASE FACE (as it floats on turf): three annular",
+        "   seat pads touch the FR-4 face next to the three feet and each ball hangs free in",
+        "   its pocket. Item 2: the marker stands on its three BALLS on a plain face.",
+        f"2. POCKET: Ø{fmt(c['pocket_dia'])} clears the ball cap (Ø{fmt(2 * r_cap, 2)} at the seat plane), the mask relief",
+        f"   (Ø{fmt(P.BALL_HOLE_D + M['fr4_mask_relief'], 2)}) and a foot up to {fmt(c['locate_tol'])} off its pocket centre; {fmt(c['pocket_depth'])} deep is {c['pocket_depth'] / (P.BALL_PROT + M['tol_ball_set']):.1f} x",
+        f"   the largest protrusion ({fmt(P.BALL_PROT + M['tol_ball_set'])}). Rim broken 0.05 max, no burr above the pad.",
+        f"3. PADS, not the whole face: a legend print stands about {fmt(M['legend_ink_t'])} proud of the mask and",
+        f"   the tub rim is {fmt(P.RIM_Z)} above the base plane. The base plate keeps its legend out of",
+        f"   Ø{fmt(P.CAL_LEGEND_ZONE_D)} round each foot (GL1-011 sheet 2).",
+        "4. TWO NESTS: read in nest A, lift, turn the marker 180°, read in nest B. Both",
+        "   nests lie in one lapped plane, so the tilt of the plate and of the table cancels;",
+        "   no parallelism of the plate is needed.",
+        "5. LOCATION: push the visor flat against the fence (contact above the undercut,",
+        f"   z {fmt(c['fence_relief'][1])} to {fmt(c['fence_h'])}) and the round wall against the stop pin.",
+        "6. NO CONTACTS, no clamp, no cable: a spring pin pushes five times harder than",
+        "   the marker weighs. The zero is read with the marker free on the plate.",
+        "7. Clean plate and marker before every read (10 µm of dust is 0.4 mrad).",
+        "8. The six-face fixture (a cube nest with spring pins) is NOT on this drawing:",
+        "   not yet designed (README, fixtures).",
+        "9. 0 AND 180 DEGREES ONLY: the fence takes the visor flat, so these plates give",
+        "   the two-position reversal. A four-position zero (0, 90, 180, 270; planned for",
+        "   production) needs a location on the round wall instead: not designed.",
+        f"10. Seat pads end {fmt(M['legend_edge_margin'])} inside the base-plate outline (R{fmt(P.BASE_R)}, flat at {fmt(P.BASE_FLAT)} from",
+        f"   the nest centre): pads 2, 3 on R{fmt(trim_r)}, pad 1 on a line {fmt(P.CAL_FENCE_Y0 - trim_y)} from its datum face.",
+        "11. Item 3, the ball gauge plate of assembly step 2: sheet 2.",
+        "12. PROVISIONAL - not released. Nothing has been made. Checked by check 18.",
+    ], fs=5.5, title="NOTES")
+    # ================================================================== sheet 2: section, detail, positions
+    s2 = Sheet("GL1-050", "Calibration seat plates and ball gauge plate (fixtures)", 2, 2, scale="10:1 / 30:1", **head)
+    s10 = 10.0
+    ya, yb, za, zb = 10.9, 27.6, -1.5, 7.9
+    d = s2.view((30 - ya * s10, 150 - za * s10), s10, "SECTION A-A (plane x = 0 of nest A): marker on its base face in item 1, visor flat on datum face A   10:1", (16, 268))
+    clip = (ya, za, yb, zb)
+    puck = [n for n, i in parts.items() if i.group == "puck"]
+    gp = G.section_polys(A.solid_of(seat), "x", 0.0).intersection(sbox(*clip))
+    d.fill(gp, fc="#d9dce3", hatch="////", lw=0.6, zorder=2)
+    draw_section(d, parts, puck, "x", 0.0, clip=clip, lw=0.45)
+    d.frame(*clip)
+    b1y = balls[0][1]
+    d.levels([(P.CAL_SEAT_Z, "seat plane = pad tops = marker base plane"), (-c["relief"], "relieved top face"), (-c["pocket_depth"], "pocket floor"), (c["fence_relief"][1], "top of the undercut"),
+              (c["fence_h"], "fence top"), (P.LEDGE_Z0, "visor wall underside"), (P.T, "marker top")], yb, side="right", x_text=d.X(yb) + 6, fs=5.8, min_gap=3.6)
+    d.dim_h(b1y, P.CAL_FENCE_Y0, zb, zb, 0, at=d.Y(zb) + 5, text_side="left", suffix=" pocket 1 to datum face A")
+    d.dim_h(P.CAL_FENCE_Y0, P.CAL_FENCE_Y1, zb, zb, 0, at=d.Y(zb) + 5, suffix=" fence")
+    d.dim_h(b1y - c["pad_od"] / 2, P.BASE_FLAT - M["legend_edge_margin"], zb, zb, 0, at=d.Y(zb) + 11, suffix=f" seat pad 1 (Ø{fmt(c['pad_od'])}, trimmed at the front)")
+    d.dim_h(P.CAL_FENCE_Y0, P.CAL_FENCE_Y0 + c["fence_relief"][0], 0.8, 0.8, 0, at=d.Y(0.8), text_side="right", suffix=" undercut", fs=5.8)
+    d.dim_h(trim_y, P.CAL_FENCE_Y0, -0.3, -0.3, 0, at=d.Y(za) - 5, text_side="left", suffix=" pad 1 front edge to datum face A", fs=5.8)
+    d.leader((P.Y_VISOR, 0.5 * (c["fence_relief"][1] + c["fence_h"])), "visor flat on datum face A:\ncontact band above the undercut", 40, 34, ha="left", color=C_DIM, fs=5.8)
+    d.leader((b1y - 2.6, -0.02), "seat pad under the FR-4 base plate", 2, -13, ha="left", color=C_DIM, fs=5.8)
+    d.leader((P.BASE_FLAT + 0.2, 1.0), "seal joint under the visor wall:\nclear of the fence (undercut)", 46, -17, ha="left", color=C_DIM, fs=5.8)
+    d.leader((23.5, 2.0), "fence (hardened bar, screwed and\ndowelled to the plate)", 30, 44, ha="left", color=C_DIM, fs=5.8)
+    d.frame(b1y - 2.0, -0.75, b1y + 2.0, 1.15, "B")
+    # detail B
+    s30 = 30.0
+    y0, y1, z0, z1 = b1y - 2.0, b1y + 2.0, -0.75, 1.15
+    e = s2.view((36 - y0 * s30, 44 - z0 * s30), s30, "DETAIL B - ball foot 1 in its pocket   30:1", (16, 108))
+    clip = (y0, z0, y1, z1)
+    ge = G.section_polys(A.solid_of(seat), "x", 0.0).intersection(sbox(*clip))
+    e.fill(ge, fc="#d9dce3", hatch="////", lw=0.6, zorder=2)
+    draw_section(e, parts, ["base_plate", "pcb_adhesive", "main_pcb", "ball_epoxy_1", "ball_1"], "x", 0.0, clip=clip, lw=0.5)
+    e.frame(*clip)
+    e.dim_h(b1y - c["pocket_dia"] / 2, b1y + c["pocket_dia"] / 2, -c["pocket_depth"], -c["pocket_depth"], 0, at=e.Y(z0) - 5, prefix="Ø", suffix=" pocket")
+    e.dim_v(-c["pocket_depth"], 0.0, y0, y0, 0, at=e.X(y0) - 5, text_side="left", suffix=" deep")
+    e.dim_v(-c["relief"], 0.0, y1, y1, 0, at=e.X(y1) + 5, text_side="right", suffix=" pad proud")
+    labs = [((b1y, -0.5 * (P.BALL_PROT + c["pocket_depth"])), f"{fmt(c['pocket_depth'] - P.BALL_PROT)} under the ball ({fmt(c['pocket_depth'] - P.BALL_PROT - M['tol_ball_set'])} when it is set {fmt(M['tol_ball_set'])} high)"),
+            ((b1y + 0.3, -0.06), f"ball Ø{fmt(P.BALL_D)}, {fmt(P.BALL_PROT)} +-{fmt(M['tol_ball_set'])} proud of the base face: it hangs free"),
+            ((b1y + c["pocket_dia"] / 2, -0.25), f"pocket wall {fmt(P.CAL_POCKET_RADIAL, 2)} from the cap of a ball set high"),
+            ((b1y + 1.75, 0.4), f"FR-4 base plate {fmt(P.BASE_T)} on the seat pad"),
+            ((b1y + 1.0, P.BASE_T + 0.1), "adhesive sheet / stage 2 epoxy / PCB")]
+    e.label_column(labs, e.X(y1) + 34, side="right", fs=5.7, min_gap=7.5, y_min=46, y_max=98)
+    # positions of pockets and pins (toolroom table)
+    rows = [["Feature", "Nest", "across the centre line (marker x)", "from its datum face", "datum face"]]
+    for nest, face in (("A", "A"), ("B", "B")):
+        for i, (bx, by) in enumerate(balls):
+            rows.append([f"pocket {i + 1} / seat pad {i + 1}", nest, co(bx if nest == "A" else -bx), fmt(P.Y_VISOR - by), face])
+        px, py = P.CAL_PIN_XY
+        rows.append([f"stop pin Ø{fmt(c['pin_dia'])}", nest, co(px if nest == "A" else -px), fmt(P.Y_VISOR - py), face])
+    rows.append(["nest centre (marker centre)", "A, B", "0.0", fmt(P.Y_VISOR), "A, B"])
+    s2.ax.text(262, 252.5, "POSITIONS (mm; plate centre line = marker x = 0; nest B = nest A turned 180°)", fontsize=6.4, fontweight="bold", va="bottom", ha="left")
+    yq = s2.table(262, 251, rows, [38, 12, 42, 30, 20], fs=5.3, row_h=3.7)
+    # ---------------- item 3: the ball gauge plate of assembly step 2 (the base plate lies on it OUTER FACE DOWN)
+    gq = P.GAUGE
+    s9 = 10.0
+    gy0, gy1, gz0, gz1 = b1y - 4.4, b1y + 3.8, -0.8, 1.0
+    g3 = s2.view((286 - gy0 * s9, 118 - gz0 * s9), s9, "ITEM 3 - BALL GAUGE PLATE (assembly step 2): section x = 0 through boss 1   10:1", (262, 160))
+    s2.ax.text(262, 154.5, "the base plate lies on it OUTER FACE DOWN (shown at step 2: ball and stage 1 epoxy only)", fontsize=6.0, va="bottom", ha="left")
+    gclip = (gy0, gz0, gy1, gz1)
+    g3.fill(G.section_polys(A.solid_of(parts["gauge_plate"]), "x", 0.0).intersection(sbox(*gclip)), fc="#d9dce3", hatch="////", lw=0.6, zorder=2)
+    draw_section(g3, parts, ["base_plate", "ball_1"], "x", 0.0, clip=gclip, lw=0.5)
+    g3.fill(G.section_polys(A.solid_of(parts["ball_epoxy_1"]), "x", 0.0).intersection(sbox(gy0, 0.0, gy1, P.BASE_T)), fc=style("ball_epoxy_1")[0], lw=0.4, zorder=4)
+    g3.frame(*gclip)
+    g3.dim_h(b1y - gq["boss_od"] / 2, b1y + gq["boss_od"] / 2, -gq["relief"], -gq["relief"], 0, at=g3.Y(gz0) - 5, prefix="Ø", suffix=" boss (x3)")
+    g3.dim_h(b1y - P.GAUGE_HOLE_D / 2, b1y + P.GAUGE_HOLE_D / 2, -gq["hole_depth"], -gq["hole_depth"], 0, at=g3.Y(gz0) - 11, prefix="Ø", suffix=" reamed gauge hole (x3)", nd=2, text_side="right")
+    g3.dim_v(-gq["hole_depth"], 0.0, gy0, gy0, 0, at=g3.X(gy0) - 4, text_side="left", suffix=" hole", fs=6.0)
+    g3.dim_v(-gq["relief"], 0.0, gy0, gy0, 0, at=g3.X(gy0) - 20, text_side="left", suffix=" relief", fs=6.0)
+    glabs = [((b1y + 2.3, 0.45), "FR-4 base plate, outer face DOWN;\nits flat edge is at the right"),
+             ((b1y + 0.75, 0.3), "stage 1 epoxy in the hole annulus,\ndammed by the boss"),
+             ((b1y - 2.2, -0.02), "boss top = the plane the protrusion\nis set from: BARE MASK"),
+             ((b1y + 0.25, -0.06), f"ball Ø{fmt(P.BALL_D)} on the rim of its hole:\n{fmt(P.BALL_PROT)} below the boss top"),
+             ((b1y - 4.2, -0.15), f"legend print (up to {fmt(M['legend_ink_t_max'])}) only outside\nØ{fmt(P.CAL_LEGEND_ZONE_D)}: {fmt(gq['relief'] - M['legend_ink_t_max'])} clear of the plate")]
+    g3.label_column(glabs, g3.X(gy1) + 4, side="right", fs=5.2, min_gap=6.6, y_min=106, y_max=150)
+    s2.note(262, 98, [
+        f"4. ITEM 3: blank {fmt(gq['blank'][0])} x {fmt(gq['blank'][1])} x {fmt(gq['blank'][2])}; three bosses Ø{fmt(gq['boss_od'])}, {fmt(gq['relief'])} proud, tops ground in",
+        f"   one plane within 0.005; in each a reamed hole Ø{fmt(P.GAUGE_HOLE_D, 2)} +0.005 / 0 x {fmt(gq['hole_depth'])}, sharp burr-free",
+        "   rim, at the pocket positions of the table (+-0.02). The base plate rests on the",
+        "   bosses only (inside its legend-free zones); clamp: three annular feet over them.",
+    ], fs=5.5)
+    s2.note(262, yq - 5, [
+        f"1. Pocket positions are the ball-foot positions of the marker (YAML base_plate.feet):",
+        f"   ({co(balls[0][0])}, {co(balls[0][1])}), ({co(balls[1][0])}, {co(balls[1][1])}), ({co(balls[2][0])}, {co(balls[2][1])}) from the marker centre; the visor flat",
+        f"   is at y = {fmt(P.Y_VISOR)}, the round wall at R{fmt(P.R_OUT)}.",
+        "2. Section A-A is cut through nest A with the marker seated (assembly solids of",
+        "   this build). The fence touches the visor flat between the top of its undercut and",
+        f"   its top; the window recesses start higher (z {fmt(P.WIN_Z0)}).",
+        f"3. Item 2 in the same section: no pads and no pockets, the balls stand on the face,",
+        f"   the base plate is {fmt(P.BALL_PROT)} above it.",
+    ], fs=5.5, title="NOTES")
+    return _save("GL1-050_calibration_seat_plates", [sh, s2])
+
+
+def cq_vec(x, y, z):
+    import cadquery as cq
+    return cq.Vector(x, y, z)
 
 
 # ==============================================================================================
@@ -897,7 +1235,7 @@ def gl1_020(parts):
     _triad(sh, 178, 110, (1, 0), (0, 1))
     # ---------------- section D-D with the marker seated
     ss = 2.8
-    allp = list(parts)
+    allp = [n for n, i in parts.items() if i.group in ("puck", "cradle")]
     d = sh.view((238 - y0c * ss, 222), ss, "SECTION D-D  (x = 0), marker seated, centre pin on its pad   2.8:1", (232, 272))
     draw_section(d, parts, allp, "x", 0.0)
     d.lines([np.array([(y0c - 2, 0.0), (y1c + 2, 0.0)])], lw=0.3, color="#b02020", ls=(0, (12, 2.5, 2, 2.5)))
@@ -1113,8 +1451,17 @@ def export_dxf(parts):
         "GL1-031_die_cut_pcb_sheet_PA12_build": [(f"PCB_SHEET_{t(alt_t['psa_t'])}_PA12_BUILD_BAFFLE_PATTERN", "pcb_adhesive" + alt, "z", zs_alt)],
         "GL1-032_die_cut_lcd_frame": [("LCD_FRAME_0p15_WITH_VENT_CHANNEL", "lcd_adhesive", "z", 0.5 * (P.LCD_Z1 + P.BOND_Z))],
         "GL1-033_die_cut_cover_tape_ring": [(f"COVER_TAPE_{t(P.CG_TAPE_T)}_D{t(P.CG_D)}_D{t(M['cover_tape_id'])}", "cover_tape", "z", 0.5 * (P.RECESS_FLOOR_Z + P.CG_Z0))],
-        "GL1-034_die_cut_baffle_annulus": [(f"BAFFLE_ANNULUS_{t(P.BAFFLE_PSA_T)}_D{t(2 * P.BAFFLE_RO)}_D{t(2 * P.BAFFLE_RI)}", "baffle_adhesive", "z", 0.5 * (P.BAFFLE_RING_Z1 + P.PCB_Z0))],
+        "GL1-034_die_cut_baffle_annulus": [(f"BAFFLE_ANNULUS_BLACK_TAPE_{t(min(P.BAFFLE_TAPE_RANGE))}_TO_{f'{max(P.BAFFLE_TAPE_RANGE):.3f}'.replace('.', 'p')}_AS_AVAILABLE_D{t(2 * P.BAFFLE_RO)}_D{t(2 * P.BAFFLE_RI)}",
+                                            "baffle_adhesive", "z", 0.5 * (P.BAFFLE_RING_Z1 + P.PCB_Z0))],
+        "GL1-035_die_cut_retarder_film_optional": [(f"RETARDER_FILM_OPTIONAL_E9_D{t(P.RETARDER_D)}_T{t(P.RETARDER_T)}_CLOCKING_FLAT_AT_Y{t(P.RETARDER_FLAT_Y)}_TOWARD_VISOR", "retarder_film", "z",
+                                                    0.5 * (P.RETARDER_Z0 + P.RETARDER_Z1))],
         "GL1-040_main_pcb_outline": [("BOARD_OUTLINE_LOCATING_HOLE_AND_SLOT_POSTS_B", None, "z", 0.5 * (P.PCB_Z0 + P.PCB_Z1))],
+        "GL1-050_calibration_seat_plates": [("ITEM1_SEAT_PLANE_PADS_AND_POCKETS_Z0", "cal_seat_plate", "z", -1e-3), ("ITEM1_TOP_FACE_FENCE_FOOT_PINS", "cal_seat_plate", "z", -0.5 * P.CAL["relief"]),
+                                            ("ITEM1_BLANK", "cal_seat_plate", "z", -0.5 * P.CAL["plate"][2]),
+                                            ("FENCE_CONTACT_BAND_AND_PINS", "cal_seat_plate", "z", 0.5 * (P.CAL["fence_relief"][1] + P.CAL["fence_h"])),
+                                            ("ITEM2_PLAIN_PLATE_BLANK", "cal_plain_plate", "z", -0.5 * P.CAL["plate"][2]),
+                                            ("ITEM3_BALL_GAUGE_PLATE_BOSSES_AND_GAUGE_HOLES", "gauge_plate", "z", -1e-3),
+                                            ("ITEM3_BALL_GAUGE_PLATE_BLANK", "gauge_plate", "z", -0.5 * (P.GAUGE["relief"] + P.GAUGE["hole_depth"]))],
     }
     # carrier liner of the two PCB-sheet die cuts: outline and two tooling holes for the posts of the lamination jig (the sheet is
     # placed on the base plate by these, not by eye: a sheet 0.25 mm off would put adhesive on the seal land)
@@ -1123,6 +1470,9 @@ def export_dxf(parts):
     liner = [("circle", (sx_ * lt["x"], 0.0), lt["dia"] / 2) for sx_ in (-1, 1)] + [("poly", [(-lw_, -lh_), (lw_, -lh_), (lw_, lh_), (-lw_, lh_), (-lw_, -lh_)])]
     extras = {k: [("CARRIER_LINER_%sx%s_TOOLING_HOLES_D%s_AT_X%s" % (t(lt["liner"][0]), t(lt["liner"][1]), t(lt["dia"]), t(lt["x"])), e) for e in liner]
               for k in ("GL1-030_die_cut_pcb_sheet_FR4_build", "GL1-031_die_cut_pcb_sheet_PA12_build")}
+    # E10: the legend of the outer face as centre lines of its strokes (marker frame, seen from the top face: mirrored text), one layer per line width
+    import legend as L
+    extras["GL1-011_base_plate_FR4_fab"] = [("LEGEND_BOTTOM_OUTER_FACE_LINE_%s_MIRRORED_AS_SEEN_FROM_TOP" % t(w_), ("poly", pl_)) for pl_, w_, _n in L.strokes()]
     puck = [n for n, i in parts.items() if i.group == "puck"]
     files["GL1-002_section_A-A_x0"] = [(n.upper(), n, "x", 0.0) for n in puck]
     files["GL1-002_section_B-B_x%s" % f"{cxr:.1f}".replace(".", "p")] = [(n.upper(), n, "x", cxr) for n in puck]
@@ -1167,7 +1517,84 @@ def export_dxf(parts):
     return out
 
 
-DRAWINGS = [gl1_001, gl1_002, gl1_010, gl1_011, gl1_012, gl1_013, gl1_020]
+def verify_outputs(parts):
+    """Read the written fabrication and outline files back from DISK and compare them with the model: the five fabrication
+    files of the FR-4 plate must be the text that check 15 generated and read; the PCB outline DXF GL1-040 must carry the
+    YAML slot; the fabrication DXF must carry the legend layers.  Returns (problems, facts)."""
+    import ezdxf
+    import fabdata as FD
+    problems, facts = [], []
+    fab = DRAW_DIR / "fab"
+    gen = FD.generate(A.solid_of(parts["base_plate"]))
+    for key, text in gen.items():
+        f = fab / FD.FILES[key]
+        if not f.exists() or f.read_text() != text:
+            problems.append(f"fab/{FD.FILES[key]} on disk is not the data that check 15 read back")
+    facts.append(f"{len(gen)} fabrication files on disk equal the checked data")
+    f = DXF_DIR / "GL1-040_main_pcb_outline.dxf"
+    try:
+        msp = ezdxf.readfile(str(f)).modelspace()
+        sx, sy, sd, sl = P.LOC_SLOT
+        arcs = [e for e in msp if e.dxftype() == "ARC" and abs(e.dxf.radius - sd / 2) < 1e-6 and abs(e.dxf.center.y - sy) < 1e-6]
+        xs = sorted(e.dxf.center.x for e in arcs)
+        length = (xs[-1] - xs[0] + sd) if len(xs) >= 2 else float("nan")
+        circ = [e for e in msp if e.dxftype() == "CIRCLE" and abs(e.dxf.radius - P.LOC_ROUND[2] / 2) < 1e-6]
+        if not abs(length - sl) < 1e-6 or abs(0.5 * (xs[0] + xs[-1]) - sx) > 1e-6:
+            problems.append(f"GL1-040 DXF: slot {length:.3f} long, YAML {sl}")
+        if len(circ) != 1 or abs(circ[0].dxf.center.x - P.LOC_ROUND[0]) > 1e-6 or abs(circ[0].dxf.center.y - P.LOC_ROUND[1]) > 1e-6:
+            problems.append("GL1-040 DXF: round locating hole not found at its YAML position")
+        facts.append(f"GL1-040 DXF read back: slot {length:.2f} x {sd} at ({0.5 * (xs[0] + xs[-1]):.2f}, {sy}), round hole dia {P.LOC_ROUND[2]} at ({P.LOC_ROUND[0]}, {P.LOC_ROUND[1]})")
+    except Exception as ex:
+        problems.append(f"GL1-040 DXF unreadable: {ex!r}")
+    try:
+        doc = ezdxf.readfile(str(DXF_DIR / "GL1-011_base_plate_FR4_fab.dxf"))
+        leg = [e for e in doc.modelspace() if e.dxf.layer.startswith("LEGEND_BOTTOM")]
+        n_leg = len(leg)
+        if n_leg == 0:
+            problems.append("GL1-011 fabrication DXF has no legend layer")
+        else:                                                 # orientation: the DXF legend (seen from the top face) mirrored about x = 0 must be the legend as READ
+            import legend as L
+            from shapely.geometry import LineString, MultiLineString
+            got = MultiLineString([LineString([(-x_, y_) for x_, y_, *_r in e.get_points()]) for e in leg if e.dxftype() == "LWPOLYLINE" and len(e) > 1])
+            want = MultiLineString([LineString(pl_) for b_ in L.blocks() for pl_, _w in L.block_strokes(b_) if len(pl_) > 1])
+            dev = max(got.hausdorff_distance(want), want.hausdorff_distance(got))
+            if dev > 1e-6:
+                problems.append(f"GL1-011 fabrication DXF: the legend layers are not the mirror image of the legend as read (largest deviation {dev:.3f} mm)")
+        facts.append(f"GL1-011 fabrication DXF: {n_leg} legend strokes, mirrored as a bottom layer")
+    except Exception as ex:
+        problems.append(f"GL1-011 fabrication DXF unreadable: {ex!r}")
+    # the legend Gerber ON DISK: mirrored about x = 0 it must be the legend as read (independent of legend.to_model)
+    try:
+        import legend as L
+        from shapely import affinity
+        ink = FD.legend_shape(FD.parse_gerber((fab / FD.FILES["legend_bottom"]).read_text()))
+        d_mir = affinity.scale(ink, xfact=-1.0, yfact=1.0, origin=(0, 0)).symmetric_difference(L.reading_geometry()).area
+        if d_mir > 1e-3:
+            problems.append(f"fab/{FD.FILES['legend_bottom']}: the file is not the mirror image of the legend as read ({d_mir:.3f} mm2 differ)")
+        facts.append(f"legend Gerber on disk mirrored about x = 0 equals the legend as read ({d_mir:.5f} mm2 differ)")
+    except Exception as ex:
+        problems.append(f"legend Gerber unreadable: {ex!r}")
+    # die cuts: retarder film with its clocking flat, baffle annulus named by the tape range
+    try:
+        msp = ezdxf.readfile(str(DXF_DIR / "GL1-035_die_cut_retarder_film_optional.dxf")).modelspace()
+        flat = [e for e in msp if e.dxftype() == "LINE" and abs(e.dxf.start.y - P.RETARDER_FLAT_Y) < 1e-6 and abs(e.dxf.end.y - P.RETARDER_FLAT_Y) < 1e-6]
+        arcs = [e for e in msp if e.dxftype() in ("ARC", "CIRCLE") and abs(e.dxf.radius - P.RETARDER_D / 2) < 1e-6]
+        ln = abs(flat[0].dxf.end.x - flat[0].dxf.start.x) if flat else float("nan")
+        if len(flat) != 1 or not arcs or abs(ln - P.RETARDER_FLAT_LEN) > 1e-4 or any(e.dxftype() == "CIRCLE" for e in arcs):
+            problems.append(f"GL1-035 DXF: the film is not a dia {P.RETARDER_D} disc with one clocking flat at y = {P.RETARDER_FLAT_Y}")
+        facts.append(f"GL1-035 DXF read back: film dia {P.RETARDER_D} with a flat {ln:.2f} long at y {P.RETARDER_FLAT_Y}")
+        doc = ezdxf.readfile(str(DXF_DIR / "GL1-034_die_cut_baffle_annulus.dxf"))
+        lay = [l_.dxf.name for l_ in doc.layers if l_.dxf.name.startswith("BAFFLE_ANNULUS")]
+        want = f"{min(P.BAFFLE_TAPE_RANGE):.2f}".replace(".", "p") + "_TO_" + f"{max(P.BAFFLE_TAPE_RANGE):.3f}".replace(".", "p")
+        if len(lay) != 1 or want not in lay[0]:
+            problems.append(f"GL1-034 DXF: the layer does not name the tape range ({lay})")
+        facts.append(f"GL1-034 DXF layer {lay[0] if lay else '-'}")
+    except Exception as ex:
+        problems.append(f"die-cut DXF unreadable: {ex!r}")
+    return problems, facts
+
+
+DRAWINGS = [gl1_001, gl1_002, gl1_010, gl1_011, gl1_012, gl1_013, gl1_020, gl1_050]
 
 
 def draw_all(parts=None, verbose=True, only=None):

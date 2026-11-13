@@ -4,9 +4,12 @@
     mask      Gerber RS-274X, solder mask top and bottom: full coverage with a round opening at each drilled hole
               (hole + MECH['fr4_mask_relief']), so that no mask lies on the hole wall or on its rim
     drill     Excellon, the three non-plated holes
+    legend    Gerber RS-274X, legend (silkscreen) of the BOTTOM = outer face (spec amendment E10): the placeholder blocks of
+              cad/legend.py as round-ended strokes.  Like every bottom layer it is given as seen from the top face, so the
+              text reads mirrored in the file and correctly on the part
 
-Everything is generated from the typed section edges of the plate SOLID (geom.section_edges), never from typed-in
-numbers.  parse_gerber() / parse_excellon() read the text back; check 15 compares what a fabricator's CAM would read
+Profile, mask and drill are generated from the typed section edges of the plate SOLID (geom.section_edges), never from typed-in
+numbers; the legend from the blocks of cad/legend.py.  parse_gerber() / parse_excellon() read the text back; check 15 compares what a fabricator's CAM would read
 with the solid.  Origin = centre of the outline arc (the marker frame), millimetres, seen on the top (PCB) face.
 """
 from __future__ import annotations
@@ -17,7 +20,8 @@ import geom as G
 M = P.MECH
 DEC = 6                      # decimals of the Gerber coordinate format (4.6, mm)
 NAME = "GL1-011_base_plate_FR4"
-FILES = {"profile": f"{NAME}-Profile.gbr", "mask_top": f"{NAME}-F_Mask.gbr", "mask_bottom": f"{NAME}-B_Mask.gbr", "drill": f"{NAME}-NPTH.drl"}
+FILES = {"profile": f"{NAME}-Profile.gbr", "mask_top": f"{NAME}-F_Mask.gbr", "mask_bottom": f"{NAME}-B_Mask.gbr", "drill": f"{NAME}-NPTH.drl",
+         "legend_bottom": f"{NAME}-B_Legend.gbr"}
 
 
 def plate_entities(plate):
@@ -77,9 +81,30 @@ def excellon(drill):
     return "\n".join(out + ["T0", "M30"]) + "\n"
 
 
-def generate(plate):
+def gerber_legend(blocks=None):
+    """Legend of the bottom (outer) face, positive polarity: every stroke of cad/legend.py drawn with a round aperture of its
+    width.  Coordinates in the marker frame (seen from the top face), so the text is mirrored in this file."""
+    import legend as L
+    st = L.strokes(blocks)
+    widths = sorted({round(w, 6) for _, w, _ in st})
+    code = {w: 10 + i for i, w in enumerate(widths)}
+    out = _head("Legend,Bot", ["G04 PLACEHOLDER legend (E10): maker, model, 'PRACTICE DEVICE', blocks reserved for the statements, serial-number box.*",
+                               "G04 Bottom layer given as seen from the top face: text reads mirrored here, correctly on the part.*"])
+    out += ["%%ADD%dC,%.6f*%%" % (code[w], w) for w in widths] + ["G01*"]
+    for w in widths:
+        out.append("D%d*" % code[w])
+        for pl, w_, _name in st:
+            if round(w_, 6) != w:
+                continue
+            out.append(f"X{_c(pl[0][0])}Y{_c(pl[0][1])}D02*")
+            out += [f"X{_c(x)}Y{_c(y)}D01*" for x, y in pl[1:]]
+    return "\n".join(out + ["M02*"]) + "\n"
+
+
+def generate(plate, legend_blocks=None):
     rout, drill = plate_entities(plate)
-    return {"profile": gerber_profile(rout), "mask_top": gerber_mask(drill, "top"), "mask_bottom": gerber_mask(drill, "bottom"), "drill": excellon(drill)}
+    return {"profile": gerber_profile(rout), "mask_top": gerber_mask(drill, "top"), "mask_bottom": gerber_mask(drill, "bottom"), "drill": excellon(drill),
+            "legend_bottom": gerber_legend(legend_blocks)}
 
 
 def write(plate, outdir):
@@ -95,14 +120,15 @@ def write(plate, outdir):
 # ---------------------------------------------------------------------------------------------- readers (for the check)
 def parse_gerber(text):
     """Minimal RS-274X reader for the files written here: returns dict(function, negative, apertures {code: dia},
-    segments [('line', p0, p1) | ('arc', centre, r, p0, p1, ccw)], flashes [(x, y, dia)])."""
+    segments [('line', p0, p1) | ('arc', centre, r, p0, p1, ccw)], widths [aperture diameter of each segment],
+    flashes [(x, y, dia)])."""
     fmt = re.search(r"%FSLAX(\d)(\d)Y\d\d\*%", text)
     dec = int(fmt.group(2))
     scale = 10.0 ** -dec
     unit = 1.0 if "%MOMM*%" in text else 25.4
     aps = {int(c): float(d) * unit for c, d in re.findall(r"%ADD(\d+)C,([0-9.]+)\*%", text)}
     func = re.search(r"%TF\.FileFunction,([^*]+)\*%", text)
-    res = dict(function=func.group(1) if func else "", negative="FilePolarity,Negative" in text, apertures=aps, segments=[], flashes=[])
+    res = dict(function=func.group(1) if func else "", negative="FilePolarity,Negative" in text, apertures=aps, segments=[], widths=[], flashes=[])
     x = y = 0.0
     mode, cur = "G01", None
     for cmd in re.sub(r"%[^%]*%", "", text).replace("\n", "").split("*"):
@@ -128,6 +154,7 @@ def parse_gerber(text):
             else:
                 i = int(m.group(3) or 0) * scale * unit; j = int(m.group(4) or 0) * scale * unit
                 res["segments"].append(("arc", (x + i, y + j), math.hypot(i, j), (x, y), (nx, ny), mode == "G03"))
+            res["widths"].append(aps.get(cur))
         elif op == "3":
             res["flashes"].append((nx, ny, aps[cur]))
         x, y = nx, ny
@@ -174,3 +201,16 @@ def profile_polygon(segments, chord_tol=2e-5):
         lines.append(LineString(pts))
     faces = list(polygonize(unary_union(lines)))
     return max(faces, key=lambda g: g.area) if faces else None
+
+
+def legend_shape(parsed):
+    """The ink of a parsed legend layer as a shapely shape: every drawn line with the width of its (round) aperture."""
+    from shapely.geometry import LineString, Point
+    from shapely.ops import unary_union
+    parts = []
+    for seg, w in zip(parsed["segments"], parsed["widths"]):
+        if seg[0] != "line" or not w:
+            raise ValueError("legend layer: only straight strokes with a round aperture are expected")
+        a, b = seg[1], seg[2]
+        parts.append((LineString([a, b]) if (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 > 0 else Point(a)).buffer(w / 2, 16))
+    return unary_union(parts) if parts else None

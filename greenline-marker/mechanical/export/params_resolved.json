@@ -16,6 +16,22 @@
   "base_plate": {
    "material": "FR-4 0.80 mm, matte black solder mask both sides, no copper, routed outline, drilled holes",
    "thickness": 0.8,
+   "tolerances": {
+    "outline": 0.1,
+    "holes": 0.05,
+    "thickness_over_mask": 0.1
+   },
+   "thickness_accepted": [
+    0.76,
+    0.9
+   ],
+   "mask_relief_dia": 1.25,
+   "legend": {
+    "side": "outer",
+    "process": "white legend print on the black mask, or laser mark",
+    "clear_of_features": 1.0,
+    "content": "maker, model, Practice device, required statements (docs/COMPLIANCE.md), serial-number box"
+   },
    "psa": {
     "mpn": "3M 93020LE (300LSE) double-coated tape, die cut",
     "thickness": 0.2,
@@ -27,7 +43,11 @@
     "psa_thickness": 0.13,
     "psa_mpn": "3M 9472LE (300LSE) adhesive transfer tape",
     "foot_hole_dia": 1.15,
-    "baffle": "integral"
+    "baffle": "integral",
+    "thickness_accepted": [
+     0.83,
+     0.92
+    ]
    },
    "radius": 21.75,
    "flat_y": 18.25,
@@ -40,7 +60,17 @@
     "x": 0.0,
     "y": -4.0,
     "dia": 13.0,
-    "fill": "clear optical epoxy, surface 0.05 below the base plane",
+    "fill": "clear optical epoxy",
+    "fill_surface_z": {
+     "never_below": 0.05,
+     "target": 0.1,
+     "max": 0.2,
+     "below_ring_crest": [
+      0.0,
+      0.1
+     ]
+    },
+    "fill_volume_nominal_mm3": 93.4,
     "fill_basis": "provisional"
    },
    "pad_holes": {
@@ -60,6 +90,7 @@
    },
    "feet": {
     "ball_dia": 1.0,
+    "material": "316 stainless grade 100 or better, or silicon nitride; not 440C (E8)",
     "protrusion": 0.1,
     "hole_dia": 1.1,
     "psa_hole_dia": 2.0,
@@ -91,7 +122,20 @@
      225,
      315
     ],
-    "spoke_width": 0.8
+    "spoke_width": 0.8,
+    "ring": {
+     "height": 0.82,
+     "height_tol": [
+      -0.03,
+      0.0
+     ],
+     "matched_to": "measured plate thickness + 0.02",
+     "adhesive": "opaque black double-coated tape, 0.10 to 0.145 as available (E16)",
+     "crest_z": [
+      0.0,
+      0.15
+     ]
+    }
    }
   },
   "pcb": {
@@ -109,7 +153,7 @@
      "x": -14.35,
      "y": 10.8,
      "dia": 1.15,
-     "length_x": 1.8
+     "length_x": 2.2
     },
     "spigot_dia": 1.0,
     "spigot_height": 0.6
@@ -149,7 +193,13 @@
    "recess_depth": 1.25,
    "bond": "3M 9472LE transfer tape ring 0.13 mm, OD 28.0 / ID 25.0",
    "bond_thickness": 0.13,
-   "sub_flush": 0.12
+   "bond_id": 25.0,
+   "sub_flush": 0.12,
+   "retarder": {
+    "type": "quarter-wave film, about 0.1 mm, on the glass underside, axis 45 deg to the LCD polariser",
+    "status": "EVT trial (E9)",
+    "basis": "provisional"
+   }
   },
   "battery": {
    "mpn": "GM201030-PCB",
@@ -207,7 +257,7 @@
    "field_required_deg": {
     "h": 26.0,
     "up": 17.6,
-    "up_guaranteed": 15.0,
+    "up_guaranteed": 14.5,
     "down": 8.0
    }
   },
@@ -237,6 +287,9 @@
     "z1": 6.8
    },
    "min_wall_behind_recess": 0.525,
+   "sub_flush": 0.15,
+   "bond_line": 0.0,
+   "bond": "frame of thixotropic adhesive round the glass edge: side gaps, top bead 0.10, sill fillet 0.12 x 0.12; nothing behind the glass",
    "material": "0.40 mm borosilicate (SCHOTT D 263 T eco class), custom cut 5.0 x 3.25; AR coating optional at EVT"
   },
   "vent": {
@@ -288,7 +341,12 @@
        14.35,
        10.8
       ]
-     ]
+     ],
+     "foot": {
+      "dx": 1.9,
+      "dy": 2.2,
+      "x_inner": 13.55
+     }
     }
    },
    "camera_hoods": {
@@ -314,7 +372,17 @@
       16.5,
       -9.5
      ]
-    ]
+    ],
+    "part_margin": 0.3
+   },
+   "lcd_tail": {
+    "half_w": 3.25,
+    "y": [
+     -18.3,
+     -16.8
+    ],
+    "max_part_height": 0.7,
+    "basis": "provisional"
    }
   },
   "cradle": {
@@ -509,17 +577,17 @@
    },
    {
     "ref": "U9",
-    "name": "MCP73831 charger SOT-23-5",
+    "name": "BQ25101YFP charger DSBGA-6 (E1)",
     "x": -10.5,
     "y": -13.5,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.45
+    "dx": 1.6,
+    "dy": 0.9,
+    "h": 0.5
    },
    {
     "ref": "U10",
     "name": "USBLC6-2SC6 ESD SOT-23-6",
-    "x": -14.2,
+    "x": -13.9,
     "y": -12.2,
     "dx": 3.0,
     "dy": 3.0,
@@ -588,6 +656,7 @@
     0.76,
     0.9
    ],
+   "accept_lo_needed": 0.76,
    "seal_joint_height": 0.3999999999999999,
    "psa_z": [
     0.8,
@@ -641,6 +710,7 @@
     0.83,
     0.92
    ],
+   "accept_lo_needed": 0.83,
    "seal_joint_height": 0.32999999999999996,
    "psa_z": [
     0.87,
@@ -696,7 +766,6 @@
    8.0,
    11.0
   ],
-  "cover_tape_id": 25.0,
   "lcd_psa_window_dia": 23.0,
   "lcd_psa_vent_w": 0.8,
   "post_names_plain": [
@@ -719,7 +788,6 @@
   "hood_seal_place_tol": 0.075,
   "hood_seal_max_squeeze": 0.3,
   "hood_seal_min_land": 0.1,
-  "window_bond": 0.0,
   "window_top_bead": 0.1,
   "window_sill_fillet": 0.12,
   "window_seal_test_gap": 0.02,
@@ -739,23 +807,18 @@
    0.5
   ],
   "led_pair_offset": 0.45,
-  "grain_fill_recess": 0.05,
-  "grain_fill_recess_max": 0.2,
-  "grain_fill_below_crest": 0.1,
   "grain_fill_min_cover": 0.3,
   "potting_viscosity_Pa_s": [
    0.1,
    2.0
   ],
   "potting_dispense_tol": 0.03,
-  "baffle_psa_t": 0.13,
   "baffle_psa_tol": 0.02,
-  "baffle_ring_tol": [
-   0.0,
-   0.03
+  "baffle_tape_range_default": [
+   0.1,
+   0.145
   ],
   "baffle_ring_lap_allowance": 0.15,
-  "baffle_crest_max_z": 0.15,
   "plate_gauging_tol": 0.01,
   "ring_sprue": {
    "n": 6,
@@ -775,22 +838,15 @@
   },
   "fr4_min_inner_radius": 0.5,
   "fr4_min_web": 1.0,
-  "fr4_tol_outline": 0.1,
-  "fr4_tol_hole": 0.05,
-  "fr4_tol_thickness": 0.1,
-  "fr4_mask_relief": 0.15,
   "fr4_tab_recess_max": 0.25,
   "tol_printed": 0.1,
   "tol_pcb": 0.08,
   "tol_sheet_frac": 0.1,
-  "tol_fr4_plate": 0.1,
   "tol_pa12_plate": 0.1,
   "tol_ball_set": 0.02,
   "ball_gap_min": 0.02,
-  "plate_sort_plus": {
-   "fr4": 0.1,
-   "pa12": 0.05
-  },
+  "ball_dia_tol": 0.0127,
+  "ball_dia_tol_g25": 0.0025,
   "seal_dispense_margin": 1.0,
   "cte_pa12": 110.0,
   "cte_fr4": 15.0,
@@ -812,9 +868,84 @@
   "n_prism": 1.517,
   "n_window": 1.52,
   "fov_down_sensor_deg": 15.0,
-  "fov_up_guar_shortfall_recorded": 0.05,
+  "gate2_margin_deg": 1.0,
+  "gate2_distance": 500.0,
   "fov_angle_tol": 0.002,
   "print_tol": 0.2,
+  "retarder_t_default": 0.1,
+  "retarder_t_tol": 0.01,
+  "retarder_dia": 23.4,
+  "retarder_flat_overlap": 0.5,
+  "retarder_place_tol": 0.25,
+  "retarder_clock_tol_deg": 3.0,
+  "legend_edge_margin": 0.75,
+  "legend_stroke": 0.15,
+  "legend_frame_stroke": 0.2,
+  "legend_min_text_h": 1.0,
+  "legend_min_gap": 0.15,
+  "legend_ink_t_max": 0.03,
+  "legend_ink_t": 0.02,
+  "cal": {
+   "plate": [
+    70.0,
+    112.0,
+    12.0
+   ],
+   "fence_t": 8.0,
+   "fence_len": 60.0,
+   "fence_h": 4.0,
+   "fence_relief": [
+    0.5,
+    1.6
+   ],
+   "pin_dia": 3.0,
+   "pin_h": 4.0,
+   "pad_od": 7.0,
+   "pocket_dia": 3.0,
+   "pocket_depth": 0.5,
+   "relief": 0.3,
+   "locate_tol": 0.6,
+   "coplanar": 0.001,
+   "flat_plain": 0.001,
+   "fence_square": 0.01,
+   "legend_zone_margin": 0.15
+  },
+  "gauge": {
+   "boss_od": 7.0,
+   "relief": 0.3,
+   "hole_depth": 0.5,
+   "blank": [
+    52.0,
+    50.0,
+    10.0
+   ],
+   "locate_tol": 0.1
+  },
+  "bridge": {
+   "foot_od": 6.0,
+   "foot_bore": 1.6,
+   "foot_h": 1.0,
+   "rim_station_r": 22.35,
+   "rim_station_deg": [
+    -135.0,
+    -45.0,
+    45.0,
+    135.0
+   ],
+   "mask_od": 24.0
+  },
+  "legend_registration": 0.15,
+  "pcb_hole_tol": 0.05,
+  "spigot_undersize": 0.05,
+  "up_guaranteed_proposed": 14.0,
+  "pupil_dia_alt": 0.4,
+  "pupil_below_alt": 0.5,
+  "roof_cold_drop": 0.02,
+  "lcd_free_rotation_limit_deg": 1.25,
+  "lcd_line_budget_deg": 0.5,
+  "lcd_pusher_pad_w": 5.0,
+  "lcd_pusher_guide_tol": 0.5,
+  "lcd_rib_step_tol": 0.05,
   "lcd_tilt_deg": 6.0,
   "lcd_bias": 0.55,
   "join_offset": 0.1,
@@ -976,15 +1107,34 @@
    2.0,
    4.0,
    7.0
-  ]
+  ],
+  "baffle_psa_t": 0.13
  },
  "from_yaml_under_mech_names": {
+  "cover_tape_id": 25.0,
+  "window_bond": 0.0,
+  "grain_fill_recess": 0.05,
+  "grain_fill_target": 0.1,
+  "grain_fill_recess_max": 0.2,
+  "grain_fill_below_crest": 0.1,
+  "baffle_ring_tol": [
+   0.0,
+   0.03
+  ],
+  "baffle_crest_max_z": 0.15,
+  "fr4_tol_outline": 0.1,
+  "fr4_tol_hole": 0.05,
+  "fr4_tol_thickness": 0.1,
+  "tol_fr4_plate": 0.1,
+  "fr4_mask_relief": 0.15,
+  "foot_part_margin": 0.3,
+  "legend_clear": 1.0,
   "rim_relief": 0.25,
   "epoxy_dome_max": 0.08,
   "fov_h_half_deg": 26.0,
   "fov_up_deg": 17.6,
   "fov_down_deg": 8.0,
-  "fov_up_guaranteed_deg": 15.0,
+  "fov_up_guaranteed_deg": 14.5,
   "lip_half_w": 6.0,
   "lip_overlap": 1.2,
   "lip_t": 1.6,
@@ -1078,7 +1228,7 @@
    -14.35,
    10.8,
    1.15,
-   1.8
+   2.2
   ],
   "SPIGOT_D": 1.0,
   "SPIGOT_H": 0.6,
@@ -1126,6 +1276,19 @@
   "CG_Z1": 7.4799999999999995,
   "CG_BELOW_FLUSH": 0.1200000000000001,
   "CG_TAPE_W": 1.5,
+  "RETARDER": {
+   "type": "quarter-wave film, about 0.1 mm, on the glass underside, axis 45 deg to the LCD polariser",
+   "status": "EVT trial (E9)",
+   "basis": "provisional"
+  },
+  "RETARDER_T": 0.1,
+  "RETARDER_D": 23.4,
+  "RETARDER_Z1": 6.4799999999999995,
+  "RETARDER_Z0": 6.38,
+  "RETARDER_LEDGE_GAP": 0.03000000000000025,
+  "RETARDER_LEDGE_GAP_MIN": 0.007000000000000006,
+  "RETARDER_FLAT_Y": 11.5,
+  "RETARDER_FLAT_LEN": 4.308131845707597,
   "ROOF_Z": 6.8,
   "ROOF_T": 0.8,
   "BAT": {
@@ -1169,7 +1332,7 @@
   "CAM_Z1": 4.56,
   "FOV_H": 26.0,
   "FOV_UP": 17.6,
-  "FOV_UP_GUAR": 15.0,
+  "FOV_UP_GUAR": 14.5,
   "FOV_DOWN": 8.0,
   "PRISM_LEG": 2.0,
   "PRISM_BOND": 0.05,
@@ -1267,6 +1430,21 @@
     -9.5
    ]
   ],
+  "FOOT_PART_MARGIN": 0.3,
+  "KO_LOC_FOOT": {
+   "dx": 1.9,
+   "dy": 2.2,
+   "x_inner": 13.55
+  },
+  "KO_TAIL": {
+   "half_w": 3.25,
+   "y": [
+    -18.3,
+    -16.8
+   ],
+   "max_part_height": 0.7,
+   "basis": "provisional"
+  },
   "TOP_PARTS": [
    {
     "ref": "U1",
@@ -1364,17 +1542,17 @@
    },
    {
     "ref": "U9",
-    "name": "MCP73831 charger SOT-23-5",
+    "name": "BQ25101YFP charger DSBGA-6 (E1)",
     "x": -10.5,
     "y": -13.5,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.45
+    "dx": 1.6,
+    "dy": 0.9,
+    "h": 0.5
    },
    {
     "ref": "U10",
     "name": "USBLC6-2SC6 ESD SOT-23-6",
-    "x": -14.2,
+    "x": -13.9,
     "y": -12.2,
     "dx": 3.0,
     "dy": 3.0,
@@ -1491,12 +1669,23 @@
   "GRAIN_FILL_Z": 0.05,
   "GRAIN_FILL_DEPTH": 0.95,
   "GRAIN_FILL_Z_MAX": 0.2,
-  "BAFFLE_PSA_T": 0.13,
+  "GRAIN_FILL_TARGET_Z": 0.1,
+  "GRAIN_FILL_VOL_YAML": 93.4,
   "BAFFLE_RING_Z0": 0.05,
-  "BAFFLE_RING_Z1": 0.87,
   "BAFFLE_RING_H": 0.82,
-  "BAFFLE_RING_PRINT_H": 0.97,
+  "BAFFLE_RING_Z1": 0.87,
+  "BAFFLE_PSA_T": 0.13,
+  "BAFFLE_TAPE_RANGE": [
+   0.1,
+   0.145
+  ],
+  "BAFFLE_RING_RULE": 0.15,
   "BAFFLE_CREST_MAX_Z": 0.15,
+  "BAFFLE_RING_H_RANGE": [
+   0.735,
+   0.9500000000000001
+  ],
+  "BAFFLE_RING_PRINT_H": 1.1,
   "LED_R_IN": 4.7,
   "LED_R_OUT": 5.742821606144492,
   "VENT_PAD_Z": 6.5,
@@ -1618,6 +1807,49 @@
   "LOC_FOOT": [
    1.8999999999999986,
    2.1999999999999993
+  ],
+  "CAL_FENCE_Y0": 18.4,
+  "CAL_FENCE_Y1": 26.4,
+  "CAL_CENTRE": [
+   0.0,
+   22.4
+  ],
+  "CAL_PIN_XY": [
+   -24.5,
+   0.0
+  ],
+  "CAL_SEAT_Z": 0.0,
+  "CAL_POCKET_RADIAL": 1.1750384638145617,
+  "CAL_LEGEND_ZONE_D": 8.5,
+  "GAUGE": {
+   "boss_od": 7.0,
+   "relief": 0.3,
+   "hole_depth": 0.5,
+   "blank": [
+    52.0,
+    50.0,
+    10.0
+   ],
+   "locate_tol": 0.1
+  },
+  "BRIDGE": {
+   "foot_od": 6.0,
+   "foot_bore": 1.6,
+   "foot_h": 1.0,
+   "rim_station_r": 22.35,
+   "rim_station_deg": [
+    -135.0,
+    -45.0,
+    45.0,
+    135.0
+   ],
+   "mask_od": 24.0
+  },
+  "GAUGE_HOLE_D": 0.5999999999999999,
+  "BRIDGE_FOOT_PLAY": 0.5287068006749893,
+  "RIM_FLAT_R": [
+   22.0,
+   22.7
   ]
  },
  "posts": [
@@ -1751,6 +1983,11 @@
    -0.03,
    0.22
   ]
+ },
+ "baffle_ring_height_by_tape": {
+  "0.1": 0.85,
+  "0.13": 0.82,
+  "0.145": 0.805
  },
  "hood_seal": {
   "area_free": 0.11,

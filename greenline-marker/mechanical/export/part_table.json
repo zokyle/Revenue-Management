@@ -101,8 +101,8 @@
   "kind": "purchased",
   "material": "FR-4 + parts (envelope)",
   "valid": true,
-  "volume_mm3": 1512.373,
-  "mass_g": 3.3272,
+  "volume_mm3": 1499.675,
+  "mass_g": 3.2993,
   "bbox_min": [
    -21.1,
    -21.1,
@@ -147,7 +147,7 @@
   "name": "baffle_adhesive",
   "group": "puck",
   "kind": "adhesive",
-  "material": "opaque black double-coated tape 0.13 mm, die-cut annulus (PROVISIONAL)",
+  "material": "opaque black double-coated tape, 0.1 to 0.145 mm as available (modelled 0.13), die-cut annulus (PROVISIONAL)",
   "valid": true,
   "volume_mm3": 2.418,
   "mass_g": 0.0024,
@@ -552,6 +552,30 @@
   ]
  },
  {
+  "name": "retarder_film",
+  "group": "option",
+  "kind": "purchased",
+  "material": "quarter-wave retarder film with laminating adhesive, about 0.1 mm, dia 23.4 (E9, EVT trial; PROVISIONAL, no part number)",
+  "valid": true,
+  "volume_mm3": 42.948,
+  "mass_g": 0.0515,
+  "bbox_min": [
+   -11.7,
+   -11.7,
+   6.38
+  ],
+  "bbox_max": [
+   11.7,
+   11.5,
+   6.48
+  ],
+  "size": [
+   23.4,
+   23.2,
+   0.1
+  ]
+ },
+ {
   "name": "battery",
   "group": "puck",
   "kind": "purchased",
@@ -651,10 +675,10 @@
   "name": "ball_1",
   "group": "puck",
   "kind": "purchased",
-  "material": "stainless ball 1.0 mm",
+  "material": "ball dia 1.0: 316 stainless grade 100 or better, or silicon nitride; not 440C (E8)",
   "valid": true,
   "volume_mm3": 0.524,
-  "mass_g": 0.0041,
+  "mass_g": 0.0042,
   "bbox_min": [
    -0.5,
    14.5,
@@ -699,10 +723,10 @@
   "name": "ball_2",
   "group": "puck",
   "kind": "purchased",
-  "material": "stainless ball 1.0 mm",
+  "material": "ball dia 1.0: 316 stainless grade 100 or better, or silicon nitride; not 440C (E8)",
   "valid": true,
   "volume_mm3": 0.524,
-  "mass_g": 0.0041,
+  "mass_g": 0.0042,
   "bbox_min": [
    -17.0,
    -10.0,
@@ -747,10 +771,10 @@
   "name": "ball_3",
   "group": "puck",
   "kind": "purchased",
-  "material": "stainless ball 1.0 mm",
+  "material": "ball dia 1.0: 316 stainless grade 100 or better, or silicon nitride; not 440C (E8)",
   "valid": true,
   "volume_mm3": 0.524,
-  "mass_g": 0.0041,
+  "mass_g": 0.0042,
   "bbox_min": [
    16.0,
    -10.0,
@@ -885,6 +909,78 @@
    8.94,
    7.35,
    3.26
+  ]
+ },
+ {
+  "name": "cal_seat_plate",
+  "group": "fixture",
+  "kind": "fixture",
+  "material": "hardened, stabilised tool steel, seat faces lapped (fixture, drawing GL1-050)",
+  "valid": true,
+  "volume_mm3": 93776.804,
+  "mass_g": 731.4591,
+  "bbox_min": [
+   -35.0,
+   -33.6,
+   -12.0
+  ],
+  "bbox_max": [
+   35.0,
+   78.4,
+   4.0
+  ],
+  "size": [
+   70.0,
+   112.0,
+   16.0
+  ]
+ },
+ {
+  "name": "cal_plain_plate",
+  "group": "fixture",
+  "kind": "fixture",
+  "material": "hardened, stabilised tool steel, seat faces lapped (fixture, drawing GL1-050)",
+  "valid": true,
+  "volume_mm3": 95960.549,
+  "mass_g": 748.4923,
+  "bbox_min": [
+   -35.0,
+   -33.6,
+   -12.0
+  ],
+  "bbox_max": [
+   35.0,
+   78.4,
+   4.0
+  ],
+  "size": [
+   70.0,
+   112.0,
+   16.0
+  ]
+ },
+ {
+  "name": "gauge_plate",
+  "group": "fixture",
+  "kind": "fixture",
+  "material": "hardened tool steel, boss tops ground in one plane, gauge holes reamed (fixture, detail on GL1-011 sheet 1)",
+  "valid": true,
+  "volume_mm3": 25254.212,
+  "mass_g": 196.9829,
+  "bbox_min": [
+   -26.0,
+   -25.0,
+   -10.0
+  ],
+  "bbox_max": [
+   26.0,
+   25.0,
+   0.0
+  ],
+  "size": [
+   52.0,
+   50.0,
+   10.0
   ]
  },
  {

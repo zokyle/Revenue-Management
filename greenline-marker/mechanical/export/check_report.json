@@ -601,7 +601,7 @@
    "id": 2,
    "name": "clearances",
    "passed": true,
-   "summary": "94 key gaps and 12 PCB parts evaluated; 2 below the 0.25 mm rule are recorded deviations; smallest margin -0.175 mm (PCB locating spigot in the round hole, radial)",
+   "summary": "106 key gaps and 12 PCB parts evaluated; 3 rows below their minimum are recorded deviations (the two spigot fits, D19; the epoxy under an oversize grade 100 ball, D33); retarder film after its centring chain: 0.05 to the tape bore, 0.20 beyond the aperture (worst case); smallest margin -0.175 mm (PCB locating spigot in the round hole, radial)",
    "tables": [
     {
      "title": "Key clearances",
@@ -649,7 +649,7 @@
        "required_min_mm": 0.25,
        "margin_mm": -0.0,
        "status": "ok",
-       "note": "posts B are cut back to /x/ >= 13.55 for this gap (D29)"
+       "note": "posts B are cut back to /x/ >= 13.55 for this gap (YAML post_feet.locating.foot, N1)"
       },
       {
        "item": "LCD glass to roof bonding plane (adhesive frame)",
@@ -743,21 +743,21 @@
       },
       {
        "item": "PCB locating spigot in the round hole, radial",
-       "method": "section z = 1.50",
+       "method": "section z = 1.50 of the main PCB solid",
        "actual_mm": 0.075,
        "required_min_mm": 0.25,
        "margin_mm": -0.175,
        "status": "below the 0.25 rule - recorded deviation D19",
-       "note": "locating fit specified in the YAML, not a drop-in fit; go gauge dia 1.10 at first article"
+       "note": "locating fit specified in the YAML, not a drop-in fit; go gauge dia 1.10 at first article. The row FAILS when the fit of the solid differs from the YAML fit by more than 0.01 (a hole or a spigot off its position)"
       },
       {
        "item": "PCB locating spigot in the slot, across the slot (y)",
-       "method": "section z = 1.50",
+       "method": "section z = 1.50 of the main PCB solid",
        "actual_mm": 0.075,
        "required_min_mm": 0.25,
        "margin_mm": -0.175,
        "status": "below the 0.25 rule - recorded deviation D19",
-       "note": "along the slot (x): 0.400 mm each way"
+       "note": "along the slot (x): 0.600 mm each way; a slot off its centre line fails this row"
       },
       {
        "item": "Spigot tip to the adhesive sheet",
@@ -856,7 +856,16 @@
        "required_min_mm": 0.02,
        "margin_mm": 0.0,
        "status": "ok",
-       "note": "plate accepted from 0.76 to 0.90 mm (nominal 0.8), sheet 0.2 +-0.02, ball protrusion 0.1 +-0.02: a thinner plate would let the ball hold the laminate open. The plate thickness also sets the rim relief and the depth of the grain opening, not the seal joint"
+       "note": "plate accepted from 0.76 to 0.90 mm (YAML thickness_accepted; nominal 0.8), sheet 0.2 +-0.02, ball protrusion 0.1 +-0.02, ball diameter exactly 1.0: a thinner plate would let the ball hold the laminate open. The plate thickness also sets the rim relief and the depth of the grain opening, not the seal joint"
+      },
+      {
+       "item": "Same with a ball at the upper diameter limit of grade 100 (E8: dia +0.0127, ABMA figure as remembered)",
+       "method": "arithmetic on the incoming limits",
+       "actual_mm": 0.007,
+       "required_min_mm": 0.02,
+       "margin_mm": -0.013,
+       "status": "below the 0.02 rule - recorded deviation D33",
+       "note": "a ball set to its protrusion on the gauge plate carries its whole diameter error at its top. Incoming rule that restores the 0.02 mm: measure the ball lot; lower plate limit = 0.76 + (lot diameter - 1.0), i.e. 0.773 at the grade limit. A grade 25 ball (+0.0025) leaves 0.018 mm; radial clearance of the largest grade 100 ball in its hole 0.044 mm"
       },
       {
        "item": "Potting epoxy of a ball to the PCB underside (sheet hole backfilled)",
@@ -919,16 +928,16 @@
        "required_min_mm": 0.05,
        "margin_mm": 0.0,
        "status": "ok",
-       "note": "finished height 0.82 +0.00 / -0.03, lapped by us (printed 0.97 high)"
+       "note": "finished height 0.82 +0.00 / -0.03, lapped by us (printed 1.10 high)"
       },
       {
-       "item": "Baffle ring crest above the base plane, worst case (ring lapped to the plate lot)",
+       "item": "Baffle ring crest above the base plane, worst case (ring lapped to the plate lot and to the tape used)",
        "method": "arithmetic on the tolerances",
        "actual_mm": 0.0,
        "required_min_mm": 0.0,
        "margin_mm": 0.0,
        "status": "ok",
-       "note": "ring height = measured plate thickness + 0.02 (so 0.82 for the nominal 0.8 plate); sheet +-0.02, annulus +-0.02, gauging +-0.01: crest z 0.00 to 0.13. A ring lapped to 0.82 regardless of the plate would end between z -0.03 (proud of the base plane) and 0.22"
+       "note": "ring height = measured plate thickness + 0.15 - tape thickness (E16; 0.82 for the nominal 0.8 plate and a 0.13 tape, i.e. plate + 0.02); sheet +-0.02, annulus +-0.02, gauging +-0.01: crest z 0.00 to 0.13. A ring lapped to 0.82 regardless of the plate would end between z -0.03 (proud of the base plane) and 0.22"
       },
       {
        "item": "Baffle ring crest not deeper than z 0.15 (acceptance after lamination), worst case",
@@ -938,6 +947,15 @@
        "margin_mm": 0.02,
        "status": "ok",
        "note": "per unit: crest between the base plane and z 0.15, measured with a depth gauge after lamination"
+      },
+      {
+       "item": "Baffle ring print file: printed height less the tallest finished ring (lapping allowance)",
+       "method": "arithmetic (E16)",
+       "actual_mm": 0.15,
+       "required_min_mm": 0.15,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "finished rings from 0.735 (plate 0.76, tape 0.145, lower height limit) to 0.950 (plate 0.90, tape 0.1); printed 1.10 high"
       },
       {
        "item": "Potting window (crest to 0.10 inside it, within z 0.05 to 0.20) with the crest at its deepest: width",
@@ -1021,6 +1039,87 @@
        "note": "rev D: 0.12 below flush (was 0.05)"
       },
       {
+       "item": "Optional retarder film (E9): bonded to the underside of the cover glass",
+       "method": "3D minimum distance",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "quarter-wave film with its laminating adhesive, 0.1 mm, dia 23.4; axis at 45 deg to the LCD polariser (not a mechanical item)"
+      },
+      {
+       "item": "Optional retarder film to the display (LCD glass top)",
+       "method": "3D minimum distance",
+       "actual_mm": 0.98,
+       "required_min_mm": 0.25,
+       "margin_mm": 0.73,
+       "status": "ok",
+       "note": "air between display and glass 1.08 mm without the film"
+      },
+      {
+       "item": "Optional retarder film to the roof ledge under it (the film lies in the tape gap outside the aperture)",
+       "method": "3D minimum distance",
+       "actual_mm": 0.03,
+       "required_min_mm": 0.023,
+       "margin_mm": 0.007,
+       "status": "ok",
+       "note": "required: more than the tolerances that close it (tape 0.13 -10 %, film +0.01): 0.007 mm is left then. A film thicker than 0.11 mm would carry the glass off its tape: cut it to dia 21.5 (inside the aperture) instead"
+      },
+      {
+       "item": "Optional retarder film to the bore of the tape ring, radial (the tape ring still seats on glass)",
+       "method": "section z = 6.43",
+       "actual_mm": 0.8,
+       "required_min_mm": 0.25,
+       "margin_mm": 0.55,
+       "status": "ok",
+       "note": "tape ring dia 28.0 / 25.0: its whole 1.5 mm width stays on bare glass"
+      },
+      {
+       "item": "Optional retarder film: overlap beyond the display aperture, radial",
+       "method": "bounding box",
+       "actual_mm": 0.7,
+       "required_min_mm": 0.25,
+       "margin_mm": 0.45,
+       "status": "ok",
+       "note": "aperture dia 22.0: the film edge is hidden under the roof ledge"
+      },
+      {
+       "item": "Optional retarder film to the bore of the tape ring AFTER THE CENTRING CHAIN, worst case",
+       "method": "radial gap of the solids less the three placements",
+       "actual_mm": 0.05,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.05,
+       "status": "ok",
+       "note": "film on the glass +-0.25 (lamination nest), glass in its recess +-0.25, tape ring in the same recess +-0.25: 0.75 worst case, 0.43 RSS (0.37 left at RSS). A film that reached under the tape would lift the glass off its seal"
+      },
+      {
+       "item": "Optional retarder film: overlap beyond the aperture AFTER THE CENTRING CHAIN, worst case (round edge)",
+       "method": "overlap of the solid less two placements",
+       "actual_mm": 0.2,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.2,
+       "status": "ok",
+       "note": "film on the glass +-0.25 and glass in its recess +-0.25 (the aperture is part of the tub); 0.35 left at RSS"
+      },
+      {
+       "item": "Optional retarder film: clocking flat beyond the aperture (the flat is the chord toward the visor)",
+       "method": "bounding box (y max of the film)",
+       "actual_mm": 0.5,
+       "required_min_mm": 0.25,
+       "margin_mm": 0.25,
+       "status": "ok",
+       "note": "flat 4.31 mm long at y = 11.5: it carries the film axis from the die cut to the tub (lamination nest with a straight stop, edge mark on the crystal, mark set to the nose groove within +-3 deg); after the chain 0.00 worst case, 0.15 at RSS: the flat may just reach the aperture edge, never the round edge"
+      },
+      {
+       "item": "Optional retarder film: interference with any part of the marker (mm3, negated)",
+       "method": "boolean common with every marker part",
+       "actual_mm": 0.0,
+       "required_min_mm": -0.01,
+       "margin_mm": 0.01,
+       "status": "ok",
+       "note": "the film is not in the assembly of check 1; this row is its interference check"
+      },
+      {
        "item": "Camera cube L to hood (sides, top, front pad)",
        "method": "3D minimum distance",
        "actual_mm": 0.25,
@@ -1081,7 +1180,7 @@
        "required_min_mm": 0.15,
        "margin_mm": 0.0,
        "status": "ok",
-       "note": "0.4 mm glass seated on the floor of the 0.55 recess (D30)"
+       "note": "0.4 mm glass seated on the floor of the 0.55 recess (YAML visor_window.sub_flush, bond_line 0.0: N2)"
       },
       {
        "item": "Visor window L top edge below the tub top",
@@ -1207,7 +1306,7 @@
        "required_min_mm": 0.15,
        "margin_mm": 0.0,
        "status": "ok",
-       "note": "0.4 mm glass seated on the floor of the 0.55 recess (D30)"
+       "note": "0.4 mm glass seated on the floor of the 0.55 recess (YAML visor_window.sub_flush, bond_line 0.0: N2)"
       },
       {
        "item": "Visor window R top edge below the tub top",
@@ -1451,6 +1550,15 @@
        "margin_mm": 0.0,
        "status": "ok",
        "note": "envelope PROVISIONAL"
+      },
+      {
+       "item": "Clear potting to the fill target: model volume against YAML fill_volume_nominal_mm3 (within 0.1 mm3)",
+       "method": "potting solid less its free surface x (target - limit)",
+       "actual_mm": 0.06,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.06,
+       "status": "ok",
+       "note": "model 93.36 mm3 to z 0.10; YAML 93.4 mm3 (fill_surface_z.target 0.1)"
       }
      ]
     },
@@ -1558,22 +1666,22 @@
       },
       {
        "ref": "U9",
-       "part": "MCP73831 charger SOT-23-5",
+       "part": "BQ25101YFP charger DSBGA-6 (E1)",
        "x": -10.5,
        "y": -13.5,
-       "top_z": 3.25,
-       "to_tub_mm": 2.141,
-       "to_lcd_glass_or_foam_mm": 1.4,
-       "to_battery_mm": 1.8,
+       "top_z": 2.3,
+       "to_tub_mm": 3.25,
+       "to_lcd_glass_or_foam_mm": 2.35,
+       "to_battery_mm": 2.85,
        "status": "ok"
       },
       {
        "ref": "U10",
        "part": "USBLC6-2SC6 ESD SOT-23-6",
-       "x": -14.2,
+       "x": -13.9,
        "y": -12.2,
        "top_z": 3.25,
-       "to_tub_mm": 0.513,
+       "to_tub_mm": 0.738,
        "to_lcd_glass_or_foam_mm": 1.208,
        "to_battery_mm": 0.5,
        "status": "ok"
@@ -1809,6 +1917,86 @@
      ]
     },
     {
+     "title": "Baffle ring height by tape thickness (E16: ring height = plate thickness + 0.15 - tape thickness)",
+     "rows": [
+      {
+       "tape_mm": 0.1,
+       "tape": "available tape (E16)",
+       "ring_height_rule": "plate + 0.15 - 0.1 = plate + 0.050",
+       "ring_height_for_the_nominal_plate_mm": 0.85,
+       "for_the_thinnest_and_thickest_accepted_plate_mm": [
+        0.81,
+        0.95
+       ],
+       "height_tolerance_mm": "+0.00 / -0.03",
+       "lapped_off_the_printed_ring_mm": [
+        0.15,
+        0.29
+       ],
+       "crest_z_nominal": 0.05,
+       "crest_z_range": [
+        0.0,
+        0.13
+       ],
+       "crest_window_z": [
+        0.0,
+        0.15
+       ],
+       "status": "ok"
+      },
+      {
+       "tape_mm": 0.13,
+       "tape": "modelled (YAML ring height)",
+       "ring_height_rule": "plate + 0.15 - 0.13 = plate + 0.020",
+       "ring_height_for_the_nominal_plate_mm": 0.82,
+       "for_the_thinnest_and_thickest_accepted_plate_mm": [
+        0.78,
+        0.92
+       ],
+       "height_tolerance_mm": "+0.00 / -0.03",
+       "lapped_off_the_printed_ring_mm": [
+        0.18,
+        0.32
+       ],
+       "crest_z_nominal": 0.05,
+       "crest_z_range": [
+        0.0,
+        0.13
+       ],
+       "crest_window_z": [
+        0.0,
+        0.15
+       ],
+       "status": "ok"
+      },
+      {
+       "tape_mm": 0.145,
+       "tape": "available tape (E16)",
+       "ring_height_rule": "plate + 0.15 - 0.145 = plate + 0.005",
+       "ring_height_for_the_nominal_plate_mm": 0.805,
+       "for_the_thinnest_and_thickest_accepted_plate_mm": [
+        0.765,
+        0.905
+       ],
+       "height_tolerance_mm": "+0.00 / -0.03",
+       "lapped_off_the_printed_ring_mm": [
+        0.195,
+        0.335
+       ],
+       "crest_z_nominal": 0.05,
+       "crest_z_range": [
+        0.0,
+        0.13
+       ],
+       "crest_window_z": [
+        0.0,
+        0.15
+       ],
+       "status": "ok"
+      }
+     ]
+    },
+    {
      "title": "Thermal estimates (handbook coefficients, not measured)",
      "rows": [
       {
@@ -1869,7 +2057,7 @@
        "temperature_span_K": 47.0,
        "relative_movement_mm": 0.128,
        "shear_of_the_layer_pct": "-",
-       "layer": "slot allows +-0.400"
+       "layer": "slot allows +-0.600"
       }
      ]
     }
@@ -1877,6 +2065,7 @@
    "notes": [
     "required minimum = 0.25 mm drop-in rule unless the row is a specified stack value (adhesive lines, prism-to-roof 0.19, sub-flush values)",
     "passives are not in master_params.yaml, so only the 13 listed top-side parts are checked here; the real board is checked by check 17",
+    "the optional retarder film (E9) is checked by its own rows; it is not part of the assembly of checks 1, 8, 13 and 14",
     "sections are true boolean sections of the solids; curved edges are sampled to 0.0002 mm",
     "comparisons carry a numerical tolerance of 0.002 mm",
     "tolerance chains are arithmetic on ASSUMED part tolerances (critical printed tub dimensions +-0.1 as drawing GL1-010 requires, or +-0.2 as the bureau quotes in general; PCB +-0.08; sheet +-10 %; FR-4 plate +-0.1, PA12 plate +-0.1; ball protrusion +-0.02). The posts seat on the PCB top, so the seal joint = PCB - printed step + sheet and does not depend on the plate thickness; the plate sets the rim relief, the gap under the balls and the depth of the grain opening",
@@ -1885,7 +2074,8 @@
    ],
    "warnings": [
     "PCB locating spigot in the round hole, radial: 0.075 mm < 0.25 mm (D19)",
-    "PCB locating spigot in the slot, across the slot (y): 0.075 mm < 0.25 mm (D19)"
+    "PCB locating spigot in the slot, across the slot (y): 0.075 mm < 0.25 mm (D19)",
+    "Same with a ball at the upper diameter limit of grade 100 (E8: dia +0.0127, ABMA figure as remembered): 0.007 mm < 0.02 mm (D33)"
    ]
   },
   {
@@ -2223,7 +2413,7 @@
     "'left/right' = toward -x/+x, 'up/down' = toward +z/-z in object space",
     "the lower field edge (8.0 deg) meets the base plane about 39.9 mm in front of the virtual pupil - turf, not a part",
     "the visor windows are treated as transparent plates (the 0.4 mm plate shifts a 26 deg ray by about 0.07 mm; not modelled); rev D window 5.0 x 3.25 x 0.4: it covers the opening with lands of 0.50 (sides), 0.40 (sill) and 0.65 mm (top), and the adhesive round it lies outside every frustum (rows window_bond)",
-    "required field (YAML cameras.field_required_deg): +-26.0 deg horizontal, +17.6 / -8.0 deg vertical; the upper edge is accepted with 15.0 deg guaranteed at the tolerance limit (check 4)",
+    "required field (YAML cameras.field_required_deg): +-26.0 deg horizontal, +17.6 / -8.0 deg vertical; the upper edge is accepted with 14.5 deg guaranteed at the tolerance limit (check 4)",
     "the lower field is required only to -8.0 deg (flagstick base near the horizon); the sill stays at z 4.6 and the full pupil is in fact clear to -15.3 deg (the sensor could use -15.0 deg)"
    ],
    "warnings": [
@@ -2237,7 +2427,7 @@
    "id": 4,
    "name": "fold geometry",
    "passed": true,
-   "summary": "chief rays of all nine field points pass the prism and the visor opening on both cameras; pupil transmission at the worst nominal field point 97.7 % (prism exit face); bundle margin to the opening: sides 0.377, sill 0.397, top 0.054 mm; upper field 18.56 deg nominal, 14.97 deg at the tolerance limit (YAML guarantees 15.0: 0.03 deg short, deviation D31), 14.61 deg with the spigot play added",
+   "summary": "chief rays of all nine field points pass the prism and the visor opening on both cameras; pupil transmission at the worst nominal field point 97.7 % (prism exit face); bundle margin to the opening: sides 0.377, sill 0.397, top 0.054 mm; upper field 18.56 deg nominal, 14.97 deg with the optics 0.2 high, 14.61 deg in the guaranteed case (optics high and spigot play against it; camera L 14.61, camera R 14.61): YAML guarantees 14.5, margin +0.11 deg at the nominal fit (-0.004 with the PCB hole 0.05 oversize); gate 2 target +13.5 deg fully clear on a unit at the limit",
    "tables": [
     {
      "title": "Chief rays and pupil-bundle margins (nominal geometry)",
@@ -2626,7 +2816,7 @@
      "title": "Camera position from the spigot fit (rev D: spigots under posts B)",
      "rows": [
       {
-       "quantity": "radial fit of each spigot (dia 1.00 in dia 1.15 / in the 1.15 x 1.80 slot)",
+       "quantity": "radial fit of each spigot (dia 1.00 in dia 1.15 / in the 1.15 x 2.20 slot)",
        "value": 0.075,
        "unit": "mm",
        "basis": "YAML pcb.locating_holes"
@@ -2673,7 +2863,7 @@
         14.97
        ],
        "unit": "deg",
-       "basis": "required 17.6, guaranteed 15.0 (YAML)"
+       "basis": "required 17.6 nominal (YAML)"
       },
       {
        "quantity": "upper field at the tolerance limit, closed form (rim ray of the pupil through the top edge of the opening)",
@@ -2682,15 +2872,21 @@
        "basis": "a tan(t) + (prism leg) tan(t') = margin, sin(t) = n sin(t'); cross-check of the ray trace"
       },
       {
-       "quantity": "upper field with the optics high AND the fore-aft play (spigot fit) against it",
+       "quantity": "GUARANTEED CASE: upper field with the optics high AND the fore-aft play (spigot fit) against it, the smaller of the two cameras",
        "value": 14.61,
        "unit": "deg",
-       "basis": "not covered by the YAML's guaranteed figure (proposal N3)"
+       "basis": "YAML up_guaranteed = 14.5 is defined on this case (N3): camera L 14.61, camera R 14.61; margin +0.11 deg; closed form 14.611 deg"
+      },
+      {
+       "quantity": "roof lower by 0.01 mm over the opening: loss of upper field (sensitivity)",
+       "value": 0.179,
+       "unit": "deg per 0.01 mm",
+       "basis": "the margin of 0.11 deg is 0.006 mm of roof or optics height"
       }
      ]
     },
     {
-     "title": "Sensitivity to misplacement of the optics relative to the tub (camera R)",
+     "title": "Sensitivity to misplacement of the optics relative to the tub (four directions: camera R; upper field: both cameras)",
      "rows": [
       {
        "case": "nominal",
@@ -2711,6 +2907,8 @@
         21.89,
         18.74
        ],
+       "upper_field_full_pupil_deg_camera_R": 18.56,
+       "upper_field_full_pupil_deg_camera_L": 18.56,
        "upper_field_full_pupil_deg": 18.56,
        "upper_field_margin_to_required_deg": 0.96,
        "worst_field_point_transmission_pct": 97.7
@@ -2734,6 +2932,8 @@
         21.89,
         18.74
        ],
+       "upper_field_full_pupil_deg_camera_R": 18.56,
+       "upper_field_full_pupil_deg_camera_L": 18.56,
        "upper_field_full_pupil_deg": 18.56,
        "upper_field_margin_to_required_deg": 0.96,
        "worst_field_point_transmission_pct": 97.7
@@ -2757,6 +2957,8 @@
         21.89,
         18.74
        ],
+       "upper_field_full_pupil_deg_camera_R": 18.56,
+       "upper_field_full_pupil_deg_camera_L": 18.56,
        "upper_field_full_pupil_deg": 18.56,
        "upper_field_margin_to_required_deg": 0.96,
        "worst_field_point_transmission_pct": 97.7
@@ -2780,6 +2982,8 @@
         22.42,
         19.2
        ],
+       "upper_field_full_pupil_deg_camera_R": 19.02,
+       "upper_field_full_pupil_deg_camera_L": 19.02,
        "upper_field_full_pupil_deg": 19.02,
        "upper_field_margin_to_required_deg": 1.42,
        "worst_field_point_transmission_pct": 97.7
@@ -2803,6 +3007,8 @@
         21.38,
         18.3
        ],
+       "upper_field_full_pupil_deg_camera_R": 18.12,
+       "upper_field_full_pupil_deg_camera_L": 18.12,
        "upper_field_full_pupil_deg": 18.12,
        "upper_field_margin_to_required_deg": 0.52,
        "worst_field_point_transmission_pct": 97.7
@@ -2826,6 +3032,8 @@
         20.13,
         17.22
        ],
+       "upper_field_full_pupil_deg_camera_R": 17.05,
+       "upper_field_full_pupil_deg_camera_L": 17.05,
        "upper_field_full_pupil_deg": 17.05,
        "upper_field_margin_to_required_deg": -0.55,
        "worst_field_point_transmission_pct": 93.5
@@ -2849,12 +3057,14 @@
         25.29,
         15.15
        ],
+       "upper_field_full_pupil_deg_camera_R": 22.06,
+       "upper_field_full_pupil_deg_camera_L": 22.06,
        "upper_field_full_pupil_deg": 22.06,
        "upper_field_margin_to_required_deg": 4.46,
        "worst_field_point_transmission_pct": 97.7
       },
       {
-       "case": "TOLERANCE LIMIT of the upper field: optics 0.2 high (print tolerance on the roof)",
+       "case": "optics 0.2 high (print tolerance on the roof), no play",
        "shift_xyz": [
         0,
         0,
@@ -2872,12 +3082,14 @@
         18.38,
         22.23
        ],
+       "upper_field_full_pupil_deg_camera_R": 14.97,
+       "upper_field_full_pupil_deg_camera_L": 14.97,
        "upper_field_full_pupil_deg": 14.97,
        "upper_field_margin_to_required_deg": -2.63,
        "worst_field_point_transmission_pct": 63.6
       },
       {
-       "case": "optics 0.2 high and 0.075 away from the visor",
+       "case": "GUARANTEED CASE (YAML up_guaranteed, N3): optics 0.2 high AND the spigot play 0.075 away from the visor",
        "shift_xyz": [
         0,
         -0.075,
@@ -2895,9 +3107,174 @@
         17.95,
         21.72
        ],
+       "upper_field_full_pupil_deg_camera_R": 14.61,
+       "upper_field_full_pupil_deg_camera_L": 14.61,
        "upper_field_full_pupil_deg": 14.61,
        "upper_field_margin_to_required_deg": -2.99,
        "worst_field_point_transmission_pct": 55.8
+      }
+     ]
+    },
+    {
+     "title": "What uses up the margin of the guaranteed upper field (closed form; one change per row)",
+     "rows": [
+      {
+       "what": "the case the YAML defines: fit 0.075 (hole dia 1.15, spigot dia 1.0), pupil dia 0.38, 0.4 below the cube top",
+       "upper_field_deg_closed_form": 14.611,
+       "margin_to_the_guaranteed_deg": 0.111,
+       "basis": "N3",
+       "status": "the comparison of this check (ray trace: 14.61 / 14.61 deg, camera L / R)"
+      },
+      {
+       "what": "PCB hole at its upper limit, dia 1.20 (ordinary NPTH tolerance +0.05, assumed): fit 0.100; a spigot 0.05 undersize does the same",
+       "upper_field_deg_closed_form": 14.496,
+       "margin_to_the_guaranteed_deg": -0.004,
+       "basis": "the hole tolerance is not in the YAML",
+       "status": "information: BELOW the guaranteed figure"
+      },
+      {
+       "what": "pupil dia 0.4 instead of the assumed 0.38",
+       "upper_field_deg_closed_form": 14.434,
+       "margin_to_the_guaranteed_deg": -0.066,
+       "basis": "lens data not published",
+       "status": "information: BELOW the guaranteed figure"
+      },
+      {
+       "what": "pupil 0.5 instead of 0.4 below the cube top",
+       "upper_field_deg_closed_form": 14.163,
+       "margin_to_the_guaranteed_deg": -0.337,
+       "basis": "lens data not published",
+       "status": "information: BELOW the guaranteed figure"
+      },
+      {
+       "what": "roof 0.02 lower over the opening (-10 C; not part of the YAML case)",
+       "upper_field_deg_closed_form": 14.256,
+       "margin_to_the_guaranteed_deg": -0.244,
+       "basis": "thermal estimate of the README",
+       "status": "information: BELOW the guaranteed figure"
+      },
+      {
+       "what": "hole at its upper limit AND the roof 0.02 lower",
+       "upper_field_deg_closed_form": 14.144,
+       "margin_to_the_guaranteed_deg": -0.356,
+       "basis": "both mechanical items together",
+       "status": "information: BELOW the guaranteed figure"
+      },
+      {
+       "what": "largest fit 0.125: hole dia 1.20 and a spigot of dia 0.95 (no spigot gauge for the LOWER size exists yet)",
+       "upper_field_deg_closed_form": 14.383,
+       "margin_to_the_guaranteed_deg": -0.117,
+       "basis": "proposal N18: a no-go gauge for the spigots",
+       "status": "information: BELOW the guaranteed figure; +0.383 against the proposed 14.0"
+      },
+      {
+       "what": "largest fit 0.125 AND the roof 0.02 lower (-10 C): the case proposal N18 would define the guarantee on",
+       "upper_field_deg_closed_form": 14.033,
+       "margin_to_the_guaranteed_deg": -0.467,
+       "basis": "proposal N18: up_guaranteed 14.0",
+       "status": "information: BELOW the guaranteed figure; +0.033 against the proposed 14.0"
+      },
+      {
+       "what": "what the margin of the defined case is worth",
+       "upper_field_deg_closed_form": 14.611,
+       "margin_to_the_guaranteed_deg": 0.111,
+       "basis": "17.8 deg per mm of roof or optics height, 4.62 deg per mm of fore-aft play",
+       "status": "= 0.0063 mm of height = 0.024 mm of extra fore-aft play"
+      }
+     ]
+    },
+    {
+     "title": "Test gate 2 target and the former +17 deg target: pupil transmission on the axis of each camera",
+     "rows": [
+      {
+       "unit": "nominal unit",
+       "elevation_deg": 13.5,
+       "what": "gate 2 target: guaranteed 14.5 - 1.0 margin",
+       "pupil_transmission_pct_camera_L": 100.0,
+       "pupil_transmission_pct_camera_R": 100.0,
+       "pupil_transmission_pct": 100.0,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": 120.0
+      },
+      {
+       "unit": "nominal unit",
+       "elevation_deg": -13.5,
+       "what": "gate 2 reference bar (mirrored)",
+       "pupil_transmission_pct_camera_L": 100.0,
+       "pupil_transmission_pct_camera_R": 100.0,
+       "pupil_transmission_pct": 100.0,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": -120.0
+      },
+      {
+       "unit": "nominal unit",
+       "elevation_deg": 14.5,
+       "what": "guaranteed upper field",
+       "pupil_transmission_pct_camera_L": 100.0,
+       "pupil_transmission_pct_camera_R": 100.0,
+       "pupil_transmission_pct": 100.0,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": 129.3
+      },
+      {
+       "unit": "nominal unit",
+       "elevation_deg": 17.0,
+       "what": "former gate 2 target (+17 deg)",
+       "pupil_transmission_pct_camera_L": 100.0,
+       "pupil_transmission_pct_camera_R": 100.0,
+       "pupil_transmission_pct": 100.0,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": 152.9
+      },
+      {
+       "unit": "nominal unit",
+       "elevation_deg": 17.6,
+       "what": "required nominal field edge",
+       "pupil_transmission_pct_camera_L": 100.0,
+       "pupil_transmission_pct_camera_R": 100.0,
+       "pupil_transmission_pct": 100.0,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": 158.6
+      },
+      {
+       "unit": "guaranteed case (optics high, play against it)",
+       "elevation_deg": 13.5,
+       "what": "gate 2 target: guaranteed 14.5 - 1.0 margin",
+       "pupil_transmission_pct_camera_L": 100.0,
+       "pupil_transmission_pct_camera_R": 100.0,
+       "pupil_transmission_pct": 100.0,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": 120.0
+      },
+      {
+       "unit": "guaranteed case (optics high, play against it)",
+       "elevation_deg": -13.5,
+       "what": "gate 2 reference bar (mirrored)",
+       "pupil_transmission_pct_camera_L": 100.0,
+       "pupil_transmission_pct_camera_R": 100.0,
+       "pupil_transmission_pct": 100.0,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": -120.0
+      },
+      {
+       "unit": "guaranteed case (optics high, play against it)",
+       "elevation_deg": 14.5,
+       "what": "guaranteed upper field",
+       "pupil_transmission_pct_camera_L": 100.0,
+       "pupil_transmission_pct_camera_R": 100.0,
+       "pupil_transmission_pct": 100.0,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": 129.3
+      },
+      {
+       "unit": "guaranteed case (optics high, play against it)",
+       "elevation_deg": 17.0,
+       "what": "former gate 2 target (+17 deg)",
+       "pupil_transmission_pct_camera_L": 66.8,
+       "pupil_transmission_pct_camera_R": 66.8,
+       "pupil_transmission_pct": 66.8,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": 152.9
+      },
+      {
+       "unit": "guaranteed case (optics high, play against it)",
+       "elevation_deg": 17.6,
+       "what": "required nominal field edge",
+       "pupil_transmission_pct_camera_L": 55.8,
+       "pupil_transmission_pct_camera_R": 55.8,
+       "pupil_transmission_pct": 55.8,
+       "height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm": 158.6
       }
      ]
     }
@@ -2907,11 +3284,13 @@
     "margins are the smallest distance of any ray of the pupil bundle to the edge of that aperture (negative = clipped); the visor margin is taken on the aperture plane (window-recess floor)",
     "field points are rectilinear: direction (tan h, 1, tan v)",
     "paraxial check: virtual pupil 1.768 mm behind the exit face (y = 14.832), z = 5.61",
-    "sensitivity cases move the camera and prism together relative to the printed tub (camera R; L is the mirror image)",
-    "PCB location (rev D): spigots dia 1.0 under posts B in a dia 1.15 hole and a 1.15 x 1.8 slot, 28.7 mm apart: +-0.075 mm at each spigot gives +-0.100 mm sideways and +-0.075 mm fore-aft at a camera and +-0.30 deg of yaw (a stereo-calibration item, not a vignetting item)",
+    "sensitivity cases move the camera and prism together relative to the printed tub. The four-direction columns are those of camera R; the UPPER FIELD is traced on both cameras in every case (camera L with the mirrored sideways shift) and the smaller value is compared, so a one-sided change of the tub over either opening is caught",
+    "PCB location (rev D): spigots dia 1.0 under posts B in a dia 1.15 hole and a 1.15 x 2.2 slot, 28.7 mm apart: +-0.075 mm at each spigot gives +-0.100 mm sideways and +-0.075 mm fore-aft at a camera and +-0.30 deg of yaw (a stereo-calibration item, not a vignetting item)",
     "smallest margin of the full pupil bundle to the opening over the required field: sides 0.377, sill 0.397, top 0.054 mm",
-    "required field (YAML): +-26.0 deg horizontal, +17.6 / -8.0 deg vertical; upper field guaranteed at the tolerance limit: 15.0 deg",
-    "limit angles: bisection to 0.002 deg; the pupil samples include the four extreme rim points, so the full-pupil limits are those of the whole 0.38 mm disc. The comparison with the guaranteed 15.0 deg is strict; the shortfall of the model is deviation D31"
+    "required field (YAML): +-26.0 deg horizontal, +17.6 / -8.0 deg vertical; upper field guaranteed at the tolerance limit: 14.5 deg",
+    "limit angles: bisection to 0.002 deg; the pupil samples include the four extreme rim points, so the full-pupil limits are those of the whole 0.38 mm disc. The comparison with the guaranteed 14.5 deg is strict and is made on the case the YAML defines (optics 0.2 high and the spigot play against it), for each camera: L 14.61, R 14.61 deg, closed form 14.611 deg",
+    "the margin of +0.11 deg belongs to the case as the YAML defines it (nominal fit 0.075) and to the assumed pupil; the table 'What uses up the margin' shows the figure with the hole at its upper limit, with other pupil numbers and with the roof 0.02 mm lower at -10 C",
+    "test gate 2 (assembly step 16): target bar at +13.5 deg = guaranteed 14.5 - 1.0 deg (placement of target and unit in the join fixture), reference bar at -13.5 deg; both are fully clear on every in-tolerance unit, so the upper bar may not be darker than the lower one (threshold to be set on first units). A bar at +17 deg is vignetted on in-tolerance units and cannot be a pass / fail limit"
    ],
    "warnings": [
     "camera L left edge: 2.3 % of the pupil is vignetted (prism exit face)",
@@ -2922,8 +3301,8 @@
     "camera R right edge: 2.3 % of the pupil is vignetted (prism exit face)",
     "camera R bottom-left corner: 2.3 % of the pupil is vignetted (prism exit face)",
     "camera R bottom-right corner: 2.3 % of the pupil is vignetted (prism exit face)",
-    "upper field at the tolerance limit is 14.97 deg, 0.03 deg BELOW the 15.0 deg the YAML guarantees (recorded deviation D31; closed form 14.967 deg; a shortfall above 0.05 deg fails this check)",
-    "the upper field edge (+17.6 deg) clears the top of the opening (the roof underside, z 6.8) by only 0.054 mm: optics 0.2 mm high clip the upper field to 14.97 deg (accepted in rev D with 15.0 deg guaranteed at the tolerance limit)"
+    "the +0.11 deg margin of the guaranteed case holds for the NOMINAL spigot fit and the ASSUMED pupil only. Closed form (required 14.5): PCB hole dia +0.05 -> 14.496 deg; pupil dia 0.4 -> 14.434; pupil 0.5 below the cube top -> 14.163; roof 0.02 lower (-10 C) -> 14.256: 7 of 7 rows are below the guaranteed figure. The YAML defines the guarantee on the nominal fit, so this is not a failure of the check: proposal N18 (PROPOSED_PARAM_CHANGES.md part C)",
+    "the upper field edge (+17.6 deg) clears the top of the opening (the roof underside, z 6.8) by only 0.054 mm: optics 0.2 mm high clip the upper field to 14.97 deg, 14.61 deg with the spigot play against it (accepted: 14.5 deg guaranteed, YAML N3)"
    ]
   },
   {
@@ -3943,7 +4322,7 @@
        "quantity": "marker weight",
        "value": 0.12,
        "unit": "N",
-       "basis": "12.3 g (check 8)"
+       "basis": "12.2 g (check 8)"
       },
       {
        "quantity": "hold-down reactions with seven pins: hook / lip",
@@ -4529,7 +4908,7 @@
    "id": 8,
    "name": "mass and centre of gravity",
    "passed": true,
-   "summary": "marker 12.25 g, CoG (-0.02, -1.3, 3.48) mm; cradle assembly 31.16 g; CoG 8.2 mm inside the ball-foot triangle",
+   "summary": "marker 12.23 g, CoG (-0.0, -1.28, 3.48) mm; cradle assembly 31.16 g; CoG 8.2 mm inside the ball-foot triangle",
    "tables": [
     {
      "title": "Totals",
@@ -4537,9 +4916,9 @@
       {
        "assembly": "marker (all puck parts)",
        "parts": 34,
-       "mass_g": 12.25,
-       "cog_x": -0.02,
-       "cog_y": -1.3,
+       "mass_g": 12.23,
+       "cog_x": -0.0,
+       "cog_y": -1.28,
        "cog_z": 3.48
       },
       {
@@ -4553,9 +4932,9 @@
       {
        "assembly": "marker in cradle",
        "parts": 48,
-       "mass_g": 43.41,
+       "mass_g": 43.39,
        "cog_x": -0.01,
-       "cog_y": -5.56,
+       "cog_y": -5.55,
        "cog_z": -1.58
       }
      ]
@@ -4611,11 +4990,11 @@
        "part": "main_pcb",
        "group": "puck",
        "material": "FR-4 + parts (envelope)",
-       "volume_mm3": 1512.37,
+       "volume_mm3": 1499.68,
        "density_g_cm3": "1.85 board / 1.5 part boxes",
-       "mass_g": 2.6419,
-       "cog_x": 0.06,
-       "cog_y": -0.6,
+       "mass_g": 2.6227,
+       "cog_x": 0.14,
+       "cog_y": -0.51,
        "cog_z": 1.69
       },
       {
@@ -4632,7 +5011,7 @@
       {
        "part": "baffle_adhesive",
        "group": "puck",
-       "material": "opaque black double-coated tape 0.13 mm, die-cut annulus (PROVISIONAL)",
+       "material": "opaque black double-coated tape, 0.1 to 0.145 mm as available (modelled 0.13), die-cut annulus (PROVISIONAL)",
        "volume_mm3": 2.42,
        "density_g_cm3": 1.0,
        "mass_g": 0.0024,
@@ -4863,10 +5242,10 @@
       {
        "part": "ball_1",
        "group": "puck",
-       "material": "stainless ball 1.0 mm",
+       "material": "ball dia 1.0: 316 stainless grade 100 or better, or silicon nitride; not 440C (E8)",
        "volume_mm3": 0.52,
-       "density_g_cm3": 7.9,
-       "mass_g": 0.0041,
+       "density_g_cm3": 8.0,
+       "mass_g": 0.0042,
        "cog_x": -0.0,
        "cog_y": 15.0,
        "cog_z": 0.4
@@ -4885,10 +5264,10 @@
       {
        "part": "ball_2",
        "group": "puck",
-       "material": "stainless ball 1.0 mm",
+       "material": "ball dia 1.0: 316 stainless grade 100 or better, or silicon nitride; not 440C (E8)",
        "volume_mm3": 0.52,
-       "density_g_cm3": 7.9,
-       "mass_g": 0.0041,
+       "density_g_cm3": 8.0,
+       "mass_g": 0.0042,
        "cog_x": -16.5,
        "cog_y": -9.5,
        "cog_z": 0.4
@@ -4907,10 +5286,10 @@
       {
        "part": "ball_3",
        "group": "puck",
-       "material": "stainless ball 1.0 mm",
+       "material": "ball dia 1.0: 316 stainless grade 100 or better, or silicon nitride; not 440C (E8)",
        "volume_mm3": 0.52,
-       "density_g_cm3": 7.9,
-       "mass_g": 0.0041,
+       "density_g_cm3": 8.0,
+       "mass_g": 0.0042,
        "cog_x": 16.5,
        "cog_y": -9.5,
        "cog_z": 0.4
@@ -5106,7 +5485,7 @@
    "id": 9,
    "name": "printed and fabricated parts for quoting / export integrity",
    "passed": true,
-   "summary": "tub 46.0 x 41.4 x 7.35 mm, 2.4709 cm3; cradle 22.627 x 60.0 x 60.0 mm, 27.0689 cm3; baffle_ring: sprued set of 6 rings, each 0.97 high for lapping 20.4 x 30.2 x 2.0 mm, 0.2329 cm3; base_plate_pa12 43.5 x 40.0 x 0.87 mm, 1.1146 cm3; FR-4 base plate 43.5 x 40.0 x 0.8 mm, 12.571 cm2; all 55 STEP and STL files re-read and match the checked solids",
+   "summary": "tub 46.0 x 41.4 x 7.35 mm, 2.4709 cm3; cradle 22.627 x 60.0 x 60.0 mm, 27.0689 cm3; baffle_ring: sprued set of 6 rings, each 1.10 high for lapping 20.4 x 30.2 x 2.0 mm, 0.2474 cm3; base_plate_pa12 43.5 x 40.0 x 0.87 mm, 1.1146 cm3; FR-4 base plate 43.5 x 40.0 x 0.8 mm, 12.571 cm2; all 59 STEP and STL files re-read and match the checked solids",
    "tables": [
     {
      "title": "Printed parts (print orientation)",
@@ -5148,17 +5527,17 @@
        "box_volume_cm3": 81.459
       },
       {
-       "part": "baffle_ring: sprued set of 6 rings, each 0.97 high for lapping",
+       "part": "baffle_ring: sprued set of 6 rings, each 1.10 high for lapping",
        "used_in": "primary build",
        "process": "MJF PA12, dyed black, not vapor smoothed",
        "print_file": "export/stl/print/baffle_ring_print.stl",
        "box_x_mm": 20.4,
        "box_y_mm": 30.2,
        "box_z_build_mm": 2.0,
-       "volume_cm3": 0.2329,
-       "stl_volume_cm3": 0.2329,
-       "surface_area_cm2": 7.55,
-       "mass_g": 0.235,
+       "volume_cm3": 0.2474,
+       "stl_volume_cm3": 0.2474,
+       "surface_area_cm2": 7.91,
+       "mass_g": 0.25,
        "stl_triangles": 7038,
        "stl_watertight": true,
        "stl_z_min_mm": 0.0,
@@ -5244,9 +5623,9 @@
       {
        "part": "main_pcb",
        "build": "primary",
-       "solid_volume_mm3": 1512.373,
-       "step_reimport_volume_mm3": 1512.373,
-       "stl_volume_mm3": 1510.894,
+       "solid_volume_mm3": 1499.675,
+       "step_reimport_volume_mm3": 1499.675,
+       "stl_volume_mm3": 1498.196,
        "stl_watertight": true,
        "status": "ok"
       },
@@ -5413,6 +5792,15 @@
        "status": "ok"
       },
       {
+       "part": "retarder_film",
+       "build": "optional (EVT trial)",
+       "solid_volume_mm3": 42.948,
+       "step_reimport_volume_mm3": 42.948,
+       "stl_volume_mm3": 42.882,
+       "stl_watertight": true,
+       "status": "ok"
+      },
+      {
        "part": "battery",
        "build": "primary",
        "solid_volume_mm3": 680.0,
@@ -5535,6 +5923,33 @@
        "solid_volume_mm3": 214.211,
        "step_reimport_volume_mm3": 214.211,
        "stl_volume_mm3": 214.211,
+       "stl_watertight": true,
+       "status": "ok"
+      },
+      {
+       "part": "cal_seat_plate",
+       "build": "fixture",
+       "solid_volume_mm3": 93776.804,
+       "step_reimport_volume_mm3": 93776.804,
+       "stl_volume_mm3": 93776.539,
+       "stl_watertight": true,
+       "status": "ok"
+      },
+      {
+       "part": "cal_plain_plate",
+       "build": "fixture",
+       "solid_volume_mm3": 95960.549,
+       "step_reimport_volume_mm3": 95960.549,
+       "stl_volume_mm3": 95960.455,
+       "stl_watertight": true,
+       "status": "ok"
+      },
+      {
+       "part": "gauge_plate",
+       "build": "fixture",
+       "solid_volume_mm3": 25254.212,
+       "step_reimport_volume_mm3": 25254.212,
+       "stl_volume_mm3": 25254.155,
        "stl_watertight": true,
        "status": "ok"
       },
@@ -5709,7 +6124,7 @@
     "GL1_marker_only_pa12_base.step: 3.34 MB",
     "print files: STL tolerance 0.005 mm linear, 0.0873 rad angular, resting on z = 0; the same parts are exported as STEP in print orientation (export/step/*_print.step) - send the STEP when the bureau accepts it",
     "part meshes for renders and mesh checks: 0.02 mm linear, 0.2 rad angular",
-    "the baffle ring is printed as a sprued set of 6 rings on a 2.0 mm runner (gates 0.8 wide on the outside of each ring), each ring 0.97 high: 0.15 mm is lapped off by us to the height that suits the plate lot (0.82 for the nominal plate)",
+    "the baffle ring is printed as a sprued set of 6 rings on a 2.0 mm runner (gates 0.8 wide on the outside of each ring), each ring 1.10 high: 0.15 mm or more is lapped off by us to the height that suits the plate lot and the tape used (0.735 to 0.95; 0.82 for the nominal plate and a 0.13 tape)",
     "print orientation (z = build direction): tub roof-down; baffle-ring set and PA12 base plate flat; cradle with its x axis as the build direction, so that the side profile of the latch beam and of the lip lies in the build plane (orientation of the cradle is to be LOCKED with the bureau)",
     "facet sag = main radius minus the smallest mid-edge radius of the facets on the cylindrical wall (tub R 23.0, cradle nest R 23.25, baffle ring R 4.1, PA12 base plate R 21.75)",
     "box = exact axis-aligned bounding box of the solid in print orientation",
@@ -5721,7 +6136,7 @@
    "id": 10,
    "name": "support posts and ball-foot zones",
    "passed": true,
-   "summary": "8 posts on their keep-out squares, solid from PCB to roof, clear of listed parts and of the LCD glass; two spigots under posts B (28.7 mm apart); seat area 20.9 mm2; no post foot and no soldered part other than the battery over the 3 ball-foot zones (nearest part 0.192 mm, nearest post 2.15 mm from a zone)",
+   "summary": "8 posts on their keep-out squares, solid from PCB to roof, clear of listed parts and of the LCD glass; two spigots under posts B (28.7 mm apart); seat area 20.6 mm2 (post B+ 3.14, post B- over its 2.2 mm slot 2.15); no post foot and no soldered part other than the battery over the 3 ball-foot zones (nearest part 0.312 mm, required 0.3; nearest post 2.15 mm from a zone)",
    "tables": [
     {
      "title": "Support posts",
@@ -5776,7 +6191,7 @@
        "gap_to_lcd_glass_mm": 0.25,
        "solid_from_pcb_to_roof_pct": 100.0,
        "foot_area_in_the_tub_mm2": 4.18,
-       "seat_area_on_pcb_mm2": 2.44,
+       "seat_area_on_pcb_mm2": 2.15,
        "locating_spigot": "dia 1.0 x 0.6",
        "ok": true
       },
@@ -5888,6 +6303,7 @@
        "soldered_parts_over_the_zone": "none",
        "nearest_soldered_part": "U1",
        "its_gap_to_the_zone_mm": 0.45,
+       "required_gap_mm": 0.3,
        "battery_over_the_zone": "no",
        "land_on_the_board": true,
        "status": "ok"
@@ -5904,7 +6320,8 @@
        "nearest_post_foot_to_the_zone_mm": 9.254,
        "soldered_parts_over_the_zone": "none",
        "nearest_soldered_part": "U10",
-       "its_gap_to_the_zone_mm": 0.192,
+       "its_gap_to_the_zone_mm": 0.378,
+       "required_gap_mm": 0.3,
        "battery_over_the_zone": "yes (allowed)",
        "land_on_the_board": true,
        "status": "ok"
@@ -5922,6 +6339,7 @@
        "soldered_parts_over_the_zone": "none",
        "nearest_soldered_part": "U11",
        "its_gap_to_the_zone_mm": 0.312,
+       "required_gap_mm": 0.3,
        "battery_over_the_zone": "yes (allowed)",
        "land_on_the_board": true,
        "status": "ok"
@@ -5931,10 +6349,10 @@
    ],
    "notes": [
     "post feet are the YAML tub_keepouts.post_feet (the contract with the PCB layout, proven in check 12); passives are not in the YAML",
-    "rev D: the spigots are under posts B at (-14.35, 10.8) (slot 1.15 x 1.8 along x, on the IMU side) and (14.35, 10.8) (round dia 1.15, on the flash side), 28.7 mm apart; posts E are plain 1.6 mm posts",
-    "posts B: the YAML keep-out square is 2.2 x 2.2; the foot as built is 1.9 x 2.2 because the LCD glass (/x/ <= 13.3) passes between the two posts and needs the 0.25 mm fit clearance (/x/ >= 13.55); the foot stays inside its square (D29). Seat round the round hole 3.14 mm2, beside the slot 2.44 mm2",
-    "intended load path roof -> posts -> PCB -> adhesive sheet -> base plate. Total seat area 20.9 mm2: an 800 N footstep carried by the posts alone would be 38 MPa (PA12 yields near 48 MPa). The side wall shares the load only through the ledge and the perimeter joint into the edge of the base plate: its rim ends 0.25 mm above the base plane. The design review estimates that a load on the cover glass also passes through the roof ledge into the LCD glass. The footstep case is NOT analysed or tested (README open issues)",
-    "foot zones: dia 2.5 on the PCB at each ball foot; on the bottom side no via and no track and an unmasked dia 1.6 copper land (a layout rule: check 17 looks for the keep-out in the board file). The battery lies over the two rear feet by decision; the two battery-lead pads (nominal positions) are soldered and are tested like parts"
+    "rev D: the spigots are under posts B at (-14.35, 10.8) (slot 1.15 x 2.2 along x, on the IMU side) and (14.35, 10.8) (round dia 1.15, on the flash side), 28.7 mm apart; posts E are plain 1.6 mm posts",
+    "posts B: the YAML keep-out square is 2.2 x 2.2; the foot as built is 1.9 x 2.2 with its inner face at /x/ = 13.55 (YAML post_feet.locating.foot, N1) because the LCD glass (/x/ <= 13.3) passes between the two posts with the 0.25 mm fit clearance; the foot stays inside its square. Seat round the round hole 3.14 mm2; over the slot 2.15 mm2: the 2.2 mm slot (N9) runs from x = -15.45 to -13.25 and so crosses the whole foot (x -15.45 to -13.55): post B- seats on two strips 0.525 mm wide, one in front of the slot and one behind it",
+    "intended load path roof -> posts -> PCB -> adhesive sheet -> base plate. Total seat area 20.6 mm2: an 800 N footstep carried by the posts alone would be 39 MPa (PA12 yields near 48 MPa). The side wall shares the load only through the ledge and the perimeter joint into the edge of the base plate: its rim ends 0.25 mm above the base plane. The design review estimates that a load on the cover glass also passes through the roof ledge into the LCD glass. The footstep case is NOT analysed or tested (README open issues)",
+    "foot zones: dia 2.5 on the PCB at each ball foot; on the bottom side no via and no track and an unmasked dia 1.6 copper land (a layout rule: check 17 looks for the keep-out in the board file). The battery lies over the two rear feet by decision; the two battery-lead pads (nominal positions) are soldered and are tested like parts. N7: every other soldered part keeps 0.3 mm from a zone (YAML foot_zones.part_margin)"
    ],
    "warnings": []
   },
@@ -5957,7 +6375,7 @@
        "line": "NOTE  prism top z = 6.61; optical axis z = 5.61"
       },
       {
-       "line": "NOTE  PCB area 1336 mm^2; top-side parts 651 mm^2 (49 %)"
+       "line": "NOTE  PCB area 1336 mm^2; top-side parts 643 mm^2 (48 %)"
       },
       {
        "line": "NOTE  PCB edge to tub ledge: 0.25 mm"
@@ -5986,7 +6404,7 @@
    "id": 12,
    "name": "tub keep-out contract (YAML tub_keepouts)",
    "passed": true,
-   "summary": "no tub material in the layout space below z 4.35 (0.000000 mm3 common); eight post feet inside their squares (1.6 mm, posts B 2.2 mm); hood skirts 1.20 mm above the PCB inside the +-2.85 zones (parts to 0.95); lowest tub feature elsewhere 2.55 mm above the PCB",
+   "summary": "no tub material in the layout space below z 4.35 (0.000000 mm3 common); eight post feet inside their squares (1.6 mm, posts B 2.2 mm, built 1.9 x 2.2); LCD tail inside its zone, 0.225 mm over a 0.7 mm part; hood skirts 1.20 mm above the PCB inside the +-2.85 zones (parts to 0.95); lowest tub feature elsewhere 2.55 mm above the PCB",
    "tables": [
     {
      "title": "Boolean proof",
@@ -6132,6 +6550,19 @@
        "lowest_tub_above_pcb_mm": 1.2,
        "allowed": ">= 0.95 (part height)",
        "status": "ok"
+      },
+      {
+       "keep_out": "LCD flex tail (N10, PROVISIONAL)",
+       "yaml_centre": [
+        0.0,
+        -17.55
+       ],
+       "yaml_size_mm": "6.5 x 1.5",
+       "tub_area_inside_mm2": "-",
+       "tub_area_outside_mm2": "modelled tail inside the zone by 0.250 in x, 0.088 at the rear; the zone ends at the mouth of J1 (y -16.8)",
+       "lowest_tub_above_pcb_mm": 0.925,
+       "allowed": "parts to 0.7 (tail underside 0.925 above the PCB: 0.225 over such a part, 0.2 needed)",
+       "status": "ok"
       }
      ]
     },
@@ -6140,15 +6571,15 @@
      "rows": [
       {
        "region": "post feet",
-       "grid_points": 148,
+       "grid_points": 144,
        "lowest_tub_above_pcb_mm": 0.0,
        "at_xy": [
         -16.1,
         1.1
        ],
        "contract_minimum_mm": 0.0,
-       "share_below_free_height_pct": 91.9,
-       "share_between_free_height_and_roof_pct": 8.1,
+       "share_below_free_height_pct": 92.4,
+       "share_between_free_height_and_roof_pct": 7.6,
        "share_at_roof_height_pct": 0.0,
        "status": "ok"
       },
@@ -6201,8 +6632,9 @@
     "free height = YAML tub_keepouts.free_height_above_pcb = 2.55 mm above the PCB top (z 4.35): the height the layout may use everywhere on the board outside the keep-outs (rev D; design/check_layout.py uses the same number, which closes D22). Above it the tub has the glass locating ribs (lowest feature outside the keep-outs 2.55 mm above the PCB top, z 4.35), the thick roof at z 5.55 and the nose and vent pads",
     "keep-out prisms are enlarged by 0.0002 mm so that a face lying exactly on the contract boundary does not count as an intrusion",
     "hood zones: tub material is allowed from 0.95 mm above the PCB top upward; the camera cube is exempt (it is a part, not tub)",
-    "height map: 8331 rays on a 0.4 mm grid over the board top (locating holes excluded); the corner fill between hood and side wall starts at y = 16.79, where the PCB outline has left the hood zone",
-    "the seating ledge (r >= 21.35) lies outside the PCB (r 21.1) and is checked as a clearance in check 2"
+    "height map: 8327 rays on a 0.4 mm grid over the board top (locating holes excluded); the corner fill between hood and side wall starts at y = 16.79, where the PCB outline has left the hood zone",
+    "the seating ledge (r >= 21.35) lies outside the PCB (r 21.1) and is checked as a clearance in check 2",
+    "LCD tail zone (YAML tub_keepouts.lcd_tail, N10): x +-3.25, y -18.3 to -16.8, parts to 0.7 mm; it is a contract for the layout, not a tub feature: the row shows that the representative tail of the model (one U-fold behind the mouth of J1) lies inside it. PROVISIONAL until the Sharp tail drawing is in hand (gate B16)"
    ],
    "warnings": []
   },
@@ -6210,7 +6642,7 @@
    "id": 13,
    "name": "seal continuity (air-solid test)",
    "passed": true,
-   "summary": "outside and inner cavity are separate air solids (cavity 4205 mm3 incl. the cell under the cover glass); perimeter bead is one closed ring, 0.40 mm high, narrowest joint 0.40 mm, 49.8 mm3 at nominal gaps; adhesive-sheet lands 1.06 mm and more; grain opening potted; each visor window closed by its adhesive frame (air test run with the glass 0.02 mm off its seats); to dispense 70 mm3",
+   "summary": "outside and inner cavity are separate air solids (cavity 4218 mm3 incl. the cell under the cover glass); perimeter bead is one closed ring, 0.40 mm high, narrowest joint 0.40 mm, 49.8 mm3 at nominal gaps; adhesive-sheet lands 1.06 mm and more; grain opening potted; each visor window closed by its adhesive frame (air test run with the glass 0.02 mm off its seats); to dispense 70 mm3",
    "tables": [
     {
      "title": "Probe points",
@@ -6438,7 +6870,7 @@
       {
        "probe": "PCB locating slot, beside the spigot",
        "at_xyz": [
-        -13.5,
+        -13.3,
         10.8,
         1.1
        ],
@@ -6481,7 +6913,7 @@
       },
       {
        "air_solid": "inner cavity",
-       "volume_mm3": 4205.25,
+       "volume_mm3": 4217.94,
        "x": [
         -22.0,
         22.0
@@ -6686,8 +7118,8 @@
    "notes": [
     "air-solid test: a box minus all marker solids; each remaining solid is one connected body of air. The marker is closed when the outside and the cavity are different bodies. Adhesives are modelled as cured, at nominal size; this proves that no modelled opening by-passes a seal - it does not prove that the adhesive wets or fills (leak test of every unit)",
     "a bare contact is not counted as a seal: for the air test each visor window is drawn 0.02 mm off the recess floor and off its shelf (probes 'test gap ...' lie in that gap and must belong to the cavity). The cavity then stays closed only through the adhesive frame of each window: two side-gap fills, the bead on the top edge and the fillet on the shelf; the self-test removes the fillet, and the bead, and the check fails",
-    "free air volume of the sealed cavity: 4205 mm3 (for the leak-test and vent calculations); it includes the cell between cover glass and LCD, which breathes through the 0.8 mm channel of the LCD adhesive frame",
-    "the round PCB locating hole is closed by the foot of post B+ that seats round it: 0.39 mm3 of trapped air, harmless; the slot under post B- reaches 0.10 mm past the cut-back foot and stays open to the cavity",
+    "free air volume of the sealed cavity: 4218 mm3 (for the leak-test and vent calculations); it includes the cell between cover glass and LCD, which breathes through the 0.8 mm channel of the LCD adhesive frame",
+    "the round PCB locating hole is closed by the foot of post B+ that seats round it: 0.39 mm3 of trapped air, harmless; the slot under post B- reaches 0.30 mm past the cut-back foot and stays open to the cavity",
     "rev D: the grain opening is potted (clear, from the PCB down to z 0.05); the pad slot stays open, there the adhesive sheet is the only barrier. The base plate has a plain edge and the bead is one ring (no key notch)",
     "base plate variant: routed FR-4 (primary): plate 0.8, sheet 0.2, joint 0.40 mm"
    ],
@@ -6697,7 +7129,7 @@
    "id": 14,
    "name": "assembly paths (LCD tilt-in, PCB / base join)",
    "passed": true,
-   "summary": "LCD glass tilts in at 6.0 deg with 0.28 mm to the ledge (14 poses, no interference); the PCB / base unit descends with +-0.1 mm lateral error (10 heights) and closes about the fixture hinge (14 angles) without interference",
+   "summary": "LCD glass tilts in at 6.0 deg with 0.28 mm to the ledge (14 poses, no interference); the PCB / base unit descends with +-0.1 mm lateral error (10 heights) and closes about the fixture hinge (14 angles) without interference; PCB slot 2.20 long on the solid: +-0.60 against 0.378 to 0.478 needed (margin 0.122 to 0.222); display rotation: the glass can turn 1.19 deg free in its pocket, 0 when bedded on the two rear ribs",
    "tables": [
     {
      "title": "LCD tilt-in (glass + adhesive frame against the tub)",
@@ -6930,7 +7362,7 @@
        "pcb_top_z": -0.6,
        "worst_interference_mm3": 0.0,
        "cameras_and_prisms_to_tub_mm": 0.425,
-       "board_and_base_to_tub_mm": 0.742,
+       "board_and_base_to_tub_mm": 0.873,
        "status": "ok"
       },
       {
@@ -7162,47 +7594,134 @@
      ]
     },
     {
-     "title": "PCB slot: travel along the slot against spacing error, hole position and thermal movement (arithmetic)",
+     "title": "PCB slot: travel along the slot (length measured on the PCB solid) against spacing error, hole position and thermal movement",
      "rows": [
       {
        "case": "spigot spacing printed +-0.2",
+       "slot_length_on_the_solid_mm": 2.2,
+       "slot_centre_on_the_solid_xy": [
+        -14.35,
+        10.8
+       ],
        "spacing_error_mm": 0.2,
        "hole_position_mm": 0.05,
        "thermal_mm": 0.128,
        "sum_mm": 0.378,
-       "slot_allows_mm": 0.4,
-       "margin_mm": 0.022
+       "slot_allows_mm": 0.6,
+       "margin_mm": 0.222
       },
       {
        "case": "spigot spacing printed +-0.3",
+       "slot_length_on_the_solid_mm": 2.2,
+       "slot_centre_on_the_solid_xy": [
+        -14.35,
+        10.8
+       ],
        "spacing_error_mm": 0.3,
        "hole_position_mm": 0.05,
        "thermal_mm": 0.128,
        "sum_mm": 0.478,
-       "slot_allows_mm": 0.4,
-       "margin_mm": -0.078
+       "slot_allows_mm": 0.6,
+       "margin_mm": 0.122
+      }
+     ]
+    },
+    {
+     "title": "LCD glass: rotation in its pocket (display rotation, E12)",
+     "rows": [
+      {
+       "quantity": "free rotation of the glass in its pocket, counter-clockwise seen from above",
+       "value_deg": 1.187,
+       "glass_centre_shift_xy_mm": [
+        0.044,
+        -0.018
+       ],
+       "stopped_by": "post B-, rear glass rib -x, hood rear wall +x, side rib +x (y -10.8)",
+       "solid_check": "glass + frame turned 1.17 deg at that position: 0.00000 mm3 common with the tub; turned 1.24 deg: 0.0046 mm3",
+       "status": "ok"
+      },
+      {
+       "quantity": "free rotation of the glass in its pocket, clockwise seen from above",
+       "value_deg": 1.187,
+       "glass_centre_shift_xy_mm": [
+        -0.044,
+        -0.018
+       ],
+       "stopped_by": "side rib -x (y -10.8), hood rear wall -x, rear glass rib +x, post B+",
+       "solid_check": "glass + frame turned 1.17 deg at that position: 0.00000 mm3 common with the tub; turned 1.24 deg: 0.0046 mm3",
+       "status": "ok"
+      },
+      {
+       "quantity": "for comparison: a pocket with continuous walls at the fit clearance (the manufacturing review's estimate)",
+       "value_deg": 0.952,
+       "glass_centre_shift_xy_mm": "-",
+       "stopped_by": "arithmetic",
+       "solid_check": "-",
+       "status": "information"
+      },
+      {
+       "quantity": "aim-line transfer budget of the specification (E12)",
+       "value_deg": 0.5,
+       "glass_centre_shift_xy_mm": "-",
+       "stopped_by": "DESIGN_SPEC section 6",
+       "solid_check": "-",
+       "status": "information: the free rotation exceeds it, hence the squaring aid and the factory measurement"
+      },
+      {
+       "quantity": "glass squared against the two rear ribs (assembly step 9): rotation left in the model",
+       "value_deg": 0.0,
+       "glass_centre_shift_xy_mm": "-",
+       "stopped_by": "both rear ribs: faces at y -17.05, x -11.0..-8.0 and 8.0..11.0",
+       "solid_check": "rib faces coplanar on the tub section",
+       "status": "ok"
+      },
+      {
+       "quantity": "residual angle per 0.05 mm of step between the two rib faces (printed)",
+       "value_deg": 0.151,
+       "glass_centre_shift_xy_mm": "-",
+       "stopped_by": "contact points 19.0 mm apart",
+       "solid_check": "arithmetic on an assumed print error",
+       "status": "information"
+      },
+      {
+       "quantity": "squaring pusher: its line of action inside the span of the two rib faces (margin, mm)",
+       "value_deg": 5.0,
+       "glass_centre_shift_xy_mm": "-",
+       "stopped_by": "pad 5.0 wide on x = 0 +-0.5; inner rib corners at x = +-8.0",
+       "solid_check": "a push between the two ribs beds the glass on both",
+       "status": "ok"
+      },
+      {
+       "quantity": "squaring pusher: clearance to the two posts E, between which it passes (mm)",
+       "value_deg": 0.4,
+       "glass_centre_shift_xy_mm": "-",
+       "stopped_by": "inner faces of posts E at x = +-3.4",
+       "solid_check": "post rectangles of the model",
+       "status": "ok"
       }
      ]
     }
    ],
    "notes": [
-    "(a) LCD: glass with its adhesive frame, rear edge first at 6.0 deg, shifted 0.55 mm toward the visor while the rear corners pass the seating ledge (r 21.35); the front edge is then still below the feet of posts E (z 1.8), so the shift is free. The glass passes between the two posts B with 0.25 mm per side (their feet are cut back for it, D29; the spigots are 0.55 mm outside the glass edge). Smallest gap to the ledge 0.28 mm (flat insertion: 0.1 mm). The frame is applied to the LCD, not to the roof",
+    "(a) LCD: glass with its adhesive frame, rear edge first at 6.0 deg, shifted 0.55 mm toward the visor while the rear corners pass the seating ledge (r 21.35); the front edge is then still below the feet of posts E (z 1.8), so the shift is free. The glass passes between the two posts B with 0.25 mm per side (their feet are cut back for it: YAML post_feet.locating.foot, N1; the spigots are 0.55 mm outside the glass edge). Smallest gap to the ledge 0.28 mm (flat insertion: 0.1 mm). The frame is applied to the LCD, not to the roof",
     "(a) the stop: still shifted, the rear edge is raised to z 4.82 (front edge 0.15 below the feet of posts E); the two rear ribs reach down to z 4.35 (the free height above the PCB), so the rear face of the glass overlaps them by 0.47 mm and the glass is pushed back 0.75 mm against them. Raised further, its lower rear edge runs up the ribs; hinged flat it lies 0.16 mm behind its nominal position, 0.09 mm in front of the ribs, inside the 0.25 mm pocket clearance (the nominal position is the last pose)",
     "(b) the unit = PCB with cameras, prisms, battery and its leads, adhesive sheet, base plate, baffle, potting and potted feet (the base is laminated to the PCB and the grain opening potted before the join). Straight descent with +-0.1 mm of lateral error in x and y until the spigots engage (0.6 mm before the seat); the 0.15 mm tip chamfer of the spigots captures up to 0.225 mm. The hood gaskets (compressible) and the wet seal adhesive are not part of this test",
     "(c) hinge axis parallel to x at y = -30.0, z = 0.0 (join fixture). The last column is the straight distance from the mouth of J1 to the rear edge of the LCD glass: the length of free tail needed to mate the connector at that opening (the real tail length is PROVISIONAL)",
     "these are nominal solids: the paths show that the motion exists and how much room it has, not that every printed part allows it (go gauges in the assembly sequence)",
-    "(d) no key between base plate and tub: the plate edge reaches the bore through the chain in the fourth table. The plate top passes the rim 0.55 mm before the seat, after the spigots have engaged at 0.6 mm, so an offset plate would fight the two spigots with the bead wet: hence the dry trial close of every unit"
+    "(d) no key between base plate and tub: the plate edge reaches the bore through the chain in the fourth table. The plate top passes the rim 0.55 mm before the seat, after the spigots have engaged at 0.6 mm, so an offset plate would fight the two spigots with the bead wet: hence the dry trial close of every unit",
+    "(e) slot under post B-: 2.20 x 1.15 at (-14.35, 10.80) and round hole dia 1.15 at (14.35, 10.80), measured on the section of the PCB solid and compared with the YAML to 0.01 in length, width and both centre coordinates (YAML 2.2 x 1.15, decision N9); the spigot may move +-0.600 along it. Needed: spacing error of the two printed spigots, hole position +-0.05 and 0.13 mm of thermal movement at 70 C",
+    "(f) display rotation: obstacles = union of the tub sections at z 4.66, 4.77, 4.83, 5.10, 5.54 (the height of the glass and its frame) near the glass; for a rotation angle the set of free positions of the glass centre is the translation window less the Minkowski sum of the obstacles with the mirrored glass; the largest angle with a free position is found by bisection to 0.002 deg and confirmed by a boolean on the solids. The check fails above 1.25 deg (the specification sizes the stored correction on 'up to about 1 degree'). The squaring aid is a pusher on the centre of the front edge of the tilted glass: pushed between the two rear ribs the glass beds on both"
    ],
    "warnings": [
     "base-plate edge to tub bore: the lateral chain uses up the 0.25 mm gap at the worst case (0.6 mm; RSS 0.17 to 0.276 mm): every laminated unit is tried dry in its own tub before the seal bead (assembly step 14)",
-    "PCB slot: +-0.40 mm along the slot against up to 0.478 mm of spacing error, hole position and thermal movement (proposal N9: a longer slot); gauged by the dummy unit at incoming inspection"
+    "display rotation: left free, the LCD glass can turn 1.19 deg in its pocket (0.95 deg with continuous walls), more than the 0.5 deg line-transfer budget: it is squared against the two rear ribs in step 9 and the residual angle is measured at the factory and stored (E12)"
    ]
   },
   {
    "id": 15,
    "name": "FR-4 base plate: fabrication rules",
    "passed": true,
-   "summary": "0.80 mm plate of constant section, 3 drilled dia 1.1 holes, grain opening dia 13.0 and pad slot 17.44 x 2.2 routed; smallest internal radius 1.10 mm (rule 0.5), no sharp internal corner; smallest web 2.02 mm (outline to pad slot; rule 1.0)",
+   "summary": "0.80 mm plate of constant section, 3 drilled dia 1.1 holes, grain opening dia 13.0 and pad slot 17.44 x 2.2 routed; smallest internal radius 1.10 mm (rule 0.5), no sharp internal corner; smallest web 2.02 mm (outline to pad slot; rule 1.0); legend of the outer face (6 placeholder blocks) read back, mirrored in the file as a bottom layer must be: 1.2 mm or more to holes, mask reliefs, opening and slot (required 1.0), 0.342 mm outside the seat zones, 0.492 mm or more to the footprints of gauge plate, seat pads and bridge gauge; smallest space between pieces of ink 0.15 mm (rule 0.15); statement blocks hold 88 characters",
    "tables": [
     {
      "title": "Fabrication rules",
@@ -7302,6 +7821,48 @@
        "required": "dia 1.25 = hole + 0.15",
        "status": "ok",
        "note": "GL1-011_base_plate_FR4-F_Mask.gbr, GL1-011_base_plate_FR4-B_Mask.gbr: no mask on the hole wall or rim (ball clearance 0.050 radial)"
+      },
+      {
+       "rule": "fabrication data: legend layer of the outer face read back (ink = the blocks of cad/legend.py)",
+       "measured": "55.30 mm2 of ink in 343 strokes, apertures [0.15, 0.2, 0.25]; differs from the blocks by 0.00006 mm2",
+       "required": "55.30 mm2, positive layer 'Legend,Bot'",
+       "status": "ok",
+       "note": "GL1-011_base_plate_FR4-B_Legend.gbr: bottom layer given as seen from the top face (text mirrored in the file, correct on the part)"
+      },
+      {
+       "rule": "legend layer is MIRRORED (bottom layer given as seen from the top face): file mirrored about x = 0 = the legend as read; first glyph of the model text at larger x than the last",
+       "measured": "mirrored file differs from the reading view by 0.00006 mm2 (un-mirrored it would differ by 37.45 mm2); in the file the glyph at the largest x is 1.72 wide ('G' is 1.72), the one at the smallest x 0.98 ('1' is 0.98)",
+       "required": "0 mm2; first glyph at +x",
+       "status": "ok",
+       "note": "independent of legend.to_model(): an un-mirrored file would read backwards on the part (the block layout is symmetric, so no keep-clear distance would show it)"
+      },
+      {
+       "rule": "legend print rules: smallest clear space between two separate pieces of ink (letter to letter, label to frame, block to block)",
+       "measured": "0.150 mm at x -7.0, y 4.6; 71 pieces, 0 pair(s) closer than the rule",
+       "required": ">= 0.15",
+       "status": "ok",
+       "note": "legend ink gap: letters are pitched so that the space between them is at least the line width (cad/legend.py advance(): 0.15 mm at 1.0 mm text, 0.967 mm pitch); rule assumed equal to the least line width, to be confirmed with the quote"
+      },
+      {
+       "rule": "legend keep-clear: at least 1.0 mm to ball-foot holes, mask reliefs, grain opening and pad slot; inside the outline; outside the seat zones; 0.15 from every fixture footprint",
+       "measured": "smallest distance to a YAML feature 1.2 mm; 0 violation(s)",
+       "required": ">= 1.0 (YAML), edge >= 0.75, seat zones clear, fixtures >= 0.15",
+       "status": "ok",
+       "note": "E10: legend of the outer face, measured on the legend layer read back"
+      },
+      {
+       "rule": "legend content (YAML base_plate.legend.content): maker, model 'GL-1', 'Practice device', statements block(s), serial-number box",
+       "measured": "blocks ['maker', 'model', 'practice', 'statements_1', 'statements_2', 'serial']; model text 'GL-1'; missing none",
+       "required": "all five kinds present; placeholders only where the text is not frozen",
+       "status": "ok",
+       "note": "serial-number box 14.0 x 2.8 mm inside its frame; the wording of the statements is not frozen (docs/COMPLIANCE.md rows 5 and 33)"
+      },
+      {
+       "rule": "legend print rules: smallest text height / smallest line width",
+       "measured": "1.0 / 0.15",
+       "required": ">= 1.0 / >= 0.15",
+       "status": "ok",
+       "note": "fabricator rules for legend print, assumed: to be confirmed with the quote"
       }
      ]
     },
@@ -7582,6 +8143,300 @@
      ]
     },
     {
+     "title": "Legend of the outer face (E10): keep-clear distances measured on the legend layer read back",
+     "rows": [
+      {
+       "legend_ink_to": "ball-foot hole 2 (drilled edge)",
+       "distance_mm": 4.05,
+       "required_mm": 1.0,
+       "margin_mm": 3.05,
+       "basis": "YAML base_plate.legend.clear_of_features",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "pad slot",
+       "distance_mm": 1.2,
+       "required_mm": 1.0,
+       "margin_mm": 0.2,
+       "basis": "YAML base_plate.legend.clear_of_features",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "grain opening",
+       "distance_mm": 1.2,
+       "required_mm": 1.0,
+       "margin_mm": 0.2,
+       "basis": "YAML base_plate.legend.clear_of_features",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "ball-foot hole 3 (drilled edge)",
+       "distance_mm": 4.05,
+       "required_mm": 1.0,
+       "margin_mm": 3.05,
+       "basis": "YAML base_plate.legend.clear_of_features",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "ball-foot hole 1 (drilled edge)",
+       "distance_mm": 4.042,
+       "required_mm": 1.0,
+       "margin_mm": 3.042,
+       "basis": "YAML base_plate.legend.clear_of_features",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "mask relief dia 1.25 at ball-foot hole 1 (mask layer read back)",
+       "distance_mm": 3.967,
+       "required_mm": 1.0,
+       "margin_mm": 2.967,
+       "basis": "YAML base_plate.legend.clear_of_features",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "mask relief dia 1.25 at ball-foot hole 2 (mask layer read back)",
+       "distance_mm": 3.975,
+       "required_mm": 1.0,
+       "margin_mm": 2.975,
+       "basis": "YAML base_plate.legend.clear_of_features",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "mask relief dia 1.25 at ball-foot hole 3 (mask layer read back)",
+       "distance_mm": 3.975,
+       "required_mm": 1.0,
+       "margin_mm": 2.975,
+       "basis": "YAML base_plate.legend.clear_of_features",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "routed outline (ink inside the face)",
+       "distance_mm": 1.568,
+       "required_mm": 0.75,
+       "margin_mm": 0.818,
+       "basis": "mechanical-only: registration of a legend print",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "calibration seat zone dia 8.5 round ball foot 1",
+       "distance_mm": 0.342,
+       "required_mm": 0.0,
+       "margin_mm": 0.342,
+       "basis": "mechanical-only: the seat pads of plate GL1-050 bear on bare mask (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "calibration seat zone dia 8.5 round ball foot 2",
+       "distance_mm": 0.35,
+       "required_mm": 0.0,
+       "margin_mm": 0.35,
+       "basis": "mechanical-only: the seat pads of plate GL1-050 bear on bare mask (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "calibration seat zone dia 8.5 round ball foot 3",
+       "distance_mm": 0.35,
+       "required_mm": 0.0,
+       "margin_mm": 0.35,
+       "basis": "mechanical-only: the seat pads of plate GL1-050 bear on bare mask (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "fixture footprint: ball gauge plate, boss 1 (dia 7.0 + 0.1 location)",
+       "distance_mm": 0.992,
+       "required_mm": 0.15,
+       "margin_mm": 0.842,
+       "basis": "mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "fixture footprint: calibration seat pad 1 (dia 7.0 + 0.6 location)",
+       "distance_mm": 0.492,
+       "required_mm": 0.15,
+       "margin_mm": 0.342,
+       "basis": "mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "fixture footprint: bridge gauge, foot 1 (dia 6.0 + 0.53 play on the ball)",
+       "distance_mm": 1.063,
+       "required_mm": 0.15,
+       "margin_mm": 0.913,
+       "basis": "mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "fixture footprint: ball gauge plate, boss 2 (dia 7.0 + 0.1 location)",
+       "distance_mm": 1.0,
+       "required_mm": 0.15,
+       "margin_mm": 0.85,
+       "basis": "mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "fixture footprint: calibration seat pad 2 (dia 7.0 + 0.6 location)",
+       "distance_mm": 0.5,
+       "required_mm": 0.15,
+       "margin_mm": 0.35,
+       "basis": "mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "fixture footprint: bridge gauge, foot 2 (dia 6.0 + 0.53 play on the ball)",
+       "distance_mm": 1.071,
+       "required_mm": 0.15,
+       "margin_mm": 0.921,
+       "basis": "mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "fixture footprint: ball gauge plate, boss 3 (dia 7.0 + 0.1 location)",
+       "distance_mm": 1.0,
+       "required_mm": 0.15,
+       "margin_mm": 0.85,
+       "basis": "mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "fixture footprint: calibration seat pad 3 (dia 7.0 + 0.6 location)",
+       "distance_mm": 0.5,
+       "required_mm": 0.15,
+       "margin_mm": 0.35,
+       "basis": "mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "fixture footprint: bridge gauge, foot 3 (dia 6.0 + 0.53 play on the ball)",
+       "distance_mm": 1.071,
+       "required_mm": 0.15,
+       "margin_mm": 0.921,
+       "basis": "mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)",
+       "status": "ok"
+      },
+      {
+       "legend_ink_to": "(the serial number marked per unit inside its box, assembly step 13) to the nearest fixture footprint or seat zone: seat zone 3",
+       "distance_mm": 5.525,
+       "required_mm": 0.15,
+       "margin_mm": 5.375,
+       "basis": "mechanical-only: an ink-jet mark adds thickness on the seat face",
+       "status": "ok"
+      }
+     ]
+    },
+    {
+     "title": "Legend blocks (placeholders)",
+     "rows": [
+      {
+       "block": "maker",
+       "content": "maker (placeholder: name or mark of the maker)",
+       "drawn": "'MAKER NAME'",
+       "extent_as_read_u0_v0_u1_v1_mm": [
+        -6.43,
+        8.78,
+        6.43,
+        10.42
+       ],
+       "size_mm": "12.85 x 1.65",
+       "text_height_mm": 1.5,
+       "line_width_mm": 0.15,
+       "inside_of_the_frame_mm": "-",
+       "capacity_at_the_smallest_text": "-",
+       "nearest_feature": "mask relief dia 1.25 at ball-foot hole 1",
+       "distance_mm": 3.967
+      },
+      {
+       "block": "model",
+       "content": "model \"GL-1\"",
+       "drawn": "'GL-1'",
+       "extent_as_read_u0_v0_u1_v1_mm": [
+        -3.81,
+        5.68,
+        3.44,
+        8.12
+       ],
+       "size_mm": "7.25 x 2.45",
+       "text_height_mm": 2.2,
+       "line_width_mm": 0.25,
+       "inside_of_the_frame_mm": "-",
+       "capacity_at_the_smallest_text": "-",
+       "nearest_feature": "grain opening",
+       "distance_mm": 3.178
+      },
+      {
+       "block": "practice",
+       "content": "\"Practice device\"",
+       "drawn": "'PRACTICE DEVICE'",
+       "extent_as_read_u0_v0_u1_v1_mm": [
+        -8.17,
+        3.92,
+        8.17,
+        5.27
+       ],
+       "size_mm": "16.35 x 1.35",
+       "text_height_mm": 1.2,
+       "line_width_mm": 0.15,
+       "inside_of_the_frame_mm": "-",
+       "capacity_at_the_smallest_text": "-",
+       "nearest_feature": "grain opening",
+       "distance_mm": 1.425
+      },
+      {
+       "block": "statements_1",
+       "content": "reserved for the statements of docs/COMPLIANCE.md (text not frozen)",
+       "drawn": "frame + STATEMENTS / RESERVED 1",
+       "extent_as_read_u0_v0_u1_v1_mm": [
+        7.9,
+        -4.9,
+        19.6,
+        3.1
+       ],
+       "size_mm": "11.70 x 8.00",
+       "text_height_mm": 1.0,
+       "line_width_mm": 0.2,
+       "inside_of_the_frame_mm": "11.5 x 7.8",
+       "capacity_at_the_smallest_text": "4 lines of 11 characters at 1.0 mm",
+       "nearest_feature": "grain opening",
+       "distance_mm": 1.4
+      },
+      {
+       "block": "statements_2",
+       "content": "reserved for the statements of docs/COMPLIANCE.md (text not frozen)",
+       "drawn": "frame + STATEMENTS / RESERVED 2",
+       "extent_as_read_u0_v0_u1_v1_mm": [
+        -19.6,
+        -4.9,
+        -7.9,
+        3.1
+       ],
+       "size_mm": "11.70 x 8.00",
+       "text_height_mm": 1.0,
+       "line_width_mm": 0.2,
+       "inside_of_the_frame_mm": "11.5 x 7.8",
+       "capacity_at_the_smallest_text": "4 lines of 11 characters at 1.0 mm",
+       "nearest_feature": "grain opening",
+       "distance_mm": 1.4
+      },
+      {
+       "block": "serial",
+       "content": "serial-number box: the number is marked inside it per unit (laser or ink-jet)",
+       "drawn": "frame + S/N",
+       "extent_as_read_u0_v0_u1_v1_mm": [
+        -7.1,
+        -14.7,
+        7.1,
+        -11.7
+       ],
+       "size_mm": "14.20 x 3.00",
+       "text_height_mm": 1.4,
+       "line_width_mm": 0.2,
+       "inside_of_the_frame_mm": "14.0 x 2.8",
+       "capacity_at_the_smallest_text": "1 lines of 13 characters at 1.0 mm",
+       "nearest_feature": "pad slot",
+       "distance_mm": 1.2
+      }
+     ]
+    },
+    {
      "title": "Fabrication data files (written with the drawings)",
      "rows": [
       {
@@ -7607,18 +8462,26 @@
        "format": "Excellon, metric, decimal",
        "bytes": 277,
        "content": "3 NPTH holes, tool dia 1.100"
+      },
+      {
+       "file": "drawings/fab/GL1-011_base_plate_FR4-B_Legend.gbr",
+       "format": "Gerber RS-274X, mm, 4.6",
+       "bytes": 10678,
+       "content": "legend of the outer face: 343 strokes in 6 placeholder blocks"
       }
      ]
     }
    ],
    "notes": [
-    "material (YAML base_plate.material): FR-4 0.80 mm, matte black solder mask both sides, no copper, routed outline, drilled holes; no copper, no legend",
-    "fabrication data: drawings/fab/ holds a Gerber board profile (outline and routed cut-outs), two solder-mask layers and an Excellon NPTH drill file, written by cad/fabdata.py from the plate solid; the rules above read the same text back and compare it with the solid",
+    "material (YAML base_plate.material): FR-4 0.80 mm, matte black solder mask both sides, no copper, routed outline, drilled holes; no copper; legend on the outer face only (YAML base_plate.legend: white legend print on the black mask, or laser mark)",
+    "fabrication data: drawings/fab/ holds a Gerber board profile (outline and routed cut-outs), two solder-mask layers, an Excellon NPTH drill file and the legend layer of the outer face, written by cad/fabdata.py from the plate solid and from cad/legend.py; the rules above read the same text back and compare it with the solid; build.py compares the files on disk with that text after the drawings are written",
     "break-off tabs, if the fabricator panelises: on the flat only (land 0.65 mm, no bore there), mouse bites recessed into the outline by at most 0.25 mm, no nub proud of the outline; on the arc the land is only 0.40 mm and the bore gap 0.25 mm",
     "tolerances on the drawing GL1-011: outline and routed features +-0.1, drilled holes +-0.05 (diameter and position), finished thickness over the mask +-0.1; holes free of mask (relief dia 1.25)",
     "the plate drops into the tub with 0.25 mm radial clearance and its top face carries the seal land (0.40 mm on the arc, 0.65 mm on the flat): no break-off nub may stand proud of the outline, and no V-score",
     "sharp corners are found on the section polygon (direction change above 15 deg between neighbouring edges; arcs are sampled to 0.0002 mm chord error); radii come from the exact arcs and circles of the section",
-    "area 1257.1 mm2, perimeter of the outline 135.3 mm, routed length of the cut-outs 78.2 mm"
+    "area 1257.1 mm2, perimeter of the outline 135.3 mm, routed length of the cut-outs 78.2 mm",
+    "E10 legend (outer face): placeholder blocks from cad/legend.py; 55.3 mm2 of ink; area of the outer face open to legend after every keep-clear: 940 mm2 of 1257. The statement blocks hold about 88 characters at 1.0 mm text height and 0.967 mm pitch (0.15 mm between letters): the short FCC sentence fits, the full two-condition statement (about 240 characters) does not; whether it goes on the plate, on an e-label or in the manual and on the packaging is the open decision of docs/COMPLIANCE.md row 5",
+    "extents are given in the READING frame (the outer face seen from below with the visor at the top, u to the right): u = -x, v = y"
    ],
    "warnings": []
   },
@@ -7626,7 +8489,7 @@
    "id": 16,
    "name": "alternative base plate (printed PA12)",
    "passed": true,
-   "summary": "PA12 plate 0.87 mm + sheet 0.13 mm: no interference (69 tested pairs (294 total)); 17 base-specific clearances met (ball in its hole 0.075, photodiode to ring 0.594); base_plate_pa12 minimum 0.800 mm, no trapped powder; seal joint 0.33 mm, 45.6 mm3 (dispense 65), closed; plates sorted to 0.83 .. 0.92 mm; marker 11.41 g (primary 12.25 g)",
+   "summary": "PA12 plate 0.87 mm + sheet 0.13 mm: no interference (69 tested pairs (294 total)); 18 base-specific clearances met (ball in its hole 0.075, photodiode to ring 0.594); base_plate_pa12 minimum 0.800 mm, no trapped powder; seal joint 0.33 mm, 45.6 mm3 (dispense 65), closed; plates sorted to 0.83 .. 0.92 mm; marker 11.39 g (primary 12.23 g)",
    "tables": [
     {
      "title": "Interference: every pair that involves a base-specific part",
@@ -7867,7 +8730,16 @@
        "required_min_mm": 0.02,
        "margin_mm": 0.007,
        "status": "ok",
-       "note": "plate accepted from 0.83 to 0.92 mm (nominal 0.87), sheet 0.13 +-0.013, ball protrusion 0.1 +-0.02: a thinner plate would let the ball hold the laminate open. The plate thickness also sets the rim relief and the depth of the grain opening, not the seal joint"
+       "note": "plate accepted from 0.83 to 0.92 mm (YAML thickness_accepted; nominal 0.87), sheet 0.13 +-0.013, ball protrusion 0.1 +-0.02, ball diameter exactly 1.0: a thinner plate would let the ball hold the laminate open. The plate thickness also sets the rim relief and the depth of the grain opening, not the seal joint"
+      },
+      {
+       "item": "Same with a ball at the upper diameter limit of grade 100 (E8: dia +0.0127, ABMA figure as remembered)",
+       "method": "arithmetic on the incoming limits",
+       "actual_mm": 0.014,
+       "required_min_mm": 0.02,
+       "margin_mm": -0.006,
+       "status": "below the 0.02 rule - recorded deviation D33",
+       "note": "a ball set to its protrusion on the gauge plate carries its whole diameter error at its top. Incoming rule that restores the 0.02 mm: measure the ball lot; lower plate limit = 0.83 + (lot diameter - 1.0), i.e. 0.843 at the grade limit. A grade 25 ball (+0.0025) leaves 0.024 mm; radial clearance of the largest grade 100 ball in its hole 0.069 mm"
       },
       {
        "item": "Potting epoxy of a ball to the PCB underside (sheet hole backfilled)",
@@ -8248,7 +9120,7 @@
       {
        "probe": "PCB locating slot, beside the spigot",
        "at_xyz": [
-        -13.5,
+        -13.3,
         10.8,
         1.1
        ],
@@ -8291,7 +9163,7 @@
       },
       {
        "air_solid": "inner cavity",
-       "volume_mm3": 4202.85,
+       "volume_mm3": 4215.55,
        "x": [
         -22.0,
         22.0
@@ -8576,15 +9448,15 @@
       {
        "part": "MARKER TOTAL",
        "primary_build": "34 parts",
-       "primary_mass_g": 12.25,
+       "primary_mass_g": 12.23,
        "alternative_build": "32 parts",
-       "alternative_mass_g": 11.41
+       "alternative_mass_g": 11.39
       },
       {
        "part": "centre of gravity (alternative build)",
        "primary_build": "-",
        "primary_mass_g": "-",
-       "alternative_build": "(-0.02, -1.40, 3.71)",
+       "alternative_build": "(-0.01, -1.38, 3.71)",
        "alternative_mass_g": "8.1 mm inside the foot triangle"
       }
      ]
@@ -8598,7 +9470,9 @@
     "base_plate_pa12: 2012 triangles (export/stl/parts/base_plate_pa12.stl), 438794 surface samples at 0.08 mm spacing, 5879 candidates re-measured exactly on the B-rep, 0 of them below 0.8 mm; thinnest reading 0.800 mm; 0 samples leave through an oblique face within 0.5 mm (grazing exits at wall ends and sharp edges - not wall thickness, not counted)",
     "base_plate_pa12: export/stl/parts/base_plate_pa12.stl"
    ],
-   "warnings": []
+   "warnings": [
+    "Same with a ball at the upper diameter limit of grade 100 (E8: dia +0.0127, ABMA figure as remembered): 0.014 mm < 0.02 mm (D33)"
+   ]
   },
   {
    "id": 17,
@@ -8608,8 +9482,661 @@
    "tables": [],
    "notes": [
     "looked for /home/user/Revenue-Management/greenline-marker/electrical/gl1_main/out/gl1_main-mechanical.json (written by the board toolchain: electrical/tools/gleda/outputs.py, mechanical_data)",
-    "when the file exists this check verifies outline, hole and slot against the YAML, every top-side part against the tub solid (0.2 mm), the post feet, the hood zones (0.95 mm), the free height (2.55 mm) and the ball-foot zones, the bottom side against the grain opening and the pad slot, and the contact pads against the cradle pins",
+    "when the file exists this check verifies outline, hole and slot against the YAML, every top-side part against the tub solid (0.2 mm), the post feet, the hood zones (0.95 mm), the free height (2.55 mm), the ball-foot zones with their 0.3 mm margin and the LCD-tail keep-out (0.7 mm), the bottom side against the grain opening and the pad slot, and the contact pads against the cradle pins",
     "the check itself is proven by the self-test (cad/selftest.py): a board built from the YAML passes; a tall part under a hood, a part on a post foot, a part over a foot zone, a moved hole, a shifted pad row, a bottom-side part outside the openings, a rectangular outline that states its own tolerance, a part on an unknown side, an opening listed only as a polygon hole and a part in the path of the LCD tail are each caught"
+   ],
+   "warnings": []
+  },
+  {
+   "id": 18,
+   "name": "fixtures on the outer face: calibration seat plates (E11), ball gauge plate, bridge gauge",
+   "passed": true,
+   "summary": "base-face seat plate: the base plate rests on three pads per nest (contact 24.7 to 28.0 mm2 each), balls 0.40 clear of the pocket floors and 1.18 radially, visor flat on the fence over 27.6 mm, side stop touching, rim 0.55 above the plate; ball seat plate: three balls on the plain face, base 0.10 above it; both nests, no interference. Ball gauge plate: base plate on three bosses dia 7.0 (legend 0.27 clear of the plate, 0.99 from a boss), gauge holes dia 0.60 set 0.10 of protrusion; bridge gauge: feet 1.06 from the legend, four rim stations on the rim flat",
+   "tables": [
+    {
+     "title": "Marker on the seat plates, both nests; base plate on the ball gauge plate; bridge gauge",
+     "rows": [
+      {
+       "item": "nest A, base-face seat: interference of the marker with the plate (mm3, negated)",
+       "method": "boolean common, every outside part of the marker",
+       "actual_mm": 0.0,
+       "required_min_mm": -0.01,
+       "margin_mm": 0.01,
+       "status": "ok",
+       "note": "largest: tub"
+      },
+      {
+       "item": "nest A, base-face seat: base plate on the seat pads (gap)",
+       "method": "3D minimum distance",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "contact: the pad tops are the marker base plane"
+      },
+      {
+       "item": "nest A, base-face seat: number of seat pads under the base plate",
+       "method": "section of the plate at the seat plane",
+       "actual_mm": 3.0,
+       "required_min_mm": 3.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "three pads and nothing else of the plate reach the seat plane under the marker"
+      },
+      {
+       "item": "nest A, base-face seat: smallest contact area of a pad on the FR-4 face (mm2)",
+       "method": "pad section INTERSECT base-plate section",
+       "actual_mm": 24.724,
+       "required_min_mm": 10.0,
+       "margin_mm": 14.724,
+       "status": "ok",
+       "note": "areas 24.7, 24.7, 28.0 mm2 (a full annulus dia 7.0 / 3.0 is 31.4; the pads are trimmed at the plate edge)"
+      },
+      {
+       "item": "nest A, base-face seat: seat pads inside the base plate outline by",
+       "method": "pad sections against the plate outline",
+       "actual_mm": 0.75,
+       "required_min_mm": 0.75,
+       "margin_mm": -0.0,
+       "status": "ok",
+       "note": "no pad reaches under the seal fillet at the plate edge or under the tub rim"
+      },
+      {
+       "item": "nest A, base-face seat: ball foot to its pocket, nearest (the floor under it)",
+       "method": "3D minimum distance",
+       "actual_mm": 0.4,
+       "required_min_mm": 0.25,
+       "margin_mm": 0.15,
+       "status": "ok",
+       "note": "pocket 0.5 deep: 0.38 under a ball set 0.02 high"
+      },
+      {
+       "item": "nest A, base-face seat: pocket wall to the cap of a ball set high, radial, less the location allowance",
+       "method": "arithmetic on the pocket of the solid",
+       "actual_mm": 0.575,
+       "required_min_mm": 0.25,
+       "margin_mm": 0.325,
+       "status": "ok",
+       "note": "cap radius at the seat plane 0.325 (protrusion 0.12); a ball may sit up to 0.6 off its pocket centre (fence and stop to the tub wall, bore gap 0.25, plate outline +-0.1, hole +-0.05, printed wall)"
+      },
+      {
+       "item": "nest A: visor flat against the datum fence (gap at z 2.8)",
+       "method": "sections z = 2.80",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "nest A: length of the visor flat on the fence",
+       "method": "tub section against the fence face",
+       "actual_mm": 27.6,
+       "required_min_mm": 27.1,
+       "margin_mm": 0.5,
+       "status": "ok",
+       "note": "contact band z 1.6 to 4.0 above the seat plane: below the window recesses (z 4.2), above the seal joint at the foot of the visor wall"
+      },
+      {
+       "item": "nest A: round wall against the side stop pin (gap)",
+       "method": "sections z = 2.80",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "pin dia 3.0 at the marker's -x side: with the fence it fixes x, y and the rotation"
+      },
+      {
+       "item": "nest A: relief at the foot of the fence, to the marker (z 1.40)",
+       "method": "sections z = 1.40",
+       "actual_mm": 0.5,
+       "required_min_mm": 0.49,
+       "margin_mm": 0.01,
+       "status": "ok",
+       "note": "room for the seal fillet under the visor wall"
+      },
+      {
+       "item": "nest A, base-face seat: tub rim above the relieved face of the plate",
+       "method": "3D minimum distance",
+       "actual_mm": 0.55,
+       "required_min_mm": 0.3,
+       "margin_mm": 0.25,
+       "status": "ok",
+       "note": "rim relief 0.25 + relief 0.3 (the pads end 0.75 inside the plate outline, so none lies under the rim); the rim-relief chain is +-0.30 worst case with the tub at +-0.1"
+      },
+      {
+       "item": "nest A, ball seat: interference of the marker with the plain plate (mm3, negated)",
+       "method": "boolean common",
+       "actual_mm": 0.0,
+       "required_min_mm": -0.01,
+       "margin_mm": 0.01,
+       "status": "ok",
+       "note": "largest: tub"
+      },
+      {
+       "item": "nest A, ball seat: the three balls on the plain face (largest gap)",
+       "method": "3D minimum distance",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "nest A, ball seat: base plate above the plain face",
+       "method": "3D minimum distance",
+       "actual_mm": 0.1,
+       "required_min_mm": 0.1,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "nest A, ball seat: visor flat against the datum fence (gap at z 2.8)",
+       "method": "sections z = 2.80",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "nest B, base-face seat: interference of the marker with the plate (mm3, negated)",
+       "method": "boolean common, every outside part of the marker",
+       "actual_mm": 0.0,
+       "required_min_mm": -0.01,
+       "margin_mm": 0.01,
+       "status": "ok",
+       "note": "largest: tub"
+      },
+      {
+       "item": "nest B, base-face seat: base plate on the seat pads (gap)",
+       "method": "3D minimum distance",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "contact: the pad tops are the marker base plane"
+      },
+      {
+       "item": "nest B, base-face seat: number of seat pads under the base plate",
+       "method": "section of the plate at the seat plane",
+       "actual_mm": 3.0,
+       "required_min_mm": 3.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "three pads and nothing else of the plate reach the seat plane under the marker"
+      },
+      {
+       "item": "nest B, base-face seat: smallest contact area of a pad on the FR-4 face (mm2)",
+       "method": "pad section INTERSECT base-plate section",
+       "actual_mm": 24.724,
+       "required_min_mm": 10.0,
+       "margin_mm": 14.724,
+       "status": "ok",
+       "note": "areas 24.7, 24.7, 28.0 mm2 (a full annulus dia 7.0 / 3.0 is 31.4; the pads are trimmed at the plate edge)"
+      },
+      {
+       "item": "nest B, base-face seat: seat pads inside the base plate outline by",
+       "method": "pad sections against the plate outline",
+       "actual_mm": 0.75,
+       "required_min_mm": 0.75,
+       "margin_mm": -0.0,
+       "status": "ok",
+       "note": "no pad reaches under the seal fillet at the plate edge or under the tub rim"
+      },
+      {
+       "item": "nest B, base-face seat: ball foot to its pocket, nearest (the floor under it)",
+       "method": "3D minimum distance",
+       "actual_mm": 0.4,
+       "required_min_mm": 0.25,
+       "margin_mm": 0.15,
+       "status": "ok",
+       "note": "pocket 0.5 deep: 0.38 under a ball set 0.02 high"
+      },
+      {
+       "item": "nest B, base-face seat: pocket wall to the cap of a ball set high, radial, less the location allowance",
+       "method": "arithmetic on the pocket of the solid",
+       "actual_mm": 0.575,
+       "required_min_mm": 0.25,
+       "margin_mm": 0.325,
+       "status": "ok",
+       "note": "cap radius at the seat plane 0.325 (protrusion 0.12); a ball may sit up to 0.6 off its pocket centre (fence and stop to the tub wall, bore gap 0.25, plate outline +-0.1, hole +-0.05, printed wall)"
+      },
+      {
+       "item": "nest B: visor flat against the datum fence (gap at z 2.8)",
+       "method": "sections z = 2.80",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "nest B: length of the visor flat on the fence",
+       "method": "tub section against the fence face",
+       "actual_mm": 27.6,
+       "required_min_mm": 27.1,
+       "margin_mm": 0.5,
+       "status": "ok",
+       "note": "contact band z 1.6 to 4.0 above the seat plane: below the window recesses (z 4.2), above the seal joint at the foot of the visor wall"
+      },
+      {
+       "item": "nest B: round wall against the side stop pin (gap)",
+       "method": "sections z = 2.80",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "pin dia 3.0 at the marker's -x side: with the fence it fixes x, y and the rotation"
+      },
+      {
+       "item": "nest B: relief at the foot of the fence, to the marker (z 1.40)",
+       "method": "sections z = 1.40",
+       "actual_mm": 0.5,
+       "required_min_mm": 0.49,
+       "margin_mm": 0.01,
+       "status": "ok",
+       "note": "room for the seal fillet under the visor wall"
+      },
+      {
+       "item": "nest B, base-face seat: tub rim above the relieved face of the plate",
+       "method": "3D minimum distance",
+       "actual_mm": 0.55,
+       "required_min_mm": 0.3,
+       "margin_mm": 0.25,
+       "status": "ok",
+       "note": "rim relief 0.25 + relief 0.3 (the pads end 0.75 inside the plate outline, so none lies under the rim); the rim-relief chain is +-0.30 worst case with the tub at +-0.1"
+      },
+      {
+       "item": "nest B, ball seat: interference of the marker with the plain plate (mm3, negated)",
+       "method": "boolean common",
+       "actual_mm": 0.0,
+       "required_min_mm": -0.01,
+       "margin_mm": 0.01,
+       "status": "ok",
+       "note": "largest: tub"
+      },
+      {
+       "item": "nest B, ball seat: the three balls on the plain face (largest gap)",
+       "method": "3D minimum distance",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "nest B, ball seat: base plate above the plain face",
+       "method": "3D minimum distance",
+       "actual_mm": 0.1,
+       "required_min_mm": 0.1,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "nest B, ball seat: visor flat against the datum fence (gap at z 2.8)",
+       "method": "sections z = 2.80",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "item": "Ball gauge plate: base plate on the gauge plate (gap)",
+       "method": "3D minimum distance",
+       "actual_mm": 0.0,
+       "required_min_mm": 0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "contact on the boss tops: they are the plane the protrusion is set from"
+      },
+      {
+       "item": "Ball gauge plate: pieces of the plate that reach the outer face of the base plate (bosses)",
+       "method": "section of the gauge plate just below the boss tops",
+       "actual_mm": 3.0,
+       "required_min_mm": 3.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "three bosses and nothing else: a plain plate would be one piece and would carry the base plate on its legend"
+      },
+      {
+       "item": "Ball gauge plate: smallest contact area of a boss on the FR-4 face (mm2)",
+       "method": "boss section INTERSECT base-plate section",
+       "actual_mm": 34.959,
+       "required_min_mm": 10.0,
+       "margin_mm": 24.959,
+       "status": "ok",
+       "note": "boss dia 7.0 round a gauge hole; the boss face closes the bottom of the dia 1.1 hole annulus (it dams the stage 1 epoxy)"
+      },
+      {
+       "item": "Ball gauge plate: room under the legend ink (ink up to 0.03 thick), smallest",
+       "method": "ray -z from the outer face at a point of each of the 71 pieces of legend ink",
+       "actual_mm": 0.27,
+       "required_min_mm": 0.05,
+       "margin_mm": 0.22,
+       "status": "ok",
+       "note": "the plate face outside the bosses lies 0.3 below the boss tops: the legend never touches the gauge plate"
+      },
+      {
+       "item": "Ball gauge plate: legend ink to the nearest boss, less the location of the plate on its three balls",
+       "method": "legend blocks against the boss sections",
+       "actual_mm": 0.992,
+       "required_min_mm": 0.15,
+       "margin_mm": 0.842,
+       "status": "ok",
+       "note": "the base plate is located by its three balls in the gauge holes (+-0.1); required: the registration of the legend print (0.15)"
+      },
+      {
+       "item": "Ball gauge plate: protrusion set by the three gauge holes, largest error against the YAML protrusion (negated)",
+       "method": "hole diameter measured on the section of the gauge plate",
+       "actual_mm": -0.0,
+       "required_min_mm": -0.001,
+       "margin_mm": 0.001,
+       "status": "ok",
+       "note": "a dia 1.0 ball on the rim of a dia 0.60 hole stands 0.1 below the boss top"
+      },
+      {
+       "item": "Bridge gauge: legend ink to the footprint of its feet (foot + play on the ball), smallest",
+       "method": "legend blocks against the foot circles",
+       "actual_mm": 1.063,
+       "required_min_mm": 0.15,
+       "margin_mm": 0.913,
+       "status": "ok",
+       "note": "annular feet dia 6.0 / 1.6 round the three balls; a bore on the cap of a ball set low centres the foot within 0.53"
+      },
+      {
+       "item": "Bridge gauge: foot bore clear of the mask relief of a ball-foot hole, radial",
+       "method": "arithmetic",
+       "actual_mm": 0.175,
+       "required_min_mm": 0.1,
+       "margin_mm": 0.075,
+       "status": "ok",
+       "note": "the feet rest on solder mask, not on the bare ring of laminate round each hole"
+      },
+      {
+       "item": "Bridge gauge: its four rim stations lie on the flat of the tub rim (rim height read there, worst deviation from the rim relief, negated)",
+       "method": "ray +z onto the tub solid at each station",
+       "actual_mm": -0.0,
+       "required_min_mm": -0.0,
+       "margin_mm": 0.0,
+       "status": "ok",
+       "note": "stations at r 22.35 (rim flat r 22.0 to 22.7), azimuth -135, -45, 45, 135 deg from +x: rim at z 0.250, 0.250, 0.250, 0.250; the reading of steps 14 and 15 is this height below the plane of the three feet"
+      },
+      {
+       "item": "Bridge gauge: its feet clear of the low-tack potting mask (step 12), radial",
+       "method": "arithmetic on the foot positions",
+       "actual_mm": 1.864,
+       "required_min_mm": 0.5,
+       "margin_mm": 1.364,
+       "status": "ok",
+       "note": "mask = an annulus dia 15 to 24.0 centred on the grain opening: the three seat zones stay bare for the wet level check"
+      },
+      {
+       "item": "Legend ink of the outer face to the nearest seat pad",
+       "method": "legend blocks against the pad sections",
+       "actual_mm": 1.092,
+       "required_min_mm": 0.75,
+       "margin_mm": 0.342,
+       "status": "ok",
+       "note": "a legend print stands about 0.02 mm proud of the mask: the pads must bear on bare mask wherever the marker sits inside its location allowance (D34)"
+      },
+      {
+       "item": "Marker centre of gravity inside the triangle of the three seat pads / balls",
+       "method": "mass table of check 8",
+       "actual_mm": 8.221,
+       "required_min_mm": 2.0,
+       "margin_mm": 6.221,
+       "status": "ok",
+       "note": "the marker lies stable on either plate without a clamp; no spring pin may touch it while the zero is read"
+      }
+     ]
+    },
+    {
+     "title": "Ball feet in their pockets (base-face seat plate)",
+     "rows": [
+      {
+       "nest": "A",
+       "ball": "ball_1",
+       "centre_xy": [
+        0.001,
+        15.0
+       ],
+       "pocket": "dia 3.0 x 0.5 deep",
+       "ball_to_plate_3d_mm": 0.4,
+       "under_the_ball_mm": 0.4,
+       "radial_at_z_mm": [
+        -0.05,
+        1.282
+       ],
+       "radial_to_the_cap_of_a_ball_set_high_mm": 1.175,
+       "location_allowance_mm": 0.6,
+       "status": "ok"
+      },
+      {
+       "nest": "A",
+       "ball": "ball_2",
+       "centre_xy": [
+        -16.499,
+        -9.5
+       ],
+       "pocket": "dia 3.0 x 0.5 deep",
+       "ball_to_plate_3d_mm": 0.4,
+       "under_the_ball_mm": 0.4,
+       "radial_at_z_mm": [
+        -0.05,
+        1.282
+       ],
+       "radial_to_the_cap_of_a_ball_set_high_mm": 1.175,
+       "location_allowance_mm": 0.6,
+       "status": "ok"
+      },
+      {
+       "nest": "A",
+       "ball": "ball_3",
+       "centre_xy": [
+        16.501,
+        -9.5
+       ],
+       "pocket": "dia 3.0 x 0.5 deep",
+       "ball_to_plate_3d_mm": 0.4,
+       "under_the_ball_mm": 0.4,
+       "radial_at_z_mm": [
+        -0.05,
+        1.282
+       ],
+       "radial_to_the_cap_of_a_ball_set_high_mm": 1.175,
+       "location_allowance_mm": 0.6,
+       "status": "ok"
+      },
+      {
+       "nest": "B",
+       "ball": "ball_1",
+       "centre_xy": [
+        0.0,
+        29.8
+       ],
+       "pocket": "dia 3.0 x 0.5 deep",
+       "ball_to_plate_3d_mm": 0.4,
+       "under_the_ball_mm": 0.4,
+       "radial_at_z_mm": [
+        -0.05,
+        1.282
+       ],
+       "radial_to_the_cap_of_a_ball_set_high_mm": 1.175,
+       "location_allowance_mm": 0.6,
+       "status": "ok"
+      },
+      {
+       "nest": "B",
+       "ball": "ball_2",
+       "centre_xy": [
+        16.5,
+        54.3
+       ],
+       "pocket": "dia 3.0 x 0.5 deep",
+       "ball_to_plate_3d_mm": 0.4,
+       "under_the_ball_mm": 0.4,
+       "radial_at_z_mm": [
+        -0.05,
+        1.282
+       ],
+       "radial_to_the_cap_of_a_ball_set_high_mm": 1.175,
+       "location_allowance_mm": 0.6,
+       "status": "ok"
+      },
+      {
+       "nest": "B",
+       "ball": "ball_3",
+       "centre_xy": [
+        -16.5,
+        54.3
+       ],
+       "pocket": "dia 3.0 x 0.5 deep",
+       "ball_to_plate_3d_mm": 0.4,
+       "under_the_ball_mm": 0.4,
+       "radial_at_z_mm": [
+        -0.05,
+        1.282
+       ],
+       "radial_to_the_cap_of_a_ball_set_high_mm": 1.175,
+       "location_allowance_mm": 0.6,
+       "status": "ok"
+      }
+     ]
+    },
+    {
+     "title": "Ball gauge plate: the three gauge holes, measured on the solid",
+     "rows": [
+      {
+       "ball": "ball_1",
+       "centre_xy": [
+        0.001,
+        15.0
+       ],
+       "gauge_hole_dia_on_the_solid_mm": 0.6,
+       "protrusion_of_a_dia_1p000_ball_on_its_rim_mm": 0.1,
+       "required_mm": "0.1 +-0.02",
+       "ball_of_the_model_to_the_plate_mm": 0.0,
+       "interference_mm3": 0,
+       "protrusion_of_an_oversize_grade_100_ball_mm": 0.098,
+       "status": "ok"
+      },
+      {
+       "ball": "ball_2",
+       "centre_xy": [
+        -16.499,
+        -9.5
+       ],
+       "gauge_hole_dia_on_the_solid_mm": 0.6,
+       "protrusion_of_a_dia_1p000_ball_on_its_rim_mm": 0.1,
+       "required_mm": "0.1 +-0.02",
+       "ball_of_the_model_to_the_plate_mm": 0.0,
+       "interference_mm3": 0,
+       "protrusion_of_an_oversize_grade_100_ball_mm": 0.098,
+       "status": "ok"
+      },
+      {
+       "ball": "ball_3",
+       "centre_xy": [
+        16.501,
+        -9.5
+       ],
+       "gauge_hole_dia_on_the_solid_mm": 0.6,
+       "protrusion_of_a_dia_1p000_ball_on_its_rim_mm": 0.1,
+       "required_mm": "0.1 +-0.02",
+       "ball_of_the_model_to_the_plate_mm": 0.0,
+       "interference_mm3": 0,
+       "protrusion_of_an_oversize_grade_100_ball_mm": 0.098,
+       "status": "ok"
+      }
+     ]
+    },
+    {
+     "title": "Requirements on the fixtures (GL1-050, ball gauge plate, bridge gauge) and their basis",
+     "rows": [
+      {
+       "requirement": "plate blank",
+       "value": "70.0 x 112.0 x 12.0 mm",
+       "basis": "two nests either side of the fence; marker dia 46 + stop pin + handling margin"
+      },
+      {
+       "requirement": "seat pads: six pad tops in one plane",
+       "value": "0.001 mm",
+       "basis": "a height error of 0.001 mm at one pad is 0.041 mrad over the 24.5 mm height of the foot triangle (target of the tilt chain 0.5 to 1 mrad)"
+      },
+      {
+       "requirement": "plain plate: flatness of the top face",
+       "value": "0.001 mm over each nest",
+       "basis": "same tilt error; the balls are 33.0 and 25.8 mm apart"
+      },
+      {
+       "requirement": "reversal between the nests",
+       "value": "no parallelism of the plate needed",
+       "basis": "both nests lie in one lapped plane: reading in nest A, then turned 180 deg in nest B, cancels the tilt of the plate and of the table under it; what remains is half the difference in tilt between the two nests (bounded by the coplanarity above)"
+      },
+      {
+       "requirement": "fence: datum faces square to the seat plane, parallel to each other",
+       "value": "0.01 mm",
+       "basis": "yaw of the marker 0.021 deg over the 27.6 mm flat (the reversal needs the half turn only to about 1 deg; the display-rotation measurement, E12, needs 0.1 deg)"
+      },
+      {
+       "requirement": "pocket",
+       "value": "dia 3.0 x 0.5 deep",
+       "basis": "ball cap dia 0.65 at the seat plane when set 0.02 high; mask relief dia 1.25; location allowance 0.6; depth = 4.2 x the largest protrusion"
+      },
+      {
+       "requirement": "seat pad",
+       "value": "annulus dia 7.0 / 3.0, 0.3 proud of the plate face",
+       "basis": "bare mask next to each foot; legend-free zone dia 8.5 on the base plate (pad + 2 x (0.6 + 0.15))"
+      },
+      {
+       "requirement": "contacts",
+       "value": "none on either plate",
+       "basis": "a spring pin pushes with 0.59 N against a marker weight of about 0.12 N: the zero is read without contact (started from the menu, or armed in the pogo fixture and run after the marker has come to rest on the plate)"
+      },
+      {
+       "requirement": "positions of the level zero",
+       "value": "0 and 180 deg only (nest A, nest B)",
+       "basis": "the fence takes the visor flat: a four-position zero (0, 90, 180, 270 deg; docs/MANUFACTURING_PLAN.md 6.2 and 6.7, for production) cannot be run on these plates: it needs a location on the round wall (three pins) instead of the fence. Not designed"
+      },
+      {
+       "requirement": "BALL GAUGE PLATE (step 2): bosses",
+       "value": "3 x dia 7.0, tops ground in one plane within 0.005, 0.3 proud of the plate face",
+       "basis": "inside the legend-free zones dia 8.5 with the location on the balls (+-0.1) and the print registration (0.15); the legend (up to 0.03) never touches the plate"
+      },
+      {
+       "requirement": "BALL GAUGE PLATE: gauge holes",
+       "value": "3 x dia 0.60 +0.005 / 0 reamed, 0.5 deep, sharp burr-free rim, at the ball-foot positions +-0.02",
+       "basis": "a dia 1.0 ball on the rim stands 0.1 below the boss top; +0.01 on the hole diameter is +0.0038 of protrusion"
+      },
+      {
+       "requirement": "BALL GAUGE PLATE: clamp",
+       "value": "a weight with three annular feet over the bosses (dia 7.0 / dia 3), open above each hole",
+       "basis": "the load passes straight through the plate into the bosses: a flat weight would bend the 0.8 mm plate between its three supports"
+      },
+      {
+       "requirement": "BRIDGE GAUGE (steps 11, 12, 14, 15): feet",
+       "value": "3 annular feet dia 6.0 / 1.6 at the ball-foot positions, 1.0 proud, lapped in one plane within 0.002",
+       "basis": "every depth reading on the underside (ring crest, potting level, rim relief) is taken from the bare mask round the three feet: the plane of the seat pads of GL1-050 and of the gauge-plate bosses. NOT drawn: a requirement"
+      },
+      {
+       "requirement": "BRIDGE GAUGE: stations",
+       "value": "indicator bores over the grain opening (centre and four points at r 5 outside the ring) and at four rim stations r 22.35, -135, -45, 45, 135 deg",
+       "basis": "rim flat r 22.0 to 22.7; zeroed on a flat plate; contact tip dia 2 (dia 1 on the ring crest, 0.8 wide)"
+      }
+     ]
+    }
+   ],
+   "notes": [
+    "fixtures, not product parts: drawing GL1-050; solids exported as cal_seat_plate.step and cal_plain_plate.step (the plain plate in its own frame, top face z = 0)",
+    "ball gauge plate: solid exported as gauge_plate.step, drawn in the detail of GL1-011 sheet 1. The outer face of the base plate carries the legend (E10), so this plate bears on three bosses inside the legend-free zones, not on its whole face: a print of 0.02 to 0.03 mm under a flat plate would add itself to the ball protrusion (0.1 +-0.02) and take the same amount from the epoxy between ball and land (D34)",
+    "bridge gauge: not a solid of this model; its footprint (three annular feet round the balls), its rim stations and the potting mask are checked as geometry against the legend and the tub. No depth gauge rests on printed legend: one that bridged the grain opening on the legend (1.2 mm from the opening) would read the ring crest and the potting level up to 0.03 mm deep against a never-below limit of 0.05",
+    "plate frame = marker frame of nest A (the marker as modelled); nest B = nest A turned 180 deg about (0.0, 22.4), the middle of the fence. Fence faces at y = 18.4 and 26.4; side stops at (-24.5, 0.0) and its image",
+    "base-face seat: E11 asks that the base face seats (the turf seat). The pads touch the FR-4 face in a ring round each foot, so the stored difference between the two seats is the difference between the plane of the face at the feet and the plane of the balls; a bowed laminate floats on turf on its mean plane, which three pads do not measure (D34)",
+    "the six-face calibration needs pad contact in six orientations: that fixture is NOT designed (README, fixtures)"
    ],
    "warnings": []
   }
@@ -8783,7 +10310,7 @@
    "status": "accepted",
    "yaml_change": false,
    "requirement": "0.25 mm clearance on every drop-in fit",
-   "implemented": "the two PCB locating spigots (dia 1.0 x 0.6, tip chamfered 0.15) under posts B sit in a dia 1.15 hole and a 1.15 x 1.8 slot with 0.075 mm radial clearance, as the YAML specifies",
+   "implemented": "the two PCB locating spigots (dia 1.0 x 0.6, tip chamfered 0.15) under posts B sit in a dia 1.15 hole and a 1.15 x 2.2 slot with 0.075 mm radial clearance, as the YAML specifies",
    "reason": "a locating fit, not a drop-in fit: rev D keeps it and moves the pair to posts B (28.7 mm apart, the cameras between them), which cuts the fore-aft play at a camera to +-0.075 mm and the yaw to +-0.30 deg. 0.075 mm is below the +-0.2 mm print tolerance, so the spigots are a gauged feature (go gauge dia 1.10 at first article; dress an oversize spigot, never the PCB hole). They only locate until the adhesives have cured"
   },
   {
@@ -8870,38 +10397,65 @@
   {
    "id": "D29",
    "part": "tub / PCB layout",
-   "status": "open",
-   "yaml_change": true,
-   "requirement": "feet of the locating posts B 2.2 x 2.2 mm, centred on the spigots (YAML tub_keepouts.post_feet.locating)",
-   "implemented": "feet 1.9 x 2.2 mm: each foot is cut back to |x| >= 13.55 and so uses 1.9 of the 2.2 mm of its YAML keep-out square in x; it stays inside the square (check 12), so the contract with the PCB layout holds",
-   "reason": "the LCD glass is 26.6 mm wide (|x| <= 13.3) and has to pass between the two posts B on its way to the roof. Feet centred on the spigots would reach in to |x| = 13.25: the gap between them (26.5 mm) is narrower than the glass. With the 0.25 mm fit clearance the inner face must be at |x| >= 13.55. The slot under post B- then reaches 0.10 mm past the foot (it stays open to the cavity); seat areas are in check 10"
+   "status": "closed (rev D amended, N1)",
+   "yaml_change": false,
+   "requirement": "feet of the locating posts B 2.2 x 2.2 mm, centred on the spigots (rev D before the amendment)",
+   "implemented": "feet 1.9 x 2.2 mm with their inner faces at |x| = 13.55, inside the 2.2 mm keep-out squares",
+   "reason": "the amended YAML states the foot as built (tub_keepouts.post_feet.locating.foot: dx 1.9, dy 2.2, x_inner 13.55); params asserts it. The LCD glass (26.6 mm wide) passes between the two posts"
   },
   {
    "id": "D30",
    "part": "visor_window / window_bond",
-   "status": "recorded",
-   "yaml_change": true,
-   "requirement": "visor window 0.4 mm thick, 0.15 mm below the visor face in the 0.55 mm recess, bonded (rev C: adhesive line 0.05 mm behind the glass)",
-   "implemented": "the glass is seated bare on the recess floor and on its shelf (front face 0.15 below the visor face, top edge 0.15 below the tub top; seats 0.50 sides, 0.40 sill, 0.65 top). The seal is a closed frame of THIXOTROPIC adhesive round the edge of the glass, outside the clear opening: the fill of the two 0.25 mm side gaps, a bead 0.1 mm high along the top edge and a fillet 0.12 x 0.12 mm on the shelf in front of the bottom edge (0.03 behind the visor face). Nothing is wicked behind the glass",
-   "reason": "0.55 - 0.4 - 0.15 leaves nothing for an adhesive line; the recess cannot be deepened (it comes out of the 0.525 mm strip, D04). A film wicked onto the top seat would end as a fillet at the roof edge of the opening, where the upper field has 0.054 mm: about 0.055 mm of fillet costs the required 17.6 deg (design-review figure). Check 13 proves the frame, not the bare seat, closes the opening (the glass is drawn 0.02 mm off its seats for the air test)"
+   "status": "closed (rev D amended, N2)",
+   "yaml_change": false,
+   "requirement": "visor window 0.4 mm thick in the 0.55 mm recess, bonded with an adhesive line behind the glass (rev C: 0.05 mm)",
+   "implemented": "glass seated bare on the recess floor, 0.15 below the visor face; sealed by a closed frame of thixotropic adhesive round its edge (side gaps, top bead 0.1, sill fillet 0.12 x 0.12); nothing behind the glass",
+   "reason": "the amended YAML says exactly this (visor_window.sub_flush 0.15, bond_line 0.0, bond); params asserts the numbers; check 13 proves that the frame, not the bare seat, closes the opening"
   },
   {
    "id": "D31",
    "part": "tub / optics",
-   "status": "recorded",
-   "yaml_change": true,
-   "requirement": "upper field 15.0 deg guaranteed at the tolerance limit (YAML cameras.field_required_deg.up_guaranteed; optics 0.2 mm high)",
-   "implemented": "14.97 deg (closed form 14.967 deg, confirmed by the ray trace of check 4); 14.61 deg when the fore-aft play of the spigot fit (0.075 mm) is added. Check 4 compares strictly: a shortfall up to 0.05 deg is this recorded deviation (a warning), a larger one fails",
-   "reason": "the YAML figure is the rounded value of the same geometry: 1.70 tan(t) + 2.00 tan(t') = 0.80 mm with sin(t) = 1.517 sin(t') gives 14.967 deg. Nothing can be gained in the model: the top of the opening is the roof underside. 0.03 deg changes the distance at which the stick top comes into the field by about 2 cm at 7.8 m"
+   "status": "closed (rev D amended, N3)",
+   "yaml_change": false,
+   "requirement": "upper field 15.0 deg guaranteed at the tolerance limit (rev D before the amendment)",
+   "implemented": "YAML up_guaranteed = 14.5 deg, DEFINED as the worst case with the optics 0.2 mm high and the 0.075 mm fore-aft play of the spigot fit against it: the model gives 14.61 deg there (closed form 14.611; 14.97 without the play)",
+   "reason": "check 4 compares the with-play figure with the YAML strictly and fails below it; the margin is 0.11 deg (closed form: 1.70 tan(t) + 2.00 tan(t') = 0.80 mm, sin(t) = 1.517 sin(t'), without the play)"
   },
   {
    "id": "D32",
    "part": "grain_potting / baffle_ring",
+   "status": "closed (rev D amended, N4 and E16)",
+   "yaml_change": false,
+   "requirement": "clear potting with its surface 0.05 below the base plane; baffle ring with its top flush with the potting (rev D before the amendment)",
+   "implemented": "potting surface never closer to the base plane than z 0.05, aimed at z 0.1, accepted to z 0.2 and from the ring crest to 0.1 inside it; separate ring 0.82 +0.00 / -0.03 for the nominal plate, lapped to plate thickness + 0.15 - tape thickness, crest z 0.00 to 0.13 (accepted 0 to 0.15)",
+   "reason": "the amended YAML carries these numbers (base_plate.grain_cavity.fill_surface_z, base_plate.baffle.ring); the model reads them and asserts target, ring height, crest window and tape range; E16: the tape is 0.1 to 0.145 mm as available (modelled 0.13)"
+  },
+  {
+   "id": "D33",
+   "part": "ball feet / base_plate",
    "status": "recorded",
    "yaml_change": true,
-   "requirement": "clear potting with its surface 0.05 below the base plane; baffle ring with its top flush with the potting (YAML base_plate.grain_cavity.fill, baffle; DESIGN_SPEC section 5)",
-   "implemented": "z 0.05 is the level the potting must never pass (the modelled solid, the maximum-material condition). Accepted: from the crest of the ring to 0.1 mm inside it and never deeper than z 0.2; for the nominal crest (z 0.05) that is z 0.05 to 0.15, fill target z 0.10. The ring (0.82 +0.00 / -0.03) is lapped to the measured plate thickness + 0.02, so its crest ends z 0.00 to 0.13 above the base plane",
-   "reason": "a surface dispensed to exactly the never-exceed level stands proud on half the units (a thin plate, a wide opening and the dispenser accuracy each move it by 0.02 to 0.03 mm), and a ring that is nominally flush is covered by clear potting on half of them, which bridges the baffle optically. With a ring lapped to the nominal height regardless of the plate the crest could end at z -0.03 (proud of the base plane) to 0.22"
+   "requirement": "plates accepted from 0.76 mm (PA12 0.83): the lower limit keeps 0.02 mm of epoxy between each ball and its land (YAML base_plate.thickness_accepted, N6); balls of grade 100 or better (E8)",
+   "implemented": "true for a ball of exactly 1.0 mm. A grade 100 ball may be 0.0127 mm larger (basic diameter tolerance, ABMA figure as remembered): set to its protrusion on the gauge plate it stands that much higher, and 0.007 mm (PA12 0.014) of epoxy is left at the lower plate limit. Incoming rule of this package: the ball lot is measured and the lower plate limit is raised by the oversize of the lot (0.773 mm at the grade limit)",
+   "reason": "E8 widened the ball grade from 25 (+-0.0025 mm) to 100 after the plate limits were fixed; no grade 25 ball in 316 stainless was found at 1 mm (docs/SOURCING.md). The protrusion, not the ball top, is what the gauge plate sets. Check 2 carries the row as this deviation"
+  },
+  {
+   "id": "D34",
+   "part": "fixtures on the outer face (calibration seat plate, ball gauge plate, bridge gauge) / base_plate legend",
+   "status": "recorded",
+   "yaml_change": true,
+   "requirement": "turf-seat zero on a plate with three clearance pockets for the balls so that the base face seats (DESIGN_SPEC section 6, E11); legend at least 1.0 mm from the ball-foot holes (E10); balls set on a gauge plate (YAML base_plate.feet)",
+   "implemented": "no fixture bears on printed legend. The base face seats on three annular pads (dia 7.0 round each dia 3.0 x 0.5 pocket, trimmed 0.75 inside the plate outline), not on the whole face; the ball gauge plate of assembly step 2 carries the base plate on three bosses dia 7.0 round its gauge holes, its face 0.3 lower elsewhere; every depth reading on the underside (ring crest, potting level, rim relief) is taken with a bridge gauge on three annular feet dia 6.0 / 1.6 round the balls. The legend is kept out of a dia 8.5 zone round each ball foot and 0.15 or more from each of these footprints (checks 15 and 18)",
+   "reason": "a printed legend stands about 0.02 mm proud of the mask (0.03 at most) and the tub rim is only 0.25 above the base plane. On a full-face hard seat the marker would rest on ink islands, on a bowed plate or on the rim (0.02 mm across the foot triangle is about 0.8 mrad); on a flat gauge plate the ink would add itself to the ball protrusion (0.1 +-0.02) and take the same 0.03 from the epoxy between ball and land (0.02 at the lower plate limit); a depth gauge resting on legend 1.2 mm from the grain opening would read the potting level that much deep against a never-below limit of 0.05. Three points next to the feet on bare mask are one reference plane for all of these, and they measure what E11 is about: the plane of the base face against the plane of the balls. A laser-marked legend has no height and would not need this"
+  },
+  {
+   "id": "D35",
+   "part": "retarder_film (optional) / cover_glass",
+   "status": "recorded",
+   "yaml_change": true,
+   "requirement": "quarter-wave film, about 0.1 mm, on the underside of the cover glass, axis 45 deg to the LCD polariser; 1.08 mm of air between display and glass, so nothing else moves (E9)",
+   "implemented": "film dia 23.4 x 0.1 (with its laminating adhesive) with a clocking flat 4.3 long toward the visor: 0.98 mm to the display, 0.80 mm inside the bore of the tape ring (0.05 left after the centring chain at its worst case), 0.70 beyond the aperture (0.20 after the chain; 0.00 at the flat). Outside the dia 22.0 aperture it lies over the roof ledge in the 0.13 mm gap that the tape leaves: 0.03 mm nominal, 0.007 mm with the tape at its thinnest and the film 0.01 thicker",
+   "reason": "the air gap of 1.08 mm exists only inside the aperture. A film (with adhesive) thicker than 0.11 mm would carry the glass off its tape ring: it is then cut to dia 21.5 and hangs inside the aperture (its edge visible). The diameter is set by the centring chain (film on glass 0.25, glass in its recess 0.25, tape ring in the recess 0.25): a film that reached under the tape would lift the glass off its seal. The crystal and its recess are round, so the flat is what carries the film axis to the tub (edge mark on the crystal set to the nose groove, +-3 deg). Check 2 carries the rows"
   }
  ]
 }

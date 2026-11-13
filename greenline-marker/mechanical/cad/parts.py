@@ -712,3 +712,102 @@ def ball(i):
 def vent():
     vx, vy = P.VENT_XY
     return cyl(vx, vy, M["vent_od"] / 2, P.VENT_Z0, P.VENT_PAD_Z)
+
+
+# ----------------------------------------------------------------------------------------------
+# 10. Optional part: quarter-wave retarder film under the cover glass (spec amendment E9, EVT trial)
+# ----------------------------------------------------------------------------------------------
+def retarder_film(dia=None):
+    """Quarter-wave retarder film (with its laminating adhesive, RETARDER_T thick) on the underside of the cover glass: a
+    disc that covers the display aperture and ends inside the bore of the tape ring, so that the tape still seats on glass.
+    Outside the aperture it lies in the gap that the tape leaves between glass and roof ledge.  One CLOCKING FLAT (the chord
+    y = RETARDER_FLAT_Y, toward the visor) carries the direction of the film axis from the die cut to the tub: the film is
+    laminated to the crystal against a straight stop, the crystal edge is marked at the flat and the mark is set to the nose
+    groove of the tub.  Not part of the primary build: an EVT trial part (group "option")."""
+    d = P.RETARDER_D if dia is None else dia
+    return cyl(0, 0, d / 2, P.RETARDER_Z0, P.RETARDER_Z1).cut(box(-d, d, P.RETARDER_FLAT_Y, d, P.RETARDER_Z0 - 1, P.RETARDER_Z1 + 1))
+
+
+# ----------------------------------------------------------------------------------------------
+# 11. Fixtures: the two calibration seat plates of the two-seat level zero (spec amendment E11, drawing GL1-050)
+# ----------------------------------------------------------------------------------------------
+def _cal_locators(z_top_face):
+    """Double-faced datum fence across the middle of the plate and one side stop pin per nest, standing on the top face of
+    the plate (z_top_face).  Plate frame = the marker frame of nest A; nest B is nest A turned 180 deg about CAL_CENTRE."""
+    c = P.CAL
+    hl = c["fence_len"] / 2
+    fence = box(-hl, hl, P.CAL_FENCE_Y0, P.CAL_FENCE_Y1, z_top_face - EPS, c["fence_h"])
+    rd, rh = c["fence_relief"]                           # undercut at the foot of both datum faces
+    fence = fence.cut(box(-hl - 1, hl + 1, P.CAL_FENCE_Y0 - 1, P.CAL_FENCE_Y0 + rd, z_top_face - 1, rh))
+    fence = fence.cut(box(-hl - 1, hl + 1, P.CAL_FENCE_Y1 - rd, P.CAL_FENCE_Y1 + 1, z_top_face - 1, rh))
+    out = fence
+    for (px, py) in (P.CAL_PIN_XY, P.cal_nest_b(*P.CAL_PIN_XY)):
+        out = out.union(cyl(px, py, c["pin_dia"] / 2, z_top_face - EPS, c["pin_h"]))
+    return out
+
+
+def _cal_blank(z_top):
+    c = P.CAL
+    hx, hy = c["plate"][0] / 2, c["plate"][1] / 2
+    cx, cy = P.CAL_CENTRE
+    return box(cx - hx, cx + hx, cy - hy, cy + hy, -c["plate"][2], z_top)
+
+
+def cal_seat_pad_outline(nest="A"):
+    """The limit of the seat pads of one nest: the base plate outline less a margin, so that no pad reaches under the tub
+    rim or the seal fillet at the plate edge.  A prism (-1 .. 1 in z) in the plate frame."""
+    m = P.MECH["legend_edge_margin"]
+    d = dprism(P.BASE_R - m, P.BASE_FLAT - m, -1.0, 1.0)
+    if nest == "B":
+        d = d.rotate((P.CAL_CENTRE[0], P.CAL_CENTRE[1], 0), (P.CAL_CENTRE[0], P.CAL_CENTRE[1], 1), 180)
+    return d
+
+
+def cal_seat_plate(pocket_depth=None):
+    """BASE-FACE seat plate (the 'turf seat' of E11).  Per nest three annular seat pads, each round a clearance pocket for
+    a ball foot (positions = YAML base_plate.feet.positions); the pad tops are the seat plane z = 0 = the marker base
+    plane, the rest of the top face lies CAL['relief'] lower.  The marker therefore rests on the FR-4 face next to its
+    three feet and the balls hang free in the pockets.  Two nests, 180 deg apart, either side of the datum fence."""
+    c = P.CAL
+    zr = -c["relief"]
+    depth = c["pocket_depth"] if pocket_depth is None else pocket_depth
+    body = _cal_blank(zr)
+    for nest in ("A", "B"):
+        lim = cal_seat_pad_outline(nest)
+        for (bx, by) in P.BALL_XY:
+            x, y = (bx, by) if nest == "A" else P.cal_nest_b(bx, by)
+            body = body.union(cyl(x, y, c["pad_od"] / 2, zr - EPS, P.CAL_SEAT_Z).intersect(lim))
+    for nest in ("A", "B"):
+        for (bx, by) in P.BALL_XY:
+            x, y = (bx, by) if nest == "A" else P.cal_nest_b(bx, by)
+            body = body.cut(cyl(x, y, c["pocket_dia"] / 2, P.CAL_SEAT_Z - depth, P.CAL_SEAT_Z + 1))
+    return body.union(_cal_locators(zr)).clean()
+
+
+def cal_plain_plate():
+    """BALL seat plate: the same blank, fence and side stops with a plain lapped top face (z = 0 in ITS frame = the plane of
+    the ball feet: in the marker frame the plate sits BALL_PROT lower)."""
+    return _cal_blank(0.0).union(_cal_locators(0.0)).clean()
+
+
+# ----------------------------------------------------------------------------------------------
+# 12. Fixture: ball gauge plate of assembly step 2 (sets the three ball feet 0.10 proud of the outer face)
+# ----------------------------------------------------------------------------------------------
+def ball_gauge_plate(boss=True, hole_dia=None):
+    """Ball gauge plate, in the marker frame with the base plate lying on it, OUTER FACE DOWN (boss tops at z = 0 = the
+    marker base plane; the plate body below).  Three raised bosses at the ball-foot positions, each with a reamed gauge
+    hole in its centre: a ball seated on the rim of its hole stands BALL_PROT below the boss top, and the base plate rests
+    on the three boss tops only, i.e. on bare solder mask inside the legend-free zones.  Everything else of the plate face
+    lies GAUGE['relief'] lower, so that the legend print (0.03 mm at most) never carries the base plate.
+    boss=False builds the plain flat plate of the earlier issue (used by the self-test: it bears on the legend)."""
+    g = P.GAUGE
+    hx, hy, th = g["blank"][0] / 2, g["blank"][1] / 2, g["blank"][2]
+    zr = -g["relief"] if boss else 0.0
+    body = box(-hx, hx, -hy, hy, -th, zr)
+    if boss:
+        for (x, y) in P.BALL_XY:
+            body = body.union(cyl(x, y, g["boss_od"] / 2, zr - EPS, 0.0))
+    d = P.GAUGE_HOLE_D if hole_dia is None else hole_dia
+    for (x, y) in P.BALL_XY:
+        body = body.cut(cyl(x, y, d / 2, -g["hole_depth"], 1.0))
+    return body.clean()

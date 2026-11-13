@@ -23,7 +23,8 @@ matplotlib.rcParams["font.family"] = "DejaVu Sans"
 
 MM = 1 / 25.4
 PT = 0.3528                     # mm per point
-DRAWING_REV = "D-EVT1"
+DRAWING_REV = "D-EVT1.2"      # .1: regenerated on the amended rev D YAML (decisions N1 to N10, amendments E8 to E16)
+                              # .2: after the review of .1 (GL1-011 gauge-plate detail and legend spacing, GL1-012, GL1-050 item 3 and trims, die cuts GL1-034 / -035)
 LW_VIS, LW_THIN, LW_DIM = 0.75, 0.35, 0.3
 C_DIM = "#1a3f8f"
 

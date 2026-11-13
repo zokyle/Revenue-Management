@@ -27,6 +27,8 @@ recorded deviations are printed with their numbers and stay visible as warnings.
  16 alternative base    the printed PA12 base plate build: interference, walls, powder, feet, baffle, seal joint, mass
  17 board import        the real circuit board (electrical/gl1_main/out/*-mechanical.json) against the YAML and the tub;
                         "skipped: no board file" when the file does not exist yet (cad/board_import.py)
+ 18 fixtures on the outer face   the two seat plates of the two-seat level zero (drawing GL1-050), the ball gauge plate of
+                        assembly step 2 and the footprint of the bridge gauge, against the marker and the legend
 
 Checks 1 to 14 run on the PRIMARY build (routed FR-4 base plate).  The parts of the alternative build are in the same
 dict under names ending in "_pa12" (group "alt"); only checks 9 and 16 look at them.
@@ -105,7 +107,7 @@ def check_interference(parts, focus=None, cid=1, cname="interference"):
     """Pairwise boolean intersection between ALL solids of the assembly (puck seated in the cradle at 0 deg).  The
     parts of the alternative build (group "alt") are not part of this assembly.  focus = a set of part names: only pairs
     with at least one member in it are tested (used for the alternative base plate, where everything else is unchanged)."""
-    names = [n for n, i in parts.items() if i.group != "alt"]
+    names = [n for n, i in parts.items() if i.group not in A.EXTRA_GROUPS]
     solids = _solids(parts)
     bbs = {n: A.bbox_of(parts[n]) for n in names}
     rows, fails, contacts_seen = [], [], set()
@@ -243,8 +245,13 @@ def _base_rows(parts, S, T):
         note=f"the ball stands {P.BALL_TOP_Z - P.BASE_T:.2f} above the plate inside the {P.PSA_FOOT_HOLE_D} mm hole of the adhesive sheet")
     gap_min = v["accept"][0] + (P.PSA_T - v["psa_tol"]) - (P.BALL_TOP_Z + M["tol_ball_set"])
     add("Ball top to its copper land: plate at its lower incoming limit, sheet at its thinnest, ball set high", gap_min, M["ball_gap_min"], method="arithmetic on the incoming limits",
-        note=f"plate accepted from {v['accept'][0]:.2f} to {v['accept'][1]:.2f} mm (nominal {P.BASE_T}), sheet {P.PSA_T} +-{v['psa_tol']}, ball protrusion {P.BALL_PROT} +-{M['tol_ball_set']}: "
-             f"a thinner plate would let the ball hold the laminate open. The plate thickness also sets the rim relief and the depth of the grain opening, not the seal joint")
+        note=f"plate accepted from {v['accept'][0]:.2f} to {v['accept'][1]:.2f} mm (YAML thickness_accepted; nominal {P.BASE_T}), sheet {P.PSA_T} +-{v['psa_tol']}, ball protrusion {P.BALL_PROT} +-{M['tol_ball_set']}, "
+             f"ball diameter exactly {P.BALL_D}: a thinner plate would let the ball hold the laminate open. The plate thickness also sets the rim relief and the depth of the grain opening, not the seal joint")
+    add(f"Same with a ball at the upper diameter limit of grade 100 (E8: dia +{M['ball_dia_tol']}, ABMA figure as remembered)", gap_min - M["ball_dia_tol"], M["ball_gap_min"], dev="D33",
+        method="arithmetic on the incoming limits",
+        note=f"a ball set to its protrusion on the gauge plate carries its whole diameter error at its top. Incoming rule that restores the {M['ball_gap_min']} mm: measure the ball lot; "
+             f"lower plate limit = {v['accept'][0]:.2f} + (lot diameter - {P.BALL_D}), i.e. {v['accept'][0] + M['ball_dia_tol']:.3f} at the grade limit. A grade 25 ball (+{M['ball_dia_tol_g25']}) leaves "
+             f"{gap_min - M['ball_dia_tol_g25']:.3f} mm; radial clearance of the largest grade 100 ball in its hole {(P.BALL_HOLE_D - P.BALL_D - M['ball_dia_tol']) / 2:.3f} mm")
     add("Potting epoxy of a ball to the PCB underside (sheet hole backfilled)", min_distance(S["ball_epoxy_1"], S["main_pcb"]), 0.0, nominal=0.0,
         note=f"stage 1 dome at most {M['epoxy_dome_max']} mm over the plate; stage 2 fills the {P.PSA_FOOT_HOLE_D} mm sheet hole, so the ball bears on its "
              f"dia {P.FOOT_LAND_D} copper land through {P.PCB_Z0 - P.BALL_TOP_Z:.2f} mm of epoxy in compression")
@@ -267,8 +274,9 @@ def _base_rows(parts, S, T):
         zr1 = A.bbox_of(parts["baffle_ring"])[5]
         add(f"Baffle ring crest with the ring at its upper height limit (+{plus:.2f}): not closer to the base plane than z {P.GRAIN_FILL_Z}", zr1 - (P.BAFFLE_RING_H + plus), P.GRAIN_FILL_Z,
             method="ring top of the solid - tallest ring", note=f"finished height {P.BAFFLE_RING_H:.2f} +{plus:.2f} / -{minus:.2f}, lapped by us (printed {P.BAFFLE_RING_PRINT_H:.2f} high)")
-        add("Baffle ring crest above the base plane, worst case (ring lapped to the plate lot)", cr["matched"][0], 0.0, method="arithmetic on the tolerances",
-            note=f"ring height = measured plate thickness + {P.baffle_ring_height(0.0):.2f} (so {P.BAFFLE_RING_H:.2f} for the nominal {P.BASE_T} plate); sheet +-{v['psa_tol']}, annulus +-{M['baffle_psa_tol']}, "
+        add("Baffle ring crest above the base plane, worst case (ring lapped to the plate lot and to the tape used)", cr["matched"][0], 0.0, method="arithmetic on the tolerances",
+            note=f"ring height = measured plate thickness + {P.BAFFLE_RING_RULE:.2f} - tape thickness (E16; {P.BAFFLE_RING_H:.2f} for the nominal {P.BASE_T} plate and a {P.BAFFLE_PSA_T} tape, i.e. plate + "
+                 f"{P.baffle_ring_height(0.0):.2f}); sheet +-{v['psa_tol']}, annulus +-{M['baffle_psa_tol']}, "
                  f"gauging +-{M['plate_gauging_tol']}: crest z {cr['matched'][0]:.2f} to {cr['matched'][1]:.2f}. A ring lapped to {P.BAFFLE_RING_H:.2f} regardless of the plate would end between "
                  f"z {cr['unmatched'][0]:.2f} (proud of the base plane) and {cr['unmatched'][1]:.2f}")
         add(f"Baffle ring crest not deeper than z {P.BAFFLE_CREST_MAX_Z} (acceptance after lamination), worst case", P.BAFFLE_CREST_MAX_Z - cr["matched"][1], 0.0, method="arithmetic on the tolerances",
@@ -276,6 +284,10 @@ def _base_rows(parts, S, T):
         lo_, hi_, _t = P.potting_window(cr["matched"][1])
         pv, pa = S["grain_potting"].Volume(), _potting_areas(S)
         need = 2 * M["potting_dispense_tol"] * pv / sum(pa)
+        add("Baffle ring print file: printed height less the tallest finished ring (lapping allowance)", P.BAFFLE_RING_PRINT_H - P.BAFFLE_RING_H_RANGE[1], M["baffle_ring_lap_allowance"],
+            nominal=M["baffle_ring_lap_allowance"], method="arithmetic (E16)",
+            note=f"finished rings from {P.BAFFLE_RING_H_RANGE[0]:.3f} (plate {v['accept'][0]:.2f}, tape {max(P.BAFFLE_TAPE_RANGE)}, lower height limit) to {P.BAFFLE_RING_H_RANGE[1]:.3f} "
+                 f"(plate {v['accept'][1]:.2f}, tape {min(P.BAFFLE_TAPE_RANGE)}); printed {P.BAFFLE_RING_PRINT_H:.2f} high")
         add("Potting window (crest to %.2f inside it, within z %.2f to %.2f) with the crest at its deepest: width" % (M["grain_fill_below_crest"], P.GRAIN_FILL_Z, P.GRAIN_FILL_Z_MAX),
             hi_ - lo_, need, method="window width against the dispenser accuracy",
             note=f"window z {lo_:.2f} to {hi_:.2f}; a dispenser good to +-{100 * M['potting_dispense_tol']:.0f} % places the level within +-{need / 2:.3f} mm; the level is checked wet and trimmed before cure")
@@ -341,7 +353,7 @@ def check_clearances(parts):
         add(f"LCD glass to camera cube {s}", min_distance(S["lcd_glass"], S[f"camera_{s}"]), clr)
         add(f"LCD glass to prism {s}", min_distance(S["lcd_glass"], S[f"prism_{s}"]), clr)
     add("LCD glass to tub, lateral (ribs, posts B and E, hood rear walls)", _sec_dist(S["lcd_glass"], tub, "z", zg), clr, nominal=clr,
-        method=f"section z = {zg:.3f}", note=f"posts B are cut back to /x/ >= {P.LCD_POCKET_X} for this gap (D29)")
+        method=f"section z = {zg:.3f}", note=f"posts B are cut back to /x/ >= {P.LCD_POCKET_X} for this gap (YAML post_feet.locating.foot, N1)")
     add("LCD glass to roof bonding plane (adhesive frame)", min_distance(S["lcd_glass"], tub), P.LCD_PSA_T, nominal=P.LCD_PSA_T)
     add("LCD glass rear corners to side wall", P.R_IN - math.hypot(P.LCD_X1, P.LCD_Y0), clr, method="radius of the glass corner vs wall R",
         note=f"corner r = {math.hypot(P.LCD_X1, P.LCD_Y0):.3f}; the same corners do NOT pass the seating ledge (r {P.LEDGE_RI}): see D11")
@@ -360,16 +372,17 @@ def check_clearances(parts):
     add("Battery lead joint top below the free height", P.KO_FREE_Z - max(A.bbox_of(parts[n])[5] for n in parts if n.startswith("battery_lead_")), 0.0,
         nominal=P.PCB_FREE_H - P.BAT_JOINT_H, method="bounding boxes", note=f"free height z {P.KO_FREE_Z:.2f}")
     # --- PCB against the tub
-    board = PT.pcb_board().val()
+    board = S["main_pcb"]                                    # the PCB solid of THIS build (at these levels its section is the bare board)
     zl = 0.5 * (max(P.LEDGE_Z0, P.PCB_Z0) + min(P.LEDGE_Z1, P.PCB_Z1))
     add("PCB edge to seating ledge, radial", _sec_dist(board, tub, "z", zl, clip=(-25, -25, 25, 9)), clr, nominal=P.LEDGE_RI - P.PCB_R,
         method=f"section z = {zl:.2f}", note=f"PCB radius {P.PCB_R}")
     zs = 0.5 * (P.SPIGOT_Z0 + P.PCB_Z1)
     rx, ry, _ = P.LOC_ROUND; sx, sy, sd, sl = P.LOC_SLOT
     add("PCB locating spigot in the round hole, radial", _sec_dist(board, tub, "z", zs, clip=(rx - 1.0, ry - 1.0, rx + 1.0, ry + 1.0)), clr,
-        nominal=P.SPIGOT_FIT, dev="D19", method=f"section z = {zs:.2f}", note="locating fit specified in the YAML, not a drop-in fit; go gauge dia 1.10 at first article")
+        nominal=P.SPIGOT_FIT, dev="D19", method=f"section z = {zs:.2f} of the main PCB solid", note="locating fit specified in the YAML, not a drop-in fit; go gauge dia 1.10 at first article. "
+        "The row FAILS when the fit of the solid differs from the YAML fit by more than 0.01 (a hole or a spigot off its position)")
     add("PCB locating spigot in the slot, across the slot (y)", _sec_dist(board, tub, "z", zs, clip=(sx - 1.0, sy - 1.0, sx + 1.0, sy + 1.0)), clr,
-        nominal=(sd - P.SPIGOT_D) / 2, dev="D19", method=f"section z = {zs:.2f}", note=f"along the slot (x): {(sl - P.SPIGOT_D) / 2:.3f} mm each way")
+        nominal=(sd - P.SPIGOT_D) / 2, dev="D19", method=f"section z = {zs:.2f} of the main PCB solid", note=f"along the slot (x): {(sl - P.SPIGOT_D) / 2:.3f} mm each way; a slot off its centre line fails this row")
     add("Spigot tip to the adhesive sheet", P.SPIGOT_Z0 - A.bbox_of(parts["pcb_adhesive"])[5], 0.1, nominal=P.SPIGOT_Z0 - P.PSA_Z1, method="bounding boxes",
         note="the spigot ends inside the PCB hole")
     add("PCB flat edge to visor wall", _sec_dist(board, tub, "z", zl, clip=(-3, 15.5, 3, 20)), clr, nominal=P.Y_VISOR_IN - P.PCB_FLAT,
@@ -384,6 +397,37 @@ def check_clearances(parts):
         note=f"transfer-tape ring dia {P.CG_D} / {M['cover_tape_id']}")
     add("Cover glass top below the tub top (sub-flush)", P.T - A.bbox_of(parts["cover_glass"])[5], P.Y["cover_glass"]["sub_flush"], nominal=P.CG_BELOW_FLUSH,
         method="bounding box", note="rev D: 0.12 below flush (was 0.05)")
+    # --- E9: optional quarter-wave retarder film on the underside of the cover glass (EVT trial; not part of the primary build)
+    if "retarder_film" in parts:
+        rf, rbb = S["retarder_film"], A.bbox_of(parts["retarder_film"])
+        zf = 0.5 * (rbb[2] + rbb[5])
+        tol_gap = P.CG_TAPE_T * M["tol_sheet_frac"] + M["retarder_t_tol"]
+        add("Optional retarder film (E9): bonded to the underside of the cover glass", min_distance(rf, S["cover_glass"]), 0.0, nominal=0.0,
+            note=f"quarter-wave film with its laminating adhesive, {P.RETARDER_T} mm, dia {P.RETARDER_D}; axis at 45 deg to the LCD polariser (not a mechanical item)")
+        add("Optional retarder film to the display (LCD glass top)", min_distance(rf, S["lcd_glass"]), clr, nominal=P.RETARDER_Z0 - P.LCD_Z1,
+            note=f"air between display and glass {P.CG_Z0 - P.LCD_Z1:.2f} mm without the film")
+        add("Optional retarder film to the roof ledge under it (the film lies in the tape gap outside the aperture)", min_distance(rf, tub), tol_gap, nominal=P.RETARDER_LEDGE_GAP,
+            note=f"required: more than the tolerances that close it (tape {P.CG_TAPE_T} -{100 * M['tol_sheet_frac']:.0f} %, film +{M['retarder_t_tol']}): {P.RETARDER_LEDGE_GAP_MIN:.3f} mm is left then. "
+                 f"A film thicker than {P.RETARDER_T + M['retarder_t_tol']:.2f} mm would carry the glass off its tape: cut it to dia {P.APERTURE_D - 2 * clr:.1f} (inside the aperture) instead")
+        add("Optional retarder film to the bore of the tape ring, radial (the tape ring still seats on glass)", _sec_dist(rf, S["cover_tape"], "z", zf), clr,
+            nominal=(M["cover_tape_id"] - P.RETARDER_D) / 2, method=f"section z = {zf:.2f}", note=f"tape ring dia {P.CG_D} / {M['cover_tape_id']}: its whole {P.CG_TAPE_W} mm width stays on bare glass")
+        add("Optional retarder film: overlap beyond the display aperture, radial", 0.5 * (rbb[3] - rbb[0]) - P.APERTURE_D / 2, clr, nominal=(P.RETARDER_D - P.APERTURE_D) / 2,
+            method="bounding box", note=f"aperture dia {P.APERTURE_D}: the film edge is hidden under the roof ledge")
+        ch = P.retarder_chain()
+        d_bore = _sec_dist(rf, S["cover_tape"], "z", zf)
+        add("Optional retarder film to the bore of the tape ring AFTER THE CENTRING CHAIN, worst case", d_bore - (ch["place"] + ch["glass"] + ch["tape"]), 0.0,
+            method="radial gap of the solids less the three placements", note=f"film on the glass +-{ch['place']} (lamination nest), glass in its recess +-{ch['glass']}, tape ring in the same recess "
+            f"+-{ch['tape']}: {ch['place'] + ch['glass'] + ch['tape']:.2f} worst case, {math.sqrt(ch['place'] ** 2 + ch['glass'] ** 2 + ch['tape'] ** 2):.2f} RSS ({ch['bore'][2]:.2f} left at RSS). "
+            "A film that reached under the tape would lift the glass off its seal")
+        add("Optional retarder film: overlap beyond the aperture AFTER THE CENTRING CHAIN, worst case (round edge)", 0.5 * (rbb[3] - rbb[0]) - P.APERTURE_D / 2 - (ch["place"] + ch["glass"]), 0.0,
+            method="overlap of the solid less two placements", note=f"film on the glass +-{ch['place']} and glass in its recess +-{ch['glass']} (the aperture is part of the tub); {ch['aperture'][2]:.2f} left at RSS")
+        add("Optional retarder film: clocking flat beyond the aperture (the flat is the chord toward the visor)", rbb[4] - P.APERTURE_D / 2, clr, nominal=M["retarder_flat_overlap"],
+            method="bounding box (y max of the film)", note=f"flat {P.RETARDER_FLAT_LEN:.2f} mm long at y = {P.RETARDER_FLAT_Y}: it carries the film axis from the die cut to the tub (lamination nest with a straight stop, "
+            f"edge mark on the crystal, mark set to the nose groove within +-{M['retarder_clock_tol_deg']:.0f} deg); after the chain {ch['flat'][1]:.2f} worst case, {ch['flat'][2]:.2f} at RSS: the flat may "
+            "just reach the aperture edge, never the round edge")
+        v_rf = max(common_volume(rf, S[n]) for n, i in parts.items() if i.group == "puck")
+        add("Optional retarder film: interference with any part of the marker (mm3, negated)", -v_rf, -INTERFERENCE_LIMIT_MM3, method="boolean common with every marker part",
+            note="the film is not in the assembly of check 1; this row is its interference check")
     # --- cameras / prisms / windows against the tub
     for s in ("L", "R"):
         cx, cy = P.CAM_XY[s]
@@ -403,7 +447,7 @@ def check_clearances(parts):
         add(f"Visor window {s} to recess sides", _sec_dist(w, tub, "y", 0.5 * (P.WIN_Y0 + P.WIN_Y1), clip=(cx - 5, P.WIN_Z0 + 0.3, cx + 5, P.T)),
             clr, nominal=(P.WIN_RECESS_W - P.WIN_W) / 2, method="section through the window, above the shelf", note="gaps filled with the window adhesive")
         add(f"Visor window {s} front face below the visor face (sub-flush)", P.Y_VISOR - wb[4], P.WIN_RECESS_DEPTH - P.WIN_T, nominal=P.WIN_SUBFLUSH,
-            method="bounding box", note=f"{P.WIN_T} mm glass seated on the floor of the {P.WIN_RECESS_DEPTH} recess (D30)")
+            method="bounding box", note=f"{P.WIN_T} mm glass seated on the floor of the {P.WIN_RECESS_DEPTH} recess (YAML visor_window.sub_flush, bond_line {M['window_bond']}: N2)")
         add(f"Visor window {s} top edge below the tub top", P.T - wb[5], P.T - (P.WIN_Z0 + P.Y['visor_window']['h']), nominal=P.WIN_TOP_BELOW,
             method="bounding box", note=f"window {P.WIN_W} x {P.WIN_H} x {P.WIN_T}")
         add(f"Visor window {s} rear face to recess floor", min_distance(w, tub), 0.0, nominal=M["window_bond"],
@@ -494,6 +538,23 @@ def check_clearances(parts):
                                      range_rss_mm=(R3(c["nominal"] - c["rss"]), R3(c["nominal"] + c["rss"])),
                                      range_worst_case_mm=(R3(c["nominal"] - c["worst"]), R3(c["nominal"] + c["worst"])), note=extra))
     potrow, (pw_lo, pw_hi, pw_tg) = _potting_table(S)
+    v_tg = next(r for r in potrow if r["compartment"] == "TOTAL")["volume_to_the_fill_target_mm3"]
+    add("Clear potting to the fill target: model volume against YAML fill_volume_nominal_mm3 (within 0.1 mm3)", 0.1 - abs(v_tg - P.GRAIN_FILL_VOL_YAML), 0.0,
+        method="potting solid less its free surface x (target - limit)", note=f"model {v_tg} mm3 to z {pw_tg:.2f}; YAML {P.GRAIN_FILL_VOL_YAML} mm3 (fill_surface_z.target {P.GRAIN_FILL_TARGET_Z})")
+    # E16: baffle-ring height by tape thickness (the tape is 0.10 to 0.145 mm as available; the ring is lapped to plate lot and tape)
+    v0 = P.BASE_VARIANTS[P.BASE_PRIMARY]
+    crr = P.baffle_crest_range()
+    erow = []
+    for tape in sorted({min(P.BAFFLE_TAPE_RANGE), P.BAFFLE_PSA_T, max(P.BAFFLE_TAPE_RANGE)}):
+        h_nom, h_lo, h_hi = (P.baffle_ring_height(t_, tape) for t_ in (v0["thickness"], v0["accept"][0], v0["accept"][1]))
+        ok_e = crr["matched"][0] >= -1e-9 and crr["matched"][1] <= P.BAFFLE_CREST_MAX_Z + 1e-9 and P.BAFFLE_RING_PRINT_H - h_hi >= M["baffle_ring_lap_allowance"] - 1e-9
+        if not ok_e:
+            fails.append(f"baffle ring for a {tape} mm tape")
+        erow.append(dict(tape_mm=tape, tape=("modelled (YAML ring height)" if abs(tape - P.BAFFLE_PSA_T) < 1e-9 else "available tape (E16)"),
+                         ring_height_rule=f"plate + {P.BAFFLE_RING_RULE:.2f} - {tape:g} = plate + {P.BAFFLE_RING_RULE - tape:.3f}",
+                         ring_height_for_the_nominal_plate_mm=R3(h_nom), for_the_thinnest_and_thickest_accepted_plate_mm=(R3(h_lo), R3(h_hi)),
+                         height_tolerance_mm=f"+{M['baffle_ring_tol'][0]:.2f} / -{M['baffle_ring_tol'][1]:.2f}", lapped_off_the_printed_ring_mm=(R3(P.BAFFLE_RING_PRINT_H - h_hi), R3(P.BAFFLE_RING_PRINT_H - h_lo)),
+                         crest_z_nominal=P.BAFFLE_RING_Z0, crest_z_range=crr["matched"], crest_window_z=(0.0, P.BAFFLE_CREST_MAX_Z), status="ok" if ok_e else "FAIL"))
     dT = max(abs(t - M["t_assembly"]) for t in M["t_range"])
     th = lambda length, a1, a2: length * abs(a1 - a2) * 1e-6 * dT
     r_cg, r_lcd = P.CG_D / 2, math.hypot(P.LCD["dx"] / 2, P.LCD["dy"] / 2)
@@ -507,7 +568,8 @@ def check_clearances(parts):
         trow.append(dict(pair=label, length_mm=R3(length), cte_ppm_per_K=(a1, a2), temperature_span_K=dT, relative_movement_mm=R3(d),
                          shear_of_the_layer_pct=(round(100 * d / layer) if layer else "-"), layer=(f"{lname} {layer}" if layer else lname)))
     notes = ["required minimum = 0.25 mm drop-in rule unless the row is a specified stack value (adhesive lines, prism-to-roof 0.19, sub-flush values)",
-             "passives are not in master_params.yaml, so only the 13 listed top-side parts are checked here; the real board is checked by check 17",
+             f"passives are not in master_params.yaml, so only the {len(P.TOP_PARTS)} listed top-side parts are checked here; the real board is checked by check 17",
+             "the optional retarder film (E9) is checked by its own rows; it is not part of the assembly of checks 1, 8, 13 and 14",
              "sections are true boolean sections of the solids; curved edges are sampled to 0.0002 mm",
              f"comparisons carry a numerical tolerance of {NUM_TOL} mm",
              f"tolerance chains are arithmetic on ASSUMED part tolerances (critical printed tub dimensions +-{M['tol_printed']} as drawing GL1-010 requires, or +-{M['print_tol']} as the "
@@ -519,11 +581,13 @@ def check_clearances(parts):
              f"mixed viscosity {M['potting_viscosity_Pa_s'][0]} to {M['potting_viscosity_Pa_s'][1]} Pa.s (estimate), vacuum degassing"]
     worst = min((r for r in rows if r["margin_mm"] is not None), key=lambda r: r["margin_mm"])
     return res(2, "clearances", not fails,
-               (f"{len(rows)} key gaps and {len(prow)} PCB parts evaluated; {len(warns)} below the 0.25 mm rule are recorded deviations; "
+               (f"{len(rows)} key gaps and {len(prow)} PCB parts evaluated; {len(warns)} rows below their minimum are recorded deviations (the two spigot fits, D19; the epoxy under an oversize "
+                f"grade 100 ball, D33); retarder film after its centring chain: {P.retarder_chain()['bore'][1]:.2f} to the tape bore, {P.retarder_chain()['aperture'][1]:.2f} beyond the aperture (worst case); "
                 f"smallest margin {worst['margin_mm']} mm ({worst['item']})" if not fails else f"FAILED: {fails}"),
                [dict(title="Key clearances", rows=rows), dict(title="PCB top-side parts (envelope boxes from the YAML)", rows=prow),
                 dict(title="Tolerance chains: seal joint, rim relief, ball to land (both base-plate variants)", rows=srow),
                 dict(title=f"Clear potting: volumes and levels (FR-4 build; accepted z {pw_lo:.2f} to {pw_hi:.2f}, fill target z {pw_tg:.3f} for the nominal ring crest)", rows=potrow),
+                dict(title="Baffle ring height by tape thickness (E16: ring height = plate thickness + %.2f - tape thickness)" % P.BAFFLE_RING_RULE, rows=erow),
                 dict(title="Thermal estimates (handbook coefficients, not measured)", rows=trow)],
                notes, warns)
 
@@ -644,30 +708,94 @@ def check_fold(parts):
              (f"spigot fore-aft play: optics {dy:.3f} away from the visor (yaw {yaw_deg:.2f} deg when the two spigots oppose)", (0, -dy, 0)),
              (f"fore-aft play plus {tp} print tolerance: optics {dy + tp:.3f} away from the visor", (0, -dy - tp, 0)),
              (f"optics {tp} low (print tolerance on the sill)", (0, 0, -tp)),
-             (f"TOLERANCE LIMIT of the upper field: optics {tp} high (print tolerance on the roof)", (0, 0, tp)),
-             (f"optics {tp} high and {dy:.3f} away from the visor", (0, -dy, tp))]
+             (f"optics {tp} high (print tolerance on the roof), no play", (0, 0, tp)),
+             (f"GUARANTEED CASE (YAML up_guaranteed, N3): optics {tp} high AND the spigot play {dy:.3f} away from the visor", (0, -dy, tp))]
     srows = []
-    up_limit = None
+    up_limit = up_play = None
+    up_side = {}                                             # upper field of the full pupil in the guaranteed case, per camera
     for label, sh in cases:
+        # the full table is traced on camera R; the upper field, the quantity with no margin, is traced on BOTH cameras in every case
+        # (camera L with the mirrored sideways shift) and the SMALLER value is the one that is compared
         lim = {d: O.limit_angle("R", d, rc, True, shift=sh)[0] for d in ("left", "right", "up", "down")}
         limc = {d: O.limit_angle("R", d, rc, False, shift=sh)[0] for d in ("left", "right", "up", "down")}
+        up_l = O.limit_angle("L", "up", rc, True, shift=(-sh[0], sh[1], sh[2]))[0]
+        up_both = min(lim["up"], up_l)
         worst = min(O.bundle("R", th, tv, rc, shift=sh, n_rim=48, n_rings=8)["total_fraction"] for _, th, tv in O.field_points())
-        if label.startswith("TOLERANCE LIMIT"):
-            up_limit = lim["up"]
+        if label.startswith("optics") and sh == (0, 0, tp):
+            up_limit = up_both
+        if label.startswith("GUARANTEED CASE"):
+            up_play = up_both
+            up_side = dict(L=up_l, R=lim["up"])
+            worst = min(worst, min(O.bundle("L", th, tv, rc, shift=sh, n_rim=48, n_rings=8)["total_fraction"] for _, th, tv in O.field_points()))
         srows.append(dict(case=label, shift_xyz=tuple(round(v, 3) for v in sh),
                           full_pupil_clear_deg_left_right_up_down=tuple(round(lim[d], 2) for d in ("left", "right", "up", "down")),
                           chief_clear_deg_left_right_up_down=tuple(round(limc[d], 2) for d in ("left", "right", "up", "down")),
-                          upper_field_full_pupil_deg=round(lim["up"], 2), upper_field_margin_to_required_deg=round(lim["up"] - P.FOV_UP, 2),
+                          upper_field_full_pupil_deg_camera_R=round(lim["up"], 2), upper_field_full_pupil_deg_camera_L=round(up_l, 2),
+                          upper_field_full_pupil_deg=round(up_both, 2), upper_field_margin_to_required_deg=round(up_both - P.FOV_UP, 2),
                           worst_field_point_transmission_pct=round(100 * worst, 1)))
-    # the rev D decision: the upper edge is accepted with FOV_UP_GUAR at the tolerance limit.  The comparison is strict; the model
-    # falls short of the (rounded) YAML figure by a few hundredths of a degree, which is the recorded deviation D31: a shortfall
-    # up to MECH['fov_up_guar_shortfall_recorded'] is reported as a warning, a larger one fails the check
-    short = float("inf") if up_limit is None else P.FOV_UP_GUAR - up_limit
-    if short > M["fov_up_guar_shortfall_recorded"]:
-        fails.append(f"upper field at the tolerance limit is {up_limit:.2f} deg, more than {M['fov_up_guar_shortfall_recorded']} deg below the {P.FOV_UP_GUAR} deg the YAML guarantees")
-    elif short > 0:
-        warns.append(f"upper field at the tolerance limit is {up_limit:.2f} deg, {short:.2f} deg BELOW the {P.FOV_UP_GUAR} deg the YAML guarantees (recorded deviation D31; "
-                     f"closed form {O.upper_field_closed_form(tp):.3f} deg; a shortfall above {M['fov_up_guar_shortfall_recorded']} deg fails this check)")
+    # Decision N3 (YAML cameras.field_required_deg.up_guaranteed): the guaranteed upper field is DEFINED as the worst case with the
+    # optics print_tol high AND the fore-aft play of the spigot fit against it.  The comparison is strict (no recorded shortfall)
+    # and is made on the SMALLER of the two cameras
+    cf_play = O.upper_field_closed_form(tp, dy)
+    guar_margin = float("-inf") if up_play is None else up_play - P.FOV_UP_GUAR
+    for side_, v_ in sorted(up_side.items()):
+        if not v_ - P.FOV_UP_GUAR >= 0.0:
+            fails.append(f"upper field of camera {side_} in the guaranteed case (optics {tp} high and {dy:.3f} of spigot play against it) is {v_:.2f} deg, BELOW the {P.FOV_UP_GUAR} deg the YAML guarantees")
+    if not up_side:
+        fails.append("the guaranteed case was not traced")
+    # What uses up the margin of the guaranteed case (closed form; information).  The YAML defines the case with the NOMINAL spigot fit
+    # and the model assumes the lens pupil: each row below changes ONE of these and shows what is left
+    fit_hi = P.SPIGOT_FIT + M["pcb_hole_tol"] / 2
+    dy_hi = P.spigot_play(fit_hi)["fore_aft"]
+    fit_max = P.SPIGOT_FIT + M["pcb_hole_tol"] / 2 + M["spigot_undersize"] / 2      # hole at its upper limit and spigot at the no-go size proposed in N18
+    dy_max = P.spigot_play(fit_max)["fore_aft"]
+    per_mm_z = (O.upper_field_closed_form(tp, dy) - O.upper_field_closed_form(tp + 0.01, dy)) / 0.01
+    per_mm_y = (O.upper_field_closed_form(tp, dy) - O.upper_field_closed_form(tp, dy + 0.01)) / 0.01
+    mrow, m_worst = [], []
+    for what, kw, basis in (
+            (f"the case the YAML defines: fit {P.SPIGOT_FIT:.3f} (hole dia {P.LOC_ROUND[2]}, spigot dia {P.SPIGOT_D}), pupil dia {M['pupil_dia']}, {M['pupil_below_cube_top']} below the cube top", dict(dy_away=dy), "N3"),
+            (f"PCB hole at its upper limit, dia {P.LOC_ROUND[2] + M['pcb_hole_tol']:.2f} (ordinary NPTH tolerance +{M['pcb_hole_tol']}, assumed): fit {fit_hi:.3f}; a spigot {M['pcb_hole_tol']} undersize does the same",
+             dict(dy_away=dy_hi), "the hole tolerance is not in the YAML"),
+            (f"pupil dia {M['pupil_dia_alt']} instead of the assumed {M['pupil_dia']}", dict(dy_away=dy, pupil_dia=M["pupil_dia_alt"]), "lens data not published"),
+            (f"pupil {M['pupil_below_alt']} instead of {M['pupil_below_cube_top']} below the cube top", dict(dy_away=dy, pupil_below=M["pupil_below_alt"]), "lens data not published"),
+            (f"roof {M['roof_cold_drop']} lower over the opening (-10 C; not part of the YAML case)", dict(dy_away=dy, dz_extra=M["roof_cold_drop"]), "thermal estimate of the README"),
+            (f"hole at its upper limit AND the roof {M['roof_cold_drop']} lower", dict(dy_away=dy_hi, dz_extra=M["roof_cold_drop"]), "both mechanical items together"),
+            (f"largest fit {fit_max:.3f}: hole dia {P.LOC_ROUND[2] + M['pcb_hole_tol']:.2f} and a spigot of dia {P.SPIGOT_D - M['spigot_undersize']:.2f} (no spigot gauge for the LOWER size exists yet)",
+             dict(dy_away=dy_max), "proposal N18: a no-go gauge for the spigots"),
+            (f"largest fit {fit_max:.3f} AND the roof {M['roof_cold_drop']} lower (-10 C): the case proposal N18 would define the guarantee on", dict(dy_away=dy_max, dz_extra=M["roof_cold_drop"]),
+             f"proposal N18: up_guaranteed {M['up_guaranteed_proposed']}")):
+        dz_ = tp + kw.pop("dz_extra", 0.0)
+        a_ = O.upper_field_closed_form(dz_, **kw)
+        mrow.append(dict(what=what, upper_field_deg_closed_form=round(a_, 3), margin_to_the_guaranteed_deg=round(a_ - P.FOV_UP_GUAR, 3), basis=basis,
+                         status=("the comparison of this check (ray trace: %.2f / %.2f deg, camera L / R)" % (up_side.get("L", float("nan")), up_side.get("R", float("nan"))) if basis == "N3" else
+                                 (("information: inside" if a_ >= P.FOV_UP_GUAR else "information: BELOW the guaranteed figure") +
+                                  (f"; {a_ - M['up_guaranteed_proposed']:+.3f} against the proposed {M['up_guaranteed_proposed']}" if "N18" in basis else "")))))
+        if basis != "N3":
+            m_worst.append((a_, what))
+    mrow.append(dict(what="what the margin of the defined case is worth", upper_field_deg_closed_form=round(cf_play, 3), margin_to_the_guaranteed_deg=round(cf_play - P.FOV_UP_GUAR, 3),
+                     basis=f"{per_mm_z:.1f} deg per mm of roof or optics height, {per_mm_y:.2f} deg per mm of fore-aft play",
+                     status=f"= {(cf_play - P.FOV_UP_GUAR) / per_mm_z:.4f} mm of height = {(cf_play - P.FOV_UP_GUAR) / per_mm_y:.3f} mm of extra fore-aft play"))
+    below = [w for a_, w in m_worst if a_ < P.FOV_UP_GUAR]
+    if below:
+        warns.append(f"the {guar_margin:+.2f} deg margin of the guaranteed case holds for the NOMINAL spigot fit and the ASSUMED pupil only. Closed form (required {P.FOV_UP_GUAR}): PCB hole dia +{M['pcb_hole_tol']} -> "
+                     f"{mrow[1]['upper_field_deg_closed_form']:.3f} deg; pupil dia {M['pupil_dia_alt']} -> {mrow[2]['upper_field_deg_closed_form']:.3f}; pupil {M['pupil_below_alt']} below the cube top -> "
+                     f"{mrow[3]['upper_field_deg_closed_form']:.3f}; roof {M['roof_cold_drop']} lower (-10 C) -> {mrow[4]['upper_field_deg_closed_form']:.3f}: {len(below)} of {len(m_worst)} rows are below the guaranteed "
+                     "figure. The YAML defines the guarantee on the nominal fit, so this is not a failure of the check: proposal N18 (PROPOSED_PARAM_CHANGES.md part C)")
+    # test gate 2 of the assembly sequence (wet adhesive): a target bar inside the guaranteed field must be fully clear on every
+    # in-tolerance unit; a bar at +17 deg (the former gate) is not
+    g2 = P.FOV_UP_GUAR - M["gate2_margin_deg"]
+    grow = []
+    for ulabel, sh in (("nominal unit", (0, 0, 0)), ("guaranteed case (optics high, play against it)", (0, -dy, tp))):
+        for ang, what in ((g2, f"gate 2 target: guaranteed {P.FOV_UP_GUAR} - {M['gate2_margin_deg']} margin"), (-g2, "gate 2 reference bar (mirrored)"), (P.FOV_UP_GUAR, "guaranteed upper field"),
+                          (17.0, "former gate 2 target (+17 deg)"), (P.FOV_UP, "required nominal field edge")):
+            trs = {sd_: O.bundle(sd_, 0.0, math.tan(math.radians(ang)), rc, shift=sh, n_rim=48, n_rings=8)["total_fraction"] for sd_ in ("L", "R")}
+            tr_ = min(trs.values())
+            grow.append(dict(unit=ulabel, elevation_deg=round(ang, 2), what=what, pupil_transmission_pct_camera_L=round(100 * trs["L"], 1), pupil_transmission_pct_camera_R=round(100 * trs["R"], 1),
+                             pupil_transmission_pct=round(100 * tr_, 1),
+                             height_of_the_bar_above_the_optical_axis_at_the_gate_distance_mm=round(M["gate2_distance"] * math.tan(math.radians(ang)), 1)))
+            for sd_, t_ in trs.items():
+                if ulabel.startswith("guaranteed") and abs(abs(ang) - g2) < 1e-9 and t_ < 1.0 - 1e-9:
+                    fails.append(f"test gate 2: a bar at {ang:+.1f} deg is only {100 * t_:.1f} % clear in camera {sd_} on a unit at the tolerance limit")
     prow_ = [dict(quantity="radial fit of each spigot (dia %.2f in dia %.2f / in the %.2f x %.2f slot)" % (P.SPIGOT_D, P.LOC_ROUND[2], P.LOC_SLOT[2], P.LOC_SLOT[3]),
                   value=round(pl["fit"], 3), unit="mm", basis="YAML pcb.locating_holes"),
              dict(quantity="spigot spacing", value=P.SPIGOT_SPAN, unit="mm", basis=f"posts B at x = +-{abs(P.LOC_ROUND[0])}, y = {P.LOC_ROUND[1]}; cameras at x = +-{P.CAM_X}, y = {P.CAM_XY['R'][1]}"),
@@ -676,17 +804,20 @@ def check_fold(parts):
              dict(quantity="sideways play at a camera", value=round(dx, 3), unit="mm", basis=f"fit of the round hole plus yaw x {abs(P.CAM_XY['R'][1] - P.LOC_ROUND[1]):.1f} mm (camera y - spigot y)"),
              dict(quantity="for comparison, rev C (spigots under posts E, 8.4 mm apart)", value=(0.094, 0.179, 1.02), unit="mm sideways / mm fore-aft / deg yaw", basis="rev C check report"),
              dict(quantity="upper field, full pupil: nominal / with the fore-aft play / at the tolerance limit", value=tuple(r["upper_field_full_pupil_deg"] for r in (srows[0], srows[4], srows[7])),
-                  unit="deg", basis=f"required {P.FOV_UP}, guaranteed {P.FOV_UP_GUAR} (YAML)"),
+                  unit="deg", basis=f"required {P.FOV_UP} nominal (YAML)"),
              dict(quantity="upper field at the tolerance limit, closed form (rim ray of the pupil through the top edge of the opening)", value=round(O.upper_field_closed_form(tp), 3),
                   unit="deg", basis="a tan(t) + (prism leg) tan(t') = margin, sin(t) = n sin(t'); cross-check of the ray trace"),
-             dict(quantity="upper field with the optics high AND the fore-aft play (spigot fit) against it", value=srows[8]["upper_field_full_pupil_deg"], unit="deg",
-                  basis="not covered by the YAML's guaranteed figure (proposal N3)")]
+             dict(quantity="GUARANTEED CASE: upper field with the optics high AND the fore-aft play (spigot fit) against it, the smaller of the two cameras", value=srows[8]["upper_field_full_pupil_deg"], unit="deg",
+                  basis=f"YAML up_guaranteed = {P.FOV_UP_GUAR} is defined on this case (N3): camera L {up_side.get('L', float('nan')):.2f}, camera R {up_side.get('R', float('nan')):.2f}; margin {guar_margin:+.2f} deg; "
+                        f"closed form {cf_play:.3f} deg"),
+             dict(quantity="roof lower by 0.01 mm over the opening: loss of upper field (sensitivity)", value=round((srows[0]["upper_field_full_pupil_deg"] - srows[7]["upper_field_full_pupil_deg"]) / (tp / 0.01), 3),
+                  unit="deg per 0.01 mm", basis=f"the margin of {guar_margin:.2f} deg is {guar_margin / max(1e-9, (srows[0]['upper_field_full_pupil_deg'] - srows[7]['upper_field_full_pupil_deg']) / tp):.3f} mm of roof or optics height")]
     nom = [r for r in rows if r["camera"] == "R"]
     worst_nom = min(r["pupil_through_visor_pct"] for r in nom)
     m_open_min = min(r["margin_visor_opening_mm"] for r in rows)
     if m_edge[2] < 0.2:
         warns.append(f"the upper field edge (+{M['fov_up_deg']} deg) clears the top of the opening (the roof underside, z {P.OPEN_Z1}) by only {m_edge[2]:.3f} mm: "
-                     f"optics {tp} mm high clip the upper field to {up_limit:.2f} deg (accepted in rev D with {P.FOV_UP_GUAR} deg guaranteed at the tolerance limit)")
+                     f"optics {tp} mm high clip the upper field to {up_limit:.2f} deg, {up_play:.2f} deg with the spigot play against it (accepted: {P.FOV_UP_GUAR} deg guaranteed, YAML N3)")
     if m_edge[0] < 0.2 or m_edge[1] < 0.2:
         warns.append(f"bundle margin to the opening sides {m_edge[0]:.3f} mm / sill {m_edge[1]:.3f} mm is below the 0.2 mm print tolerance")
     notes = [f"entrance pupil ASSUMED: dia {M['pupil_dia']} mm, {M['pupil_below_cube_top']} mm below the cube top (z = {P.PUPIL_Z:.2f}); prism n = {O.N_GLASS}, "
@@ -695,23 +826,34 @@ def check_fold(parts):
              "the visor margin is taken on the aperture plane (window-recess floor)",
              "field points are rectilinear: direction (tan h, 1, tan v)",
              f"paraxial check: virtual pupil {P.VIRTUAL_PUPIL_BEHIND_EXIT:.3f} mm behind the exit face (y = {P.VIRTUAL_PUPIL_Y:.3f}), z = {P.AXIS_Z:.2f}",
-             "sensitivity cases move the camera and prism together relative to the printed tub (camera R; L is the mirror image)",
+             "sensitivity cases move the camera and prism together relative to the printed tub. The four-direction columns are those of camera R; the UPPER FIELD is traced on both cameras in "
+             "every case (camera L with the mirrored sideways shift) and the smaller value is compared, so a one-sided change of the tub over either opening is caught",
              f"PCB location (rev D): spigots dia {P.SPIGOT_D} under posts B in a dia {P.LOC_ROUND[2]} hole and a {P.LOC_SLOT[2]} x {P.LOC_SLOT[3]} slot, {P.SPIGOT_SPAN} mm apart: "
              f"+-{pl['fit']:.3f} mm at each spigot gives +-{dx:.3f} mm sideways and +-{dy:.3f} mm fore-aft at a camera and +-{yaw_deg:.2f} deg of yaw (a stereo-calibration "
              "item, not a vignetting item)",
              f"smallest margin of the full pupil bundle to the opening over the required field: sides {m_edge[0]:.3f}, sill {m_edge[1]:.3f}, top {m_edge[2]:.3f} mm",
              f"required field (YAML): +-{P.FOV_H} deg horizontal, +{P.FOV_UP} / -{P.FOV_DOWN} deg vertical; upper field guaranteed at the tolerance limit: {P.FOV_UP_GUAR} deg",
              f"limit angles: bisection to {M['fov_angle_tol']} deg; the pupil samples include the four extreme rim points, so the full-pupil limits are those of the whole "
-             f"{M['pupil_dia']} mm disc. The comparison with the guaranteed {P.FOV_UP_GUAR} deg is strict; the shortfall of the model is deviation D31"]
+             f"{M['pupil_dia']} mm disc. The comparison with the guaranteed {P.FOV_UP_GUAR} deg is strict and is made on the case the YAML defines (optics {tp} high and the spigot play "
+             f"against it), for each camera: L {up_side.get('L', float('nan')):.2f}, R {up_side.get('R', float('nan')):.2f} deg, closed form {cf_play:.3f} deg",
+             f"the margin of {guar_margin:+.2f} deg belongs to the case as the YAML defines it (nominal fit {P.SPIGOT_FIT:.3f}) and to the assumed pupil; the table 'What uses up the margin' shows the "
+             f"figure with the hole at its upper limit, with other pupil numbers and with the roof {M['roof_cold_drop']} mm lower at -10 C",
+             f"test gate 2 (assembly step 16): target bar at +{g2:.1f} deg = guaranteed {P.FOV_UP_GUAR} - {M['gate2_margin_deg']} deg (placement of target and unit in the join fixture), reference bar at "
+             f"-{g2:.1f} deg; both are fully clear on every in-tolerance unit, so the upper bar may not be darker than the lower one (threshold to be set on first units). A bar at +17 deg is "
+             "vignetted on in-tolerance units and cannot be a pass / fail limit"]
     return res(4, "fold geometry", not fails,
                (f"chief rays of all nine field points pass the prism and the visor opening on both cameras; pupil transmission at the worst "
                 f"nominal field point {worst_nom:.1f} % (prism exit face); bundle margin to the opening: sides {m_edge[0]:.3f}, sill {m_edge[1]:.3f}, "
-                f"top {m_edge[2]:.3f} mm; upper field {srows[0]['upper_field_full_pupil_deg']:.2f} deg nominal, {up_limit:.2f} deg at the tolerance limit "
-                f"(YAML guarantees {P.FOV_UP_GUAR}: {max(short, 0.0):.2f} deg short, deviation D31), {srows[8]['upper_field_full_pupil_deg']:.2f} deg with the spigot play added"
+                f"top {m_edge[2]:.3f} mm; upper field {srows[0]['upper_field_full_pupil_deg']:.2f} deg nominal, {up_limit:.2f} deg with the optics {tp} high, "
+                f"{up_play:.2f} deg in the guaranteed case (optics high and spigot play against it; camera L {up_side.get('L', float('nan')):.2f}, camera R {up_side.get('R', float('nan')):.2f}): "
+                f"YAML guarantees {P.FOV_UP_GUAR}, margin {guar_margin:+.2f} deg at the nominal fit ({mrow[1]['margin_to_the_guaranteed_deg']:+.3f} with the PCB hole {M['pcb_hole_tol']} oversize); "
+                f"gate 2 target +{g2:.1f} deg fully clear on a unit at the limit"
                 if not fails else "FAILED: " + "; ".join(fails)),
                [dict(title="Chief rays and pupil-bundle margins (nominal geometry)", rows=rows),
                 dict(title="Camera position from the spigot fit (rev D: spigots under posts B)", rows=prow_),
-                dict(title="Sensitivity to misplacement of the optics relative to the tub (camera R)", rows=srows)], notes, warns)
+                dict(title="Sensitivity to misplacement of the optics relative to the tub (four directions: camera R; upper field: both cameras)", rows=srows),
+                dict(title="What uses up the margin of the guaranteed upper field (closed form; one change per row)", rows=mrow),
+                dict(title="Test gate 2 target and the former +17 deg target: pupil transmission on the axis of each camera", rows=grow)], notes, warns)
 
 
 # ==============================================================================================
@@ -1508,7 +1650,7 @@ PCB_BOARD_DENSITY, PCB_PART_DENSITY = 1.85, 1.5
 def _mass_table(parts):
     rows = []
     for n, info in parts.items():
-        if info.group == "alt":                               # parts of the alternative base-plate build: check 16
+        if info.group in A.EXTRA_GROUPS:                      # alternative base-plate parts (check 16), the optional film, the fixtures
             continue
         s = A.solid_of(info)
         v = s.Volume()
@@ -1640,9 +1782,9 @@ def check_quoting(parts):
             ok = abs(rv - s.Volume()) < 1e-3 * max(1.0, s.Volume()) and abs(tv - s.Volume()) < 0.02 * s.Volume() + 0.01 and closed
             if not ok:
                 fails.append(f"{name}: STEP {rv:.3f} / STL {tv:.3f} vs solid {s.Volume():.3f} mm3, closed={closed}")
-            irows.append(dict(part=name, build=("alternative" if info.group == "alt" else "primary"), solid_volume_mm3=round(s.Volume(), 3),
+            irows.append(dict(part=name, build=A.GROUP_LABEL.get(info.group, info.group), solid_volume_mm3=round(s.Volume(), 3),
                               step_reimport_volume_mm3=round(rv, 3), stl_volume_mm3=round(tv, 3), stl_watertight=closed, status="ok" if ok else "FAIL"))
-        n_main = sum(1 for i in parts.values() if i.group != "alt")
+        n_main = sum(1 for i in parts.values() if i.group not in A.EXTRA_GROUPS)
         for fname, n_exp in (("GL1_assembly.step", n_main), ("GL1_marker_only.step", None), (f"GL1_marker_only{A.ALT_SUFFIX}_base.step", None)):
             asm = A.STEP_DIR / fname
             notes.append(f"{fname}: {asm.stat().st_size / 1e6:.2f} MB" + (f", {n_exp} named parts" if n_exp else "") if asm.exists() else f"{fname} MISSING")
@@ -1654,7 +1796,8 @@ def check_quoting(parts):
               "STEP in print orientation (export/step/*_print.step) - send the STEP when the bureau accepts it",
               f"part meshes for renders and mesh checks: {A.STL_TOL} mm linear, {A.STL_ANG} rad angular",
               f"the baffle ring is printed as a sprued set of {M['ring_sprue']['n']} rings on a {M['ring_sprue']['runner']} mm runner (gates {M['ring_sprue']['gate_w']} wide on the outside of each ring), "
-              f"each ring {P.BAFFLE_RING_PRINT_H:.2f} high: {M['baffle_ring_lap_allowance']} mm is lapped off by us to the height that suits the plate lot ({P.BAFFLE_RING_H:.2f} for the nominal plate)",
+              f"each ring {P.BAFFLE_RING_PRINT_H:.2f} high: {M['baffle_ring_lap_allowance']} mm or more is lapped off by us to the height that suits the plate lot and the tape used "
+              f"({P.BAFFLE_RING_H_RANGE[0]:.3f} to {P.BAFFLE_RING_H_RANGE[1]:.2f}; {P.BAFFLE_RING_H:.2f} for the nominal plate and a {P.BAFFLE_PSA_T} tape)",
               "print orientation (z = build direction): tub roof-down; baffle-ring set and PA12 base plate flat; cradle with its x axis as the build direction, so that "
               "the side profile of the latch beam and of the lip lies in the build plane (orientation of the cradle is to be LOCKED with the bureau)",
               f"facet sag = main radius minus the smallest mid-edge radius of the facets on the cylindrical wall (tub R {P.R_OUT}, cradle nest R {P.NEST_R}, "
@@ -1740,20 +1883,23 @@ def check_posts(parts):
             if d < d_part:
                 d_part, n_part = d, n
         land_on = board_top.contains(Point(fx, fy).buffer(P.FOOT_ZONE_LAND_D / 2, 64))
-        good = tub_in < 1e-6 and d_post >= -1e-9 and not over and land_on
+        near_ok = d_part >= P.FOOT_PART_MARGIN - 1e-9                              # N7: free parts keep part_margin from a zone
+        good = tub_in < 1e-6 and d_post >= -1e-9 and not over and land_on and near_ok
         ok &= good
         zrows.append(dict(foot=i + 1, xy=(fx, fy), zone_dia_mm=P.FOOT_ZONE_D, land_dia_mm=P.FOOT_ZONE_LAND_D, tub_area_inside_the_zone_mm2=round(tub_in, 4),
                           nearest_post_foot_to_the_zone_mm=R3(d_post), soldered_parts_over_the_zone=", ".join(over) or "none",
-                          nearest_soldered_part=n_part, its_gap_to_the_zone_mm=R3(d_part), battery_over_the_zone=("yes (allowed)" if bat_over else "no"),
+                          nearest_soldered_part=n_part, its_gap_to_the_zone_mm=R3(d_part), required_gap_mm=P.FOOT_PART_MARGIN, battery_over_the_zone=("yes (allowed)" if bat_over else "no"),
                           land_on_the_board=land_on, status="ok" if good else "FAIL"))
     area = sum(r["seat_area_on_pcb_mm2"] for r in rows)
     loc = [r for r in rows if r["locating_spigot"] != "-"]
     notes = ["post feet are the YAML tub_keepouts.post_feet (the contract with the PCB layout, proven in check 12); passives are not in the YAML",
              f"rev D: the spigots are under posts B at ({P.LOC_SLOT[0]}, {P.LOC_SLOT[1]}) (slot {P.LOC_SLOT[2]} x {P.LOC_SLOT[3]} along x, on the IMU side) and "
              f"({P.LOC_ROUND[0]}, {P.LOC_ROUND[1]}) (round dia {P.LOC_ROUND[2]}, on the flash side), {P.SPIGOT_SPAN} mm apart; posts E are plain {P.KO_POST_SIZE} mm posts",
-             f"posts B: the YAML keep-out square is {P.KO_LOC_SIZE} x {P.KO_LOC_SIZE}; the foot as built is {P.LOC_FOOT[0]:.1f} x {P.LOC_FOOT[1]:.1f} because the LCD glass "
-             f"(/x/ <= {P.LCD_X1}) passes between the two posts and needs the {P.CLR} mm fit clearance (/x/ >= {P.LCD_POCKET_X}); the foot stays inside its square (D29). "
-             f"Seat round the round hole {loc[-1]['seat_area_on_pcb_mm2']} mm2, beside the slot {loc[0]['seat_area_on_pcb_mm2']} mm2",
+             f"posts B: the YAML keep-out square is {P.KO_LOC_SIZE} x {P.KO_LOC_SIZE}; the foot as built is {P.LOC_FOOT[0]:.1f} x {P.LOC_FOOT[1]:.1f} with its inner face at /x/ = {P.LCD_POCKET_X} "
+             f"(YAML post_feet.locating.foot, N1) because the LCD glass (/x/ <= {P.LCD_X1}) passes between the two posts with the {P.CLR} mm fit clearance; the foot stays inside its square. "
+             f"Seat round the round hole {loc[-1]['seat_area_on_pcb_mm2']} mm2; over the slot {loc[0]['seat_area_on_pcb_mm2']} mm2: the {P.LOC_SLOT[3]} mm slot (N9) runs from x = "
+             f"{P.LOC_SLOT[0] - P.LOC_SLOT[3] / 2:.2f} to {P.LOC_SLOT[0] + P.LOC_SLOT[3] / 2:.2f} and so crosses the whole foot (x {-P.LCD_POCKET_X - P.LOC_FOOT[0]:.2f} to {-P.LCD_POCKET_X:.2f}): post B- seats on two strips "
+             f"{(P.LOC_FOOT[1] - P.LOC_SLOT[2]) / 2:.3f} mm wide, one in front of the slot and one behind it",
              f"intended load path roof -> posts -> PCB -> adhesive sheet -> base plate. Total seat area {area:.1f} mm2: an 800 N "
              f"footstep carried by the posts alone would be {800 / area:.0f} MPa (PA12 yields near 48 MPa). The side wall shares the load only "
              f"through the ledge and the perimeter joint into the edge of the base plate: its rim ends {P.RIM_Z} mm above the base plane. "
@@ -1761,12 +1907,14 @@ def check_posts(parts):
              "case is NOT analysed or tested (README open issues)",
              f"foot zones: dia {P.FOOT_ZONE_D} on the PCB at each ball foot; on the bottom side no via and no track and an unmasked dia {P.FOOT_ZONE_LAND_D} copper land "
              "(a layout rule: check 17 looks for the keep-out in the board file). The battery lies over the two rear feet by decision; the two battery-lead "
-             "pads (nominal positions) are soldered and are tested like parts"]
+             f"pads (nominal positions) are soldered and are tested like parts. N7: every other soldered part keeps {P.FOOT_PART_MARGIN} mm from a zone (YAML foot_zones.part_margin)"]
     return res(10, "support posts and ball-foot zones", ok,
                (f"{len(rows)} posts on their keep-out squares, solid from PCB to roof, clear of listed parts and of the LCD glass; two spigots under posts B "
-                f"({P.SPIGOT_SPAN} mm apart); seat area {area:.1f} mm2; no post foot and no soldered part other than the battery over the {len(zrows)} ball-foot zones "
-                f"(nearest part {min(r['its_gap_to_the_zone_mm'] for r in zrows)} mm, nearest post {min(r['nearest_post_foot_to_the_zone_mm'] for r in zrows)} mm from a zone)")
-               if ok else "FAILED: " + "; ".join([f"post {r['post']}" for r in rows if not r["ok"]] + [f"foot zone {r['foot']}: {r['soldered_parts_over_the_zone']}, tub {r['tub_area_inside_the_zone_mm2']} mm2"
+                f"({P.SPIGOT_SPAN} mm apart); seat area {area:.1f} mm2 (post B+ {loc[-1]['seat_area_on_pcb_mm2']}, post B- over its {P.LOC_SLOT[3]} mm slot {loc[0]['seat_area_on_pcb_mm2']}); "
+                f"no post foot and no soldered part other than the battery over the {len(zrows)} ball-foot zones "
+                f"(nearest part {min(r['its_gap_to_the_zone_mm'] for r in zrows)} mm, required {P.FOOT_PART_MARGIN}; nearest post {min(r['nearest_post_foot_to_the_zone_mm'] for r in zrows)} mm from a zone)")
+               if ok else "FAILED: " + "; ".join([f"post {r['post']}" for r in rows if not r["ok"]] + [f"foot zone {r['foot']}: over it {r['soldered_parts_over_the_zone']}, nearest part "
+                                                                                                    f"{r['nearest_soldered_part']} at {r['its_gap_to_the_zone_mm']} mm (required {P.FOOT_PART_MARGIN}), tub {r['tub_area_inside_the_zone_mm2']} mm2"
                                                                                                     for r in zrows if r["status"] != "ok"]),
                [dict(title="Support posts", rows=rows), dict(title="Ball-foot zones on the PCB (YAML tub_keepouts.foot_zones)", rows=zrows)], notes)
 
@@ -1822,7 +1970,7 @@ def check_keepouts(parts):
     for (name, x0, x1, y0, y1), sq in zip(ko, squares):
         near = feet.intersection(sq.buffer(1.0)).intersection(pcb)
         inside, outside = near.intersection(sq).area, near.difference(sq.buffer(tol)).area
-        expect = built[name].intersection(sq).area              # posts B are built smaller than their square (D29)
+        expect = built[name].intersection(sq).area              # posts B are built smaller than their square (YAML post_feet.locating.foot, N1)
         okk = abs(inside - expect) < 0.02 and inside > 0.8 * sq.area and outside < 1e-6
         if not okk:
             fails.append(f"post foot {name}: {inside:.2f} mm2 inside its square (expected {expect:.2f}), {outside:.4f} mm2 outside")
@@ -1871,6 +2019,24 @@ def check_keepouts(parts):
                          yaml_size_mm=f"{2 * P.KO_HOOD_HW} x {P.KO_HOOD_Y1 - P.KO_HOOD_Y0:.1f}", tub_area_inside_mm2=round(max(g.area for g in low), 2),
                          tub_area_outside_mm2=f"hood spans x {bx[0] - cx:+.3f}..{bx[2] - cx:+.3f} of +-{P.KO_HOOD_HW}, from y {bx[1]:.3f} (zone from {P.KO_HOOD_Y0})",
                          lowest_tub_above_pcb_mm=round(hmin, 3), allowed=f">= {P.KO_HOOD_MAX_H} (part height)", status="ok" if okk else "FAIL"))
+    # (b2) N10: the keep-out under the folded LCD flex tail.  The contract is with the layout (parts up to max_part_height inside
+    #      the zone); here the modelled tail is proven to lie inside the zone and to clear the tallest part the zone allows
+    kt = P.KO_TAIL
+    fb = A.bbox_of(parts["lcd_flex"])
+    j1 = next(q for q in P.TOP_PARTS if q["ref"] == "J1")
+    mouth = j1["y"] - j1["dy"] / 2
+    m_x = kt["half_w"] - max(abs(fb[0]), abs(fb[3]))
+    m_y0, m_y1 = fb[1] - kt["y"][0], kt["y"][1] - fb[4]
+    low = G.section_polys(S["lcd_flex"], "x", 0.0).intersection(sbox(kt["y"][0] - 1, 0.0, mouth + 1e-6, 0.5 * (P.FLEX_ZB + P.FLEX_ZT)))   # lower run of the fold
+    z_under = low.bounds[1] - zt if not low.is_empty else float("nan")
+    need = 0.2                                                # the clearance check 17 keeps between a part and the tail
+    okk = m_x >= -1e-9 and m_y0 >= -1e-9 and m_y1 >= -1e-9 and z_under - kt["max_part_height"] >= need - NUM_TOL and abs(kt["y"][1] - mouth) < 1e-6
+    if not okk:
+        fails.append(f"LCD tail keep-out: tail outside the zone (x margin {m_x:.3f}, y margins {m_y0:.3f} / {m_y1:.3f}) or only {z_under - kt['max_part_height']:.3f} mm above a part of the allowed height")
+    krow.append(dict(keep_out="LCD flex tail (N10, PROVISIONAL)", yaml_centre=(0.0, round(0.5 * (kt["y"][0] + kt["y"][1]), 3)), yaml_size_mm=f"{2 * kt['half_w']} x {kt['y'][1] - kt['y'][0]:.1f}",
+                     tub_area_inside_mm2="-", tub_area_outside_mm2=f"modelled tail inside the zone by {m_x:.3f} in x, {m_y0:.3f} at the rear; the zone ends at the mouth of J1 (y {mouth})",
+                     lowest_tub_above_pcb_mm=round(z_under, 3), allowed=f"parts to {kt['max_part_height']} (tail underside {z_under:.3f} above the PCB: {z_under - kt['max_part_height']:.3f} over such a part, {need} needed)",
+                     status="ok" if okk else "FAIL"))
     # (c) height map of the tub above the PCB top (rays +z from the board top on a grid), by region
     hrow = []
     limits = {"post feet": 0.0, "camera-hood zones": P.KO_HOOD_MAX_H, "under the LCD glass": P.PCB_FREE_H, "elsewhere on the PCB": P.PCB_FREE_H}
@@ -1896,10 +2062,13 @@ def check_keepouts(parts):
              f"hood zones: tub material is allowed from {P.KO_HOOD_MAX_H} mm above the PCB top upward; the camera cube is exempt (it is a part, not tub)",
              f"height map: {len(hts)} rays on a {KO_GRID} mm grid over the board top (locating holes excluded); the corner fill between hood and side wall starts "
              f"at y = {P.HOOD_FILL_Y0:.2f}, where the PCB outline has left the hood zone",
-             "the seating ledge (r >= 21.35) lies outside the PCB (r 21.1) and is checked as a clearance in check 2"]
+             "the seating ledge (r >= 21.35) lies outside the PCB (r 21.1) and is checked as a clearance in check 2",
+             f"LCD tail zone (YAML tub_keepouts.lcd_tail, N10): x +-{kt['half_w']}, y {kt['y'][0]} to {kt['y'][1]}, parts to {kt['max_part_height']} mm; it is a contract for the layout, not a tub "
+             "feature: the row shows that the representative tail of the model (one U-fold behind the mouth of J1) lies inside it. PROVISIONAL until the Sharp tail drawing is in hand (gate B16)"]
     okall = not fails
     return res(12, "tub keep-out contract (YAML tub_keepouts)", okall,
-               (f"no tub material in the layout space below z {zf:.2f} ({v:.6f} mm3 common); eight post feet inside their squares ({P.KO_POST_SIZE} mm, posts B {P.KO_LOC_SIZE} mm); hood skirts "
+               (f"no tub material in the layout space below z {zf:.2f} ({v:.6f} mm3 common); eight post feet inside their squares ({P.KO_POST_SIZE} mm, posts B {P.KO_LOC_SIZE} mm, built "
+                f"{P.LOC_FOOT[0]:.1f} x {P.LOC_FOOT[1]:.1f}); LCD tail inside its zone, {z_under - kt['max_part_height']:.3f} mm over a {kt['max_part_height']} mm part; hood skirts "
                 f"{min(r['lowest_tub_above_pcb_mm'] for r in krow if r['keep_out'].startswith('camera')):.2f} mm above the PCB inside the +-{P.KO_HOOD_HW} zones "
                 f"(parts to {P.KO_HOOD_MAX_H}); lowest tub feature elsewhere {low_out:.2f} mm above the PCB" if okall else "FAILED: " + "; ".join(fails)),
                [dict(title="Boolean proof", rows=brow), dict(title="Keep-outs of the YAML against the tub solid", rows=krow),
@@ -2141,10 +2310,143 @@ def _turn_x(shape, y0, z0, deg):
     return shape.rotate(cq.Vector(0, y0, z0), cq.Vector(1, y0, z0), deg) if abs(deg) > 1e-12 else shape
 
 
+def _pcb_slot_from_solid(S):
+    """The locating slot of the PCB as BUILT: (length along x, width, centre x, centre y) of the cut-out nearest to the YAML slot
+    position in the section of the main PCB solid at mid thickness (None when there is no such cut-out)."""
+    from shapely.geometry import Polygon as SPoly
+    sec = G.section_polys(S["main_pcb"], "z", 0.5 * (P.PCB_Z0 + P.PCB_Z1), 2e-4)
+    pg = max(getattr(sec, "geoms", [sec]), key=lambda g_: g_.area)
+    best = None
+    for ring in pg.interiors:
+        hp = SPoly(ring)
+        d = math.hypot(hp.centroid.x - P.LOC_SLOT[0], hp.centroid.y - P.LOC_SLOT[1])
+        if d < 1.0 and (best is None or d < best[0]):
+            x0, y0, x1, y1 = hp.bounds
+            best = (d, x1 - x0, y1 - y0, 0.5 * (x0 + x1), 0.5 * (y0 + y1))
+    return best[1:] if best else None
+
+
+def _pcb_round_from_solid(S):
+    """The round locating hole of the PCB as BUILT: (diameter, centre x, centre y) of the circular cut-out nearest to the YAML
+    position in the section of the main PCB solid at mid thickness (None when there is none)."""
+    from shapely.geometry import Polygon as SPoly
+    sec = G.section_polys(S["main_pcb"], "z", 0.5 * (P.PCB_Z0 + P.PCB_Z1), 2e-4)
+    pg = max(getattr(sec, "geoms", [sec]), key=lambda g_: g_.area)
+    best = None
+    for ring in pg.interiors:
+        hp = SPoly(ring)
+        d = math.hypot(hp.centroid.x - P.LOC_ROUND[0], hp.centroid.y - P.LOC_ROUND[1])
+        if d < 1.0 and (best is None or d < best[0]):
+            x0, y0, x1, y1 = hp.bounds
+            best = (d, 0.5 * ((x1 - x0) + (y1 - y0)), 0.5 * (x0 + x1), 0.5 * (y0 + y1), abs((x1 - x0) - (y1 - y0)))
+    return best[1:] if best else None
+
+
+def _lcd_pocket_obstacles(tub):
+    """Everything of the tub that the LCD glass and its adhesive frame can meet when they move in their own plane: the union
+    of the tub sections inside their height range, near the glass, as a shapely shape relative to the glass centre."""
+    from shapely.ops import unary_union
+    from shapely import affinity
+    zs = sorted({P.LCD_Z0 + 0.01, M["lcd_rib_z0"] + 0.02, P.HOOD_Z_OVER_CUBE + 0.02, 0.5 * (P.LCD_Z0 + P.BOND_Z), P.BOND_Z - 0.01})
+    zs = [z for z in zs if P.LCD_Z0 < z < P.BOND_Z]
+    win = sbox(P.LCD_X0 - 3.0, P.LCD_Y0 - 3.0, P.LCD_X1 + 3.0, P.LCD_Y1 + 3.0)
+    obs = unary_union([G.section_polys(tub, "z", z, 5e-4).intersection(win) for z in zs])
+    return affinity.translate(obs, -P.LCD["x"], -P.LCD["y"]), zs
+
+
+def _lcd_feasible(obs, deg, half=1.5):
+    """Positions (dx, dy) of the glass centre at which the glass, turned by `deg` about its centre, touches nothing: the
+    window of translations less the configuration-space obstacle (Minkowski sum of the obstacles with the mirrored glass,
+    built as the union of the hulls swept by every boundary segment)."""
+    from shapely.geometry import MultiPoint
+    from shapely.ops import unary_union
+    a, b = P.LCD["dx"] / 2, P.LCD["dy"] / 2
+    t = math.radians(deg)
+    ct, st = math.cos(t), math.sin(t)
+    cor = [(ct * x - st * y, st * x + ct * y) for x, y in ((a, b), (-a, b), (-a, -b), (a, -b))]
+    hulls = []
+    for pg in getattr(obs, "geoms", [obs]):
+        if pg.is_empty or pg.geom_type != "Polygon":
+            continue
+        for ring in [pg.exterior] + list(pg.interiors):
+            xy = list(ring.simplify(1e-3).coords)
+            for (x0, y0), (x1, y1) in zip(xy[:-1], xy[1:]):
+                hulls.append(MultiPoint([(x0 - cx, y0 - cy) for cx, cy in cor] + [(x1 - cx, y1 - cy) for cx, cy in cor]).convex_hull)
+    return sbox(-half, -half, half, half).difference(unary_union(hulls + [obs]))
+
+
+def _lcd_rotation(S, tol_deg=0.002):
+    """Display rotation (E12): how far the LCD glass can turn in its pocket.  Returns dict(ccw, cw (deg, by bisection on the
+    configuration-space construction), pose (dx, dy at the limit), stops (what the glass touches there), walls (the same for
+    a pocket with continuous walls at the fit clearance), ribs (the two rear ribs measured on the tub section), levels)."""
+    from shapely import affinity
+    tub = S["tub"]
+    obs, zs = _lcd_pocket_obstacles(tub)
+    a, b = P.LCD["dx"] / 2, P.LCD["dy"] / 2
+    out = dict(levels=zs)
+    for key, sgn in (("ccw", 1.0), ("cw", -1.0)):
+        lo, hi = 0.0, 6.0
+        if _lcd_feasible(obs, 0.0).area < 1e-9:
+            out[key] = float("nan"); continue
+        while hi - lo > tol_deg:
+            mid = 0.5 * (lo + hi)
+            if _lcd_feasible(obs, sgn * mid).area > 1e-9:
+                lo = mid
+            else:
+                hi = mid
+        out[key] = lo
+        free = _lcd_feasible(obs, sgn * lo)
+        c = free.representative_point()
+        glass = affinity.translate(affinity.rotate(sbox(-a, -b, a, b), sgn * lo, origin=(0, 0)), c.x, c.y)
+        near = obs.intersection(glass.buffer(0.02))
+        stops = []
+        for g_ in getattr(near, "geoms", [near]):
+            if g_.is_empty:
+                continue
+            x, y = g_.centroid.x + P.LCD["x"], g_.centroid.y + P.LCD["y"]
+            side = "+x" if x > 0 else "-x"
+            if y < P.LCD_Y0:
+                nm = f"rear glass rib {side}"
+            elif y > P.LCD_Y1:
+                nm = f"hood rear wall {side}" if abs(x) > abs(P.CAM_X) - P.HOOD_OUT_HW - 0.1 else f"post E{side[0]}"
+            elif abs(x) > P.LCD_X1:
+                nm = f"post B{side[0]}" if abs(y - P.LOC_ROUND[1]) < P.KO_LOC_SIZE else f"side rib {side} (y {y:.1f})"
+            else:
+                nm = f"tub at ({x:.1f}, {y:.1f})"
+            if nm not in stops:
+                stops.append(nm)
+        out[key + "_pose"] = (c.x, c.y)
+        out[key + "_stops"] = stops
+    # the manufacturing review's estimate: a pocket with continuous walls at the fit clearance all round
+    lo, hi = 0.0, 6.0
+    while hi - lo > 1e-5:
+        mid = 0.5 * (lo + hi)
+        t = math.radians(mid)
+        if max(2 * a * math.cos(t) + 2 * b * math.sin(t) - 2 * (a + P.CLR), 2 * b * math.cos(t) + 2 * a * math.sin(t) - 2 * (b + P.CLR)) <= 0:
+            lo = mid
+        else:
+            hi = mid
+    out["walls"] = lo
+    # the two rear glass ribs (the pocket datum of step 9), measured on the tub section at the height of the glass
+    band = sbox(P.LCD_X0 - 1.0, P.LCD_POCKET_Y0 - M["lcd_rib_t"] - 0.2, P.LCD_X1 + 1.0, P.LCD_POCKET_Y0 + 0.2)
+    sec = G.section_polys(tub, "z", 0.5 * (P.LCD_Z0 + P.LCD_Z1), 2e-4).intersection(band)
+    ribs = []
+    for g_ in getattr(sec, "geoms", [sec]):
+        if g_.is_empty or g_.area < 0.5:
+            continue
+        x0, y0, x1, y1 = g_.bounds
+        if x1 - x0 < 6.0 and x0 >= P.LCD_X0 and x1 <= P.LCD_X1:   # a rib behind the glass edge, not the side wall
+            ribs.append((x0, x1, y1))
+    out["ribs"] = sorted(ribs)
+    return out
+
+
 def check_assembly_paths(parts):
     """Blind assembly steps proven on the solids: (a) the LCD glass (with its adhesive frame) tilted in past the seating
     ledge; (b) the PCB / base unit lowered straight into the tub with the lateral error a guide may leave; (c) the same
-    unit closed about a hinge behind the tub (the motion that lets the LCD tail be mated with the unit open)."""
+    unit closed about a hinge behind the tub (the motion that lets the LCD tail be mated with the unit open); (e) the
+    travel of the spigot in the PCB slot, measured on the PCB solid (N9); (f) the rotation the LCD glass can take in its
+    pocket and the squaring of the glass against the two rear ribs (E12)."""
     S = _solids(parts)
     tub = S["tub"]
     fails, warns = [], []
@@ -2255,22 +2557,84 @@ def check_assembly_paths(parts):
             rss, worst = math.sqrt(sum(t * t for _, t in chain)), sum(t for _, t in chain)
             crow.append(dict(tub_tolerance=tname, lamination_jig=fname, chain="; ".join(f"{n} {t:g}" for n, t in chain if t), rss_mm=R3(rss), worst_case_mm=R3(worst),
                              radial_gap_mm=P.CLR, margin_rss_mm=R3(P.CLR - rss), margin_worst_case_mm=R3(P.CLR - worst)))
-    slot_allow = (P.LOC_SLOT[3] - P.SPIGOT_D) / 2
+    # ---------------- (e) the PCB slot under post B-, MEASURED on the PCB solid (decision N9: 2.2 long)
+    slot = _pcb_slot_from_solid(S)
+    slot_len = slot[0] if slot else float("nan")
+    pos_tol = 0.01                                            # the solid must carry the YAML numbers: length, width and BOTH centre coordinates
+    if (slot is None or abs(slot[0] - P.LOC_SLOT[3]) > pos_tol or abs(slot[1] - P.LOC_SLOT[2]) > pos_tol or abs(slot[2] - P.LOC_SLOT[0]) > pos_tol
+            or abs(slot[3] - P.LOC_SLOT[1]) > pos_tol):
+        fails.append(f"PCB locating slot: the board solid has {('%.2f x %.2f at (%.3f, %.3f)' % slot[:4]) if slot else 'no slot'}, the YAML asks for {P.LOC_SLOT[3]} x {P.LOC_SLOT[2]} at "
+                     f"({P.LOC_SLOT[0]}, {P.LOC_SLOT[1]}): a slot {pos_tol} or more off its centre line moves the cameras (the across-slot fit is {P.SPIGOT_FIT:.3f})")
+    rnd = _pcb_round_from_solid(S)
+    if (rnd is None or abs(rnd[0] - P.LOC_ROUND[2]) > pos_tol or abs(rnd[1] - P.LOC_ROUND[0]) > pos_tol or abs(rnd[2] - P.LOC_ROUND[1]) > pos_tol or rnd[3] > pos_tol):
+        fails.append(f"PCB locating hole (round): the board solid has {('dia %.2f at (%.3f, %.3f)' % rnd[:3]) if rnd else 'no round hole'}, the YAML asks for dia {P.LOC_ROUND[2]} at "
+                     f"({P.LOC_ROUND[0]}, {P.LOC_ROUND[1]})")
+    slot_allow = (slot_len - P.SPIGOT_D) / 2
     dT = max(abs(t - M["t_assembly"]) for t in M["t_range"])
     slot_need = [(f"spigot spacing printed +-{tp_}", tp_) for tp_ in (M["print_tol"], 0.3)]
     th_sp = P.SPIGOT_SPAN * abs(M["cte_pa12"] - M["cte_fr4"]) * 1e-6 * dT
-    srow_ = [dict(case=n, spacing_error_mm=t, hole_position_mm=M["fr4_tol_hole"], thermal_mm=R3(th_sp), sum_mm=R3(t + M["fr4_tol_hole"] + th_sp), slot_allows_mm=R3(slot_allow),
-                  margin_mm=R3(slot_allow - (t + M["fr4_tol_hole"] + th_sp))) for n, t in slot_need]
+    srow_ = [dict(case=n, slot_length_on_the_solid_mm=R3(slot_len), slot_centre_on_the_solid_xy=((R3(slot[2]), R3(slot[3])) if slot else "-"), spacing_error_mm=t, hole_position_mm=M["fr4_tol_hole"], thermal_mm=R3(th_sp), sum_mm=R3(t + M["fr4_tol_hole"] + th_sp),
+                  slot_allows_mm=R3(slot_allow), margin_mm=R3(slot_allow - (t + M["fr4_tol_hole"] + th_sp))) for n, t in slot_need]
+    # ---------------- (f) display rotation (E12): free rotation of the glass in its pocket, and the squaring aid of step 9
+    rot = _lcd_rotation(S)
+    rmax = max(rot["ccw"], rot["cw"])
+    lcd_c = cq.Vector(P.LCD["x"], P.LCD["y"], 0.0)
+    rrow = []
+    for key, sgn in (("ccw", 1.0), ("cw", -1.0)):
+        th, (px, py) = rot[key], rot[key + "_pose"]
+        turned = lambda d_: lcd.rotate(lcd_c, lcd_c + cq.Vector(0, 0, 1), sgn * d_).translate(cq.Vector(px, py, 0))
+        v_in, v_out = common_volume(turned(max(0.0, th - 0.02)), tub), common_volume(turned(th + 0.05), tub)
+        if not v_in < lim:
+            fails.append(f"display rotation: the pose found on the sections ({th:.2f} deg {key}) interferes with the tub solid by {v_in:.4f} mm3")
+        rrow.append(dict(quantity=f"free rotation of the glass in its pocket, {'counter-clockwise' if sgn > 0 else 'clockwise'} seen from above", value_deg=round(th, 3),
+                         glass_centre_shift_xy_mm=(R3(px), R3(py)), stopped_by=", ".join(rot[key + "_stops"]) or "-",
+                         solid_check=f"glass + frame turned {max(0.0, th - 0.02):.2f} deg at that position: {v_in:.5f} mm3 common with the tub; turned {th + 0.05:.2f} deg: {v_out:.4f} mm3",
+                         status="ok" if (th <= M["lcd_free_rotation_limit_deg"] and v_in < lim) else "FAIL"))
+    if not rmax <= M["lcd_free_rotation_limit_deg"]:
+        fails.append(f"display rotation: the LCD glass can turn {rmax:.2f} deg in its pocket, more than the {M['lcd_free_rotation_limit_deg']} deg the stored correction (E12) is sized for")
+    ribs = rot["ribs"]
+    rib_ok = len(ribs) == 2 and ribs[0][1] < 0 < ribs[1][0] and abs(ribs[0][2] - ribs[1][2]) < 1e-6
+    push_e = M["lcd_pusher_pad_w"] / 2 + M["lcd_pusher_guide_tol"]
+    if rib_ok:
+        span_in, span_c = ribs[1][0] - ribs[0][1], ribs[1][1] - ribs[0][1]         # between the inner corners; inner corner of one rib to the outer corner of the other
+        m_push = min(-ribs[0][1], ribs[1][0]) - push_e
+        resid = math.degrees(math.atan(M["lcd_rib_step_tol"] / span_c))
+        if m_push <= 0:
+            fails.append("display rotation: the squaring pusher does not act between the two rear glass ribs")
+    else:
+        span_in = span_c = m_push = resid = float("nan")
+        fails.append(f"display rotation: the two rear glass ribs (the datum the glass is squared against) were not found on the tub section ({len(ribs)} found)")
+    rrow += [dict(quantity="for comparison: a pocket with continuous walls at the fit clearance (the manufacturing review's estimate)", value_deg=round(rot["walls"], 3),
+                  glass_centre_shift_xy_mm="-", stopped_by="arithmetic", solid_check="-", status="information"),
+             dict(quantity="aim-line transfer budget of the specification (E12)", value_deg=M["lcd_line_budget_deg"], glass_centre_shift_xy_mm="-",
+                  stopped_by="DESIGN_SPEC section 6", solid_check="-", status="information: the free rotation exceeds it, hence the squaring aid and the factory measurement"),
+             dict(quantity="glass squared against the two rear ribs (assembly step 9): rotation left in the model", value_deg=0.0, glass_centre_shift_xy_mm="-",
+                  stopped_by=(f"both rear ribs: faces at y {ribs[0][2]:.2f}, x {ribs[0][0]:.1f}..{ribs[0][1]:.1f} and {ribs[1][0]:.1f}..{ribs[1][1]:.1f}" if rib_ok else "-"),
+                  solid_check="rib faces coplanar on the tub section" if rib_ok else "-", status="ok" if rib_ok else "FAIL"),
+             dict(quantity=f"residual angle per {M['lcd_rib_step_tol']} mm of step between the two rib faces (printed)", value_deg=round(resid, 3), glass_centre_shift_xy_mm="-",
+                  stopped_by=f"contact points {span_c:.1f} mm apart" if rib_ok else "-", solid_check="arithmetic on an assumed print error", status="information"),
+             dict(quantity="squaring pusher: its line of action inside the span of the two rib faces (margin, mm)", value_deg=R3(m_push), glass_centre_shift_xy_mm="-",
+                  stopped_by=f"pad {M['lcd_pusher_pad_w']} wide on x = 0 +-{M['lcd_pusher_guide_tol']}; inner rib corners at x = +-{min(-ribs[0][1], ribs[1][0]):.1f}" if rib_ok else "-",
+                  solid_check="a push between the two ribs beds the glass on both", status="ok" if rib_ok and m_push > 0 else "FAIL")]
+    e_in = min(abs(x_) for n_, x0_, x1_, y0_, y1_ in P.post_rects() if n_[0] == "E" for x_ in (x0_, x1_))      # inner faces of the two posts E
+    m_e = e_in - push_e
+    if m_e < P.CLR - NUM_TOL:
+        fails.append(f"display rotation: the squaring pusher (half width {push_e} with its guidance) has only {m_e:.2f} mm to the posts E")
+    rrow.append(dict(quantity="squaring pusher: clearance to the two posts E, between which it passes (mm)", value_deg=R3(m_e), glass_centre_shift_xy_mm="-",
+                     stopped_by=f"inner faces of posts E at x = +-{e_in:.1f}", solid_check="post rectangles of the model", status="ok" if m_e >= P.CLR - NUM_TOL else "FAIL"))
     if min(r["margin_worst_case_mm"] for r in crow) < 0:
         warns.append(f"base-plate edge to tub bore: the lateral chain uses up the {P.CLR} mm gap at the worst case "
                      f"({max(r['worst_case_mm'] for r in crow)} mm; RSS {min(r['rss_mm'] for r in crow)} to {max(r['rss_mm'] for r in crow)} mm): every laminated unit is tried dry "
                      "in its own tub before the seal bead (assembly step 14)")
-    if min(r["margin_mm"] for r in srow_) < 0:
-        warns.append(f"PCB slot: +-{slot_allow:.2f} mm along the slot against up to {max(r['sum_mm'] for r in srow_)} mm of spacing error, hole position and thermal movement "
-                     "(proposal N9: a longer slot); gauged by the dummy unit at incoming inspection")
+    if not min(r["margin_mm"] for r in srow_) >= 0:
+        fails.append(f"PCB slot: +-{slot_allow:.2f} mm along the slot against up to {max(r['sum_mm'] for r in srow_)} mm of spacing error, hole position and thermal movement "
+                     f"(the YAML slot is {P.LOC_SLOT[3]} long for this, N9)")
+    if rmax > M["lcd_line_budget_deg"]:
+        warns.append(f"display rotation: left free, the LCD glass can turn {rmax:.2f} deg in its pocket ({rot['walls']:.2f} deg with continuous walls), more than the {M['lcd_line_budget_deg']} deg "
+                     "line-transfer budget: it is squared against the two rear ribs in step 9 and the residual angle is measured at the factory and stored (E12)")
     notes = [f"(a) LCD: glass with its adhesive frame, rear edge first at {tau} deg, shifted {bias} mm toward the visor while the rear corners pass the "
              f"seating ledge (r {P.LEDGE_RI}); the front edge is then still below the feet of posts E (z {P.PCB_Z1}), so the shift is free. The glass passes between the two "
-             f"posts B with {P.LCD_POCKET_X - P.LCD_X1:.2f} mm per side (their feet are cut back for it, D29; the spigots are {abs(P.LOC_ROUND[0]) - P.SPIGOT_D / 2 - P.LCD_X1:.2f} mm "
+             f"posts B with {P.LCD_POCKET_X - P.LCD_X1:.2f} mm per side (their feet are cut back for it: YAML post_feet.locating.foot, N1; the spigots are {abs(P.LOC_ROUND[0]) - P.SPIGOT_D / 2 - P.LCD_X1:.2f} mm "
              f"outside the glass edge). Smallest gap to the ledge {gap_ledge:.2f} mm (flat insertion: {lrow[-1]['smallest_gap_to_tub_mm']} mm). The frame is applied to the LCD, not to the roof",
              f"(a) the stop: still shifted, the rear edge is raised to z {z_push:.2f} (front edge {front_margin:.2f} below the feet of posts E); the two rear ribs reach down to z "
              f"{P.LCD_REAR_RIB_Z0} (the free height above the PCB), so the rear face of the glass overlaps them by {z_push - P.LCD_REAR_RIB_Z0:.2f} mm and the glass is pushed back "
@@ -2284,15 +2648,26 @@ def check_assembly_paths(parts):
              "these are nominal solids: the paths show that the motion exists and how much room it has, not that every printed part allows it "
              "(go gauges in the assembly sequence)",
              f"(d) no key between base plate and tub: the plate edge reaches the bore through the chain in the fourth table. The plate top passes the rim {P.BASE_T - P.RIM_Z:.2f} mm "
-             f"before the seat, after the spigots have engaged at {P.SPIGOT_H} mm, so an offset plate would fight the two spigots with the bead wet: hence the dry trial close of every unit"]
+             f"before the seat, after the spigots have engaged at {P.SPIGOT_H} mm, so an offset plate would fight the two spigots with the bead wet: hence the dry trial close of every unit",
+             f"(e) slot under post B-: {slot_len:.2f} x {slot[1] if slot else float('nan'):.2f} at ({slot[2] if slot else float('nan'):.2f}, {slot[3] if slot else float('nan'):.2f}) and round hole dia "
+             f"{rnd[0] if rnd else float('nan'):.2f} at ({rnd[1] if rnd else float('nan'):.2f}, {rnd[2] if rnd else float('nan'):.2f}), measured on the section of the PCB solid and compared with the YAML to {pos_tol} in "
+             f"length, width and both centre coordinates (YAML {P.LOC_SLOT[3]} x {P.LOC_SLOT[2]}, decision N9); the spigot may move "
+             f"+-{slot_allow:.3f} along it. Needed: spacing error of the two printed spigots, hole position +-{M['fr4_tol_hole']} and {th_sp:.2f} mm of thermal movement at {max(M['t_range']):.0f} C",
+             f"(f) display rotation: obstacles = union of the tub sections at z {', '.join(f'{z:.2f}' for z in rot['levels'])} (the height of the glass and its frame) near the glass; for a rotation "
+             "angle the set of free positions of the glass centre is the translation window less the Minkowski sum of the obstacles with the mirrored glass; the largest angle with a free position "
+             f"is found by bisection to 0.002 deg and confirmed by a boolean on the solids. The check fails above {M['lcd_free_rotation_limit_deg']} deg (the specification sizes the stored "
+             "correction on 'up to about 1 degree'). The squaring aid is a pusher on the centre of the front edge of the tilted glass: pushed between the two rear ribs the glass beds on both"]
     return res(14, "assembly paths (LCD tilt-in, PCB / base join)", not fails,
                (f"LCD glass tilts in at {tau} deg with {gap_ledge:.2f} mm to the ledge ({len(seq)} poses, no interference); the PCB / base unit descends with "
-                f"+-{o} mm lateral error ({len(jrow)} heights) and closes about the fixture hinge ({len(hrow)} angles) without interference"
+                f"+-{o} mm lateral error ({len(jrow)} heights) and closes about the fixture hinge ({len(hrow)} angles) without interference; PCB slot {slot_len:.2f} long on the solid: "
+                f"+-{slot_allow:.2f} against {min(r['sum_mm'] for r in srow_)} to {max(r['sum_mm'] for r in srow_)} needed (margin {min(r['margin_mm'] for r in srow_)} to {max(r['margin_mm'] for r in srow_)}); "
+                f"display rotation: the glass can turn {rmax:.2f} deg free in its pocket, 0 when bedded on the two rear ribs"
                 if not fails else "FAILED: " + "; ".join(fails)),
                [dict(title="LCD tilt-in (glass + adhesive frame against the tub)", rows=lrow),
                 dict(title="PCB / base unit, straight descent", rows=jrow), dict(title="PCB / base unit, hinged close", rows=hrow),
                 dict(title="Base-plate edge to the tub bore: lateral chain (arithmetic on assumed tolerances)", rows=crow),
-                dict(title="PCB slot: travel along the slot against spacing error, hole position and thermal movement (arithmetic)", rows=srow_)], notes, warns)
+                dict(title="PCB slot: travel along the slot (length measured on the PCB solid) against spacing error, hole position and thermal movement", rows=srow_),
+                dict(title="LCD glass: rotation in its pocket (display rotation, E12)", rows=rrow)], notes, warns)
 
 
 # ==============================================================================================
@@ -2329,10 +2704,12 @@ def _ring_corners(coords, hole, sharp_deg=15.0):
     return out
 
 
-def check_fr4_plate(parts):
+def check_fr4_plate(parts, legend_blocks=None):
     """The primary base plate is routed and drilled by a PCB fabricator: it must be a constant-section (2.5 D) plate of
     the YAML thickness whose internal corners all have at least the router radius, with webs and edge distances a
-    fabricator accepts.  Everything is measured on the plate solid (typed section edges and the section polygon)."""
+    fabricator accepts.  Everything is measured on the plate solid (typed section edges and the section polygon).
+    E10: the legend of the outer face (cad/legend.py; legend_blocks overrides its blocks, for the self-test) is written
+    as a Gerber layer, read back, and its keep-clear distances are measured on what was read."""
     from shapely.geometry import Polygon as SPoly
     v = P.BASE_VARIANTS[P.BASE_PRIMARY]
     info = parts["base_plate"]
@@ -2428,8 +2805,10 @@ def check_fr4_plate(parts):
     rule("smallest web or edge distance", f"{wmin[0]:.3f} ({wmin[1]})", f">= {M['fr4_min_web']}", wmin[0] >= M["fr4_min_web"] - 1e-9, "rule assumed, to be confirmed by the fabricator")
     # ---- fabrication data (Gerber profile, two mask layers, Excellon drill): generated from THIS solid, read back and compared with it
     import fabdata as FD
-    gen = FD.generate(plate)
-    grow = []
+    import legend as L
+    gen = FD.generate(plate, legend_blocks)
+    grow, lrow, brow = [], [], []
+    g_min, cap_all = float("nan"), 0
     try:
         prof = FD.parse_gerber(gen["profile"])
         poly = FD.profile_polygon(prof["segments"])
@@ -2452,16 +2831,143 @@ def check_fr4_plate(parts):
             ok_m &= mk["negative"] and fl == want and all(abs(d_ - dm) < 1e-6 for *_q, d_ in mk["flashes"]) and not mk["segments"]
         rule("fabrication data: solder-mask layers read back (negative: only the three hole reliefs are open)", f"openings dia {dm:.2f} at the three holes: {ok_m}", f"dia {dm:.2f} = hole + {M['fr4_mask_relief']}",
              ok_m, f"{FD.FILES['mask_top']}, {FD.FILES['mask_bottom']}: no mask on the hole wall or rim (ball clearance {(P.BALL_HOLE_D - P.BALL_D) / 2:.3f} radial)")
+        # ---- E10: legend of the outer face.  Written from cad/legend.py, read back; every distance below is measured on the ink
+        #      that was READ (strokes with the width of their aperture) against the plate solid and the mask layer read back
+        lg = FD.parse_gerber(gen["legend_bottom"])
+        ink = FD.legend_shape(lg)
+        blks = L.blocks() if legend_blocks is None else legend_blocks
+        ink_model = L.geometry(blks)
+        d_ink = ink.symmetric_difference(ink_model).area if ink is not None else float("nan")
+        rule("fabrication data: legend layer of the outer face read back (ink = the blocks of cad/legend.py)",
+             f"{ink.area:.2f} mm2 of ink in {len(lg['segments'])} strokes, apertures {sorted(set(lg['widths']))}; differs from the blocks by {d_ink:.5f} mm2" if ink is not None else "no ink",
+             f"{ink_model.area:.2f} mm2, positive layer 'Legend,Bot'", ink is not None and d_ink < 1e-3 and lg["function"].startswith("Legend,Bot") and not lg["negative"],
+             FD.FILES["legend_bottom"] + ": bottom layer given as seen from the top face (text mirrored in the file, correct on the part)")
+        # ---- the legend is a BOTTOM layer: the file must be the mirror image (x -> -x) of the legend as it is read on the part.
+        #      Two tests that do not go through legend.to_model(): (a) the ink read back, mirrored HERE, against the reading view
+        #      built from the block strokes; (b) from the file and the model text alone: the first glyph of the model text lies at
+        #      larger x than its last glyph (text that reads left to right on the underside runs right to left seen from the top)
+        from shapely import affinity
+        ink_read = L.reading_geometry(blks)
+        d_mir = affinity.scale(ink, xfact=-1.0, yfact=1.0, origin=(0, 0)).symmetric_difference(ink_read).area if ink is not None else float("nan")
+        d_same = ink.symmetric_difference(ink_read).area if ink is not None else float("nan")
+        mb = next((b_ for b_ in blks if b_["name"] == "model" and b_["kind"] == "text"), None)
+        order_ok, order_txt = False, "model text not found"
+        if mb is not None and ink is not None:
+            (cu, cv), hh, tx = mb["centre"], mb["h"], mb["text"]
+            hw = abs(cu) + L.text_width(tx, hh, mb["stroke"]) / 2 + 0.5
+            inb = ink.intersection(sbox(-hw, cv - hh / 2 - 0.3, hw, cv + hh / 2 + 0.3))
+            gl = sorted((g_ for g_ in getattr(inb, "geoms", [inb]) if not g_.is_empty and g_.bounds[3] - g_.bounds[1] > 0.8 * hh), key=lambda g_: g_.bounds[0])
+            gw = lambda ch_: (max(x_ for pl_ in L.FONT[ch_] for x_, _y in pl_) - min(x_ for pl_ in L.FONT[ch_] for x_, _y in pl_)) * hh / L.GLYPH_H + mb["stroke"]
+            w_first, w_last = gw(tx[0]), gw(tx[-1])
+            if len(gl) >= 2 and abs(w_first - w_last) > 0.2:
+                w_lo, w_hi = gl[0].bounds[2] - gl[0].bounds[0], gl[-1].bounds[2] - gl[-1].bounds[0]
+                order_ok = abs(w_hi - w_first) < 0.05 and abs(w_lo - w_last) < 0.05
+                order_txt = (f"in the file the glyph at the largest x is {w_hi:.2f} wide ({tx[0]!r} is {w_first:.2f}), the one at the smallest x {w_lo:.2f} ({tx[-1]!r} is {w_last:.2f})")
+            else:
+                order_txt = "first and last glyph of the model text cannot be told apart by width"
+        rule("legend layer is MIRRORED (bottom layer given as seen from the top face): file mirrored about x = 0 = the legend as read; first glyph of the model text at larger x than the last",
+             f"mirrored file differs from the reading view by {d_mir:.5f} mm2 (un-mirrored it would differ by {d_same:.2f} mm2); {order_txt}",
+             "0 mm2; first glyph at +x", ink is not None and d_mir < 1e-3 and d_same > 1.0 and order_ok,
+             "independent of legend.to_model(): an un-mirrored file would read backwards on the part (the block layout is symmetric, so no keep-clear distance would show it)")
+        # ---- clear space between separate pieces of ink (a narrower space fills in when printed): measured on the ink read back
+        from shapely.strtree import STRtree
+        pieces_ = [g_ for g_ in getattr(ink, "geoms", [ink]) if not g_.is_empty] if ink is not None else []
+        tree_ = STRtree(pieces_) if pieces_ else None
+        g_min, g_at, n_close = float("inf"), None, 0
+        for i_, c_ in enumerate(pieces_):
+            for j_ in tree_.query(c_.buffer(1.0)):
+                if j_ > i_:
+                    d_ = c_.distance(pieces_[j_])
+                    n_close += d_ < M["legend_min_gap"] - NUM_TOL
+                    if d_ < g_min:
+                        g_min, g_at = d_, (0.5 * (c_.centroid.x + pieces_[j_].centroid.x), 0.5 * (c_.centroid.y + pieces_[j_].centroid.y))
+        rule("legend print rules: smallest clear space between two separate pieces of ink (letter to letter, label to frame, block to block)",
+             f"{g_min:.3f} mm" + (f" at x {g_at[0]:.1f}, y {g_at[1]:.1f}" if g_at else "") + f"; {len(pieces_)} pieces, {n_close} pair(s) closer than the rule",
+             f">= {M['legend_min_gap']}", g_min >= M["legend_min_gap"] - NUM_TOL,
+             f"legend ink gap: letters are pitched so that the space between them is at least the line width (cad/legend.py advance(): {L.letter_gap(M['legend_min_text_h']):.2f} mm at "
+             f"{M['legend_min_text_h']} mm text, {L.advance(M['legend_min_text_h']):.3f} mm pitch); rule assumed equal to the least line width, to be confirmed with the quote")
+        clear = M["legend_clear"]
+        feats = [(nm + (" (drilled edge)" if "ball-foot" in nm else ""), SPoly(ring)) for nm, ring, hole in rings if hole]
+        mkb = FD.parse_gerber(gen["mask_bottom"])
+        feats += [(f"mask relief dia {d_:.2f} at ball-foot hole {1 + min(range(len(P.BALL_XY)), key=lambda i_: math.hypot(x_ - P.BALL_XY[i_][0], y_ - P.BALL_XY[i_][1]))} (mask layer read back)",
+                   Point(x_, y_).buffer(d_ / 2, 128)) for x_, y_, d_ in mkb["flashes"]]
+        for nm, shp in feats:
+            d_ = ink.distance(shp)
+            lrow.append(dict(legend_ink_to=nm, distance_mm=R3(d_), required_mm=clear, margin_mm=R3(d_ - clear), basis="YAML base_plate.legend.clear_of_features",
+                             status="ok" if d_ >= clear - NUM_TOL else "FAIL"))
+        outer = SPoly(pg.exterior)
+        d_edge = pg.exterior.distance(ink) if outer.contains(ink) else -1.0
+        lrow.append(dict(legend_ink_to="routed outline (ink inside the face)", distance_mm=R3(d_edge), required_mm=M["legend_edge_margin"], margin_mm=R3(d_edge - M["legend_edge_margin"]),
+                         basis="mechanical-only: registration of a legend print", status="ok" if d_edge >= M["legend_edge_margin"] - NUM_TOL else "FAIL"))
+        for i_, z_ in enumerate(L.seat_zones()):
+            d_ = ink.distance(z_)
+            lrow.append(dict(legend_ink_to=f"calibration seat zone dia {P.CAL_LEGEND_ZONE_D:.1f} round ball foot {i_ + 1}", distance_mm=R3(d_), required_mm=0.0, margin_mm=R3(d_),
+                             basis="mechanical-only: the seat pads of plate GL1-050 bear on bare mask (D34)", status="ok" if d_ >= -1e-9 and not ink.intersects(z_) else "FAIL"))
+        # fixtures that take the outer face as their reference bear on bare mask: gauge-plate bosses (step 2), seat pads of GL1-050
+        # (step 19), feet of the bridge gauge (steps 11, 12, 14, 15), each grown by the play of its location
+        reg = M["legend_registration"]
+        for nm, shp in L.fixture_footprints().items():
+            d_ = ink.distance(shp)
+            lrow.append(dict(legend_ink_to="fixture footprint: " + nm, distance_mm=R3(d_), required_mm=reg, margin_mm=R3(d_ - reg),
+                             basis="mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)", status="ok" if d_ >= reg - NUM_TOL and not ink.intersects(shp) else "FAIL"))
+        ser_ = next((b_ for b_ in blks if b_["name"] == "serial"), None)
+        if ser_ is not None:
+            box_ = sbox(-ser_["rect"][2], ser_["rect"][1], -ser_["rect"][0], ser_["rect"][3])      # the inside of the serial box in the model frame (mirrored here)
+            d_, nn_ = min((box_.distance(shp), nm) for nm, shp in list(L.fixture_footprints().items()) + [(f"seat zone {i_ + 1}", z_) for i_, z_ in enumerate(L.seat_zones())])
+            lrow.append(dict(legend_ink_to=f"(the serial number marked per unit inside its box, assembly step 13) to the nearest fixture footprint or seat zone: {nn_.split(' (')[0]}", distance_mm=R3(d_),
+                             required_mm=reg, margin_mm=R3(d_ - reg), basis="mechanical-only: an ink-jet mark adds thickness on the seat face", status="ok" if d_ >= reg - NUM_TOL else "FAIL"))
+        bad_l = [r_["legend_ink_to"] for r_ in lrow if r_["status"] != "ok"]
+        rule(f"legend keep-clear: at least {clear} mm to ball-foot holes, mask reliefs, grain opening and pad slot; inside the outline; outside the seat zones; {reg} from every fixture footprint",
+             f"smallest distance to a YAML feature {min(r_['distance_mm'] for r_ in lrow if 'YAML' in r_['basis'])} mm; {len(bad_l)} violation(s)" + (": " + "; ".join(bad_l) if bad_l else ""),
+             f">= {clear} (YAML), edge >= {M['legend_edge_margin']}, seat zones clear, fixtures >= {reg}", not bad_l, "E10: legend of the outer face, measured on the legend layer read back")
+        per = L.geometry(blks, by_block=True)
+        names = [b_["name"] for b_ in blks]
+        missing = [q for q in L.REQUIRED if not any(n_.startswith(q) for n_ in names)]
+        texts = {b_["name"]: b_.get("text", "") for b_ in blks}
+        h_min = min([b_["h"] for b_ in blks if b_["kind"] == "text"] + [b_.get("label_h", 9.0) for b_ in blks if b_["kind"] == "frame"])
+        w_min = min(w_ for w_ in lg["widths"] if w_)
+        ser = next((b_ for b_ in blks if b_["name"] == "serial"), None)
+        ok_c = not missing and texts.get("model") == "GL-1" and texts.get("practice") == "PRACTICE DEVICE" and ser is not None
+        rule("legend content (YAML base_plate.legend.content): maker, model 'GL-1', 'Practice device', statements block(s), serial-number box",
+             f"blocks {names}; model text {texts.get('model')!r}; missing {missing or 'none'}", "all five kinds present; placeholders only where the text is not frozen", ok_c,
+             (f"serial-number box {ser['rect'][2] - ser['rect'][0]:.1f} x {ser['rect'][3] - ser['rect'][1]:.1f} mm inside its frame" if ser else "") + "; the wording of the statements is not frozen (docs/COMPLIANCE.md rows 5 and 33)")
+        rule("legend print rules: smallest text height / smallest line width", f"{h_min} / {w_min}", f">= {M['legend_min_text_h']} / >= {M['legend_stroke']}",
+             h_min >= M["legend_min_text_h"] - 1e-9 and w_min >= M["legend_stroke"] - 1e-9, "fabricator rules for legend print, assumed: to be confirmed with the quote")
+        free = outer.buffer(-M["legend_edge_margin"])
+        for nm, shp in feats:
+            free = free.difference(shp.buffer(clear))
+        for z_ in L.seat_zones():
+            free = free.difference(z_)
+        for b_ in blks:
+            g_ = per[b_["name"]]
+            ext = L.block_extent(b_)
+            dn, nn = min((g_.distance(shp), nm) for nm, shp in feats)
+            cap = L.capacity(b_) if b_["kind"] == "frame" else None
+            brow.append(dict(block=b_["name"], content=b_["content"], drawn=(repr(b_["text"]) if b_["kind"] == "text" else "frame + " + " / ".join(b_.get("label") or [])),
+                             extent_as_read_u0_v0_u1_v1_mm=tuple(round(q, 2) for q in ext), size_mm=f"{ext[2] - ext[0]:.2f} x {ext[3] - ext[1]:.2f}",
+                             text_height_mm=(b_["h"] if b_["kind"] == "text" else b_.get("label_h")), line_width_mm=b_["stroke"],
+                             inside_of_the_frame_mm=(f"{b_['rect'][2] - b_['rect'][0]:.1f} x {b_['rect'][3] - b_['rect'][1]:.1f}" if b_["kind"] == "frame" else "-"),
+                             capacity_at_the_smallest_text=(f"{cap[1]} lines of {cap[0]} characters at {M['legend_min_text_h']} mm" if cap else "-"),
+                             nearest_feature=nn.split(" (")[0], distance_mm=R3(dn)))
+        cap_all = sum(L.capacity(b_)[0] * L.capacity(b_)[1] for b_ in blks if b_["name"].startswith("statements"))
+        notes_legend = [f"E10 legend (outer face): placeholder blocks from cad/legend.py; {ink.area:.1f} mm2 of ink; area of the outer face open to legend after every keep-clear: {free.area:.0f} mm2 of {pg.area:.0f}. "
+                        f"The statement blocks hold about {cap_all} characters at {M['legend_min_text_h']} mm text height and {L.advance(M['legend_min_text_h']):.3f} mm pitch ({L.letter_gap(M['legend_min_text_h']):.2f} mm between "
+                        f"letters): the short FCC sentence fits, the full two-condition statement (about 240 characters) "
+                        "does not; whether it goes on the plate, on an e-label or in the manual and on the packaging is the open decision of docs/COMPLIANCE.md row 5",
+                        "extents are given in the READING frame (the outer face seen from below with the visor at the top, u to the right): u = -x, v = y"]
         for key, text in gen.items():
             grow.append(dict(file="drawings/fab/" + FD.FILES[key], format=("Excellon, metric, decimal" if key == "drill" else "Gerber RS-274X, mm, 4.6"), bytes=len(text),
                              content={"profile": f"{len(prof['segments'])} segments: outline arc + flat, round opening, slot", "mask_top": "3 openings", "mask_bottom": "3 openings",
-                                      "drill": f"{len(dholes)} NPTH holes, tool dia {P.BALL_HOLE_D:.3f}"}[key]))
+                                      "drill": f"{len(dholes)} NPTH holes, tool dia {P.BALL_HOLE_D:.3f}",
+                                      "legend_bottom": f"legend of the outer face: {len(lg['segments'])} strokes in {len(blks)} placeholder blocks"}[key]))
     except Exception as ex:
         fails.append(f"fabrication data could not be generated or read back: {ex!r}")
+        notes_legend = []
     land = P.BASE_R - P.LAND_RI
-    notes = [f"material (YAML base_plate.material): {v['material']}; no copper, no legend",
-             "fabrication data: drawings/fab/ holds a Gerber board profile (outline and routed cut-outs), two solder-mask layers and an Excellon NPTH drill file, written by "
-             "cad/fabdata.py from the plate solid; the rules above read the same text back and compare it with the solid",
+    notes = [f"material (YAML base_plate.material): {v['material']}; no copper; legend on the outer face only (YAML base_plate.legend: {P.Y['base_plate']['legend']['process']})",
+             "fabrication data: drawings/fab/ holds a Gerber board profile (outline and routed cut-outs), two solder-mask layers, an Excellon NPTH drill file and the legend layer of the "
+             "outer face, written by cad/fabdata.py from the plate solid and from cad/legend.py; the rules above read the same text back and compare it with the solid; build.py compares "
+             "the files on disk with that text after the drawings are written",
              f"break-off tabs, if the fabricator panelises: on the flat only (land {P.BASE_FLAT - P.LAND_FLAT_IN:.2f} mm, no bore there), mouse bites recessed into the outline by at most "
              f"{M['fr4_tab_recess_max']} mm, no nub proud of the outline; on the arc the land is only {land:.2f} mm and the bore gap {P.CLR} mm",
              f"tolerances on the drawing GL1-011: outline and routed features +-{M['fr4_tol_outline']}, drilled holes +-{M['fr4_tol_hole']} (diameter and position), finished thickness over the mask "
@@ -2471,13 +2977,19 @@ def check_fr4_plate(parts):
              "sharp corners are found on the section polygon (direction change above 15 deg between neighbouring edges; arcs are sampled to 0.0002 mm chord error); "
              "radii come from the exact arcs and circles of the section",
              f"area {pg.area:.1f} mm2, perimeter of the outline {pg.exterior.length:.1f} mm, routed length of the cut-outs "
-             f"{sum(r.length for n_, r, h_ in rings[1:] if 'hole' not in n_):.1f} mm"]
+             f"{sum(r.length for n_, r, h_ in rings[1:] if 'hole' not in n_):.1f} mm"] + notes_legend
+    leg_sum = (f"; legend of the outer face ({len(brow)} placeholder blocks) read back, mirrored in the file as a bottom layer must be: {min(r_['distance_mm'] for r_ in lrow if 'YAML' in r_['basis'])} mm or more to "
+               f"holes, mask reliefs, opening and slot (required {M['legend_clear']}), {min(r_['distance_mm'] for r_ in lrow if r_['legend_ink_to'].startswith('calibration seat zone'))} mm outside the seat zones, "
+               f"{min(r_['distance_mm'] for r_ in lrow if r_['legend_ink_to'].startswith('fixture footprint'))} mm or more to the footprints of gauge plate, seat pads and bridge gauge; "
+               f"smallest space between pieces of ink {g_min:.2f} mm (rule {M['legend_min_gap']}); statement blocks hold {cap_all} characters") if lrow else ""
     return res(15, "FR-4 base plate: fabrication rules", not fails,
                (f"0.80 mm plate of constant section, {n_drill} drilled dia {P.BALL_HOLE_D} holes, grain opening dia {P.GRAIN_D} and pad slot {P.PAD_SLOT_L} x {P.PAD_HOLE_D} routed; "
-                f"smallest internal radius {rmin:.2f} mm (rule {M['fr4_min_inner_radius']}), no sharp internal corner; smallest web {wmin[0]:.2f} mm ({wmin[1]}; rule {M['fr4_min_web']})"
+                f"smallest internal radius {rmin:.2f} mm (rule {M['fr4_min_inner_radius']}), no sharp internal corner; smallest web {wmin[0]:.2f} mm ({wmin[1]}; rule {M['fr4_min_web']})" + leg_sum
                 if not fails else "FAILED: " + "; ".join(fails)),
                [dict(title="Fabrication rules", rows=rules), dict(title="Feature and drill table", rows=frow),
                 dict(title="Corner radii and sharp corners", rows=crow), dict(title="Webs and edge distances", rows=wrow),
+                dict(title="Legend of the outer face (E10): keep-clear distances measured on the legend layer read back", rows=lrow),
+                dict(title="Legend blocks (placeholders)", rows=brow),
                 dict(title="Fabrication data files (written with the drawings)", rows=grow)], notes, warns)
 
 
@@ -2568,9 +3080,237 @@ def check_board_import(parts, path=None, data=None):
     return res(17, "board import (electrical/gl1_main)", r["passed"], r["summary"], r["tables"], r["notes"], r["warnings"])
 
 
+# ==============================================================================================
+# 18. calibration seat plates (fixtures of the two-seat level zero, E11)
+# ==============================================================================================
+def check_cal_plates(parts):
+    """The two calibration seat plates of drawing GL1-050 against the marker solids, in both nests (the marker as
+    modelled = nest A; turned 180 deg about the plate centre = nest B).  BASE-FACE seat plate: the base plate rests on
+    the three annular seat pads and on nothing else, every ball hangs free in its pocket, the visor flat lies against
+    the datum fence above the relief of its foot and the round wall touches the side stop.  BALL seat plate: the three
+    balls stand on the plain face.  Fixtures are not product parts: this check proves that the drawn fixtures do what
+    the two-seat zero (DESIGN_SPEC section 6, E11) needs; nothing has been made."""
+    from shapely.geometry import Polygon as SPoly
+    import legend as L
+    name = "fixtures on the outer face: calibration seat plates (E11), ball gauge plate, bridge gauge"
+    if "cal_seat_plate" not in parts or "cal_plain_plate" not in parts or "gauge_plate" not in parts:
+        return res(18, name, False, "FAILED: the seat plates or the ball gauge plate were not built", [], [], [])
+    S = _solids(parts)
+    c = P.CAL
+    seat = S["cal_seat_plate"]
+    plain = S["cal_plain_plate"].translate(cq.Vector(0, 0, -P.BALL_PROT))        # in the marker frame the balls stand on its top face
+    balls = [n for n in parts if n.startswith("ball_") and not n.startswith("ball_epoxy_")]
+    outside = ["tub", "base_plate", "seal_bead", "grain_potting"] + balls + [n for n in parts if n.startswith("ball_epoxy_") and parts[n].group == "puck"]
+    cen = cq.Vector(P.CAL_CENTRE[0], P.CAL_CENTRE[1], 0.0)
+    T = _Rows()
+    add = T.add
+    zc = 0.5 * (c["fence_relief"][1] + c["fence_h"])                             # a level inside the contact band of the fence
+    st = P.stack_tolerance(printed=M["tol_printed"])["rim"]
+    prow, areas = [], {}
+    r_cap = math.sqrt(max(0.0, (P.BALL_D / 2) ** 2 - (P.BALL_D / 2 - (P.BALL_PROT + M["tol_ball_set"])) ** 2))   # ball cap at the seat plane, ball set high
+    for nest in ("A", "B"):
+        turn = (lambda sh: sh) if nest == "A" else (lambda sh: sh.rotate(cen, cen + cq.Vector(0, 0, 1), 180))
+        m = {n: turn(S[n]) for n in outside}
+        base, tub = m["base_plate"], m["tub"]
+        tag = f"nest {nest}"
+        # ---------------- base-face seat plate
+        v_max, n_max = max((common_volume(m[n], seat), n) for n in outside)
+        add(f"{tag}, base-face seat: interference of the marker with the plate (mm3, negated)", -v_max, -INTERFERENCE_LIMIT_MM3, method="boolean common, every outside part of the marker",
+            note=f"largest: {n_max}")
+        add(f"{tag}, base-face seat: base plate on the seat pads (gap)", min_distance(base, seat), 0.0, nominal=0.0, note="contact: the pad tops are the marker base plane")
+        pads = G.section_polys(seat, "z", P.CAL_SEAT_Z - 1e-3, 2e-4)
+        face = G.section_polys(base, "z", 1e-3, 2e-4)
+        foot = SPoly(max(getattr(face, "geoms", [face]), key=lambda g_: g_.area).exterior)   # the outline of the base plate
+        under = pads.intersection(foot)                                            # plate material that reaches the seat plane under the base plate
+        on = [g_ for g_ in getattr(under, "geoms", [under]) if not g_.is_empty and g_.area > 0.01]
+        contact = [g_.intersection(face).area for g_ in on]
+        d_edge = min((foot.exterior.distance(g_) if foot.contains(g_) else -1.0) for g_ in on) if on else float("nan")
+        add(f"{tag}, base-face seat: number of seat pads under the base plate", float(len(on)), 3.0, nominal=3.0, method="section of the plate at the seat plane",
+            note="three pads and nothing else of the plate reach the seat plane under the marker")
+        add(f"{tag}, base-face seat: smallest contact area of a pad on the FR-4 face (mm2)", min(contact) if contact else float("nan"), 10.0,
+            method="pad section INTERSECT base-plate section", note=f"areas {', '.join(f'{a_:.1f}' for a_ in sorted(contact))} mm2 (a full annulus dia {c['pad_od']} / {c['pocket_dia']} is "
+            f"{math.pi * (c['pad_od'] ** 2 - c['pocket_dia'] ** 2) / 4:.1f}; the pads are trimmed at the plate edge)")
+        add(f"{tag}, base-face seat: seat pads inside the base plate outline by", d_edge, M["legend_edge_margin"], nominal=M["legend_edge_margin"], method="pad sections against the plate outline",
+            note="no pad reaches under the seal fillet at the plate edge or under the tub rim")
+        areas[nest] = contact
+        for bn in balls:
+            b = m[bn]
+            bb = b.BoundingBox()
+            bx, by = 0.5 * (bb.xmin + bb.xmax), 0.5 * (bb.ymin + bb.ymax)
+            d3 = min_distance(b, seat)
+            zs_ = -0.5 * P.BALL_PROT
+            rad = _sec_dist(b, seat, "z", zs_, clip=(bx - 3, by - 3, bx + 3, by + 3))
+            prow.append(dict(nest=nest, ball=bn, centre_xy=(round(bx, 3), round(by, 3)), pocket=f"dia {c['pocket_dia']} x {c['pocket_depth']} deep",
+                             ball_to_plate_3d_mm=R3(d3), under_the_ball_mm=R3(c["pocket_depth"] - P.BALL_PROT), radial_at_z_mm=(zs_, R3(rad)),
+                             radial_to_the_cap_of_a_ball_set_high_mm=R3(c["pocket_dia"] / 2 - r_cap), location_allowance_mm=c["locate_tol"],
+                             status="ok" if (d3 >= P.CLR - NUM_TOL and c["pocket_dia"] / 2 - r_cap >= c["locate_tol"] + P.CLR - NUM_TOL) else "FAIL"))
+        d_b = min(r_["ball_to_plate_3d_mm"] for r_ in prow if r_["nest"] == nest)
+        add(f"{tag}, base-face seat: ball foot to its pocket, nearest (the floor under it)", d_b, P.CLR, nominal=c["pocket_depth"] - P.BALL_PROT,
+            note=f"pocket {c['pocket_depth']} deep: {c['pocket_depth'] - (P.BALL_PROT + M['tol_ball_set']):.2f} under a ball set {M['tol_ball_set']} high")
+        add(f"{tag}, base-face seat: pocket wall to the cap of a ball set high, radial, less the location allowance", c["pocket_dia"] / 2 - r_cap - c["locate_tol"], P.CLR,
+            method="arithmetic on the pocket of the solid", note=f"cap radius at the seat plane {r_cap:.3f} (protrusion {P.BALL_PROT + M['tol_ball_set']:.2f}); a ball may sit up to {c['locate_tol']} off its pocket centre "
+            f"(fence and stop to the tub wall, bore gap {P.CLR}, plate outline +-{M['fr4_tol_outline']}, hole +-{M['fr4_tol_hole']}, printed wall)")
+        # location: visor flat on the fence, round wall on the side stop
+        ps, ts = G.section_polys(seat, "z", zc, 2e-4), G.section_polys(tub, "z", zc, 2e-4)
+        pieces = sorted((g_ for g_ in getattr(ps, "geoms", [ps]) if not g_.is_empty), key=lambda g_: -g_.area)
+        fence = pieces[0]
+        pin = min(pieces[1:], key=lambda g_: g_.distance(ts)) if len(pieces) > 1 else None
+        touch = ts.buffer(1e-4).intersection(fence.exterior).length
+        add(f"{tag}: visor flat against the datum fence (gap at z {zc:.1f})", ts.distance(fence), 0.0, nominal=0.0, method=f"sections z = {zc:.2f}")
+        add(f"{tag}: length of the visor flat on the fence", touch, 2 * P.HORN_X_OUT - 0.5, nominal=2 * P.HORN_X_OUT, method="tub section against the fence face",
+            note=f"contact band z {c['fence_relief'][1]} to {c['fence_h']} above the seat plane: below the window recesses (z {P.WIN_Z0}), above the seal joint at the foot of the visor wall")
+        add(f"{tag}: round wall against the side stop pin (gap)", ts.distance(pin) if pin is not None else float("nan"), 0.0, nominal=0.0, method=f"sections z = {zc:.2f}",
+            note=f"pin dia {c['pin_dia']} at the marker's -x side: with the fence it fixes x, y and the rotation")
+        zl = 0.5 * (P.LEDGE_Z0 + c["fence_relief"][1])
+        low = G.section_polys(seat, "z", zl, 2e-4)
+        mk = [G.section_polys(m[n], "z", zl, 2e-4) for n in ("tub", "base_plate", "seal_bead")]
+        fl = max((g_ for g_ in getattr(low, "geoms", [low]) if not g_.is_empty), key=lambda g_: g_.area)
+        add(f"{tag}: relief at the foot of the fence, to the marker (z {zl:.2f})", min(g_.distance(fl) for g_ in mk if not g_.is_empty), c["fence_relief"][0] - 0.01, nominal=c["fence_relief"][0],
+            method=f"sections z = {zl:.2f}", note="room for the seal fillet under the visor wall")
+        rim = min_distance(tub, seat.intersect(PT.box(-200, 200, -200, 200, -50, P.CAL_SEAT_Z - c["relief"] + 1e-6).val()))
+        add(f"{tag}, base-face seat: tub rim above the relieved face of the plate", rim, st["worst"], nominal=P.RIM_Z + c["relief"],
+            note=f"rim relief {P.RIM_Z} + relief {c['relief']} (the pads end {M['legend_edge_margin']} inside the plate outline, so none lies under the rim); the rim-relief chain is "
+                 f"+-{st['worst']:.2f} worst case with the tub at +-{M['tol_printed']}")
+        # ---------------- ball seat plate
+        v_pl, n_pl = max((common_volume(m[n], plain), n) for n in outside)
+        add(f"{tag}, ball seat: interference of the marker with the plain plate (mm3, negated)", -v_pl, -INTERFERENCE_LIMIT_MM3, method="boolean common", note=f"largest: {n_pl}")
+        add(f"{tag}, ball seat: the three balls on the plain face (largest gap)", max(min_distance(m[bn], plain) for bn in balls), 0.0, nominal=0.0)
+        add(f"{tag}, ball seat: base plate above the plain face", min_distance(base, plain), P.BALL_PROT, nominal=P.BALL_PROT)
+        pps = G.section_polys(plain, "z", zc, 2e-4)
+        pf = max((g_ for g_ in getattr(pps, "geoms", [pps]) if not g_.is_empty), key=lambda g_: g_.area)
+        add(f"{tag}, ball seat: visor flat against the datum fence (gap at z {zc:.1f})", ts.distance(pf), 0.0, nominal=0.0, method=f"sections z = {zc:.2f}")
+    # ---------------- ball gauge plate (assembly step 2): the base plate lies on it OUTER FACE DOWN, so the legend lies between them.
+    #                  Plate frame = marker frame, boss tops at z = 0.  Everything is measured on the gauge-plate solid
+    gq = P.GAUGE
+    gauge = S["gauge_plate"]
+    base0 = S["base_plate"]
+    ink = L.geometry()
+    grc = G.RayCaster(gauge)
+    GT = _Rows()
+    gadd = GT.add
+    gadd("Ball gauge plate: base plate on the gauge plate (gap)", min_distance(base0, gauge), 0.0, nominal=0.0, note="contact on the boss tops: they are the plane the protrusion is set from")
+    gsec = G.section_polys(gauge, "z", -1e-3, 2e-4)
+    face0 = G.section_polys(base0, "z", 1e-3, 2e-4)
+    foot0 = SPoly(max(getattr(face0, "geoms", [face0]), key=lambda g_: g_.area).exterior)
+    under0 = gsec.intersection(foot0)
+    lands = [g_ for g_ in getattr(under0, "geoms", [under0]) if not g_.is_empty and g_.area > 0.01]
+    gadd("Ball gauge plate: pieces of the plate that reach the outer face of the base plate (bosses)", float(len(lands)), 3.0, nominal=3.0, method="section of the gauge plate just below the boss tops",
+         note="three bosses and nothing else: a plain plate would be one piece and would carry the base plate on its legend")
+    gadd("Ball gauge plate: smallest contact area of a boss on the FR-4 face (mm2)", min((g_.intersection(face0).area for g_ in lands), default=float("nan")), 10.0, method="boss section INTERSECT base-plate section",
+         note=f"boss dia {gq['boss_od']} round a gauge hole; the boss face closes the bottom of the dia {P.BALL_HOLE_D} hole annulus (it dams the stage 1 epoxy)")
+    pts_ink = [(g_.representative_point().x, g_.representative_point().y) for g_ in getattr(ink, "geoms", [ink]) if not g_.is_empty]
+    drop = min((grc.first_hit((x_, y_, 1e-6), (0, 0, -1), 1e-9, 5.0) or 0.0) for x_, y_ in pts_ink)
+    gadd(f"Ball gauge plate: room under the legend ink (ink up to {M['legend_ink_t_max']} thick), smallest", drop - M["legend_ink_t_max"], 0.05, nominal=gq["relief"] - M["legend_ink_t_max"],
+         method=f"ray -z from the outer face at a point of each of the {len(pts_ink)} pieces of legend ink", note=f"the plate face outside the bosses lies {gq['relief']} below the boss tops: the legend never touches the gauge plate")
+    d_boss = min(ink.distance(g_) for g_ in lands) if lands else float("nan")
+    gadd("Ball gauge plate: legend ink to the nearest boss, less the location of the plate on its three balls", d_boss - gq["locate_tol"], M["legend_registration"], method="legend blocks against the boss sections",
+         note=f"the base plate is located by its three balls in the gauge holes (+-{gq['locate_tol']}); required: the registration of the legend print ({M['legend_registration']})")
+    hsec = G.section_polys(gauge, "z", -0.5 * min(gq["hole_depth"], gq["relief"]), 2e-4)       # through the bosses (or the plain face), inside the gauge holes
+    hholes = [SPoly(r_) for g_ in getattr(hsec, "geoms", [hsec]) if not g_.is_empty for r_ in g_.interiors]
+    hrow = []
+    for bn in balls:
+        bb_ = S[bn].BoundingBox()
+        bx, by = 0.5 * (bb_.xmin + bb_.xmax), 0.5 * (bb_.ymin + bb_.ymax)
+        ring_ = min(hholes, key=lambda h_: math.hypot(h_.centroid.x - bx, h_.centroid.y - by), default=None)
+        d_h = (ring_.bounds[2] - ring_.bounds[0]) if ring_ is not None and math.hypot(ring_.centroid.x - bx, ring_.centroid.y - by) < 0.05 else float("nan")
+        prot = P.gauge_protrusion(d_h) if d_h == d_h else float("nan")
+        v_b, d_b3 = common_volume(S[bn], gauge), min_distance(S[bn], gauge)
+        hrow.append(dict(ball=bn, centre_xy=(round(bx, 3), round(by, 3)), gauge_hole_dia_on_the_solid_mm=R3(d_h), protrusion_of_a_dia_1p000_ball_on_its_rim_mm=R3(prot),
+                         required_mm=f"{P.BALL_PROT} +-{M['tol_ball_set']}", ball_of_the_model_to_the_plate_mm=R3(d_b3), interference_mm3=round(v_b, 6),
+                         protrusion_of_an_oversize_grade_100_ball_mm=(R3(P.gauge_protrusion(d_h, P.BALL_D + M["ball_dia_tol"])) if d_h == d_h else None),
+                         status="ok" if (prot == prot and abs(prot - P.BALL_PROT) < 1e-3 and d_b3 < 2e-3 and v_b < INTERFERENCE_LIMIT_MM3) else "FAIL"))
+    perr = max((abs(P.gauge_protrusion(r_["gauge_hole_dia_on_the_solid_mm"]) - P.BALL_PROT) if r_["gauge_hole_dia_on_the_solid_mm"] is not None and r_["gauge_hole_dia_on_the_solid_mm"] == r_["gauge_hole_dia_on_the_solid_mm"]
+                else float("nan")) for r_ in hrow) if hrow else float("nan")
+    gadd("Ball gauge plate: protrusion set by the three gauge holes, largest error against the YAML protrusion (negated)", -perr, -1e-3,
+         method="hole diameter measured on the section of the gauge plate", note=f"a dia {P.BALL_D} ball on the rim of a dia {P.GAUGE_HOLE_D:.2f} hole stands {P.BALL_PROT} below the boss top")
+    # ---------------- bridge gauge (depth readings of steps 11, 12, 14, 15): three annular feet round the balls; requirement, not a solid
+    bq = P.BRIDGE
+    foot_reach = bq["foot_od"] / 2 + P.BRIDGE_FOOT_PLAY
+    d_foot = min(ink.distance(Point(x_, y_).buffer(foot_reach, 128)) for x_, y_ in P.BALL_XY)
+    gadd("Bridge gauge: legend ink to the footprint of its feet (foot + play on the ball), smallest", d_foot, M["legend_registration"],
+         method="legend blocks against the foot circles", note=f"annular feet dia {bq['foot_od']} / {bq['foot_bore']} round the three balls; a bore on the cap of a ball set low centres the foot within {P.BRIDGE_FOOT_PLAY:.2f}")
+    gadd("Bridge gauge: foot bore clear of the mask relief of a ball-foot hole, radial", (bq["foot_bore"] - (P.BALL_HOLE_D + M["fr4_mask_relief"])) / 2, 0.1, method="arithmetic",
+         note="the feet rest on solder mask, not on the bare ring of laminate round each hole")
+    tub_rc = G.RayCaster(S["tub"])
+    rims = []
+    for az in bq["rim_station_deg"]:
+        x_, y_ = bq["rim_station_r"] * math.cos(math.radians(az)), bq["rim_station_r"] * math.sin(math.radians(az))
+        h_ = tub_rc.first_hit((x_, y_, -1.0), (0, 0, 1), 1e-9, 5.0)
+        rims.append((az, (h_ - 1.0) if h_ is not None else float("nan")))
+    gadd("Bridge gauge: its four rim stations lie on the flat of the tub rim (rim height read there, worst deviation from the rim relief, negated)",
+         -max(abs(z_ - P.RIM_Z) if z_ == z_ else float("nan") for _a, z_ in rims), -1e-6, method="ray +z onto the tub solid at each station",
+         note=f"stations at r {bq['rim_station_r']} (rim flat r {P.RIM_FLAT_R[0]} to {P.RIM_FLAT_R[1]}), azimuth {', '.join(f'{a_:.0f}' for a_, _z in rims)} deg from +x: rim at z "
+              f"{', '.join(f'{z_:.3f}' for _a, z_ in rims)}; the reading of steps 14 and 15 is this height below the plane of the three feet")
+    d_mask = min(math.hypot(x_ - P.GRAIN_X, y_ - P.GRAIN_Y) for x_, y_ in P.BALL_XY) - foot_reach - bq["mask_od"] / 2
+    gadd("Bridge gauge: its feet clear of the low-tack potting mask (step 12), radial", d_mask, 0.5, method="arithmetic on the foot positions",
+         note=f"mask = an annulus dia {2 * P.GRAIN_R + 2.0:.0f} to {bq['mask_od']} centred on the grain opening: the three seat zones stay bare for the wet level check")
+    T.rows += GT.rows; T.fails += GT.fails; T.warns += GT.warns
+    gfail = [f"{r_['ball']} on the gauge plate" for r_ in hrow if r_["status"] != "ok"]
+    # legend ink against the seat pads (nest A = the marker frame)
+    padsA = G.section_polys(seat, "z", P.CAL_SEAT_Z - 1e-3, 2e-4).intersection(sbox(-P.BASE_R, -P.BASE_R, P.BASE_R, P.BASE_FLAT))
+    add("Legend ink of the outer face to the nearest seat pad", ink.distance(padsA), c["locate_tol"] + c["legend_zone_margin"], method="legend blocks against the pad sections",
+        note=f"a legend print stands about {M['legend_ink_t']} mm proud of the mask: the pads must bear on bare mask wherever the marker sits inside its location allowance (D34)")
+    cg = _cog(_mass_table(parts), "puck")
+    tri = SPoly(P.BALL_XY)
+    add("Marker centre of gravity inside the triangle of the three seat pads / balls", tri.exterior.distance(Point(cg[0], cg[1])) if tri.contains(Point(cg[0], cg[1])) else -1.0, 2.0,
+        method="mass table of check 8", note="the marker lies stable on either plate without a clamp; no spring pin may touch it while the zero is read")
+    span = min(math.hypot(P.BALL_XY[i][0] - P.BALL_XY[j][0], P.BALL_XY[i][1] - P.BALL_XY[j][1]) for i in range(3) for j in range(i))
+    hgt = tri.area * 2 / max(math.hypot(P.BALL_XY[i][0] - P.BALL_XY[j][0], P.BALL_XY[i][1] - P.BALL_XY[j][1]) for i in range(3) for j in range(i))
+    frow = [dict(requirement="plate blank", value=f"{c['plate'][0]} x {c['plate'][1]} x {c['plate'][2]} mm", basis="two nests either side of the fence; marker dia 46 + stop pin + handling margin"),
+            dict(requirement="seat pads: six pad tops in one plane", value=f"{c['coplanar']} mm", basis=f"a height error of {c['coplanar']} mm at one pad is {1000 * c['coplanar'] / hgt:.3f} mrad over the "
+                 f"{hgt:.1f} mm height of the foot triangle (target of the tilt chain 0.5 to 1 mrad)"),
+            dict(requirement="plain plate: flatness of the top face", value=f"{c['flat_plain']} mm over each nest", basis="same tilt error; the balls are 33.0 and 25.8 mm apart"),
+            dict(requirement="reversal between the nests", value="no parallelism of the plate needed", basis="both nests lie in one lapped plane: reading in nest A, then turned 180 deg in nest B, "
+                 "cancels the tilt of the plate and of the table under it; what remains is half the difference in tilt between the two nests (bounded by the coplanarity above)"),
+            dict(requirement="fence: datum faces square to the seat plane, parallel to each other", value=f"{c['fence_square']} mm", basis=f"yaw of the marker {math.degrees(math.atan(c['fence_square'] / (2 * P.HORN_X_OUT))):.3f} deg "
+                 f"over the {2 * P.HORN_X_OUT:.1f} mm flat (the reversal needs the half turn only to about 1 deg; the display-rotation measurement, E12, needs 0.1 deg)"),
+            dict(requirement="pocket", value=f"dia {c['pocket_dia']} x {c['pocket_depth']} deep", basis=f"ball cap dia {2 * r_cap:.2f} at the seat plane when set {M['tol_ball_set']} high; mask relief dia "
+                 f"{P.BALL_HOLE_D + M['fr4_mask_relief']:.2f}; location allowance {c['locate_tol']}; depth = {c['pocket_depth'] / (P.BALL_PROT + M['tol_ball_set']):.1f} x the largest protrusion"),
+            dict(requirement="seat pad", value=f"annulus dia {c['pad_od']} / {c['pocket_dia']}, {c['relief']} proud of the plate face", basis=f"bare mask next to each foot; legend-free zone dia {P.CAL_LEGEND_ZONE_D:.1f} "
+                 f"on the base plate (pad + 2 x ({c['locate_tol']} + {c['legend_zone_margin']}))"),
+            dict(requirement="contacts", value="none on either plate", basis=f"a spring pin pushes with {P.PIN_FORCE_N} N against a marker weight of about 0.12 N: the zero is read without contact "
+                 "(started from the menu, or armed in the pogo fixture and run after the marker has come to rest on the plate)"),
+            dict(requirement="positions of the level zero", value="0 and 180 deg only (nest A, nest B)", basis="the fence takes the visor flat: a four-position zero (0, 90, 180, 270 deg; docs/MANUFACTURING_PLAN.md "
+                 "6.2 and 6.7, for production) cannot be run on these plates: it needs a location on the round wall (three pins) instead of the fence. Not designed"),
+            dict(requirement="BALL GAUGE PLATE (step 2): bosses", value=f"3 x dia {gq['boss_od']}, tops ground in one plane within 0.005, {gq['relief']} proud of the plate face", basis=f"inside the legend-free zones dia "
+                 f"{P.CAL_LEGEND_ZONE_D:.1f} with the location on the balls (+-{gq['locate_tol']}) and the print registration ({M['legend_registration']}); the legend (up to {M['legend_ink_t_max']}) never touches the plate"),
+            dict(requirement="BALL GAUGE PLATE: gauge holes", value=f"3 x dia {P.GAUGE_HOLE_D:.2f} +0.005 / 0 reamed, {gq['hole_depth']} deep, sharp burr-free rim, at the ball-foot positions +-0.02",
+                 basis=f"a dia {P.BALL_D} ball on the rim stands {P.BALL_PROT} below the boss top; +0.01 on the hole diameter is +{P.gauge_protrusion(P.GAUGE_HOLE_D + 0.01) - P.BALL_PROT:.4f} of protrusion"),
+            dict(requirement="BALL GAUGE PLATE: clamp", value=f"a weight with three annular feet over the bosses (dia {gq['boss_od']} / dia 3), open above each hole", basis="the load passes straight through the plate into the "
+                 "bosses: a flat weight would bend the 0.8 mm plate between its three supports"),
+            dict(requirement="BRIDGE GAUGE (steps 11, 12, 14, 15): feet", value=f"3 annular feet dia {bq['foot_od']} / {bq['foot_bore']} at the ball-foot positions, {bq['foot_h']} proud, lapped in one plane within 0.002",
+                 basis="every depth reading on the underside (ring crest, potting level, rim relief) is taken from the bare mask round the three feet: the plane of the seat pads of GL1-050 and of the gauge-plate bosses. "
+                       "NOT drawn: a requirement"),
+            dict(requirement="BRIDGE GAUGE: stations", value=f"indicator bores over the grain opening (centre and four points at r 5 outside the ring) and at four rim stations r {bq['rim_station_r']}, "
+                 + ", ".join(f"{a_:.0f}" for a_ in bq["rim_station_deg"]) + " deg", basis=f"rim flat r {P.RIM_FLAT_R[0]} to {P.RIM_FLAT_R[1]}; zeroed on a flat plate; contact tip dia 2 (dia 1 on the ring crest, 0.8 wide)")]
+    fails = list(T.fails) + [f"{r_['ball']} in nest {r_['nest']}" for r_ in prow if r_["status"] != "ok"] + gfail
+    notes = ["fixtures, not product parts: drawing GL1-050; solids exported as cal_seat_plate.step and cal_plain_plate.step (the plain plate in its own frame, top face z = 0)",
+             "ball gauge plate: solid exported as gauge_plate.step, drawn in the detail of GL1-011 sheet 1. The outer face of the base plate carries the legend (E10), so this plate bears on three "
+             f"bosses inside the legend-free zones, not on its whole face: a print of {M['legend_ink_t']} to {M['legend_ink_t_max']} mm under a flat plate would add itself to the ball protrusion "
+             f"({P.BALL_PROT} +-{M['tol_ball_set']}) and take the same amount from the epoxy between ball and land (D34)",
+             "bridge gauge: not a solid of this model; its footprint (three annular feet round the balls), its rim stations and the potting mask are checked as geometry against the legend and the tub. "
+             "No depth gauge rests on printed legend: one that bridged the grain opening on the legend (1.2 mm from the opening) would read the ring crest and the potting level up to "
+             f"{M['legend_ink_t_max']} mm deep against a never-below limit of {P.GRAIN_FILL_Z}",
+             f"plate frame = marker frame of nest A (the marker as modelled); nest B = nest A turned 180 deg about ({P.CAL_CENTRE[0]}, {P.CAL_CENTRE[1]}), the middle of the fence. "
+             f"Fence faces at y = {P.CAL_FENCE_Y0} and {P.CAL_FENCE_Y1}; side stops at ({P.CAL_PIN_XY[0]}, {P.CAL_PIN_XY[1]}) and its image",
+             "base-face seat: E11 asks that the base face seats (the turf seat). The pads touch the FR-4 face in a ring round each foot, so the stored difference between the two seats is "
+             "the difference between the plane of the face at the feet and the plane of the balls; a bowed laminate floats on turf on its mean plane, which three pads do not measure (D34)",
+             "the six-face calibration needs pad contact in six orientations: that fixture is NOT designed (README, fixtures)"]
+    return res(18, name, not fails,
+               (f"base-face seat plate: the base plate rests on three pads per nest (contact {min(min(a_) for a_ in areas.values()):.1f} to {max(max(a_) for a_ in areas.values()):.1f} mm2 each), "
+                f"balls {c['pocket_depth'] - P.BALL_PROT:.2f} clear of the pocket floors and {c['pocket_dia'] / 2 - r_cap:.2f} radially, visor flat on the fence over {2 * P.HORN_X_OUT:.1f} mm, "
+                f"side stop touching, rim {P.RIM_Z + c['relief']:.2f} above the plate; ball seat plate: three balls on the plain face, base {P.BALL_PROT:.2f} above it; both nests, no interference. "
+                f"Ball gauge plate: base plate on three bosses dia {gq['boss_od']} (legend {drop - M['legend_ink_t_max']:.2f} clear of the plate, {d_boss - gq['locate_tol']:.2f} from a boss), "
+                f"gauge holes dia {P.GAUGE_HOLE_D:.2f} set {P.BALL_PROT:.2f} of protrusion; bridge gauge: feet {d_foot:.2f} from the legend, four rim stations on the rim flat"
+                if not fails else "FAILED: " + "; ".join(fails)),
+               [dict(title="Marker on the seat plates, both nests; base plate on the ball gauge plate; bridge gauge", rows=T.rows), dict(title="Ball feet in their pockets (base-face seat plate)", rows=prow),
+                dict(title="Ball gauge plate: the three gauge holes, measured on the solid", rows=hrow),
+                dict(title="Requirements on the fixtures (GL1-050, ball gauge plate, bridge gauge) and their basis", rows=frow)], notes, T.warns)
+
+
 CHECKS = [check_interference, check_clearances, check_fov, check_fold, check_walls, check_trapped, check_cradle, check_mass,
           check_quoting, check_posts, check_layout_script, check_keepouts, check_seal, check_assembly_paths,
-          check_fr4_plate, check_alt_base, check_board_import]
+          check_fr4_plate, check_alt_base, check_board_import, check_cal_plates]
 
 
 # ==============================================================================================
@@ -2601,7 +3341,7 @@ def write_report(results, elapsed=None):
     md = [f"# GL-1 mechanical check report (parameters rev {P.REV})", "",
           "Generated by `python3 cad/build.py`. PROVISIONAL: nothing has been built or measured; every number below is computed from the CAD model.",
           "", f"Primary build: base plate {P.BASE_VARIANTS[P.BASE_PRIMARY]['short']} (checks 1 to 15). Alternative build: "
-          f"{P.BASE_VARIANTS[P.BASE_ALT]['short']} (check 16). Board import: check 17.",
+          f"{P.BASE_VARIANTS[P.BASE_ALT]['short']} (check 16). Board import: check 17. Fixtures on the outer face (calibration seat plates, ball gauge plate, bridge gauge): check 18.",
           "", f"**Overall: {'all checks pass' if ok else 'CHECKS FAILED'}**; {sum(len(r['warnings']) for r in results)} warnings; "
           f"{len(DEV_OPEN)} recorded deviations from the specification still stand, {len(DEV_CLOSED)} are closed (listed at the end).", "",
           "| # | Check | Result | Warnings | Summary |", "|---|---|---|---|---|"]
@@ -2618,7 +3358,7 @@ def write_report(results, elapsed=None):
             md += [f"### {t['title']}", ""] + _md_table(t["rows"])
     md += ["## Deviations from the specification", "",
            "Status: accepted = accepted by the system owner (rev C or rev D); recorded = differs from the specification for the stated reason; open = needs a "
-           "decision. Items marked YAML are detailed in PROPOSED_PARAM_CHANGES.md, part B (master_params.yaml is not edited).", ""]
+           "decision. Items marked YAML are detailed in PROPOSED_PARAM_CHANGES.md, part C (master_params.yaml is not edited by this package).", ""]
     for d in DEV_OPEN:
         md += [f"- **{d['id']} {d['part']}** [{d['status']}]{' (YAML)' if d['yaml_change'] else ''}: required: {d['requirement']}. "
                f"Implemented: {d['implemented']}. Reason: {d['reason']}."]

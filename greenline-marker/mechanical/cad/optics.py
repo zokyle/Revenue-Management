@@ -160,14 +160,18 @@ def limit_angle(side, direction, caster, full_pupil, shift=(0.0, 0.0, 0.0), hi=6
     return lo_a, why
 
 
-def upper_field_closed_form(dz=0.0, dy_away=0.0):
+def upper_field_closed_form(dz=0.0, dy_away=0.0, pupil_dia=None, pupil_below=None):
     """Upper field of the full pupil (deg) with the optics dz high and dy_away further from the visor, in closed form: the
     ray from the upper rim of the pupil through the top edge of the opening on the recess floor.  With a = air path (pupil
     to prism + exit face to the recess floor) and L = glass path (one prism leg):
-        a tan(t) + L tan(t') = margin,   sin(t) = n sin(t').      Cross-check of the ray trace in check 4."""
+        a tan(t) + L tan(t') = margin,   sin(t) = n sin(t').      Cross-check of the ray trace in check 4.
+    pupil_dia / pupil_below override the two ASSUMED lens numbers (diameter; depth of the pupil below the cube top) for the
+    rows of check 4 that show what uses up the margin."""
     from scipy.optimize import brentq
-    a = (P.PRISM_Z0 - P.PUPIL_Z) + (P.WIN_RECESS_FLOOR_Y - P.PRISM_EXIT_Y) + dy_away
-    margin = P.OPEN_Z1 - (P.AXIS_Z + dz) - M["pupil_dia"] / 2
+    pz = P.PUPIL_Z if pupil_below is None else P.CAM_Z1 - pupil_below
+    pd = M["pupil_dia"] if pupil_dia is None else pupil_dia
+    a = (P.PRISM_Z0 - pz) + (P.WIN_RECESS_FLOOR_Y - P.PRISM_EXIT_Y) + dy_away
+    margin = P.OPEN_Z1 - (P.AXIS_Z + dz) - pd / 2
     f = lambda t: a * math.tan(t) + P.PRISM_LEG * math.tan(math.asin(math.sin(t) / N_GLASS)) - margin
     return math.degrees(brentq(f, 0.0, math.radians(60.0)))
 

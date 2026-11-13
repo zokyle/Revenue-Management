@@ -24,7 +24,7 @@ COLORS = {            # r, g, b, opacity (render colours; black PA12 is drawn da
     "pcb_adhesive": (0.95, 0.84, 0.36, 1), "seal_bead": (0.96, 0.50, 0.12, 1), "lcd_glass": (0.70, 0.78, 0.70, 1),
     "lcd_flex": (0.88, 0.55, 0.10, 1), "lcd_adhesive": (0.96, 0.86, 0.40, 1), "cover_glass": (0.72, 0.88, 0.98, 0.32),
     "cover_tape": (0.10, 0.10, 0.11, 1), "battery": (0.76, 0.77, 0.81, 1), "foam_pad": (0.42, 0.34, 0.50, 1),
-    "vent": (0.97, 0.97, 0.97, 1), "cradle": (0.56, 0.60, 0.67, 1),
+    "vent": (0.97, 0.97, 0.97, 1), "cradle": (0.56, 0.60, 0.67, 1), "retarder_film": (0.70, 0.50, 0.95, 0.55),
     "cradle_pcb": (0.06, 0.36, 0.52, 1), "usb_receptacle": (0.82, 0.82, 0.84, 1),
 }
 PREFIX_COLORS = {"ball_epoxy_": (0.40, 0.66, 0.90, 1), "camera_": (0.33, 0.33, 0.40, 1), "prism_": (0.50, 0.78, 0.96, 0.62), "visor_window_": (0.62, 0.86, 0.96, 0.42),
@@ -110,6 +110,27 @@ def _pcb_detail_stls(tmp):
         wp.val().exportStl(str(f), A.STL_TOL, A.STL_ANG)
         out[n] = dict(stl=str(f), color=list(col), opacity=1, front=True, metalness=0.5 if n == "pads" else 0.05, roughness=0.4)
     return out
+
+
+def _legend_stl(tmp):
+    """Render-only solid of the legend of the outer face (E10): the placeholder strokes of cad/legend.py, as wide as they are
+    printed and M['legend_ink_t'] thick, standing on the underside of the base plate.  Not a part: the legend is fabrication
+    data of the FR-4 plate (drawings/fab, GL1-011 sheet 2)."""
+    import cadquery as cq
+    import legend as L
+    t = M["legend_ink_t"]
+    g = L.geometry().simplify(0.004)
+    body = None
+    for pg in getattr(g, "geoms", [g]):
+        if pg.is_empty or pg.area < 1e-6:
+            continue
+        sol = cq.Workplane("XY").workplane(offset=-t).polyline(list(pg.exterior.coords)[:-1]).close().extrude(t)
+        for ring in pg.interiors:
+            sol = sol.cut(cq.Workplane("XY").workplane(offset=-t - 0.01).polyline(list(ring.coords)[:-1]).close().extrude(t + 0.02))
+        body = sol if body is None else body.add(sol)
+    f = pathlib.Path(tmp) / "detail_legend.stl"
+    cq.Compound.makeCompound(body.vals()).exportStl(str(f), A.STL_TOL, A.STL_ANG)
+    return dict(stl=str(f), color=[0.96, 0.96, 0.94], opacity=1, front=True, metalness=0.0, roughness=0.9, edges=False)
 
 
 def _picture_ok(path, cfg):
@@ -206,8 +227,8 @@ def render_all(parts=None, verbose=True):
         rp = 0.5 * (P.BAFFLE_RO + P.GRAIN_R)
         cfg = dict(out=str(RENDER_DIR / "GL1_render_b_underside.png"), width=W, height=H, eye=eye, target=tgt, fov=fov,
                    title="GL-1 marker - underside",
-                   subtitle=f"FR-4 base plate; grain opening potted clear to {P.GRAIN_FILL_Z} inside; pad slot with seven pads; three potted ball feet {P.BALL_PROT:.2f} proud; tub rim {P.RIM_Z} higher",
-                   footer=FOOT, parts=[_entry(n, stl[n]) for n in puck] + list(detail.values()),
+                   subtitle=f"FR-4 base plate with placeholder legend; potted grain opening; pad slot; ball feet {P.BALL_PROT:.2f} proud; tub rim {P.RIM_Z} higher",
+                   footer=FOOT, parts=[_entry(n, stl[n]) for n in puck] + list(detail.values()) + [_legend_stl(tmp)],
                    labels=[dict(text="Ball foot 3 (drilled dia 1.10)", anchor=[P.BALL_XY[2][0], P.BALL_XY[2][1], -0.1], side="L"),
                            dict(text="Clear potting, dia 13 opening", anchor=[gx + rp * math.cos(math.radians(-10)), gy + rp * math.sin(math.radians(-10)), P.GRAIN_FILL_Z], side="L"),
                            dict(text="LED pairs on r 5.2 (potted)", anchor=[gx + 5.2 * math.cos(math.radians(247.5)), gy + 5.2 * math.sin(math.radians(247.5)), 0.6], side="L"),
@@ -215,17 +236,19 @@ def render_all(parts=None, verbose=True):
                            dict(text="Contact pads x7 (gold)", anchor=[P.PAD_XS[4], P.PAD_Y, 0.95], side="L"),
                            dict(text="Visor wall over the base plate", anchor=[-3.0, P.Y_VISOR, 2.6], side="R"),
                            dict(text="Seal adhesive at the rim", anchor=[-21.875 * math.cos(math.radians(25)), 21.875 * math.sin(math.radians(25)), P.RIM_Z], side="R"),
-                           dict(text="Ball foot 1 (front)", anchor=[P.BALL_XY[0][0], P.BALL_XY[0][1], -0.1], side="R"),
+                           dict(text="Ball foot 1 (front), 316 or Si3N4", anchor=[P.BALL_XY[0][0], P.BALL_XY[0][1], -0.1], side="R"),
                            dict(text="Photodiode in the baffle ring", anchor=[gx - 1.0, gy, 0.55], side="R"),
                            dict(text="Baffle ring (black PA12)", anchor=[gx - 0.5 * (P.BAFFLE_RI + P.BAFFLE_RO), gy - 0.5, P.BAFFLE_RING_Z0], side="R"),
-                           dict(text="FR-4 base plate (black mask)", anchor=[-17.5, 3.0, 0.0], side="R"),
+                           dict(text="FR-4 base plate (black mask)", anchor=[-19.0, 6.5, 0.0], side="R"),
+                           dict(text="Legend: white print, placeholders", anchor=[-13.0, -3.0, 0.0], side="R"),
+                           dict(text="Serial-number box", anchor=[4.0, -13.2, 0.0], side="L"),
                            dict(text="Ball foot 2", anchor=[P.BALL_XY[1][0], P.BALL_XY[1][1], -0.1], side="R")])
         outs.append(_run(cfg, tmp))
         # ---------------- (c) exploded, every part separated along z
         dz = {"ball_epoxy_": -44, "ball_": -51, "base_plate": -37, "grain_potting": -30, "seal_bead": -23, "baffle_ring": -17, "baffle_adhesive": -11, "pcb_adhesive": -1,
               "main_pcb": 10, "camera_": 21, "battery_lead_": 21, "battery": 21, "prism_": 29,
               "foam_pad": 32, "lcd_flex": 38, "lcd_glass": 46, "lcd_adhesive": 58, "hood_seal_": 64, "vent": 69, "tub": 74, "visor_window_": 74, "window_bond_": 74,
-              "cover_tape": 95, "cover_glass": 106}
+              "cover_tape": 94, "retarder_film": 103, "cover_glass": 112}
 
         def off(n):
             for k, v in dz.items():
@@ -233,32 +256,34 @@ def render_all(parts=None, verbose=True):
                     return (0, 9.0 if n.startswith("visor_window_") else (4.5 if n.startswith("window_bond_") else 0), v)
             return (0, 0, 0)
         eye_dir = np.array([0.62, 0.72, 0.30]); eye_dir /= np.linalg.norm(eye_dir)
-        tgt = np.array([0.0, 0.0, 32.5]); eye = tgt + 500 * eye_dir
+        tgt = np.array([0.0, 0.0, 35.0]); eye = tgt + 500 * eye_dir
         r = _screen_right(eye, tgt)
-        order = [("cover_glass", "R"), ("cover_tape", "L"), ("tub", "R"), ("visor_window_L", "R"), ("window_bond_R", "L"), ("vent", "L"), ("hood_seal_L", "R"),
+        order = [("cover_glass", "R"), ("retarder_film", "L"), ("cover_tape", "L"), ("tub", "R"), ("visor_window_L", "R"), ("window_bond_R", "L"), ("vent", "L"), ("hood_seal_L", "R"),
                  ("lcd_adhesive", "L"),
                  ("lcd_glass", "R"), ("lcd_flex", "L"), ("foam_pad", "L"), ("prism_L", "R"), ("battery", "L"), ("battery_lead_1", "L"), ("camera_L", "R"), ("main_pcb", "L"),
                  ("pcb_adhesive", "R"), ("baffle_adhesive", "L"), ("baffle_ring", "R"), ("seal_bead", "L"), ("grain_potting", "R"), ("base_plate", "R"),
                  ("ball_epoxy_1", "R"), ("ball_3", "L")]
         extra = {"visor_window_L": "Visor windows x2 (0.40 glass)", "prism_L": "Fold prisms x2 (2 mm, N-BK7)",
-                 "camera_L": "Camera cubes x2 (OVM7692)", "ball_3": "Ball feet x3 (dia 1.0)", "ball_epoxy_1": "Ball potting x3 (epoxy)", "lcd_flex": "LCD flex tail (representative)",
+                 "camera_L": "Camera cubes x2 (OVM7692)", "ball_3": "Ball feet x3 (dia 1.0, 316 or Si3N4)", "ball_epoxy_1": "Ball potting x3 (epoxy)", "lcd_flex": "LCD flex tail (representative)",
                  "window_bond_R": "Window adhesive frame x2", "hood_seal_L": "Black hood gaskets x2",
                  "seal_bead": "Perimeter seal (dispensed)", "pcb_adhesive": "Adhesive sheet 0.20 (die cut)", "lcd_adhesive": "LCD adhesive frame 0.15, vented",
-                 "cover_tape": "Tape ring 0.13 (dia 28 / 25)", "main_pcb": "Main PCB assembly", "tub": "Tub (top shell)", "base_plate": "Base plate, FR-4 0.80",
-                 "grain_potting": "Clear potting (grain opening)", "baffle_ring": "Baffle ring (black PA12)", "baffle_adhesive": "Baffle annulus 0.13 (black tape)",
+                 "cover_tape": "Tape ring 0.13 (dia 28 / 25)", "retarder_film": f"OPTIONAL (E9): retarder film dia {P.RETARDER_D:g} x {P.RETARDER_T:g}, flat", "main_pcb": "Main PCB assembly", "tub": "Tub (top shell)", "base_plate": "Base plate, FR-4 0.80",
+                 "grain_potting": "Clear potting (grain opening)", "baffle_ring": "Baffle ring (black PA12)", "baffle_adhesive": f"Baffle annulus, black tape {min(P.BAFFLE_TAPE_RANGE):g} to {max(P.BAFFLE_TAPE_RANGE):g}",
                  "battery_lead_1": "Battery leads x2 (envelope)",
                  "cover_glass": "Cover glass dia 28 x 1.0", "lcd_glass": "Memory LCD (glass 0.75)", "battery": "LiPo cell 34 x 10 x 2",
                  "foam_pad": "Foam pad 0.3", "vent": "ePTFE vent (inside the roof)"}
         labels = []
         for n, side in order:
+            if n not in parts:
+                continue
             small = n.startswith(("visor_window_", "window_bond_", "hood_seal_", "prism_", "camera_", "ball_", "vent", "lcd_flex", "battery_lead_", "baffle_"))
             a = _rim_anchor(parts, n, side, r, off(n), frac=0.0 if small else 0.88)
             labels.append(dict(text=extra.get(n, NAMES.get(n, n)), anchor=a, side=side))
-        cfg = dict(out=str(RENDER_DIR / "GL1_render_c_exploded.png"), width=1800, height=2400, eye=list(eye), target=list(tgt), ortho=91,
+        cfg = dict(out=str(RENDER_DIR / "GL1_render_c_exploded.png"), width=1800, height=2400, eye=list(eye), target=list(tgt), ortho=95,
                    title="GL-1 marker - exploded along z",
-                   subtitle="every part of the marker (primary build: FR-4 base plate), separated along z (windows also moved forward); assembly sequence in README.md",
+                   subtitle="every part of the marker (primary build, FR-4 base plate), separated along z; the retarder film is an OPTIONAL trial part",
                    footer=FOOT, labels=labels, labelTop=150, fontSize=30,
-                   parts=[_entry(n, stl[n], off(n)) for n in puck] + [dict(v, offset=[0, 0, dz["main_pcb"]]) for v in detail.values()])
+                   parts=[_entry(n, stl[n], off(n)) for n in puck + [q for q in ("retarder_film",) if q in parts]] + [dict(v, offset=[0, 0, dz["main_pcb"]]) for v in detail.values()])
         outs.append(_run(cfg, tmp))
         # ---------------- (d) cut-away: x = 0 behind y_step, x = camera R in front of it
         ystep = P.LCD_Y1 - 0.5
