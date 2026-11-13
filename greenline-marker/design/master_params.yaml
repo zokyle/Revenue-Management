@@ -5,7 +5,8 @@
 # checked against the manufacturer drawing before release) | design (our choice).
 rev: D-EVT1          # rev D: decisions on the rev C design review (mechanical/PROPOSED_PARAM_CHANGES.md parts B and C; DESIGN_SPEC section 5)
 # Amended in place after the rev D mechanical review (items N1 to N10 of mechanical/PROPOSED_PARAM_CHANGES.md part B;
-# each is marked "N<n>" below). The next revision letter is taken when the board layout is folded back in.
+# each is marked "N<n>" below) and by the spec amendments E1 to E16 (DESIGN_SPEC.md, table at the top). The next revision
+# letter is taken when the board layout is folded back in.
 envelope:
   outer_radius: 23.0          # dia 46.0, design
   thickness: 7.6              # design: every printed wall >= 0.8 mm (MJF PA12 bureau minimums 0.76-1.0 mm)
@@ -25,6 +26,7 @@ base_plate:
   tolerances: {outline: 0.10, holes: 0.05, thickness_over_mask: 0.10}
   thickness_accepted: [0.76, 0.90]
   mask_relief_dia: 1.25       # solder mask pulled back round each ball-foot hole, both faces
+  legend: {side: outer, process: "white legend print on the black mask, or laser mark", clear_of_features: 1.0, content: "maker, model, Practice device, required statements (docs/COMPLIANCE.md), serial-number box"}   # E10
   psa: {mpn: "3M 93020LE (300LSE) double-coated tape, die cut", thickness: 0.20, basis: provisional}   # z 0.80..1.00; seals the pad slot and the grain opening
   # ALTERNATIVE for an all-printed build and for the EVT comparison: same outline and features in MJF PA12.
   alternative: {material: "HP MJF PA12, dyed black, NOT vapor smoothed, free-state flatness 0.3 max", thickness: 0.87, psa_thickness: 0.13, psa_mpn: "3M 9472LE (300LSE) adhesive transfer tape", foot_hole_dia: 1.15, baffle: integral, thickness_accepted: [0.83, 0.92]}
@@ -41,11 +43,11 @@ base_plate:
   # ball feet: THROUGH holes; the balls are set on a gauge plate with 0.10 mm pockets and potted from the inside with a
   # dual-cure or two-part epoxy (the joint is shadowed, a UV-only adhesive stays liquid) before the adhesive sheet goes
   # on; the sheet hole is back-filled, so each ball bears on a copper land on the PCB underside through 0.10 mm of epoxy.
-  feet: {ball_dia: 1.0, protrusion: 0.10, hole_dia: 1.10, psa_hole_dia: 2.0, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]], epoxy_dome_max: 0.08, backfill: true, pcb_keepout_dia: 2.5, pcb_land_dia: 1.6}
+  feet: {ball_dia: 1.0, material: "316 stainless grade 100 or better, or silicon nitride; not 440C (E8)", protrusion: 0.10, hole_dia: 1.10, psa_hole_dia: 2.0, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]], epoxy_dome_max: 0.08, backfill: true, pcb_keepout_dia: 2.5, pcb_land_dia: 1.6}
   # light baffle round the photodiode. FR-4 plate: a separate printed black PA12 ring (no spokes) bonded to the PCB on a
   # die-cut adhesive annulus, its top flush with the potting. PA12 plate: integral with the plate on three spokes.
   baffle: {inner_dia: 6.6, wall: 0.8, outer_dia: 8.2, spokes_deg: [90, 225, 315], spoke_width: 0.8,
-           ring: {height: 0.82, height_tol: [-0.03, 0.0], matched_to: "measured plate thickness + 0.02", adhesive: "opaque black double-coated tape 0.13", crest_z: [0.0, 0.15]}}   # N4: separate ring of the FR-4 build
+           ring: {height: 0.82, height_tol: [-0.03, 0.0], matched_to: "measured plate thickness + 0.02", adhesive: "opaque black double-coated tape, 0.10 to 0.145 as available (E16)", crest_z: [0.0, 0.15]}}   # N4: separate ring of the FR-4 build
 pcb:
   thickness: 0.8              # 4-layer FR-4, ENIG; z 1.0 .. 1.8
   z_bottom: 1.0
@@ -67,7 +69,8 @@ lcd:
   psa_thickness: 0.15
 # EVT: flat mineral watch crystal (NOT step-proof). Production: chemically strengthened glass or sapphire specified by
 # strength (ring-on-ring 600 MPa or more), 1.0 mm, printed black border.
-cover_glass: {dia: 28.0, thickness: 1.0, recess_dia: 28.5, recess_depth: 1.25, bond: "3M 9472LE transfer tape ring 0.13 mm, OD 28.0 / ID 25.0", bond_thickness: 0.13, bond_id: 25.0, sub_flush: 0.12}
+cover_glass: {dia: 28.0, thickness: 1.0, recess_dia: 28.5, recess_depth: 1.25, bond: "3M 9472LE transfer tape ring 0.13 mm, OD 28.0 / ID 25.0", bond_thickness: 0.13, bond_id: 25.0, sub_flush: 0.12,
+              retarder: {type: "quarter-wave film, about 0.1 mm, on the glass underside, axis 45 deg to the LCD polariser", status: "EVT trial (E9)", basis: provisional}}
 battery:
   mpn: GM201030-PCB           # PowerStream, 2 x 10 x 30 mm cell + PCM (search-verified listing; PCM length provisional)
   body: {x: 0.0, y: -5.2, dx: 34.0, dy: 10.0, z0: 1.8, z1: 3.8}
@@ -168,7 +171,7 @@ top_side_parts:
   - {ref: J1,  name: "LCD FPC conn FH12A-10S-0.5SH top-contact", x: 0.0, y: -13.9, dx: 8.4, dy: 5.8, h: 2.0, fixed: true}   # mouth faces the rear (-y)
   - {ref: U7,  name: "MCP1700-2.8 LDO SOT-23",      x: 10.5,  y: -13.5, dx: 3.0,  dy: 3.0,  h: 1.2}
   - {ref: U11, name: "MCP1700-3.3 LDO SOT-23 (VDDUSB)", x: 14.0, y: -12.2, dx: 3.0,  dy: 3.0,  h: 1.2}
-  - {ref: U9,  name: "MCP73831 charger SOT-23-5",   x: -10.5, y: -13.5, dx: 3.0,  dy: 3.0,  h: 1.45}
+  - {ref: U9,  name: "BQ25101YFP charger DSBGA-6 (E1)", x: -10.5, y: -13.5, dx: 1.6,  dy: 0.9,  h: 0.5}
   - {ref: U10, name: "USBLC6-2SC6 ESD SOT-23-6",    x: -13.9, y: -12.2, dx: 3.0,  dy: 3.0,  h: 1.45}   # N7: 0.3 mm inboard, clear of ball foot 2
   - {ref: Y1,  name: "32.768 kHz xtal 3215",        x: 8.6,   y: 12.2,  dx: 3.4,  dy: 1.7,  h: 0.9}
 bottom_side_parts:
