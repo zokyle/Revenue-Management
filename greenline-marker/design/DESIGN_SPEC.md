@@ -1,4 +1,4 @@
-# GreenLine GL-1 — master design specification (rev D, EVT1, with amendments E1 to E22)
+# GreenLine GL-1 — master design specification (rev D, EVT1, with amendments E1 to E23)
 
 This file records every architecture decision. `master_params.yaml` holds the numbers that the
 mechanical CAD and the PCB layout must share; `check_layout.py` verifies them. Where this file
@@ -35,6 +35,7 @@ Amendments after rev D (each is worked into the text below and marked with its n
 | E20 | Base-plate thickness accepted from 0.78 mm (FR-4) and 0.84 mm (PA12); ball diameter tolerance of grade 100 taken as +-0.0127 mm (to be confirmed against the ball standard) | An oversize ball left 0.007 mm of epoxy over its land at the old lower limits, against 0.02 required |
 | E21 | Baffle-ring height = measured plate thickness + 0.15 - tape thickness; rings are printed 1.10 mm high and lapped | The earlier rule (plate + 0.02) was only right for one tape thickness |
 | E22 | Display rotation in its pocket is up to about 1.2 degrees (computed 1.19); cell fixing adhesive 0.06 mm or less | Corrects E12's "about 1 degree"; no tape of 0.05 mm was found |
+| E23 | Battery-life and drop requirements stated (section 6) | The validation plan found no requirement to test against |
 
 E17 to E22 come from the enclosure review of 2026-11-13. They are decided here and enter `master_params.yaml` and the CAD together at the next revision letter, so that the mechanical checks, which assert the YAML values, never run against a half-changed file. Until then the YAML still carries 14.5 degrees, [0.76, 0.90] / [0.83, 0.92], the plate + 0.02 ring rule and 0.05 mm, and the enclosure package records the same changes as proposals P1 to P9 (`mechanical/PROPOSED_PARAM_CHANGES.md`, part C). P6 (U11 0.2 mm inboard) is settled by the board placement.
 
@@ -207,6 +208,14 @@ port tested against vectors exported from the reference. Sequence for a Quick Re
 6. Draw the aim line through the ball position, with distance, slope percent, break in cup widths and a confidence bar.
 
 Read time (E15): the firmware timing model gives a result 4.1 to 4.8 s after the marker comes to rest (camera rail on for 2.2 to 2.8 s, about 96 mA during a read, about 600 reads per charge, about 21 microamps asleep). Every one of these figures is a model built from data-sheet currents; none is measured.
+
+Battery life and robustness requirements (E23, all PROPOSED until measured on EVT units; test numbers are those of `docs/VALIDATION_PLAN.md`):
+
+- Reads per charge (F6): at least 150 reads from a full charge to the low-battery symbol at 20 C with a new cell, and at least 100 at 0 C or after 300 charge cycles. Reason: a round is about 40 to 60 reads and a practice session about 100. The model gives about 600 to empty and the validation plan's own arithmetic 260 to 500 to the symbol.
+- Standby (F7): at least 45 days asleep from a full charge to the low-battery symbol at 20 C (model: 87 days to empty at 20.6 microamps, about 2.6 months with self-discharge).
+- Ship mode: no more than 5 microamps at the cell, protection circuit included; at least 3 months from a 30 % charge without the cell falling below 3.0 V. Stock older than 3 months is recharged before sale. Not modelled yet.
+- Drop (K3): free fall of 1.0 m onto paving, once in each of six attitudes (glass down, base down, visor flat, rear edge, left, right). Afterwards the marker works, passes the leak test, its ball-seat level zero has moved by no more than 0.5 mrad and its stereo calibration is still within its acceptance limit. Cosmetic marks are allowed. 1.5 m is recorded but is not a requirement at EVT.
+- Standing on the marker is not a requirement at EVT (the crystal is not step-proof); it is one for production.
 
 Calibration and limits the firmware must support:
 
