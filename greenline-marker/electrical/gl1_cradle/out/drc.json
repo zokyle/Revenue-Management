@@ -1,0 +1,61 @@
+{
+  "board": "gl1_cradle.kicad_pcb",
+  "cosmetic_allow_list": {
+    "lib_footprint_issues": "footprint library not configured (headless run)",
+    "lib_footprint_mismatch": "footprint differs from library copy",
+    "silk_edge_clearance": "silkscreen close to the board edge",
+    "silk_over_copper": "silkscreen clipped by solder mask openings",
+    "silk_overlap": "silkscreen items overlapping each other",
+    "text_height": "text smaller than the fab's legibility limit",
+    "text_thickness": "text stroke thinner than the fab's legibility limit"
+  },
+  "custom_rules": [
+    "gleda min track width of net class Default",
+    "gleda min track width of net class Power"
+  ],
+  "error_count": 0,
+  "errors": {},
+  "footprint_errors": 0,
+  "items": [
+    {
+      "description": "Silkscreen overlap",
+      "items": [
+        {
+          "description": "PCB Text 'GND' on B.Silkscreen",
+          "kicad_x": 103.19,
+          "kicad_y": 98.55,
+          "x": 3.19,
+          "y": 1.45
+        },
+        {
+          "description": "Circle on B.Silkscreen",
+          "kicad_x": 103.19,
+          "kicad_y": 98.55,
+          "x": 3.19,
+          "y": 1.45
+        }
+      ],
+      "rule": "board setup constraints silk",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_overlap"
+    }
+  ],
+  "severity_overrides": {
+    "lib_footprint_issues": {
+      "reason": "headless runs have no global footprint library table, so every footprint would be flagged 'library not found'",
+      "severity": "ignore"
+    },
+    "lib_footprint_mismatch": {
+      "reason": "placed footprints legitimately differ from their library copy (hidden reference, BOM properties), which KiCad reports for every generated footprint",
+      "severity": "ignore"
+    }
+  },
+  "tampered_checks": [],
+  "unconnected": 0,
+  "warning_count": 1,
+  "warnings": {
+    "silk_overlap": 1
+  },
+  "zones_filled": 0
+}

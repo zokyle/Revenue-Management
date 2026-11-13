@@ -1,0 +1,6 @@
+- All routed signal nets: 127 mm of track for 115 mm of spanning trees (x1.10), 0 nets over x1.5.
+- Vias: 9 (0 of them plane connections); by class Default 4, Power 5.
+- Smallest via-to-pad gap on the top side: 0.269 mm to a pad of its own net (J1.A5), 0.170 mm to a pad of another net (J1.A12).
+- Smallest solder-mask web, bottom: 0.350 mm (U1.1 / U1.2); 0 touching openings of different nets.
+- Smallest solder-mask web, top: 0.200 mm (J1.A9 / J1.A12); 0 touching openings of different nets.
+- Copper to edge: routed copper 0.348 mm (track GND F.Cu), pads 0.236 mm (pad J1.A1).

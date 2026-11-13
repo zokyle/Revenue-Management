@@ -1,9 +1,9 @@
-# GL-1 cradle board - netlist notes
+# GL-1 cradle board - netlist and layout notes
 
-Stage: **netlist, no copper**. Nothing has been built and nothing is routed. KiCad's DRC has
-seen only the board WITHOUT tracks (land patterns, courtyards, keep-outs, edge distances:
-0 errors, every connection still open); that is not the DRC of a routed board. The positions
-of the free parts in `gl1_cradle_design.py` are nominal.
+Stage: **layout**. Nothing has been built. The board is routed by the toolchain's router and
+judged by KiCad's DRC (`build_gl1_cradle.py`, section 9); sections 1 to 8 are the netlist
+stage (`build_netlist.py`, the board WITHOUT tracks) and still hold, with the two changes the
+layout made marked "LAYOUT".
 
 The board implements DESIGN_SPEC section 4, "Cradle board (E6)", on the mechanical interfaces
 of the `cradle` block of `design/master_params.yaml`: 30 x 22 mm, 1.6 mm, 2 layers, four screw
@@ -22,8 +22,10 @@ Evidence levels: **RESEARCH** (seen in `docs/research/*.md` as "confirmed"; not 
 | `make_usb_footprint.py`, `gl1_cradle_fp.pretty/` | the project copy of the receptacle's land pattern and the script that derives it from the installed KiCad library (section 6) |
 | `build_netlist.py` | runner (the stages of `../gl1_main/netlist_stage.py`): toolchain checks, rule table, schematic with netlist round trip, KiCad DRC of the board without tracks, exports |
 | `netlist_out/` | results of the last run |
+| `build_gl1_cradle.py`, `out/` | LAYOUT: one command - checks, rules, board with silkscreen legend, routing, KiCad DRC, fabrication and assembly outputs, schematic, quality figures (section 9) |
 
     /usr/bin/python3 -B electrical/gl1_cradle/build_netlist.py
+    /usr/bin/python3 -B electrical/gl1_cradle/build_gl1_cradle.py      # about 15 s
 
 Exit status 0 only if every stage passed. Content of the netlist:
 
@@ -51,9 +53,9 @@ differently from the letter of its source; section 6) or **FAIL**.
 | fitted | four spring pins fitted (VBUS, D-, D+, GND) and three service positions (SWDIO, SWCLK, NRST) for the factory fixture | SP1-SP4 fitted, SP5-SP7 not fitted (same footprint, fitted in the factory fixture) | pass |
 | service | (task) the three service positions taken to a small unpopulated header or test pads | J2: four bare pads on the bottom (GND, SWDIO, SWCLK, NRST) | pass |
 | USB-C | USB-C receptacle (USB 2.0; YAML: GCT USB4105, rear exit), the USB mouth at the YAML edge (usb_mouth_y -35.5) | J1 USB4105-GF-A, top side, body front at marker y -35.50 (1.3 mm beyond the board edge); SBU1 / SBU2 not connected | pass |
-| USB-C land | (KiCad DRC, rule set) 0.20 mm between a hole wall and foreign copper | J1 uses the project copy of KiCad's USB4105 land pattern: the four outer ground pads are 0.04 mm shorter; smallest distance from a locating-peg hole to a pad of J1 0.236 mm (library footprint: 0.194); the stored file equals the library file with exactly that change *(DEVIATION from the maker's land pattern, PROVISIONAL; no design rule is relaxed)* | **departure** |
+| USB-C land | (KiCad DRC, rule set) 0.20 mm between a hole wall and foreign copper | J1 uses the project copy of KiCad's USB4105 land pattern: the four outer ground pads are 0.04 mm shorter; smallest distance from a locating-peg hole to a pad of J1 0.236 mm (library footprint: 0.194); one pad object per wide land instead of two coincident ones (B1 on A12, B12 on A1, B4 on A9, B9 on A4); the stored file equals the library file with exactly these changes *(DEVIATION from the maker's land pattern, PROVISIONAL; no design rule is relaxed. The merged pad objects are a workaround for the toolchain's router, which cannot join coincident pads; the copper is unchanged)* | **departure** |
 | CC | 5.1 kohm from CC1 and from CC2 to ground | R1: CC1 (A5) - GND, R2: CC2 (B5) - GND, one resistor each | pass |
-| fuse | a resettable fuse in VBUS (hold about 0.2 A, trip about 0.5 A, PROPOSED) | F1 between VBUS_IN (J1 A4, A9, B4, B9) and VBUS (SP1): hold 200 mA, trip 500 mA (PROVISIONAL part MF-FSMF020X-2) | pass |
+| fuse | a resettable fuse in VBUS (hold about 0.2 A, trip about 0.5 A, PROPOSED) | F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold 200 mA, trip 500 mA (PROVISIONAL part MF-FSMF020X-2) | pass |
 | ESD | USBLC6-2SC6 on VBUS / D+ / D- | U1: D- through pins 1 + 6, D+ through pins 3 + 4, pin 5 on VBUS_IN (C1 100n), pin 2 GND *(ADDED: C1 100 nF at the VBUS pin of U1; the clamp sits on the connector side of the fuse)* | pass |
 | top side | nothing on the top side may reach the pocket ceiling (YAML note) | height limit 0.0 mm on the whole top side, J1 and SP1-SP7 exempt; every other part is on the bottom | pass |
 | pin tables | (task) the pin -> pad table of every library-backed part agrees with a second source | U1 against the installed KiCad symbol USBLC6-2SC6, J1 against USB_C_Receptacle_USB2.0_16P (pad numbers and pin names): all agree *(the spring pins and the fuse have one or two interchangeable pads)* | pass |
@@ -63,7 +65,7 @@ differently from the letter of its source; section 6) or **FAIL**.
 
 ## 3. The circuit
 
-    J1 USB-C  VBUS (A4 A9 B4 B9) --+-- F1 (PTC 0.2 A) ---- VBUS ---- SP1   pin 1  x = -7.62
+    J1 USB-C  VBUS (A4/B9 A9/B4) --+-- F1 (PTC 0.2 A) ---- VBUS ---- SP1   pin 1  x = -7.62
                                    +-- U1 pin 5, C1 100 nF
               D- (A7 B7) ---------- U1 pins 1 + 6 -------- USB_DM -- SP2   pin 2
               D+ (A6 B6) ---------- U1 pins 3 + 4 -------- USB_DP -- SP3   pin 3
@@ -123,7 +125,7 @@ in the table `PTC` of the design file.
 | J1 | body envelope 8.94 x 7.35 x 3.26 mm (mechanical model); that the KiCad land pattern's front (3.675 mm before its anchor) is the mouth of the shell; the four shortened ground pads of the project copy (section 6) against GCT's drawing |
 | R1, R2, C1 | MPNs from memory |
 | USB-C behaviour | Rd range, default current of a source, 4.75 V lower limit: from memory of the USB specifications |
-| placement | nominal |
+| placement | final for this revision (section 9); nothing has been built |
 
 `netlist_out/gl1_cradle-bom-status.csv` carries the status of every BOM line.
 
@@ -133,8 +135,9 @@ in the table `PTC` of the design file.
 |---|---|---|
 | (not in the spec) | C1 100 nF at U1 | the clamp's supply pin |
 | "three service positions for the factory fixture" | the three pin footprints stay on the board, not fitted, and are also taken to four bare pads (with GND) | the task asks for a header or test pads; the fixture can use either |
-| 2 layers | no plane is declared | the layout step decides whether the bottom becomes a ground pour |
+| 2 layers | no plane is declared; LAYOUT: ground is routed as 0.40 mm tracks, there is no pour | 29 connections on a 30 x 22 mm board; a pour would need thermal modelling the router does not have |
 | KiCad's land pattern for the USB4105 | a project copy with the four outer ground pads (A1 / B12, A12 / B1) 0.04 mm shorter: 1.11 instead of 1.15 mm | see below |
+| KiCad's land pattern for the USB4105 (LAYOUT) | the project copy has ONE pad object per wide land: A1, A4, A9, A12; the library's coincident duplicates B12, B9, B4, B1 are dropped. Copper, mask and paste are unchanged | workaround for a toolchain bug: the router cannot join two coincident pads of one net and then leaves the whole net open (section 9) |
 
 **The receptacle's land pattern.** KiCad's library footprint has 0.194 mm between each of its
 two locating-peg holes (non-plated, dia 0.65) and the corner of the neighbouring ground pad.
@@ -158,6 +161,53 @@ Nothing was relaxed, excluded or waived.
 
 ## 8. Not done
 
-No copper and no routed board (the layout step); KiCad's DRC ran on the board without tracks only (0 errors, 29 unconnected items). No datasheet was read.
-`mechanical/cad/board_import.py` checks the main board only; nothing in the mechanical package
-checks this board's file.
+No datasheet was read. `mechanical/cad/board_import.py` checks the main board only; nothing in
+the mechanical package checks this board's file (`out/gl1_cradle-mechanical.json`).
+
+## 9. Layout (LAYOUT stage)
+
+`/usr/bin/python3 -B electrical/gl1_cradle/build_gl1_cradle.py` builds everything into `out/`
+and exits 0 only if every stage passed: toolchain checks, the rule table with its self-test,
+board, routing, KiCad DRC, outputs verified against the model, schematic round trip.
+
+| | |
+|---|---|
+| board | 30 x 22 x 1.6 mm, 2 layers, rule set `US_2L_STD` (tracks 0.20 mm, supply 0.40 mm, clearance 0.15 mm, vias 0.50 / 0.25 mm) |
+| placement | J1 and the seven spring pins on the top side at their YAML positions; F1, U1, C1, R1, R2 and the four service pads J2 on the bottom; three fiducials per side |
+| routing | 29 of 29 connections, 9 vias, 127 mm of track (x1.10 of the spanning trees), router run time about 2 s |
+| KiCad DRC | 0 errors, 0 unconnected; 1 cosmetic warning (`silk_overlap`: the "GND" label touches the pin-1 dot of J2). Nothing is excluded |
+| outputs | Gerbers (2 copper layers, mask, paste, silkscreen, outline), drill (9 vias 0.25, 4 slots 0.60 for the shell, 7 holes 0.90 for the spring pins, NPTH 2 x 0.65 and 4 x 2.20), position file (10 rows), BOM 7 lines and the same BOM with a status column (`out/assembly/gl1_cradle-bom-status.csv`: 6 PROVISIONAL, 1 RESEARCH), netlist and mechanical JSON, STEP, renders, fab README |
+
+**The mirror, checked.** The YAML lists the marker's pads seen from above: VBUS at x = -7.62 ...
+NRST at x = +7.62. This board is drawn in the same frame, also seen from above, and its pins
+stand on the top side and press upward on the marker's underside. A pin at board x meets the
+pad at marker x: there is no mirror. SP1 (x = -7.62) is VBUS; rule row "pin row" measures the
+pad centres and the self-test catches a mirrored row. The only mirrored view is the one from
+below: on the bottom silkscreen VBUS is on the right, as the spec says of the marker's
+underside ("seen from below, with the visor away from you, VBUS is on the right").
+
+**Silkscreen.** Top side: "1 VBUS", "2 D-", "3 D+", "4 GND", "5 SWDIO", "6 SWCLK", "7 NRST"
+under the pins and the board name. Bottom side: the pin name above every pin, the name beside
+every service pad, the board name and revision. The toolchain has no board-level text; the
+legend is written into the board file by `../gl1_main/silk_text.py` before the routing is
+applied and before KiCad's DRC runs, so it is on the judged board and in the Gerbers
+(`gl1_cradle_design.silk_legend()` is the list).
+
+**Toolchain findings (reported, nothing in `electrical/tools/` was edited).**
+
+- The router cannot join two pads of one net that lie on top of each other (KiCad's USB4105
+  footprint has four such pairs). It reports the connection between the twins as "not routed"
+  and then leaves the whole net open: the first run of this board made 22 of 33 connections
+  with VBUS_IN and GND open. Worked around in the project copy of the footprint (one pad
+  object per land); a reproduction with one footprint of three pads is in the layout report.
+- `gleda.checks` skips the pad-to-hole test for a part with `allow_overhang=True` (found at
+  the netlist stage, section 6).
+- No board-level silkscreen text (above).
+
+**Figures measured on the copper** (`out/layout_quality.md`): smallest gap from a via to a
+top-side pad 0.269 mm (own net) and 0.170 mm (other net); smallest solder-mask web 0.200 mm
+(between the receptacle's lands A9 and A12); routed copper 0.348 mm from the edge at least,
+pads 0.236 mm from the locating-peg holes of the receptacle.
+
+**Open for the mechanical owner**: the 1.3 mm overhang of the receptacle (section 7); the
+Mill-Max pin dimensions (`MILLMAX_0914`), which set the 0.90 mm holes.

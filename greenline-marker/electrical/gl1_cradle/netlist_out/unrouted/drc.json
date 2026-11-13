@@ -44,30 +44,7 @@
       "description": "Missing connection between items",
       "items": [
         {
-          "description": "Pad B1 [GND] of J1 on F.Cu",
-          "kicad_x": 103.2,
-          "kicad_y": 104.925,
-          "x": 3.2,
-          "y": -4.925
-        },
-        {
-          "description": "PTH pad S1 [GND] of J1",
-          "kicad_x": 104.32,
-          "kicad_y": 105.52,
-          "x": 4.32,
-          "y": -5.52
-        }
-      ],
-      "rule": "Local override",
-      "section": "unconnected",
-      "severity": "error",
-      "type": "unconnected_items"
-    },
-    {
-      "description": "Missing connection between items",
-      "items": [
-        {
-          "description": "Pad B12 [GND] of J1 on F.Cu",
+          "description": "Pad A1 [GND] of J1 on F.Cu",
           "kicad_x": 96.8,
           "kicad_y": 104.925,
           "x": -3.2,
@@ -90,18 +67,41 @@
       "description": "Missing connection between items",
       "items": [
         {
-          "description": "Pad B12 [GND] of J1 on F.Cu",
-          "kicad_x": 96.8,
-          "kicad_y": 104.925,
-          "x": -3.2,
-          "y": -4.925
+          "description": "PTH pad S1 [GND] of J1",
+          "kicad_x": 104.32,
+          "kicad_y": 105.52,
+          "x": 4.32,
+          "y": -5.52
         },
+        {
+          "description": "Pad A12 [GND] of J1 on F.Cu",
+          "kicad_x": 103.2,
+          "kicad_y": 104.925,
+          "x": 3.2,
+          "y": -4.925
+        }
+      ],
+      "rule": "Local override",
+      "section": "unconnected",
+      "severity": "error",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Missing connection between items",
+      "items": [
         {
           "description": "Pad 2 [GND] of R1 on B.Cu",
           "kicad_x": 97.11,
           "kicad_y": 102.8,
           "x": -2.89,
           "y": -2.8
+        },
+        {
+          "description": "Pad A1 [GND] of J1 on F.Cu",
+          "kicad_x": 96.8,
+          "kicad_y": 104.925,
+          "x": -3.2,
+          "y": -4.925
         }
       ],
       "rule": "Local override",
@@ -120,7 +120,7 @@
           "y": -2.8
         },
         {
-          "description": "Pad B1 [GND] of J1 on F.Cu",
+          "description": "Pad A12 [GND] of J1 on F.Cu",
           "kicad_x": 103.2,
           "kicad_y": 104.925,
           "x": 3.2,
@@ -251,17 +251,17 @@
       "description": "Missing connection between items",
       "items": [
         {
-          "description": "Pad 2 [GND] of C1 on B.Cu",
-          "kicad_x": 101.58,
-          "kicad_y": 99.4,
-          "x": 1.58,
-          "y": 0.6
-        },
-        {
           "description": "Pad 2 [GND] of U1 on B.Cu",
           "kicad_x": 96.8625,
           "kicad_y": 99.4,
           "x": -3.1375,
+          "y": 0.6
+        },
+        {
+          "description": "Pad 2 [GND] of C1 on B.Cu",
+          "kicad_x": 101.58,
+          "kicad_y": 99.4,
+          "x": 1.58,
           "y": 0.6
         }
       ],
@@ -350,7 +350,7 @@
           "y": -4.945
         },
         {
-          "description": "Pad B4 [VBUS_IN] of J1 on F.Cu",
+          "description": "Pad A9 [VBUS_IN] of J1 on F.Cu",
           "kicad_x": 102.4,
           "kicad_y": 104.945,
           "x": 2.4,
@@ -366,18 +366,18 @@
       "description": "Missing connection between items",
       "items": [
         {
-          "description": "Pad A4 [VBUS_IN] of J1 on F.Cu",
-          "kicad_x": 97.6,
-          "kicad_y": 104.945,
-          "x": -2.4,
-          "y": -4.945
-        },
-        {
           "description": "Pad 5 [VBUS_IN] of U1 on B.Cu",
           "kicad_x": 99.1375,
           "kicad_y": 99.4,
           "x": -0.8625,
           "y": 0.6
+        },
+        {
+          "description": "Pad A4 [VBUS_IN] of J1 on F.Cu",
+          "kicad_x": 97.6,
+          "kicad_y": 104.945,
+          "x": -2.4,
+          "y": -4.945
         }
       ],
       "rule": "Local override",

@@ -58,7 +58,7 @@ from gleda.model import BOTTOM, TOP            # noqa: E402
 OLD_MPNS = ("MCP73831", "NCP15XH103F03RC", "1N4148", "SFH 4053")
 OLD_NETS = ("CHG_PROG", "CHG_PROG_SW", "CHG_PROG_EN", "CHG_STAT_RAW")
 #: "keep it away from the charger and regulators" has no number in the spec;
-#: this is the floor the nominal placement is tested against (body to body)
+#: this is the floor the placement is tested against (body to body)
 IMU_MIN_DISTANCE = 2.5
 
 #: the pin-1 edge of the LCD tail that the research's inference gives (see
@@ -345,7 +345,7 @@ def rules(design):
         "0402-in-0804 arrays per camera, Panasonic EXB-28V221JX)",
         "RN1-RN3 at U2, RN4-RN6 at U3: camera pin - A side, bus (CAM_D0..7, CAM_PCLK, CAM_HREF, "
         "CAM_VSYNC) - B side, element by element as in the tables CAM_ARRAY_MAP, one per camera (free for the layout "
-        "step); the 12th element of each camera is unconnected; nominal placement: every array within "
+        "step); the 12th element of each camera is unconnected; placement: every array within "
         "%.1f mm of its camera body" % far,
         ok and all(mpn(r) == "EXB-28V221JX" and ohms(P[r].value) == 220.0
                    for r in ("RN1", "RN2", "RN3", "RN4", "RN5", "RN6")) and far <= 3.0)
@@ -357,7 +357,7 @@ def rules(design):
         "R9 33R between MCO (PA8) and CAM_XVCLK (both XVCLK balls)",
         two("R9", "MCO", "CAM_XVCLK", "33R") and only("MCO", "U1.PA8", "R9.1")
         and only("CAM_XVCLK", "R9.2", "U2.XVCLK", "U3.XVCLK"),
-        "nominal placement: R9 is %.1f mm from pad 41; nothing fits between the MCU and the battery, "
+        "placement: R9 is %.1f mm from pad 41; nothing fits between the MCU and the battery, "
         "the layout step moves it as close as it can" % geometry.part_body_polygon(P["R9"]).distance(
             next(q.polygon for q in pads("U1") if q.number == "41")))
     row("cam 2d", "Each PWDN line has a 1 kohm series resistor and must not use PA9, PA2 or PC10",
@@ -573,7 +573,7 @@ def rules(design):
     d_ntc = {r: geometry.part_body_polygon(P[r]).distance(cell) for r in ("RT1", "RT2") if r in P}
     row("E2 a", "Two 10 kohm NTCs (Murata NCU15XH103F60RC, 0402, B 3380 K) on the top side within "
         "1 mm of the cell edge",
-        "RT1, RT2: NCU15XH103F60RC, top side; nominal placement %s from the cell body"
+        "RT1, RT2: NCU15XH103F60RC, top side; placement %s from the cell body"
         % ", ".join("%s %.2f mm" % (r, d) for r, d in sorted(d_ntc.items())),
         len(d_ntc) == 2 and all(mpn(r) == "NCU15XH103F60RC" and P[r].side == TOP
                                 and "0402" in P[r].footprint_name and 0.0 < d_ntc[r] <= 1.0
@@ -639,7 +639,7 @@ def rules(design):
         "board test powers the board through BT1 / BT2 (the cell-lead pads)")
     row("imu area", "No copper pours or vias under the IMU body on the top layer; keep it away from "
         "the charger and regulators",
-        "rule area under_U4 on F.Cu (tracks, vias, pours); nominal placement: U4 to U9 %.1f mm, to U8 "
+        "rule area under_U4 on F.Cu (tracks, vias, pours); placement: U4 to U9 %.1f mm, to U8 "
         "%.1f, to U7 %.1f, to U11 %.1f mm" % tuple(dist_body("U4", r) for r in ("U9", "U8", "U7", "U11")),
         any(k.name == "under_U4" and k.tracks and k.vias and k.copper for k in design.keepouts)
         and min(dist_body("U4", r) for r in ("U9", "U8", "U7", "U11")) >= IMU_MIN_DISTANCE,

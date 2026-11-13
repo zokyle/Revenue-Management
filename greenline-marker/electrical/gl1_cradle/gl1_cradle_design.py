@@ -1,10 +1,12 @@
 #!/usr/bin/python3
-"""GreenLine GL-1 charging / data cradle board - netlist as code (gleda 0.4.0).
+"""GreenLine GL-1 charging / data cradle board - netlist and layout as code (gleda 0.4.0).
 
-STAGE: NETLIST.  Nothing has been built, nothing is routed; the positions of
-the free parts are NOMINAL.  The mechanical interfaces (outline, four screw
-holes, the seven spring-pin positions, the USB-C mouth) come from the
-``cradle`` block of ``design/master_params.yaml``, read at import time.
+STAGE: LAYOUT.  Nothing has been built.  ``build_gl1_cradle.py`` routes this
+board with the toolchain's router and takes it through KiCad's DRC and the
+output stage; ``build_netlist.py`` is the earlier stage without copper.  The
+mechanical interfaces (outline, four screw holes, the seven spring-pin
+positions, the USB-C mouth) come from the ``cradle`` block of
+``design/master_params.yaml``, read at import time.
 
 What the board is (DESIGN_SPEC section 4, "Cradle board (E6)"): a USB-C
 receptacle (USB 2.0 only), 5.1 kohm from CC1 and from CC2 to ground so that a
@@ -106,6 +108,9 @@ SCREW_HEAD_DIA = 4.0                                 # PROVISIONAL: pan head of 
 #: make_usb_footprint.py): the four outer ground pads are 0.04 mm shorter, because the library
 #: footprint has only 0.194 mm between its own locating-peg holes and those pads and KiCad's DRC
 #: asks for 0.20 mm (hole wall to foreign copper).  No rule is relaxed.  PROVISIONAL.
+#: LAYOUT: the copy also has ONE pad object per wide land (the library has two coincident ones:
+#: A1 / B12, A4 / B9, A9 / B4, A12 / B1), because the toolchain's router cannot join coincident
+#: pads; the copper is the same.
 F.add_library_dir(HERE)
 USBC = "gl1_cradle_fp:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal_GL1"
 R0402 = "Resistor_SMD:R_0402_1005Metric"
@@ -117,13 +122,54 @@ PROV, RES = "PROVISIONAL", "RESEARCH"
 #: body of the KiCad USB4105 footprint reaches 3.675 mm in front of its anchor
 USB_BODY_FRONT = 3.675
 
-#: NOMINAL placement of the free parts (bottom side).  ref -> (x, y, rotation)
+#: LAYOUT: placement of the free parts (bottom side).  ref -> (x, y, rotation)
 PLACEMENT = {
     "F1": (-8.0, -1.6, 0.0), "C1": (1.1, 0.6, 0.0), "U1": (-2.0, 0.6, 0.0),
     "R1": (-3.4, -2.8, 0.0), "R2": (3.4, -2.8, 0.0), "J2": (7.0, 2.6, 0.0),
 }
-FIDUCIALS_TOP = [(-11.0, 1.5), (11.5, -2.0), (0.0, 9.5)]
-FIDUCIALS_BOTTOM = [(-11.5, 4.0), (12.0, -3.5), (0.0, 9.5)]
+#: three per side, not in line, clear of the silkscreen legend round the pin row
+FIDUCIALS_TOP = [(-11.0, 1.5), (11.5, -2.0), (12.5, 4.6)]
+FIDUCIALS_BOTTOM = [(-11.5, 4.0), (12.0, -3.5), (-12.5, -4.5)]
+
+#: LAYOUT: options of the toolchain's router for this board (defaults)
+ROUTER_OPTIONS = {}
+
+#: The pin order as it is printed on the silkscreen.
+#:
+#: MIRROR CHECK.  The YAML lists the marker's seven pads seen from ABOVE in the
+#: marker frame: VBUS at x = -7.62 ... NRST at x = +7.62.  This board is drawn
+#: in the same frame, also seen from above (board x = marker x, see "Frames"),
+#: and its spring pins stand on the TOP side and press upward on the marker's
+#: underside.  A pin at board x therefore meets the pad at marker x: no mirror.
+#: SP1 at x = -7.62 is VBUS (check_cradle_rules.py, row "pin row", measures the
+#: pad centres).  A mirror would only appear in a view from BELOW (the bottom
+#: silkscreen is such a view: its text is mirrored by KiCad so that it reads
+#: correctly from below, and each label still sits at its pin).
+SILK_PIN_LABELS = ("VBUS", "D-", "D+", "GND", "SWDIO", "SWCLK", "NRST")
+
+
+def silk_legend():
+    """[(text, x, y, {options})] for gl1_main/silk_text.add_silk_text: the
+    pin number and name under every spring pin on the top side, the name
+    above every pin and beside every service pad on the bottom side, and the
+    board name on both sides.  Design mm, seen from the top."""
+    items = []
+    for i, (name, x) in enumerate(zip(SILK_PIN_LABELS, PIN_XS), start=1):
+        # top: reads upward and ends 1.25 mm below the pin axis (the pad is dia 1.6)
+        items.append(("%d %s" % (i, name), round(x, 3), round(PIN_Y - 1.25, 3),
+                      {"rotation": 90.0, "side": "top", "height": 0.8, "justify": "right"}))
+        # bottom: starts 1.25 mm above the pin axis (mirrored text: KiCad's "right" is the
+        # end nearer the pin here; build_gl1_cradle.py's review pictures show the result)
+        items.append((name, round(x, 3), round(PIN_Y + 1.25, 3),
+                      {"rotation": 90.0, "side": "bottom", "height": 0.7, "justify": "right"}))
+    jx, jy = PLACEMENT["J2"][:2]
+    for k, name in enumerate(("GND", "SWDIO", "SWCLK", "NRST")):
+        items.append((name, round(jx + (k - 1.5) * 2.54, 3), round(jy - 1.15, 3),
+                      {"rotation": 90.0, "side": "bottom", "height": 0.7, "justify": "left"}))
+    items.append(("GL-1 CRADLE %s" % Y["rev"], 0.0, -2.6, {"side": "top", "height": 0.8}))
+    items.append(("GL-1 CRADLE", 0.0, -7.6, {"side": "bottom", "height": 0.7}))
+    items.append((str(Y["rev"]), 0.0, -8.8, {"side": "bottom", "height": 0.7}))
+    return items
 
 #: two-layer rule set: the board minimums of the toolchain's standard fab,
 #: wider default tracks (this board has room)
@@ -158,7 +204,7 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
     for i, (x, y) in enumerate(SCREWS, start=1):
         outline.add_hole(x, y, SCREW_HOLE_DIA, name="MH%d" % i)
     d = Design(name, outline, layers=2, rules=CRADLE_RULES, board_thickness=BOARD_THICKNESS,
-               title="GreenLine GL-1 cradle board (netlist stage, nothing routed)",
+               title="GreenLine GL-1 cradle board",
                revision=str(Y["rev"]), company="GreenLine")
     d.fab_notes += [
         "The TOP face lies against a plastic ceiling: only J1 and the spring pins stand on it.",
@@ -169,7 +215,9 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
     # ---- USB-C receptacle, top side, mouth toward -y, overhanging the rear edge ----------
     # spec E6: "USB-C receptacle (USB 2.0)"; YAML: "GCT USB4105 USB-C receptacle, rear exit"
     usb_pins = {
-        "GND": (("A1", "A12", "B1", "B12"), "passive"), "VBUS": (("A4", "A9", "B4", "B9"), "passive"),
+        # one pad object per wide land: A1 is also contact B12, A4 also B9, A9 also B4, A12 also B1
+        # (make_usb_footprint.MERGED_LANDS: the router cannot join two coincident pads of one net)
+        "GND": (("A1", "A12"), "passive"), "VBUS": (("A4", "A9"), "passive"),
         "CC1": ("A5", "passive"), "CC2": ("B5", "passive"),
         "DP": (("A6", "B6"), "passive"), "DM": (("A7", "B7"), "passive"),
         "SBU1": ("A8", "nc"), "SBU2": ("B8", "nc"), "SHIELD": ("S1", "passive"),

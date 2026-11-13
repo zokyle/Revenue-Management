@@ -1,0 +1,23 @@
+{
+ "seconds": {
+  "board": 0.2,
+  "checks": 0.3,
+  "drc": 0.9,
+  "outputs": 3.5,
+  "quality": 1.9,
+  "route": 3.9,
+  "rules": 0.2,
+  "schematic": 2.0,
+  "total": 13.0
+ },
+ "stages_run": [
+  "checks",
+  "rules",
+  "board",
+  "route",
+  "drc",
+  "outputs",
+  "schematic",
+  "quality"
+ ]
+}

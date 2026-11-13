@@ -1,0 +1,62 @@
+{
+ "all_signal_nets": {
+  "nets_over_1_5": 0,
+  "signal_length_mm": 126.78,
+  "signal_ratio": 1.1,
+  "signal_tree_mm": 115.267
+ },
+ "camera_nets": {},
+ "copper_to_edge": {
+  "note": "edge = board outline, the locating slot and the NPTH hole wall; rule 0.30 mm",
+  "pad": "pad J1.A1",
+  "pad_mm": 0.2358,
+  "routed_copper_mm": 0.3482,
+  "routed_item": "track GND F.Cu"
+ },
+ "router_warnings": [],
+ "solder_mask": {
+  "bottom": {
+   "between": [
+    "U1.1",
+    "U1.2"
+   ],
+   "openings": 32,
+   "smallest_web_mm": 0.35,
+   "touching_openings_of_different_nets": 0
+  },
+  "top": {
+   "between": [
+    "J1.A9",
+    "J1.A12"
+   ],
+   "openings": 26,
+   "smallest_web_mm": 0.2,
+   "touching_openings_of_different_nets": 0
+  }
+ },
+ "solder_mask_note": "mask openings are drawn 1:1 on the pads (board expansion 0.000 mm); an open via on the top side counts as an opening of its pad size",
+ "via_to_top_pad": {
+  "other_net": {
+   "gap_mm": 0.17,
+   "pad": "J1.A12",
+   "via_net": "VBUS_IN",
+   "via_x": 3.05,
+   "via_y": -3.95
+  },
+  "own_net": {
+   "gap_mm": 0.2686,
+   "pad": "J1.A5",
+   "via_net": "CC1",
+   "via_x": -1.65,
+   "via_y": -3.95
+  }
+ },
+ "vias": {
+  "by_net_class": {
+   "Default": 4,
+   "Power": 5
+  },
+  "on_plane_nets": 0,
+  "total": 9
+ }
+}

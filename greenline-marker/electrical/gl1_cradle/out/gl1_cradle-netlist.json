@@ -1,0 +1,687 @@
+{
+ "counts": {
+  "nets": 10,
+  "pads_on_nets": 36,
+  "parts": 20
+ },
+ "design": "gl1_cradle",
+ "netclasses": {
+  "Default": {
+   "clearance": 0.15,
+   "description": "",
+   "min_track_width": null,
+   "name": "Default",
+   "track_width": 0.2,
+   "via_diameter": 0.5,
+   "via_drill": 0.25
+  },
+  "Power": {
+   "clearance": 0.15,
+   "description": "",
+   "min_track_width": null,
+   "name": "Power",
+   "track_width": 0.4,
+   "via_diameter": 0.5,
+   "via_drill": 0.25
+  }
+ },
+ "nets": {
+  "CC1": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CC1",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "J1.CC1",
+    "R1.1"
+   ],
+   "pads": [
+    "J1.A5",
+    "R1.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "CC2": {
+   "layers": null,
+   "max_vias": null,
+   "name": "CC2",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "J1.CC2",
+    "R2.1"
+   ],
+   "pads": [
+    "J1.B5",
+    "R2.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "GND": {
+   "layers": null,
+   "max_vias": null,
+   "name": "GND",
+   "netclass": "Power",
+   "no_route": false,
+   "nodes": [
+    "R1.2",
+    "R2.2",
+    "J1.GND",
+    "J1.SHIELD",
+    "U1.GND",
+    "C1.2",
+    "SP4.1",
+    "J2.GND"
+   ],
+   "pads": [
+    "R1.2",
+    "R2.2",
+    "J1.A1",
+    "J1.A12",
+    "J1.S1",
+    "U1.2",
+    "C1.2",
+    "SP4.1",
+    "J2.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "NRST": {
+   "layers": null,
+   "max_vias": null,
+   "name": "NRST",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "SP7.1",
+    "J2.NRST"
+   ],
+   "pads": [
+    "SP7.1",
+    "J2.4"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SWCLK": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SWCLK",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "SP6.1",
+    "J2.SWCLK"
+   ],
+   "pads": [
+    "SP6.1",
+    "J2.3"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "SWDIO": {
+   "layers": null,
+   "max_vias": null,
+   "name": "SWDIO",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "SP5.1",
+    "J2.SWDIO"
+   ],
+   "pads": [
+    "SP5.1",
+    "J2.2"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "USB_DM": {
+   "layers": null,
+   "max_vias": null,
+   "name": "USB_DM",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "J1.DM",
+    "U1.IO1A",
+    "U1.IO1B",
+    "SP2.1"
+   ],
+   "pads": [
+    "J1.A7",
+    "J1.B7",
+    "U1.1",
+    "U1.6",
+    "SP2.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "USB_DP": {
+   "layers": null,
+   "max_vias": null,
+   "name": "USB_DP",
+   "netclass": "Default",
+   "no_route": false,
+   "nodes": [
+    "J1.DP",
+    "U1.IO2A",
+    "U1.IO2B",
+    "SP3.1"
+   ],
+   "pads": [
+    "J1.A6",
+    "J1.B6",
+    "U1.3",
+    "U1.4",
+    "SP3.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "VBUS": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VBUS",
+   "netclass": "Power",
+   "no_route": false,
+   "nodes": [
+    "F1.2",
+    "SP1.1"
+   ],
+   "pads": [
+    "F1.2",
+    "SP1.1"
+   ],
+   "planes": [],
+   "power_flag": false,
+   "priority": 0,
+   "width": null
+  },
+  "VBUS_IN": {
+   "layers": null,
+   "max_vias": null,
+   "name": "VBUS_IN",
+   "netclass": "Power",
+   "no_route": false,
+   "nodes": [
+    "J1.VBUS",
+    "F1.1",
+    "U1.VBUS",
+    "C1.1"
+   ],
+   "pads": [
+    "J1.A4",
+    "J1.A9",
+    "F1.1",
+    "U1.5",
+    "C1.1"
+   ],
+   "planes": [],
+   "power_flag": true,
+   "priority": 0,
+   "width": null
+  }
+ },
+ "no_connects": [],
+ "parts": {
+  "C1": {
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "group": "usb",
+   "in_bom": true,
+   "mpn": "GRM155R71C104KA88D",
+   "pins": {
+    "1": {
+     "net": "VBUS_IN",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "100n"
+  },
+  "F1": {
+   "dnp": false,
+   "footprint": "Fuse:Fuse_0603_1608Metric",
+   "group": "usb",
+   "in_bom": true,
+   "mpn": "MF-FSMF020X-2",
+   "pins": {
+    "1": {
+     "net": "VBUS_IN",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "VBUS",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "PTC 0.2A"
+  },
+  "FID1": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID2": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID3": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID4": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID5": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "FID6": {
+   "dnp": false,
+   "footprint": "gleda:Fiducial_1mm_Mask2mm",
+   "group": "board",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {},
+   "value": "Fiducial"
+  },
+  "J1": {
+   "dnp": false,
+   "footprint": "gl1_cradle_fp:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal_GL1",
+   "group": "usb",
+   "in_bom": true,
+   "mpn": "USB4105-GF-A",
+   "pins": {
+    "CC1": {
+     "net": "CC1",
+     "pads": [
+      "A5"
+     ],
+     "type": "passive"
+    },
+    "CC2": {
+     "net": "CC2",
+     "pads": [
+      "B5"
+     ],
+     "type": "passive"
+    },
+    "DM": {
+     "net": "USB_DM",
+     "pads": [
+      "A7",
+      "B7"
+     ],
+     "type": "passive"
+    },
+    "DP": {
+     "net": "USB_DP",
+     "pads": [
+      "A6",
+      "B6"
+     ],
+     "type": "passive"
+    },
+    "GND": {
+     "net": "GND",
+     "pads": [
+      "A1",
+      "A12"
+     ],
+     "type": "passive"
+    },
+    "SBU1": {
+     "net": null,
+     "pads": [
+      "A8"
+     ],
+     "type": "nc"
+    },
+    "SBU2": {
+     "net": null,
+     "pads": [
+      "B8"
+     ],
+     "type": "nc"
+    },
+    "SHIELD": {
+     "net": "GND",
+     "pads": [
+      "S1"
+     ],
+     "type": "passive"
+    },
+    "VBUS": {
+     "net": "VBUS_IN",
+     "pads": [
+      "A4",
+      "A9"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "USB-C"
+  },
+  "J2": {
+   "dnp": false,
+   "footprint": "gleda:ServicePads_4x1.5mm_P2.54",
+   "group": "pins",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {
+    "GND": {
+     "net": "GND",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "NRST": {
+     "net": "NRST",
+     "pads": [
+      "4"
+     ],
+     "type": "passive"
+    },
+    "SWCLK": {
+     "net": "SWCLK",
+     "pads": [
+      "3"
+     ],
+     "type": "passive"
+    },
+    "SWDIO": {
+     "net": "SWDIO",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "Service pads"
+  },
+  "R1": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "usb",
+   "in_bom": true,
+   "mpn": "RC0402FR-075K1L",
+   "pins": {
+    "1": {
+     "net": "CC1",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "5k1"
+  },
+  "R2": {
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "group": "usb",
+   "in_bom": true,
+   "mpn": "RC0402FR-075K1L",
+   "pins": {
+    "1": {
+     "net": "CC2",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "2": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "5k1"
+  },
+  "SP1": {
+   "dnp": false,
+   "footprint": "gleda:MillMax_0914_TH_PROVISIONAL",
+   "group": "pins",
+   "in_bom": true,
+   "mpn": "0914-0-15-20-77-14-11-0",
+   "pins": {
+    "1": {
+     "net": "VBUS",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "0914 pin"
+  },
+  "SP2": {
+   "dnp": false,
+   "footprint": "gleda:MillMax_0914_TH_PROVISIONAL",
+   "group": "pins",
+   "in_bom": true,
+   "mpn": "0914-0-15-20-77-14-11-0",
+   "pins": {
+    "1": {
+     "net": "USB_DM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "0914 pin"
+  },
+  "SP3": {
+   "dnp": false,
+   "footprint": "gleda:MillMax_0914_TH_PROVISIONAL",
+   "group": "pins",
+   "in_bom": true,
+   "mpn": "0914-0-15-20-77-14-11-0",
+   "pins": {
+    "1": {
+     "net": "USB_DP",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "0914 pin"
+  },
+  "SP4": {
+   "dnp": false,
+   "footprint": "gleda:MillMax_0914_TH_PROVISIONAL",
+   "group": "pins",
+   "in_bom": true,
+   "mpn": "0914-0-15-20-77-14-11-0",
+   "pins": {
+    "1": {
+     "net": "GND",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "0914 pin"
+  },
+  "SP5": {
+   "dnp": true,
+   "footprint": "gleda:MillMax_0914_TH_PROVISIONAL",
+   "group": "pins",
+   "in_bom": true,
+   "mpn": "0914-0-15-20-77-14-11-0",
+   "pins": {
+    "1": {
+     "net": "SWDIO",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "0914 pin"
+  },
+  "SP6": {
+   "dnp": true,
+   "footprint": "gleda:MillMax_0914_TH_PROVISIONAL",
+   "group": "pins",
+   "in_bom": true,
+   "mpn": "0914-0-15-20-77-14-11-0",
+   "pins": {
+    "1": {
+     "net": "SWCLK",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "0914 pin"
+  },
+  "SP7": {
+   "dnp": true,
+   "footprint": "gleda:MillMax_0914_TH_PROVISIONAL",
+   "group": "pins",
+   "in_bom": true,
+   "mpn": "0914-0-15-20-77-14-11-0",
+   "pins": {
+    "1": {
+     "net": "NRST",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "0914 pin"
+  },
+  "U1": {
+   "dnp": false,
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "group": "usb",
+   "in_bom": true,
+   "mpn": "USBLC6-2SC6",
+   "pins": {
+    "GND": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "power_in"
+    },
+    "IO1A": {
+     "net": "USB_DM",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    },
+    "IO1B": {
+     "net": "USB_DM",
+     "pads": [
+      "6"
+     ],
+     "type": "passive"
+    },
+    "IO2A": {
+     "net": "USB_DP",
+     "pads": [
+      "3"
+     ],
+     "type": "passive"
+    },
+    "IO2B": {
+     "net": "USB_DP",
+     "pads": [
+      "4"
+     ],
+     "type": "passive"
+    },
+    "VBUS": {
+     "net": "VBUS_IN",
+     "pads": [
+      "5"
+     ],
+     "type": "power_in"
+    }
+   },
+   "value": "USBLC6-2SC6"
+  }
+ }
+}

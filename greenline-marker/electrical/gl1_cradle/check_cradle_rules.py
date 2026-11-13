@@ -80,6 +80,13 @@ def pin_table_problems(design):
                 pads |= set(part.pins[pin].pads) if pin in part.pins else {"missing pin %s" % pin}
             want = {num for num, nm in sym_pins.items() if nm == theirs}
             covered |= want
+            if ref == "J1":
+                # the project land pattern has one pad object per wide land (make_usb_footprint.py):
+                # contact B12 is on land A1, B9 on A4, B4 on A9, B1 on A12
+                import make_usb_footprint as _M
+                if any(_M.MERGED_LANDS.get(n, n) not in want for n in want):
+                    bad.append("J1.%s: a merged land carries contacts of different symbol pins" % mine)
+                want = {_M.MERGED_LANDS.get(n, n) for n in want}
             if pads != want:
                 bad.append("%s.%s on pad(s) %s, the symbol %s has %s on %s"
                            % (ref, mine, sorted(pads), sym, theirs, sorted(want)))
@@ -173,19 +180,24 @@ def rules(design):
     row("USB-C land", "(KiCad DRC, rule set) 0.20 mm between a hole wall and foreign copper",
         "J1 uses the project copy of KiCad's USB4105 land pattern: the four outer ground pads are 0.04 mm "
         "shorter; smallest distance from a locating-peg hole to a pad of J1 %.3f mm (library footprint: "
-        "0.194); the stored file equals the library file with exactly that change" % gap,
-        gap >= design.rules.hole_clearance + 0.01 and same and j1.footprint_name.endswith("_GL1"),
-        "DEVIATION from the maker's land pattern, PROVISIONAL; no design rule is relaxed")
+        "0.194); one pad object per wide land instead of two coincident ones (%s); the stored file equals "
+        "the library file with exactly these changes" % (gap, ", ".join(
+            "%s on %s" % kv for kv in sorted(M.MERGED_LANDS.items()))),
+        gap >= design.rules.hole_clearance + 0.01 and same and j1.footprint_name.endswith("_GL1")
+        and not any(q.number in M.MERGED_LANDS for q in copper_j1),
+        "DEVIATION from the maker's land pattern, PROVISIONAL; no design rule is relaxed. The merged pad "
+        "objects are a workaround for the toolchain's router, which cannot join coincident pads; the copper "
+        "is unchanged")
     row("CC", "5.1 kohm from CC1 and from CC2 to ground",
         "R1: CC1 (A5) - GND, R2: CC2 (B5) - GND, one resistor each",
         two("R1", "CC1", "GND") and two("R2", "CC2", "GND") and P["R1"].value == P["R2"].value == "5k1"
         and only("CC1", "J1.CC1", "R1.1") and only("CC2", "J1.CC2", "R2.1")
         and tuple(j1.pins["CC1"].pads) == ("A5",) and tuple(j1.pins["CC2"].pads) == ("B5",))
     row("fuse", "a resettable fuse in VBUS (hold about 0.2 A, trip about 0.5 A, PROPOSED)",
-        "F1 between VBUS_IN (J1 A4, A9, B4, B9) and VBUS (SP1): hold %d mA, trip %d mA (PROVISIONAL part %s)"
+        "F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold %d mA, trip %d mA (PROVISIONAL part %s)"
         % (G.PTC["hold_mA"], G.PTC["trip_mA"], G.PTC["mpn"]),
         two("F1", "VBUS_IN", "VBUS") and only("VBUS", "F1.2", "SP1.1") and net("J1.VBUS") == "VBUS_IN"
-        and tuple(j1.pins["VBUS"].pads) == ("A4", "A9", "B4", "B9")
+        and tuple(j1.pins["VBUS"].pads) == ("A4", "A9")
         and G.PTC["hold_mA"] == SPEC_HOLD_MA and G.PTC["trip_mA"] == SPEC_TRIP_MA
         and "F1" in P and P["F1"].mpn == G.PTC["mpn"])
     row("ESD", "USBLC6-2SC6 on VBUS / D+ / D-",

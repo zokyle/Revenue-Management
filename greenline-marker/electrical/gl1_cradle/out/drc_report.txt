@@ -1,0 +1,13 @@
+** Drc report for gl1_cradle.kicad_pcb **
+
+** Found 1 DRC violations **
+[silk_overlap]: Silkscreen overlap
+    Rule: board setup constraints silk; Severity: warning
+    @(103.1900 mm, 98.5500 mm): PCB Text 'GND' on B.Silkscreen
+    @(103.1900 mm, 98.5500 mm): Circle on B.Silkscreen
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** End of Report **

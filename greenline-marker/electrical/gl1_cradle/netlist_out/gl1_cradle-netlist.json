@@ -1,7 +1,7 @@
 {
  "counts": {
   "nets": 10,
-  "pads_on_nets": 40,
+  "pads_on_nets": 36,
   "parts": 20
  },
  "design": "gl1_cradle",
@@ -85,8 +85,6 @@
     "R2.2",
     "J1.A1",
     "J1.A12",
-    "J1.B1",
-    "J1.B12",
     "J1.S1",
     "U1.2",
     "C1.2",
@@ -237,8 +235,6 @@
    "pads": [
     "J1.A4",
     "J1.A9",
-    "J1.B4",
-    "J1.B9",
     "F1.1",
     "U1.5",
     "C1.1"
@@ -394,9 +390,7 @@
      "net": "GND",
      "pads": [
       "A1",
-      "A12",
-      "B1",
-      "B12"
+      "A12"
      ],
      "type": "passive"
     },
@@ -425,9 +419,7 @@
      "net": "VBUS_IN",
      "pads": [
       "A4",
-      "A9",
-      "B4",
-      "B9"
+      "A9"
      ],
      "type": "passive"
     }

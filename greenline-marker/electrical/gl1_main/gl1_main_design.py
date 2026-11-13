@@ -1,13 +1,14 @@
 #!/usr/bin/python3
-"""GreenLine GL-1 main board - netlist as code (gleda 0.4.0).
+"""GreenLine GL-1 main board - netlist and layout as code (gleda 0.4.0).
 
-STAGE: NETLIST.  Nothing has been built, nothing is routed, KiCad's DRC has
-not seen this board.  This file holds every part, net, net class, footprint,
-the MCU pin map and the mechanical contract of the board (outline, locating
-features, keep-outs, height limits) so that the toolchain's checks and its
-schematic generator can run.  The part positions in ``PLACEMENT`` are NOMINAL:
-legal (the checks pass) and roughly where each part belongs, nothing more.
-The layout step owns them.
+STAGE: LAYOUT.  Nothing has been built.  This file holds every part, net, net
+class, footprint, the MCU pin map, the mechanical contract of the board
+(outline, locating features, keep-outs, height limits) and the placement
+(``PLACEMENT``, ``CAM_ARRAY_MAP``, the fiducials, ``ROUTER_OPTIONS``).
+``build_gl1_main.py`` routes it with the toolchain's router and takes it
+through KiCad's DRC and the output stage; ``build_netlist.py`` is the earlier
+stage without copper.  ``LAYOUT_LOG.md`` records every routing attempt and
+says why the parts are where they are.
 
 Implements DESIGN_SPEC rev D with the amendments E1 to E16.  The ones that
 change the netlist: E1 (charger TI BQ25101 with a hardware thermistor input),
@@ -566,9 +567,26 @@ def camera_footprint():
 
 def charger_footprint():
     """PROVISIONAL land pattern of the BQ25101YFP (see BQ25101_BALLS): 2 columns
-    x 3 rows on 0.4 mm, A1 top left.  No clearance override: 0.40 - 0.23 =
-    0.17 mm between two lands is more than the standard 0.127 mm, and every
-    ball is on the perimeter, so no track has to pass between two balls."""
+    x 3 rows on 0.4 mm, A1 top left, made with the toolchain's BGA generator.
+
+    Copper: round lands of 0.23 mm (BQ25101_PAD_D), i.e. 0.17 mm between two
+    lands - more than the standard 0.127 mm clearance, so the pads need NO
+    clearance override and the part is laid out with the default rules.  Every
+    ball is on the perimeter (2 columns), so no track passes between two balls;
+    a 0.15 mm track leaves each land outward with 0.21 mm to the neighbouring
+    lands.  The two supply nets (0.30 mm class) neck down to 0.15 mm at the
+    0.23 mm lands (class Power, min_track_width).  The router does not treat
+    the part as a fine-pitch array (fewer than nine balls): no escape stage,
+    no via keep-out; vias keep the normal distance from the lands.
+
+    Mask and paste: the toolchain's board-level mask expansion is 0, so the
+    mask opening is drawn 1:1 on the land (0.23 mm) and the web between two
+    openings is 0.17 mm; paste 1:1.  Fab note: the fabricator's own mask
+    compensation must leave a web of at least 0.075 mm between these six
+    openings (and between the camera balls).  Whether TI recommends a
+    non-solder-mask-defined land of this size for the YFP package is
+    PROVISIONAL (memory of TI's wafer-level-package application note; the
+    mechanical page of SLUSBV8 has not been read)."""
     return F.bga("BQ25101_YFP_DSBGA6_P0.4_PROVISIONAL", 2, 3, pitch=BQ25101_PITCH,
                  pad_d=BQ25101_PAD_D, body=BQ25101_BODY, height=BQ25101_HEIGHT,
                  courtyard_margin=0.2,
@@ -657,6 +675,27 @@ PLACEMENT = {
 FIDUCIALS_TOP = [(-19.0, 0.9), (18.6, -5.5), (17.3, 8.6)]
 FIDUCIALS_BOTTOM = [(-13.5, -3.0), (14.0, -7.0), (0.0, 11.0)]
 
+#: LAYOUT: options of the toolchain's router (gleda.router.RouterOptions) this
+#: board is routed with; build_gl1_main.py passes them on, and they are part of
+#: the fingerprint of the stored routing.  LAYOUT_LOG.md says why each is set.
+ROUTER_OPTIONS = {"escape_neighbours": False, "escape_attempts": 6}
+#: seconds after which the router starts no new work (what is open then is
+#: reported as unrouted and the build fails)
+ROUTER_TIME_LIMIT = 3600.0
+
+#: LAYOUT: per-net router options (gleda.model.Net: layers, max_vias, priority).
+#: The two crystal nets stay on the top layer and take no via (short, over the
+#: solid ground plane of layer 2, nothing of them on the far side of the board);
+#: they and the USB pair are routed before the rest so that they get the direct
+#: way.  The router has no guard-trace and no differential-pair mode: what runs
+#: how close to these nets is measured afterwards (layout_quality.py).
+NET_ROUTING = {
+    "OSC32_IN": {"layers": ("F.Cu",), "max_vias": 0, "priority": 3},
+    "OSC32_OUT": {"layers": ("F.Cu",), "max_vias": 0, "priority": 3},
+    "USB_DM": {"priority": 1},
+    "USB_DP": {"priority": 1},
+}
+
 
 def led_positions():
     """[(ref, colour, x, y, rotation, azimuth, anode line, cathode line)] of the
@@ -733,7 +772,7 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     outline.add_npth_slot(LOC_SLOT["x"], LOC_SLOT["y"], width=LOC_SLOT["dia"],
                           length=LOC_SLOT["length_x"])
     d = Design(name, outline, layers=4, rules=GL1_RULES, board_thickness=BOARD_THICKNESS,
-               title="GreenLine GL-1 main board (netlist stage, nothing routed)",
+               title="GreenLine GL-1 main board",
                revision=str(Y["rev"]), company="GreenLine")
     # ---- net classes -----------------------------------------------------------------------
     d.add_netclass("Power", track_width=GL1_RULES.power_track,
@@ -757,6 +796,11 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
         "0.100 mm track and gap (3.94 mil) inside the two fine areas round the cameras: the "
         "fabricator must accept it in writing (DESIGN_SPEC E7, release gate).",
         "Lead-free assembly (SAC305), RoHS-compliant parts, no conformal coating (DESIGN_SPEC E5).",
+        "Solder mask is drawn 1:1 on every land. U9 (6 balls on 0.4 mm, lands 0.23 mm) and U2 / U3 "
+        "(25 balls on 0.5 mm, lands 0.20 mm): whatever mask compensation the fabricator applies must "
+        "leave a mask web of at least 0.075 mm between the openings of these parts.",
+        "Vias: 0.50 mm pad, 0.25 mm finished hole, through only. Every via is tented on the BOTTOM "
+        "side and plugged from the bottom (see via protection); on the top side the via pads are open.",
     ]
 
     def add(part, xy=None, rot=0.0):
@@ -1255,8 +1299,16 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     d.add_height_limit(RoundedPolygon.rect(0.0, 0.0, 2.2 * BOARD_RADIUS, 2.2 * BOARD_RADIUS),
                        FREE_HEIGHT, side=TOP, exempt=("U2", "U3"), name="free_height")
     # ---- no copper on F.Cu under the IMU body (spec) -------------------------------------------
+    # "No copper pours or vias under the IMU body on the top layer".  add_body_keepout forbids
+    # tracks, vias and pours in the pad-free rectangle under the body; a through via between the
+    # pads of the LGA would still put its pad on the top layer under the body, so a second rule
+    # area forbids vias (only vias) under the whole body outline.
     if d.part("U4").placed:
         d.add_body_keepout("U4")
+        u4 = d.part("U4")
+        bw, bh = (3.0, 2.5) if abs(u4.rotation % 180.0) < 1e-9 else (2.5, 3.0)     # LGA-14 body
+        d.add_keepout(RoundedPolygon.rect(u4.x, u4.y, bw, bh), layers=ALL_LAYERS,
+                      name="under_U4_no_via", tracks=False, vias=True, copper=False)
     # ---- fine areas: the fine classes are fine only round the cameras --------------------------
     d.add_fine_area("U2", margin=5.0)
     d.add_fine_area("U3", margin=5.0)
@@ -1265,6 +1317,9 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
         d.add_fiducial(x, y)
     for x, y in FIDUCIALS_BOTTOM:
         d.add_fiducial(x, y, side=BOTTOM).dnp = BARE_BOTTOM_COPPER_NOT_FITTED
+    # ---- per-net router options (layout) -------------------------------------------------------
+    for net_name, options in NET_ROUTING.items():
+        d.net(net_name, **options)
     return d
 
 

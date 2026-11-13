@@ -1,0 +1,48 @@
+{
+ "bottom": {
+  "dpi": 600,
+  "file": "gl1_cradle-bottom.png",
+  "layers": [
+   "B.Cu",
+   "B.Fab",
+   "B.SilkS",
+   "Edge.Cuts"
+  ],
+  "mirrored": true,
+  "origin_px": [
+   378.595,
+   284.205
+  ],
+  "px_per_mm": 23.622047,
+  "size_px": [
+   757,
+   568
+  ],
+  "svg": "gl1_cradle-bottom.svg",
+  "view": "bottom side seen from below (mirrored)",
+  "x_sign": -1
+ },
+ "top": {
+  "dpi": 600,
+  "file": "gl1_cradle-top.png",
+  "layers": [
+   "F.Cu",
+   "F.Fab",
+   "F.SilkS",
+   "Edge.Cuts"
+  ],
+  "mirrored": false,
+  "origin_px": [
+   378.205,
+   284.205
+  ],
+  "px_per_mm": 23.622047,
+  "size_px": [
+   757,
+   568
+  ],
+  "svg": "gl1_cradle-top.svg",
+  "view": "top side seen from above",
+  "x_sign": 1
+ }
+}

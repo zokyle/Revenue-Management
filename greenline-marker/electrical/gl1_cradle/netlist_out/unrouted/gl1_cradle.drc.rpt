@@ -9,20 +9,20 @@
     @(98.7500 mm, 104.9450 mm): Pad A5 [CC1] of J1 on F.Cu
 [unconnected_items]: Missing connection between items
     Local override; Severity: error
-    @(103.2000 mm, 104.9250 mm): Pad B1 [GND] of J1 on F.Cu
-    @(104.3200 mm, 105.5200 mm): PTH pad S1 [GND] of J1
-[unconnected_items]: Missing connection between items
-    Local override; Severity: error
-    @(96.8000 mm, 104.9250 mm): Pad B12 [GND] of J1 on F.Cu
+    @(96.8000 mm, 104.9250 mm): Pad A1 [GND] of J1 on F.Cu
     @(95.6800 mm, 105.5200 mm): PTH pad S1 [GND] of J1
 [unconnected_items]: Missing connection between items
     Local override; Severity: error
-    @(96.8000 mm, 104.9250 mm): Pad B12 [GND] of J1 on F.Cu
+    @(104.3200 mm, 105.5200 mm): PTH pad S1 [GND] of J1
+    @(103.2000 mm, 104.9250 mm): Pad A12 [GND] of J1 on F.Cu
+[unconnected_items]: Missing connection between items
+    Local override; Severity: error
     @(97.1100 mm, 102.8000 mm): Pad 2 [GND] of R1 on B.Cu
+    @(96.8000 mm, 104.9250 mm): Pad A1 [GND] of J1 on F.Cu
 [unconnected_items]: Missing connection between items
     Local override; Severity: error
     @(103.9100 mm, 102.8000 mm): Pad 2 [GND] of R2 on B.Cu
-    @(103.2000 mm, 104.9250 mm): Pad B1 [GND] of J1 on F.Cu
+    @(103.2000 mm, 104.9250 mm): Pad A12 [GND] of J1 on F.Cu
 [unconnected_items]: Missing connection between items
     Local override; Severity: error
     @(103.1900 mm, 97.4000 mm): Pad 1 [GND] of J2 on B.Cu
@@ -45,8 +45,8 @@
     @(104.3200 mm, 105.5200 mm): PTH pad S1 [GND] of J1
 [unconnected_items]: Missing connection between items
     Local override; Severity: error
-    @(101.5800 mm, 99.4000 mm): Pad 2 [GND] of C1 on B.Cu
     @(96.8625 mm, 99.4000 mm): Pad 2 [GND] of U1 on B.Cu
+    @(101.5800 mm, 99.4000 mm): Pad 2 [GND] of C1 on B.Cu
 [unconnected_items]: Missing connection between items
     Local override; Severity: error
     @(103.1900 mm, 97.4000 mm): Pad 1 [GND] of J2 on B.Cu
@@ -62,11 +62,11 @@
 [unconnected_items]: Missing connection between items
     Local override; Severity: error
     @(97.6000 mm, 104.9450 mm): Pad A4 [VBUS_IN] of J1 on F.Cu
-    @(102.4000 mm, 104.9450 mm): Pad B4 [VBUS_IN] of J1 on F.Cu
+    @(102.4000 mm, 104.9450 mm): Pad A9 [VBUS_IN] of J1 on F.Cu
 [unconnected_items]: Missing connection between items
     Local override; Severity: error
-    @(97.6000 mm, 104.9450 mm): Pad A4 [VBUS_IN] of J1 on F.Cu
     @(99.1375 mm, 99.4000 mm): Pad 5 [VBUS_IN] of U1 on B.Cu
+    @(97.6000 mm, 104.9450 mm): Pad A4 [VBUS_IN] of J1 on F.Cu
 [unconnected_items]: Missing connection between items
     Local override; Severity: error
     @(91.2125 mm, 101.6000 mm): Pad 1 [VBUS_IN] of F1 on B.Cu

@@ -1,0 +1,294 @@
+{
+ "complete_run": true,
+ "counts": {
+  "bare_copper_parts": 1,
+  "bottom_side": 9,
+  "fiducials": 6,
+  "net_classes": {
+   "Default": 7,
+   "Power": 3
+  },
+  "nets": 10,
+  "no_connect_pins": 2,
+  "pads_on_nets": 36,
+  "parts_dnp": 3,
+  "parts_fitted": 10,
+  "parts_on_the_bom": 13,
+  "parts_total": 20,
+  "top_side": 11
+ },
+ "criteria": {
+  "100 % of the connections routed, audit clean": true,
+  "KiCad DRC: 0 errors, 0 unconnected, nothing excluded": true,
+  "design checks: 0 errors": true,
+  "outputs verified against the model": true,
+  "schematic netlist round trip matches": true
+ },
+ "design": "gl1_cradle",
+ "passed": true,
+ "stages": {
+  "board": {
+   "legend_texts": 21,
+   "passed": true,
+   "pcb": "gl1_cradle.kicad_pcb"
+  },
+  "checks": {
+   "errors": 0,
+   "passed": true,
+   "warning_messages": [],
+   "warnings": 0,
+   "warnings_by_code": {}
+  },
+  "drc": {
+   "errors": 0,
+   "errors_by_type": {},
+   "passed": true,
+   "tampered": [],
+   "tracks_written": 143,
+   "unconnected": 0,
+   "vias_written": 9,
+   "warnings_by_type": {
+    "silk_overlap": 1
+   }
+  },
+  "outputs": {
+   "anchor_offsets": [],
+   "bom": {
+    "cost_per_board": 1.45,
+    "lines": 7,
+    "parts_dnp": 3,
+    "parts_fitted": 10,
+    "unpriced_refs": [
+     "C1",
+     "F1",
+     "R1",
+     "R2",
+     "SP1",
+     "SP2",
+     "SP3",
+     "SP4"
+    ]
+   },
+   "bom_status": {
+    "by_status": {
+     "PROVISIONAL": 6,
+     "RESEARCH": 1
+    },
+    "lines": 7
+   },
+   "copper": {
+    "confined": false,
+    "fine_areas": [],
+    "fine_pitch_arrays": [],
+    "length_by_width": {
+     "0.200": {
+      "B.Cu": 29.761,
+      "F.Cu": 26.175,
+      "total": 55.937
+     },
+     "0.400": {
+      "B.Cu": 55.358,
+      "F.Cu": 15.486,
+      "total": 70.843
+     }
+    },
+    "min_via_to_own_pad_gap": {
+     "bottom": 0.13,
+     "top": 0.2686
+    },
+    "narrow_farthest": null,
+    "narrow_in_fine_areas_mm": 0.0,
+    "narrow_length_mm": 0.0,
+    "narrow_nets": [],
+    "narrow_outside_fine_areas_mm": null,
+    "offender_count": 0,
+    "standard_track": 0.2,
+    "tracks": 143,
+    "vias": 9
+   },
+   "drc_clean": true,
+   "drill_tables": {
+    "gl1_cradle-NPTH.drl": [
+     [
+      0.65,
+      2
+     ],
+     [
+      2.2,
+      4
+     ]
+    ],
+    "gl1_cradle-PTH.drl": [
+     [
+      0.25,
+      9
+     ],
+     [
+      0.6,
+      4
+     ],
+     [
+      0.9,
+      7
+     ]
+    ]
+   },
+   "fab_zip": "gl1_cradle-fab.zip",
+   "fab_zip_bytes": 33971,
+   "files": 28,
+   "passed": true,
+   "position_rows": 10,
+   "problems": []
+  },
+  "quality": {
+   "figures": {
+    "all_signal_nets": {
+     "nets_over_1_5": 0,
+     "signal_length_mm": 126.78,
+     "signal_ratio": 1.1,
+     "signal_tree_mm": 115.267
+    },
+    "camera_nets": {},
+    "copper_to_edge": {
+     "note": "edge = board outline, the locating slot and the NPTH hole wall; rule 0.30 mm",
+     "pad": "pad J1.A1",
+     "pad_mm": 0.2358,
+     "routed_copper_mm": 0.3482,
+     "routed_item": "track GND F.Cu"
+    },
+    "router_warnings": [],
+    "solder_mask": {
+     "bottom": {
+      "between": [
+       "U1.1",
+       "U1.2"
+      ],
+      "openings": 32,
+      "smallest_web_mm": 0.35,
+      "touching_openings_of_different_nets": 0
+     },
+     "top": {
+      "between": [
+       "J1.A9",
+       "J1.A12"
+      ],
+      "openings": 26,
+      "smallest_web_mm": 0.2,
+      "touching_openings_of_different_nets": 0
+     }
+    },
+    "solder_mask_note": "mask openings are drawn 1:1 on the pads (board expansion 0.000 mm); an open via on the top side counts as an opening of its pad size",
+    "via_to_top_pad": {
+     "other_net": {
+      "gap_mm": 0.17,
+      "pad": "J1.A12",
+      "via_net": "VBUS_IN",
+      "via_x": 3.05,
+      "via_y": -3.95
+     },
+     "own_net": {
+      "gap_mm": 0.2686,
+      "pad": "J1.A5",
+      "via_net": "CC1",
+      "via_x": -1.65,
+      "via_y": -3.95
+     }
+    },
+    "vias": {
+     "by_net_class": {
+      "Default": 4,
+      "Power": 5
+     },
+     "on_plane_nets": 0,
+     "total": 9
+    }
+   },
+   "passed": true,
+   "review_pictures": [
+    "gl1_cradle-copper-F_Cu.png",
+    "gl1_cradle-copper-B_Cu.png",
+    "gl1_cradle-assembly-top.png",
+    "gl1_cradle-assembly-bottom.png"
+   ]
+  },
+  "route": {
+   "audit_violations": 0,
+   "connections_routed": 29,
+   "connections_total": 29,
+   "passed": true,
+   "routed_percent": 100.0,
+   "router_options": {},
+   "track_length_mm": 126.78,
+   "tracks": 143,
+   "unrouted": [],
+   "vias": 9
+  },
+  "rules": {
+   "as_specified": 13,
+   "departures": [
+    "USB-C land"
+   ],
+   "failed": [],
+   "open_not_met": [],
+   "passed": true,
+   "rows": 14,
+   "selftest_defects": 14,
+   "selftest_missed": 0,
+   "workarounds": []
+  },
+  "schematic": {
+   "passed": true,
+   "pdf": "schematic/gl1_cradle-schematic.pdf",
+   "pdf_pages": 3,
+   "previews": [
+    "schematic/gl1_cradle-schematic-1.png",
+    "schematic/gl1_cradle-schematic-2.png",
+    "schematic/gl1_cradle-schematic-3.png"
+   ],
+   "project": "gl1_cradle.kicad_pro",
+   "root": "gl1_cradle.kicad_sch",
+   "round_trip": {
+    "components_compared": 14,
+    "nets_compared": 10,
+    "ok": true,
+    "pads_compared": 36,
+    "problems": [],
+    "unconnected_compared": 2
+   },
+   "sheets": [
+    {
+     "file": "gl1_cradle_usb.kicad_sch",
+     "name": "usb",
+     "paper": "A4",
+     "parts": 6
+    },
+    {
+     "file": "gl1_cradle_pins.kicad_sch",
+     "name": "pins",
+     "paper": "A4",
+     "parts": 8
+    }
+   ],
+   "symbol_library": "gleda.kicad_sym",
+   "symbols": [
+    "C",
+    "Pad",
+    "R",
+    "Service_pads",
+    "TwoPin",
+    "USB-C",
+    "USBLC6-2SC6"
+   ]
+  }
+ },
+ "stages_run": [
+  "checks",
+  "rules",
+  "board",
+  "route",
+  "drc",
+  "outputs",
+  "schematic",
+  "quality"
+ ]
+}

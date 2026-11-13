@@ -1,0 +1,271 @@
+{
+ "anchor_offsets": [],
+ "bom": {
+  "cost_per_board": 1.45,
+  "lines": 7,
+  "parts_dnp": 3,
+  "parts_fitted": 10,
+  "unpriced_refs": [
+   "C1",
+   "F1",
+   "R1",
+   "R2",
+   "SP1",
+   "SP2",
+   "SP3",
+   "SP4"
+  ]
+ },
+ "copper": {
+  "confined": false,
+  "fine_areas": [],
+  "fine_pitch_arrays": [],
+  "length_by_width": {
+   "0.200": {
+    "B.Cu": 29.761,
+    "F.Cu": 26.175,
+    "total": 55.937
+   },
+   "0.400": {
+    "B.Cu": 55.358,
+    "F.Cu": 15.486,
+    "total": 70.843
+   }
+  },
+  "min_via_to_own_pad_gap": {
+   "bottom": 0.13,
+   "top": 0.2686
+  },
+  "narrow_farthest": null,
+  "narrow_in_fine_areas_mm": 0.0,
+  "narrow_length_mm": 0.0,
+  "narrow_nets": [],
+  "narrow_outside_fine_areas_mm": null,
+  "offender_count": 0,
+  "offenders": [],
+  "standard_track": 0.2,
+  "tracks": 143,
+  "vias": 9
+ },
+ "drc": "KiCad DRC 0 error(s), 0 unconnected, 1 warning(s) (silk_overlap 1)",
+ "drc_clean": true,
+ "drill_tables": {
+  "gl1_cradle-NPTH.drl": [
+   [
+    0.65,
+    2
+   ],
+   [
+    2.2,
+    4
+   ]
+  ],
+  "gl1_cradle-PTH.drl": [
+   [
+    0.25,
+    9
+   ],
+   [
+    0.6,
+    4
+   ],
+   [
+    0.9,
+    7
+   ]
+  ]
+ },
+ "files": [
+  {
+   "bytes": 1639,
+   "path": "assembly/README.txt",
+   "sha256": "05b60c07e60f33dc8a404350c57df57068228b85e6a447447ea8751b46234ecf"
+  },
+  {
+   "bytes": 1329,
+   "path": "assembly/gl1_cradle-bom.csv",
+   "sha256": "c26ec1a634c02b21fa04f94bdbe1e181e1badce5f6e3fd69970abe4c1197b248"
+  },
+  {
+   "bytes": 1008,
+   "path": "assembly/gl1_cradle-pos.csv",
+   "sha256": "ce85c0b0bae4f07366ccccfd644064825df56508f29582d98c4fb63e7c19e0bc"
+  },
+  {
+   "bytes": 4237,
+   "path": "fab/README.txt",
+   "sha256": "4e18a8df895cfc65272abb066d5b7e338afabe3d1e0d0c0d5c65dde60dcc98eb"
+  },
+  {
+   "bytes": 8221,
+   "path": "fab/gl1_cradle-B_Cu.gbr",
+   "sha256": "83aab60dee540edff513e5498bfd8cdf3c85fe6716fa1e1f74b9a186c4143990"
+  },
+  {
+   "bytes": 2836,
+   "path": "fab/gl1_cradle-B_Mask.gbr",
+   "sha256": "25e5262ff777ae0c549d2d208abd6b48f9d33a499af1b16d8c102acd06923c8c"
+  },
+  {
+   "bytes": 1785,
+   "path": "fab/gl1_cradle-B_Paste.gbr",
+   "sha256": "5adf49a833e2e2d4d344011125051496a0eeb4fcb9ea92fdb05c3d55749a1b09"
+  },
+  {
+   "bytes": 24974,
+   "path": "fab/gl1_cradle-B_Silkscreen.gbr",
+   "sha256": "ace58947082992333d406bc55fcb6888bf0c034fc7369058dbf43be5836b964c"
+  },
+  {
+   "bytes": 635,
+   "path": "fab/gl1_cradle-Edge_Cuts.gbr",
+   "sha256": "1becd6c374eb77881324242cfdf0473a542d4cf950f17a1eba5bda2de0827c8e"
+  },
+  {
+   "bytes": 5736,
+   "path": "fab/gl1_cradle-F_Cu.gbr",
+   "sha256": "14fc9189e10a6745e14321a9f31f6c89c76cc682aa81a51a5f9ad48e551ad707"
+  },
+  {
+   "bytes": 2502,
+   "path": "fab/gl1_cradle-F_Mask.gbr",
+   "sha256": "0d99b0f3ae08fa66d6233045360e9d362847bd83938495713b39bfa17fed4bef"
+  },
+  {
+   "bytes": 1752,
+   "path": "fab/gl1_cradle-F_Paste.gbr",
+   "sha256": "4b9c462ce4ab4c8fe7bda7f0e4524b919e8b05591327083df3da1ed7f749e24f"
+  },
+  {
+   "bytes": 19883,
+   "path": "fab/gl1_cradle-F_Silkscreen.gbr",
+   "sha256": "4541b406c2a4e4cec77bd29584676a9c2dcd89fe84432693649c9ac8ffde37d9"
+  },
+  {
+   "bytes": 39357,
+   "path": "fab/gl1_cradle-NPTH-drl_map.gbr",
+   "sha256": "f49e708391217d7817fb8a3e760afe3d7f9269b0ebfd230527dd32bd32715f09"
+  },
+  {
+   "bytes": 416,
+   "path": "fab/gl1_cradle-NPTH.drl",
+   "sha256": "a51512941136d8350f21f35e7788d07588cb5702a52abe84f040ce29cc0b75ef"
+  },
+  {
+   "bytes": 47752,
+   "path": "fab/gl1_cradle-PTH-drl_map.gbr",
+   "sha256": "182f30d6eab71cd3a851bc395a33bcc501fdb0688e67b986105084432328c9bd"
+  },
+  {
+   "bytes": 686,
+   "path": "fab/gl1_cradle-PTH.drl",
+   "sha256": "d4415609c303b891f28c94f5cb3e4e53040f05a277d5b31c8f902181d56a2e98"
+  },
+  {
+   "bytes": 2622,
+   "path": "fab/gl1_cradle-job.gbrjob",
+   "sha256": "dc1f4f4f4f956dcb8c96d58ef16c11ca5071bd7cb1a73a9a1c2eb0b63b52a442"
+  },
+  {
+   "bytes": 2271,
+   "path": "gl1_cradle-assembly.zip",
+   "sha256": "bb0cc67c238b1861c7b9a524bb398e2c3891cb74585b0c5ee3b8687a7326e1fb"
+  },
+  {
+   "bytes": 394956,
+   "path": "gl1_cradle-board.step",
+   "sha256": "90e9f13bd6500438e2b0ba4e6176576d9c3b117c97487dca9eadd6fea5c2bf78"
+  },
+  {
+   "bytes": 33971,
+   "path": "gl1_cradle-fab.zip",
+   "sha256": "89fb733fa57b3e71762696b181c7b8d646e0cbf153c7da1eed29946762e5d4a2"
+  },
+  {
+   "bytes": 26917,
+   "path": "gl1_cradle-mechanical.json",
+   "sha256": "1e1eb7cecdc454faa55b11e0fbeef4afe8168ed1d8900869f50fcea78a897a12"
+  },
+  {
+   "bytes": 10895,
+   "path": "gl1_cradle-netlist.json",
+   "sha256": "74051da78aee97267e0645b851ae6a5d516f3aaf1d9fe8cd6944a6113a3d0eff"
+  },
+  {
+   "bytes": 33343,
+   "path": "renders/gl1_cradle-bottom.png",
+   "sha256": "a5b4dced3cb328beb5edf05a28069299916a5620193b91268cde3228ccb3c842"
+  },
+  {
+   "bytes": 71228,
+   "path": "renders/gl1_cradle-bottom.svg",
+   "sha256": "e7b142929b08b4edd17cd50a22a087741b83f80d670744c8c624f6b97970e14d"
+  },
+  {
+   "bytes": 31375,
+   "path": "renders/gl1_cradle-top.png",
+   "sha256": "78121deb326150f9a7e9c1d36412e1b464f38a7ebd23a28c5cefbb3778ee77dd"
+  },
+  {
+   "bytes": 59278,
+   "path": "renders/gl1_cradle-top.svg",
+   "sha256": "ce4d96055cf7beba209e5c7a2d8cedc9edd136ffbffd77daba41ec3da8f2ac4b"
+  },
+  {
+   "bytes": 708,
+   "path": "renders/renders.json",
+   "sha256": "ab5f26ea35a448eb5b08a9a8abfd83e3d05129b05f1120de53441ee30ef0ac3d"
+  }
+ ],
+ "ok": true,
+ "position_rows": 10,
+ "problems": [],
+ "renders": {
+  "bottom": {
+   "dpi": 600,
+   "file": "gl1_cradle-bottom.png",
+   "layers": [
+    "B.Cu",
+    "B.Fab",
+    "B.SilkS",
+    "Edge.Cuts"
+   ],
+   "mirrored": true,
+   "origin_px": [
+    378.595,
+    284.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    757,
+    568
+   ],
+   "svg": "gl1_cradle-bottom.svg",
+   "view": "bottom side seen from below (mirrored)",
+   "x_sign": -1
+  },
+  "top": {
+   "dpi": 600,
+   "file": "gl1_cradle-top.png",
+   "layers": [
+    "F.Cu",
+    "F.Fab",
+    "F.SilkS",
+    "Edge.Cuts"
+   ],
+   "mirrored": false,
+   "origin_px": [
+    378.205,
+    284.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    757,
+    568
+   ],
+   "svg": "gl1_cradle-top.svg",
+   "view": "top side seen from above",
+   "x_sign": 1
+  }
+ }
+}
