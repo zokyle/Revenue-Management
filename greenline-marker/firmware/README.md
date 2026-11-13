@@ -51,11 +51,12 @@ clock, chip-select pulls, PWDN pins); the specification's own header reads "rev 
   is still written for the rev C2 charger**, as its brief said; the difference is pinned by a
   test as NOT MET and listed under "DESIGN_SPEC amendments E1 to E16".
 * **A second review has been applied** (phase 2; three reviewers: numerical, safety, product;
-  34 findings). Each finding was reproduced on the unchanged tree first; what was fixed has a
-  regression test that failed there. The critical one: a second double tap on a Precision
+  34 findings). Every finding that was fixed was first reproduced on the unchanged tree and
+  has a regression test that failed there. The critical one: a second double tap on a Precision
   result gave a `2X` screen with zero slope and a straight line. The gravest for the cell: one
-  lost VBUS edge left the charger unsupervised for as long as the marker slept. The table is "Phase-2 review: what was fixed"; what could not be fixed here
-  is in "Open issues".
+  lost VBUS edge left the charger unsupervised for as long as the marker slept. The table is
+  "Phase-2 review: what was fixed"; what could not be fixed here is in "Open issues" (24 to
+  32, and additions to 1, 2, 5, 12, 17, 18, 21 and 22).
 * All accuracy figures below are **measured on synthetic data** (`tests/synth`). They say what
   the algorithms do on idealised images; they are not a prediction of field performance. In
   particular the renderer does not model the Bayer mosaic of the colour sensor.
@@ -70,13 +71,21 @@ clock, chip-select pulls, PWDN pins); the specification's own header reads "rev 
   time** (phase 2, builder 3; "Run time"). With that, a Quick Read at 6 m shows its result
   **4.1 - 4.8 s after the marker comes to rest** (4.4 s at the nominal factor) and keeps the
   camera rail on for 2.2 - 2.8 s - not the 3.45 s and 1.56 s this file used to state, which
-  charged no computation, and **not the "about three seconds" of DESIGN_SPEC (NOT MET)**. A
-  stick nearer than about 4 m, or several lines in the band, cost 87 million instructions and
-  more. The factor between a host instruction and an MCU clock cycle is an ESTIMATE (1.5 - 3,
-  nominal 2); it is **not measured**, no board exists. Honest timing also changed three
-  results, all pinned by tests as NOT MET: a second post 14 px from the stick now defeats most
-  reads, a Survey fit hangs on a marginal classification of the stick's base, and a drift that
-  reverses inside a group of four strips is not noticed ("End to end", "Vision").
+  charged no computation. DESIGN_SPEC said "about three seconds" then; its amendment E15 now
+  states these figures, taken from this model. **They are a model and not a measurement**:
+  the factor between a host instruction and an MCU clock cycle is an ESTIMATE (1.5 - 3,
+  nominal 2), no board exists. A flagstick between 2.25 and 4.5 m used to take 0.6 s longer in
+  a third of the reads (its own shoulder in the band was probed as a second line); the
+  phase-2 review removed that (2.42 - 2.46 s of rail and at most 4.40 s to the result in a
+  sweep of 21 reads). **Still outside the stated figures:** a read with a person behind the
+  stick or with two real lines in the band (3.4 s of rail), and a near stick at the high
+  factor (the review measured 2.99 s of rail and 5.0 s to the result at 1.5 m; not repeated
+  here). A stick whose line is wider than 1.2 px (3 m and nearer in the bench scenes) costs
+  72 to 87 million instructions instead of 58 to 60. Honest timing also changed three
+  results, all pinned by tests as NOT MET: a second post 14 px from the stick defeats more
+  than half the reads (26 of 64 give a disparity), a Survey fit hangs on a marginal
+  classification of the stick's base, and a drift that reverses inside a group of four strips
+  is not noticed ("End to end", "Vision").
 * **Rev C and later.** `core/gl_config.h` is generated from `master_params.yaml`, which now
   reads rev D-EVT1 (`GL_CFG_PARAMS_REV`); the values this firmware takes from it are the ones
   rev C set (stereo baseline 20.0 mm, cameras at x = +-10.0 mm). Where this file says "the rev
@@ -110,7 +119,9 @@ charger default), one only as far as a file that has never run can (EXTCOMIN han
 ## Phase-2 review: what was fixed
 
 Three reviewers (numerical, safety, product) read the tree the three builders left and returned
-34 findings. Each was reproduced first on an unchanged copy of that tree ("before"). A fix has
+34 findings. Every finding that was fixed was reproduced first on an unchanged copy of that
+tree ("before"); the ones that were not fixed were checked against the code, and where this
+session did not measure them again their figures are quoted as the reviewer's. A fix has
 a regression test that was run against the unchanged copy and FAILED there: 13 tests of
 `tests/test_e2e_review.c` (13 of 13 failed, 68 failed checks), `tests/test_app_handover.c`
 (8 failed checks), `test_backend_starts_the_watchdog_first` in `tests/test_board.c` (5 failed
@@ -305,8 +316,9 @@ make V=1 ...  # show full compiler command lines
 ```
 
 `build/host/tests/test_read --cpi 0` runs the read tests with computation for nothing (the
-timing every figure before builder 3 was measured with; its output is byte-identical to the
-output of phase 1); `test_read <scene> <reads> <factor>` runs one scene at a compute factor.
+timing every figure before builder 3 was measured with; until the phase-2 review changed which
+band lines a read probes, its output was byte-identical to the output of phase 1);
+`test_read <scene> <reads> <factor>` runs one scene at a compute factor.
 
 Needs `gcc`, `make`, `arm-none-eabi-gcc` (with newlib headers) and, for the staleness check of
 the generated files, `python3` with PyYAML (skipped with a note if absent); `make profile`
@@ -318,6 +330,30 @@ Firmware code (core, drivers, app) is additionally compiled with `-Wdouble-promo
 double-precision soft-float helper, a double-precision libm function, the heap or stdio, which is
 how "single-precision float only, no dynamic allocation" is enforced rather than promised.
 gcc reports different `-Wconversion` findings at `-O1` (asan) and `-O2` (test): both must be run.
+
+**Floating-point contraction is off, explicitly** (`-ffp-contract=off` in the flags of every
+build, host and target; phase-2 review). It used to be off only because `-std=c99` implies it
+with gcc; with `-std=gnu99` or another compiler the Cortex-M33's fused multiply-add would
+have changed the solver's results in the last bit against the host build that is compared
+with the reference. `make cross` now also FAILS if a compiled object contains a fused
+instruction (`vfma`, `vfms`, `vfnma`, `vfnms`). This session: none; 342 `vmla` / `vmls`, which
+multiply, round, add and round - as written.
+
+**The link probe** (phase-2 review: the object check says nothing about what the C library
+brings into an image). `tools/cross_link_check.py` links the cross-compiled objects against
+the installed toolchain's libm and libc - a probe, not an image: no start-up code, no linker
+script, every `gl_hal_*` symbol unresolved, nothing run -, builds the graph of direct calls
+and takes EVERY firmware function as a starting point. This session: probe text 107,244
+bytes, 477 functions of which 394 are the firmware's; the firmware reaches 43 library
+functions by direct calls (single-precision libm and its kernels, `memcpy` and friends,
+`__aeabi_ldivmod`, `__errno`); **17 double-precision helpers are PRESENT in the probe and
+none is reachable from firmware code** (newlib's `erff` shares an object with `erfcf`, and
+its error helpers with their double twins: "called only from `__math_check_oflow`,
+`__math_check_uflow`, `__math_divzero`, `__math_invalid`, `erfcf`, `xflow`"); no heap, no
+stdio. The check fails if any of them becomes reachable. What it does not show: another C
+library (newlib-nano, a vendor toolchain), calls through pointers inside the library, or
+anything about the HAL sources, which are not here. `errno` IS reachable (`__errno`,
+`with_errnof`): newlib's single-precision functions set it; the firmware never reads it.
 
 `tools/gen_config.py` reads the YAML keys it needs by name and ignores every other key, so the
 mechanical additions of rev C (`pcb.locating_holes`, `tub_keepouts`, `cradle`,
@@ -1168,7 +1204,12 @@ pixels. `make test` on the final sources:
 * Solid or dashed is decided from the pixels too: of the pixels that only a solid line inks
   (the gaps of the dashes), at least 0.61 are black for the lines that must be solid and at
   most 0.07 for the ones that must be dashed.
-* `make appdiff`: APPDIFF_PENDING
+* `make appdiff`: 22 estimator calls of the application, 22 agree with the Python reference
+  (flags and codes exactly; C double within 1e-4 relative, largest aim difference 1.6e-7 mrad;
+  firmware within 0.5 mrad of aim, 0.1 % of launch speed, 0.01 cup, 1e-4 of confidence; drawn
+  line within 6.5 mrad; solid / dashed as the reference's flags require - where a flag-out
+  result now requires dashed: the tool's rule was changed with the firmware's, and the first
+  run after the change caught that it had not been).
 * Precision Read: with a device bias of (0.4, -0.3) % the single read aims 16.41 mrad from the
   true scene's reference, the combined read 2.01 mrad.
 * The best-effort rows: of a failed solve only the class (`aim_source`, `solve_status`) is
@@ -1288,7 +1329,7 @@ Cell temperature, as built and as tested:
 
 | Change | Firmware | How it is checked |
 |---|---|---|
-| `CHG_INHIBIT` polarity and safe states | `drivers/power.c`, table above | simulator rules and the measured table above |
+| `CHG_INHIBIT` polarity and safe states (rev C2: open drain, low = stop) | `drivers/power.c`, table above | simulator rules and the measured table above. **The specification's present circuit (amendment E1) is the opposite polarity with another charger: NOT MET, pinned** (`test_charger_of_the_specification_is_not_the_firmwares`) |
 | Cell NTC | `GL_ADC_CH_CELL_NTC`, `GL_PIN_NTC_BIAS`, `GL_PIN_NTC_SENSE`, `drivers/power.c` | above |
 | EXTCOMIN divider 547 | the generator reads the divider from the spec into `GL_PINS_EXTCOMIN_LSE_TICKS`; `GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS` must equal it (`test_pins.c`) | simulator: the LCD driver starts LPTIM1 with 547 ticks, 32768 / 547 = 59.905 Hz |
 | Core clock slow / 160 MHz around the read | `gl_hal_clock_set()`, `clock_()` in `app/gl_app.c` | simulator: calls recorded, paired, compute only while fast, never Stop while fast. **STM32: by inspection only** |
@@ -1314,8 +1355,13 @@ Three things about those pins need the schematic owner, and none is verifiable h
 All figures here are from runs on the host. "Reference" = the Python package
 `../sim/greenline_sim` and its exported vectors (`../sim/results/reference_vectors.json`, schema
 2: 240 estimator and 120 solver cases from simulated reads, plus the groups appended for this
-port: 82 fallback estimator cases, 32 fallback solver cases, 33 single rolls; see
-`REFERENCE_VECTORS.md`). The same C source is built twice: `gl_real_t` = `double`
+port: 82 fallback estimator cases, 32 fallback solver cases, 33 single rolls, and - phase-2
+review - 18 near-miss estimator cases; see `REFERENCE_VECTORS.md`). The file was regenerated
+for the near-miss group and **the old file is a byte-identical prefix of the new one** up to
+its closing bracket (checked with the files of before and after; 0 lines removed or changed),
+as is the old `REFERENCE_VECTORS.md`: the reference's behaviour for the existing vectors is
+unchanged, and the reference's own test suite passes (`python -m pytest -q` in `../sim`: 235
+passed, 4 of them new). The same C source is built twice: `gl_real_t` = `double`
 (`-DGL_SOLVER_DOUBLE`, symbols `gl_solver64_*`, host only) and `gl_real_t` = `float` (the
 firmware). `tests/test_solver.c` runs both builds inside `make test` and `make asan`.
 
@@ -1329,10 +1375,12 @@ absolute floors; flags and codes exact):
 | `solver_cases` | 120 | 0 (status: 0 differ) | 2.1e-12 | 118 solved |
 | `fallback_solver_cases` | 32 | 0 (status: 0 differ) | 0 | same number of trial rolls as the reference in 32 of 32 |
 | `roll_cases` | 33 | 0 | 0 (limit 1e-9) | status, capture, side and RK4 step count exact |
+| `near_miss_estimator_cases` (`make diff`; `test_near_miss_cases`) | 18 | 0 | 0 | each case with the rule on (`near_miss` 5 mm) and, in its `without_*` fields, with the rule off: 14 kept, 4 controls that the rule must leave alone |
 
 Between them the vectors reach every `aim_source` with every solve status the reference can
-attach to it (0: OK, PACE_LIMITED; 1: OK, PACE_LIMITED; 2: UNREACHABLE, NO_BRACKET,
-NO_CONVERGENCE; 3: OK for method STRAIGHT, INVALID for a zero distance), 6 fits that did not
+attach to it (0: OK, PACE_LIMITED, and NO_CONVERGENCE for the 14 kept near misses; 1: OK,
+PACE_LIMITED; 2: UNREACHABLE, NO_BRACKET, NO_CONVERGENCE; 3: OK for method STRAIGHT, INVALID
+for a zero distance), 6 fits that did not
 converge (5 stopped by an iteration limit of 0 to 2, 1 whose horizon stage cannot run), Survey
 with 2, 3 and 4 drops, B0 / B1 / B2 / STRAIGHT, flag missing, flag not
 ranged, base hidden, stick top visible and not, dialled distance, Precision Read; the test
@@ -1346,12 +1394,38 @@ chosen from measurements and are asserted with their margins:
 
 | Option | Single-precision default | Why |
 |---|---|---|
-| `tol_miss_m` | 2e-4 m | the same launch rolled in single and in double precision crosses the hole line up to 2.1e-5 m apart (8580 launches around the solutions of the vectors; median 7.7e-8 m, 99 % 2.5e-6 m): 9.5 x that maximum |
+| `tol_miss_m` | 2e-4 m | the same launch rolled in single and in double precision crosses the hole line up to 2.1e-5 m apart (8580 launches around the solutions of the vectors; median 7.7e-8 m, 99 % 2.5e-6 m): 9.5 x that maximum. **For the vectors' putts only** - by putt length below |
 | `tol_pace_m` | 1e-3 m | the squared arrival speed of those launches differs by up to 1.12e-4 m^2/s^2 (99 %: 6.7e-5); the tolerance as an energy, 2 a_r tol_pace, is 6.9e-4 at Stimp 16 (6.1 x) and more on slower greens |
 | `lm_tol` | 1e-5 | bounded on both sides: at 1e-6 single-precision fits begin to end on the iteration limit (5 of 5542 random nominal fits; 0 at 3e-6 and above), and from 3e-5 on a fit that converges linearly (a Huber outlier row) stops early in EITHER precision (scaled patch error of the double build 8e-7 at 1e-5, 6e-5 at 2e-5, 0.14 at 3e-5) |
 
 Three resolutions of the reference that are written for double (1e-13, 4e-15, 1e-15) are the
 same multiples of the single-precision epsilon in the single build (`gl_solver_priv.h`).
+
+**The margin of `tol_miss_m` by putt length** (phase-2 review: the 9.5 x above is a property
+of the vectors' putts, not of the tolerance). `test_single_precision_roll_noise_by_distance`
+solves random putts in double at 1e-9 m and rolls each solution in both precisions:
+
+| Putt length | Launches | \|single - double\| at the hole line: median / 99 % / max | Max in units of `tol_miss_m` | Above a fifth of it |
+|---|---|---|---|---|
+| 0.3 to 6 m | 700 | 8.2e-8 / 2.8e-6 / 7.0e-6 m | 0.03 | 0 |
+| 6 to 15 m | 700 | 8.4e-7 / 1.2e-5 / 2.4e-5 m | 0.12 | 0 |
+| 15 to 25 m | 699 | 2.3e-6 / 7.3e-5 / 2.2e-4 m | **1.08** | 13 |
+| 25 to 40 m | 699 | 4.7e-6 / 8.0e-5 / 2.6e-3 m | **13** | 36 |
+
+Up to 15 m the tolerance is 8 times the worst roll noise or more (asserted up to 6 m).
+**NOT MET from 15 m on, pinned**: there the tolerance is inside the noise of the roll for the
+worst launches, and a single-precision solve can end NO_CONVERGENCE for no other reason (the
+read accepts a flagstick up to 40 m away). A tolerance that grows with the distance would be
+a change of the solver's contract (open issue 25).
+
+**A horizon fit that converged used to be reported as not converged** in single precision
+(review): with a fitted parameter above 0.125 the step that the convergence test asks for is
+below one unit in the last place, and the fit flipped between two neighbours of equal cost
+until its iteration limit (60), after which the application showed `FIT NOT DONE` and
+multiplied the confidence by 0.7. In the single build a step below the resolution of the parameters
+(`GLS_LM_STEP_ULPS` x epsilon x |x|) now ends the fit as converged: the reviewer's case
+converges after 10 iterations (the double build with the same tolerances after 9; patch
+coefficients equal to 4e-8). The double build and the vectors are untouched.
 
 **Single build against the reference** (the reference at 1e-9 m / 1e-10; the single build with
 its defaults). 240 simulated reads: all `GL_OK`, every flag and code equal, every fit converged.
@@ -1370,10 +1444,17 @@ its defaults). 240 simulated reads: all `GL_OK`, every flag and code equal, ever
 | Plays-like distance [mm] | 0.15 | 0.94 | 0.99 | 1.5 |
 | Height of the hole [mm] | 2.5e-6 | 4.6e-5 | 9.0e-5 | 3e-4 |
 
-The aim line on the display moves in steps of 0.94 degree = 16.4 mrad. **The largest
-single-precision error of the aim direction on the simulated reads is 0.132 mrad: 1/125 of one
-display step** (median 1/3600). It is also 1/19 of the 2.5 mrad seating noise the estimator
-assumes per tilt axis. Single precision is not what limits this instrument.
+**A yardstick used in this section: one "display step" = 0.94 degree = 16.4 mrad.** That is
+the step in which the reference's Monte Carlo quantises the displayed aim (2 / 122 rad, one
+pixel at the rim of the aperture; `sim/greenline_sim/montecarlo.py`). **It is not the
+resolution of this firmware's line** - an earlier version of this paragraph said "the aim line
+on the display moves in steps of 0.94 degree", which the display tests contradict: the
+dithered line reproduces an aim to 0.05 degree (0.9 mrad) rms ("Display"), and with the
+labels of the result screen over it the drawn line is within 3.8 mrad of the reference in
+every scene of `test_e2e_putt.c`. The largest single-precision error of the aim direction on
+the simulated reads is 0.132 mrad: 1/125 of that yardstick (median 1/3600), a seventh of the
+renderer's own rms error, and 1/19 of the 2.5 mrad seating noise the estimator assumes per
+tilt axis. Single precision is not what limits this instrument.
 
 Other groups in single precision:
 
@@ -1382,40 +1463,76 @@ Other groups in single precision:
 | 82 fallback cases | 82 `GL_OK`; flags and codes equal to the reference's in 80. **NOT MET in 2** (pinned): cases 62 and 77, patches on a knife edge, end PACE_LIMITED where the reference at 1e-9 m ends NO_BRACKET / NO_CONVERGENCE. The double build run with the single-precision tolerances ends exactly like the single build in both: a tolerance effect, not an arithmetic one. Values of the 66 cases with a defined aim: aim 0.099 mrad, speed 0.012 %, aim point 0.48 mm at most. Every aim source and every solve status is reached in single precision too. |
 | 120 solver cases | status equal in 120. Solved cases: aim 99 % 0.096 mrad, **max 1.04 mrad** (0.064 display steps), speed max 0.079 %, aim point max 3.1 mm, all three on case 16 (a putt down a slope at 0.9 of critical, where a family of aim / speed pairs holes the putt within the tolerance); rolled in double the single-precision solutions cross within 0.19 mm of the hole centre in every case. |
 | 32 fallback solver cases | status equal in 28. **NOT MET in 4** (pinned): cases 12, 13, 25, 28, whose tags say that the outcome depends on the tolerance (two putts that die at the hole, one knife edge, one roll budget that is only exhausted at 1e-9 m); again the double build with the single tolerances ends like the single build. |
+| 18 near-miss cases (rule on, firmware tolerances) | 18 `GL_OK`. In the 14 that the reference keeps, the single build's aim is on the patch too (`aim_source` 0) in 14 of 14 and passes within 5.5 mm of the hole centre in 12 (worst 6.42 mm; one stops short); its status is the reference's NO_CONVERGENCE in 8, PACE_LIMITED in 4 and OK in 2 - the same tolerance effect on knife-edge putts as in the rows above. The 4 controls, which the reference at 1e-9 m does not keep, end on the patch in the single build as well. Aim against the reference: up to 2.95 mrad (`make diff`). |
 
 **Differential test beyond the vectors** (`make diff`, seed 20261111, 30 % of the cases pushed
 outside the nominal ranges: slopes beyond what the green holds, curvatures of 0.02 /m, distances
 from 0 to 500 m, green speeds from 0 to 1e6 ft, not-a-number and infinities in every field,
-missing flags, iteration limits of 1 to 5, roll budgets of 8 to 1000):
+missing flags, iteration limits of 1 to 5, roll budgets of 8 to 1000; since the phase-2 review
+also the near-miss option at random and inputs of 1e300, 1e20, 1e-20 and 1e-200, so the
+counts are not those of the run before it). This session, 3 min 37 s:
 
 | Double build | Result |
 |---|---|
-| 20000 random reads against `estimate_batch` | 18461 both return an estimate within the tolerance; 839 both reject (the reference raises `ValueError` 639, `ZeroDivisionError` 119, or returns a not-a-number 81; C returns `GL_ERR_PARAM` / `GL_ERR_RANGE` and the flagged record); 680 refused by contract (C returns `GL_ERR_PARAM` for a focal length or baseline that is not positive, or a lens height or tilt that is not finite, where the reference would compute on); **0 disagreements**; 0 undefined results |
-| - distribution of \|C - reference\| over the 18461 | aim: median 0, 99 % 2.5e-14 rad, 99.9 % 3.3e-7, max 3.7e-5 rad; launch speed: 99 % 6e-15, max 6.6e-5 m/s; patch: 99 % at most 7e-18, max 5e-11; worst case 0.78 of the allowed difference; fit covariance (not in the vectors) within 3.9e-8 relative |
-| - 20 further reads differ in outcome and are explained | 19 with a horizon, 1 Survey: the two fitted patches differ by 1e-19 to 1.6e-11 because two library functions of the reference differ from libm in the last bit (numpy's vectorised cos / sin / tan in the horizon rows; CPython's `math.hypot` in the sigmas of Survey drops, different for 0.6 % of 200000 random arguments), and for each of the 20 the C solve chain run on the REFERENCE's patch reproduces the reference's aim source, status, aim and speed exactly. 19 are failing, pace-limited or dying-putt solves, whose outcome a last-bit change of the patch flips; 1 is a horizon fit at the 1e-10 tolerance whose "converged" flag differs |
+| 20000 random reads against `estimate_batch` | 18367 both return an estimate; 872 both reject (the reference raises `ValueError` 660, `ZeroDivisionError` 124, `OverflowError` 9, or returns a not-a-number 79; C returns `GL_ERR_PARAM` / `GL_ERR_RANGE` and the flagged record); 735 refused by contract (C returns `GL_ERR_PARAM` for a focal length or baseline that is not positive, or a lens height or tilt that is not finite, where the reference would compute on); **0 disagreements**; 0 undefined results |
+| - distribution of \|C - reference\| over the reads where both return an estimate (the 30 of the next row included, which is where every maximum comes from) | worst difference in units of the allowed one: median 0, 99 % 6.0e-8, 99.9 % 0.029. Aim: median 0, 99 % 1.8e-14 rad, 99.9 % 3.5e-7 rad; launch speed: 99 % 8.8e-15, 99.9 % 3.6e-7 m/s; patch coefficients: 99 % at most 1.4e-17, 99.9 % at most 3.0e-12; fit covariance (not in the vectors) within 2.9e-8 relative |
+| - 30 of those reads differ by more than the tolerance and are accounted for | 26 "explained by last-bit rounding of the patch" (25 with a horizon, 1 Survey: the two fitted patches differ by 1e-19 to 3e-13 because two library functions of the reference differ from libm in the last bit - numpy's vectorised cos / sin / tan, CPython's `math.hypot` - and for each the C solve chain run on the REFERENCE's patch reproduces the reference's aim source, status, aim and speed exactly; they are failing, pace-limited, dying-putt or kept-near-miss solves, whose outcome a last-bit change of the patch flips); 4 "tolerance-limited": drawn with loose random tolerances they differ by more than the allowed difference, and they agree within it when both sides are run again with the vectors' tolerances (1e-9 m, 1e-10) |
 | 20000 random aim problems against `solve_aim` | status equal in 20000 (OK 14852, PACE_LIMITED 523, UNREACHABLE 690, NO_BRACKET 473, NO_CONVERGENCE 3273, INVALID 189); of the 19811 that ran, the number of trial rolls is the same in 19811 and aim and speed are **bit-identical in 19811** |
 | 5000 random rolls against `simulate_putt` | status, capture, side equal in 5000; every real identical |
 | 20000 range fusions, 5000 horizon rays | largest relative difference 1.9e-16 |
+| the 5 vector groups of the estimator and the solver, through the same shared library | worst difference 3.55e-6 of the allowed one (`estimator_cases`); `near_miss_estimator_cases`: 0 |
 
-Two port bugs were found by this test and fixed (the covariance of an anchored fit whose horizon
-stage failed; a zero stick height, which the reference rejects with a division by zero and the
-port used to answer with the "not ranged" fallback).
+Two port bugs were found by this test and fixed by builder 1 (the covariance of an anchored fit
+whose horizon stage failed; a zero stick height, which the reference rejects with a division by
+zero and the port used to answer with the "not ranged" fallback). In the phase-2 review it
+found two more things, both in what the fixer had just written: the overflow check of finding
+7 refused inputs with a not-a-number or infinite sigma that the reference accepts (6
+disagreements; the check now mirrors the reference's `**2`), and the tool's own replay of a
+solve on the reference's patch did not know the near-miss rule (1 disagreement).
 
 The single build on the same random cases, the reference run with the single build's
-tolerances: 0 undefined results. Of 20000 aim problems the status is equal in 19806. Of the 194
-others, 25 are distances within a rounding of the 1e-6 m limit, 150 lie between the classes of
-failing or pace-limited solves, 7 are solved in single and not in double, and 12 are solved in
-double and not in single: 10 of those with a roll budget of 8 or 40, which the single build's
-slightly different path exhausts, 1 on a slope at 0.90 to 0.97 of critical and 1 a dying putt
-with a grain of 0.5. With the default budget of 200, slopes below 0.9 of critical and a pace
-above 0 there is none. Deviation of the 17101 solved problems with equal status: aim median 0.0001, 99 % 0.077,
-99.9 % 0.47, max 3.7 mrad; launch speed 99 % 0.0035 %, max 0.12 %. Random reads: 1.3 % end
-with a different solve status or aim source, almost all between failing classes (12 reads that
-the reference solves on the patch with status OK end otherwise in single precision); for the
-15360 reads
-with the same outcome the aim differs by 0.0001 mrad median, 0.13 mrad at 99 %, 1.2 mrad at
-99.9 % - and by up to 63 mrad in single cases of this deliberately hostile mix (steep or dying
-putts whose solution is not determined to the tolerance).
+tolerances: 0 undefined results, 0 disagreements. Of 20000 aim problems the status is equal in
+19806; the 194 others are, as before the review (the aim problems are the same ones),
+distances within a rounding of the 1e-6 m limit (25), classes of failing or pace-limited
+solves that change places (150), and putts solved in one precision only (12 solved by the
+reference and not in single, 7 the other way round; builder 1 traced the 12 to roll budgets
+of 8 or 40, a slope at 0.90 to 0.97 of critical and a dying putt). Deviation of the
+17101 solved problems with equal status: aim median 0.0001, 99 % 0.077, 99.9 % 0.47, max 3.7
+mrad; launch speed 99 % 0.0035 %, max 0.12 %. Random reads: 18353 both return an estimate,
+865 both reject, 47 are rejected by one side only because the input is not representable in
+single precision; 1.4 % end with a different solve status (256) or aim source (153), almost
+all between failing classes (14 reads that the reference solves on the patch with status OK
+end otherwise in single precision). For the 15110 reads with the same outcome and a solved
+aim the aim differs by 0.0001 mrad median, 0.12 mrad at 99 %, 1.3 mrad at 99.9 % - and by up
+to 123 mrad in single cases of this deliberately hostile mix (steep or dying putts whose
+solution is not determined to the tolerance; the near-critical instability below).
+
+**Near the critical slope the aim is not determined, in either precision** (phase-2 review,
+finding 2; not a port error and not changed, because the brief fixes the reference's
+numerical behaviour). The reviewer perturbed the inputs of nominal reads by one microradian
+and found the reference's aim jumping by more than a display step in about 3 % of the reads
+whose putt runs near the critical slope, and the best-effort direction (`aim_source` 2) to be
+an arbitrary iterate of the search (those figures are the reviewer's; they were not measured
+again here). What this session shows of the same thing: the C double build follows the
+reference bit for bit through all of it (19811 of 19811 aim problems); in `test_e2e_putt.c`
+the best iterate of the unsolvable 7 % scene is +797 mrad in the firmware and +847 mrad in the
+reference on the same record; and the single build differs from the reference by up to 123
+mrad on the hostile reads above. What the firmware does about it: a best-effort aim is never
+drawn as a solution (dashed, `NOT SOLVED`, `BREAK ?`, one box at most), and a near miss of
+the patch is kept in preference to a secant-plane aim that misses (finding 1). What it does
+not do: stabilise the search. That is the estimator owner's (open issue 24).
+
+**The base-visible flag is a hard switch** (finding 9; reference behaviour, not changed): the
+same placement with `flag_base_visible` flipped moves the aim by more than a display step in
+1.6 % of nominal Quick Reads (the reviewer's figure), because the height of the hole is a
+measurement in one case and a one-sided bound in the other. The vision's class flips with
+the noise when the base is within the 1.5-row margin (open issue 22). The screen now marks
+the weaker case (`PLAYS n?`).
+
+**Method B2 with untidy horizons** (finding 10; B2 is OFF by default): the reviewer found
+nominal reads that fall back, jump and differ between the precisions when the horizon samples
+are untidy; nothing in the estimator was changed. A poor horizon is now shown (`POOR
+HORIZON`). Method B1 does not use the horizon.
 
 **Hostile inputs** (`test_hostile_inputs_give_defined_results`, both precisions, also under
 `-fsanitize=address,undefined,float-cast-overflow` in `make asan`): 28000 calls per precision of
@@ -1424,45 +1541,84 @@ putts whose solution is not determined to the tolerance).
 absurd slopes, zero green speed, NULL pointers, drop counts 0 to 6, options out of range.
 **0 violations**: every call returns `GL_OK`, `GL_ERR_PARAM` or `GL_ERR_RANGE`; with `GL_OK`
 every real the header promises finite is finite and the codes are defined; with an error the
-output is the flagged record. (Single: 11059 OK, 3764 PARAM, 1177 RANGE; double: 11317, 3764,
-919.) A longer run of 12000 iterations (84000 calls per precision, not under the sanitisers)
-was also clean.
+output is the flagged record. (Single: 11074 OK, 3796 PARAM, 1130 RANGE; double: 11136, 3796,
+1068. The table of hostile values grew in the phase-2 review by numbers whose square
+overflows or underflows, which is why the counts moved.) Builder 1 also ran 84000 calls per
+precision outside the sanitisers; that longer run was not repeated in this session.
+
+**Absurd inputs** (finding 7). Four probe calls returned `GL_OK` and a plausible-looking
+record: in the double build a relative stick-height sigma or a stick height of 1e300, which
+the reference refuses with an `OverflowError`; in the single build a stick height of 1e-20 m
+("not ranged", 3 m shown) or a focal length of 1e20 px, whose squares leave the range of a
+float. A square of a finite input that overflows is now `GL_ERR_RANGE` in both precisions,
+in the double build exactly where the reference's `**2` raises (an infinite or not-a-number
+sigma is still what the reference makes of it: `make diff` holds the two together, 9
+`OverflowError` cases among the random reads). `test_absurd_inputs_are_refused`.
+
+**The default pace** (finding 6): `GL_SOLVER_DEFAULT_PAST_M` was the float literal `0.30f`,
+so the double build's default was 0.30000001192092896 and not the reference's 0.3. It is a
+double constant now (0.29999999999999999 in the double build, the same float as before in
+the firmware); the vectors always passed their pace explicitly and are unaffected.
 
 **Run time, bounded.** No loop without a counter: one roll takes at most 6004 RK4 steps, one aim
-solve at most `max_rolls` + 120 = 320 rolls, an estimate at most two aim solves, a fit at most
-60 iterations of at most 25 damping trials for at most 6 starts. `gl_estimate_t.n_rolls` /
-`.n_steps` report what was spent. Measured with `valgrind --tool=callgrind --collect-atstart=no
---toggle-collect=bench_estimate_ build/host/solver_bench <case>` (host, `-O2`, single
-precision, firmware defaults; 350 host instructions per RK4 step):
+solve at most `max_rolls` + 120 = 320 rolls, an estimate at most two aim solves (the patch,
+then its secant plane; **one if the patch is a plane**, since the secant plane is then the
+same problem - it used to be solved twice), a fit at most 60 iterations of at most 25 damping
+trials for at most 6 starts. `gl_estimate_t.n_rolls` / `.n_steps` report what was spent.
+
+**And since the phase-2 review, a budget on the steps themselves**:
+`gl_solver_options_t.max_steps` (firmware only; the default is 0 = none, as in the reference,
+and every vector is run without it). The budget is checked between trial rolls and counted
+over the whole estimate, so an estimate integrates at most `max_steps` + 6004 steps; a solve
+that runs out ends as the best iterate so far, NO_CONVERGENCE (`aim_source` 2, or a kept near
+miss). The application sets `GL_APP_SOLVE_MAX_STEPS` = 300,000 and refreshes the watchdog
+before the solve. Over all 340 estimator vectors, with and without that budget, no record
+differs among those that stay inside it: in the single build with the firmware's tolerances
+none exceeds it (costliest 208,952 steps, with a result); in the double build at the
+reference's 1e-9 m two do (costliest 338,870).
+
+`make bench` (`tools/solver_bench.c`; host, `-O2`, single precision, firmware defaults).
+Instruction counts: builder 1's callgrind runs where marked (c); `make profile` of this
+session for the typical read (p); otherwise the simulator's cost rule, 40,000 + 351 per RK4
+step, which reproduces the callgrind count of the 20.7 m case to 0.03 %:
 
 | Estimate | Trial rolls | RK4 steps | Fit iterations | Host instructions | At 160 MHz, if one host instruction costs 1.5-3 cycles (ESTIMATE) |
 |---|---|---|---|---|---|
-| Typical Quick Read, B1 (the median of the 24 B1 reads) | 5 | 730 | 3 | 295 316 | 3-6 ms |
-| Survey, 3 drops (median of 24) | 3 | 849 | 3 | 348 793 | 3-7 ms |
-| B2 with 41 horizon samples (median of 69; the horizon stage's 5 starts are most of it) | 5 | 875 | 3 | 1 424 989 | 13-27 ms |
-| Worst case constructed: 20.7 m across a slope near the limit, neither patch nor secant plane solvable | 418 | 492 782 | 3 | 172 948 041 | 1.6-3.2 s |
-| Bound that follows from the counters (640 rolls of 6004 steps) | 640 | 3 842 560 | - | about 1.35e9 (not run) | 13-25 s |
+| Typical Quick Read, B1 (the median of the 24 B1 reads) | 5 | 730 | 3 | 295,603 (p) | 3-6 ms |
+| Survey, 3 drops (median of 24) | 3 | 849 | 3 | 348,793 (c) | 3-7 ms |
+| B2 with 41 horizon samples (median of 69; the horizon stage's 5 starts are most of it) | 5 | 875 | 3 | 1,424,989 (c) | 13-27 ms |
+| W0: 20.7 m across a slope near the limit (this table's "worst case constructed" before the review) | 418 | 492,782 | 3 | 172,948,041 (c) | 1.6-3.2 s |
+| W1 (review): 30 m dialled, down a slope at 0.90 of critical, a tilt-only plane | 212 (424 when the plane was solved twice) | 309,911 (619,822) | 0 | 109 million | 1.0-2.0 s |
+| **W2: the costliest found with the reference's limits alone** - 26 m by stereo, method B1, neither patch nor secant plane solvable | 421 | 575,247 | 3 | 202 million | 1.9-3.8 s |
+| **W2 with the application's budget** | 223 | 300,514 | 3 | 105 million | **1.0-2.0 s** |
+| W1 with the application's budget | 206 | 300,911 | 0 | 106 million | 1.0-2.0 s |
+| Bound that follows from the counters alone (640 rolls of 6004 steps) | 640 | 3,842,560 | - | about 1.35e9 (not run) | 13-25 s |
+| Bound with the application's budget (300,000 + 6004 steps) | - | 306,004 | - | 107 million | 1.0-2.0 s |
 
 Over the 240 simulated reads: 5.0 rolls and 1026 RK4 steps on average, at most 57 rolls and
-25144 steps. The worst case comes from three random searches of 6000 to 12000 steep reads with
-hill climbing; they ended at 492 782, 507 453 and 519 807 steps, so "half a million steps" is
-what could be constructed, a seventh of the bound. **The time on the target is an estimate, not
-a measurement**: the cycles-per-instruction factor is the same guess as for the vision
-(a Cortex-M33 needs 14 cycles for each of the 5 square roots and 8 divisions of an RK4 step
-alone, 180 of the roughly 500-1000 cycles the factor implies per step); newlib's `powf`,
-`sinf`, `cosf`, `logf`, `erff`, `hypotf`, `atan2f`, `tanf` are not the host's. A typical solve
-is 0.5 % of the 58 million instructions of a read's vision (0.2 % of the 145 million of
-phase 1); the worst case is three whole reads. At 48 MHz the worst case constructed would take 5-11 s.
+25,144 steps. W0 came from builder 1's random searches with hill climbing (492,782 to 519,807
+steps); W1 and W2 are the two costliest cases of the safety reviewer's search (its seeds 21
+and 11), run here with the fixed code; the numerical reviewer's own search ended at 628,940
+steps (that case was not run again here). **None of them is a proven maximum** - the hostile-input test, which also
+draws roll budgets up to 1000, saw 864,765 steps in one call of the double build - which is
+why the application's bound is the budget and not a search result. **The time on the target is
+an estimate, not a measurement**: the cycles-per-instruction factor is the same guess as for
+the vision (a Cortex-M33 needs 14 cycles for each of the 5 square roots and 8 divisions of an
+RK4 step alone, 180 of the roughly 500-1000 cycles the factor implies per step); newlib's
+`powf`, `sinf`, `cosf`, `logf`, `erff`, `hypotf`, `atan2f`, `tanf` are not the host's. A
+typical solve is 0.5 % of the 58 million instructions of a read's vision; the budget is 1.8
+whole reads. At 48 MHz (a PLL that did not lock) the budget is 3.3-6.6 s; the watchdog period
+is 32 s.
 
 **Stack and RAM** (`make cross`, `-Os`, `-fstack-usage`): `gls_fit_patch` 464, `gls_roll` 304,
-`gls_solve_kernel` 264, `fit_lm_` 240, `estimate_` 208, `trial_` 112, `fit_residuals_` 112,
-`solve_pace_` 96, `solve_patch_` 72, `accel_` 40, `gl_solver_estimate_survey` 40 bytes. Deepest
+`gls_solve_kernel` 272, `fit_lm_` 240, `estimate_` 224, `trial_` 112, `fit_residuals_` 112,
+`solve_pace_` 104, `solve_patch_` 80, `accel_` 40, `gl_solver_estimate_survey` 40 bytes. Deepest
 chain below the caller: estimate -> solve on the patch -> kernel -> pace solve -> trial -> roll
--> acceleration = 1136 bytes (the fit chain: 1064), libm frames not included (not compiled
+-> acceleration = 1176 bytes (the fit chain: 1080), libm frames not included (not compiled
 here). Static RAM: none (`.data` and `.bss` of the four solver objects are 0); the caller
 supplies `gl_solver_work_t`, 6160 bytes on the target (12248 in the double build), which the
-application holds once. Code: 17 149 bytes (`gl_solver` 2445, `_aim` 3808, `_fit` 6654, `_roll`
-4242). No double-precision helper, no double libm function, no heap, no stdio (the
+application holds once. Code: 17,835 bytes (`gl_solver` 2623, `_aim` 4028, `_fit` 6942, `_roll`
+4242; 17,149 before the phase-2 review). No double-precision helper, no double libm function, no heap, no stdio (the
 forbidden-symbol check of `make cross`).
 
 ### Vision
@@ -1482,9 +1638,10 @@ which these perfectly calibrated synthetic cameras do not exercise, so "rms / cl
 is expected on clean scenes and says nothing about the calibration term itself.
 
 **These tables are the run with the compute-time model at its nominal factor** (builder 3).
-The vision itself computes bit for bit what it did in phase 1 ("Run time"): with computation
-for nothing (`test_read --cpi 0`) the output of this test is byte-identical to the one before
-the optimisation, and every threshold of the test holds unchanged. What charging the
+The vision itself computes bit for bit what it did in phase 1 ("Run time"): when builder 3
+finished, the output of this test with computation for nothing (`test_read --cpi 0`) was
+byte-identical to the one before the optimisation, and every threshold of the test held
+unchanged. What charging the
 computation changes is WHEN the frames are exposed: the first strip comes about 0.2 s after
 the band (its analysis, 0.18 s, and the wait for the next frame) instead of one frame after
 it, and the groups of four strips are further apart. Of the 106 lines the test prints, 36
@@ -1494,11 +1651,13 @@ by the test (the post 14 px beside the stick).
 **And they are the run after the phase-2 review**, which changed two things in the read
 (`app/gl_read.c`), not in the vision: a band "line" that is the shoulder of a much stronger
 one is dropped, and a lone line that its first group shows not to be a flagstick is given up
-at once. Against the tables of builder 3 the first change moved 20 of the rows in their last
-digits (the frames of a read with a dropped shoulder fall at other moments) and one for real
-(the post 14 px beside the stick); the second changed nothing but the camera-rail time of the
-stick-free reads. `test_read --cpi 0` no longer prints the phase-1 output byte for byte for
-the same reason; `tests/test_vision_equiv.c` still shows the vision itself bit-identical.
+at once. Against builder 3's run 38 of the lines the test prints differ, nearly all in their
+last digits (the frames of a read with a dropped shoulder fall at other moments) and one for
+real (the post 14 px beside the stick); the second change moved nothing but the camera-rail
+time of the stick-free reads. For the same reason `test_read --cpi 0` no longer prints the
+phase-1 output byte for byte (37 lines differ from the unchanged tree's, run in this
+session); that the VISION computes what it did in phase 1 is shown by
+`tests/test_vision_equiv.c`, which is unchanged and passes.
 
 Flat green, width x contrast (6 reads per cell; reads that gave a disparity | disparity rms px;
 bright sticks, dark ones are the same within the scatter):
@@ -1673,7 +1832,12 @@ line") has a dead zone: within about 0.5 degree of a pixel axis several angles r
 identically, which is exactly where straight putts live. The aim line therefore uses a 4-phase
 ordered dither of the edges (quarter-pixel edge resolution, slightly rough edges). The fitted
 line misses the ball centre by 0.24 px RMS (0.04 mm). Beyond about 13.5 degrees of aim the true
-line leaves the aperture; a dashed parallel line and a side arrow are drawn instead.
+line leaves the aperture; its parallel through the centre is drawn instead, solid or dashed as
+the result is (`test_aim_line_off_screen_fallback`; the side arrow of earlier versions, which
+pointed away from the aim, is gone). `gl_gfx_rotate_180()`, with which a result is turned for
+a golfer behind the marker, maps pixel (x, y) to (127 - x, 127 - y) and is its own inverse
+(`test_rotate_180`); the aim-line figures above therefore hold for the turned screen too
+(`test_e2e_putt.c` measures the Precision row on it: 0.18 mrad from the reference).
 
 ### Storage
 
@@ -1824,9 +1988,11 @@ nominal read. Builder 3 reduced it **without changing a single result bit**:
 | The putt estimate, typical (method B1, 730 RK4 steps) | 295,316 | 295,316 | not touched |
 | **Nominal read: vision + estimate** | **145.1 million** | **58.5 million** | the aim was 60 million |
 
-(Both columns with computation for nothing, so that both see the same frames: `test_read
-A_nominal 1 0`. With the frames at the moments of the nominal compute factor the same read
-counts 58,242,672, which is what `make profile` prints.)
+(Both columns are builder 3's measurements, with computation for nothing so that both see the
+same frames: `test_read A_nominal 1 0`. The vision's code has not changed since
+(`tests/test_vision_equiv.c`). With the frames at the moments of the nominal compute factor
+`make profile` counts 58,241,057 for the same read in this session, after the phase-2 review;
+58,242,672 before it.)
 
 **That the results are the same** is tested, not argued (`tests/test_vision_equiv.c`, part of
 `make test`): the vision of phase 1 is kept, verbatim, as an oracle with renamed symbols
@@ -1839,34 +2005,40 @@ errors planted one at a time in the optimised code (the reuse without one of its
 conditions, a row limit off by one, a percentile index off by one, an offset in the band, a
 stale weight in the fit, the tie rule of the integer search), 8 were caught by this test with
 141 to 209,416 differing values; the ninth changed nothing because a later statement
-overrides it, and its two real variants were caught (2702 and 248,797 values). And
-`build/host/tests/test_read --cpi 0` prints, byte for byte, what `test_read` printed in
-phase 1 (106 lines, 920 reads).
+overrides it, and its two real variants were caught (2702 and 248,797 values). (Builder 3
+also had `build/host/tests/test_read --cpi 0` print, byte for byte, what `test_read` printed
+in phase 1. That no longer holds, and is not meant to: the phase-2 review changed which band
+lines a read probes, in `app/gl_read.c`, not the vision.)
 
 **The 60 million are met for the nominal read and NOT for near sticks or several lines.**
 One read of each scene of `tools/vision_bench.c` (the scene generator of `test_read.c`),
-`gl_read_step` inclusive:
+`gl_read_step` inclusive; "now" is `make profile` of this session:
 
-| Scene | Strips | Phase 1 | Now | Band / strips now |
-|---|---|---|---|---|
-| A: 1.5 px stick, 6.6 m | 32 | 147,435,467 | 59,847,299 | 14.3 / 44.1 million |
-| B: 0.8 px, 12.3 m | 32 | 138,102,377 | 59,364,010 | 14.3 / 43.7 |
-| **3.3 px, 3 m** (the band lists two lines: one group more for each) | 40 | 178,732,435 | **86,690,409** | 14.3 / 69.2 |
-| **6.6 px, 1.5 m** | 32 | 168,493,313 | **86,695,037** | 14.2 / 70.4 |
-| faint: 0.7 px at 10 % contrast (read with rows binned) | 32 | 100,553,036 | 43,913,225 | 14.3 / 28.3 |
-| faint: 0.5 px at 20 % | 32 | 108,158,334 | 48,245,489 | 14.3 / 32.7 |
-| **a person behind the stick** (three lines probed) | 44 | 197,913,409 | **88,052,456** | 14.3 / 69.4 |
-| no stick | 0 | 35,219,331 | 14,262,080 | 14.2 / 0 |
-| the Quick Read of `test_e2e.c` (1.6 px, 6 m, swaying) | 32 | not measured | 59,573,080 + 489,728 for its estimate of 1267 RK4 steps | 14.3 / 43.7 |
+| Scene | Strips | Phase 1 | Builder 3 | Now | What the cost table charges; rail on (`make bench-vision`) |
+|---|---|---|---|---|---|
+| A: 1.5 px stick, 6.6 m | 32 | 147,435,467 | 59,847,299 | 59,846,021 | 59.95 million; 2.42 s |
+| B: 0.8 px, 12.3 m | 32 | 138,102,377 | 59,364,010 | 59,362,733 | 59.95; 2.42 s |
+| **3.3 px, 3 m** | 32 (was 40: the stick's shoulder got a group, and so did the stick, before the read) | 178,732,435 | 86,690,409 | **71,991,668** | 78.51; 2.66 s (was 3.29 s) |
+| **6.6 px, 1.5 m** | 32 | 168,493,313 | 86,695,037 | **86,693,728** | 78.51; 2.66 s |
+| faint: 0.7 px at 10 % contrast (read with rows binned) | 32 | 100,553,036 | 43,913,225 | 43,911,981 | 44.59; 2.22 s |
+| faint: 0.5 px at 20 % | 32 | 108,158,334 | 48,245,489 | 48,244,292 | 48.78; 2.23 s |
+| **a person behind the stick** (three lines probed) | 44 | 197,913,409 | 88,052,456 | **88,050,771** | 84.03; 3.36 s |
+| no stick | 0 | 35,219,331 | 14,262,080 | 14,262,020 | 14.27; 0.34 s |
+| the Quick Read of `test_e2e.c` (1.6 px, 6 m, swaying) | 32 | not measured | 59,573,080 + 489,728 for its estimate of 1267 RK4 steps | not measured again (the cost table charges 60.4 million, as before) | 2.42 s |
 
 A line whose fitted profile is wider than 1.2 px costs 1.8 to 2.2 million instructions per
 strip instead of 1.4 (measured: the 3.3 px stick at 3 m and the 6.6 px one at 1.5 m, not the
 1.5 px stick at 6.6 m; where between 3 and 6.6 m the change lies was not measured): the second
 pass uses a wider window than the first, so its rows cannot take over the first pass's
-centroids. That, and the extra groups when the band
-lists several lines, is **what remains**: 87 to 88 million instructions for those reads. The
+centroids. That, and the extra groups when the band lists several REAL lines, is **what
+remains**: 72 to 87 million instructions for a near stick, 88 million with a person behind
+the stick. What the phase-2 review removed is the group of four strips that a near stick's own
+shoulder used to cost (3 m scene: 86.7 -> 72.0 million, 40 -> 32 strips). In the end-to-end
+world the same stick distances give 2.42 to 2.46 s of rail time (`test_near_stick_is_one_candidate`,
+`test_quick_read_with_dcmi_crop_windowing`: 2.43 s), less than the 2.66 s of this bench's 3 m
+scene; the two worlds render their sticks differently and the difference was not traced. The
 end-to-end Quick Read is at the limit: 60.06 million with its estimate (about 0.4 million of
-that are the simulator's own HAL functions inside `gl_read_step`).
+that are the simulator's own HAL functions inside `gl_read_step`; builder 3's figure).
 
 **From instructions to seconds: an estimate with a stated range.** The simulator charges
 
@@ -1886,8 +2058,9 @@ with the instruction counts of `hal/host/gl_sim_cost.h` (rounded from `make prof
 | The estimate | 0.04 million + 351 per RK4 step (typical 0.3 million) | 3 / 4 / 6 ms typical | 12 ms |
 | One rendering of the screen | 0.234 million | (runs at 48 MHz) | 9.8 ms |
 
-The table reproduces the measured whole reads of the eight scenes above within +8.4 % (the
-3 m scene) and -9.4 % (the 1.5 m scene), the nominal ones within +1 %. What the cycles-per-
+The table reproduces the measured whole reads of the eight scenes above within +9 % (the
+3 m scene), -9 % (the 1.5 m scene) and -5 % (the person), the others within +2 % (`make
+profile`, this session). What the cycles-per-
 instruction factor stands for, and why its range is wide:
 
 * the count is of **x86-64** instructions. A Cortex-M33 runs a comparable number of Thumb-2
@@ -1908,23 +2081,30 @@ instruction factor stands for, and why its range is wide:
 What it means, with the tables under "End to end":
 
 * **a Quick Read shows its result 4.1 - 4.8 s after the marker comes to rest** (4.4 s nominal),
-  with the camera rail on for 2.2 - 2.8 s. "About three seconds" (DESIGN_SPEC) is NOT MET: of
+  with the camera rail on for 2.2 - 2.8 s. These are the figures DESIGN_SPEC now states
+  (amendment E15, taken from this model; "about three seconds" before). Of
   the 4.4 s, 1.85 s are stillness and the tilt read, 1.6 s the cameras' power-up, settling
   and 33 frames, and 1.0 s the computation (0.8 s) with the frame periods the captures wait
   for it. The vision of phase 1 would have needed 1.4 - 2.7 s of computation for the same read
   by the same arithmetic instead of 0.5 - 1.1 s (not simulated);
-* a near stick or several lines: rail on for about 3.0 - 3.4 s at the nominal factor
-  (`make bench-vision`: 3.29 s for the 3 m scene, 3.36 s with a person behind the stick);
+* a near stick: rail on for 2.4 - 2.7 s at the nominal factor (2.66 s in `make bench-vision`
+  for the 3 m and the 1.5 m scene; 2.42 - 2.46 s in the end-to-end sweep of 2.25 to 3.75 m),
+  where it was 3.0 - 3.3 s before the stick's shoulder stopped being probed; **several real
+  lines still cost a group each**: 3.36 s with a person behind the stick, which is outside
+  the 2.2 - 2.8 s the specification states;
 * without the PLL (it failed to lock, or the backend's clock code does not work as written:
   **not verified**) the same read takes 6.0 s with the rail on for 3.8 s;
 * the putt estimate is 0.5 % of a read, but a slope near the limit of what the green holds can
-  cost seconds: 173 million instructions for the worst case that could be constructed (2.2 s
-  at 160 MHz and the nominal factor, 1.6 - 3.2 s over the range), and a bound from the loop
-  counters of 1.35e9 - open issue 17 (in `tests/test_e2e_putt.c` the 7 % cross slope at Stimp
-  14 took 107 trial rolls and 45215 RK4 steps: 15.9 million instructions by the cost table,
-  0.2 s).
+  cost seconds. The application now gives the solve a budget of 300,000 RK4 steps (plus the
+  roll in progress): 105 million instructions by the cost table, **1.3 s at 160 MHz and the
+  nominal factor, 1.0 - 2.0 s over the range** (4.4 s at 48 MHz), after which the result is a
+  best-effort aim, shown as such. Without the budget the costliest estimate found needs
+  575,247 steps (202 million instructions, 1.9 - 3.8 s) and the loop counters bound it only at
+  1.35e9 instructions ("Solver"). In `tests/test_e2e_putt.c` the 7 % cross slope at Stimp 14
+  took 137 trial rolls and 55,471 RK4 steps: 19.5 million instructions by the cost table,
+  0.24 s.
 
-The firmware's own code is 93.2 kB of the 2 MB flash before libraries (phase 2, builder 2 added 2.2 kB: result screen, charge gate and NTC, settings, hand-over; builder 3 added 3.5 kB: the faster vision is 3.0 kB larger, the selection 0.3 kB), plus 6.4 kB for the STM32 backend as compiled by `make cross-hal` and the vendor's HAL and USB library, which were not compiled.
+The firmware's own code is 94.8 kB of the 2 MB flash before libraries (phase 2, builder 2 added 2.2 kB: result screen, charge gate and NTC, settings, hand-over; builder 3 added 3.5 kB: the faster vision is 3.0 kB larger, the selection 0.3 kB; the phase-2 review added 1.5 kB: 0.7 kB in the solver, 0.4 kB in the UI and graphics, 0.5 kB in the application), plus 6.7 kB for the STM32 backend as compiled by `make cross-hal` and the vendor's HAL and USB library, which were not compiled. The link probe of `make cross` (firmware objects + newlib's libm and libc, no HAL, no start-up code) has 107,244 bytes of text.
 
 ## Device registers and commands: "from memory - verify against datasheet"
 
@@ -2012,8 +2192,10 @@ check. Changing one is the whole firmware change if the fact turns out different
 
 Tuning constants that are our own choices rather than hardware facts (gesture timing, repeat
 counts, flash layout, the charge supervision period of 5 s and the 12 s staleness limit, the
-confidence factors 0.6 / 0.6 / 0.7 and the cap 0.2, the Survey's "at the ball" fraction 0.85)
-are in `app/gl_app_cfg.h`; none has been tuned on hardware or with golfers.
+confidence factors 0.6 / 0.6 / 0.7 and the caps 0.2 (best effort) and 0.09 (flag out), the
+Survey's "at the ball" fraction 0.85, and from the phase-2 review the near-miss distance of
+5 mm, the solve's budget of 300,000 RK4 steps and the shoulder ratio of 4) are in
+`app/gl_app_cfg.h`; none has been tuned on hardware or with golfers.
 
 Two assumptions that are not in DESIGN_SPEC and must be checked against the mechanical design:
 the ball centre is taken at outer radius + ball radius = 23.0 + 21.335 = 44.335 mm ahead of the
@@ -2037,16 +2219,27 @@ stated in the rev C YAML).
   battery-life figures are all provisional.
 * **The solver on the target.** The port is tested on the host only; its run time on the
   Cortex-M33 is an estimate (see "Solver"), and newlib's single-precision libm has not been
-  compared with the host's.
+  compared with the host's (open issue 26). The link probe of `make cross` shows which
+  library functions a link against the installed newlib would bring in, not what they compute.
+* **The specification's amendments E1, E11, E12, E13** (charger with its own temperature
+  input and the opposite `CHG_INHIBIT` polarity; two level zeros; stored display rotation; no
+  read above 60 C and a ship mode): not implemented ("DESIGN_SPEC amendments E1 to E16").
+* **Nine findings of the phase-2 review are not fixed** (2, 9, 10, 19, 20, 27, 28, 32, 33:
+  "Phase-2 review: what was fixed" and the open issues it names), and four only in part.
 * **The rev C2 changes on the target.** Everything in "Charger and cell temperature" and "Board
   changes of rev C2" was run on the simulator, whose NTC, charger and clock models encode this
   project's reading of the specification. Not verified: the clock switch (PLL, voltage range,
   booster, flash latency: it compiles against the vendor's headers and has never run), that PH1 is an FT pin, ADC1_IN13 on PC4, the NTC
   settling time, the real part's R-T curve against the B-parameter equation, and the thermal
   coupling between the cell and the NTC.
-* **Estimator results that no simulated read produces** (pace limited, straight fallback, fit
-  on its iteration limit, poor horizon): only their mapping to the screen is tested.
-* **Grain as a solver option.** `use_grain` has no setting and stays off.
+* **Estimator results that no simulated read produces** (pace limited, straight fallback, a
+  kept near miss, fit on its iteration limit, poor horizon): only their mapping to the screen
+  is tested.
+* **Grain as a solver option.** `use_grain` now follows the GRAIN setting, which ships OFF.
+  With GRAIN ON the line moves by what the measured grain and the grass's coefficient say
+  (4.7 mrad for bentgrass and 27 mrad for bermuda in the test scene), and nothing here shows
+  that this is right: the coefficients and the optical principle are unproven
+  (`GL_PROV_GRAIN_KAPPA_*`), and there is no on-device noise-floor procedure.
 * **Camera exposure and clocking.** No exposure, gain, PLL or frame-rate register is written
   (no verified values): the sensors run on their reset settings. The sun-in-frame flag exists;
   nothing reacts to it beyond the confidence figure.
@@ -2063,18 +2256,23 @@ stated in the rev C YAML).
   gate), **and nothing watches the cell temperature there while the charger runs** (NOT MET,
   see "Charger and cell temperature").
 * **Vision speed beyond the nominal read.** 58 million host instructions for the nominal read
-  (145 before), but 87 - 88 million for a stick nearer than about 3 m or with several lines
-  in the band: the second pass of a wide line still measures every row afresh, and every extra
-  line costs a group of four strips; see "Run time". Nothing was tuned for the Cortex-M33
+  (145 before), but 72 - 87 million for a stick whose line is wider than 1.2 px (3 m and
+  nearer in the bench scenes) and 88 million with a person behind the stick: the second pass
+  of a wide line still measures every row afresh, and every extra REAL line costs a group of
+  four strips (the stick's own shoulder no longer does); see "Run time". Nothing was tuned for the Cortex-M33
   itself (no fixed-point path, no CMSIS-DSP, no assembly).
 * **Vision cases known not to work** (pinned by `tests/test_read.c`, listed under "Vision"):
   sticks under about 0.7 px at under 10 % contrast; a 0.8 px stick with a person, a post or a
   second pole within a few pixels; a low-contrast stick against strong tree trunks; following a
   thin stick into rough turf; the lowest point behind tall ragged grass; **and, with honest
-  timing, a 1.5 px stick with a post 14 px beside it** (3 of 8 reads; 7 of 8 while computation
-  was free).
+  timing, a 1.5 px stick with a post 14 px beside it** (26 of 64 reads give a disparity; 34
+  while computation was free). Also from the phase-2 review and not looked into here: at 2 to
+  3 m on a putt that is level along its line the hole is read 3 to 5 mm low, and at 0.6 m the
+  flagstick is refused (open issue 30).
 * **Found by the honest timing and not fixed** (each pinned by a test as NOT MET): the result
-  comes 4.4 s after the marker is at rest, not "about three seconds"; a Survey fit loses its
+  comes 4.4 s after the marker is at rest, not within the 4.0 s the end-to-end test once
+  allowed (the specification, which said "about three seconds", now states 4.1 to 4.8 s from
+  this model: amendment E15); a Survey fit loses its
   curvature when the base of the stick at a drop is within the 1.5-row margin of "visible"
   (`test_survey_second_drop`); a drift that reverses inside a group of four strips gives a
   disparity 0.04 px off under a claimed 0.05 px and is not noticed
@@ -2088,12 +2286,21 @@ stated in the rev C YAML).
 
 Hardware and system decisions first: none of them can be closed in firmware.
 
-1. **Read time against "about three seconds".** The vision is down from 145 to 58 million host
+1. **Read time, and the charge of a read.** The vision is down from 145 to 58 million host
    instructions for the nominal read (bit-identical results), and the simulator charges
    computation its time: a Quick Read shows its result 4.1 - 4.8 s after the marker is at rest
-   (4.4 s at the nominal factor; 6.0 s if the PLL does not lock), the camera rail is on for
-   2.2 - 2.8 s, 3.0 - 3.4 s for a near stick or several lines. DESIGN_SPEC says "about three
-   seconds". **To decide:** accept about 4.5 s; or shorten what is not computation (0.77 s to
+   (4.4 s at the nominal factor; 6.0 s if the PLL does not lock) and the camera rail is on for
+   2.2 - 2.8 s. DESIGN_SPEC now states exactly these figures (amendment E15; "about three
+   seconds" before), so the specification follows the model; nothing has been measured.
+   **Reads outside those figures after the phase-2 review:** a person behind the stick or two
+   real lines in the band (rail on for 3.4 s at the nominal factor), and near sticks at the
+   high factor (the review measured 2.99 s of rail and 5.0 s to the result at 1.5 m, factor
+   3). The near-stick case the review found (a third of the reads between 2.25 and 4.5 m, 0.6
+   s longer) is fixed. **The charge**: the review compared the model's 226 mAs per read (86 mA
+   on the camera rail) with the battery budget of `docs/research/power.md` (40 mAs nominal,
+   141 mAs worst case, with the cameras at 10.7 mA): 5.7 times the nominal budget. One of
+   the two documents is wrong about the cameras' current, and only a measurement can say
+   which. **To decide:** accept about 4.5 s; or shorten what is not computation (0.77 s to
    establish stillness, 1.08 s of tilt read - the cameras could be powered and the band taken
    DURING the tilt read, which would hide the 0.34 s of power-up and band and most of the
    band's analysis; fewer than 8 groups for an easy stick); or spend more on the remaining 0.8 s
@@ -2102,9 +2309,10 @@ Hardware and system decisions first: none of them can be closed in firmware.
    but has never run; the cost of each clock switch and the current at 160 MHz are unmeasured.
    1b. **The search allowance for sway grows with the compute time** (3 px per second since
    the band, `GL_APP_SWAY_ALLOW_PX_PER_S`): it was written when the band's analysis took no
-   simulated time. With 0.18 s it lets a post 14 px beside the stick ruin most reads ("Vision":
-   34 of 64 reads with a disparity fall to 11, and to 0 at the high factor; with the allowance
-   at 0 the compute time makes no difference). To decide: a fixed allowance, one that follows
+   simulated time. With 0.18 s it lets a post 14 px beside the stick ruin many reads ("Vision":
+   34 of 64 reads with a disparity fall to 26 at the nominal factor - 11 before the shoulders
+   were dropped - and to 0 at the high factor; with the allowance at 0 the compute time made
+   no difference in builder 3's scratch build). To decide: a fixed allowance, one that follows
    the measured sway, or analysing the band while the first strips are already being taken.
 2. **Charger when the MCU is not in control.** Answered for the unpowered MCU by rev C2 (the
    charger runs by default). What remains is the other side of that default, and it is NOT MET
@@ -2114,6 +2322,15 @@ Hardware and system decisions first: none of them can be closed in firmware.
    it needs hardware: a charger with an NTC input, or a comparator on the NTC node that pulls
    `CHG_INHIBIT` by itself. Also for the schematic: `CHG_INHIBIT` must be on an FT pin (PH1 as
    remembered: verify), or the unpowered MCU clamps the gate and defeats the default.
+   **The specification has since chosen the hardware answer (amendment E1: BQ25101 with its
+   own thermistor input; `CHG_INHIBIT` push-pull, HIGH = stop).** This firmware still drives
+   the rev C2 circuit (open drain, LOW = stop) because its brief says so; on an E1 board its
+   stop does nothing. **To decide: which document rules for the next phase.** If E1: a new
+   charger driver and simulator model, the cradle messages (the charger, not the firmware,
+   then decides), and the two NOT MET rows become hardware-covered. Pinned meanwhile as NOT
+   MET (`tests/test_pins.c`). Related, from the same review: with the start-up order fixed
+   the watchdog bounds a hang AFTER `gl_hal_init()`; a hang before it (start-up code, RAM
+   initialisation) is covered only by the hardware-watchdog option bit (issue 12).
 3. **Both cameras on the shared bus at power-up.** Unless PWDN tri-states the OVM7692 pads
    (unconfirmed, `GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS` = 0), both sensors drive the eight data
    lines and the three sync lines against each other for 14.4 ms of every power-up (6.4 ms of it
@@ -2131,7 +2348,12 @@ Hardware and system decisions first: none of them can be closed in firmware.
 5. **Charge temperature.** The cell NTC is now the input, with the die sensors as a
    plausibility check (within 10 K of at least one). Decide: (a) whether the guard band of
    1.5 K, which covers the part tolerances and the ADC only, should be widened for the
-   gradient between the cell and an NTC "within 1 mm of its edge", which nobody has measured;
+   gradient between the cell and an NTC "within 1 mm of its edge", which nobody has measured,
+   **and for the error of the one-B equation against the part's R-T table**: the budget uses
+   0.90 K of the 1.5 K at 0 C and 1.09 K at 45 C, which leaves 0.6 K and 0.4 K for an error
+   that is NOT VERIFIED (no data sheet table here; amendment E2 also changes the part to a
+   Murata NCU15XH103F60RC, whose B value has not been checked against the 3380 K in
+   `gl_provisional.h`). A table from the data sheet in `test_drv_power.c` would settle it;
    (b) whether "at least one die sensor agrees" is the wanted rule, or "both" (safer against a
    wrong NTC, but a warm MCU during USB would then stop a healthy charge); (c) whether a unit
    whose NTC is broken should refuse to charge for good, as it does now (it says `TEMP SENSOR`
@@ -2148,7 +2370,7 @@ Product decisions:
 8. **The weaker tiers.** A read can end as "left camera only" (bearing and elevations, no
    disparity; the estimator ranges it from the angular height if top and base of the stick are
    visible, otherwise the dialled distance is applied along the measured bearing) or as
-   "band-only bearing" (logged, not used). Confirm that a single-camera stick, which cannot be checked against a disparity,
+   "band-only bearing" (not used and not logged). Confirm that a single-camera stick, which cannot be checked against a disparity,
    should be aimed at; and whether `ambiguous` should block the result rather than lower the
    confidence figure (x 0.6). As built: both are aimed at with a solid line, a message (`1
    CAMERA`, `2 LINES SEEN`, or `NO RANGE` when the single camera could not range the stick) and
@@ -2166,9 +2388,14 @@ Product decisions:
 11. **Raw-strip logging level ALL keeps the camera rail on for about 41 s per read** (48 s in
     all; about 1 mAh of a 43 mAh cell, and heat). Level FIRST costs 2.6 s. If ALL is wanted in
     the field it needs a different capture plan (cameras off between groups) or less data.
-12. **Watchdog in Stop mode.** The independent watchdog keeps running in Stop 2, so the sleeping
-    device wakes every 16 s for a few microseconds. Freezing it in Stop by option byte would
-    avoid that at the price of no supervision while asleep. Related: after 8 failed IMU
+12. **Watchdog in Stop mode, and before `main()`.** The independent watchdog keeps running in
+    Stop 2, so the sleeping device wakes every 16 s for a few microseconds. Freezing it in
+    Stop by option byte would avoid that at the price of no supervision while asleep - and
+    since the phase-2 review that wake-up is also what bounds a lost VBUS edge (15.5 s at
+    worst), so it should stay. The watchdog is started by software, first thing in
+    `gl_hal_init()`; a hang before that is covered only if the **hardware-watchdog option bit
+    (`IWDG_SW` = 0)** is programmed in production. To decide, and to put into the production
+    programming procedure; it cannot be set from here. Related: after 8 failed IMU
     recoveries the firmware deliberately lets the watchdog reset it; a unit with a dead IMU
     then resets every 32 s while awake. Decide whether it should give up and sleep instead.
 13. **Idle camera kept awake** during L R R L (deviation from the letter of DESIGN_SPEC, see
@@ -2179,30 +2406,41 @@ Product decisions:
     be added.
 15. **DESIGN_SPEC text:** the EXTCOMIN divider is corrected in rev C2 (547); still to correct:
     the register table's "INT pins pulsed" (latched is used and selected explicitly). These
-    board changes were handed to the firmware as "rev C2" while the file's header reads "rev D,
-    EVT1": one of the two names should go.
+    board changes were handed to the firmware as "rev C2" while the file's header now reads
+    "rev D, EVT1, with amendments E1 to E16": one of the names should go, and the amendments
+    that this firmware does not implement are issue 32.
 16. **State name.** `CAL_FLIP` of the original state list is now `CAL_ZERO` (rev C wording); the
     storage fields `flip_bias_*` and `GL_CAL_TILT_FLAG_FLIP` keep their names because they are the
     record format. The read log record is unchanged: a left-camera-only read is a record with
     the stick flag set, zero disparity and zero repeats.
-17. **Worst-case solve time.** A typical putt estimate is a few milliseconds at 160 MHz
-    (estimate), but a read on a slope near the limit of what the green holds, where neither the
-    fitted patch nor its secant plane can be solved, ran to 0.5 million RK4 steps on the host
-    (173 million instructions: an estimated 1.6-3.2 s at 160 MHz, 5-11 s at 48 MHz), and the
-    loop counters only bound it at 3.8 million steps (13-25 s at 160 MHz), which is of the
-    order of the 32 s watchdog. Decide: keep the fast clock through SOLVE (needed in any case),
-    and either accept seconds for such reads, lower `max_rolls` (200, the reference's value;
-    the 240 simulated reads use at most 57), or add a step budget to the aim solve (not in the
-    reference; it would end the same reads as NO_CONVERGENCE earlier). The fast clock is now
-    kept through SOLVE; the rest is open.
+17. **Worst-case solve time: bounded now, by a budget that is this firmware's choice.** A
+    typical putt estimate is a few milliseconds at 160 MHz (estimate). A read on a slope near
+    the limit of what the green holds, where neither the fitted patch nor its secant plane can
+    be solved, ran to 0.58 million RK4 steps on the host with the reference's limits alone
+    (1.9-3.8 s at 160 MHz), and the loop counters bound it only at 3.8 million (13-25 s). The
+    application now sets `max_steps` = 300,000 (1.0-2.0 s at 160 MHz, 3.3-6.6 s at 48 MHz;
+    not in the reference), keeps the fast clock through SOLVE and refreshes the watchdog
+    before it. A solve that runs out is shown as `NOT SOLVED`. **To decide:** whether 300,000
+    is the right number (the costliest solve WITH a result among the vectors needs 208,952 in
+    single precision; a smaller budget ends more hard putts unsolved, a larger one keeps the
+    golfer waiting), and whether the reference should have the same option so that the two can
+    be compared at the limit.
 18. **Survey: where is the ball, and when is there a line.** The estimator needs the drop at
     the ball first; the specification's flow ("move the marker along the line") leaves the
     marker somewhere else at the end. As built: the ball is the stored drop farthest from the
     flagstick; the line is drawn only while the marker lies there (the newest drop is that one
     or within 0.85 of its range), otherwise the numbers and `PUT AT BALL`. That makes "walk
     from the hole side back to the ball" or "start at the ball and return to it" the working
-    orders, and a Survey that ends near the hole shows no line. The product owner should
-    confirm the rule and the 0.85, or say in which order golfers are to survey.
+    orders, and a Survey that ends near the hole shows no line. **The order the specification
+    describes (ball, midpoint, about 1 m short of the hole: "Survey, three placements") ends
+    without a line**; the review measured it: a line appears only with a fourth placement
+    back at the ball, and a fifth placement is silently a plain Quick Read. Also measured by
+    the review: with the ball at 6 m and a second drop at 5.3 m (0.88 of the range) the newer
+    drop is taken as the ball and a line for a 5.3 m putt is shown as `D2` without a remark.
+    Nothing of this was changed. The product owner should say in which order golfers are to
+    survey; then either the last drop says what to do (`BACK TO BALL`) and the Survey stays
+    open for the placement at the ball, or the result at the ball is drawn from the stored
+    drops when the marker returns.
 19. **A range that nobody measured or dialled.** When the flagstick is found but cannot be
     ranged and nothing is dialled, the estimator solves for its 3 m default. As built the
     screen shows `--`, `NO RANGE`, `BREAK ?` and a DASHED line. The alternative is to ask for
@@ -2210,9 +2448,19 @@ Product decisions:
 20. **Distance shown is the cameras' distance to the stick**, which is about 29 mm more than
     the ball's distance to the hole (the lenses sit behind the ball). Not corrected: it is
     about one 0.1 ft step of the display, and a known offset.
-21. **Confidence factors.** 0.6 (one camera), 0.6 (ambiguous), 0.7 (fit not converged), the
-    disparity-sigma factor and the caps are this firmware's choices; nothing calibrates them
-    against how often such reads are wrong. They need field data.
+21. **Confidence: the factors, and what the bar means.** 0.6 (one camera), 0.6 (ambiguous),
+    0.7 (fit not converged), the disparity-sigma factor and the caps (0.2 best effort, 0.09
+    flag out) are this firmware's choices; nothing calibrates them against how often such
+    reads are wrong. They need field data. **And the bar itself does not do what a golfer
+    would expect of it** (phase-2 review): the estimator's confidence is essentially the
+    chance of holing, so a clean read has 5 boxes at 1.5 m, 3 at 3 m, 1 at 4.5 to 6 m and
+    none from 9 m on, and most fallbacks have the same 0 or 1 box. The specification asks for
+    a "low-confidence indicator" in the flag-out mode; that case now has a dashed line and an
+    empty bar, the others have their message. **To decide:** an indicator of the QUALITY of
+    the read relative to what a clean read achieves at that distance (the ratio to the
+    clean-read confidence, or the 1-sigma lateral error at the hole in cups), with the holing
+    chance as a separate number if it is wanted; and, per fallback, whether its line stays
+    solid (issue 8).
 
 22. **The base of the stick near the margin of "visible"** (found by the honest timing). The
     read classes the base VISIBLE when the stick is followed at least 1.5 rows below the turf
@@ -2221,7 +2469,11 @@ Product decisions:
     the height of the hole from a visible base only, so the same putt gets a Survey fit with a
     curvature or without one (c = 0.0008 /m or 0.00001). Decide: a margin that follows the
     measured uncertainty of the lowest point instead of a constant, a soft weight in the
-    estimator instead of a class, or showing which of the two was used.
+    estimator instead of a class, or showing which of the two was used. The phase-2 review
+    measured the other side of the same switch (finding 9): with the flag flipped the aim of
+    the same placement moves by more than a display step in 1.6 % of nominal Quick Reads.
+    Since then the screen shows which of the two was used (`PLAYS n?` = base hidden); the
+    switch itself is unchanged.
 23. **Motion that is not uniform over a group.** The L R R L correction removes a steady
     drift exactly; a reversal inside the 0.13 s of a group leaves that group wrong by tenths
     of a pixel (0.039 px in the read against a claimed 0.05 px) and no check sees it: the two
@@ -2229,6 +2481,64 @@ Product decisions:
     motion predicts. The instantaneous reversal of the test is harsher than a swaying stick
     (the sway rows under "Vision" stay within their claimed sigma), so this may be acceptable;
     it is not measured on anything real.
+
+From the phase-2 review (the findings that were not, or not wholly, fixed):
+
+24. **Near the critical slope the aim is not determined** (finding 2; "Solver"). A change of
+    one microradian in an input flips the reference's aim by more than a display step in
+    about 3 % of the reads there (the reviewer's figure), and a best-effort direction is an
+    arbitrary iterate. The port follows the reference exactly and the brief forbids changing
+    its numerical behaviour. For the estimator's owner: a search that is stable there (a
+    continuation in the launch speed, or reporting the INTERVAL of aims that hole the putt),
+    and whether a best-effort aim should be drawn at all - today it is drawn dashed.
+25. **A solver tolerance that does not grow with the putt** (finding 3). In single precision
+    `tol_miss_m` = 2e-4 m is inside the roll noise from 15 m on (1.08 x at 15-25 m, 13 x at
+    25-40 m, pinned), so a long putt can end NO_CONVERGENCE for no other reason. A tolerance
+    proportional to the distance would be a change of the contract with the reference.
+    Decide whether putts beyond 15 m matter enough for it.
+26. **newlib's libm on the target** (finding 8). The single-precision functions the solver
+    and the vision call (`powf`, `sinf`, `cosf`, `tanf`, `logf`, `erff`, `hypotf`, `atan2f`,
+    `asinf`, `sqrtf`) are newlib's on the target and glibc's in every test here. NOT
+    VERIFIED: their last-bit differences against the host's, and with them every
+    single-precision figure of "Solver", on the target. It needs the cross-compiled solver
+    run on the vectors in an instruction-set simulator or on a board; neither was available.
+27. **Method B2 with untidy horizons** (finding 10): nominal reads fall back, jump and differ
+    between the precisions. Not changed; B2 is off by default and a poor horizon is now
+    shown. Decide whether B2 stays selectable before it has been made robust.
+28. **Charge termination, charge time, and the cradle state** (finding 19). The firmware has
+    no charge timer and no "full" decision; the charger's STAT input is only displayed. In
+    the cradle the MCU never enters Stop mode (USB is started on VBUS whether or not a host
+    is there), with the IMU at 240 Hz and the display on, and that load sits on the cell's
+    node. NOT VERIFIED (no data sheet here; the reviewer's recollection): the MCP73831 ends a
+    charge only when the current falls to a few percent of the programmed 20 mA and has no
+    safety timer, so with that load the charge may never terminate and the cell would float
+    at 4.2 V for as long as the marker is docked. The E1 charger may behave differently.
+    Firmware has the means (`CHG_INHIBIT`, STAT, the battery ADC: a maximum charge time, a
+    "full, stop" state, Stop 2 between the 5 s checks when no host is connected); what the
+    cell and the charger need is the hardware and product owners' call.
+29. **Turning the marker back after a Precision spin** discards the `2X` result: it is a new
+    placement and a new Quick Read (finding 22). The result screen is now upright for the
+    golfer WITHOUT turning back, which removes the reason to do it; if the golfer is still
+    expected to turn the marker back, the gyro's angle could carry the result over instead.
+30. **Vision at short range** (finding 32): at 2 to 3 m on a putt that is level along its
+    line the hole is read 3 to 5 mm low, which adds about 2 % to the break, and at 0.6 m the
+    flagstick is refused (the strips hold a stick down to 0.8 m: `GL_APP_MIN_RANGE_M`). The
+    reviewer's figures; neither was reproduced or looked into here. The first is a bias of
+    the lowest-point estimate at the turf edge of the size the "Vision" tables show (-0.3 to
+    -0.5 row); a putt of 0.6 m may simply not need the instrument.
+31. **A result cannot be recalled** (finding 33): it is on the screen for 45 s, then only a
+    new camera read shows a line again. Decide whether the last result should be shown again
+    on wake-up while the marker has not been moved (the IMU can tell), at the price of a
+    stale line if it has.
+32. **The specification's amendments that this firmware does not implement** ("DESIGN_SPEC
+    amendments E1 to E16"): E1 (charger and `CHG_INHIBIT` polarity; issue 2), E11 (two stored
+    level zeros, base face and ball feet: one in firmware), E12 (the display's rotation in
+    its pocket, up to about 1 degree = 17 mrad, measured at the factory and applied to the
+    drawn line: not stored, not applied; the largest drawn-line error measured here is 3.8
+    mrad, a quarter of that), E13 (no read above 60 C cell temperature; a ship mode: neither
+    exists). Each is a calibration field, a few lines in `compose_view_()` or the read
+    start, a protocol command and tests; none was in this phase's brief. To decide first:
+    whether the specification file or the brief is the authority.
 
 ## The solver: decisions and open points
 
@@ -2261,8 +2571,21 @@ owner:
   the line only when the marker lies there (Application / Survey; open issue 18).
 * **Method.** B1 is the default; the setting METHOD switches B2 (anchored horizon fit, 5
   starts, about 1.4 million host instructions against 0.3 million) on. B0 and STRAIGHT are
-  ported and tested but cannot be selected on the device. The grain option (`use_grain`) is
-  off and has no setting.
+  ported and tested but cannot be selected on the device. The grain option (`use_grain`)
+  follows the GRAIN setting, which ships OFF (phase-2 review: the setting used to lengthen the
+  read and change nothing).
+* **Near miss of the patch solve** (phase-2 review; the one change to the reference, and
+  additive). `EstimatorConfig.near_miss_keep` / `gl_solver_options_t.near_miss_m`: 0 by
+  default in both, which is the behaviour of every earlier vector. With a positive value a
+  patch solve that ends without a solution, but whose last iterate is a real launch that
+  passes within that distance of the hole centre, is kept instead of the secant plane's or a
+  best-effort aim; its confidence is scored as a fallback's. The application passes 5 mm
+  (`GL_APP_NEAR_MISS_M`: a twentieth of the hole) and shows `APPROX`. Whether 5 mm is the
+  right number, and whether the reference's own default should become positive, is the
+  estimator owner's decision.
+* **Step budget** (phase-2 review; firmware only). `gl_solver_options_t.max_steps`, 0 = none
+  by default; the application passes 300,000 (open issue 17). The reference has no such
+  option; inside the budget the results are identical (tested on all 340 estimator vectors).
 * **`flag_base_visible` is passed strictly** (the stick was followed, with significance, more
   than 1.5 rows below the turf edge); with the base "at the horizon" the estimator uses the
   one-sided bound and does not range from the angular height (open issue 9 still applies to
@@ -2272,7 +2595,11 @@ owner:
   (`GL_ERR_PARAM`), where the reference computes on; where the reference raises an exception
   or returns not-a-number, C returns `GL_ERR_RANGE` and a flagged record; an infinite distance
   sigma is reported as not-a-number; `gl_solver_solve_aim()` and `gl_solver_roll()` refuse a
-  result that is not finite. Not ported: the joint horizon fit and the other comparison-only
+  result that is not finite; a finite input whose square overflows is `GL_ERR_RANGE` (the
+  reference raises `OverflowError` in double; in single precision the range is the float's);
+  in the single build a fit step below the resolution of the parameters ends the fit as
+  converged; the secant plane of a patch that is a plane is not solved a second time (same
+  result, half the work). Not ported: the joint horizon fit and the other comparison-only
   switches of `EstimatorConfig`, grid surfaces, trajectories, batches.
 * **For the next agent:** `gl_estimate_t` carries `n_rolls` and `n_steps` (the cost of the
   solve) and `gl_solver_work_t.fit` the whole fit record (covariance, range channels,
