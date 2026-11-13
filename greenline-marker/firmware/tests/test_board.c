@@ -169,8 +169,8 @@ GL_TEST(test_core_clock_calls_are_recorded_and_checked)
     GL_CHECK_EQ(gl_sim_stats()->clock_to_fast, 1u);
     gl_hal_delay_ms(7);
     /* heavy work while fast is fine ... */
-    gl_hal_trace(GL_TRACE_VISION_STRIP);
-    gl_hal_trace(GL_TRACE_SOLVE);
+    gl_hal_trace(GL_TRACE_VISION_STRIP, 0u);
+    gl_hal_trace(GL_TRACE_SOLVE, 0u);
     GL_CHECK_EQ(gl_sim_stats()->heavy_while_slow, 0u);
     /* ... Stop mode is not */
     gl_hal_irq_enable(GL_IRQ_WAKE_TIMER, true);
@@ -187,14 +187,18 @@ GL_TEST(test_core_clock_calls_are_recorded_and_checked)
     st = gl_sim_stats();
     GL_CHECK_EQ(st->clock_to_fast, 1u);
     GL_CHECK_EQ(st->clock_to_slow, 1u);
-    GL_CHECK(st->clock_fast_us >= 13000u && st->clock_fast_us < 14500u);
+    /* 7 ms + two 3 ms sleeps + the lock time, and the computation the two
+     * trace points above were charged (the cost model, gl_sim_cost.h) */
+    GL_CHECK(st->compute_us == st->stage_us[GL_TRACE_VISION_STRIP] + st->stage_us[GL_TRACE_SOLVE]);
+    GL_CHECK(st->clock_fast_us - st->compute_us >= 13000u &&
+             st->clock_fast_us - st->compute_us < 14500u);
     gl_hal_wake_timer_start(3);
     (void)gl_hal_sleep(GL_SLEEP_STOP);
     GL_CHECK_EQ(gl_sim_violations()->clock, 1u);
     (void)gl_hal_irq_take();
     /* heavy work at the slow clock is counted (a statistic, not a rule: the
      * driver-level tests run the vision without an application) */
-    gl_hal_trace(GL_TRACE_VISION_BAND);
+    gl_hal_trace(GL_TRACE_VISION_BAND, 0u);
     GL_CHECK_EQ(gl_sim_stats()->heavy_while_slow, 1u);
 
     /* the trace: every call, with the clock before it */

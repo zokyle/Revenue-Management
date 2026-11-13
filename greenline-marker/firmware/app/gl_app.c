@@ -1235,7 +1235,7 @@ static void solve_(gl_app_t *app, bool precision_reread)
     } else {
         st = gl_solver_estimate(&app->meas_cur, opt, &app->solver_work, &app->est);
     }
-    gl_hal_trace(GL_TRACE_SOLVE);
+    gl_hal_trace(GL_TRACE_SOLVE, (st == GL_OK) ? app->est.n_steps : 0u);
     clock_(app, false);
     app->solver_status = st;
     if (st != GL_OK) {
@@ -1595,6 +1595,7 @@ static void draw_(gl_app_t *app)
     }
     app->view.cal_step = app->zero.active ? app->zero.step : 0u;
     gl_ui_render(&app->ui, &app->view, &app->gfx);
+    gl_hal_trace(GL_TRACE_RENDER, 0u);
     if (gl_lcd_update(&app->lcd, &app->gfx, NULL) != GL_OK) {
         app->last_error = (uint16_t)GL_ERR_IO;
     }

@@ -17,8 +17,8 @@
  * back: 0.03-0.09 px for exactly vertical sticks; PHASE_BIAS_* below puts
  * that into the reported uncertainty.  The real blur must be measured at
  * EVT and this constant set from it. */
-#define MIN_WINDOW_SIGMA 1.2f
-#define MAX_CORE 64 /* residual samples per row: 2 * flank offset - 1 <= 63 */
+#define MIN_WINDOW_SIGMA GL_VIS_MIN_WINDOW_SIGMA_PX
+#define MAX_CORE ((int)GL_VIS_AMP_MAX_N) /* residual samples per row: 2 * flank offset - 1 <= 63 */
 /* A row is rejected as an edge when |left flank - right flank| exceeds this
  * fraction of the line's peak contrast. */
 #define EDGE_ASYMMETRY 0.8f
@@ -52,10 +52,18 @@ static inline int px_(const gl_strip_t *s, int col, int row)
 
 /* exp(-t) for t >= 0 from a table (linear interpolation, relative error
  * below 2e-4): the Gaussian window weights are the innermost loop of the
- * refinement, and expf() dominated its run time. */
+ * refinement, and expf() dominated its run time.
+ *
+ * The argument is passed already scaled: u = t * EXP_LUT_SCALE (a power of
+ * two, so the scaling is exact and the callers fold it into the constant
+ * they multiply by anyway).  The slope of every table interval is stored
+ * beside its value: slope[i] is lut[i + 1] - lut[i] as single-precision
+ * arithmetic gives it, so the result is bit for bit what the first version
+ * computed from the value table alone (tests/test_vision_equiv.c). */
 #define EXP_LUT_N 128
 #define EXP_LUT_MAX 8.0f
-static float exp_neg_(float t)
+#define EXP_LUT_SCALE ((float)EXP_LUT_N / EXP_LUT_MAX) /* 16 */
+static float exp_lut_(float u)
 {
     static const float lut[EXP_LUT_N + 2] = {
         1.00000000f, 0.93941306f, 0.88249690f, 0.82902912f,
@@ -92,17 +100,49 @@ static float exp_neg_(float t)
         0.00043074f, 0.00040465f, 0.00038013f, 0.00035710f,
         0.00033546f, 0.0f
     };
-    float u;
+    static const float slope[EXP_LUT_N] = {
+        -0.0605869293f, -0.0569161773f, -0.0534677505f, -0.0502283573f,
+        -0.0471851826f, -0.0443263054f, -0.0416407585f, -0.0391178727f,
+        -0.0367478728f, -0.0345213413f, -0.0324298739f, -0.0304650366f,
+        -0.0286192298f, -0.0268853009f, -0.0252563953f, -0.0237261653f,
+        -0.0222887099f, -0.0209382772f, -0.0196696818f, -0.0184779763f,
+        -0.0173584521f, -0.0163067579f, -0.0153187811f, -0.0143906474f,
+        -0.0135187805f, -0.0126997083f, -0.011930272f, -0.0112074614f,
+        -0.0105284303f, -0.00989054143f, -0.00929130614f, -0.00872838497f,
+        -0.00819955766f, -0.00770275295f, -0.00723607838f, -0.00679767132f,
+        -0.00638581067f, -0.00599891692f, -0.0056354627f, -0.00529403239f,
+        -0.00497327745f, -0.00467196107f, -0.00438891351f, -0.00412298739f,
+        -0.00387318805f, -0.00363853201f, -0.00341808051f, -0.0032109879f,
+        -0.00301644951f, -0.00283369049f, -0.00266199932f, -0.00250072032f,
+        -0.00234921277f, -0.00220687687f, -0.00207317248f, -0.00194756873f,
+        -0.00182956085f, -0.00171871856f, -0.00161459111f, -0.0015167594f,
+        -0.00142486952f, -0.00133854151f, -0.00125744008f, -0.00118125975f,
+        -0.00110968947f, -0.00104245916f, -0.000979290344f, -0.000919970684f,
+        -0.000864219852f, -0.00081187021f, -0.00076266937f, -0.000716470182f,
+        -0.000673060305f, -0.000632279553f, -0.000593979843f, -0.0005579805f,
+        -0.00052418001f, -0.000492429826f, -0.000462580007f, -0.000434560236f,
+        -0.000408229884f, -0.00038350001f, -0.000360270031f, -0.000338430051f,
+        -0.000317929778f, -0.000298670027f, -0.000280570239f, -0.000263579655f,
+        -0.000247600023f, -0.000232610153f, -0.000218509929f, -0.000205270015f,
+        -0.000192830106f, -0.000181159936f, -0.000170169864f, -0.000159870135f,
+        -0.000150179956f, -0.000141080003f, -0.000132529996f, -0.000124510028f,
+        -0.000116960029f, -0.000109869987f, -0.000103219994f, -9.69599932e-05f,
+        -9.10899835e-05f, -8.55700346e-05f, -8.0389902e-05f, -7.55100045e-05f,
+        -7.09400047e-05f, -6.66400883e-05f, -6.26099645e-05f, -5.88099938e-05f,
+        -5.52500132e-05f, -5.18999877e-05f, -4.87499638e-05f, -4.58100112e-05f,
+        -4.30200016e-05f, -4.042004e-05f, -3.79699632e-05f, -3.56800156e-05f,
+        -3.35099758e-05f, -3.14700301e-05f, -2.95799982e-05f, -2.77799845e-05f,
+        -2.60900124e-05f, -2.45200063e-05f, -2.30299775e-05f, -2.16400076e-05f
+    };
     int i;
-    if (!(t < EXP_LUT_MAX)) {
+    if (!(u < (float)EXP_LUT_N)) {
         return 0.0f; /* also NaN */
     }
-    if (t < 0.0f) {
-        t = 0.0f;
+    if (u < 0.0f) {
+        u = 0.0f;
     }
-    u = t * ((float)EXP_LUT_N / EXP_LUT_MAX);
     i = (int)u;
-    return lut[i] + (lut[i + 1] - lut[i]) * (u - (float)i);
+    return lut[i] + slope[i] * (u - (float)i);
 }
 
 /* ======================================================================= */
@@ -156,13 +196,21 @@ void gl_vis_strip_stats_rows(const gl_strip_t *s, unsigned rows, float *scratch,
     unsigned run_cols = 0;
 
     out->sun = false;
-    for (int c = 0; c < w; c++) {
+    /* sum and saturated pixels, along the rows */
+    for (int r = 0; r < h; r++) {
+        const uint8_t *p = &s->px[(size_t)r * s->stride];
+        for (int c = 0; c < w; c++) {
+            const unsigned v = p[c];
+            sum += v;
+            sat += (v >= GL_VIS_SAT_LEVEL) ? 1u : 0u;
+        }
+    }
+    /* a blob: enough adjacent columns each with a long saturated run (looked
+     * for only if anything is saturated at all) */
+    for (int c = 0; sat > 0u && c < w; c++) {
         unsigned run = 0, max_run = 0;
         for (int r = 0; r < h; r++) {
-            int v = px_(s, c, r);
-            sum += (uint32_t)v;
-            if (v >= (int)GL_VIS_SAT_LEVEL) {
-                sat++;
+            if (px_(s, c, r) >= (int)GL_VIS_SAT_LEVEL) {
                 run++;
                 if (run > max_run) {
                     max_run = run;
@@ -171,7 +219,6 @@ void gl_vis_strip_stats_rows(const gl_strip_t *s, unsigned rows, float *scratch,
                 run = 0;
             }
         }
-        /* a blob: enough adjacent columns each with a long saturated run */
         if (max_run >= GL_VIS_SUN_MIN_PX) {
             run_cols++;
             if (run_cols >= GL_VIS_SUN_MIN_PX) {
@@ -348,15 +395,23 @@ gl_status_t gl_vis_band_analyse(const gl_strip_t *band, gl_vis_band_work_t *work
             for (int x = 0; x < w; x++) {
                 rg[x] = 0.0f;
             }
-            for (int x = margin; x < w - margin; x++) {
+            /* core and flank sums of the first column; they slide from there
+             * (integers: the same sums as adding them up at every column) */
+            {
                 int c = 0, fl = 0, fr = 0;
-                float v, asym;
                 for (int k = -half; k <= half; k++) {
-                    c += blk[x + k];
+                    c += blk[margin + k];
                 }
                 for (int k = 0; k < flank; k++) {
-                    fl += blk[x - half - gap - 1 - k];
-                    fr += blk[x + half + gap + 1 + k];
+                    fl += blk[margin - half - gap - 1 - k];
+                    fr += blk[margin + half + gap + 1 + k];
+                }
+            for (int x = margin; x < w - margin; x++) {
+                float v, asym;
+                if (x > margin) {
+                    c += blk[x + half] - blk[x - 1 - half];
+                    fl += blk[x - 1 - half - gap] - blk[x - 1 - half - gap - flank];
+                    fr += blk[x + half + gap + flank] - blk[x + half + gap];
                 }
                 v = (float)c * kcore - (float)(fl + fr) * kflank; /* grey levels */
                 /* the noise figure is taken from the response as it is,
@@ -373,6 +428,7 @@ gl_status_t gl_vis_band_analyse(const gl_strip_t *band, gl_vis_band_work_t *work
                 asym = fabsf((float)(fl - fr)) * kflank;
                 v = (v > asym) ? (v - asym) : ((v < -asym) ? (v + asym) : 0.0f);
                 rg[x] = v;
+            }
             }
             /* robust sigma of the response of this block: the median of its
              * absolute value over a sample of columns (a mean would be
@@ -421,6 +477,7 @@ gl_status_t gl_vis_band_analyse(const gl_strip_t *band, gl_vis_band_work_t *work
                     const float *rg = work->ridge[b];
                     s += rg[i0] + (rg[i0 + 1] - rg[i0]) * fr;
                     work->path[b][ns] = s;
+                    work->path_keep[b][ns] = s; /* (path[] is destroyed by the medians) */
                 }
                 ns++;
             }
@@ -435,28 +492,55 @@ gl_status_t gl_vis_band_analyse(const gl_strip_t *band, gl_vis_band_work_t *work
                 }
                 inv_spread[b] = 1.0f / spread;
             }
-            /* Pass 2: every column. */
-            for (int x = pad; x < w - pad; x++) {
-                const float xf = (float)x;
-                float s = 0.0f;
-                for (int b = 0; b < nb; b++) {
-                    const float xs = xf + sb[b];
-                    const int i0 = (int)xs;
-                    const float fr = xs - (float)i0;
-                    const float *rg = work->ridge[b];
-                    s += rg[i0] + (rg[i0 + 1] - rg[i0]) * fr;
-                    if (b >= 1) {
-                        float z = fabsf(s - centre[b]) * inv_spread[b];
-                        if (z > work->score[x]) {
-                            work->score[x] = z;
-                            work->best_slant[x] = (uint8_t)ji;
-                            work->best_scale[x] = (uint8_t)si;
-                            work->best_blocks[x] = (uint8_t)(b + 1);
-                            work->best_pol[x] = (int8_t)((s >= centre[b]) ? 1 : -1);
-                        }
+            /* Pass 2: every column.  A column that pass 1 sampled (every
+             * `step`-th from `pad`) takes its path sums from there; the
+             * others are summed along the path here. */
+#define BAND_TRY(b_, s_)                                                        \
+    do {                                                                        \
+        const float z_ = fabsf((s_) - centre[b_]) * inv_spread[b_];             \
+        if (z_ > work->score[x]) {                                              \
+            work->score[x] = z_;                                                \
+            work->best_slant[x] = (uint8_t)ji;                                  \
+            work->best_scale[x] = (uint8_t)si;                                  \
+            work->best_blocks[x] = (uint8_t)((b_) + 1);                         \
+            work->best_pol[x] = (int8_t)(((s_) >= centre[b_]) ? 1 : -1);        \
+        }                                                                       \
+    } while (0)
+#define BAND_COLUMN()                                                           \
+    do {                                                                        \
+        const float xf = (float)x;                                              \
+        float s = 0.0f;                                                         \
+        for (int b = 0; b < nb; b++) {                                          \
+            const float xs = xf + sb[b];                                        \
+            const int i0 = (int)xs;                                             \
+            const float fr = xs - (float)i0;                                    \
+            const float *rg = work->ridge[b];                                   \
+            s += rg[i0] + (rg[i0 + 1] - rg[i0]) * fr;                           \
+            if (b >= 1) {                                                       \
+                BAND_TRY(b, s);                                                 \
+            }                                                                   \
+        }                                                                       \
+    } while (0)
+            {
+                int x = pad;
+                for (unsigned js = 0; js < ns; js++) {
+                    /* here x == pad + js * step: the js-th sample of pass 1 */
+                    const int next = pad + ((int)js + 1) * step;
+                    const int end = (next < w - pad) ? next : (w - pad);
+                    for (int b = 1; b < nb; b++) {
+                        const float s = work->path_keep[b][js];
+                        BAND_TRY(b, s);
+                    }
+                    for (x++; x < end; x++) {
+                        BAND_COLUMN();
                     }
                 }
+                for (; x < w - pad; x++) {
+                    BAND_COLUMN(); /* beyond the last sample */
+                }
             }
+#undef BAND_COLUMN
+#undef BAND_TRY
         }
     }
 
@@ -568,6 +652,7 @@ static void row_geom_(float s_w, int *core_h, int *flank_off)
 }
 
 #define FLANK_W 4      /* pixels per side that define the row's linear background */
+#define CENTROID_PRUNE 8.64f /* 0.96 x 9: see centroid_row_ */
 #define FLANK_STORE 6  /* pixels per side kept for the static-error estimate */
 #define FLANK_INVALID (-128)
 
@@ -595,53 +680,27 @@ typedef struct {
     float lm, rm;   /* left / right flank mean there, grey */
 } row_scan_t;
 
-/* 1. coarse position: strongest centre-minus-flanks response among the
- *    columns c_lo..c_hi.  `row` holds the SUM of nb image rows.  The core sum
- *    and the two flank sums slide along the row - integers, so they are
- *    exactly the sums the three direct loops of the first version gave. */
-static bool scan_row_(const uint16_t *row, int nb, int c_lo, int c_hi, int h, int g,
-                      row_scan_t *out)
+/* Centre-minus-flanks response of a column from its three pixel sums, and
+ * the two flank means.  nb = rows summed in `row` (1, 4 or 16). */
+static float scan_response_(int core, int l, int r, int h, float inv, float *lm, float *rm)
 {
-    const float inv = 1.0f / (float)nb;
-    int core = 0, l = 0, r = 0, best_c = -1;
-    float best_rr = 0.0f, best_l = 0.0f, best_r = 0.0f;
-
-    if (c_lo > c_hi) {
-        return false;
-    }
-    for (int k = -h; k <= h; k++) {
-        core += row[c_lo + k];
-    }
-    for (int k = 0; k < FLANK_W; k++) {
-        l += row[c_lo - g - k];
-        r += row[c_lo + g + k];
-    }
-    for (int c = c_lo;; c++) {
-        const float lm = (float)l * inv / (float)FLANK_W;
-        const float rm = (float)r * inv / (float)FLANK_W;
-        const float rr = (float)core * inv / (float)(2 * h + 1) - 0.5f * (lm + rm);
-        if (fabsf(rr) > fabsf(best_rr)) {
-            best_rr = rr;
-            best_c = c;
-            best_l = lm;
-            best_r = rm;
-        }
-        if (c == c_hi) {
-            break;
-        }
-        core += (int)row[c + 1 + h] - (int)row[c - h];
-        l += (int)row[c + 1 - g] - (int)row[c - g - FLANK_W + 1];
-        r += (int)row[c + g + FLANK_W] - (int)row[c + g];
-    }
-    if (best_c < 0) {
-        return false;
-    }
-    out->c = best_c;
-    out->rr = best_rr;
-    out->lm = best_l;
-    out->rm = best_r;
-    return true;
+    *lm = (float)l * inv / (float)FLANK_W;
+    *rm = (float)r * inv / (float)FLANK_W;
+    return (float)core * inv / (float)(2 * h + 1) - 0.5f * (*lm + *rm);
 }
+
+/* 1. coarse position of the line on a row: see gl_vision_scan.inc, the one
+ *    implementation, built here for a row of pixels and for a row of sums. */
+#define GL_VIS_SCAN_FN scan_row8_
+#define GL_VIS_SCAN_PIX uint8_t
+#include "gl_vision_scan.inc"
+#undef GL_VIS_SCAN_FN
+#undef GL_VIS_SCAN_PIX
+#define GL_VIS_SCAN_FN scan_row16_
+#define GL_VIS_SCAN_PIX uint16_t
+#include "gl_vision_scan.inc"
+#undef GL_VIS_SCAN_FN
+#undef GL_VIS_SCAN_PIX
 
 /* 2.-4. the line on one row, from its coarse position: residual profile,
  * centroid, significance.  `noise` is the pixel noise of a single row.
@@ -657,9 +716,10 @@ static bool centroid_row_(const uint16_t *row, int nb, int g, float s_w, float n
     const float best_l = sc->lm, best_r = sc->rm;
     float p[MAX_CORE];
     float xc, relax = 1.0f, den = 0.0f, var_w = 0.0f, flux = 0.0f, peak = 0.0f;
-    const float inv2s2 = 0.5f / (s_w * s_w);
+    const float ku = (0.5f / (s_w * s_w)) * EXP_LUT_SCALE; /* window exponent, in table units */
     const float inv = 1.0f / (float)nb;
     const float noise_b = noise * sqrtf(inv);
+    const float k0 = (float)(-(g - 1));
     int n;
 
     m->col = best_c;
@@ -688,6 +748,18 @@ static bool centroid_row_(const uint16_t *row, int nb, int g, float s_w, float n
     if (fabsf(best_r - best_l) > EDGE_ASYMMETRY * peak + 1.5f * noise_b) {
         return false;
     }
+    /* A row whose largest residual is small cannot pass the significance
+     * test of step 4, wherever the centroid ends up, so the iteration is not
+     * started for it (most rows above the top of a stick are like that).
+     * Step 4 wants amp = sum(w p) / sum(w^2) >= 3 noise_b sqrt(1 / sum(w^2) +
+     * sum(w)^2 / (8 sum(w^2)^2)) with weights w >= 0.  As sum(w p) <= peak
+     * sum(w) and sum(w^2) >= sum(w)^2 / n (n terms), that fails whenever
+     * peak^2 < 9 (1 / n + 1 / 8) noise_b^2.  The limit used is 4 % below it,
+     * far more than the rounding of the sums; a row cut here would have ended
+     * with the same "no line" in step 3 or 4. */
+    if (peak * peak * (float)(8 * n) < CENTROID_PRUNE * (float)(8 + n) * noise_b * noise_b) {
+        return false;
+    }
 
     /* 3. iterated Gaussian-weighted centroid.  One step moves the estimate
      *    only part of the way (the window pulls it back toward its own
@@ -697,9 +769,10 @@ static bool centroid_row_(const uint16_t *row, int nb, int g, float s_w, float n
     xc = 0.0f; /* relative to best_c */
     for (int it = 0; it < 6; it++) {
         float s0 = 0.0f, s1 = 0.0f, s2 = 0.0f, sg2 = 0.0f, step, v;
-        for (int i = 0; i < n; i++) {
-            float d = (float)(i - (g - 1)) - xc;
-            float wgt = exp_neg_(d * d * inv2s2);
+        float kf = k0; /* (float)(i - (g - 1)): small whole numbers, exact */
+        for (int i = 0; i < n; i++, kf += 1.0f) {
+            float d = kf - xc;
+            float wgt = exp_lut_(d * d * ku);
             float wp = wgt * p[i];
             s0 += wp;
             s1 += wp * d;
@@ -734,9 +807,10 @@ static bool centroid_row_(const uint16_t *row, int nb, int g, float s_w, float n
      *    contrast for the same decision. */
     {
         float sg = 0.0f, sgg = 0.0f, sgp = 0.0f, amp, amp_sigma;
-        for (int i = 0; i < n; i++) {
-            float d = (float)(i - (g - 1)) - xc;
-            float wgt = exp_neg_(d * d * inv2s2);
+        float kf = k0;
+        for (int i = 0; i < n; i++, kf += 1.0f) {
+            float d = kf - xc;
+            float wgt = exp_lut_(d * d * ku);
             sg += wgt;
             sgg += wgt * wgt;
             sgp += wgt * p[i];
@@ -765,7 +839,7 @@ static bool measure_row_(const uint16_t *row, int nb, int c_lo, int c_hi, int h,
                          float search, float s_w, float noise, row_meas_t *m)
 {
     row_scan_t sc;
-    if (!scan_row_(row, nb, c_lo, c_hi, h, g, &sc) ||
+    if (!scan_row16_(row, nb, c_lo, c_hi, h, g, &sc) ||
         !centroid_row_(row, nb, g, s_w, noise, &sc, m)) {
         return false;
     }
@@ -786,9 +860,10 @@ static float line_at_(const line_t *l, float row)
 }
 
 /* One iteratively-reweighted step with Tukey cut-off c (px).  Candidate
- * rows are MEASURED and not WIDE.  Returns the number of rows with
+ * rows are MEASURED and not WIDE, among the rows r0 .. r1 - 1 (the caller
+ * passes the span of the measured rows).  Returns the number of rows with
  * non-zero weight; the line is updated only if that is >= 3. */
-static unsigned irls_step_(gl_vis_stick_work_t *wk, int rows, line_t *l, float c)
+static unsigned irls_step_(gl_vis_stick_work_t *wk, int r0, int r1, line_t *l, float c)
 {
     float sw = 0.0f, swy = 0.0f, swx = 0.0f;
     float syy = 0.0f, sxy = 0.0f, ybar, xbar;
@@ -796,7 +871,7 @@ static unsigned irls_step_(gl_vis_stick_work_t *wk, int rows, line_t *l, float c
 
     /* the weight of each row is kept in wk->tmp for the second sum (-1 = the
      * row takes no part), instead of being worked out twice */
-    for (int r = 0; r < rows; r++) {
+    for (int r = r0; r < r1; r++) {
         float w = -1.0f;
         if ((wk->flag[r] & (GL_VIS_ROW_MEASURED | GL_VIS_ROW_WIDE)) == GL_VIS_ROW_MEASURED) {
             float res = (wk->x[r] - line_at_(l, (float)r)) / c;
@@ -816,7 +891,7 @@ static unsigned irls_step_(gl_vis_stick_work_t *wk, int rows, line_t *l, float c
     }
     ybar = swy / sw;
     xbar = swx / sw;
-    for (int r = 0; r < rows; r++) {
+    for (int r = r0; r < r1; r++) {
         const float w = wk->tmp[r];
         if (!(w < 0.0f)) {
             float dy = (float)r - ybar;
@@ -834,11 +909,11 @@ static unsigned irls_step_(gl_vis_stick_work_t *wk, int rows, line_t *l, float c
 
 /* Tukey cut-off from the data: 4.685 * 1.4826 * median |residual| over the
  * rows currently inside the cut-off c_prev, floored. */
-static float robust_cut_(gl_vis_stick_work_t *wk, int rows, const line_t *l, float c_prev)
+static float robust_cut_(gl_vis_stick_work_t *wk, int r0, int r1, const line_t *l, float c_prev)
 {
     unsigned n = 0;
     float med;
-    for (int r = 0; r < rows; r++) {
+    for (int r = r0; r < r1; r++) {
         if ((wk->flag[r] & (GL_VIS_ROW_MEASURED | GL_VIS_ROW_WIDE)) == GL_VIS_ROW_MEASURED) {
             float res = fabsf(wk->x[r] - line_at_(l, (float)r));
             if (res < c_prev) {
@@ -854,11 +929,11 @@ static float robust_cut_(gl_vis_stick_work_t *wk, int rows, const line_t *l, flo
 }
 
 /* Flag rows that are much brighter or wider than the typical stick row. */
-static void flag_wide_(gl_vis_stick_work_t *wk, int rows)
+static void flag_wide_(gl_vis_stick_work_t *wk, int r0, int r1)
 {
     unsigned n = 0;
     float med_flux, med_m2;
-    for (int r = 0; r < rows; r++) {
+    for (int r = r0; r < r1; r++) {
         if ((wk->flag[r] & GL_VIS_ROW_MEASURED) != 0u) {
             wk->tmp[n++] = wk->flux[r];
         }
@@ -868,13 +943,13 @@ static void flag_wide_(gl_vis_stick_work_t *wk, int rows)
     }
     med_flux = gl_median_select(wk->tmp, n);
     n = 0;
-    for (int r = 0; r < rows; r++) {
+    for (int r = r0; r < r1; r++) {
         if ((wk->flag[r] & GL_VIS_ROW_MEASURED) != 0u) {
             wk->tmp[n++] = wk->m2[r];
         }
     }
     med_m2 = gl_median_select(wk->tmp, n);
-    for (int r = 0; r < rows; r++) {
+    for (int r = r0; r < r1; r++) {
         if ((wk->flag[r] & GL_VIS_ROW_MEASURED) != 0u) {
             float lim_m2 = 3.0f * med_m2;
             if (lim_m2 < med_m2 + 1.0f) {
@@ -887,38 +962,76 @@ static void flag_wide_(gl_vis_stick_work_t *wk, int rows)
     }
 }
 
+/* Internal row flags, beside the public GL_VIS_ROW_* ones of gl_vision.h
+ * (every test of wk->flag masks the bits it means). */
+#define ROW_FORCED (1u << 5) /* wk->flux[r] holds a forced line amplitude */
+#define ROW_NOLINE (1u << 6) /* the centroid at column wk->col[r] found no line on this row */
+
 /* Measure along a predicted line, on the rows [0, row_end) only, nb rows at
  * a time: the nb rows are summed along the line (whole-pixel shifts) and
  * the result is stored at the middle row of the group.
  *
  * Only the columns a measurement can read are fetched from the strip
- * (scan_range_), not the whole row.
+ * (scan_range_), not the whole row; unbinned (nb == 1) the coarse search
+ * reads the strip directly.
  *
- * `reuse` (nb == 1 only): the work area holds the result of an EARLIER PASS
- * over the same strip made with the same window s_w and the same noise.  A
- * row whose coarse column comes out the same then has the same centroid,
- * weight, flux, second moment and peak as in that pass - they do not depend
- * on the prediction - and they are taken over instead of being worked out
- * again; only the test against the new prediction is made afresh.  The
- * results are identical to a pass without `reuse`. */
+ * `prev` / `prev_search` (nb == 1 only; NULL = none): the work area holds
+ * the result of an EARLIER PASS over the same strip, made along the line
+ * `prev` with the search `prev_search`, the SAME window s_w and the same
+ * noise.  What the centroid of a row finds depends on the row's pixels, its
+ * coarse column, the window and the noise only (centroid_row_) - not on the
+ * prediction.  So for a row whose coarse column is the one of the earlier
+ * pass, that pass's outcome is taken over instead of being worked out again
+ * (its centroid, weight, flux, second moment and peak, or the fact that
+ * there was no line); only the test against the new prediction is made
+ * afresh.  The coarse column is known to be the same WITHOUT scanning when
+ * this pass's columns c_lo..c_hi lie inside the earlier pass's and contain
+ * its column: that column was the first strongest of the wider range, hence
+ * of the narrower one.  The results are identical to a pass without `prev`
+ * (tests/test_vision_equiv.c compares them with the first version of this
+ * code, which measured every row twice). */
 static unsigned measure_all_(const gl_strip_t *s, gl_vis_stick_work_t *wk, const line_t *l,
-                             int row_end, int nb, float search, float s_w, float noise, bool reuse)
+                             int row_end, int nb, float search, float s_w, float noise,
+                             const line_t *prev, float prev_search, int *span0, int *span1)
 {
     const int rows = (int)s->height, w = (int)s->width;
     unsigned n = 0;
     int h, g;
 
+    /* *span0 .. *span1 - 1: the rows from the first to the last measured one */
+    *span0 = 0;
+    *span1 = 0;
+#define SPAN_ADD(row)          \
+    do {                       \
+        if (n == 0u) {         \
+            *span0 = (row);    \
+        }                      \
+        *span1 = (row) + 1;    \
+        n++;                   \
+    } while (0)
     row_geom_(s_w, &h, &g);
     if (nb == 1) {
-        for (int r = 0; r < rows; r++) {
+        for (int r = (row_end > 0) ? row_end : 0; r < rows; r++) {
+            /* below the rows wanted: only the defaults */
+            wk->flag[r] = 0;
+            wk->w[r] = 0.0f;
+            wk->x[r] = line_at_(l, (float)r);
+            wk->flux[r] = 0.0f;
+            wk->m2[r] = 0.0f;
+            wk->peak[r] = 0;
+        }
+        for (int r = 0; r < row_end; r++) {
             const float xp = line_at_(l, (float)r);
-            /* what the previous pass left for this row */
+            /* what the earlier pass left for this row */
             const uint8_t old_flag = wk->flag[r], old_peak = wk->peak[r], old_col = wk->col[r];
             const float old_x = wk->x[r], old_w = wk->w[r], old_flux = wk->flux[r];
             const float old_m2 = wk->m2[r];
+            const bool have_old = prev != NULL &&
+                                  (old_flag & (GL_VIS_ROW_MEASURED | ROW_NOLINE)) != 0u;
+            bool same = false;
             int c_lo, c_hi;
+            row_scan_t sc;
             row_meas_t m;
-            bool ok;
 
             wk->flag[r] = 0;
             wk->w[r] = 0.0f;
@@ -926,52 +1039,64 @@ static unsigned measure_all_(const gl_strip_t *s, gl_vis_stick_work_t *wk, const
             wk->flux[r] = 0.0f;
             wk->m2[r] = 0.0f;
             wk->peak[r] = 0;
-            if (r >= row_end || !(xp >= 0.0f && xp <= (float)(w - 1))) {
-                continue; /* below the rows wanted, outside the strip, or not a number */
+            if (!(xp >= 0.0f && xp <= (float)(w - 1))) {
+                continue; /* outside the strip, or not a number */
             }
             scan_range_(w, xp, search, g, &c_lo, &c_hi);
             if (c_lo > c_hi) {
                 continue;
             }
+            if (have_old) {
+                int a_lo, a_hi;
+                scan_range_(w, line_at_(prev, (float)r), prev_search, g, &a_lo, &a_hi);
+                same = (a_lo <= c_lo && c_hi <= a_hi && (int)old_col >= c_lo &&
+                        (int)old_col <= c_hi);
+            }
+            if (!same) {
+                if (!scan_row8_(&s->px[(size_t)r * s->stride], 1, c_lo, c_hi, h, g, &sc)) {
+                    continue;
+                }
+                same = have_old && sc.c == (int)old_col;
+            }
+            if (same) {
+                if ((old_flag & GL_VIS_ROW_MEASURED) == 0u) {
+                    wk->flag[r] = (uint8_t)ROW_NOLINE; /* no line at this column: known */
+                    continue;
+                }
+                if (fabsf(old_x - xp) > search + 1.0f) {
+                    continue;
+                }
+                wk->x[r] = old_x;
+                wk->w[r] = old_w;
+                wk->flux[r] = old_flux;
+                wk->m2[r] = old_m2;
+                wk->peak[r] = old_peak;
+                wk->flag[r] = (uint8_t)(GL_VIS_ROW_MEASURED | (old_flag & GL_VIS_ROW_NEG));
+                SPAN_ADD(r);
+                continue;
+            }
+            wk->col[r] = (uint8_t)sc.c;
             {
+                /* the centroid reads the 2 g - 1 pixels around the coarse column */
                 const uint8_t *rowp = &s->px[(size_t)r * s->stride];
-                for (int c = c_lo - g - FLANK_W + 1; c <= c_hi + g + FLANK_W - 1; c++) {
+                for (int c = sc.c - (g - 1); c <= sc.c + (g - 1); c++) {
                     wk->rowsum[c] = rowp[c];
                 }
             }
-            if (reuse && (old_flag & GL_VIS_ROW_MEASURED) != 0u) {
-                row_scan_t sc;
-                if (!scan_row_(wk->rowsum, 1, c_lo, c_hi, h, g, &sc)) {
-                    continue;
-                }
-                if (sc.c == (int)old_col) {
-                    if (fabsf(old_x - xp) > search + 1.0f) {
-                        continue;
-                    }
-                    wk->x[r] = old_x;
-                    wk->w[r] = old_w;
-                    wk->flux[r] = old_flux;
-                    wk->m2[r] = old_m2;
-                    wk->peak[r] = old_peak;
-                    wk->flag[r] = (uint8_t)(GL_VIS_ROW_MEASURED | (old_flag & GL_VIS_ROW_NEG));
-                    n++;
-                    continue;
-                }
-                ok = centroid_row_(wk->rowsum, 1, g, s_w, noise, &sc, &m) &&
-                     !(fabsf(m.x - xp) > search + 1.0f);
-            } else {
-                ok = measure_row_(wk->rowsum, 1, c_lo, c_hi, h, g, xp, search, s_w, noise, &m);
+            if (!centroid_row_(wk->rowsum, 1, g, s_w, noise, &sc, &m)) {
+                wk->flag[r] = (uint8_t)ROW_NOLINE;
+                continue;
             }
-            if (ok) {
-                wk->x[r] = m.x + l->b * 0.0f; /* (the general form below with rc == rmid) */
-                wk->w[r] = 1.0f / m.var;
-                wk->flux[r] = m.flux;
-                wk->m2[r] = m.m2;
-                wk->peak[r] = (uint8_t)((m.peak > 255.0f) ? 255.0f : m.peak);
-                wk->col[r] = (uint8_t)m.col;
-                wk->flag[r] = (uint8_t)(GL_VIS_ROW_MEASURED | ((m.pol < 0) ? GL_VIS_ROW_NEG : 0u));
-                n++;
+            if (fabsf(m.x - xp) > search + 1.0f) {
+                continue; /* a line, but not where this pass looks for one */
             }
+            wk->x[r] = m.x + l->b * 0.0f; /* (the general form below with rc == rmid) */
+            wk->w[r] = 1.0f / m.var;
+            wk->flux[r] = m.flux;
+            wk->m2[r] = m.m2;
+            wk->peak[r] = (uint8_t)((m.peak > 255.0f) ? 255.0f : m.peak);
+            wk->flag[r] = (uint8_t)(GL_VIS_ROW_MEASURED | ((m.pol < 0) ? GL_VIS_ROW_NEG : 0u));
+            SPAN_ADD(r);
         }
         return n;
     }
@@ -1019,9 +1144,10 @@ static unsigned measure_all_(const gl_strip_t *s, gl_vis_stick_work_t *wk, const
             wk->peak[rc] = (uint8_t)((m.peak > 255.0f) ? 255.0f : m.peak);
             wk->col[rc] = (uint8_t)m.col;
             wk->flag[rc] = (uint8_t)(GL_VIS_ROW_MEASURED | ((m.pol < 0) ? GL_VIS_ROW_NEG : 0u));
-            n++;
+            SPAN_ADD(rc);
         }
     }
+#undef SPAN_ADD
     return n;
 }
 
@@ -1029,19 +1155,34 @@ static unsigned measure_all_(const gl_strip_t *s, gl_vis_stick_work_t *wk, const
 /* Extent: top, bottom, local horizon                                       */
 /* ======================================================================= */
 
-#define ROW_FORCED (1u << 5) /* internal: wk->flux[r] holds a forced line amplitude */
+
+/* The Gaussian weights of a forced amplitude: they depend on the fractional
+ * position dx of the line between two pixels (and on the window, which is
+ * the same throughout one refinement), nothing else.  Kept so that later
+ * amplitudes at the SAME dx - the lines parallel to the stick that
+ * turf_follow_() samples on every row, a whole number of columns apart - can
+ * use them again instead of working them out anew.  (The sum line + offset
+ * is rounded when it lands in a higher binade, so the dx of the lines on
+ * the right may differ in the last bit: those are computed, not reused.) */
+typedef struct {
+    bool valid;
+    float dx;  /* the offset the weights were made for */
+    float den; /* sum of their squares */
+    float *w;  /* weight of pixel c - (g - 1) + i: MAX_CORE values (in the work area) */
+} amp_win_t;
 
 /* Forced photometry on one row: amplitude (grey levels) of the best-fitting
  * Gaussian line of rms half-width s_w centred at column xline, after
  * removing the linear background between the flanks.  Signed: positive for
  * bright-on-dark.  Optionally the flank means and the FLANK_STORE flank
- * pixels per side minus that background (half grey levels). */
+ * pixels per side minus that background (half grey levels).  `win` (may be
+ * NULL): weights of an earlier call with the same g and s_w, used if they
+ * were made for exactly this dx; an empty `win` is filled. */
 static bool row_amp_at_(const uint8_t *rowp, int width, float xline, int g, float s_w, float *amp,
-                        float *background, float *asym, int8_t *flank)
+                        float *background, float *asym, int8_t *flank, amp_win_t *win)
 {
     const int c = gl_roundi(gl_clampf(xline, -1000.0f, 1000.0f));
     const float dx = xline - (float)c;
-    const float inv2s2 = 0.5f / (s_w * s_w);
     float lm, rm, mid, grad, num = 0.0f, den = 0.0f;
     int l = 0, r = 0;
 
@@ -1056,11 +1197,31 @@ static bool row_amp_at_(const uint8_t *rowp, int width, float xline, int g, floa
     rm = (float)r / (float)FLANK_W;
     mid = 0.5f * (lm + rm);
     grad = (rm - lm) / (2.0f * ((float)g + 0.5f * (float)(FLANK_W - 1)));
-    for (int k = -(g - 1); k <= g - 1; k++) {
-        float d = (float)k - dx;
-        float wgt = exp_neg_(d * d * inv2s2);
-        num += wgt * ((float)rowp[c + k] - (mid + grad * (float)k));
-        den += wgt * wgt;
+    if (win != NULL && win->valid && win->dx == dx) {
+        /* the same weights in the same order: the same sums */
+        const float *wp = win->w;
+        for (int k = -(g - 1); k <= g - 1; k++) {
+            num += *wp++ * ((float)rowp[c + k] - (mid + grad * (float)k));
+        }
+        den = win->den;
+    } else {
+        const float ku = (0.5f / (s_w * s_w)) * EXP_LUT_SCALE;
+        const bool keep = (win != NULL && !win->valid);
+        float *wp = keep ? win->w : NULL;
+        for (int k = -(g - 1); k <= g - 1; k++) {
+            float d = (float)k - dx;
+            float wgt = exp_lut_(d * d * ku);
+            num += wgt * ((float)rowp[c + k] - (mid + grad * (float)k));
+            den += wgt * wgt;
+            if (wp != NULL) {
+                *wp++ = wgt;
+            }
+        }
+        if (keep) {
+            win->dx = dx;
+            win->den = den;
+            win->valid = true;
+        }
     }
     *amp = num / den;
     *background = mid;
@@ -1101,7 +1262,7 @@ static void forced_amp_(const gl_strip_t *s, gl_vis_stick_work_t *wk, const line
         wk->flank[r][0] = (int8_t)FLANK_INVALID;
         if (r < row_limit &&
             row_amp_at_(&s->px[(size_t)r * s->stride], w, line_at_(l, (float)r), g, s_w, &a, &bg,
-                        &as, (r >= flank_lo && r <= flank_hi) ? wk->flank[r] : NULL)) {
+                        &as, (r >= flank_lo && r <= flank_hi) ? wk->flank[r] : NULL, NULL)) {
             wk->flux[r] = a;
             wk->m2[r] = bg;
             wk->peak[r] = (uint8_t)((as > 255.0f) ? 255.0f : as);
@@ -1312,7 +1473,10 @@ static float turf_follow_(const gl_strip_t *s, gl_vis_stick_work_t *wk, const li
     float var_row = 0.0f, csum = 0.0f, zmax = 0.0f, amp, q = 0.0f, qbest = 0.0f, sgn;
     unsigned ng = 0, nvar = 0;
     int kmax = 0, kend = 0, K;
+    amp_win_t win; /* the ghosts of a row mostly share one fractional position */
 
+    win.w = wk->amp_w;
+    win.valid = false;
     if (t1 > (int)s->height - 1) {
         t1 = (int)s->height - 1;
     }
@@ -1341,12 +1505,13 @@ static float turf_follow_(const gl_strip_t *s, gl_vis_stick_work_t *wk, const li
             K = k;
             break;
         }
+        win.valid = false; /* the first ghost of the row makes the weights */
         for (int j = 0; j < TURF_GHOSTS; j++) {
             if (gok[j]) {
                 const float off = (float)(((j & 1) != 0) ? pitch : -pitch) * (float)(j / 2 + 1);
                 float a = 0.0f, bg = 0.0f;
                 (void)row_amp_at_(rowp, w, line_at_(l, (float)r) + off, g, s_w, &a, &bg, NULL,
-                                  NULL);
+                                  NULL, &win);
                 gsum[j] += a;
                 var_row += a * a;
                 nvar++;
@@ -1410,8 +1575,9 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
                                 gl_vis_stick_work_t *wk, gl_vis_stick_t *out)
 {
     int rows, w, g, core_h, nb, rows_clean, bot_idx, top_idx, first_in = -1, last_in = -1;
-    float noise, s_w, s_w_a, search, cut, h_row = 0.0f, h_sigma = 1.0e3f;
-    line_t line;
+    int m0 = 0, m1 = 0; /* span of the measured rows of the pass just made */
+    float noise, s_w, s_w_a, search, search_a, cut, h_row = 0.0f, h_sigma = 1.0e3f;
+    line_t line, line_a;
     unsigned n_meas, n_in = 0, n_cand = 0, min_meas;
     bool have_h, bottom_known = false;
     float sw = 0.0f, syy = 0.0f, sres = 0.0f, sres_unw = 0.0f, svar = 0.0f, chi = 1.0f;
@@ -1479,25 +1645,29 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
     }
     out->noise_sigma = noise;
 
-    /* (From here on the loops over the measured rows stop at rows_clean:
-     * no row at or below the turf edge is ever measured.) */
+    /* (From here on the loops over the measured rows run over their span
+     * m0 .. m1 - 1 only, or stop at rows_clean: no row at or below the turf
+     * edge is ever measured.) */
 
     /* ---- pass A: wide search along the prior ---- */
     s_w_a = s_w;
-    n_meas = measure_all_(strip, wk, &line, rows_clean, nb, search, s_w, noise, false);
+    search_a = search;
+    line_a = line;
+    n_meas = measure_all_(strip, wk, &line, rows_clean, nb, search, s_w, noise, NULL, 0.0f, &m0,
+                          &m1);
     out->rows_measured = (uint16_t)(n_meas * (unsigned)nb);
     if (n_meas < min_meas) {
         return GL_ERR_NO_STICK;
     }
-    flag_wide_(wk, rows_clean);
+    flag_wide_(wk, m0, m1);
     cut = (search > 2.0f) ? search : 2.0f;
-    (void)irls_step_(wk, rows_clean, &line, cut);
-    (void)irls_step_(wk, rows_clean, &line, cut);
-    (void)irls_step_(wk, rows_clean, &line, 1.5f);
+    (void)irls_step_(wk, m0, m1, &line, cut);
+    (void)irls_step_(wk, m0, m1, &line, cut);
+    (void)irls_step_(wk, m0, m1, &line, 1.5f);
     cut = 1.5f;
     for (int it = 0; it < 4; it++) {
-        cut = robust_cut_(wk, rows_clean, &line, cut);
-        n_in = irls_step_(wk, rows_clean, &line, cut);
+        cut = robust_cut_(wk, m0, m1, &line, cut);
+        n_in = irls_step_(wk, m0, m1, &line, cut);
     }
     if (n_in < min_meas || fabsf(line.b) > 0.15f) {
         out->rows_used = (uint16_t)(n_in * (unsigned)nb);
@@ -1507,7 +1677,7 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
     /* ---- pass B: re-measure along the fit with a matched window ---- */
     {
         unsigned n = 0;
-        for (int r = 0; r < rows_clean; r++) {
+        for (int r = m0; r < m1; r++) {
             if ((wk->flag[r] & (GL_VIS_ROW_MEASURED | GL_VIS_ROW_WIDE)) == GL_VIS_ROW_MEASURED &&
                 fabsf(wk->x[r] - line_at_(&line, (float)r)) < cut) {
                 wk->tmp[n++] = wk->m2[r];
@@ -1522,16 +1692,16 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
      * than about 3.4 px: both are MIN_WINDOW_SIGMA), a row whose coarse
      * column is unchanged has the centroid pass A found: it is taken over. */
     n_meas = measure_all_(strip, wk, &line, rows_clean, nb, search, s_w, noise,
-                          nb == 1 && s_w == s_w_a);
+                          (nb == 1 && s_w == s_w_a) ? &line_a : NULL, search_a, &m0, &m1);
     out->rows_measured = (uint16_t)(n_meas * (unsigned)nb);
     if (n_meas < min_meas) {
         return GL_ERR_NO_STICK;
     }
-    flag_wide_(wk, rows_clean);
+    flag_wide_(wk, m0, m1);
     cut = search;
     for (int it = 0; it < 5; it++) {
-        cut = robust_cut_(wk, rows_clean, &line, cut);
-        n_in = irls_step_(wk, rows_clean, &line, cut);
+        cut = robust_cut_(wk, m0, m1, &line, cut);
+        n_in = irls_step_(wk, m0, m1, &line, cut);
     }
     if (n_in < min_meas || fabsf(line.b) > 0.15f) {
         out->rows_used = (uint16_t)(n_in * (unsigned)nb);
@@ -1540,7 +1710,7 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
 
     /* ---- inliers, covariance ---- */
     n_in = 0;
-    for (int r = 0; r < rows_clean; r++) {
+    for (int r = m0; r < m1; r++) {
         if ((wk->flag[r] & (GL_VIS_ROW_MEASURED | GL_VIS_ROW_WIDE)) == GL_VIS_ROW_MEASURED) {
             float res = wk->x[r] - line_at_(&line, (float)r);
             n_cand++;
@@ -1589,7 +1759,7 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
      * residuals (AR(1) effective sample size). */
     {
         float num = 0.0f, den = 0.0f, rho;
-        for (int r = 0; r + nb < rows_clean; r++) {
+        for (int r = m0; r + nb < m1; r++) {
             if ((wk->flag[r] & wk->flag[r + nb] & GL_VIS_ROW_INLIER) != 0u) {
                 float ra = wk->x[r] - line_at_(&line, (float)r);
                 float rb = wk->x[r + nb] - line_at_(&line, (float)(r + nb));
@@ -1612,14 +1782,14 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
     /* ---- quality: medians over the inlier rows ---- */
     {
         unsigned n = 0;
-        for (int r = 0; r < rows_clean; r++) {
+        for (int r = m0; r < m1; r++) {
             if ((wk->flag[r] & GL_VIS_ROW_INLIER) != 0u) {
                 wk->tmp[n++] = (float)wk->peak[r];
             }
         }
         out->contrast = gl_median_select(wk->tmp, n);
         n = 0;
-        for (int r = 0; r < rows_clean; r++) {
+        for (int r = m0; r < m1; r++) {
             if ((wk->flag[r] & GL_VIS_ROW_INLIER) != 0u) {
                 wk->tmp[n++] = wk->m2[r];
             }
@@ -1643,7 +1813,7 @@ gl_status_t gl_vis_stick_refine(const gl_strip_t *strip, const gl_vis_prior_t *p
         float ref, pol = 0.0f, bg_tol, cross = 0.0f, end_sigma;
         int edge = 0, res_t, res_b;
 
-        for (int r = 0; r < rows_clean; r++) {
+        for (int r = m0; r < m1; r++) {
             if ((wk->flag[r] & (GL_VIS_ROW_INLIER | ROW_FORCED)) ==
                 (GL_VIS_ROW_INLIER | ROW_FORCED)) {
                 wk->tmp[n++] = fabsf(wk->flux[r]);

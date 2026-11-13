@@ -4,12 +4,24 @@
  *
  * The simulator is a model of the GL-1 board as seen from the MCU pins:
  *
- *   time        simulated microseconds.  Time passes ONLY in gl_hal_delay_*,
- *               in gl_hal_sleep and for the duration of bus transfers and ADC
- *               conversions.  Computation takes zero simulated time, EXCEPT
- *               at the trace points of gl_hal_trace(): a test can charge a
- *               run time for each (gl_sim_set_compute_us), which is how the
- *               capture sequence is tested with realistic vision run times.
+ *   time        simulated microseconds.  Time passes in gl_hal_delay_*, in
+ *               gl_hal_sleep, for the duration of bus transfers and ADC
+ *               conversions, and FOR COMPUTATION at the trace points of
+ *               gl_hal_trace(point, work): the stage that has just ended is
+ *               charged its instruction count (gl_sim_cost.h, measured with
+ *               callgrind) x a cycles-per-instruction factor / the core clock
+ *               in effect.  The factor is an ESTIMATE with a low and a high
+ *               case (GL_SIM_CPI_*, gl_sim_set_cpi); 0 switches the charge
+ *               off (the phase-1 behaviour: computation for nothing).  A
+ *               test can also fix the time of a trace point
+ *               (gl_sim_set_compute_us).  Computation BETWEEN trace points
+ *               (the main loop's bookkeeping, a few hundred instructions per
+ *               IMU sample) is still free.
+ *   supply      the charge drawn from the cell, from a current per state of
+ *               the MCU, the camera rail, the IMU and the rest (GL_SIM_I_*:
+ *               every one PROVISIONAL, from memory of the datasheets):
+ *               gl_sim_stats_t.charge_*.  An ESTIMATE of what a read costs,
+ *               not a measurement.
  *   GPIO        mode and output latch of every logical pin, external levels
  *               for inputs, every change recorded in the trace
  *   SPI1        LS013B7DH03 model (decodes frames into a panel memory) and
@@ -227,12 +239,26 @@ typedef struct {
     uint64_t cam_powerup_overlap_streaming_us;
     uint32_t trace_points[GL_TRACE_COUNT]; /**< gl_hal_trace() calls per point */
     uint64_t compute_us;       /**< simulated time charged for computation */
+    uint64_t stage_us[GL_TRACE_COUNT];    /**< ... per trace point */
+    uint64_t stage_instr[GL_TRACE_COUNT]; /**< instructions the cost table gives for the work
+                                               reported at each trace point (whatever the
+                                               time charged for them) */
+    /* supply (the current model below; nothing is counted while VBUS is present: the
+     * cradle supplies the board then).  Unit: microampere-seconds = microcoulombs */
+    double charge_uas;         /**< drawn from the cell in all */
+    double charge_cam_uas;     /**< of it: the camera rail */
+    double charge_mcu_uas;     /**< the MCU (run, idle sleep, Stop 2) */
+    double charge_imu_uas;     /**< the IMU */
+    uint64_t run_us;           /**< MCU running (not in gl_hal_sleep / gl_hal_delay_ms) */
+    uint64_t run_fast_us;      /**< ... of it with the fast clock */
+    uint64_t idle_fast_us;     /**< idle sleep (or a millisecond delay) with the fast clock */
     /* core clock */
     uint32_t clock_to_fast;    /**< SLOW -> FAST switches */
     uint32_t clock_to_slow;    /**< FAST -> SLOW switches */
     uint32_t clock_calls;      /**< gl_hal_clock_set() calls, including the ones that change nothing */
     uint64_t clock_fast_us;    /**< time spent with the fast clock */
-    uint32_t heavy_while_slow; /**< gl_hal_trace() points reached with the SLOW clock */
+    uint32_t heavy_while_slow; /**< vision / solve trace points reached with the SLOW clock
+                                    (GL_TRACE_RENDER is light and belongs to the slow clock) */
     /* cell temperature divider */
     uint32_t ntc_reads;        /**< conversions of GL_ADC_CH_CELL_NTC with the bias driven */
     uint64_t ntc_bias_us;      /**< total time NTC_BIAS was driven high */
@@ -356,8 +382,85 @@ void gl_sim_spi_fail(gl_spi_bus_t bus, unsigned count, gl_status_t st);
 /** Lose pending interrupt latches: the bits in `mask` are cleared as if the
  *  latch had been overwritten (the race the STM32 backend must not have). */
 void gl_sim_irq_drop(uint32_t mask);
-/** Charge `us` of simulated time at every gl_hal_trace(point) (default 0). */
+/** Charge a FIXED `us` of simulated time at every gl_hal_trace(point, ...)
+ *  instead of what the cost model gives (0 = back to the model; cleared by
+ *  gl_sim_reset). */
 void gl_sim_set_compute_us(gl_trace_point_t point, uint32_t us);
+
+/* ---- computation time: the cost model --------------------------------------------- */
+
+/**
+ * MCU clock cycles per instruction of the cost table (gl_sim_cost.h counts
+ * instructions of the x86-64 host build).  NOT MEASURED - no board exists.
+ * What it stands for: a Cortex-M33 runs about as many Thumb-2 instructions
+ * as the host runs x86-64 ones for this code (more loads and stores, no
+ * memory operands; fewer instructions for rounding and conversions), and
+ * needs 1 cycle for most of them, 2 for a load, 2-3 for a taken branch and
+ * 14 for each single-precision division or square root (the row measurement
+ * has about 15 of those per row).  LOW assumes the code behaves like plain
+ * integer code with the instruction cache hitting; HIGH leaves room for
+ * flash wait states behind cache misses, -Os code that is longer than the
+ * host's -O2 code, and the library routines (newlib's sqrtf with errno,
+ * memset).  The honest statement is the range; NOMINAL is where the tests
+ * run.
+ */
+#define GL_SIM_CPI_LOW 1.5f
+#define GL_SIM_CPI_NOMINAL 2.0f
+#define GL_SIM_CPI_HIGH 3.0f
+/** Core clock of the two settings of gl_hal_clock_set() (hal/stm32u5: PLL
+ *  160 MHz, MSIS 48 MHz). */
+#define GL_SIM_CLOCK_FAST_HZ 160000000u
+#define GL_SIM_CLOCK_SLOW_HZ 48000000u
+
+/** Set the cycles-per-instruction factor (0 = computation takes no time).
+ *  STICKY: gl_sim_reset() does not change it, so that one scenario can be
+ *  run at several factors; a test that changes it puts GL_SIM_CPI_NOMINAL
+ *  back.  The default is GL_SIM_CPI_NOMINAL. */
+void gl_sim_set_cpi(float cycles_per_instr);
+float gl_sim_cpi(void);
+
+/** Instructions the cost table gives for `work` at a trace point. */
+uint64_t gl_sim_stage_instr(gl_trace_point_t point, uint32_t work);
+
+/* ---- supply current model (ESTIMATE; every figure PROVISIONAL) ----------------------
+ *
+ * Currents at the cell, microamperes (all rails are linear regulators, so
+ * load current = cell current).  FROM MEMORY of the datasheets or from the
+ * unverified figures of docs/research; none is a measurement of this board.
+ */
+/** Both OVM7692 awake: 2 x 120 mW from 2.8 V (docs/research/micro-cameras.md,
+ *  unverified), for as long as the camera rail is on. */
+#define GL_SIM_I_CAM_RAIL_UA 86000.0
+/** STM32U585 on its internal LDO (no SMPS on the RIT6): run at 160 MHz in
+ *  voltage range 1 (about 55 uA/MHz + PLL), run at 48 MHz in range 3, the
+ *  same in sleep mode (core clock gated), Stop 2 with all RAM retained and
+ *  the RTC / LSE / LPTIM running (docs/research/processor-radio.md: about
+ *  9 uA, reviewer recollection). */
+#define GL_SIM_I_MCU_RUN_FAST_UA 9500.0
+#define GL_SIM_I_MCU_IDLE_FAST_UA 3500.0
+#define GL_SIM_I_MCU_RUN_SLOW_UA 2800.0
+#define GL_SIM_I_MCU_IDLE_SLOW_UA 900.0
+#define GL_SIM_I_MCU_STOP_UA 9.0
+/** LSM6DSV16X: accelerometer + gyroscope in high-performance mode, the
+ *  accelerometer alone in high-performance mode, in low-power mode (the
+ *  wake-on-motion setting, 15 Hz), both off. */
+#define GL_SIM_I_IMU_COMBO_UA 650.0
+#define GL_SIM_I_IMU_ACCEL_UA 190.0
+#define GL_SIM_I_IMU_WAKE_UA 5.0
+#define GL_SIM_I_IMU_OFF_UA 3.0
+/** Everything that is always there: MCP1700 quiescent 1.6, battery divider
+ *  2 Mohm at 3.8 V 1.9, the cell's protection circuit 3 (docs/research/power.md). */
+#define GL_SIM_I_ALWAYS_UA 6.5
+/** Memory LCD with DISP on (15 uW static + EXTCOMIN); flash in standby / in
+ *  deep power-down / while programming or erasing; ADC and op-amp powered;
+ *  one grain LED lit. */
+#define GL_SIM_I_LCD_ON_UA 6.0
+#define GL_SIM_I_FLASH_STANDBY_UA 5.0
+#define GL_SIM_I_FLASH_DPD_UA 0.1
+#define GL_SIM_I_FLASH_BUSY_UA 5000.0
+#define GL_SIM_I_ADC_UA 300.0
+#define GL_SIM_I_OPAMP_UA 150.0
+#define GL_SIM_I_GRAIN_LED_UA 6000.0
 /** Register value as the model currently holds it (tests of the driver's
  *  configuration writes). */
 uint8_t gl_sim_imu_reg(uint8_t addr);

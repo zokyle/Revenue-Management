@@ -49,6 +49,8 @@ void sim_lcd_extcomin(bool running, uint16_t period_ticks);
 void sim_flash_reset(bool erase);
 void sim_flash_cs(bool asserted);
 void sim_flash_xfer(const gl_spi_cfg_t *cfg, const uint8_t *tx, uint8_t *rx, size_t len);
+/** Supply current of the flash right now, microamperes. */
+double sim_flash_supply_ua(void);
 
 /* ---- IMU model (gl_sim_imu.c) ----------------------------------------------------- */
 
@@ -62,6 +64,8 @@ uint64_t sim_imu_next_event(void);
 void sim_imu_fire(uint64_t t);
 /** Die temperature of the IMU model, degrees C. */
 float sim_imu_temperature(void);
+/** Supply current of the IMU in its present mode, microamperes. */
+double sim_imu_supply_ua(void);
 
 /* ---- camera models (gl_sim_cam.c) -------------------------------------------------- */
 

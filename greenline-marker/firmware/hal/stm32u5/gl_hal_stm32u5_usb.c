@@ -4,7 +4,10 @@
  * usbd_cdc) on top of the HAL PCD driver.
  *
  * ##########################################################################
- * #  THIS FILE HAS NEVER BEEN COMPILED OR RUN (see gl_hal_stm32u5.c).      #
+ * #  THIS FILE HAS NEVER BEEN COMPILED OR RUN.  (gl_hal_stm32u5.c has     #
+ * #  been compiled against ST's headers by `make cross-hal`; this file     #
+ * #  has not: it includes usbd_core.h and usbd_cdc.h of ST's USB device    #
+ * #  library, which is not among the header sets that target uses.)        #
  * ##########################################################################
  *
  * Not in this repository and needed to build it: the USB device library

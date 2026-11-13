@@ -501,22 +501,47 @@ size_t gl_hal_usb_write(const uint8_t *buf, size_t len);
 /* ======================================================================= */
 
 typedef enum {
-    GL_TRACE_VISION_BAND = 0,  /**< a horizon band has just been analysed */
-    GL_TRACE_VISION_STRIP,     /**< one flagstick strip has just been analysed */
-    GL_TRACE_VISION_GROUP,     /**< one L R R L group has just been combined */
-    GL_TRACE_SOLVE,            /**< one putt estimate has just been computed */
+    GL_TRACE_VISION_BAND = 0,  /**< a horizon band has just been analysed.
+                                    work = pixels of the band */
+    GL_TRACE_VISION_STRIP,     /**< one flagstick strip has just been analysed.
+                                    work = GL_TRACE_STRIP_* bits: what was tried */
+    GL_TRACE_VISION_GROUP,     /**< one L R R L group has just been combined.  work = 0 */
+    GL_TRACE_SOLVE,            /**< one putt estimate has just been computed.
+                                    work = RK4 steps of its trial rolls
+                                    (gl_estimate_t.n_steps; 0 if it was refused) */
+    GL_TRACE_RENDER,           /**< a screen has just been drawn into the framebuffer (the
+                                    transfer to the panel is bus time, not this).  work = 0 */
     GL_TRACE_COUNT
 } gl_trace_point_t;
 
+/** `work` of GL_TRACE_VISION_STRIP: the refinements made on the strip, each
+ *  with 1, 4 or 16 rows averaged along the line (app/gl_read.c tries them in
+ *  that order until one finds the line), whether the last one found it, how
+ *  wide the line is, and whether the strip's statistics were computed as
+ *  well. */
+#define GL_TRACE_STRIP_TRIED_1  (1u << 0)
+#define GL_TRACE_STRIP_TRIED_4  (1u << 1)
+#define GL_TRACE_STRIP_TRIED_16 (1u << 2)
+#define GL_TRACE_STRIP_FOUND    (1u << 3)
+#define GL_TRACE_STRIP_STATS    (1u << 4)
+#define GL_TRACE_STRIP_WIDE     (1u << 5) /**< the line found is wider than the narrowest window
+                                               (a stick within about 4 m): its two passes share
+                                               no work */
+
 /**
- * Mark the END of a piece of heavy computation.  On the target this is for
- * measuring run times (a test pad or an ITM channel; it may do nothing).
- * The host simulator, in which computation otherwise takes zero simulated
- * time, CHARGES the time configured for the point (gl_sim_set_compute_us),
- * so that the tests can run the capture sequence with realistic vision
- * run times.  Must be cheap and callable from the main loop only.
+ * Mark the END of a piece of heavy computation and say how much of it there
+ * was: `work` in the unit given with each trace point.  On the target this
+ * is for measuring run times on the bench (a test pad or an ITM channel; it
+ * may do nothing): the pair (point, work) and the time since the previous
+ * mark are what calibrates the simulator's compute-time model.  The host
+ * simulator, in which computation otherwise takes no simulated time, CHARGES
+ * the stage's run time here: by default from its table of instruction counts
+ * (hal/host/gl_sim_cost.h), a cycles-per-instruction factor and the core
+ * clock in effect; a test can set a fixed time per point instead
+ * (gl_sim_set_compute_us).  Must be cheap and callable from the main loop
+ * only.
  */
-void gl_hal_trace(gl_trace_point_t point);
+void gl_hal_trace(gl_trace_point_t point, uint32_t work);
 
 #ifdef __cplusplus
 }

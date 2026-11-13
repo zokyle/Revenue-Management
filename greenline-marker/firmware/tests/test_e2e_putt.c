@@ -932,7 +932,12 @@ GL_TEST(test_core_clock_is_fast_for_capture_and_solve_only)
     if (seen.n >= 6u) {
         GL_CHECK_EQ(seen.state[4], GL_UI_CAPTURE);
         GL_CHECK_NEAR((double)t_up / 1000.0, (double)seen.t_ms[4], 2.0);
-        GL_CHECK_NEAR((double)t_down / 1000.0, (double)seen.t_ms[5], 2.0);
+        /* (the state changes to SHOW_RESULT at the start of the loop iteration
+         * that solves; the clock comes down when the estimate has been
+         * computed, which the simulator charges its run time) */
+        GL_CHECK_NEAR((double)t_down / 1000.0,
+                      (double)seen.t_ms[5] + (double)st->stage_us[GL_TRACE_SOLVE] / 1000.0, 2.0);
+        GL_CHECK(st->stage_us[GL_TRACE_SOLVE] > 1000u && st->stage_us[GL_TRACE_SOLVE] < 20000u);
     }
     /* every piece of heavy computation ran at the fast clock */
     GL_CHECK_EQ(st->heavy_while_slow, 0u);

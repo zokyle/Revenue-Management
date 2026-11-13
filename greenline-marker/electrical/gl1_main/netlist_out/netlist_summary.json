@@ -1,0 +1,66 @@
+{
+ "counts": {
+  "bare_copper_parts": 6,
+  "bottom_side": 24,
+  "fiducials": 6,
+  "net_classes": {
+   "CamPower": 3,
+   "Default": 59,
+   "Fine": 28,
+   "Power": 6
+  },
+  "nets": 96,
+  "no_connect_pins": 17,
+  "pads_on_nets": 393,
+  "parts_dnp": 0,
+  "parts_fitted": 105,
+  "parts_on_the_bom": 105,
+  "parts_total": 117,
+  "top_side": 93
+ },
+ "design": "gl1_main",
+ "passed": true,
+ "stage": "netlist (no copper)",
+ "stages": {
+  "checks": {
+   "errors": 0,
+   "errors_by_code": {},
+   "passed": true,
+   "warnings": 0,
+   "warnings_by_code": {}
+  },
+  "exports": {
+   "bom_lines": 37,
+   "bom_lines_by_status": {
+    "PROVISIONAL": 29,
+    "RESEARCH": 8
+   },
+   "passed": true
+  },
+  "pinmap": {
+   "exit_status": 0,
+   "lines": [
+    "data: ST STM32_open_pin_data (STM32U585RITx, package LQFP64, STM32U575/585)",
+    "RESULT: PASS - 195 checks passed, 0 failed; 3 PROVISIONAL statements above",
+    "SELF-TEST: 11 seeded defects, 11 caught, 0 missed"
+   ],
+   "passed": true
+  },
+  "rules": {
+   "failed": [],
+   "passed": true,
+   "rows": 48
+  },
+  "schematic": {
+   "components_compared": 108,
+   "error": null,
+   "nets_compared": 96,
+   "pads_compared": 393,
+   "passed": true,
+   "pdf_pages": 8,
+   "problems": [],
+   "round_trip_ok": true,
+   "sheets": 8
+  }
+ }
+}

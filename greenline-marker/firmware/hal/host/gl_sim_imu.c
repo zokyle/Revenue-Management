@@ -256,6 +256,23 @@ static void odr_changed_(void)
     I.have_prev = false;
 }
 
+double sim_imu_supply_ua(void)
+{
+    const bool gyro_on = (I.reg[REG_CTRL2] & 0x0Fu) != 0u;
+    const bool accel_on = (I.reg[REG_CTRL1] & 0x0Fu) != 0u;
+    const bool accel_lp = (I.reg[REG_CTRL1] & 0x70u) != 0u; /* any mode but high performance */
+    if (!I.present) {
+        return 0.0;
+    }
+    if (gyro_on) {
+        return GL_SIM_I_IMU_COMBO_UA;
+    }
+    if (accel_on) {
+        return accel_lp ? GL_SIM_I_IMU_WAKE_UA : GL_SIM_I_IMU_ACCEL_UA;
+    }
+    return GL_SIM_I_IMU_OFF_UA;
+}
+
 static bool wu_enabled_(void)
 {
     return (I.reg[REG_FUNCTIONS_ENABLE] & 0x80u) != 0u && (I.reg[REG_MD1_CFG] & 0x20u) != 0u;

@@ -1166,11 +1166,18 @@ GL_TEST(test_storage_mode_for_a_nearly_empty_cell)
 /* 5. capture timing with a realistic vision run time                       */
 /* ======================================================================= */
 
-/* One read of a stick drifting at 6 px/s with `strip_ms` of computation
- * charged per analysed strip (and 8 x that for the band).  Returns the
- * disparity error in px, 99 if the read failed. */
-static double drift_error_px_(bool correction, double phase_ms, uint32_t strip_ms,
-                              uint32_t *capture_ms, uint8_t *final_state)
+/* How the computation of a read is charged in the runs below. */
+typedef enum {
+    COMPUTE_FREE = 0, /* nothing (cycles per instruction 0): an infinitely fast CPU */
+    COMPUTE_MODEL,    /* the simulator's cost model at its nominal factor */
+    COMPUTE_FIXED     /* `strip_ms` per analysed strip and 8 x that for the band */
+} compute_t;
+
+/* One read of a stick drifting at 6 px/s.  `turn_s`: the drift reverses
+ * every this many seconds (0 = never).  Returns the disparity error in px,
+ * 99 if the read failed. */
+static double drift_error_px_(bool correction, double phase_ms, compute_t how, uint32_t strip_ms,
+                              double turn_s, uint32_t *capture_ms, uint8_t *final_state)
 {
     double true_d;
     uint32_t t_cap;
@@ -1178,27 +1185,32 @@ static double drift_error_px_(bool correction, double phase_ms, uint32_t strip_m
     W.dist_m = 5.0;
     W.bearing_rad = -0.03;
     project_scene_();
+    gl_sim_set_cpi((how == COMPUTE_FREE) ? 0.0f : GL_SIM_CPI_NOMINAL);
     board_up_(true);
     gl_sim_cam_set_phase_us(GL_CAM_RIGHT, (uint32_t)(phase_ms * 1000.0));
-    gl_sim_set_compute_us(GL_TRACE_VISION_STRIP, strip_ms * 1000u);
-    gl_sim_set_compute_us(GL_TRACE_VISION_BAND, 8u * strip_ms * 1000u);
+    if (how == COMPUTE_FIXED) {
+        gl_sim_set_compute_us(GL_TRACE_VISION_STRIP, strip_ms * 1000u);
+        gl_sim_set_compute_us(GL_TRACE_VISION_BAND, 8u * strip_ms * 1000u);
+    }
     (void)gl_app_init(&app);
     app.read.time_correction = correction;
     watch_reset_();
     *capture_ms = 0;
     if (!run_until_state_(GL_UI_CAPTURE, 6000)) {
         *final_state = app.ui.state;
+        gl_sim_set_cpi(GL_SIM_CPI_NOMINAL);
         return 99.0;
     }
     t_cap = now_ms_();
     W.drift_t0_s = (double)gl_sim_now_us() * 1e-6;
     W.drift_px_per_s = 6.0;
-    W.drift_turn_s = 1.7; /* out and back: stays in the strip however long the read takes */
+    W.drift_turn_s = turn_s;
     while (app.ui.state == (uint8_t)GL_UI_CAPTURE && now_ms_() < t_cap + 60000u) {
         run_until_ms_(now_ms_() + 1u);
     }
     *capture_ms = now_ms_() - t_cap;
     *final_state = app.ui.state;
+    gl_sim_set_cpi(GL_SIM_CPI_NOMINAL);
     if (app.ui.state != (uint8_t)GL_UI_SHOW_RESULT || !app.cur.flag_found) {
         return 99.0;
     }
@@ -1212,23 +1224,54 @@ static double drift_error_px_(bool correction, double phase_ms, uint32_t strip_m
  * stamps (taken when the application polled) hid it, and the timing
  * correction computed zero: "worst corrected disparity error 0.0076 px at
  * 0-30 ms, 0.0251 px at 60 ms, 0.112 px at 100 ms".  And with 260 ms per
- * strip "the UI leaves CAPTURE with ERROR (TIMEOUT) at 7.97 s". */
+ * strip "the UI leaves CAPTURE with ERROR (TIMEOUT) at 7.97 s".
+ *
+ * The rows: computation for nothing; the simulator's cost model (what the
+ * vision is expected to take: about 17 ms per strip and 180 ms for the band
+ * at the nominal factor); fixed times per strip up to 300 ms.
+ *
+ * The drift of the fixed rows reverses every 1.7 s so that the stick stays
+ * in the strip however long the read takes.  The correction assumes uniform
+ * motion over the 0.13 s of one group, and a reversal that falls INSIDE a
+ * group breaks that - whatever the computation costs.  In the fixed rows it
+ * happens to fall between groups.  With the cost model's timing it falls
+ * inside one: that row is run without a reversal (the read is over after
+ * 2.4 s and 15 px), and once more with it - NOT MET there, pinned. */
 GL_TEST(test_lrrl_timing_with_vision_run_time)
 {
-    static const uint32_t compute[] = { 0, 30, 60, 100, 200, 300 };
+    static const struct {
+        compute_t how;
+        uint32_t strip_ms;
+        double turn_s;
+        bool uncorrected_too;
+        const char *label;
+    } row[] = {
+        { COMPUTE_FREE, 0, 1.7, true, "free" },
+        { COMPUTE_MODEL, 0, 0.0, true, "cost model" },
+        { COMPUTE_FIXED, 30, 1.7, false, " 30 ms" },
+        { COMPUTE_FIXED, 60, 1.7, false, " 60 ms" },
+        { COMPUTE_FIXED, 100, 1.7, true, "100 ms" },
+        { COMPUTE_FIXED, 200, 1.7, false, "200 ms" },
+        { COMPUTE_FIXED, 300, 1.7, false, "300 ms" },
+        { COMPUTE_MODEL, 0, 1.7, true, "model, turn" },
+    };
     static const double phases[] = { 2.0, 9.0, 16.0, 24.0, 31.0 };
     double worst0 = 0.0;
     printf("    stick drifting 6 px/s, 5 sensor phases; vision run time charged per strip:\n");
-    printf("    %-9s %-23s %-25s %-13s %s\n", "per strip", "worst |err| corrected",
+    printf("    (free: computation for nothing; cost model: the simulator's model at its nominal "
+           "factor, drift not reversing;\n     model, turn: the same with the drift reversing inside "
+           "a group - NOT MET)\n");
+    printf("    %-11s %-23s %-25s %-13s %s\n", "per strip", "worst |err| corrected",
            "worst |err| uncorrected", "capture", "camera rail on");
-    for (size_t c = 0; c < GL_ARRAY_LEN(compute); c++) {
+    for (size_t c = 0; c < GL_ARRAY_LEN(row); c++) {
         double w_on = 0.0, w_off = 0.0;
         uint32_t cap_max = 0;
         uint64_t rail_us = 0;
         for (size_t i = 0; i < GL_ARRAY_LEN(phases); i++) {
             uint8_t fs = 0;
             uint32_t cap = 0;
-            const double e_on = drift_error_px_(true, phases[i], compute[c], &cap, &fs);
+            const double e_on = drift_error_px_(true, phases[i], row[c].how, row[c].strip_ms,
+                                                row[c].turn_s, &cap, &fs);
             GL_CHECK_EQ(fs, GL_UI_SHOW_RESULT); /* never a time-out, however slow */
             rail_us = gl_sim_stats()->cam_rail_on_us;
             GL_CHECK_EQ(gl_sim_stats()->trace_points[GL_TRACE_VISION_STRIP], 32u);
@@ -1240,27 +1283,35 @@ GL_TEST(test_lrrl_timing_with_vision_run_time)
             if (fabs(e_on) > w_on) {
                 w_on = fabs(e_on);
             }
-            if (c == 0u || c == 3u) {
-                const double e_off = drift_error_px_(false, phases[i], compute[c], &cap, &fs);
+            if (row[c].uncorrected_too) {
+                const double e_off = drift_error_px_(false, phases[i], row[c].how, row[c].strip_ms,
+                                                     row[c].turn_s, &cap, &fs);
                 if (fabs(e_off) > w_off) {
                     w_off = fabs(e_off);
                 }
             }
         }
-        if (c == 0u || c == 3u) {
-            printf("    %3u ms    %-23.4f %-25.4f %5.2f s       %.2f s\n", (unsigned)compute[c], w_on,
-                   w_off, (double)cap_max / 1000.0, (double)rail_us / 1e6);
+        if (row[c].uncorrected_too) {
+            printf("    %-11s %-23.4f %-25.4f %5.2f s       %.2f s\n", row[c].label, w_on, w_off,
+                   (double)cap_max / 1000.0, (double)rail_us / 1e6);
         } else {
-            printf("    %3u ms    %-23.4f %-25s %5.2f s       %.2f s\n", (unsigned)compute[c], w_on,
-                   "-", (double)cap_max / 1000.0, (double)rail_us / 1e6);
+            printf("    %-11s %-23.4f %-25s %5.2f s       %.2f s\n", row[c].label, w_on, "-",
+                   (double)cap_max / 1000.0, (double)rail_us / 1e6);
         }
         if (c == 0u) {
             worst0 = w_on;
         }
-        /* the correction is as good with a slow CPU as with an infinitely
-         * fast one: the exposure spacing no longer depends on it */
-        GL_CHECK(w_on < 0.02);
-        GL_CHECK(w_on < worst0 + 0.01);
+        if (c + 1u < GL_ARRAY_LEN(row)) {
+            /* the correction is as good with a slow CPU as with an infinitely
+             * fast one: the exposure spacing no longer depends on it */
+            GL_CHECK(w_on < 0.02);
+            GL_CHECK(w_on < worst0 + 0.01);
+        } else {
+            /* NOT MET (pinned, 0.039 px): the drift reverses in the middle of
+             * one of the 8 groups; that group is wrong by a few tenths of a
+             * pixel and nothing in the read notices */
+            GL_CHECK(w_on > 0.02 && w_on < 0.06);
+        }
     }
 }
 

@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "gl_provisional.h"
+#include "gl_sim_cost.h"
 #include "gl_sim_internal.h"
 
 /* ---- board constants of the model --------------------------------------------- */
@@ -88,6 +89,7 @@ static struct {
     uint8_t clock;
     uint64_t clock_fast_since;
     unsigned clock_fail;
+    uint8_t mcu_mode;            /* SIM_MCU_RUN / _IDLE / _STOP: for the supply model */
     /* irq */
     uint32_t irq_enabled, irq_pending;
     int irq_lock;
@@ -126,6 +128,12 @@ static struct {
 
 static gl_sim_trace_t trace_[GL_SIM_TRACE_MAX];
 static uint8_t byte_log_[SIM_BYTE_LOG_MAX];
+
+/* Cycles per instruction of the compute-time model: kept across gl_sim_reset
+ * (gl_sim.h). */
+static float cpi_ = GL_SIM_CPI_NOMINAL;
+
+enum { SIM_MCU_RUN = 0, SIM_MCU_IDLE = 1, SIM_MCU_STOP = 2 };
 
 /* ======================================================================= */
 /* services                                                                 */
@@ -483,6 +491,48 @@ static void watchdog_check_(void)
     }
 }
 
+/* The supply model: charge drawn from the cell while the clock advances by
+ * dt with everything in its present state (states change only between two
+ * advances).  Nothing is counted with VBUS present, and nothing for an MCU
+ * held in reset. */
+static void supply_account_(uint64_t dt)
+{
+    const bool fast = (S.clock == (uint8_t)GL_CLOCK_FAST);
+    const double s = (double)dt * 1e-6;
+    double mcu, imu, rest;
+
+    if (S.mcu_mode == (uint8_t)SIM_MCU_RUN) {
+        S.stats.run_us += dt;
+        if (fast) {
+            S.stats.run_fast_us += dt;
+        }
+    } else if (S.mcu_mode == (uint8_t)SIM_MCU_IDLE && fast) {
+        S.stats.idle_fast_us += dt;
+    }
+    if (!S.inited || S.pin[GL_PIN_VBUS_SENSE].ext) {
+        return;
+    }
+    if (S.mcu_mode == (uint8_t)SIM_MCU_STOP) {
+        mcu = GL_SIM_I_MCU_STOP_UA;
+    } else if (S.mcu_mode == (uint8_t)SIM_MCU_IDLE) {
+        mcu = fast ? GL_SIM_I_MCU_IDLE_FAST_UA : GL_SIM_I_MCU_IDLE_SLOW_UA;
+    } else {
+        mcu = fast ? GL_SIM_I_MCU_RUN_FAST_UA : GL_SIM_I_MCU_RUN_SLOW_UA;
+    }
+    imu = sim_imu_supply_ua();
+    rest = GL_SIM_I_ALWAYS_UA + sim_flash_supply_ua() +
+           (sim_pin_out_high(GL_PIN_LCD_DISP) ? GL_SIM_I_LCD_ON_UA : 0.0) +
+           (S.adc_on ? GL_SIM_I_ADC_UA : 0.0) + (S.opamp_on ? GL_SIM_I_OPAMP_UA : 0.0) +
+           ((gl_sim_grain_lit_mask() != 0u) ? GL_SIM_I_GRAIN_LED_UA : 0.0);
+    S.stats.charge_mcu_uas += mcu * s;
+    S.stats.charge_imu_uas += imu * s;
+    if (S.rail_on) {
+        S.stats.charge_cam_uas += GL_SIM_I_CAM_RAIL_UA * s;
+        rest += GL_SIM_I_CAM_RAIL_UA;
+    }
+    S.stats.charge_uas += (mcu + imu + rest) * s;
+}
+
 /* Process every event up to and including t_target, then set the clock. */
 static void run_until_(uint64_t t_target)
 {
@@ -492,6 +542,7 @@ static void run_until_(uint64_t t_target)
             break;
         }
         if (t > S.now_us) {
+            supply_account_(t - S.now_us);
             S.now_us = t;
             watchdog_check_();
             charger_account_();
@@ -520,6 +571,7 @@ static void run_until_(uint64_t t_target)
         }
     }
     if (t_target > S.now_us) {
+        supply_account_(t_target - S.now_us);
         S.now_us = t_target;
         watchdog_check_();
         charger_account_();
@@ -899,6 +951,54 @@ void gl_sim_set_compute_us(gl_trace_point_t point, uint32_t us)
     }
 }
 
+void gl_sim_set_cpi(float cycles_per_instr)
+{
+    cpi_ = (cycles_per_instr > 0.0f && cycles_per_instr < 1000.0f) ? cycles_per_instr : 0.0f;
+}
+
+float gl_sim_cpi(void)
+{
+    return cpi_;
+}
+
+uint64_t gl_sim_stage_instr(gl_trace_point_t point, uint32_t work)
+{
+    static const uint32_t found[3] = GL_SIM_COST_REFINE_FOUND_IR;
+    static const uint32_t none[3] = GL_SIM_COST_REFINE_NONE_IR;
+    switch (point) {
+    case GL_TRACE_VISION_BAND:
+        return ((uint64_t)GL_SIM_COST_BAND_IR * work) / GL_SIM_COST_BAND_PX;
+    case GL_TRACE_VISION_STRIP: {
+        uint64_t ir = 0;
+        int last = -1;
+        for (int b = 0; b < 3; b++) {
+            if ((work & (GL_TRACE_STRIP_TRIED_1 << b)) != 0u) {
+                ir += none[b];
+                last = b;
+            }
+        }
+        if (last >= 0 && (work & GL_TRACE_STRIP_FOUND) != 0u) {
+            /* the last attempt found the line */
+            const uint64_t f = (last == 0 && (work & GL_TRACE_STRIP_WIDE) != 0u)
+                                   ? (uint64_t)GL_SIM_COST_REFINE_WIDE_IR : (uint64_t)found[last];
+            ir += f - none[last];
+        }
+        if ((work & GL_TRACE_STRIP_STATS) != 0u) {
+            ir += GL_SIM_COST_STRIP_STATS_IR;
+        }
+        return ir;
+    }
+    case GL_TRACE_VISION_GROUP:
+        return GL_SIM_COST_GROUP_IR;
+    case GL_TRACE_SOLVE:
+        return (uint64_t)GL_SIM_COST_SOLVE_BASE_IR + (uint64_t)GL_SIM_COST_SOLVE_STEP_IR * work;
+    case GL_TRACE_RENDER:
+        return GL_SIM_COST_RENDER_IR;
+    default:
+        return 0;
+    }
+}
+
 void gl_sim_set_reset_reason(uint32_t flags)
 {
     S.reset_reason = flags;
@@ -994,25 +1094,41 @@ uint32_t gl_hal_time_us(void)
     return (uint32_t)S.now_us;
 }
 
-void gl_hal_trace(gl_trace_point_t point)
+void gl_hal_trace(gl_trace_point_t point, uint32_t work)
 {
+    uint64_t instr, us;
     if ((unsigned)point >= (unsigned)GL_TRACE_COUNT) {
         return;
     }
     S.stats.trace_points[point]++;
-    if (S.clock != (uint8_t)GL_CLOCK_FAST) {
+    if (S.clock != (uint8_t)GL_CLOCK_FAST && point != GL_TRACE_RENDER) {
         S.stats.heavy_while_slow++; /* compute-heavy work at the slow clock */
     }
+    instr = gl_sim_stage_instr(point, work);
+    S.stats.stage_instr[point] += instr;
     if (S.compute_us[point] != 0u) {
-        /* the computation that has just ended took this long */
-        S.stats.compute_us += S.compute_us[point];
-        run_until_(S.now_us + S.compute_us[point]);
+        us = S.compute_us[point]; /* a time fixed by the test */
+    } else {
+        /* the cost model: instructions x cycles per instruction / core clock */
+        const double hz = (S.clock == (uint8_t)GL_CLOCK_FAST) ? (double)GL_SIM_CLOCK_FAST_HZ
+                                                              : (double)GL_SIM_CLOCK_SLOW_HZ;
+        us = (uint64_t)((double)instr * (double)cpi_ * 1.0e6 / hz + 0.5);
+    }
+    if (us != 0u) {
+        /* the computation that has just ended took this long (the MCU ran) */
+        S.stats.compute_us += us;
+        S.stats.stage_us[point] += us;
+        run_until_(S.now_us + us);
     }
 }
 
 void gl_hal_delay_ms(uint32_t ms)
 {
+    /* (the core sleeps between ticks: gl_hal.h) */
+    const uint8_t mode = S.mcu_mode;
+    S.mcu_mode = (uint8_t)SIM_MCU_IDLE;
     run_until_(S.now_us + (uint64_t)ms * 1000u);
+    S.mcu_mode = mode;
 }
 
 void gl_hal_delay_us(uint32_t us)
@@ -1204,6 +1320,7 @@ uint32_t gl_hal_sleep(gl_sleep_mode_t mode)
             sim_violation(&S.viol.stop_mode, "Stop mode with a chip select asserted");
         }
     }
+    S.mcu_mode = (uint8_t)((mode == GL_SLEEP_STOP) ? SIM_MCU_STOP : SIM_MCU_IDLE);
     while ((S.irq_pending & wake_mask) == 0u) {
         uint64_t t = next_event_();
         if (t == SIM_NEVER) {
@@ -1213,6 +1330,7 @@ uint32_t gl_hal_sleep(gl_sleep_mode_t mode)
         }
         run_until_(t);
     }
+    S.mcu_mode = (uint8_t)SIM_MCU_RUN;
     if (mode == GL_SLEEP_STOP) {
         S.stats.stop_us += S.now_us - t0;
     } else {

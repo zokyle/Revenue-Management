@@ -1,0 +1,55 @@
+{
+ "counts": {
+  "bare_copper_parts": 1,
+  "bottom_side": 9,
+  "fiducials": 6,
+  "net_classes": {
+   "Default": 7,
+   "Power": 3
+  },
+  "nets": 10,
+  "no_connect_pins": 2,
+  "pads_on_nets": 40,
+  "parts_dnp": 3,
+  "parts_fitted": 10,
+  "parts_on_the_bom": 13,
+  "parts_total": 20,
+  "top_side": 11
+ },
+ "design": "gl1_cradle",
+ "passed": true,
+ "stage": "netlist (no copper)",
+ "stages": {
+  "checks": {
+   "errors": 0,
+   "errors_by_code": {},
+   "passed": true,
+   "warnings": 0,
+   "warnings_by_code": {}
+  },
+  "exports": {
+   "bom_lines": 7,
+   "bom_lines_by_status": {
+    "PROVISIONAL": 5,
+    "RESEARCH": 2
+   },
+   "passed": true
+  },
+  "rules": {
+   "failed": [],
+   "passed": true,
+   "rows": 11
+  },
+  "schematic": {
+   "components_compared": 14,
+   "error": null,
+   "nets_compared": 10,
+   "pads_compared": 40,
+   "passed": true,
+   "pdf_pages": 3,
+   "problems": [],
+   "round_trip_ok": true,
+   "sheets": 3
+  }
+ }
+}

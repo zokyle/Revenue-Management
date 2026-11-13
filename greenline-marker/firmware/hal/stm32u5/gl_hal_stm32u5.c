@@ -3,22 +3,27 @@
  * the STM32Cube HAL API (STM32CubeU5, stm32u5xx_hal.h).
  *
  * ##########################################################################
- * #  THIS FILE HAS NEVER BEEN COMPILED OR RUN.                             #
- * #  No vendor SDK is available in the environment this firmware was       #
- * #  written in, and no board exists.  It was written from the HAL API as  #
- * #  remembered and from the reference-manual behaviour as remembered.     #
- * #  Treat every line as unverified until it has been built against the    #
- * #  real STM32CubeU5 package and exercised on hardware.  `make cross`     #
- * #  does NOT compile it.                                                  #
+ * #  THIS FILE HAS BEEN COMPILED - AND NEVER LINKED, NEVER RUN.            #
+ * #  `make cross-hal STM32_HEADERS=<dir>` compiles it (compile only),      #
+ * #  warning-free with the firmware's whole warning set, against ST's and  #
+ * #  Arm's header files (README, "STM32 backend": which files, which       #
+ * #  release tags).  That shows that every identifier used here exists     #
+ * #  with the type it is used with.  It shows NOTHING about behaviour: no  #
+ * #  HAL source was compiled, no image was linked, and no board exists.    #
+ * #  It was written from the HAL API and the reference-manual behaviour as #
+ * #  remembered: treat every SEQUENCE in it as unverified until it has run #
+ * #  on hardware.  `make cross` does NOT compile it.                       #
  * ##########################################################################
  *
  * What it needs around it (not in this repository): the CMSIS device files
  * and startup code (startup_stm32u585xx.s, system_stm32u5xx.c), a linker
- * script, stm32u5xx_hal_conf.h with the modules ADC, CORTEX, DCMI, DMA,
- * EXTI, FLASH, GPIO, ICACHE, IWDG, LPTIM, OPAMP, PCD, PWR, RCC, RTC, SPI
- * enabled,
- * and - for gl_hal_stm32u5_usb.c - ST's USB device library with its CDC
- * class plus the usual usbd_conf.c / usbd_desc.c glue.
+ * script, the HAL sources of the modules ADC, CORTEX, DCMI, DMA, EXTI,
+ * FLASH, GPIO, ICACHE, IWDG, LPTIM, OPAMP, PCD, PWR, RCC, RTC, SPI (the
+ * project's own stm32u5xx_hal_conf.h, next to this file, enables exactly
+ * these), and - for gl_hal_stm32u5_usb.c, which is still uncompiled - ST's
+ * USB device library with its CDC class plus the usual usbd_conf.c /
+ * usbd_desc.c glue.  README, "STM32 backend", lists what a flashable image
+ * takes.
  *
  * DESIGN
  *   clocks    SLOW (the state after init and after every Stop): MSIS 48 MHz
@@ -63,19 +68,21 @@
  *             start to be safe; the HAL de-initialisation functions write
  *             through handle->Instance, which is NULL in a zeroed handle).
  *
- * IDENTIFIERS TO CHECK FIRST when this is compiled (written from memory;
- * they are collected in the "identifier map" below so that a wrong name is
- * a one-line fix): ADC sampling-time constants, the GPDMA request number
- * of the DCMI, the DCMI byte-select constants, the LPTIM output-compare
- * API of the U5 HAL (it differs from the L4 one), RCC_MSIRANGE_0 = 48 MHz,
- * the MCO source names, the IRQ names of the individual EXTI lines, the
- * RTC wake-up call (the U5 version has an extra auto-clear argument), the
- * system-memory address of the ROM bootloader, the temperature-sensor
- * calibration macros (TEMPSENSOR_CAL1_ADDR ..., whether the calibration
- * values are 14-bit), HAL_ICACHE_Enable, flash latency for 48 MHz,
- * the kernel-clock selection names (RCC_PERIPHCLK_LPTIM34, _ADCDAC, _ICLK),
- * the autonomous-mode clock macros (__HAL_RCC_LPTIMx_CLKAM_ENABLE), the
- * OPAMP init fields and the TAMP backup-register access.
+ * IDENTIFIERS.  The names that were written from memory are collected in
+ * the "identifier map" below.  The first compile against the headers found
+ * two that do not exist in this form (the VREFINT macro takes the ADC
+ * instance as its first argument; the op-amp power mode is
+ * OPAMP_POWERMODE_NORMALPOWER_NORMALSPEED) and two that exist only as
+ * aliases in ST's legacy header (GPDMA1_REQUEST_DCMI,
+ * ADC_SAMPLETIME_391CYCLES_5); all four are corrected.  The MEANING of the
+ * map's entries was then compared with the comments of the headers (MSI
+ * range 0 = 48 MHz, the PLL input range, the DCMI byte-select constants,
+ * the ADC sampling times, the RTC wake-up clock, the calibration values at
+ * 14 bits and 3.0 V).  STILL FROM MEMORY, because no header says it: the
+ * ADC channel numbers of PA2 and PC4 (data sheet, table of pin functions),
+ * the system-memory address of the ROM bootloader (AN2606), the order of
+ * the PLL / booster / flash-latency steps (RM0456), and everything listed
+ * next.
  *
  * BEHAVIOUR TO CONFIRM ON HARDWARE (the application depends on it):
  *   - LPTIM1 keeps toggling its PWM pin in Stop 2 (GL_PROV_LPTIM_PWM_RUNS_IN_STOP2)
@@ -114,9 +121,14 @@
 #define GLH_ADC_SMP_MEDIUM       ADC_SAMPLETIME_68CYCLES     /*   5.7 us */
 #define GLH_ADC_SMP_LONG         ADC_SAMPLETIME_391CYCLES    /*  32.6 us (the _5 name is a legacy alias) */
 #define GLH_ADC_SMP_LONGEST      ADC_SAMPLETIME_814CYCLES    /*  67.8 us */
-#define GLH_ADC_CH_GRAIN         ADC_CHANNEL_8           /* PA3 = OPAMP1_VOUT = ADC1_IN8 (verified) */
-#define GLH_ADC_CH_VBAT          ADC_CHANNEL_7           /* PA2 = ADC1_IN7 (from memory) */
-#define GLH_ADC_CH_NTC           ADC_CHANNEL_13          /* PC4 = ADC1_IN13 (from memory; GL_PINS_ADC_CH_CELL_NTC) */
+/* ADC channels: the NUMBERS are in the generated gl_pins.h (tools/gen_pins.py),
+ * nowhere else: PA3 = OPAMP1_VOUT = ADC1_IN8 (verified), PA2 = ADC1_IN7 and
+ * PC4 = ADC1_IN13 (both from memory) */
+#define GLH_ADC_CHANNEL__(n)     ADC_CHANNEL_##n
+#define GLH_ADC_CHANNEL_(n)      GLH_ADC_CHANNEL__(n)
+#define GLH_ADC_CH_GRAIN         GLH_ADC_CHANNEL_(GL_PINS_ADC_CH_GRAIN_TIA)
+#define GLH_ADC_CH_VBAT          GLH_ADC_CHANNEL_(GL_PINS_ADC_CH_VBAT_DIV)
+#define GLH_ADC_CH_NTC           GLH_ADC_CHANNEL_(GL_PINS_ADC_CH_CELL_NTC)
 /* fast clock: PLL1 from MSIS 48 MHz -> 16 MHz -> VCO 320 MHz -> 160 MHz */
 #define GLH_PLL_M                3u
 #define GLH_PLL_N                20u
@@ -149,6 +161,18 @@ typedef struct {
 #define GLH_ROW(logical, port_letter, pin_no, pad, fn_kind, af_no, src) \
     [logical] = { GPIO##port_letter, (uint16_t)(1u << (pin_no)), (uint8_t)(fn_kind), (uint8_t)(af_no) },
 static const glh_pin_t pin_[GL_PIN_COUNT] = { GL_PINS_TABLE(GLH_ROW) };
+
+/* The interrupt vectors (EXTI13 / 5 / 9 / 0), their NVIC lines and the EXTI
+ * callback further down name four pins by their line NUMBER.  The numbers
+ * come from the generated pin table: if tools/gen_pins.py moves one of the
+ * four pins, this stops compiling instead of silently listening on the old
+ * line. */
+#define GLH_LINE(logical, port_letter, pin_no, pad, fn_kind, af_no, src) GLH_LINE_##logical = (pin_no),
+enum { GL_PINS_TABLE(GLH_LINE) GLH_LINE_COUNT_ };
+typedef char glh_imu_int1_is_exti13_[(GLH_LINE_GL_PIN_IMU_INT1 == 13) ? 1 : -1];
+typedef char glh_imu_int2_is_exti5_[(GLH_LINE_GL_PIN_IMU_INT2 == 5) ? 1 : -1];
+typedef char glh_vbus_sense_is_exti9_[(GLH_LINE_GL_PIN_VBUS_SENSE == 9) ? 1 : -1];
+typedef char glh_chg_stat_is_exti0_[(GLH_LINE_GL_PIN_CHG_STAT == 0) ? 1 : -1];
 
 static bool latch_[GL_PIN_COUNT];
 static uint8_t mode_[GL_PIN_COUNT];
@@ -521,12 +545,16 @@ uint32_t gl_hal_time_us(void)
     return (uint32_t)((lse_ticks_() * 15625u) >> 9);
 }
 
-void gl_hal_trace(gl_trace_point_t point)
+void gl_hal_trace(gl_trace_point_t point, uint32_t work)
 {
-    /* Timing instrumentation.  Nothing by default; for a run-time
-     * measurement on the bench, toggle a spare pad or write `point` to an
-     * ITM channel here. */
+    /* Timing instrumentation.  Nothing by default.  For a run-time
+     * measurement on the bench, write `point`, `work` and gl_hal_time_us()
+     * to an ITM channel here (or toggle a spare pad): the time between two
+     * marks against the instruction count that hal/host/gl_sim_cost.h gives
+     * for (point, work) is the cycles-per-instruction factor the simulator's
+     * timing figures rest on, which nobody has measured yet. */
     (void)point;
+    (void)work;
 }
 
 uint32_t gl_hal_tick_ms(void)

@@ -1,6 +1,7 @@
 /*
  * gl_hal_stm32u5_priv.h - shared between the two files of the STM32U5
- * backend.  NOT COMPILED in this repository (see gl_hal_stm32u5.c).
+ * backend.  Compiled only by `make cross-hal` (with gl_hal_stm32u5.c; see
+ * there).
  */
 #ifndef GL_HAL_STM32U5_PRIV_H
 #define GL_HAL_STM32U5_PRIV_H

@@ -210,13 +210,18 @@ float gl_select_inplace(float *v, size_t n, size_t k)
     }
     kk = (ptrdiff_t)k;
     hi = (ptrdiff_t)n - 1;
-    /* Wirth's selection: partition v[lo..hi] about x = v[k], then keep the
-     * side that holds index k.  Invariant: nothing left of lo is larger and
-     * nothing right of hi is smaller than any element of v[lo..hi].  The two
-     * scans cannot leave [lo, hi]: the first time they are stopped by x
-     * itself, afterwards by an element the previous swap put there. */
+    /* Wirth's selection: partition v[lo..hi] about a value x taken from it,
+     * then keep the side that holds index k.  Invariant: nothing left of lo
+     * is larger and nothing right of hi is smaller than any element of
+     * v[lo..hi].  The two scans cannot leave [lo, hi]: the first time they
+     * are stopped by an element equal to x, afterwards by an element the
+     * previous swap put there; and every round takes at least one element
+     * off each end it keeps. */
     while (lo < hi) {
-        const float x = v[kk];
+        /* pivot: the median of the first, the k-th and the last element */
+        const float a = v[lo], b = v[kk], c = v[hi];
+        const float x = (a < b) ? ((b < c) ? b : ((a < c) ? c : a))
+                                : ((a < c) ? a : ((b < c) ? c : b));
         ptrdiff_t i = lo, j = hi;
         if (++rounds > GL_SELECT_MAX_ROUNDS) {
             /* a pathological order: finish with the sort, on what is left */

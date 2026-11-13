@@ -11,10 +11,15 @@ clock, chip-select pulls, PWDN pins); the specification's own header reads "rev 
   build environment. What exists is portable C99 that is built and unit-tested on the host
   against a simulator of the board, and cross-compiled (compile only, not linked) for the
   Cortex-M33 to check that it is clean and to measure its size.
-* **`hal/stm32u5` has never been compiled.** It is written against the STM32Cube HAL API from
-  memory of that API and of the reference manual. No target of the Makefile builds it; only its
-  generated pin table (`gl_pins.h`, plain macros) is checked, by `tests/test_pins.c`. Treat it
-  as unverified until it has been built against the real STM32CubeU5 package and run on a board.
+* **`hal/stm32u5/gl_hal_stm32u5.c` has been compiled, and never linked or run** (phase 2,
+  builder 3). `make cross-hal STM32_HEADERS=<dir>` compiles it - compile only - against ST's
+  and Arm's header files, warning-free with the firmware's whole warning set; the first compile
+  found two wrong identifiers and two that existed only as legacy aliases ("STM32U5 backend").
+  That shows that the names and types fit. It shows nothing about behaviour: no HAL source was
+  compiled, no image linked, and every sequence in the file is still from memory of the
+  reference manual. `gl_hal_stm32u5_usb.c` is **still uncompiled** (it needs ST's USB device
+  library). No vendor file is in this repository; without the header directory the target is
+  skipped with a message.
 * **The device models of the simulator encode this project's understanding of the parts**, the
   same understanding the drivers are written from. A passing driver test shows that driver and
   model agree and that the bus traffic is self-consistent and obeys the board rules; it does not
@@ -48,12 +53,18 @@ clock, chip-select pulls, PWDN pins); the specification's own header reads "rev 
   32 findings). What was changed, what was handed to the hardware design and what remains open
   is in "Design review" below; the vision figures in this file are the ones measured after it,
   and several of them are worse - and truer - than the ones this file used to carry.
-* **The vision's run time on the target is the largest known risk.** It has now been counted
-  (about 145 million instructions per read on the host build) and does not fit the 1.6 s the read was
-  designed around without a faster clock; see "Run time" under Memory and open issue 1. The
-  application now asks the HAL for the fast clock (160 MHz) from the start of the capture to the
-  end of the solve; on the simulator that is a recorded and checked call, on the target an
-  uncompiled PLL sequence whose effect on the run time is **not verified** (no board).
+* **The vision's run time has been reduced from 145 to 58 million host instructions for the
+  nominal read, with bit-identical results, and the simulator now charges computation its
+  time** (phase 2, builder 3; "Run time"). With that, a Quick Read at 6 m shows its result
+  **4.1 - 4.8 s after the marker comes to rest** (4.4 s at the nominal factor) and keeps the
+  camera rail on for 2.2 - 2.8 s - not the 3.45 s and 1.56 s this file used to state, which
+  charged no computation, and **not the "about three seconds" of DESIGN_SPEC (NOT MET)**. A
+  stick nearer than about 4 m, or several lines in the band, cost 87 million instructions and
+  more. The factor between a host instruction and an MCU clock cycle is an ESTIMATE (1.5 - 3,
+  nominal 2); it is **not measured**, no board exists. Honest timing also changed three
+  results, all pinned by tests as NOT MET: a second post 14 px from the stick now defeats most
+  reads, a Survey fit hangs on a marginal classification of the stick's base, and a drift that
+  reverses inside a group of four strips is not noticed ("End to end", "Vision").
 * **Rev C.** `core/gl_config.h` is regenerated from the rev C YAML (stereo baseline 20.0 mm,
   cameras at x = +-10.0 mm). The user calibration is a **zeroing on any hard flat surface**
   (read, turn the marker 180 degrees in place, read again). It is never done in the cradle,
@@ -75,12 +86,12 @@ clock, chip-select pulls, PWDN pins); the specification's own header reads "rev 
 | Vision: faint sticks rejected, all-or-nothing read, lowest point and base class, flag over the tip, band false candidates with FPN, phase bias, accuracy table on an impossible scene (7) | | **Fixed or partly fixed**, see "Vision" for what is met and what is not; the reviewers' scenes are permanent tests. |
 | Range fusion (1) | contradicting sources averaged; insignificant disparity | **Fixed** (`test_range.c`). |
 | Camera bus at power-up (1) | depends on PWDN releasing the bus | **Not fixable in firmware**: measured, asserted, documented (open issue 3). |
-| Backend: EXTCOMIN stop on an uninitialised handle (1) | | **Fixed by inspection only** (uncompiled); the rule "every stop is safe before its start" is in `gl_hal.h` and tested on the simulator. |
+| Backend: EXTCOMIN stop on an uninitialised handle (1) | | **Fixed by inspection only** (the file compiles since builder 3 and has never run); the rule "every stop is safe before its start" is in `gl_hal.h` and tested on the simulator. |
 | Charger default-off with the MCU unpowered (1) | | **Escalated to hardware; answered by rev C2** (charger on by default, the MCU can only stop it: `CHG_INHIBIT`). |
 | Register table says "pulsed"; register 0x0C bit 4; EXTCOMIN 546 ticks; bootloader pins (4) | | **Fixed** in driver, table and generator; two SPEC pins remain a release gate (open issue 4). |
 
 No finding was rejected as false. Two were closed only as far as firmware can (camera bus,
-charger default), one only as far as an uncompiled file can (EXTCOMIN handle).
+charger default), one only as far as a file that has never run can (EXTCOMIN handle).
 
 ## Architecture
 
@@ -154,18 +165,20 @@ IMU INT1 (wake-on-motion) -> GL_EV_MOTION -> WAKE: display on, IMU 240 Hz
 | `drivers/` | Device drivers written against `hal/gl_hal.h`: `ov7692`, `ls013b7dh03`, `lsm6dsv16x`, `mx25r`, `grain_frontend`, `power`. |
 | `hal/gl_hal.h` | The only hardware interface: GPIO, SPI, SCCB, DCMI strip capture, ADC / op-amp, LPTIM, tick / RTC, USB CDC, sleep. |
 | `hal/host/` | Host simulator behind `gl_hal.h`: simulated time, pin and bus trace, models of the LCD, flash, IMU, two cameras, analog front end and USB; rule checkers. |
-| `hal/stm32u5/` | STM32U585 backend (`gl_hal_stm32u5.c`, `gl_hal_stm32u5_usb.c`) and the generated pin map `gl_pins.h`. **Never compiled.** |
+| `hal/host/gl_sim_cost.h` | The instruction counts of the vision stages, the estimate and a rendering (measured with callgrind, `make profile`) from which the simulator charges computation its time. |
+| `hal/stm32u5/` | STM32U585 backend (`gl_hal_stm32u5.c`: **compiled against the vendor's headers by `make cross-hal`, never linked or run**; `gl_hal_stm32u5_usb.c`: **never compiled**), the project's own HAL configuration `stm32u5xx_hal_conf.h` and the generated pin map `gl_pins.h`. No vendor file. |
 | `app/` | Main loop and glue: `gl_app`, `gl_motion`, `gl_read`, `gl_usb`, `gl_app_cfg.h` (tuning constants, flash layout), `gl_main.c` (`main()`). |
-| `tests/` | Host unit tests, one executable per `test_*.c`, with the tiny runner `gl_test.h`; `test_drv_*.c` check bus traffic, `test_e2e.c` and `test_e2e_faults.c` run the whole firmware on the simulator (the second one with faults injected), `test_e2e_putt.c` runs whole reads on rendered scenes and compares the line on the panel and the numbers shown with the reference, `test_board.c` checks the rev C2 board rules (chip selects through reset, core-clock calls, EXTCOMIN), `test_read.c` runs the camera part of a read on hard scenes, `test_solver.c` runs the solver against the reference vectors in both precisions. |
+| `tests/` | Host unit tests, one executable per `test_*.c`, with the tiny runner `gl_test.h`; `test_drv_*.c` check bus traffic, `test_e2e.c` and `test_e2e_faults.c` run the whole firmware on the simulator (the second one with faults injected), `test_e2e_putt.c` runs whole reads on rendered scenes and compares the line on the panel and the numbers shown with the reference, `test_board.c` checks the rev C2 board rules (chip selects through reset, core-clock calls, EXTCOMIN), `test_read.c` runs the camera part of a read on hard scenes, `test_vision_equiv.c` compares the vision bit for bit with the frozen phase-1 version, `test_solver.c` runs the solver against the reference vectors in both precisions. |
+| `tests/vision_ref/` | The vision of phase 1, frozen (`gl_vision_p1_body.inc`, verbatim; built with its symbols renamed `glp1_*`): the oracle of `test_vision_equiv.c`. Host only. |
 | `tests/solver/` | `gl_solver_vectors.c` (**generated** from `../sim/results/reference_vectors.json`, 0.96 MB of C data, host only), its hand-written header, `gl_solver_run.c`, the harness that is compiled once per precision, and `gl_solver_ref.c`, the double-precision build of the solver behind a plain-C interface (`gl_ref_estimate`), which the end-to-end putt test uses as its reference. |
 | `tests/synth/` | Synthetic strip renderer (`gl_synth`), the reviewers' independent, physically consistent scene generator (`gl_scene`, used by `test_read.c`) and simulated NOR flash with power cuts (`gl_simflash`). |
-| `tools/` | `gen_config.py` (YAML -> `core/gl_config.h`), `gen_font.py` (-> `core/gl_font_data.c`), `gen_pins.py` (-> `hal/stm32u5/gl_pins.h`, cross-checked against DESIGN_SPEC), `gen_vectors.py` (reference vectors -> `tests/solver/gl_solver_vectors.c`), `cross_report.sh`; host-only solver tools: `diff_solver.py` + `diff_solver_abi.c` (`make diff`), `solver_bench.c` (`make bench`), `app_diff.py` (`make appdiff`: the estimator inputs the application produced, run through the Python reference). |
+| `tools/` | `gen_config.py` (YAML -> `core/gl_config.h`), `gen_font.py` (-> `core/gl_font_data.c`), `gen_pins.py` (-> `hal/stm32u5/gl_pins.h`, cross-checked against DESIGN_SPEC), `gen_vectors.py` (reference vectors -> `tests/solver/gl_solver_vectors.c`), `cross_report.sh`; host-only solver tools: `diff_solver.py` + `diff_solver_abi.c` (`make diff`), `solver_bench.c` (`make bench`), `app_diff.py` (`make appdiff`: the estimator inputs the application produced, run through the Python reference); run-time tools: `vision_bench.c` (`make bench-vision`), `vision_cost.sh` (`make profile`); `cross_hal.sh` and `cross_hal_report.sh` (`make cross-hal`). |
 
 ## Building and testing
 
 ```
 make test     # gcc -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror, builds
-              #   core + drivers + app + simulator and runs all 24 test executables
+              #   core + drivers + app + simulator and runs all 25 test executables
               #   (several minutes, most of them the 920 reads of tests/test_read.c)
 make asan     # the same under -fsanitize=address,undefined,float-cast-overflow
               #   (test_read.c with 3 instead of 8 reads per scene: its yield and accuracy
@@ -173,8 +186,20 @@ make asan     # the same under -fsanitize=address,undefined,float-cast-overflow
 make cross    # arm-none-eabi-gcc -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -mfloat-abi=hard -Os
               #   -ffunction-sections: compiles core, drivers and app (NOT hal/stm32u5);
               #   size table, largest stack frames, forbidden-symbol check
+make cross-hal STM32_HEADERS=<dir>
+              # compiles hal/stm32u5/gl_hal_stm32u5.c - COMPILE ONLY - against ST's and Arm's
+              #   header files in <dir> (layout and versions: "STM32U5 backend"); size, stack
+              #   frames, forbidden-symbol check, the HAL functions a link would need.
+              #   Without STM32_HEADERS, or if the headers are not there: SKIPPED with a
+              #   message, exit 0 - the backend has then NOT been compiled
 make config   # regenerate core/gl_config.h, core/gl_font_data.c, hal/stm32u5/gl_pins.h and
               #   tests/solver/gl_solver_vectors.c
+make bench-vision
+              # NOT part of make test: whole reads of 8 scenes on the simulator with the
+              #   compute-time model: strips, what the cost table charges, camera-rail time
+make profile  # NOT part of make test: callgrind (valgrind) instruction counts per stage of
+              #   the vision, of whole reads and of the estimate; the source of
+              #   hal/host/gl_sim_cost.h (several minutes)
 make diff     # NOT part of make test: the solver as shared libraries against the Python
               #   reference on 20000 random reads and 20000 random aim problems (about 4.5 min;
               #   needs the reference's Python environment: numpy, scipy, numba optional)
@@ -187,8 +212,13 @@ make appdiff  # NOT part of make test: tests/test_e2e_putt.c dumps every gl_meas
 make V=1 ...  # show full compiler command lines
 ```
 
+`build/host/tests/test_read --cpi 0` runs the read tests with computation for nothing (the
+timing every figure before builder 3 was measured with; its output is byte-identical to the
+output of phase 1); `test_read <scene> <reads> <factor>` runs one scene at a compute factor.
+
 Needs `gcc`, `make`, `arm-none-eabi-gcc` (with newlib headers) and, for the staleness check of
-the generated files, `python3` with PyYAML (skipped with a note if absent). `make test` fails
+the generated files, `python3` with PyYAML (skipped with a note if absent); `make profile`
+needs valgrind. `make test` fails
 if a generated file is stale, which is how the rev C YAML change was caught.
 
 Firmware code (core, drivers, app) is additionally compiled with `-Wdouble-promotion -Wvla
@@ -320,11 +350,34 @@ collects.
 
 ### Host simulator (`hal/host`)
 
-A model of the board as seen from the MCU pins, with **simulated time**: time passes only in
-delays, in sleep and for the duration of bus transfers and conversions; computation takes zero
-simulated time (so timing figures below do not include the vision's run time on the target).
-Every pin change, bus transfer, register access and sleep is recorded in a trace (up to 262144
-records, with the SPI bytes) that tests inspect.
+A model of the board as seen from the MCU pins, with **simulated time**: time passes in
+delays, in sleep, for the duration of bus transfers and conversions, and - from builder 3 -
+**for computation**. Every pin change, bus transfer, register access and sleep is recorded in
+a trace (up to 262144 records, with the SPI bytes) that tests inspect.
+
+**Compute-time model.** The firmware reports the end of each heavy stage to the HAL with what
+it did (`gl_hal_trace(point, work)`: the band with its pixel count; a strip with which
+refinements were tried - 1, 4, 16 rows binned -, whether a line was found, whether it was wide,
+whether the strip statistics ran; a group; the estimate with its RK4 steps; a rendering). On
+the target the call does nothing. The simulator looks the stage up in `gl_sim_cost.h` - host
+instruction counts measured with callgrind, table under "Run time" - and lets
+
+    time = instructions x cycles per instruction / core clock in effect (160 or 48 MHz)
+
+pass before the firmware continues, so that frames go by, the IMU keeps sampling and the
+camera rail stays on while the firmware "computes". **The cycles-per-instruction factor is an
+estimate, not a measurement**: 1.5 (low), 2.0 (nominal, the default of every test), 3.0 (high);
+what it stands for and why the range is this wide is under "Run time". `gl_sim_set_cpi(0)`
+gives the old behaviour (computation for nothing). What is still free: everything between the
+trace points - the main loop, the drivers, the IMU filtering (a few hundred instructions per
+sample).
+
+**Supply model.** The simulator also integrates a current for every state of the board (MCU
+run / idle / Stop 2 at either clock, camera rail, IMU mode, LCD, flash, ADC, op-amp, grain
+LED): `gl_sim_stats_t.charge_*`. **Every current is PROVISIONAL** - from memory of the data
+sheets or from the unverified figures of `docs/research` (`GL_SIM_I_*` in `gl_sim.h`) - so
+the charge figures of this file say how the measured TIMES translate into charge under those
+assumptions; they are not measurements.
 
 It models: the LCD (decodes frames into a panel memory), the flash (8 MB, NOR semantics, busy
 times, deep power-down), the IMU (register map, sample generator driven by a motion function of
@@ -367,15 +420,16 @@ It **checks**, and counts as violations (all tests require zero):
 It also MEASURES what it cannot forbid: the time both cameras' pads are enabled during power-up
 (`cam_powerup_overlap_us`), how long the charger ran in all, outside the temperature window
 (total and longest stretch) and during reset, how long `CHG_INHIBIT` was held and `NTC_BIAS`
-driven, the number of clock switches and the time at the fast clock; and it can charge simulated time to the vision
-(`gl_sim_set_compute_us()` per trace point), drop interrupt latches, fail SPI transfers and
-glitch the IMU's supply, which is what `tests/test_e2e_faults.c` uses.
+driven, the number of clock switches and the time at the fast clock, the computation charged per stage
+and the charge drawn; and it can charge a FIXED time at a trace point instead of the model's
+(`gl_sim_set_compute_us()`), drop interrupt latches, fail SPI transfers and glitch the IMU's
+supply, which is what `tests/test_e2e_faults.c` uses.
 
 `tests/test_e2e.c` adds an **independent** check of the camera rail rule: it replays the
 recorded pin trace with its own model and counts moments at which a camera-facing pin is neither
 analog nor driven low while the rail is off, and bus accesses with the rail off.
 
-### STM32U5 backend (`hal/stm32u5`) - never compiled
+### STM32U5 backend (`hal/stm32u5`) - compiled against the vendor's headers, never linked or run
 
 | File | Content |
 |---|---|
@@ -383,14 +437,163 @@ analog nor driven low while the rail is off, and bus accesses with the rail off.
 | `gl_hal_stm32u5.c` | Clocks (MSIS 48 MHz trimmed against LSE; **rev C2: `gl_hal_clock_set()` switches SYSCLK to PLL1 at 160 MHz and back** - PLL1 from MSIS / 3 x 20 / 2; up: voltage range 1 with the EPOD booster, PLL locked, then SYSCLK with flash latency 4; down: SYSCLK back to MSIS, PLL off, then the lower voltage range; a PLL that does not lock leaves the slow clock and is not an error; SPI1, SPI2 and the ADC take their kernel clock from MSIK so that their timing does not move; `gl_hal_delay_us()` scales with the clock; Stop mode is refused (idle sleep instead) while the clock is fast; XVCLK = MSI / 4 on MCO), tick on LPTIM3 from LSE (runs through Stop 2), RTC seconds and RTC wake-up timer, GPIO from the pin table, EXTI sources, Stop 2 / sleep that returns only for an enabled source and cannot lose a wake-up, SPI1 / SPI2, **bit-banged SCCB** (two clock lines for two sensors at one address: no I2C peripheral can do that), DCMI snapshot with crop + byte select through GPDMA, ADC1 14-bit, OPAMP1 standalone, LPTIM1 PWM for EXTCOMIN, independent watchdog (32 s), unique id, reboot, jump to the ROM DFU bootloader through a backup-register flag (taken only if VBUS is present, so a marker in a pocket cannot be parked in the ROM). After the review: the interrupt latch is updated with interrupts masked (a lost IMU data-ready used to be possible), `gl_hal_extcomin_stop()` and the op-amp stop are safe before their start, the DCMI frame-end time is latched in the interrupt, the die temperature sensor is read, ICACHE is enabled. Rev C2: the NTC channel (ADC1_IN13), `CHG_INHIBIT` and `NTC_BIAS` left analog by `gl_hal_init()`, the chip selects taken over at the level of their pulls (output latch written before the mode). None of it compiled; the PLL / booster / latency sequence in particular is written from memory of the reference manual. |
 | `gl_hal_stm32u5_usb.c` | CDC-ACM on ST's USB device library: HSI48 + clock recovery, VDDUSB supply-valid only after VBUS was seen, byte rings, flow control by NAK. |
 
-To build it one needs, outside this repository: STM32CubeU5 (HAL, CMSIS, startup code, linker
-script, `stm32u5xx_hal_conf.h`), ST's USB device library with the CDC class, and the board glue
-`usbd_conf.c` / `usbd_desc.c` (with a VID / PID). The identifiers most likely to be wrong are
-collected in an "identifier map" at the top of `gl_hal_stm32u5.c` so that each is a one-line fix.
-Design points that the application relies on and that must be confirmed on hardware: LPTIM1 PWM
-output in Stop 2, wake-up from Stop 2 on the IMU data-ready line at 240 Hz, DCMI crop and byte
-select semantics, DMA block limit (both strip sizes, 61440 and 46080 bytes, are below 64 kB and
-multiples of 4 by design; a compile-time check in `app/gl_read.c` keeps it that way).
+**What was done (builder 3).** `gl_hal_stm32u5.c` is compiled - `arm-none-eabi-gcc -c`, nothing
+linked, nothing run - against the header files of three public repositories, fetched from
+`raw.githubusercontent.com` at fixed tags into a scratch directory **outside this repository**
+(header and device-description files only; no HAL source, no start-up code, no example). The
+headers are data: nothing in that directory is executed and nothing from it is copied here.
+
+```
+make cross-hal STM32_HEADERS=<dir>
+
+<dir>/cmsis_device_u5/Include/        stm32u5xx.h stm32u585xx.h system_stm32u5xx.h
+<dir>/stm32u5xx_hal_driver/Inc/       stm32u5xx_hal*.h stm32u5xx_ll_*.h Legacy/stm32_hal_legacy.h
+<dir>/CMSIS_5/CMSIS/Core/Include/     core_cm33.h cmsis_version.h cmsis_compiler.h cmsis_gcc.h mpu_armv8.h
+```
+
+Flags: the firmware's warning set with `-Werror` (`-Wall -Wextra -Wpedantic -Wshadow
+-Wconversion -Wdouble-promotion -Wvla -Wmissing-prototypes -Wstrict-prototypes -Wundef`),
+`-mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard -Os -DSTM32U585xx
+-DUSE_HAL_DRIVER`; the vendor headers are included with `-isystem`, so the warnings are
+judged on this project's code. `stm32u5xx_hal_conf.h` is the project's own file (every Cube
+project supplies one); it is written here, not copied from ST's template, and enables exactly
+the modules the backend calls.
+
+**The 41 files it was compiled against** (STM32CubeU5 HAL driver v1.6.1, CMSIS device
+package v1.4.1, CMSIS 5.9.0):
+
+| Repository (github.com) | Tag | File | Bytes | SHA-256 (first 16 hex digits) |
+|---|---|---|---|---|
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_conf_template.h` | 19769 | `a761a1c98d22aa0d` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal.h` | 39344 | `be0aa206bbdbd4be` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_def.h` | 7638 | `73a911c835b4c7f7` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/Legacy/stm32_hal_legacy.h` | 240589 | `7fff96faed90c813` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_rcc.h` | 249026 | `1006c48ca927ada2` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_rcc_ex.h` | 122138 | `79e433bc3ff360f1` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_gpio.h` | 16246 | `6d9e6c1abe6303f3` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_gpio_ex.h` | 16959 | `40848fe334a9252b` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_icache.h` | 9541 | `18aa44e01f694413` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_dma.h` | 45368 | `0d4f824e30374332` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_dma_ex.h` | 38773 | `bfe6f1435f362fd4` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_cortex.h` | 16590 | `d839d550236888f6` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_adc.h` | 161245 | `72a33bd9bd42e6a6` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_ll_adc.h` | 533842 | `1538f159a0b4b15b` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_adc_ex.h` | 84028 | `b2acc7d3c97a248a` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_flash.h` | 56604 | `e59f8e71dee58b4b` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_flash_ex.h` | 8978 | `8943fc2f847e40a8` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_iwdg.h` | 9899 | `28f4133413f1c0a7` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_lptim.h` | 59662 | `4c024efe65c72aad` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_ll_lptim.h` | 94415 | `e94a56981606821a` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_opamp.h` | 16946 | `cb5a5ab367616e96` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_opamp_ex.h` | 2179 | `82cc8fd42201a9c8` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_pwr.h` | 49154 | `d1b3888b86f2c25b` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_pwr_ex.h` | 46635 | `dd70ff0d9345914c` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_rtc.h` | 46370 | `92a7b0baff657fa0` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_rtc_ex.h` | 92645 | `1f7014ba621c8ab7` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_spi.h` | 58360 | `786f1dd29f4b5020` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_spi_ex.h` | 11381 | `c15da1ec3dc4f092` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_exti.h` | 15753 | `271badb9ab523a4f` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_dcmi.h` | 28975 | `725046175e4eb495` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_pcd.h` | 26414 | `401e2ceb09a42bc5` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_ll_usb.h` | 46803 | `ef829dd79eced900` |
+| `STMicroelectronics/stm32u5xx_hal_driver` | `v1.6.1` | `Inc/stm32u5xx_hal_pcd_ex.h` | 2858 | `57ca135317a8b122` |
+| `STMicroelectronics/cmsis_device_u5` | `v1.4.1` | `Include/stm32u5xx.h` | 10767 | `9c6f99860a416806` |
+| `STMicroelectronics/cmsis_device_u5` | `v1.4.1` | `Include/stm32u585xx.h` | 2065354 | `c7b606a2868c4c4e` |
+| `STMicroelectronics/cmsis_device_u5` | `v1.4.1` | `Include/system_stm32u5xx.h` | 2713 | `73675e7a1dfd4a63` |
+| `ARM-software/CMSIS_5` | `5.9.0` | `CMSIS/Core/Include/core_cm33.h` | 189524 | `225c47c36230edaa` |
+| `ARM-software/CMSIS_5` | `5.9.0` | `CMSIS/Core/Include/cmsis_version.h` | 1680 | `184c19fd3ee73632` |
+| `ARM-software/CMSIS_5` | `5.9.0` | `CMSIS/Core/Include/cmsis_compiler.h` | 9481 | `b51963d271c1571c` |
+| `ARM-software/CMSIS_5` | `5.9.0` | `CMSIS/Core/Include/cmsis_gcc.h` | 63374 | `43bfd1fe69fbbc2c` |
+| `ARM-software/CMSIS_5` | `5.9.0` | `CMSIS/Core/Include/mpu_armv8.h` | 11370 | `2c7d22a344cedcc1` |
+
+(`stm32u5xx_hal_conf_template.h` was fetched to read, and is not included by anything.)
+
+**Result of the compile** (`make cross-hal`, this session):
+
+* The first compile stopped on **two identifiers that do not exist in this form**:
+  `__HAL_ADC_CALC_VREFANALOG_VOLTAGE` takes the ADC instance as its first argument on the U5
+  (3 arguments, 2 were given), and the op-amp power mode is
+  `OPAMP_POWERMODE_NORMALPOWER_NORMALSPEED` (`OPAMP_POWERMODE_NORMAL` does not exist). Both
+  are fixed. **Two more compiled only through ST's legacy alias header** and were replaced by
+  the current names: `GPDMA1_REQUEST_DCMI` -> `GPDMA1_REQUEST_DCMI_PSSI`,
+  `ADC_SAMPLETIME_391CYCLES_5` -> `ADC_SAMPLETIME_391CYCLES`. Everything else - about 70 HAL
+  functions, the handle and init structures, the interrupt names, the RCC / PWR / LPTIM / RTC /
+  DCMI / GPDMA constants - compiled as written from memory.
+* It now compiles **warning-free**: text 6446, data 4, bss 1011 bytes; largest frames
+  `clocks_init_` 344, `gl_hal_clock_set` 136 bytes; no double-precision helper, no heap, no
+  stdio. It references `__aeabi_ldivmod` / `__aeabi_uldivmod` (64-bit divisions in the tick
+  arithmetic; from libgcc at link time) and `memset`.
+* The MEANING of the entries of the identifier map was then compared with the comments of the
+  headers: MSIS / MSIK range 0 = 48 MHz; PLL input range 1 = 8-16 MHz (the 16 MHz this file
+  feeds it is at the edge of that range); `DCMI_BSM_OTHER` / `DCMI_OEBS_ODD` / `_EVEN`; the ADC
+  sampling times; the RTC wake-up clock; the temperature and VREFINT calibration at 14 bits and
+  3.0 V, with this file's formula identical to ST's macro. One inconsistency **inside ST's
+  header** was seen and not resolved: the comment of `TEMPSENSOR_CAL2_ADDR` says 110 C, the
+  constant `TEMPSENSOR_CAL2_TEMP` is 130 (the firmware uses the constant).
+* The EXTI vectors and the ADC channels are now tied to the generated pin table at compile
+  time: moving one of the four interrupt pins in `tools/gen_pins.py` stops the compile
+  (checked with a scratch copy: "size of array 'glh_imu_int1_is_exti13_' is negative").
+* The object needs 70 HAL functions (listed by `make cross-hal`) and defines the handlers
+  `DCMI_PSSI_IRQHandler`, `EXTI0/5/9/13_IRQHandler`, `GPDMA1_Channel0_IRQHandler`,
+  `LPTIM3_IRQHandler`, `RTC_IRQHandler`, `SysTick_Handler` - names taken from memory that a
+  link against the start-up file's vector table would confirm or refute. **Not confirmed.**
+
+**`gl_hal_stm32u5_usb.c` was NOT compiled**: it includes `usbd_core.h` and `usbd_cdc.h` of ST's
+USB device library, which is in none of the three repositories. It is as unverified as before.
+
+**What a person needs to produce a flashable image** (none of it is here, and none of it was
+downloaded):
+
+1. **STM32CubeU5** (the HAL release above or a later one - recompile and re-read the warnings
+   if later): the HAL sources `stm32u5xx_hal.c`, `_hal_cortex.c`, `_hal_rcc.c`, `_hal_rcc_ex.c`,
+   `_hal_pwr.c`, `_hal_pwr_ex.c`, `_hal_flash.c`, `_hal_flash_ex.c`, `_hal_gpio.c`,
+   `_hal_exti.c`, `_hal_icache.c`, `_hal_iwdg.c`, `_hal_lptim.c`, `_hal_rtc.c`, `_hal_rtc_ex.c`,
+   `_hal_spi.c`, `_hal_spi_ex.c`, `_hal_dma.c`, `_hal_dma_ex.c`, `_hal_dcmi.c`, `_hal_adc.c`,
+   `_hal_adc_ex.c`, `_hal_opamp.c`, `_hal_opamp_ex.c`, and for USB `_hal_pcd.c`, `_hal_pcd_ex.c`,
+   `stm32u5xx_ll_usb.c` (the list follows the modules enabled in `stm32u5xx_hal_conf.h`; the
+   exact file a function lives in was not checked, no HAL source was read).
+2. **Start-up code and system file**: `startup_stm32u585xx.s` (GCC flavour: vector table,
+   reset handler, data / bss initialisation) and `system_stm32u5xx.c` (`SystemInit`,
+   `SystemCoreClock`) from the CMSIS device package.
+3. **A linker script** for the STM32U585RIT6: 2 MB flash at 0x08000000; SRAM1 192 kB at
+   0x20000000, SRAM2 64 kB at 0x20030000, SRAM3 512 kB at 0x20040000 (sizes and addresses as
+   the device header states them). The firmware's static data is 0.32 MB (`gl_app_t` alone
+   320904 bytes): it does NOT fit SRAM1 + SRAM2, so `.bss` must reach into SRAM3 (the three
+   regions are contiguous). That SRAM3 is clocked after reset and retained in Stop 2 without
+   further action is how the part is remembered - **not verified**, and the backend touches
+   neither setting. A hard fault at the first access to `.bss`, or data lost over the first
+   sleep, would be the symptom.
+4. **ST's USB device library** (core + CDC class) and the board glue the backend's USB file
+   expects: `usbd_conf.c` (PCD low-level callbacks, `HAL_PCD_MspInit`, `OTG_FS_IRQHandler`),
+   `usbd_desc.c` exporting `GL_USBD_Desc`, and an assigned VID / PID.
+5. **`main()`** is `app/gl_main.c`. The backend defines `SysTick_Handler` and the interrupt
+   handlers listed above itself, and relies on the HAL's default `HAL_InitTick`; the
+   interrupt and MSP files of a generated Cube project must not define the same handlers a
+   second time. No stdio is used: nothing of the C library's formatted output is wanted.
+6. Link with `-mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard`, newlib-nano and
+   `-Wl,--gc-sections`; then flash over SWD, or over USB with the ROM bootloader (DFU).
+
+**What remains unverified until it runs on a board** - everything about behaviour:
+
+* that it links at all (the handler names against the vector table, the HAL functions against
+  the HAL sources, the weak callbacks' signatures as the HAL calls them);
+* the clock sequences: MSIS 48 MHz with LSE trimming; PLL1 at 160 MHz with voltage range 1,
+  the EPOD booster and 4 flash wait states, and the way back; kernel clocks from MSIK;
+* Stop 2: entry and wake-up by the RTC timer and the four EXTI lines, LPTIM3 counting through
+  it (the tick), LPTIM1 PWM continuing through it (EXTCOMIN), the independent watchdog
+  running through it, wake-up fast enough for a 240 Hz data-ready interrupt;
+* DCMI crop and byte-select semantics, the sync polarities, GPDMA with 32-bit words, both
+  strip sizes (61440 and 46080 bytes, below 64 kB and multiples of 4 by design; a compile-time
+  check in `app/gl_read.c` keeps it that way);
+* the bit-banged SCCB timing, SPI modes and rates, the ADC sampling times against the source
+  impedances, the op-amp configuration, the calibration arithmetic on real calibration words;
+* the ADC channel numbers of PA2 and PC4 and the system-memory address of the ROM bootloader
+  (from memory; no header states them);
+* the reboot into the ROM bootloader, the backup-register flags, the interrupt-latch scheme
+  under real preemption;
+* **the run time of everything** - the cycles-per-instruction factor of the compute-time model
+  (`gl_hal_trace()` is an empty function on the target; a bench build can toggle a pin or
+  read the cycle counter there to measure each stage) - and every supply current.
 
 ## Application (`app/`)
 
@@ -404,7 +607,7 @@ multiples of 4 by design; a compile-time check in `app/gl_read.c` keeps it that 
   camera error, time-out; a last check in the main loop drops a fast clock that no read is
   using). The compute-heavy part of a read is exactly what lies between the two calls: the
   vision on the band and on every strip, and the putt solve. Measured on the simulator: fast
-  for 1602 ms of a Quick Read, 33 vision trace points and the solve inside, none outside;
+  for 2545 ms of a Quick Read (1602 ms with computation for nothing), 33 vision trace points and the solve inside, none outside;
   equally many switches up and down in every end-to-end test; never Stop mode in between. If
   the switch up fails, the read runs at the slow clock (counted in `clock_fails`).
 * **Motion** (`gl_motion.c`). 240 Hz samples in 32-sample blocks. `GL_EV_STILL`: flat and 4
@@ -555,73 +758,146 @@ These are copied from `make test`; re-run it to reproduce them.
 
 Scene: green sloped (1.2, -2.0) %, flagstick 6.0 m away and 2.9 degrees to the left, 15 mm
 wide (1.6 px), SNR 20, swaying +-0.3 px at 1.5 Hz; sensors 9 ms out of phase; marker put down
-between t = 1.0 and 1.6 s. Computation takes no simulated time in this table (what happens
-when it does is measured further down).
+between t = 1.0 and 1.6 s. **Computation is charged its time at the nominal factor** (2.0
+cycles per host instruction, 160 MHz during the read); the low and the high case follow.
 
 | Quantity | Result |
 |---|---|
-| State sequence | SLEEP, WAKE (1.02 s), WAIT_STILL (1.82 s), READ_TILT (2.36 s), CAPTURE (3.42 s), SOLVE, SHOW_RESULT (5.03 s) |
-| Result on the screen | 3.45 s after the marker came to rest (0.76 s until stillness is established, 1.07 s tilt read, 1.62 s camera part including power-up and settling) |
-| Camera rail | on once, for 1557 ms; 33 captures, 87 SCCB writes; rail never on outside the CAPTURE state |
-| Camera rail rule | simulator: 0 violations; independent replay of the 17868 trace records: 0 pin-rule violations, 0 bus accesses with the rail off |
-| Slope | (1.202, -1.998) % against (1.200, -2.000) % |
-| Disparity | 2.1991 px against 2.1985 px true; claimed sigma 0.054 px, of which 0.05 px is the (unmeasured) stereo calibration term |
-| Range | 5.982 m +- 0.138 m against 5.984 m (stereo 5.982, angular height 5.982 with the prior stick height) |
-| Bearing | 48.46 mrad against 48.46 mrad |
-| Putt estimate (method B1, single precision) | aim 79.3 mrad right of the line to the hole (-4.40 cups), launch speed 2.276 m/s, distance 5.982 m, hole 124 mm below the ball, confidence 0.16; aim source 0, status OK; 6 trial rolls, 1273 RK4 steps, 3 fit iterations |
+| State sequence | SLEEP, WAKE (1.02 s), WAIT_STILL (1.82 s), READ_TILT (2.37 s), CAPTURE (3.45 s), SOLVE, SHOW_RESULT (5.99 s; on the screen at 6.03 s) |
+| Result on the screen | **4.43 s after the marker came to rest** (0.77 s until stillness is established, 1.08 s tilt read, 2.58 s camera part including power-up, settling and 0.80 s of computation). NOT MET: the "about three seconds" of DESIGN_SPEC and the 4.0 s bound this test had while computation was free (3.45 s then) |
+| Camera rail | on once, for 2424 ms (1557 ms with computation for nothing); 33 captures, 87 SCCB writes; rail never on outside the CAPTURE state |
+| Camera rail rule | simulator: 0 violations; independent replay of the 18286 trace records: 0 pin-rule violations, 0 bus accesses with the rail off |
+| Slope | (1.202, -1.997) % against (1.200, -2.000) % |
+| Disparity | 2.2036 px against 2.1985 px true; claimed sigma 0.053 px, of which 0.05 px is the (unmeasured) stereo calibration term |
+| Range | 5.972 m +- 0.136 m against 5.984 m (stereo 5.970, angular height 5.987 with the prior stick height) |
+| Bearing | 48.48 mrad against 48.46 mrad |
+| Putt estimate (method B1, single precision) | aim 78.9 mrad right of the line to the hole (-4.37 cups), launch speed 2.277 m/s, distance 5.970 m, hole 122 mm below the ball, confidence 0.16; aim source 0, status OK; 6 trial rolls, 1267 RK4 steps, 2 fit iterations |
 | Screen | panel memory identical to the framebuffer; the aim line (bearing from the ball + aim angle) passes through the predicted pixels |
 | While the result is shown | MCU in Stop 2 for 99.5 % of the time (IMU at 240 Hz) |
 | After 45 s | display off, IMU wake-on-motion, flash in deep power-down, Stop 2; at most 6 loop iterations in the next 60 s (watchdog refresh every 16 s) |
 | Log | one boot event, one read record (range = the estimator's distance, solve status, launch speed, aim offset) and its estimate event (aim source, status, flags, method, tier, rolls), decoded and compared with the result |
+
+(The measured values differ in the last digits from the ones this table carried before: the
+frames are exposed at other moments, so the noise and the sway in them are other samples.)
+
+**Time and charge of this read, with its computation**
+(`test_quick_read_time_and_charge_with_computation`; the same scene at four compute factors
+and with a PLL that does not lock). Times are measured on the simulator; the factor is an
+estimate (see "Run time"); the charge comes from the simulator's supply model, whose currents
+are all PROVISIONAL:
+
+| Computation | Rest to result | CAPTURE state | Camera rail on | Computation: all = band + strips + estimate + rendering | Charge, wake-up to result (cameras + MCU + rest) | Charge of a whole cycle |
+|---|---|---|---|---|---|---|
+| for nothing (what this file stated before) | 3.45 s | 1.60 s | 1.56 s | 0 | 143 mAs (134 + 6 + 3) | 175 mAs |
+| low, 1.5 cycles per instruction | 4.13 s | 2.25 s | 2.16 s | 598 ms = 134 + 428 + 4.6 + 31 | 201 mAs (186 + 12 + 3) | 233 mAs |
+| **nominal, 2.0** | **4.43 s** | **2.54 s** | **2.42 s** | 797 ms = 178 + 571 + 6.1 + 42 | **226 mAs** (208 + 14 + 4) | **258 mAs** |
+| high, 3.0 | 4.82 s | 2.91 s | 2.76 s | 1196 ms = 268 + 857 + 9.1 + 63 | 259 mAs (237 + 18 + 4) | 291 mAs |
+| nominal, PLL does not lock: the read at 48 MHz | 6.00 s | 4.10 s | 3.82 s | 2567 ms = 595 + 1903 + 20 + 49 | 342 mAs (329 + 9 + 5) | 374 mAs |
+
+* "Whole cycle": wake-up, read, the 45 s the result is shown, and falling asleep again.
+* The rail time grows by more than the computation between the captures would suggest in
+  some rows and by less in others, because a capture can only start with the next frame of the
+  sensor (33 ms): computation is paid in whole frames.
+* The cost table counts 60.4 million instructions for this read; callgrind on the same read
+  counts 59.6 million in the camera part and 0.49 million in the estimate.
+* The rendering (0.23 million instructions per frame; five frames up to the result, four of
+  them at 48 MHz by design) is 5 % of the computation.
+* The cameras are 92 % of the charge of a read: **what a read costs is the time the camera
+  rail is on**, and computation between the captures is paid at the cameras' 86 mA, not at
+  the MCU's 9.5 mA.
+
+**Battery life under the supply model** (ESTIMATE: every current is provisional - 86 mA for
+the two cameras from an unverified 120 mW each, 9.5 mA for the MCU at 160 MHz, 9 uA in Stop 2,
+5 uA for the IMU's wake-on-motion mode, 6.5 uA for regulator, battery divider and protection
+circuit; the cell's 43 mAh is the listed figure, unverified; self-discharge, the usable part of
+the capacity above the cut-off voltage and the cell's low-temperature behaviour are not
+modelled):
+
+| | For nothing (before) | Low | Nominal | High | PLL not locked |
+|---|---|---|---|---|---|
+| Charge per read cycle | 0.049 mAh | 0.065 mAh | 0.072 mAh | 0.081 mAh | 0.104 mAh |
+| Read cycles per 43 mAh | 885 | 665 | 600 | 533 | 414 |
+| Read cycles per 43 mAh, in % of "for nothing" | 100 | 75 | 68 | 60 | 47 |
+
+Asleep, the model draws 20.6 uA (Stop 2 with RTC 9, IMU 5, always-on parts 6.5, flash 0.1):
+0.49 mAh per day, 87 days from a full cell with no read at all; a round of 40 read cycles is
+2.9 mAh at the nominal factor, the equivalent of 6 days asleep. A read of a near stick, or
+with several lines in the band, keeps the rail on longer (2.96 s in the 3 m scene below): by
+the same arithmetic about 0.09 mAh per cycle.
 
 What the L R R L timing correction is worth (stick drifting steadily at 6 px/s = 0.2 px per
 frame, 8 groups):
 
 | Sensor phase offset | Disparity error, corrected | Uncorrected |
 |---|---|---|
-| 2 ms | +0.007 px | -0.003 px |
-| 9 ms | +0.005 px | +0.053 px |
-| 16 ms | -0.001 px | +0.005 px |
-| 24 ms | -0.001 px | -0.043 px |
-| 31 ms | +0.002 px | -0.082 px |
+| 2 ms | +0.002 px | -0.008 px |
+| 9 ms | -0.001 px | +0.047 px |
+| 16 ms | +0.004 px | +0.010 px |
+| 24 ms | +0.003 px | -0.040 px |
+| 31 ms | +0.003 px | -0.081 px |
 
-The same with the vision's run time charged to the simulated clock (per strip; eight times that
-for the band), worst of the five phase offsets. The exposures of a group keep the sensors'
-spacing whatever the run time, so the correction keeps working; what grows is the read:
+The same against the run time of the vision, worst of the five phase offsets
+(`tests/test_e2e_faults.c`): computation for nothing, the cost model at its nominal factor, and
+fixed times per strip (eight times that for the band) up to 300 ms. The exposures of a group
+keep the sensors' spacing whatever the run time, so the correction keeps working; what grows is
+the read:
 
 | Run time per strip | Worst error, corrected | Capture state | Camera rail on |
 |---|---|---|---|
-| 0 ms | 0.007 px | 1.48 s | 1.56 s |
-| 30 ms | 0.011 px | 2.76 s | 2.72 s |
-| 60 ms | 0.008 px | 4.05 s | 3.89 s |
-| 100 ms | 0.005 px | 5.47 s | 5.16 s |
-| 200 ms | 0.008 px | 9.47 s | 8.76 s |
-| 300 ms | 0.004 px | 13.47 s | 12.36 s |
+| none (computation for nothing) | 0.007 px | 1.48 s | 1.56 s |
+| the cost model (about 17 ms, band 178 ms) | 0.004 px | 2.43 s | 2.42 s |
+| 30 ms | 0.005 px | 2.78 s | 2.72 s |
+| 60 ms | 0.005 px | 4.07 s | 3.89 s |
+| 100 ms | 0.006 px | 5.49 s | 5.16 s |
+| 200 ms | 0.011 px | 9.49 s | 8.76 s |
+| 300 ms | 0.006 px | 13.49 s | 12.36 s |
+| **the cost model, the drift REVERSING inside a group: NOT MET** | **0.039 px** | 2.43 s | 2.42 s |
 
-No time-out at any of them. The measured cost of a strip is of the order of 0.1-0.2 s at 48 MHz
-(see "Run time"): **the 200 ms row is the one to expect on the target without a faster clock.**
+No time-out at any of them. The fixed rows let the drift reverse every 1.7 s so that the stick
+stays in the strip; in them the reversal happens to fall between two groups. With the cost
+model's timing it falls inside one (the last row): the correction assumes uniform motion over
+the 0.13 s of a group, that group is wrong by a few tenths of a pixel, **and nothing in the
+read notices** - the read reports 0.039 px of error under a claimed sigma of 0.05 px. This is
+not a matter of compute time (the row above it, without a reversal inside the read, is as good
+as any); it was hidden by the timing of the earlier rows. Pinned by the test as NOT MET. The
+200 ms and 300 ms rows are what a read would look like at 48 MHz with the vision of phase 1;
+with the present vision the cost model gives about 59 ms per strip at 48 MHz (table above:
+3.82 s of rail time).
 
 Other end-to-end scenarios, all with zero simulator violations:
 
 * **DCMI-crop windowing** (the fallback if the sensor window registers do not mean what is
-  assumed): stick at 3 m, range 2.981 m against 2.984 m.
+  assumed): stick at 3 m, range 2.981 m against 2.984 m. With the frames at the moments the
+  compute model gives, the band lists TWO lines for this 3.3 px wide stick; each gets a group
+  of its own before one is chosen: 41 captures instead of 33, **camera rail on for 2.96 s**.
+  (Whether the band lists one line or two at 3 m changes with the noise of the frame: in a
+  sweep of the compute factor, 1 line at factor 0 and 0.5, 2 lines at 1.0 to 3.0 with sensor
+  windowing; the range is right either way.)
 * **Raw-strip logging.** Level FIRST: the first left and right strips arrive in the log byte
-  for byte (2 x 48 records); the read takes 6.0 s instead of 3.4 s. Level ALL: 1600 records,
-  1.6 MB, **47.2 s per read with the camera rail on for 40.1 s** - a bench mode, see open issues.
-* **No flagstick:** the rail is on for 157 ms (band only), the UI asks for the distance; with a
+  for byte (2 x 48 records); the read takes 7.0 s instead of 4.4 s. Level ALL: 1600 records,
+  1.6 MB, **48.1 s per read with the camera rail on for 40.8 s** - a bench mode, see open issues.
+* **No flagstick:** the rail is on for 335 ms (band only, of which 178 ms are its analysis),
+  the UI asks for the distance; with a
   dialled distance of 4.5 m the estimator's flag-out fallback: a tilt-only plane along the visor
   axis, aim 82 mrad right of the axis, `flag_missing`, confidence 0.21, shown with `NO FLAG`.
 * **Bumped 0.4 s into the capture:** read aborted and rail off within one 133 ms block,
   re-read by itself.
-* **Precision Read:** spin measured 176.08 degrees (true 176.00); a device bias of (0.4, -0.3) %
-  cancels: combined slope (1.203, -2.000) % against (1.200, -2.000) %; no second camera read;
+* **Precision Read:** spin measured 176.10 degrees (true 176.00); a device bias of (0.4, -0.3) %
+  cancels: combined slope (1.205, -1.997) % against (1.200, -2.000) %; no second camera read;
   the estimator is told `tilt_reads` = 2.
 * **Survey:** second drop 3 m further along, both drops stored with their own range and slope;
-  the Survey estimate uses both (stations 0 and 3.0 m, fitted curvature c = 0.0008 /m and
-  twist d = 0.0041 /m, solved on the patch). The second drop is nearer the flagstick than the
-  first, so the first is the ball and the screen says `PUT AT BALL` without a line.
+  the Survey estimate uses both (stations 0 and 3.0 m, twist d = 0.0041 /m, solved on the
+  patch). The second drop is nearer the flagstick than the first, so the first is the ball and
+  the screen says `PUT AT BALL` without a line. **NOT MET in this run, pinned: the curvature.**
+  The fit gets a curvature (c = 0.0008 /m, what the two tilts 3 m apart imply) only if the base
+  of the stick is classed VISIBLE at the second drop. There the stick ends 1.24 rows below the
+  turf horizon, inside the 1.5-row margin of that class, and the class flips with the noise of
+  the frames: VISIBLE in 51 of 80 runs of this scenario with the read shifted in time (compute
+  factor 0 to 3.95). While computation was free the test was one of the 51 and asserted the
+  curvature; at the nominal factor it is one of the 29: base AT THE HORIZON, c = 0.00001, patch
+  coefficient a = -0.0205 instead of -0.0229.
 * **Zeroing** on a table sloped (0.6, -1.1) % with a turn of -171 degrees: stored bias
-  (3.496, -2.521) mrad against (3.500, -2.500) true, present after a power cycle; a 120 degree
+  (3.490, -2.519) mrad against (3.500, -2.500) true, present after a power cycle; a 120 degree
   turn is refused; being put into the cradle abandons it; it cannot be started in the cradle.
 * **Cradle:** protocol over the simulated CDC port (ping, info, status, settings, calibration,
   log dump, streams), charging at 22 C, stopped at 47 C (the charger ran for 4.30 s of the 5 s
@@ -652,8 +928,8 @@ rewritten for rev C2):
 * **IMU supervision.** One failed SPI2 transfer: recovered (1 recovery), the read completes and
   15 later pick-up / put-down cycles all wake the device (it used to stay deaf until a reset).
   IMU absent only during boot: found later, 6 of 6 wakes. IMU dead for good: 12 failed
-  recoveries, then the watchdog is left to expire (a reset on the target). 18 data-ready latches
-  dropped during a read: longest gap without a sample 15 ms, bridged by polling.
+  recoveries, then the watchdog is left to expire (a reset on the target). 20 data-ready latches
+  dropped during a read: longest gap without a sample 19 ms, bridged by polling.
 * **Precision Read disturbed during the re-read:** a turn of 176 + 40 degrees is not shown as
   "Precision" (the angle is re-checked when the second read is done); 170 + 12 degrees is.
 * **Lifted out of the cradle while a fault is shown:** USB stopped in the next loop pass (it
@@ -683,35 +959,42 @@ pixels. `make test` on the final sources:
 
 | Scene | Reference aim: app record / true scene | Drawn | Drawn - reference | Shown |
 |---|---|---|---|---|
-| Quick 3 m, rises LEFT 2 %, level | +129.19 / +127.58 | +128.73 | -0.46 | 9.8FT, PLAYS 10.7FT, <2.7 CUP, 2.0%, 3/5 |
-| Quick 3 m, rises RIGHT 2 %, uphill 1.5 % | -102.69 / -102.27 | -102.80 | -0.11 | 9.8FT, PLAYS 12.7FT, 2.3 CUP>, 2.5%, 2/5 |
-| Quick 6 m, rises RIGHT 1.2 %, downhill 2 % | -28.87 / -28.71 | -28.63 | +0.25 | 19.6FT, PLAYS 15.5FT, 4.4 CUP>, 2.3%, 1/5 |
-| Quick 6 m, rises LEFT 1 %, uphill 1.5 % | +8.42 / +8.56 | +8.42 | +0.00 | 19.6FT, PLAYS 24.3FT, <2.7 CUP, 1.8%, 1/5 |
-| Quick 9 m, rises LEFT 0.8 %, downhill 1 % | +72.55 / +72.80 | +74.86 | +2.32 | 29.4FT, PLAYS 26.7FT, <4.4 CUP, 1.3%, 0/5 |
-| Quick 1.5 m, rises RIGHT 1.5 %, uphill 0.5 % | -59.92 / -58.56 | -59.78 | +0.14 | 4.9FT, PLAYS 6.0FT, 0.8 CUP>, 1.6%, 5/5 |
-| Quick 12 m, rises RIGHT 0.6 %, uphill 1 % | -59.39 / -59.33 | -59.65 | -0.27 | 39.3FT, PLAYS 45.4FT, 3.2 CUP>, 1.2%, 0/5 |
-| Quick 4.5 m, level green | +10.01 / +10.10 | +9.60 | -0.41 | 14.7FT, PLAYS 15.7FT, STRAIGHT, 0.0%, 1/5 |
-| Precision 6 m, rises LEFT 1.2 %, uphill 1.6 %, spun 176 deg | +102.84 / +101.00 | +102.76 | -0.09 | 19.7FT, PLAYS 24.1FT, <2.9 CUP, 2.0%, 1/5, 2X |
-| Survey 2 drops (3 m, then the ball at 6 m) | +54.62 / +54.77 | +54.74 | +0.12 | 19.6FT, PLAYS 15.6FT, <1.4 CUP, 2.2%, 1/5, D2 |
-| Survey 3 drops: at drop 2 (3 m), not at the ball | +50.52 / +50.10 | no line | - | 19.6FT, PLAYS 15.5FT, <0.6 CUP, 2.3%, PUT AT BALL, 1/5, D2 |
-| Survey 3 drops (ball 6 m, 3 m, ball again) | +39.32 / +39.35 | +38.61 | -0.71 | 19.7FT, PLAYS 15.6FT, <0.5 CUP, 2.3%, 1/5, D3 |
-| Survey 4 drops: at drop 3 (2 m), not at the ball | +49.41 / +49.57 | no line | - | 29.4FT, PLAYS 35.2FT, <2.4 CUP, 1.6%, PUT AT BALL, 1/5, D3 |
-| Survey 4 drops (ball 9 m, 6 m, 2 m, ball again) | +19.63 / +19.63 | +19.71 | +0.08 | 29.6FT, PLAYS 35.3FT, <2.5 CUP, 1.6%, 1/5, D4 |
+| Quick 3 m, rises LEFT 2 %, level | +129.08 / +127.58 | +129.47 | +0.39 | 9.8FT, PLAYS 10.7FT, <2.7 CUP, 2.0%, 3/5 |
+| Quick 3 m, rises RIGHT 2 %, uphill 1.5 % | -103.53 / -102.27 | -103.75 | -0.22 | 9.8FT, PLAYS 12.6FT, 2.3 CUP>, 2.5%, 3/5 |
+| Quick 6 m, rises RIGHT 1.2 %, downhill 2 % | -28.65 / -28.71 | -28.15 | +0.50 | 19.6FT, PLAYS 15.5FT, 4.4 CUP>, 2.3%, 1/5 |
+| Quick 6 m, rises LEFT 1 %, uphill 1.5 % | +8.43 / +8.56 | +8.42 | -0.01 | 19.6FT, PLAYS 24.3FT, <2.7 CUP, 1.8%, 1/5 |
+| Quick 9 m, rises LEFT 0.8 %, downhill 1 % | +72.68 / +72.80 | +74.58 | +1.90 | 29.6FT, PLAYS 26.8FT, <4.4 CUP, 1.3%, 0/5 |
+| Quick 1.5 m, rises RIGHT 1.5 %, uphill 0.5 % | -59.73 / -58.56 | -59.32 | +0.41 | 4.9FT, PLAYS 6.0FT, 0.8 CUP>, 1.6%, 5/5 |
+| Quick 12 m, rises RIGHT 0.6 %, uphill 1 % | -59.40 / -59.33 | -59.10 | +0.30 | 39.8FT, PLAYS 45.9FT, 3.3 CUP>, 1.2%, 0/5 |
+| Quick 4.5 m, level green | +10.02 / +10.10 | +9.60 | -0.42 | 14.7FT, PLAYS 15.6FT, STRAIGHT, 0.0%, 1/5 |
+| Precision 6 m, rises LEFT 1.2 %, uphill 1.6 %, spun 176 deg | +103.01 / +101.00 | +103.59 | +0.58 | 19.6FT, PLAYS 23.9FT, <2.9 CUP, 2.0%, 1/5, 2X |
+| Survey 2 drops (3 m, then the ball at 6 m) | +53.99 / +54.03 | +55.21 | +1.23 | 19.6FT, PLAYS 15.7FT, <1.3 CUP, 2.2%, 1/5, D2 |
+| Survey 3 drops: at drop 2 (3 m), not at the ball | +50.46 / +50.53 | no line | - | 19.6FT, PLAYS 15.5FT, <0.6 CUP, 2.3%, PUT AT BALL, 1/5, D2 |
+| Survey 3 drops (ball 6 m, 3 m, ball again) | +39.46 / +39.64 | +38.97 | -0.48 | 19.6FT, PLAYS 15.6FT, <0.5 CUP, 2.3%, 1/5, D3 |
+| Survey 4 drops: at drop 3 (2 m), not at the ball | +49.45 / +49.57 | no line | - | 29.5FT, PLAYS 35.2FT, <2.4 CUP, 1.6%, PUT AT BALL, 1/5, D3 |
+| Survey 4 drops (ball 9 m, 6 m, 2 m, ball again) | +19.56 / +19.63 | +19.78 | +0.22 | 29.6FT, PLAYS 35.2FT, <2.5 CUP, 1.6%, 1/5, D4 |
 | Flag out, dialled 4.5 m, rises LEFT 1.5 %, uphill 1 % | +70.12 / +70.21 | +73.97 | +3.85 | 14.8FT?, PLAYS 17.7FT, <2.9 CUP, 1.8%, NO FLAG, 1/5 |
-| Left camera only, 5 m dialled, rises RIGHT 1.4 % | -11.30 / -11.20 | -11.87 | -0.58 | 5.0M?, PLAYS 5.6M, 3.3 CUP>, 1.5%, NO RANGE, 0/5 |
-| Left camera only, nothing dialled (3 m assumed) | -4.05 / -5.48 | -3.96 dashed | +0.09 | --, no plays-like, BREAK ?, 1.5%, NO RANGE, 1/5 |
-| Ambiguous: a second flagstick in view | -28.64 / -28.71 | -28.08 | +0.56 | 19.6FT, PLAYS 15.5FT, 4.4 CUP>, 2.3%, 2 LINES SEEN, 0/5 |
-| Best effort: 7 % cross slope at Stimp 14 (`aim_source` 2, status 2) | +796.98 / +797.72 | off the screen: dashed substitute | - | 13.1FT, no plays-like, BREAK ?, 7.0%, NOT SOLVED, 1/5 |
-| Best effort: 6.5 % downhill at Stimp 14 (`aim_source` 2, status 3) | +975.15 / +976.82 | off the screen: dashed substitute | - | 9.7FT, no plays-like, BREAK ?, 6.5%, NOT SOLVED, 1/5 |
+| Left camera only, 5 m dialled, rises RIGHT 1.4 % | -11.28 / -11.20 | -11.51 | -0.23 | 5.0M?, PLAYS 5.6M, 3.3 CUP>, 1.5%, NO RANGE, 0/5 |
+| Left camera only, nothing dialled (3 m assumed) | -4.04 / -5.48 | -3.96 dashed | +0.08 | --, no plays-like, BREAK ?, 1.5%, NO RANGE, 1/5 |
+| Ambiguous: a second flagstick in view | -28.54 / -28.71 | -27.88 | +0.66 | 19.6FT, PLAYS 15.5FT, 4.4 CUP>, 2.3%, 2 LINES SEEN, 0/5 |
+| Best effort: 7 % cross slope at Stimp 14 (`aim_source` 2, status 2) | +796.75 / +797.72 | off the screen: dashed substitute | - | 13.1FT, no plays-like, BREAK ?, 7.0%, NOT SOLVED, 1/5 |
+| Best effort: 6.5 % downhill at Stimp 14 (`aim_source` 2, status 3) | +975.21 / +976.82 | off the screen: dashed substitute | - | 9.8FT, no plays-like, BREAK ?, 6.5%, NOT SOLVED, 1/5 |
 | Secant plane: twisted green, Survey of 3 drops, Stimp 8 (`aim_source` 1) | -417.53 / -415.37 | off the screen: dashed substitute | - | 16.4FT, PLAYS 19.0FT, 20.5 CUP>, 6.2%, APPROX, 1/5, D3 |
-| Method B2 (setting), 45 cm past, paces | -23.61 / -23.51 | -22.96 | +0.66 | 6.5P, PLAYS 5.3P, 4.1 CUP>, 2.3%, 1/5 |
+| Method B2 (setting), 45 cm past, paces | -23.29 / -23.35 | -22.76 | +0.53 | 6.5P, PLAYS 5.3P, 4.1 CUP>, 2.3%, 1/5 |
 
 * Largest |drawn - reference| of a line on the screen: **3.85 mrad (0.22 degree)**; the test
   allows 6.5 mrad. The free-line figure of the display is 0.28 degree worst ("Display"); the
   labels of the result screen cover parts of this line, which is what the larger rows show.
-* Largest |firmware (single precision) - reference| of a solved aim: 0.062 mrad. Largest
-  |firmware - reference on the true scene|: 1.85 mrad over the scenes where that comparison is
+* Largest |firmware (single precision) - reference| of a solved aim: 0.061 mrad. Largest
+  |firmware - reference on the true scene|: 2.01 mrad over the scenes where that comparison is
   asserted (it contains the vision's and the tilt read's errors).
+* This table is the run WITH the compute-time model (nominal factor). Against the run with
+  computation for nothing, which this table carried before, the frames of every read fall at
+  other moments: the aims on the application's record move by up to 0.84 mrad (Quick 3 m,
+  rises RIGHT: -102.69 before), the largest error against the true scene from 1.85 to 2.01
+  mrad, the distances shown by up to 0.5 ft (the 12 m read: 39.3FT before, 39.8FT now; at 12 m
+  the range rests on 1.1 px of disparity), two break labels by 0.1 cup and one confidence from
+  2 to 3 boxes; every assertion of the test holds unchanged.
 * Solid or dashed is decided from the pixels too: of the pixels that only a solid line inks
   (the gaps of the dashes), at least 0.61 are black for the lines that must be solid and at
   most 0.07 for the ones that must be dashed.
@@ -719,8 +1002,8 @@ pixels. `make test` on the final sources:
   (flags and codes exactly; C double within 1e-4 relative, largest aim difference 6.3e-7 mrad;
   firmware within 0.5 mrad of aim, 0.1 % of launch speed, 0.01 cup, 1e-4 of confidence; drawn
   line within 6.5 mrad; solid / dashed as the reference's flags require).
-* Precision Read: with a device bias of (0.4, -0.3) % the single read aims 16.47 mrad from the
-  true scene's reference, the combined read 1.85 mrad.
+* Precision Read: with a device bias of (0.4, -0.3) % the single read aims 16.41 mrad from the
+  true scene's reference, the combined read 2.01 mrad.
 * The best-effort row "6.5 % downhill": the firmware's best iterate is 1200 mrad where the
   reference's is 975 mrad. Of a failed solve only the class (`aim_source`, `solve_status`) is
   defined and compared; neither number is an aim, and the screen says so.
@@ -961,8 +1244,8 @@ a measurement**: the cycles-per-instruction factor is the same guess as for the 
 (a Cortex-M33 needs 14 cycles for each of the 5 square roots and 8 divisions of an RK4 step
 alone, 180 of the roughly 500-1000 cycles the factor implies per step); newlib's `powf`,
 `sinf`, `cosf`, `logf`, `erff`, `hypotf`, `atan2f`, `tanf` are not the host's. A typical solve
-is 0.2 % of the 145 million instructions of a read's vision; the worst case is more than a
-whole read. At 48 MHz the worst case constructed would take 5-11 s.
+is 0.5 % of the 58 million instructions of a read's vision (0.2 % of the 145 million of
+phase 1); the worst case is three whole reads. At 48 MHz the worst case constructed would take 5-11 s.
 
 **Stack and RAM** (`make cross`, `-Os`, `-fstack-usage`): `gls_fit_patch` 464, `gls_roll` 304,
 `gls_solve_kernel` 264, `fit_lm_` 240, `estimate_` 208, `trial_` 112, `fit_residuals_` 112,
@@ -991,17 +1274,27 @@ random. "A" = 1.5 px stick (6.6 m), "B" = 0.8 px (12.3 m), both 30 % brighter th
 which these perfectly calibrated synthetic cameras do not exercise, so "rms / claimed" below 1
 is expected on clean scenes and says nothing about the calibration term itself.
 
+**These tables are the run with the compute-time model at its nominal factor** (builder 3).
+The vision itself computes bit for bit what it did in phase 1 ("Run time"): with computation
+for nothing (`test_read --cpi 0`) the output of this test is byte-identical to the one before
+the optimisation, and every threshold of the test holds unchanged. What charging the
+computation changes is WHEN the frames are exposed: the first strip comes about 0.2 s after
+the band (its analysis, 0.18 s, and the wait for the next frame) instead of one frame after
+it, and the groups of four strips are further apart. Of the 106 lines the test prints, 36
+differ, most of them in the last digits; the rows that moved are marked "(was ...)" below. One threshold is NOT MET with honest timing and is pinned
+by the test (the post 14 px beside the stick).
+
 Flat green, width x contrast (6 reads per cell; reads that gave a disparity | disparity rms px;
 bright sticks, dark ones are the same within the scatter):
 
 | Width (range) | 5 % (3 x noise) | 10 % | 20 % | 40 % | 60 % |
 |---|---|---|---|---|---|
 | 0.5 px (19.7 m) | 0 of 6 | 0 of 6 | 6: 0.026 | 6: 0.018 | 6: 0.014 |
-| 0.7 px (14.1 m) | 1 of 6 | 6: 0.036 | 6: 0.016 | 6: 0.009 | 6: 0.004 |
+| 0.7 px (14.1 m) | 1 of 6 | 6: 0.036 | 6: 0.017 | 6: 0.009 | 6: 0.004 |
 | 1.0 px (9.9 m) | 6: 0.038 | 6: 0.021 | 6: 0.013 | 6: 0.004 | 6: 0.003 |
 | 1.5 px (6.6 m) | 6: 0.023 | 6: 0.013 | 6: 0.004 | 6: 0.002 | 6: 0.003 |
 | 2.0 px (4.9 m) | 6: 0.017 | 6: 0.007 | 6: 0.005 | 6: 0.002 | 6: 0.003 |
-| 3.0 px (3.3 m) | 6: 0.020 | 6: 0.008 | 6: 0.003 | 6: 0.003 | 6: 0.001 |
+| 3.0 px (3.3 m) | 6: 0.021 | 6: 0.008 | 6: 0.003 | 6: 0.003 | 6: 0.001 |
 
 The claimed sigma is 0.051-0.054 px wherever the stick is easy and rises to 0.06-0.22 px in the
 faint cells; no cell has an error above 1.5 claimed sigma rms. **Not met:** sticks of 0.5-0.7 px
@@ -1016,14 +1309,14 @@ Named scenes (reads of 8 that gave a disparity; disparity rms px / mean claimed 
 |---|---|---|---|
 | A, B nominal | 8, 8 | 0.004 / 0.052, 0.015 / 0.053 | |
 | Lean 1, 2, 3 degrees (A), -3 (B) | 8 each | 0.004-0.015 / 0.050-0.053 | |
-| Sway: drift 3 px/s; 0.5 px at 1.5 Hz; 1 px at 3 Hz (A); 2 px at 1 Hz (B) | 8 each | 0.004 / 0.051; 0.008 / 0.056; 0.040 / 0.179; 0.014 / 0.066 | fast sway shows up in the sigma through the scatter of the groups |
+| Sway: drift 3 px/s; 0.5 px at 1.5 Hz; 1 px at 3 Hz (A); 2 px at 1 Hz (B) | 8 each | 0.005 / 0.051; 0.009 / 0.056; 0.060 / 0.175; 0.021 / 0.065 | fast sway shows up in the sigma through the scatter of the groups. **Worse with honest timing** (was 0.004; 0.008; 0.040; 0.014 with computation for nothing): the groups are spread over 2.4 s instead of 1.5 s; still within the claimed sigma (0.09 - 0.34 of it) |
 | Flag over the tip, bright or dark cloth (A, B) | 8 each | 0.003-0.010 / 0.051-0.053 | top flagged "in clutter" in 32 of 32 reads and never offered for ranging (it used to be ranged with: 19-23 % long) |
 | Person 0.6 m beside, 2 m beside and nearer (A) | 8, 8 | 0.004 / 0.051, 0.005 / 0.051 | |
 | Person 2 m behind, a leg right behind the stick (A) | 8 | 0.035 / 0.345 | static sigma 0.34 px: the background says so; all 8 flagged ambiguous |
-| The same at 12 m (B) | **0** | - | **not met**: 5 nothing, 3 band-only bearing |
+| The same at 12 m (B) | **0** | - | **not met**: 6 nothing, 2 band-only bearing (was 5, 3) |
 | Second pole 7 px beside, half as wide, twice as far (A) | 8 | 0.019 / 0.256 | |
-| The same beside the 0.8 px stick (B) | 8 | - | **not met**: in 4 of 8 the far pole is taken (it too is a plausible flagstick); all 4 carry the ambiguity flag |
-| Dark 4 px post 14 px beside (A / B) | 7 / **0** | 0.005 / 0.051 | B **not met** |
+| The same beside the 0.8 px stick (B) | **4** | 0.009 / 0.251 | **not met**: 4 of 8 give a disparity, none of them the far pole; 1 the left camera only, 3 a band-only bearing. (Was: 8 with a disparity, in 4 of them the far pole taken, all 4 with the ambiguity flag) |
+| Dark 4 px post 14 px beside (A / B) | **3** / **0** | 0.002 / 0.051 | **A NOT MET with honest timing, pinned** (the test demands half; was 7 of 8). Over 64 reads: 34 with computation for nothing, 14 at the low factor, 11 at the nominal, 0 at the high one. B **not met** as before |
 | Other line 120 px away: weaker stick; dark 3 px post (A, B) | 8 each | 0.004-0.012 / 0.051-0.054 | the post used to be chosen over the stick in 12 of 12 |
 | Glare gradients, veiling glare, sun disc 25 px from the stick | 8 each | 0.005-0.011 / 0.051-0.054 | |
 | Row gain 3 %; alternating-column gain 3 % | 8, 8 | 0.005 / 0.051; 0.005 / 0.121 | the column pattern is over-claimed 20-fold (it reads as background structure) |
@@ -1032,12 +1325,32 @@ Named scenes (reads of 8 that gave a disparity; disparity rms px / mean claimed 
 | Right window smeared: blur 1.2; 1.8 + veil; 2.5 + veil | 8 each | 0.007 / 0.052; 0.012 / 0.055; 0.037 / 0.077 | a smeared LEFT window fails the width test instead (not tested) |
 | Tree line behind, white stick: mild trunks; strong trunks; isotropic foliage | 8 each | 0.037 / 0.071; **0.172 / 0.120**; 0.063 / 0.071 | strong trunks: worst read 0.31 px off, 1.4 claimed sigma rms |
 | Tree line, stick only 36 grey brighter than trunks of 12 grey rms | **0** | - | **not met** |
-| Everything at once (A / B) | 8 / 7 | 0.095 / 0.088; 0.145 / 0.198 | range error 5 % / 13 % rms = 1.1 / 0.7 of its claimed sigma |
+| Everything at once (A / B) | 8 / 7 | 0.095 / 0.088; 0.142 / 0.199 | range error 5 % / 12 % rms = 1.1 / 0.7 of its claimed sigma |
 
 No stick in the scene (88 reads: plain, tree line, a person, FPN 1 and 2 grey, glare, a 12 px
 trunk at 40 m, a 3 px post at 25 m, column gain, PRNU, foliage + rough turf): **0 reads report a
 flagstick**, in either tier; 1 read (glare) reports a band-only bearing. The trunk and the post
-were ranged as flagsticks by the old code in most reads. Mean camera-rail time 0.6 s.
+were ranged as flagsticks by the old code in most reads. Mean camera-rail time 1.65 s (0.6 s
+with computation for nothing: the lines that are probed and rejected cost their analysis).
+
+**Why the post 14 px beside the stick now defeats the read.** The first search for the stick
+in each camera is widened by 3 px for every second that has passed since the band was exposed
+(`GL_APP_SWAY_ALLOW_PX_PER_S`: the stick may have swayed). With computation for nothing that
+is a few tenths of a pixel; with the band's analysis taking its 0.18 s and the frame waits it
+is about a pixel, and at the high factor more. `test_read A_pole2_14px_post 64 <factor>`:
+
+| Compute factor | Disparity | Left camera only | Band-only bearing | Nothing | Wrong object |
+|---|---|---|---|---|---|
+| 0 (computation for nothing) | 34 of 64 | 0 | 0 | 30 | 0 |
+| 1.5 | 14 | 14 | 3 | 33 | 0 |
+| 2.0 (nominal) | 11 | 2 | 18 | 33 | 0 |
+| 3.0 | 0 | 11 | 21 | 32 | 0 |
+| 0, 2.0 and 3.0 with the allowance set to 0 (scratch build, not in the repository) | 34 | 0 | 0 | 30 | 0 |
+
+So the loss is the allowance meeting the compute time, not the compute time itself; no read
+takes the post for the stick. Whether the allowance should grow with time at all, now that
+the time is not zero, is open issue 1b. (Even with computation for nothing the long-run yield
+of this scene is 53 %: the 7 of 8 this table used to show were a lucky eight.)
 
 Lowest visible point and base class (truth: the scene's lowest visible stick row):
 
@@ -1180,7 +1493,7 @@ and the USB library - is not included):
 
 | Group | Module | text | data | bss |
 |---|---|---|---|---|
-| core | gl_vision | 16606 | 0 | 0 |
+| core | gl_vision | 19640 | 0 | 0 |
 | core | gl_gfx | 4644 | 0 | 0 |
 | core | gl_ui | 4813 | 0 | 0 |
 | core | gl_log | 4102 | 0 | 0 |
@@ -1190,7 +1503,7 @@ and the USB library - is not included):
 | core | gl_cal | 2160 | 0 | 0 |
 | core | gl_grain | 1888 | 0 | 0 |
 | core | gl_cam | 1504 | 0 | 0 |
-| core | gl_math | 1440 | 0 | 0 |
+| core | gl_math | 1772 | 0 | 0 |
 | core | gl_settings | 1443 | 0 | 0 |
 | core | gl_gesture | 970 | 0 | 0 |
 | core | gl_font_data | 632 | 0 | 0 |
@@ -1201,7 +1514,7 @@ and the USB library - is not included):
 | core | gl_solver | 2445 | 0 | 0 |
 | core | gl_event | 148 | 0 | 0 |
 | core | gl_crc | 100 | 0 | 0 |
-| core | **total** | **65860** | **0** | **0** |
+| core | **total** | **69226** | **0** | **0** |
 | drivers | ov7692 | 1941 | 0 | 0 |
 | drivers | lsm6dsv16x | 1254 | 0 | 0 |
 | drivers | mx25r | 870 | 0 | 0 |
@@ -1209,23 +1522,23 @@ and the USB library - is not included):
 | drivers | power | 1306 | 0 | 0 |
 | drivers | grain_frontend | 530 | 0 | 0 |
 | drivers | **total** | **6575** | **0** | **0** |
-| app | gl_app | 9444 | 0 | 1366 |
-| app | gl_read | 4931 | 0 | 0 |
+| app | gl_app | 9472 | 0 | 1366 |
+| app | gl_read | 5007 | 0 | 0 |
 | app | gl_usb | 2070 | 0 | 388 |
 | app | gl_motion | 860 | 0 | 0 |
-| app | gl_main | 24 | 0 | 312840 |
-| app | **total** | **17329** | **0** | **314594** |
-| all | **total** | **89764** | **0** | **314594** |
+| app | gl_main | 24 | 0 | 320904 |
+| app | **total** | **17433** | **0** | **322658** |
+| all | **total** | **93234** | **0** | **322658** |
 
 RAM (ARM `sizeof`, from the same build; core and drivers have no `.data` / `.bss` of their own,
 all state is in the application object):
 
 | Object | Bytes | Note |
 |---|---|---|
-| `gl_app_t` (bss of `gl_main`) | 312840 | everything below is inside it |
+| `gl_app_t` (bss of `gl_main`) | 320904 | everything below is inside it (312840 before builder 3: the optimisation of the vision costs 8064 bytes of work area) |
 | - strip buffers `gl_read_t.img` | 184320 | FOUR 96 x 480 strips, one L R R L group (was two: the review showed that analysing while capturing ties the exposure spacing to the vision's run time); the 640 x 96 band (61440) uses the same memory |
-| - `gl_vis_band_work_t` | 42240 | band analysis, including the 5 kB of sampled path sums |
-| - `gl_vis_stick_work_t` x 4 | 66576 | one per strip of a group (16644 each, of which 5760 are the stored flank pixels) |
+| - `gl_vis_band_work_t` | 47360 | band analysis; 5120 bytes are new: the path sums of the sampled columns are kept from the first pass for the second |
+| - `gl_vis_stick_work_t` x 4 | 69520 | one per strip of a group (17380 each, of which 5760 are the stored flank pixels; 736 are new: the coarse column of every row and the amplitude weights) |
 | - LCD: `gl_gfx_t` + driver shadow | 2305 + 2060 | |
 | - `gl_proto_t` | 2096 | two 1032-byte frame buffers |
 | - solver inputs `gl_measurements_t` x 5 | 2000 | the shown read + 4 Survey drops (400 bytes each) |
@@ -1233,24 +1546,24 @@ all state is in the application object):
 | - `gl_store_t` | 1084 | settings and calibration blobs |
 | - everything else (UI, motion, tilt, survey, drivers, log, read state) | about 5900 | |
 | static scratch in `gl_app.c` / `gl_usb.c` | 1754 | one raw-strip log record (978), two raw grain measurements (388 each) |
-| STM32 backend (estimate, not compiled) | about 3000 | HAL handles, pin shadows, two 1 kB USB rings |
+| STM32 backend | 1015 + about 2200 | `gl_hal_stm32u5.o` as compiled by `make cross-hal`: data 4, bss 1011 (HAL handles, pin shadows); the USB file (not compiled, estimate): two 1 kB rings and a packet buffer. The HAL's own data is not counted |
 | main stack (recommended) | 4096 | see below |
-| **total** | **about 322 kB of 786 kB** | |
+| **total** | **about 330 kB of 786 kB** | does not fit SRAM1 + SRAM2 (256 kB): see "STM32U5 backend", linker script |
 
-Stack (`-fstack-usage`, `-Os`, bytes per frame): `gl_vis_band_analyse` 632, `gls_fit_patch` 464,
-`measure_row_` 352, `gls_roll` 304, `gl_cam_model_init` 304, `gl_app_run_once` 296,
-`gls_solve_kernel` 264, `gl_vis_stick_refine` 248, `gl_read_step` 240, `fit_lm_` 240,
-`do_actions_` 216, `estimate_` 208, `gl_usb_service` 208, `gl_lcd_update` 200, `gl_store_mount`
-200, `gl_vis_stick_segment` 168, `measure_all_` 144, `gl_ui_render` 144. The code added in this
-round is shallow: `build_measurement_` 88, `gl_gfx_aim_line_styled` 80, `gl_power_measure` 40,
-`compose_view_`, `charge_supervise_`, `gl_power_measure_temps`, `gl_power_charge_gate` and
-`gl_ui_result_text` 24 each. Worst chains (the two frames that changed, run_once 320 -> 296
-and the actions 224 -> 216, are entered in the sums builder 1 traced):
+Stack (`-fstack-usage`, `-Os`, bytes per frame): `gl_vis_band_analyse` 672, `gls_fit_patch` 464,
+`centroid_row_` 328, `gls_roll` 304, `gl_cam_model_init` 304, `gl_vis_stick_refine` 296,
+`gl_app_run_once` 296, `gls_solve_kernel` 264, `measure_all_` 248, `gl_read_step` 240, `fit_lm_`
+240, `do_actions_` 216, `estimate_` 208, `gl_usb_service` 208, `gl_lcd_update` 200,
+`gl_store_mount` 200, `gl_vis_stick_segment` 168, `gl_ui_render` 144. Builder 3's changes to the
+vision moved its frames: the row measurement is now `centroid_row_` (328; `measure_row_` was
+352), `measure_all_` grew from 144 to 248 (the reuse of the first pass), `gl_vis_stick_refine`
+from 248 to 296, `gl_vis_band_analyse` from 632 to 672; the selection that replaced the sort
+needs 24 bytes (`gl_select_inplace`, no recursion; its fallback `shell_sort_` 28). Worst chains:
 
 | Chain | Bytes |
 |---|---|
-| run_once -> read step -> stick refinement -> measure_all_ -> measure_row_ (296 + 240 + 248 + 144 + 352) | about 1280 |
-| run_once -> read step -> band analysis (296 + 240 + 632 + the sort) | about 1210 |
+| run_once -> read step -> stick refinement -> measure_all_ -> centroid_row_ (296 + 240 + 296 + 248 + 328) | about 1410 (was 1280) |
+| run_once -> read step -> band analysis -> selection (296 + 240 + 672 + 24 + 28) | about 1260 (was 1210) |
 | run_once -> read step -> raw-strip hook -> log append -> flash driver | about 870 |
 | run_once -> actions -> estimate -> aim solve on the patch -> kernel -> pace solve -> trial -> roll (296 + 216 + 40 + 208 + 72 + 264 + 96 + 112 + 304 + 40) | about 1650 (the deepest; libm frames not included) |
 | run_once -> actions -> estimate -> patch fit -> Levenberg-Marquardt -> residuals (296 + 216 + 40 + 208 + 464 + 240 + 112) | about 1580 |
@@ -1259,51 +1572,135 @@ and the actions 224 -> 216, are entered in the sums builder 1 traced):
 | run_once -> charge supervision -> temperature measurement (296 + 24 + 24) and the HAL below | about 350 + HAL |
 | init -> store mount -> log walk -> flash driver | about 500 |
 
-Add the HAL's own frames below the drivers (not measured: not compiled) and interrupt frames
-(104 bytes each with FPU state, handlers are short). A 4 kB main stack leaves a factor of two
-over the deepest measured chain (1650 bytes, the solver's), before libm and the HAL.
+Add the HAL's own frames below the drivers (not measured: the HAL's sources were not compiled) and interrupt frames
+(104 bytes each with FPU state, handlers are short; the backend's own frames, as compiled:
+`clocks_init_` 344 once at start-up, `gl_hal_clock_set` 136, everything else 64 or less). A
+4 kB main stack leaves a factor of two over the deepest measured chain (1650 bytes, the
+solver's), before libm and the HAL.
 No function recurses.
 
 ### Run time
 
-**Not measured on the target; counted on the host.** `valgrind --tool=callgrind` on the `-O2`
-host build of one nominal read (band + 32 strips, `tests/test_read A_nominal 1`):
+**No part of this firmware has been timed on the target.** What is measured is the number of
+instructions the x86-64 host build (`-O2`) executes, counted with callgrind (`make profile`;
+`valgrind --tool=callgrind build/host/tests/test_read A_nominal 1`, inclusive count of
+`gl_read_step`, for the nominal read). Phase 1 counted 145 million for the camera part of the
+nominal read. Builder 3 reduced it **without changing a single result bit**:
 
-| Step | Host instructions | At 48 MHz, if one host instruction costs 1.5-3 cycles |
-|---|---|---|
-| Band analysis (once) | 35.2 million | 1.1-2.2 s |
-| One strip refinement | 3.4 million (108 million for 32) | 0.11-0.21 s |
-| A whole read | about 145 million | 4.5-9 s |
-| A read with four band candidates (a person in view) | about 195 million | 6-12 s |
-| The putt estimate after the read, typical (method B1) | 0.3 million | 9-18 ms |
-| The putt estimate, worst case constructed | 173 million | 5-11 s |
+| Stage (nominal read: 1.5 px stick at 6.6 m, 32 strips) | Phase 1 | Now | What was done |
+|---|---|---|---|
+| **Band analysis** (640 x 96, once) | 35,215,021 | 14,230,610 | medians by selection instead of sorting (16.7 million -> 3.0 million); the ridge sums slide along the row instead of being re-summed; the second pass takes the sums of the sampled columns from the first |
+| **Strip refinement** (32 x) | 108,077,724 (3.38 million each) | 42,544,539 (1.33 million each) | the rows below |
+| - row measurement (`measure_all_`) | 56,244,114 | 18,833,778 | the second pass reuses the first pass's centroid of every row whose window and coarse column are provably the same; the coarse column search is integer arithmetic (one division per row instead of one per candidate column); rows that cannot pass the significance test are dropped before their centroid is computed; `exp()` from a table with precomputed slopes |
+| - medians and percentiles | 20.5 million | 3.0 million | selection (Wirth, median-of-three pivot, bounded rounds with a sort as fallback) instead of a Shell sort of every array |
+| - amplitude along the line (`row_amp_at_`) | 18.1 million | 10,071,380 | weights of the window computed once per sub-pixel offset; rows below the lowest row that can matter are not visited |
+| - weighted line fit (`irls_step_`) | 6.9 million | 3,971,536 | weights of a step kept for the next one |
+| Everything else in `gl_read_step` (strip statistics, grouping, driver calls) | 1,484,508 | 1,384,391 | strip statistics: the column pass only if a pixel is saturated |
+| **Camera part of the nominal read** | **144,777,253** | **58,159,540** | **-60 %** |
+| The putt estimate, typical (method B1, 730 RK4 steps) | 295,316 | 295,316 | not touched |
+| **Nominal read: vision + estimate** | **145.1 million** | **58.5 million** | the aim was 60 million |
 
-The cycles-per-instruction factor is a guess (single-precision FPU code, no cache misses on
-this part, but more instructions per C statement than x86-64); the instruction counts are
-measured. The earlier text of this file ("band about 3 million operations, a strip about 0.1
-million, inside one frame period") was wrong by more than a factor of ten, and the two-buffer
-pipeline that relied on it has been replaced (see Application / Read). What it means:
+(Both columns with computation for nothing, so that both see the same frames: `test_read
+A_nominal 1 0`. With the frames at the moments of the nominal compute factor the same read
+counts 58,242,672, which is what `make profile` prints.)
 
-* a Quick Read at 48 MHz would take of the order of 8-12 s after the marker comes to rest
-  instead of the 3.4 s of the simulator (which charges no computation), with the camera rail on
-  for most of it (table under "End to end": 8.8 s at 200 ms per strip);
-* the remedy of rev C2 is the PLL at 160 MHz during a read, which the application now requests
-  (`gl_hal_clock_set`, see Application): by the same arithmetic that brings the figures to
-  about 1.4-2.7 s of computation - an estimate, **not verified**: the backend's clock code has
-  never been compiled, and nothing has been timed on a board; and the vision itself can be made
-  cheaper (a quarter of a strip's cost is the sorting behind its medians, even after that sort
-  was made 20 % cheaper in this round; the band tries 13 leans x 4 widths at full resolution).
-  None of that optimisation has been done beyond the sort and the exponential table.
+**That the results are the same** is tested, not argued (`tests/test_vision_equiv.c`, part of
+`make test`): the vision of phase 1 is kept, verbatim, as an oracle with renamed symbols
+(`tests/vision_ref`), and both versions run on the same strips with every float of every
+result compared as a bit pattern: 160 bands, 2131 strip refinements, 5692 segment fits,
+683,040 rows - 1,497,340 values, **0 differ**; 960 more refinements on strips of only 2 to 5
+grey levels (ties in the integer search), 0 differ; the selection against the sort on 6008
+arrays including its worst case, 0 differ. The check was itself checked: of 9 deliberate
+errors planted one at a time in the optimised code (the reuse without one of its three
+conditions, a row limit off by one, a percentile index off by one, an offset in the band, a
+stale weight in the fit, the tie rule of the integer search), 8 were caught by this test with
+141 to 209,416 differing values; the ninth changed nothing because a later statement
+overrides it, and its two real variants were caught (2702 and 248,797 values). And
+`build/host/tests/test_read --cpi 0` prints, byte for byte, what `test_read` printed in
+phase 1 (106 lines, 920 reads).
 
-The putt estimate is counted in "Solver" under Measured results (callgrind commands and the
-figures at 160 MHz there): typically 0.2 % of a read's vision, but 173 million instructions for
-the worst case that could be constructed, and a bound from the loop counters of 1.35e9. **The
-SOLVE state therefore needs the fast clock too**, and has it: the application keeps the fast
-clock until the solve is done. A slope near the limit of what the green holds can still cost
-seconds: see open issue 17 (in `tests/test_e2e_putt.c` the 7 % cross slope at Stimp 14 took
-111 trial rolls and 46880 RK4 steps).
+**The 60 million are met for the nominal read and NOT for near sticks or several lines.**
+One read of each scene of `tools/vision_bench.c` (the scene generator of `test_read.c`),
+`gl_read_step` inclusive:
 
-The firmware's own code is 89.8 kB of the 2 MB flash before libraries (phase 2, builder 2 added 2.2 kB: result screen, charge gate and NTC, settings, hand-over).
+| Scene | Strips | Phase 1 | Now | Band / strips now |
+|---|---|---|---|---|
+| A: 1.5 px stick, 6.6 m | 32 | 147,435,467 | 59,847,299 | 14.3 / 44.1 million |
+| B: 0.8 px, 12.3 m | 32 | 138,102,377 | 59,364,010 | 14.3 / 43.7 |
+| **3.3 px, 3 m** (the band lists two lines: one group more for each) | 40 | 178,732,435 | **86,690,409** | 14.3 / 69.2 |
+| **6.6 px, 1.5 m** | 32 | 168,493,313 | **86,695,037** | 14.2 / 70.4 |
+| faint: 0.7 px at 10 % contrast (read with rows binned) | 32 | 100,553,036 | 43,913,225 | 14.3 / 28.3 |
+| faint: 0.5 px at 20 % | 32 | 108,158,334 | 48,245,489 | 14.3 / 32.7 |
+| **a person behind the stick** (three lines probed) | 44 | 197,913,409 | **88,052,456** | 14.3 / 69.4 |
+| no stick | 0 | 35,219,331 | 14,262,080 | 14.2 / 0 |
+| the Quick Read of `test_e2e.c` (1.6 px, 6 m, swaying) | 32 | not measured | 59,573,080 + 489,728 for its estimate of 1267 RK4 steps | 14.3 / 43.7 |
+
+A line whose fitted profile is wider than 1.2 px costs 1.8 to 2.2 million instructions per
+strip instead of 1.4 (measured: the 3.3 px stick at 3 m and the 6.6 px one at 1.5 m, not the
+1.5 px stick at 6.6 m; where between 3 and 6.6 m the change lies was not measured): the second
+pass uses a wider window than the first, so its rows cannot take over the first pass's
+centroids. That, and the extra groups when the band
+lists several lines, is **what remains**: 87 to 88 million instructions for those reads. The
+end-to-end Quick Read is at the limit: 60.06 million with its estimate (about 0.4 million of
+that are the simulator's own HAL functions inside `gl_read_step`).
+
+**From instructions to seconds: an estimate with a stated range.** The simulator charges
+
+    time = instructions x cycles per instruction / core clock
+
+with the instruction counts of `hal/host/gl_sim_cost.h` (rounded from `make profile`):
+
+| Stage | Host instructions | At 160 MHz: low 1.5 / nominal 2.0 / high 3.0 cycles per instruction | At 48 MHz, nominal |
+|---|---|---|---|
+| Band analysis, 640 x 96 | 14.27 million | 134 / 178 / 268 ms | 595 ms |
+| One strip, line found unbinned (narrow line) | 1.39 million | 13 / 17 / 26 ms | 58 ms |
+| One strip, wide line (> 1.2 px) | 1.97 million | 18 / 25 / 37 ms | 82 ms |
+| One strip, found with 4 / 16 rows binned (after the failed tries before it) | 1.61 / 1.71 million | 15 / 20 / 30 and 16 / 21 / 32 ms | 67 / 71 ms |
+| One strip, nothing found at any binning | 1.13 million | 11 / 14 / 21 ms | 47 ms |
+| Strip statistics (first strip of each camera) | 0.44 million | 4 / 6 / 8 ms | 18 ms |
+| One L R R L group (disparity, bookkeeping) | 0.04 million | 0.4 / 0.5 / 0.8 ms | 1.7 ms |
+| The estimate | 0.04 million + 351 per RK4 step (typical 0.3 million) | 3 / 4 / 6 ms typical | 12 ms |
+| One rendering of the screen | 0.234 million | (runs at 48 MHz) | 9.8 ms |
+
+The table reproduces the measured whole reads of the eight scenes above within +8.4 % (the
+3 m scene) and -9.4 % (the 1.5 m scene), the nominal ones within +1 %. What the cycles-per-
+instruction factor stands for, and why its range is wide:
+
+* the count is of **x86-64** instructions. A Cortex-M33 runs a comparable number of Thumb-2
+  instructions for this code (no memory operands, so more loads and stores; fewer for
+  conversions and rounding), most of them in 1 cycle, loads in 2, taken branches in 2-3, and
+  **14 cycles for every single-precision division or square root**, of which the row
+  measurement has about 15 per row;
+* **low (1.5)**: the code behaves like plain integer code and the instruction cache (enabled
+  by the backend) always hits;
+* **high (3.0)**: flash wait states behind cache misses at 160 MHz (4 wait states), `-Os`
+  code that is longer than the host's `-O2` code, newlib's `sqrtf` (it sets `errno`) and
+  `memset`, data cache absent;
+* **nominal (2.0)** is where the tests run. It is a judgement, not a measurement. **The factor
+  is NOT VERIFIED** and cannot be here: there is no board, and the cross-compiled code was
+  not run in an instruction-set simulator either (none was used; that would give instruction
+  counts for the real code and narrow the range, and is the first thing to do).
+
+What it means, with the tables under "End to end":
+
+* **a Quick Read shows its result 4.1 - 4.8 s after the marker comes to rest** (4.4 s nominal),
+  with the camera rail on for 2.2 - 2.8 s. "About three seconds" (DESIGN_SPEC) is NOT MET: of
+  the 4.4 s, 1.85 s are stillness and the tilt read, 1.6 s the cameras' power-up, settling
+  and 33 frames, and 1.0 s the computation (0.8 s) with the frame periods the captures wait
+  for it. The vision of phase 1 would have needed 1.4 - 2.7 s of computation for the same read
+  by the same arithmetic instead of 0.5 - 1.1 s (not simulated);
+* a near stick or several lines: rail on for about 3.0 - 3.4 s at the nominal factor
+  (`make bench-vision`: 3.29 s for the 3 m scene, 3.36 s with a person behind the stick);
+* without the PLL (it failed to lock, or the backend's clock code does not work as written:
+  **not verified**) the same read takes 6.0 s with the rail on for 3.8 s;
+* the putt estimate is 0.5 % of a read, but a slope near the limit of what the green holds can
+  cost seconds: 173 million instructions for the worst case that could be constructed (2.2 s
+  at 160 MHz and the nominal factor, 1.6 - 3.2 s over the range), and a bound from the loop
+  counters of 1.35e9 - open issue 17 (in `tests/test_e2e_putt.c` the 7 % cross slope at Stimp
+  14 took 107 trial rolls and 45215 RK4 steps: 15.9 million instructions by the cost table,
+  0.2 s).
+
+The firmware's own code is 93.2 kB of the 2 MB flash before libraries (phase 2, builder 2 added 2.2 kB: result screen, charge gate and NTC, settings, hand-over; builder 3 added 3.5 kB: the faster vision is 3.0 kB larger, the selection 0.3 kB), plus 6.4 kB for the STM32 backend as compiled by `make cross-hal` and the vendor's HAL and USB library, which were not compiled.
 
 ## Device registers and commands: "from memory - verify against datasheet"
 
@@ -1402,17 +1799,25 @@ stated in the rev C YAML).
 
 ## What is not done
 
-* **No hardware run of anything.** The STM32 backend is uncompiled; startup code, linker script,
-  HAL configuration and the USB board glue (`usbd_conf.c`, `usbd_desc.c`, VID / PID) do not exist
-  here. Timing on the target (vision run time, SCCB bit-bang, Stop 2 wake latency at 240 Hz) is
-  unmeasured.
+* **No hardware run of anything, and no linked image.** The main file of the STM32 backend
+  compiles against the vendor's headers (`make cross-hal`); its USB file is uncompiled; the
+  HAL sources, start-up code, linker script and the USB board glue (`usbd_conf.c`,
+  `usbd_desc.c`, VID / PID) do not exist here ("STM32U5 backend": what a flashable image
+  takes). Timing on the target (vision run time, SCCB bit-bang, Stop 2 wake latency at 240 Hz)
+  is unmeasured: every time in this file is the simulator's, with computation charged through
+  an estimated factor (1.5 - 3 cycles per host instruction).
+* **The compute-time model is not calibrated.** Not measured: the factor itself; the cost of
+  the main loop, the drivers and the IMU filtering between the trace points (charged nothing);
+  the PLL lock and voltage-range switch times; the instruction counts of the cross-compiled
+  code (no instruction-set simulator was used). The supply currents behind the charge and
+  battery-life figures are all provisional.
 * **The solver on the target.** The port is tested on the host only; its run time on the
   Cortex-M33 is an estimate (see "Solver"), and newlib's single-precision libm has not been
   compared with the host's.
 * **The rev C2 changes on the target.** Everything in "Charger and cell temperature" and "Board
   changes of rev C2" was run on the simulator, whose NTC, charger and clock models encode this
   project's reading of the specification. Not verified: the clock switch (PLL, voltage range,
-  booster, flash latency: uncompiled), that PH1 is an FT pin, ADC1_IN13 on PC4, the NTC
+  booster, flash latency: it compiles against the vendor's headers and has never run), that PH1 is an FT pin, ADC1_IN13 on PC4, the NTC
   settling time, the real part's R-T curve against the B-parameter equation, and the thermal
   coupling between the cell and the NTC.
 * **Estimator results that no simulated read produces** (pace limited, straight fallback, fit
@@ -1433,12 +1838,23 @@ stated in the rev C YAML).
   can be added from the application; the jump is gated by `UNLOCK`, by VBUS and by the charge
   gate), **and nothing watches the cell temperature there while the charger runs** (NOT MET,
   see "Charger and cell temperature").
-* **Vision speed.** Nothing has been optimised for the target beyond a lookup table for the
-  exponential and a better sort; see "Run time".
+* **Vision speed beyond the nominal read.** 58 million host instructions for the nominal read
+  (145 before), but 87 - 88 million for a stick nearer than about 3 m or with several lines
+  in the band: the second pass of a wide line still measures every row afresh, and every extra
+  line costs a group of four strips; see "Run time". Nothing was tuned for the Cortex-M33
+  itself (no fixed-point path, no CMSIS-DSP, no assembly).
 * **Vision cases known not to work** (pinned by `tests/test_read.c`, listed under "Vision"):
   sticks under about 0.7 px at under 10 % contrast; a 0.8 px stick with a person, a post or a
   second pole within a few pixels; a low-contrast stick against strong tree trunks; following a
-  thin stick into rough turf; the lowest point behind tall ragged grass.
+  thin stick into rough turf; the lowest point behind tall ragged grass; **and, with honest
+  timing, a 1.5 px stick with a post 14 px beside it** (3 of 8 reads; 7 of 8 while computation
+  was free).
+* **Found by the honest timing and not fixed** (each pinned by a test as NOT MET): the result
+  comes 4.4 s after the marker is at rest, not "about three seconds"; a Survey fit loses its
+  curvature when the base of the stick at a drop is within the 1.5-row margin of "visible"
+  (`test_survey_second_drop`); a drift that reverses inside a group of four strips gives a
+  disparity 0.04 px off under a claimed 0.05 px and is not noticed
+  (`test_lrrl_timing_with_vision_run_time`).
 * **Gesture tuning.** Thresholds are guesses; taps are detected in software from the 240 Hz
   stream (the IMU's embedded tap function is not used). The gesture maths is unit-tested, the
   thresholds are not field-tested.
@@ -1448,14 +1864,24 @@ stated in the rev C YAML).
 
 Hardware and system decisions first: none of them can be closed in firmware.
 
-1. **Vision run time against the system clock.** About 145 million host instructions per read
-   (measured), of the order of 4.5-9 s at 48 MHz; the read was designed around 1.6 s. Rev C2
-   decides for the PLL (160 MHz) during the read, and the application now brackets capture and
-   solve with `gl_hal_clock_set()`. **Still open:** the backend's clock code is uncompiled, the
-   cost of each switch (PLL lock, voltage range change) and the current at 160 MHz are
-   unmeasured, and an optimisation pass on `gl_vision` is still wanted. Until a board exists,
-   every timing figure in this file that involves the cameras is the simulator's, with free
-   computation.
+1. **Read time against "about three seconds".** The vision is down from 145 to 58 million host
+   instructions for the nominal read (bit-identical results), and the simulator charges
+   computation its time: a Quick Read shows its result 4.1 - 4.8 s after the marker is at rest
+   (4.4 s at the nominal factor; 6.0 s if the PLL does not lock), the camera rail is on for
+   2.2 - 2.8 s, 3.0 - 3.4 s for a near stick or several lines. DESIGN_SPEC says "about three
+   seconds". **To decide:** accept about 4.5 s; or shorten what is not computation (0.77 s to
+   establish stillness, 1.08 s of tilt read - the cameras could be powered and the band taken
+   DURING the tilt read, which would hide the 0.34 s of power-up and band and most of the
+   band's analysis; fewer than 8 groups for an easy stick); or spend more on the remaining 0.8 s
+   of computation. **Still open underneath:** the cycles-per-instruction factor is an estimate
+   (not measured: no board, no instruction-set simulator); the backend's clock code compiles
+   but has never run; the cost of each clock switch and the current at 160 MHz are unmeasured.
+   1b. **The search allowance for sway grows with the compute time** (3 px per second since
+   the band, `GL_APP_SWAY_ALLOW_PX_PER_S`): it was written when the band's analysis took no
+   simulated time. With 0.18 s it lets a post 14 px beside the stick ruin most reads ("Vision":
+   34 of 64 reads with a disparity fall to 11, and to 0 at the high factor; with the allowance
+   at 0 the compute time makes no difference). To decide: a fixed allowance, one that follows
+   the measured sway, or analysing the band while the first strips are already being taken.
 2. **Charger when the MCU is not in control.** Answered for the unpowered MCU by rev C2 (the
    charger runs by default). What remains is the other side of that default, and it is NOT MET
    in firmware: **in the ROM bootloader nothing can stop the charger** (the firmware only
@@ -1513,7 +1939,7 @@ Product decisions:
     PC12, `CHG_INHIBIT` on PH1, `NTC_SENSE` on PC4 and, because rev C2 needs 47 signals where
     the LQFP-64 has 46 I/O pads, **`NTC_BIAS` on PH3-BOOT0**. The schematic may choose
     differently (drop a signal, share one, or a larger package); only the generator changes.
-11. **Raw-strip logging level ALL keeps the camera rail on for about 40 s per read** (47 s in
+11. **Raw-strip logging level ALL keeps the camera rail on for about 41 s per read** (48 s in
     all; about 1 mAh of a 43 mAh cell, and heat). Level FIRST costs 2.6 s. If ALL is wanted in
     the field it needs a different capture plan (cameras off between groups) or less data.
 12. **Watchdog in Stop mode.** The independent watchdog keeps running in Stop 2, so the sleeping
@@ -1563,6 +1989,22 @@ Product decisions:
 21. **Confidence factors.** 0.6 (one camera), 0.6 (ambiguous), 0.7 (fit not converged), the
     disparity-sigma factor and the caps are this firmware's choices; nothing calibrates them
     against how often such reads are wrong. They need field data.
+
+22. **The base of the stick near the margin of "visible"** (found by the honest timing). The
+    read classes the base VISIBLE when the stick is followed at least 1.5 rows below the turf
+    horizon. A flagstick 3 m away on a plane green ends 1.24 rows below it, and the class then
+    flips with the noise (VISIBLE in 51 of 80 runs of the Survey scenario). The estimator takes
+    the height of the hole from a visible base only, so the same putt gets a Survey fit with a
+    curvature or without one (c = 0.0008 /m or 0.00001). Decide: a margin that follows the
+    measured uncertainty of the lowest point instead of a constant, a soft weight in the
+    estimator instead of a class, or showing which of the two was used.
+23. **Motion that is not uniform over a group.** The L R R L correction removes a steady
+    drift exactly; a reversal inside the 0.13 s of a group leaves that group wrong by tenths
+    of a pixel (0.039 px in the read against a claimed 0.05 px) and no check sees it: the two
+    left strips and the two right strips of a group are not compared with what a uniform
+    motion predicts. The instantaneous reversal of the test is harsher than a swaying stick
+    (the sway rows under "Vision" stay within their claimed sigma), so this may be acceptable;
+    it is not measured on anything real.
 
 ## The solver: decisions and open points
 

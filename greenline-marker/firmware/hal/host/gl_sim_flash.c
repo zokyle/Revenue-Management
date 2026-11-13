@@ -67,6 +67,14 @@ static bool busy_(void)
     return sim_now() < F.busy_until;
 }
 
+double sim_flash_supply_ua(void)
+{
+    if (busy_()) {
+        return GL_SIM_I_FLASH_BUSY_UA;
+    }
+    return stats_.deep_power_down ? GL_SIM_I_FLASH_DPD_UA : GL_SIM_I_FLASH_STANDBY_UA;
+}
+
 static void start_command_(uint8_t op)
 {
     F.opcode = op;

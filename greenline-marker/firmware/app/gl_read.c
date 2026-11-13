@@ -245,7 +245,7 @@ static gl_status_t band_done_(gl_read_t *r)
     }
     r->t_band_us = r->cam->last_done_us;
     st = gl_vis_band_analyse(&r->cur, &r->band_work, &r->band);
-    gl_hal_trace(GL_TRACE_VISION_BAND);
+    gl_hal_trace(GL_TRACE_VISION_BAND, (uint32_t)r->cur.width * r->cur.height);
     r->progress++;
     r->result.n_candidates = r->band.n_cand;
     r->result.band_noise = r->band.stats.noise_sigma;
@@ -314,13 +314,16 @@ static void horizon_prior_(const gl_read_t *r, gl_cam_id_t c, gl_vis_prior_t *p)
     }
 }
 
-/* Vision on one stick strip: slot f (0..3) of the current group. */
-static void analyse_strip_(gl_read_t *r, const gl_strip_t *strip, unsigned f, gl_cam_id_t c)
+/* Vision on one stick strip: slot f (0..3) of the current group.  Returns
+ * what was done, as GL_TRACE_STRIP_* bits (the run time of a strip depends
+ * on it: hal/gl_hal.h, gl_hal_trace). */
+static uint32_t analyse_strip_(gl_read_t *r, const gl_strip_t *strip, unsigned f, gl_cam_id_t c)
 {
     static const uint8_t bins[3] = { 1, 4, 16 };
     gl_vis_prior_t prior;
     gl_vis_stick_t *s = &r->stick[f];
     unsigned b0 = 0;
+    uint32_t work = 0;
     /* the stick may have swayed since the band was exposed (its analysis
      * takes time): widen the first search accordingly */
     const float sway = gl_clampf(GL_APP_SWAY_ALLOW_PX_PER_S * 1.0e-6f *
@@ -364,13 +367,18 @@ static void analyse_strip_(gl_read_t *r, const gl_strip_t *strip, unsigned f, gl
     r->stick_ok[f] = false;
     for (unsigned b = b0; b < 3u && !r->stick_ok[f]; b++) {
         prior.bin_rows = bins[b];
+        work |= GL_TRACE_STRIP_TRIED_1 << b;
         r->stick_ok[f] = (gl_vis_stick_refine(strip, &prior, &r->stick_work[f], s) == GL_OK);
         if (r->stick_ok[f]) {
             r->bin[c] = bins[b];
         }
     }
     if (!r->stick_ok[f]) {
-        return;
+        return work;
+    }
+    work |= GL_TRACE_STRIP_FOUND;
+    if (s->width_px > GL_VIS_MIN_WINDOW_SIGMA_PX) {
+        work |= GL_TRACE_STRIP_WIDE;
     }
     r->last[c] = *s;
     r->have_last[c] = true;
@@ -379,6 +387,7 @@ static void analyse_strip_(gl_read_t *r, const gl_strip_t *strip, unsigned f, gl
         /* tmp is free scratch once the refinement is done (480 floats >= max(480, width)) */
         gl_vis_strip_stats(strip, r->stick_work[f].tmp, &r->stats[c]);
         r->have_first[c] = true;
+        work |= GL_TRACE_STRIP_STATS;
     }
     if (c == GL_CAM_RIGHT) {
         r->n_right++;
@@ -403,6 +412,7 @@ static void analyse_strip_(gl_read_t *r, const gl_strip_t *strip, unsigned f, gl
             r->n_horizon_rows++;
         }
     }
+    return work;
 }
 
 /* The four strips of a group are in: segment fits over the lowest part of
@@ -747,14 +757,14 @@ static gl_status_t analyse_step_(gl_read_t *r)
     const bool last_group = (group_k0 + 4u >= 4u * (unsigned)r->repeats);
 
     if (r->an < 4u) {
-        analyse_strip_(r, &r->grp[r->an], r->an, cam_of_(r->an));
-        gl_hal_trace(GL_TRACE_VISION_STRIP);
+        const uint32_t work = analyse_strip_(r, &r->grp[r->an], r->an, cam_of_(r->an));
+        gl_hal_trace(GL_TRACE_VISION_STRIP, work);
         r->an++;
         r->progress++;
         return GL_ERR_BUSY;
     }
     group_done_(r);
-    gl_hal_trace(GL_TRACE_VISION_GROUP);
+    gl_hal_trace(GL_TRACE_VISION_GROUP, 0u);
     r->progress++;
     if (r->probing) {
         return probe_done_(r);

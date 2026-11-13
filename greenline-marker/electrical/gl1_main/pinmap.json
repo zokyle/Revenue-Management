@@ -1,0 +1,1335 @@
+{
+ "design": "gl1_main",
+ "mcu": "STM32U585RIT6",
+ "package": "LQFP-64",
+ "u1_rotation_assumed_deg": 270.0,
+ "status": "NETLIST STAGE - nothing built; the layout step may still move PROPOSED / CHANGED pins",
+ "verification": {
+  "checks_passed": true,
+  "partial": false,
+  "source": "ST STM32_open_pin_data (STM32U585RITx, package LQFP64, STM32U575/585)",
+  "data_sha256": {
+   "STM32U585RITx.xml": "369bb06cf9794840572c58a6a058d68aa285466a49f9a4c731534bf43c7d8325",
+   "GPIO-STM32U5x_gpio_v1_0_Modes.xml": "253229fd2510d58784118e5793eb54b4042cdb16951997b7a0cf8f1b5429ea49"
+  },
+  "failures": [],
+  "provisional": [
+   "the list of bootloader pins is from memory of ST AN2606 (not readable here); only the existence of each peripheral function on its pin is verified below",
+   "OVM7692 pins are assumed to have ordinary protection diodes to their (unpowered) supply: a line that ends only on unpowered camera pins then sits below a diode drop",
+   "whether the ROM enables pull-ups on its receive pins is not known; no verdict above relies on it",
+   "bootloader pin table: memory of ST AN2606",
+   "FT / TT structure of the pins (CHG_INHIBIT on PH1 needs a pin without a diode to VDD): not in the open pin data, datasheet DS13086 not read"
+  ]
+ },
+ "pins": [
+  {
+   "signal": "VBUS_SENSE",
+   "port_pin": "PC13",
+   "pad": 2,
+   "net": "VBUS_SENSE",
+   "mode": "EXTI",
+   "function": "GPIO (PWR_WKUP2)",
+   "af": null,
+   "pull": "none / divider 82k : 100k",
+   "initial_state": "input",
+   "source": "CHANGED",
+   "changed_from": "PA9",
+   "reason": "PA9 goes to the grain LEDs; PC13 is a wake-up pin (cradle insertion can wake from Shutdown) and a static signal is the right neighbour for OSC32_IN (pad 3); PC13 may only sink 3 mA: it is an input here",
+   "wakeup": [
+    "PWR_WKUP2"
+   ],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "OSC32_IN",
+   "port_pin": "PC14",
+   "pad": 3,
+   "net": "OSC32_IN",
+   "mode": "ANALOG",
+   "function": "RCC_OSC32_IN",
+   "af": null,
+   "pull": "none",
+   "initial_state": "LSE",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "OSC32_OUT",
+   "port_pin": "PC15",
+   "pad": 4,
+   "net": "OSC32_OUT",
+   "mode": "ANALOG",
+   "function": "RCC_OSC32_OUT",
+   "af": null,
+   "pull": "none",
+   "initial_state": "LSE",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_R_PWDN",
+   "port_pin": "PH0",
+   "pad": 5,
+   "net": "CAM_R_PWDN_MCU",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 1k series",
+   "initial_state": "driven low while V2V8_CAM is off",
+   "source": "CHANGED",
+   "changed_from": "PC12",
+   "reason": "camera-facing edge, right half; a quasi-static signal is the right neighbour for OSC32_OUT (pad 4)",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CHG_INHIBIT",
+   "port_pin": "PH1",
+   "pad": 6,
+   "net": "CHG_INHIBIT",
+   "mode": "OUT_OD",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 1M to VBUS_D, 1M to GND",
+   "initial_state": "released (analog): charger on",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_R_SCL",
+   "port_pin": "PC0",
+   "pad": 8,
+   "net": "CAM_SCL_R",
+   "mode": "SCCB_OD",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 2k2 to V2V8_CAM",
+   "initial_state": "driven low while V2V8_CAM is off",
+   "source": "CHANGED",
+   "changed_from": "PA10",
+   "reason": "PA10 is on the battery-facing edge; PC0 faces the cameras, PA10 takes FLASH_CS",
+   "wakeup": [],
+   "adc": [
+    "ADC1_IN1"
+   ],
+   "bootloader": [
+    "I2C3_SCL",
+    "listen"
+   ]
+  },
+  {
+   "signal": "CAM_SCCB_SDA",
+   "port_pin": "PC1",
+   "pad": 9,
+   "net": "CAM_SDA",
+   "mode": "SCCB_OD",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 2k2 to V2V8_CAM",
+   "initial_state": "driven low while V2V8_CAM is off",
+   "source": "CHANGED",
+   "changed_from": "PB5",
+   "reason": "PB5 is needed for SPI1_MOSI next to the flash; PC1 faces the cameras",
+   "wakeup": [],
+   "adc": [
+    "ADC1_IN2"
+   ],
+   "bootloader": [
+    "I2C3_SDA",
+    "listen"
+   ]
+  },
+  {
+   "signal": "CAM_L_PWDN",
+   "port_pin": "PC2",
+   "pad": 10,
+   "net": "CAM_L_PWDN_MCU",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 1k series",
+   "initial_state": "driven low while V2V8_CAM is off",
+   "source": "CHANGED",
+   "changed_from": "PH0",
+   "reason": "PC2 is on the left half of the camera-facing edge; PH0 goes to the right camera",
+   "wakeup": [],
+   "adc": [
+    "ADC1_IN3"
+   ],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_L_SCL",
+   "port_pin": "PC3",
+   "pad": 11,
+   "net": "CAM_SCL_L",
+   "mode": "SCCB_OD",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 2k2 to V2V8_CAM",
+   "initial_state": "driven low while V2V8_CAM is off",
+   "source": "CHANGED",
+   "changed_from": "PB3",
+   "reason": "PB3 is needed for SPI1_SCK next to the flash; PC3 faces the cameras",
+   "wakeup": [],
+   "adc": [
+    "ADC1_IN4"
+   ],
+   "bootloader": null
+  },
+  {
+   "signal": "OPAMP_VINP",
+   "port_pin": "PA0",
+   "pad": 14,
+   "net": "VBIAS",
+   "mode": "ANALOG",
+   "function": "OPAMP1_VINP",
+   "af": null,
+   "pull": "none",
+   "initial_state": "analog",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP1"
+   ],
+   "adc": [
+    "ADC1_IN5"
+   ],
+   "bootloader": null
+  },
+  {
+   "signal": "OPAMP_VINM",
+   "port_pin": "PA1",
+   "pad": 15,
+   "net": "PD_K",
+   "mode": "ANALOG",
+   "function": "OPAMP1_VINM",
+   "af": null,
+   "pull": "none",
+   "initial_state": "analog",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP3"
+   ],
+   "adc": [
+    "ADC1_IN6"
+   ],
+   "bootloader": null
+  },
+  {
+   "signal": "VBAT_SENSE",
+   "port_pin": "PA2",
+   "pad": 16,
+   "net": "VBAT_SENSE",
+   "mode": "ANALOG",
+   "function": "ADC1_IN7",
+   "af": null,
+   "pull": "none",
+   "initial_state": "analog",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP4"
+   ],
+   "adc": [
+    "ADC1_IN7"
+   ],
+   "bootloader": [
+    "USART2_TX",
+    "drive"
+   ]
+  },
+  {
+   "signal": "OPAMP_VOUT",
+   "port_pin": "PA3",
+   "pad": 17,
+   "net": "OPAMP_OUT",
+   "mode": "ANALOG",
+   "function": "OPAMP1_VOUT / ADC1_IN8",
+   "af": null,
+   "pull": "none / 1M to V2V8",
+   "initial_state": "analog",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP5"
+   ],
+   "adc": [
+    "ADC1_IN8"
+   ],
+   "bootloader": [
+    "USART2_RX",
+    "listen"
+   ]
+  },
+  {
+   "signal": "CAM_HREF",
+   "port_pin": "PA4",
+   "pad": 20,
+   "net": "CAM_HREF",
+   "mode": "AF",
+   "function": "DCMI_HSYNC",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP2"
+   ],
+   "adc": [
+    "ADC1_IN9"
+   ],
+   "bootloader": [
+    "SPI1_NSS",
+    "listen"
+   ]
+  },
+  {
+   "signal": "NTC_BIAS",
+   "port_pin": "PA5",
+   "pad": 21,
+   "net": "NTC_BIAS",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none",
+   "initial_state": "analog; high only during an NTC conversion or a grain measurement (it also feeds the grain bias divider R29)",
+   "source": "CHANGED",
+   "changed_from": "PH3",
+   "reason": "PH3 carries the 10k BOOT0 pull-down, which would load the bias (see CAM_PWR_EN); PA5 is two pads from NTC_SENSE",
+   "wakeup": [
+    "PWR_WKUP6"
+   ],
+   "adc": [
+    "ADC1_IN10"
+   ],
+   "bootloader": [
+    "SPI1_SCK",
+    "listen"
+   ]
+  },
+  {
+   "signal": "CAM_PIXCLK",
+   "port_pin": "PA6",
+   "pad": 22,
+   "net": "CAM_PCLK",
+   "mode": "AF",
+   "function": "DCMI_PIXCLK",
+   "af": 4,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP7"
+   ],
+   "adc": [
+    "ADC1_IN11"
+   ],
+   "bootloader": [
+    "SPI1_MISO",
+    "drive"
+   ]
+  },
+  {
+   "signal": "IMU_INT2",
+   "port_pin": "PA7",
+   "pad": 23,
+   "net": "IMU_INT2",
+   "mode": "EXTI",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none",
+   "initial_state": "input",
+   "source": "CHANGED",
+   "changed_from": "PC5",
+   "reason": "PC5 is taken by IMU_INT1; PA7 is on the same edge (and is WKUP8)",
+   "wakeup": [
+    "PWR_WKUP8"
+   ],
+   "adc": [
+    "ADC1_IN12"
+   ],
+   "bootloader": [
+    "SPI1_MOSI",
+    "listen"
+   ]
+  },
+  {
+   "signal": "NTC_SENSE",
+   "port_pin": "PC4",
+   "pad": 24,
+   "net": "NTC_SENSE",
+   "mode": "ANALOG",
+   "function": "ADC1_IN13",
+   "af": null,
+   "pull": "none",
+   "initial_state": "analog",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [
+    "ADC1_IN13"
+   ],
+   "bootloader": null
+  },
+  {
+   "signal": "IMU_INT1",
+   "port_pin": "PC5",
+   "pad": 25,
+   "net": "IMU_INT1",
+   "mode": "EXTI",
+   "function": "GPIO (PWR_WKUP5)",
+   "af": null,
+   "pull": "none",
+   "initial_state": "input",
+   "source": "CHANGED",
+   "changed_from": "PC13",
+   "reason": "PC5 faces the IMU and is a wake-up pin (WKUP5); PC13 is on the far corner next to the crystal",
+   "wakeup": [
+    "PWR_WKUP5"
+   ],
+   "adc": [
+    "ADC1_IN14"
+   ],
+   "bootloader": null
+  },
+  {
+   "signal": "CHG_STAT",
+   "port_pin": "PB0",
+   "pad": 26,
+   "net": "CHG_STAT",
+   "mode": "EXTI",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 100k to VDDUSB, 470k to GND",
+   "initial_state": "input",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [
+    "ADC1_IN15"
+   ],
+   "bootloader": null
+  },
+  {
+   "signal": "LCD_DISP",
+   "port_pin": "PB1",
+   "pad": 27,
+   "net": "LCD_DISP",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 100k to GND",
+   "initial_state": "low (display off)",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP4"
+   ],
+   "adc": [
+    "ADC1_IN16"
+   ],
+   "bootloader": null
+  },
+  {
+   "signal": "LCD_EXTCOMIN",
+   "port_pin": "PB2",
+   "pad": 28,
+   "net": "LCD_EXTCOMIN",
+   "mode": "AF",
+   "function": "LPTIM1_CH1",
+   "af": 1,
+   "pull": "none",
+   "initial_state": "low until LPTIM1 runs",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP1"
+   ],
+   "adc": [
+    "ADC1_IN17"
+   ],
+   "bootloader": null
+  },
+  {
+   "signal": "LCD_SCS",
+   "port_pin": "PB10",
+   "pad": 29,
+   "net": "LCD_SCS",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 100k to GND",
+   "initial_state": "low (not selected)",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP8"
+   ],
+   "adc": [],
+   "bootloader": [
+    "I2C2_SCL",
+    "listen"
+   ]
+  },
+  {
+   "signal": "IMU_CS",
+   "port_pin": "PB12",
+   "pad": 33,
+   "net": "IMU_CS",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 100k to V2V8",
+   "initial_state": "high (not selected)",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "SPI2_NSS",
+    "listen"
+   ]
+  },
+  {
+   "signal": "SPI2_SCK",
+   "port_pin": "PB13",
+   "pad": 34,
+   "net": "SPI2_SCK",
+   "mode": "AF",
+   "function": "SPI2_SCK",
+   "af": 5,
+   "pull": "none",
+   "initial_state": "low",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "SPI2_SCK",
+    "listen"
+   ]
+  },
+  {
+   "signal": "SPI2_MISO",
+   "port_pin": "PB14",
+   "pad": 35,
+   "net": "SPI2_MISO",
+   "mode": "AF",
+   "function": "SPI2_MISO",
+   "af": 5,
+   "pull": "none",
+   "initial_state": "input",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "SPI2_MISO",
+    "drive"
+   ]
+  },
+  {
+   "signal": "SPI2_MOSI",
+   "port_pin": "PB15",
+   "pad": 36,
+   "net": "SPI2_MOSI",
+   "mode": "AF",
+   "function": "SPI2_MOSI",
+   "af": 5,
+   "pull": "none",
+   "initial_state": "low",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP7"
+   ],
+   "adc": [],
+   "bootloader": [
+    "SPI2_MOSI",
+    "listen"
+   ]
+  },
+  {
+   "signal": "CAM_D0",
+   "port_pin": "PC6",
+   "pad": 37,
+   "net": "CAM_D0",
+   "mode": "AF",
+   "function": "DCMI_D0",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_D1",
+   "port_pin": "PC7",
+   "pad": 38,
+   "net": "CAM_D1",
+   "mode": "AF",
+   "function": "DCMI_D1",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_D2",
+   "port_pin": "PC8",
+   "pad": 39,
+   "net": "CAM_D2",
+   "mode": "AF",
+   "function": "DCMI_D2",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_D3",
+   "port_pin": "PC9",
+   "pad": 40,
+   "net": "CAM_D3",
+   "mode": "AF",
+   "function": "DCMI_D3",
+   "af": 4,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_XVCLK",
+   "port_pin": "PA8",
+   "pad": 41,
+   "net": "MCO",
+   "mode": "AF",
+   "function": "RCC_MCO",
+   "af": 0,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "GRAIN_CP0",
+   "port_pin": "PA9",
+   "pad": 42,
+   "net": "CP0_MCU",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 68R series",
+   "initial_state": "analog (no LED lit)",
+   "source": "CHANGED",
+   "changed_from": "PC0",
+   "reason": "PC0-PC3 face the cameras and carry SCCB / PWDN now; PA9, PA15, PC10, PC12, PD2 are the corner next to the LED ring",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "USART1_TX",
+    "drive"
+   ]
+  },
+  {
+   "signal": "FLASH_CS",
+   "port_pin": "PA10",
+   "pad": 43,
+   "net": "FLASH_CS",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 100k to V2V8",
+   "initial_state": "high (not selected)",
+   "source": "CHANGED",
+   "changed_from": "PA15",
+   "reason": "PA10 is the ROM bootloader's USART1_RX: the chip-select pull-up keeps it at idle-high during the detection phase; PA15 goes to the grain LEDs",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "USART1_RX",
+    "listen"
+   ]
+  },
+  {
+   "signal": "USB_DM",
+   "port_pin": "PA11",
+   "pad": 44,
+   "net": "USB_DM",
+   "mode": "AF",
+   "function": "USB_OTG_FS_DM",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "analog until USB starts",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "USB_OTG_FS_DM",
+    "listen"
+   ]
+  },
+  {
+   "signal": "USB_DP",
+   "port_pin": "PA12",
+   "pad": 45,
+   "net": "USB_DP",
+   "mode": "AF",
+   "function": "USB_OTG_FS_DP",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "analog until USB starts",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "USB_OTG_FS_DP",
+    "listen"
+   ]
+  },
+  {
+   "signal": "SWDIO",
+   "port_pin": "PA13",
+   "pad": 46,
+   "net": "SWDIO",
+   "mode": "AF",
+   "function": "DEBUG_JTMS-SWDIO",
+   "af": 0,
+   "pull": "reset state (pull-up)",
+   "initial_state": "reset state",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "SWCLK",
+   "port_pin": "PA14",
+   "pad": 49,
+   "net": "SWCLK",
+   "mode": "AF",
+   "function": "DEBUG_JTCK-SWCLK",
+   "af": 0,
+   "pull": "reset state (pull-down)",
+   "initial_state": "reset state",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "GRAIN_CP1",
+   "port_pin": "PA15",
+   "pad": 50,
+   "net": "CP1_MCU",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 68R series",
+   "initial_state": "analog (no LED lit)",
+   "source": "CHANGED",
+   "changed_from": "PC1",
+   "reason": "see GRAIN_CP0",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "GRAIN_CP4",
+   "port_pin": "PC10",
+   "pad": 51,
+   "net": "CP4_MCU",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 68R series",
+   "initial_state": "analog (no LED lit)",
+   "source": "PROPOSED",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "USART3_TX",
+    "drive"
+   ]
+  },
+  {
+   "signal": "CAM_D4",
+   "port_pin": "PC11",
+   "pad": 52,
+   "net": "CAM_D4",
+   "mode": "AF",
+   "function": "DCMI_D4",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "USART3_RX",
+    "listen"
+   ]
+  },
+  {
+   "signal": "GRAIN_CP2",
+   "port_pin": "PC12",
+   "pad": 53,
+   "net": "CP2_MCU",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 68R series",
+   "initial_state": "analog (no LED lit)",
+   "source": "CHANGED",
+   "changed_from": "PC2",
+   "reason": "see GRAIN_CP0",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "GRAIN_CP3",
+   "port_pin": "PD2",
+   "pad": 54,
+   "net": "CP3_MCU",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 68R series",
+   "initial_state": "analog (no LED lit)",
+   "source": "CHANGED",
+   "changed_from": "PC3",
+   "reason": "see GRAIN_CP0",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "SPI1_SCK",
+   "port_pin": "PB3",
+   "pad": 55,
+   "net": "SPI1_SCK",
+   "mode": "AF",
+   "function": "SPI1_SCK",
+   "af": 5,
+   "pull": "none",
+   "initial_state": "low",
+   "source": "CHANGED",
+   "changed_from": "PA5",
+   "reason": "PB3 / PB4 / PB5 are three adjacent pads on the edge that faces the flash; PA5 is on the opposite edge",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "SPI1_MISO",
+   "port_pin": "PB4",
+   "pad": 56,
+   "net": "SPI1_MISO",
+   "mode": "AF",
+   "function": "SPI1_MISO",
+   "af": 5,
+   "pull": "none",
+   "initial_state": "input",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "SPI1_MOSI",
+   "port_pin": "PB5",
+   "pad": 57,
+   "net": "SPI1_MOSI",
+   "mode": "AF",
+   "function": "SPI1_MOSI",
+   "af": 5,
+   "pull": "none",
+   "initial_state": "low",
+   "source": "CHANGED",
+   "changed_from": "PA7",
+   "reason": "see SPI1_SCK",
+   "wakeup": [
+    "PWR_WKUP6"
+   ],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_D5",
+   "port_pin": "PB6",
+   "pad": 58,
+   "net": "CAM_D5",
+   "mode": "AF",
+   "function": "DCMI_D5",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP3"
+   ],
+   "adc": [],
+   "bootloader": [
+    "I2C1_SCL",
+    "listen"
+   ]
+  },
+  {
+   "signal": "CAM_VSYNC",
+   "port_pin": "PB7",
+   "pad": 59,
+   "net": "CAM_VSYNC",
+   "mode": "AF",
+   "function": "DCMI_VSYNC",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP4"
+   ],
+   "adc": [],
+   "bootloader": [
+    "I2C1_SDA",
+    "listen"
+   ]
+  },
+  {
+   "signal": "BOOT0",
+   "port_pin": "PH3",
+   "pad": 60,
+   "net": "CAM_EN",
+   "mode": "STRAP",
+   "function": "BOOT0",
+   "af": null,
+   "pull": "10k to GND",
+   "initial_state": "low at reset",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_PWR_EN",
+   "port_pin": "PH3",
+   "pad": 60,
+   "net": "CAM_EN",
+   "mode": "OUT_PP",
+   "function": "GPIO",
+   "af": null,
+   "pull": "none / 100k + 10k (BOOT0) to GND",
+   "initial_state": "low (rail off)",
+   "source": "CHANGED",
+   "changed_from": "PD2",
+   "reason": "takes the BOOT0 pad instead of NTC_BIAS: the 10k BOOT0 pull-down would load the ratiometric NTC bias (0.28 mA extra through the pin's on-resistance, about 0.5 K error at 0 C); a rail enable does not care",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": null
+  },
+  {
+   "signal": "CAM_D6",
+   "port_pin": "PB8",
+   "pad": 61,
+   "net": "CAM_D6",
+   "mode": "AF",
+   "function": "DCMI_D6",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [
+    "PWR_WKUP5"
+   ],
+   "adc": [],
+   "bootloader": [
+    "FDCAN1_RX",
+    "listen"
+   ]
+  },
+  {
+   "signal": "CAM_D7",
+   "port_pin": "PB9",
+   "pad": 62,
+   "net": "CAM_D7",
+   "mode": "AF",
+   "function": "DCMI_D7",
+   "af": 10,
+   "pull": "none",
+   "initial_state": "low or analog while V2V8_CAM is off",
+   "source": "SPEC",
+   "changed_from": null,
+   "reason": "",
+   "wakeup": [],
+   "adc": [],
+   "bootloader": [
+    "FDCAN1_TX",
+    "drive"
+   ]
+  }
+ ],
+ "supply_pads": [
+  {
+   "pad": 1,
+   "pin": "VBAT",
+   "net": "V2V8"
+  },
+  {
+   "pad": 7,
+   "pin": "NRST",
+   "net": "NRST"
+  },
+  {
+   "pad": 12,
+   "pin": "VSSA",
+   "net": "GND"
+  },
+  {
+   "pad": 13,
+   "pin": "VDDA",
+   "net": "VDDA"
+  },
+  {
+   "pad": 18,
+   "pin": "VSS",
+   "net": "GND"
+  },
+  {
+   "pad": 19,
+   "pin": "VDD",
+   "net": "V2V8"
+  },
+  {
+   "pad": 30,
+   "pin": "VCAP",
+   "net": "VCAP"
+  },
+  {
+   "pad": 31,
+   "pin": "VSS",
+   "net": "GND"
+  },
+  {
+   "pad": 32,
+   "pin": "VDD",
+   "net": "V2V8"
+  },
+  {
+   "pad": 47,
+   "pin": "VSS",
+   "net": "GND"
+  },
+  {
+   "pad": 48,
+   "pin": "VDDUSB",
+   "net": "VDDUSB"
+  },
+  {
+   "pad": 63,
+   "pin": "VSS",
+   "net": "GND"
+  },
+  {
+   "pad": 64,
+   "pin": "VDD",
+   "net": "V2V8"
+  }
+ ],
+ "changed_from_gl_pins_h": [
+  {
+   "signal": "CAM_L_PWDN",
+   "from": "PH0",
+   "to": "PC2",
+   "reason": "PC2 is on the left half of the camera-facing edge; PH0 goes to the right camera"
+  },
+  {
+   "signal": "CAM_L_SCL",
+   "from": "PB3",
+   "to": "PC3",
+   "reason": "PB3 is needed for SPI1_SCK next to the flash; PC3 faces the cameras"
+  },
+  {
+   "signal": "CAM_PWR_EN",
+   "from": "PD2",
+   "to": "PH3",
+   "reason": "takes the BOOT0 pad instead of NTC_BIAS: the 10k BOOT0 pull-down would load the ratiometric NTC bias (0.28 mA extra through the pin's on-resistance, about 0.5 K error at 0 C); a rail enable does not care"
+  },
+  {
+   "signal": "CAM_R_PWDN",
+   "from": "PC12",
+   "to": "PH0",
+   "reason": "camera-facing edge, right half; a quasi-static signal is the right neighbour for OSC32_OUT (pad 4)"
+  },
+  {
+   "signal": "CAM_R_SCL",
+   "from": "PA10",
+   "to": "PC0",
+   "reason": "PA10 is on the battery-facing edge; PC0 faces the cameras, PA10 takes FLASH_CS"
+  },
+  {
+   "signal": "CAM_SCCB_SDA",
+   "from": "PB5",
+   "to": "PC1",
+   "reason": "PB5 is needed for SPI1_MOSI next to the flash; PC1 faces the cameras"
+  },
+  {
+   "signal": "FLASH_CS",
+   "from": "PA15",
+   "to": "PA10",
+   "reason": "PA10 is the ROM bootloader's USART1_RX: the chip-select pull-up keeps it at idle-high during the detection phase; PA15 goes to the grain LEDs"
+  },
+  {
+   "signal": "GRAIN_CP0",
+   "from": "PC0",
+   "to": "PA9",
+   "reason": "PC0-PC3 face the cameras and carry SCCB / PWDN now; PA9, PA15, PC10, PC12, PD2 are the corner next to the LED ring"
+  },
+  {
+   "signal": "GRAIN_CP1",
+   "from": "PC1",
+   "to": "PA15",
+   "reason": "see GRAIN_CP0"
+  },
+  {
+   "signal": "GRAIN_CP2",
+   "from": "PC2",
+   "to": "PC12",
+   "reason": "see GRAIN_CP0"
+  },
+  {
+   "signal": "GRAIN_CP3",
+   "from": "PC3",
+   "to": "PD2",
+   "reason": "see GRAIN_CP0"
+  },
+  {
+   "signal": "IMU_INT1",
+   "from": "PC13",
+   "to": "PC5",
+   "reason": "PC5 faces the IMU and is a wake-up pin (WKUP5); PC13 is on the far corner next to the crystal"
+  },
+  {
+   "signal": "IMU_INT2",
+   "from": "PC5",
+   "to": "PA7",
+   "reason": "PC5 is taken by IMU_INT1; PA7 is on the same edge (and is WKUP8)"
+  },
+  {
+   "signal": "NTC_BIAS",
+   "from": "PH3",
+   "to": "PA5",
+   "reason": "PH3 carries the 10k BOOT0 pull-down, which would load the bias (see CAM_PWR_EN); PA5 is two pads from NTC_SENSE"
+  },
+  {
+   "signal": "SPI1_MOSI",
+   "from": "PA7",
+   "to": "PB5",
+   "reason": "see SPI1_SCK"
+  },
+  {
+   "signal": "SPI1_SCK",
+   "from": "PA5",
+   "to": "PB3",
+   "reason": "PB3 / PB4 / PB5 are three adjacent pads on the edge that faces the flash; PA5 is on the opposite edge"
+  },
+  {
+   "signal": "VBUS_SENSE",
+   "from": "PA9",
+   "to": "PC13",
+   "reason": "PA9 goes to the grain LEDs; PC13 is a wake-up pin (cradle insertion can wake from Shutdown) and a static signal is the right neighbour for OSC32_IN (pad 3); PC13 may only sink 3 mA: it is an input here"
+  }
+ ],
+ "grain_leds": [
+  {
+   "ref": "D1",
+   "colour": "red",
+   "azimuth_deg": 22.5,
+   "anode_line": "GRAIN_CP3",
+   "cathode_line": "GRAIN_CP4"
+  },
+  {
+   "ref": "D2",
+   "colour": "NIR",
+   "azimuth_deg": 22.5,
+   "anode_line": "GRAIN_CP4",
+   "cathode_line": "GRAIN_CP3"
+  },
+  {
+   "ref": "D3",
+   "colour": "red",
+   "azimuth_deg": 67.5,
+   "anode_line": "GRAIN_CP0",
+   "cathode_line": "GRAIN_CP4"
+  },
+  {
+   "ref": "D4",
+   "colour": "NIR",
+   "azimuth_deg": 67.5,
+   "anode_line": "GRAIN_CP4",
+   "cathode_line": "GRAIN_CP0"
+  },
+  {
+   "ref": "D5",
+   "colour": "red",
+   "azimuth_deg": 112.5,
+   "anode_line": "GRAIN_CP2",
+   "cathode_line": "GRAIN_CP4"
+  },
+  {
+   "ref": "D6",
+   "colour": "NIR",
+   "azimuth_deg": 112.5,
+   "anode_line": "GRAIN_CP4",
+   "cathode_line": "GRAIN_CP2"
+  },
+  {
+   "ref": "D7",
+   "colour": "red",
+   "azimuth_deg": 157.5,
+   "anode_line": "GRAIN_CP2",
+   "cathode_line": "GRAIN_CP3"
+  },
+  {
+   "ref": "D8",
+   "colour": "NIR",
+   "azimuth_deg": 157.5,
+   "anode_line": "GRAIN_CP3",
+   "cathode_line": "GRAIN_CP2"
+  },
+  {
+   "ref": "D9",
+   "colour": "red",
+   "azimuth_deg": 202.5,
+   "anode_line": "GRAIN_CP1",
+   "cathode_line": "GRAIN_CP3"
+  },
+  {
+   "ref": "D10",
+   "colour": "NIR",
+   "azimuth_deg": 202.5,
+   "anode_line": "GRAIN_CP3",
+   "cathode_line": "GRAIN_CP1"
+  },
+  {
+   "ref": "D11",
+   "colour": "red",
+   "azimuth_deg": 247.5,
+   "anode_line": "GRAIN_CP1",
+   "cathode_line": "GRAIN_CP2"
+  },
+  {
+   "ref": "D12",
+   "colour": "NIR",
+   "azimuth_deg": 247.5,
+   "anode_line": "GRAIN_CP2",
+   "cathode_line": "GRAIN_CP1"
+  },
+  {
+   "ref": "D13",
+   "colour": "red",
+   "azimuth_deg": 292.5,
+   "anode_line": "GRAIN_CP0",
+   "cathode_line": "GRAIN_CP2"
+  },
+  {
+   "ref": "D14",
+   "colour": "NIR",
+   "azimuth_deg": 292.5,
+   "anode_line": "GRAIN_CP2",
+   "cathode_line": "GRAIN_CP0"
+  },
+  {
+   "ref": "D15",
+   "colour": "red",
+   "azimuth_deg": 337.5,
+   "anode_line": "GRAIN_CP0",
+   "cathode_line": "GRAIN_CP1"
+  },
+  {
+   "ref": "D16",
+   "colour": "NIR",
+   "azimuth_deg": 337.5,
+   "anode_line": "GRAIN_CP1",
+   "cathode_line": "GRAIN_CP0"
+  }
+ ],
+ "extcomin_lse_ticks": 547
+}

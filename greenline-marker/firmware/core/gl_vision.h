@@ -24,10 +24,12 @@
  *
  * MEMORY.  No allocation.  The two large work areas are supplied by the
  * caller (static storage in the application):
- *   gl_vis_band_work_t   42240 bytes  (band analysis)
- *   gl_vis_stick_work_t  16644 bytes  (one per strip being refined; keep
+ *   gl_vis_band_work_t   47360 bytes  (band analysis; 5120 of them keep the
+ *                        path sums of the sampled columns for the second
+ *                        pass)
+ *   gl_vis_stick_work_t  17380 bytes  (one per strip being refined; keep
  *                        the four of an L R R L group alive until the
- *                        segment fits are done: 66.6 kB)
+ *                        segment fits are done: 69.5 kB)
  * Worst-case stack and the measured cost in instructions are in the README
  * (sections "Memory" and "Run time"); no recursion.
  *
@@ -110,6 +112,8 @@ typedef struct {
     int16_t block[GL_VIS_BAND_MAX_BLOCKS][GL_VIS_BAND_MAX_W];  /**< 12-row column sums */
     float ridge[GL_VIS_BAND_MAX_BLOCKS][GL_VIS_BAND_MAX_W];    /**< line response, one scale */
     float path[GL_VIS_BAND_MAX_BLOCKS][GL_VIS_BAND_PATH_SAMPLES]; /**< sampled path sums (spread) */
+    float path_keep[GL_VIS_BAND_MAX_BLOCKS][GL_VIS_BAND_PATH_SAMPLES]; /**< the same, kept for
+                                                                    the sweep over all columns */
     float score[GL_VIS_BAND_MAX_W];                            /**< best score per column */
     uint16_t edge_energy[GL_VIS_BAND_MAX_W];                   /**< OUTPUT, see below */
     uint8_t best_slant[GL_VIS_BAND_MAX_W];
@@ -164,6 +168,14 @@ gl_status_t gl_vis_band_analyse(const gl_strip_t *band, gl_vis_band_work_t *work
 #define GL_VIS_STRIP_MAX_H 480u
 #define GL_VIS_STRIP_MAX_W 160u
 #define GL_VIS_FLANK_COLS 12u
+/** Smallest rms half-width of the window a row's centroid is taken with, px.
+ *  A line whose profile is no wider (gl_vis_stick_t.width_px: every stick
+ *  beyond about 4 m) is measured with this window in both passes of the
+ *  refinement, and the second pass then takes most rows over from the first;
+ *  a wider line is measured twice and costs about half as much again. */
+#define GL_VIS_MIN_WINDOW_SIGMA_PX 1.2f
+/** Largest number of pixels under the line template of one row. */
+#define GL_VIS_AMP_MAX_N 64u
 
 /** Per-row flags in gl_vis_stick_work_t.flag. */
 #define GL_VIS_ROW_MEASURED (1u << 0) /**< a line was found near the prediction */
@@ -193,6 +205,7 @@ typedef struct {
      *  of the refinement take over the first pass's centroid for a row whose
      *  coarse column did not change. */
     uint8_t col[GL_VIS_STRIP_MAX_H];
+    float amp_w[GL_VIS_AMP_MAX_N];       /**< scratch: weights of one forced amplitude */
 } gl_vis_stick_work_t;
 
 /** What is known about the stick before refinement (from the band). */

@@ -561,9 +561,82 @@ GL_TEST(test_band_and_refinement_are_bit_identical)
     GL_CHECK(ref_nostick_ > 50u);
 }
 
+/* ---- 4. coarse grey levels: the integer comparison of the coarse search ----------------- */
+
+/* The coarse column search now compares integers and falls back on the
+ * rounded responses only for EQUAL integers (scan_row_ in gl_vision.c).  On
+ * the rendered scenes above equal integers are rare.  Here they are the
+ * rule: strips whose pixels take three or four grey levels only, with a
+ * faint line of one to three grey levels, so that many columns of a row have
+ * the same integer response - also the same magnitude from different pixel
+ * sums, where the rounded values differ in the last bit and the first
+ * version's choice depended on it. */
+GL_TEST(test_coarse_search_on_few_grey_levels)
+{
+    static uint8_t px[96 * 480];
+    const unsigned before_diff = n_diff_, before_ok = ref_ok_[0] + ref_ok_[1] + ref_ok_[2];
+    const unsigned before_cases = ref_cases_;
+
+    lcg_ = 777u;
+    for (unsigned t = 0; t < 240u; t++) {
+        const int level = 20 + (int)(rnd_() % 200u);
+        const int amp_noise = 1 + (int)(rnd_() % 3u);      /* pixel values level .. level + amp */
+        const int line_amp = (int)(rnd_() % 4u);           /* 0 = no line */
+        const int line_w = 1 + (int)(rnd_() % 3u);
+        const int pol = (rnd_() % 2u) ? 1 : -1;
+        const float x_line = 30.0f + (float)(rnd_() % 36u);
+        const float slope = ((float)(rnd_() % 41u) - 20.0f) * 0.001f;
+        const int horizon = 200 + (int)(rnd_() % 80u);
+        gl_strip_t strip;
+        gl_vis_prior_t p;
+        gl_vis_stick_t tmp;
+
+        for (int r = 0; r < 480; r++) {
+            const int xc = (int)floorf(x_line + slope * (float)(r - 240) + 0.5f);
+            for (int c = 0; c < 96; c++) {
+                int v = level + (int)(rnd_() % (unsigned)(amp_noise + 1));
+                if (r >= horizon) {
+                    v -= 12; /* "turf": a step for the horizon search */
+                } else if (c >= xc && c < xc + line_w) {
+                    v += pol * line_amp;
+                }
+                px[r * 96 + c] = (uint8_t)((v < 0) ? 0 : ((v > 255) ? 255 : v));
+            }
+        }
+        strip.px = px;
+        strip.width = 96;
+        strip.height = 480;
+        strip.stride = 96;
+        strip.x0 = 100;
+        strip.y0 = 0;
+        memset(&p, 0, sizeof(p));
+        p.x = 100.0f + x_line + (float)(rnd_() % 5u) - 2.0f;
+        p.row = 240.0f;
+        p.slant = slope;
+        p.width_px = (t % 3u == 0u) ? 3.0f : 1.0f;
+        p.search_px = (t % 2u == 0u) ? 0.0f : 9.0f;
+        p.have_horizon = true;
+        p.horizon_row = (float)horizon - 0.5f;
+        p.horizon_tol_rows = 6.0f;
+        for (unsigned b = 0; b < 3u; b++) {
+            p.bin_rows = (uint8_t)((b == 0u) ? 1u : ((b == 1u) ? 4u : 16u));
+            (void)compare_refine_(&strip, &p, &tmp);
+        }
+        p.have_horizon = false;
+        p.bin_rows = 1;
+        (void)compare_refine_(&strip, &p, &tmp);
+    }
+    printf("    240 strips of 2 to 4 grey levels: %u refinements (a line in %u), %u differ from the "
+           "phase-1 code\n", ref_cases_ - before_cases,
+           ref_ok_[0] + ref_ok_[1] + ref_ok_[2] - before_ok, n_diff_ - before_diff);
+    GL_CHECK_EQ(n_diff_ - before_diff, 0u);
+    GL_CHECK(ref_ok_[0] + ref_ok_[1] + ref_ok_[2] - before_ok > 100u);
+}
+
 int main(void)
 {
     GL_RUN(test_selection_equals_sorting);
     GL_RUN(test_band_and_refinement_are_bit_identical);
+    GL_RUN(test_coarse_search_on_few_grey_levels);
     return gl_test_summary();
 }

@@ -102,7 +102,8 @@ S64_OBJ  := $(patsubst core/%.c,$(BUILD)/core64/%.o,$(SOLVER_SRC)) \
 TEST_BIN := $(patsubst tests/%.c,$(BUILD)/tests/%,$(TEST_SRC))
 LIB      := $(BUILD)/libgl.a
 
-.PHONY: all test asan cross config config-check clean run-tests diff bench appdiff
+.PHONY: all test asan cross cross-hal config config-check clean run-tests diff bench appdiff \
+        bench-vision profile
 .SECONDARY:
 all: test
 
@@ -192,6 +193,37 @@ cross: config-check $(XOBJ)
 	@echo "$(CROSS_CC) $(CROSS_FLAGS)"
 	@sh tools/cross_report.sh "$(CROSS)" $(XOBJ)
 
+# ---- the STM32 backend against the vendor's headers (compile only) ---------
+# hal/stm32u5/gl_hal_stm32u5.c is written against ST's STM32U5 HAL.  No vendor
+# file is part of this repository.  `make cross-hal STM32_HEADERS=<dir>`
+# compiles the backend - COMPILE ONLY: no HAL sources, no start-up code, no
+# linker script, nothing linked or run - against header files that a person
+# has put into <dir>, laid out as the three public repositories are:
+#   <dir>/cmsis_device_u5/Include/      stm32u5xx.h stm32u585xx.h system_stm32u5xx.h
+#   <dir>/stm32u5xx_hal_driver/Inc/     stm32u5xx_hal*.h stm32u5xx_ll_*.h Legacy/
+#   <dir>/CMSIS_5/CMSIS/Core/Include/   core_cm33.h cmsis_*.h mpu_armv8.h
+# (README, "STM32 backend": the files and release tags it was last compiled
+# against).  The headers are data: nothing in <dir> is executed, and nothing
+# from it is copied into this tree.  The project's own HAL configuration is
+# hal/stm32u5/stm32u5xx_hal_conf.h.  Without STM32_HEADERS, or if the headers
+# are not there, the target is SKIPPED with a message and succeeds.
+# hal/stm32u5/gl_hal_stm32u5_usb.c is not compiled: it also needs ST's USB
+# device library (usbd_core.h, usbd_cdc.h), which is in none of the three.
+STM32_HEADERS ?=
+HALBUILD   := build/cross-hal
+HAL_SRC    := hal/stm32u5/gl_hal_stm32u5.c
+HAL_OBJ    := $(patsubst hal/stm32u5/%.c,$(HALBUILD)/%.o,$(HAL_SRC))
+HAL_NEED   := cmsis_device_u5/Include/stm32u585xx.h stm32u5xx_hal_driver/Inc/stm32u5xx_hal.h \
+              CMSIS_5/CMSIS/Core/Include/core_cm33.h
+HAL_FLAGS  := $(WARN) $(FW_WARN) -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 \
+              -mfloat-abi=hard -Os -ffunction-sections -fdata-sections \
+              -fstack-usage -fno-common -DSTM32U585xx -DUSE_HAL_DRIVER \
+              -Icore -Idrivers -Ihal -Ihal/stm32u5 -Iapp
+
+cross-hal: config-check
+	@sh tools/cross_hal.sh "$(STM32_HEADERS)" "$(CROSS)" "$(HALBUILD)" "$(HAL_FLAGS)" \
+	    "$(HAL_NEED)" $(HAL_SRC)
+
 # ---- generated sources -----------------------------------------------------
 VECTORS_JSON := ../sim/results/reference_vectors.json
 
@@ -230,6 +262,23 @@ bench: config-check
 	@$(MAKE) --no-print-directory build/host/libgl.a BUILD=build/host SAN=
 	$(Q)$(HOSTCC) $(WARN) -O2 -g $(INC) tools/solver_bench.c build/host/libgl.a -lm -o build/host/solver_bench
 	@./build/host/solver_bench all
+
+# ---- how much work the camera part of a read costs (host) ------------------------
+# bench-vision: one read of each scene of tools/vision_bench.c on the simulator
+#   and what the cost table hal/host/gl_sim_cost.h charges for it.
+# profile: the same under valgrind's callgrind (needs valgrind): the MEASURED
+#   instruction counts of every stage, against the cost table.
+build/host/vision_bench: tools/vision_bench.c config-check
+	@$(MAKE) --no-print-directory build/host/libgl.a BUILD=build/host SAN=
+	$(Q)$(HOSTCC) $(WARN) -O2 -g $(INC) tools/vision_bench.c build/host/libgl.a -lm -o $@
+
+bench-vision: build/host/vision_bench
+	@./build/host/vision_bench all
+
+profile: build/host/vision_bench
+	@$(MAKE) --no-print-directory build/host/tests/test_read BUILD=build/host SAN=
+	$(Q)$(HOSTCC) $(WARN) -O2 -g $(INC) tools/solver_bench.c build/host/libgl.a -lm -o build/host/solver_bench
+	@sh tools/vision_cost.sh build/host build/profile
 
 diff: $(DIFFDIR)/libglsolver64.so $(DIFFDIR)/libglsolver32.so
 	$(PYTHON) tools/diff_solver.py --lib $(DIFFDIR)/libglsolver64.so --vectors --random $(DIFF_N)
