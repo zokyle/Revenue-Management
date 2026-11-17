@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "gl_pins.h"
 #include "gl_provisional.h"
 #include "gl_sim_cost.h"
 #include "gl_sim_internal.h"
@@ -35,8 +36,11 @@
 #define SIM_NTC_TAU_US 50.0
 #define SIM_NTC_SETTLE_MIN_US 300u
 #define SIM_PLL_LOCK_US 100u                 /* a switch to the fast clock takes this long */
-#define SIM_CELL_T_MIN_C 0.0f                /* the window the charger rules are judged by */
+/* The window the FIRMWARE's supervision is judged by (DESIGN_SPEC section 4:
+ * 0..45 C for charging).  The charger's own window is GL_PROV_BQ25101_T_*. */
+#define SIM_CELL_T_MIN_C 0.0f
 #define SIM_CELL_T_MAX_C 45.0f
+#define SIM_CHG_STEP_US 2000000u             /* longest step of the charger / cell integration */
 
 /* Grain LED netlist OF THE MODEL (anode pin, cathode pin as charlieplex pin
  * numbers 0..4).  Pair k = 0..7 on the pin pairs below; red LED k conducts
@@ -85,6 +89,30 @@ static struct {
     uint64_t chg_t;              /* time up to which the charger has been accounted */
     uint64_t chg_stretch_us;     /* current stretch of charging outside the window */
     bool chg_stretch_reported;
+    /* the board in the cradle: the VBUS pad (the VBUS_SENSE pin may lag) */
+    bool vbus_pad;
+    uint64_t vbus_sense_fall_at; /* when VBUS_SENSE follows a pad that has gone (SIM_NEVER: -) */
+    /* charger model (BQ25101, PROVISIONAL: gl_provisional.h) */
+    uint8_t ntc1_fault;
+    bool chg_input_low;
+    bool chg_stop_broken;
+    uint8_t chg_state;           /* gl_sim_chg_state_t */
+    bool chg_done;               /* terminated: waits for the recharge threshold */
+    bool chg_timer_fault;
+    uint64_t chg_timer_us;       /* its safety timer */
+    double chg_out_ua;           /* current out of the charger during the last step */
+    /* cell model */
+    bool cell_on;
+    double cell_soc;             /* 0..1 */
+    /* supply model */
+    double load_ua;              /* the board's draw from the cell node in the last interval */
+    bool underside_lit;
+    uint64_t disp_high_since;    /* when LCD_DISP last went high (the grain bias) */
+    /* MCU states without firmware */
+    bool rom;                    /* ST's ROM loader is running */
+    bool shutdown;               /* ship mode */
+    bool ship_marker;            /* the backend's marker in the backup domain */
+    uint64_t shutdown_since;
     /* core clock */
     uint8_t clock;
     uint64_t clock_fast_since;
@@ -112,6 +140,8 @@ static struct {
     bool extcomin_on;
     /* usb */
     bool usb_started, usb_host_open;
+    bool usb_standby;
+    uint8_t usb_bus;             /* gl_usb_bus_t: what the host does */
     uint8_t usb_rx[SIM_USB_PIPE];
     size_t usb_rx_len;
     uint8_t usb_tx[SIM_USB_PIPE];
@@ -250,7 +280,7 @@ bool sim_pin_is_alt(gl_pin_t pin)
 }
 
 /* ======================================================================= */
-/* cell temperature and the charger of rev C2                               */
+/* cell temperature, the charger of rev E (BQ25101) and the cell            */
 /* ======================================================================= */
 
 static float cell_temp_(void)
@@ -258,52 +288,232 @@ static float cell_temp_(void)
     return S.cell_temp_pinned ? S.cell_temp_c : sim_imu_temperature();
 }
 
-/* The charger runs whenever VBUS is present and the MCU does not pull the
- * gate of the PROG MOSFET low - whether firmware runs or not. */
-static bool charger_on_(void)
+/* The MOSFET on the charger's TS pin conducts: CHG_INHIBIT is DRIVEN high.
+ * An open-drain "high" is high impedance and the 100 kohm on the gate wins;
+ * so does it with the pin analog, the MCU in reset or unpowered. */
+static bool inhibit_on_(void)
 {
-    return S.pin[GL_PIN_VBUS_SENSE].ext && !sim_pin_out_low(GL_PIN_CHG_INHIBIT);
+    return sim_pin_out_high(GL_PIN_CHG_INHIBIT);
 }
 
-/* Bring the charger statistics up to now.  The conditions (VBUS, the pin,
- * the temperature) change only between two advances of the clock, so this
- * is called wherever the clock advances. */
-static void charger_account_(void)
+/* ... and the MOSFET does what its gate says (a fault of the model: the
+ * MOSFET or its gate connection open). */
+static bool ts_pulled_low_(void)
 {
-    const uint64_t dt = S.now_us - S.chg_t;
-    S.chg_t = S.now_us;
-    if (dt == 0u) {
-        return;
+    return inhibit_on_() && !S.chg_stop_broken;
+}
+
+static bool chg_charging_state_(uint8_t st)
+{
+    return st == (uint8_t)GL_SIM_CHG_FAST || st == (uint8_t)GL_SIM_CHG_COOL ||
+           st == (uint8_t)GL_SIM_CHG_WARM || st == (uint8_t)GL_SIM_CHG_TTDM;
+}
+
+/* Open-circuit voltage of the cell model, mV, for a state of charge 0..1.
+ * A GUESS for a 43 mAh pouch cell (no data sheet). */
+static double cell_ocv_mv_(double soc)
+{
+    static const double pt[][2] = { { 0.00, 3000.0 }, { 0.03, 3300.0 }, { 0.10, 3550.0 },
+                                    { 0.30, 3700.0 }, { 0.60, 3850.0 }, { 0.85, 4050.0 },
+                                    { 1.00, 4200.0 } };
+    const size_t n = sizeof(pt) / sizeof(pt[0]);
+    if (soc <= pt[0][0]) {
+        return pt[0][1];
     }
-    if (sim_pin_out_low(GL_PIN_CHG_INHIBIT)) {
+    for (size_t i = 1; i < n; i++) {
+        if (soc <= pt[i][0]) {
+            const double f = (soc - pt[i - 1u][0]) / (pt[i][0] - pt[i - 1u][0]);
+            return pt[i - 1u][1] + f * (pt[i][1] - pt[i - 1u][1]);
+        }
+    }
+    /* above "full": the curve goes on with its last slope (a cell can be
+     * pushed a little past it; the charger's voltage limit is what stops) */
+    return pt[n - 1u][1] + (soc - 1.0) * (pt[n - 1u][1] - pt[n - 2u][1]) / (pt[n - 1u][0] - pt[n - 2u][0]);
+}
+
+/*
+ * What the BQ25101 of the model does RIGHT NOW (no time passes): from VBUS,
+ * its TS pin (its own thermistor NTC1 on the cell, or the MOSFET), its
+ * latches and the cell voltage.  Every rule here is PROVISIONAL
+ * (gl_provisional.h, GL_PROV_BQ25101_*).  Then the level of its CHG output.
+ */
+static void charger_update_(void)
+{
+    const float t = cell_temp_();
+    const bool input = S.vbus_pad && !S.chg_input_low;
+    const bool ts_low = ((GL_PROV_BQ25101_TS_LOW_DISABLES != 0) && ts_pulled_low_()) ||
+                        S.ntc1_fault == (uint8_t)GL_SIM_NTC1_SHORT;
+    const bool ttdm = (GL_PROV_BQ25101_TS_OPEN_IS_TTDM != 0) &&
+                      S.ntc1_fault == (uint8_t)GL_SIM_NTC1_OPEN && !ts_low;
+    const bool warm = !ttdm && t > GL_PROV_BQ25101_T_WARM_C;
+    const double vreg = warm ? (double)GL_PROV_BQ25101_VREG_WARM_MV : (double)GL_PROV_BQ25101_VREG_MV;
+    uint8_t st;
+
+    if (!input || ts_low) {
+        /* input gone, or disabled through TS: both restart the charger's
+         * cycle, its termination latch and its timer */
+        S.chg_done = false;
+        S.chg_timer_fault = false;
+        S.chg_timer_us = 0;
+        st = (uint8_t)(input ? GL_SIM_CHG_DISABLED : GL_SIM_CHG_NO_INPUT);
+    } else if (!ttdm && t < GL_PROV_BQ25101_T_COLD_C) {
+        st = (uint8_t)GL_SIM_CHG_COLD;
+    } else if (!ttdm && t > GL_PROV_BQ25101_T_HOT_C) {
+        st = (uint8_t)GL_SIM_CHG_HOT;
+    } else if (ttdm) {
+        st = (uint8_t)GL_SIM_CHG_TTDM; /* no termination, no timer, no window */
+    } else if (S.chg_timer_fault) {
+        st = (uint8_t)GL_SIM_CHG_TIMER;
+    } else {
+        if (S.chg_done && (double)S.vbat_mv < vreg - (double)GL_PROV_BQ25101_RECHARGE_DROP_MV) {
+            S.chg_done = false; /* recharge */
+        }
+        if (!S.cell_on && !S.chg_done && (double)S.vbat_mv >= vreg) {
+            /* fixed-voltage mode of the model (no cell dynamics): a cell AT
+             * the regulation voltage is a finished charge */
+            S.chg_done = true;
+            S.stats.chg_terminations++;
+        }
+        if (S.chg_done) {
+            st = (uint8_t)GL_SIM_CHG_DONE;
+        } else if (warm) {
+            st = (uint8_t)GL_SIM_CHG_WARM;
+        } else if (t < GL_PROV_BQ25101_T_COOL_C) {
+            st = (uint8_t)GL_SIM_CHG_COOL;
+        } else {
+            st = (uint8_t)GL_SIM_CHG_FAST;
+        }
+    }
+    S.chg_state = st;
+    if (!chg_charging_state_(st)) {
+        S.chg_out_ua = 0.0;
+    }
+    /* CHG: open drain, low while a charge runs; the board's pull-up otherwise */
+    sim_set_input(GL_PIN_CHG_STAT, !chg_charging_state_(st));
+}
+
+/* One step of the charger and the cell: the conditions (state, load) held
+ * for dt.  Returns nothing; updates the cell, the latches and the charger
+ * statistics. */
+static void charger_step_(uint64_t dt)
+{
+    const double s = (double)dt * 1e-6;
+    const double sys = S.load_ua; /* the board, on the same node */
+    const uint8_t st = S.chg_state;
+    const float t = cell_temp_();
+    double icell;
+
+    if (inhibit_on_()) {
         S.stats.inhibit_us += dt;
     }
-    if (!charger_on_()) {
+    if (S.vbus_pad) {
+        S.stats.docked_us += dt;
+        S.stats.load_docked_uas += sys * s;
+    }
+    if (!chg_charging_state_(st)) {
+        icell = -sys;
+        S.chg_out_ua = 0.0;
         S.chg_stretch_us = 0;
         S.chg_stretch_reported = false;
-        return;
-    }
-    if (!S.inited) {
-        S.stats.chg_in_reset_us += dt; /* MCU in reset: the hardware default, nobody supervises */
-        return;
-    }
-    S.stats.chg_on_us += dt;
-    const float t = cell_temp_();
-    if (t < SIM_CELL_T_MIN_C || t > SIM_CELL_T_MAX_C) {
-        S.stats.chg_outside_us += dt;
-        S.chg_stretch_us += dt;
-        if (S.chg_stretch_us > S.stats.chg_outside_longest_us) {
-            S.stats.chg_outside_longest_us = S.chg_stretch_us;
-        }
-        if (S.chg_stretch_us > (uint64_t)GL_SIM_CHG_REACT_MAX_MS * 1000u && !S.chg_stretch_reported) {
-            S.chg_stretch_reported = true;
-            sim_violation(&S.viol.power,
-                          "charging for %.1f s with the cell at %.1f C (outside 0..45 C) while "
-                          "firmware runs", (double)S.chg_stretch_us / 1e6, (double)t);
-        }
     } else {
-        S.chg_stretch_us = 0;
-        S.chg_stretch_reported = false;
+        const bool ttdm = (st == (uint8_t)GL_SIM_CHG_TTDM);
+        const double iset = (double)GL_PROV_BQ25101_ICHG_UA * ((st == (uint8_t)GL_SIM_CHG_COOL) ? 0.5 : 1.0);
+        const double vreg = (st == (uint8_t)GL_SIM_CHG_WARM) ? (double)GL_PROV_BQ25101_VREG_WARM_MV
+                                                             : (double)GL_PROV_BQ25101_VREG_MV;
+        double iout = iset;
+        icell = iset - sys;
+        if (S.cell_on) {
+            const double ocv = cell_ocv_mv_(S.cell_soc);
+            if (ocv + icell * 1e-3 * GL_SIM_CELL_R_OHM >= vreg) {
+                /* constant voltage: the cell takes what the voltage gives it */
+                icell = (vreg - ocv) * 1e3 / GL_SIM_CELL_R_OHM;
+                iout = icell + sys;
+                if (iout < 0.0) {
+                    iout = 0.0; /* a linear charger cannot sink: the cell feeds the board */
+                    icell = -sys;
+                }
+                if (!ttdm && iout < (double)GL_PROV_BQ25101_TERM_FRACTION * (double)GL_PROV_BQ25101_ICHG_UA) {
+                    S.chg_done = true; /* termination: it takes effect at the next update */
+                    S.stats.chg_terminations++;
+                }
+            }
+        }
+        S.chg_out_ua = iout;
+        /* statistics: who was there, and where the cell was */
+        if (t < GL_PROV_BQ25101_T_COLD_C || t > GL_PROV_BQ25101_T_HOT_C) {
+            S.stats.chg_hw_outside_us += dt;
+        }
+        if (st == (uint8_t)GL_SIM_CHG_WARM) {
+            S.stats.chg_warm_us += dt;
+        } else if (st == (uint8_t)GL_SIM_CHG_COOL) {
+            S.stats.chg_cool_us += dt;
+        }
+        if (!ttdm && GL_PROV_BQ25101_SAFETY_TIMER_H != 0u) {
+            S.chg_timer_us += dt;
+            if (S.chg_timer_us >= (uint64_t)GL_PROV_BQ25101_SAFETY_TIMER_H * 3600u * 1000000u) {
+                S.chg_timer_fault = true;
+                S.stats.chg_timer_faults++;
+            }
+        }
+        if (!S.inited) {
+            /* no firmware (reset, ROM loader, ship mode): the charger alone */
+            S.stats.chg_in_reset_us += dt;
+            if (t < SIM_CELL_T_MIN_C || t > SIM_CELL_T_MAX_C) {
+                S.stats.chg_alone_outside_us += dt;
+            }
+            S.chg_stretch_us = 0;
+            S.chg_stretch_reported = false;
+        } else {
+            S.stats.chg_on_us += dt;
+            if (t < SIM_CELL_T_MIN_C || t > SIM_CELL_T_MAX_C) {
+                S.stats.chg_outside_us += dt;
+                S.chg_stretch_us += dt;
+                if (S.chg_stretch_us > S.stats.chg_outside_longest_us) {
+                    S.stats.chg_outside_longest_us = S.chg_stretch_us;
+                }
+                if (S.chg_stretch_us > (uint64_t)GL_SIM_CHG_REACT_MAX_MS * 1000u && !S.chg_stretch_reported) {
+                    S.chg_stretch_reported = true;
+                    sim_violation(&S.viol.power,
+                                  "charging for %.1f s with the cell at %.1f C (outside the firmware's "
+                                  "0..45 C) while firmware runs", (double)S.chg_stretch_us / 1e6, (double)t);
+                }
+            } else {
+                S.chg_stretch_us = 0;
+                S.chg_stretch_reported = false;
+            }
+        }
+    }
+    if (S.cell_on) {
+        /* the charge that went into the cell, or out of it */
+        S.cell_soc += icell * s / (GL_SIM_CELL_MAH * 3.6e6);
+        if (S.cell_soc < 0.0) {
+            S.cell_soc = 0.0;
+        }
+        {
+            double v = cell_ocv_mv_(S.cell_soc) + icell * 1e-3 * GL_SIM_CELL_R_OHM;
+            if (v < 0.0) {
+                v = 0.0;
+            }
+            S.vbat_mv = (uint16_t)(v + 0.5);
+        }
+    }
+}
+
+/* Bring the charger and the cell up to now.  The conditions (VBUS, the pin,
+ * the temperature, the load) change only between two advances of the clock,
+ * so this is called wherever the clock advances; it integrates in steps of
+ * at most SIM_CHG_STEP_US, because the cell's voltage moves the charger. */
+static void charger_account_(void)
+{
+    uint64_t left = S.now_us - S.chg_t;
+    S.chg_t = S.now_us;
+    while (left != 0u) {
+        const uint64_t dt = (left > SIM_CHG_STEP_US && S.cell_on) ? SIM_CHG_STEP_US : left;
+        charger_step_(dt);
+        left -= dt;
+        if (S.cell_on || left == 0u) {
+            charger_update_();
+        }
     }
 }
 
@@ -314,6 +524,13 @@ static double ntc_fraction_(double temp_c)
                      exp(SIM_NTC_B_K * (1.0 + (double)S.ntc_b_rel) *
                          (1.0 / (temp_c + 273.15) - 1.0 / 298.15));
     return r / (r + SIM_NTC_SERIES_OHM * (1.0 + (double)S.ntc_series_rel));
+}
+
+static double ntc2_ohm_(void)
+{
+    return SIM_NTC_R25_OHM * (1.0 + (double)S.ntc_r25_rel) *
+           exp(SIM_NTC_B_K * (1.0 + (double)S.ntc_b_rel) *
+               (1.0 / ((double)cell_temp_() + 273.15) - 1.0 / 298.15));
 }
 
 static void ntc_bias_update_(void)
@@ -412,6 +629,9 @@ static void pin_changed_(gl_pin_t pin, bool cs_before, bool disp_before, const c
     if (pin == GL_PIN_LCD_DISP) {
         bool disp = sim_pin_out_high(pin);
         if (disp != disp_before) {
+            if (disp) {
+                S.disp_high_since = S.now_us; /* the grain bias divider hangs on this line */
+            }
             sim_lcd_disp(disp);
         }
     }
@@ -425,11 +645,33 @@ static void pin_changed_(gl_pin_t pin, bool cs_before, bool disp_before, const c
     if (pin == GL_PIN_NTC_BIAS) {
         ntc_bias_update_();
     }
-    if (pin == GL_PIN_CHG_INHIBIT && S.pin[pin].mode == (uint8_t)GL_PIN_MODE_OUTPUT_PP) {
-        /* the pin sits on the gate divider of the PROG MOSFET: it may pull
-         * low and nothing else */
-        sim_violation(&S.viol.power, "CHG_INHIBIT driven push-pull (latch %d) %s: open drain only",
-                      (int)S.pin[pin].latch, what);
+    if (pin == GL_PIN_CHG_INHIBIT) {
+        /* the pin drives the gate of the MOSFET on the charger's TS input
+         * (100 kohm to ground on the gate): push-pull or analog.  An
+         * open-drain "high" stops nothing; an internal pull-up half opens
+         * the MOSFET with the MCU believing the charger free */
+        const uint8_t m = S.pin[pin].mode;
+        if (m == (uint8_t)GL_PIN_MODE_OUTPUT_OD || m == (uint8_t)GL_PIN_MODE_INPUT_PULLUP ||
+            m == (uint8_t)GL_PIN_MODE_INPUT_PULLDOWN) {
+            sim_violation(&S.viol.power, "CHG_INHIBIT in mode %d %s: push-pull or analog only", (int)m,
+                          what);
+        }
+        charger_account_();
+        charger_update_();
+    }
+    if (pin == GL_PIN_CHG_STAT) {
+        /* the charger's open-drain output with the board's pull-up, on a USB
+         * Type-C CC pad of the MCU: an input without an internal pull */
+        const uint8_t m = S.pin[pin].mode;
+        if (m != (uint8_t)GL_PIN_MODE_ANALOG && m != (uint8_t)GL_PIN_MODE_INPUT) {
+            sim_violation(&S.viol.power, "CHG_STAT in mode %d %s: input without a pull only", (int)m,
+                          what);
+        }
+    }
+    if (pin == GL_PIN_OPAMP_VOUT && !S.opamp_on &&
+        (S.pin[pin].mode == (uint8_t)GL_PIN_MODE_OUTPUT_PP ||
+         S.pin[pin].mode == (uint8_t)GL_PIN_MODE_OUTPUT_OD)) {
+        sim_violation(&S.viol.analog, "OPAMP_VOUT driven with the op-amp off (150 kohm to the rail)");
     }
     /* the board's pull resistors hold the chip selects inactive; an internal
      * pull the other way would fight them */
@@ -478,6 +720,9 @@ static uint64_t next_event_(void)
     if (u < t) {
         t = u;
     }
+    if (S.vbus_sense_fall_at < t) {
+        t = S.vbus_sense_fall_at;
+    }
     return t;
 }
 
@@ -492,17 +737,92 @@ static void watchdog_check_(void)
     }
 }
 
-/* The supply model: charge drawn from the cell while the clock advances by
- * dt with everything in its present state (states change only between two
- * advances).  Nothing is counted with VBUS present, and nothing for an MCU
- * held in reset. */
+/* Resistance of NTC2 at the cell temperature (the divider of the model). */
+static double ntc2_ohm_(void);
+
+/* The supply model: what the board draws from the cell's node RIGHT NOW,
+ * microamperes, with the MCU in its present state; the parts of it.  0 for
+ * an MCU held in reset (not modelled). */
+static double load_now_(double *mcu_out, double *imu_out, double *cam_out)
+{
+    const bool fast = (S.clock == (uint8_t)GL_CLOCK_FAST);
+    const bool disp = sim_pin_out_high(GL_PIN_LCD_DISP);
+    double mcu, imu, cam = 0.0, rest;
+
+    if (S.shutdown) {
+        mcu = GL_SIM_I_MCU_SHUTDOWN_UA;
+    } else if (S.rom) {
+        mcu = GL_SIM_I_MCU_ROM_UA;
+    } else if (!S.inited) {
+        mcu = 0.0; /* held in reset: not modelled */
+    } else if (S.mcu_mode == (uint8_t)SIM_MCU_STOP) {
+        mcu = (S.usb_standby && GL_PROV_USB_WAKE_FROM_STOP2 == 0) ? GL_SIM_I_MCU_STOP1_UA
+                                                                 : GL_SIM_I_MCU_STOP_UA;
+    } else if (S.mcu_mode == (uint8_t)SIM_MCU_IDLE) {
+        mcu = fast ? GL_SIM_I_MCU_IDLE_FAST_UA : GL_SIM_I_MCU_IDLE_SLOW_UA;
+    } else {
+        mcu = fast ? GL_SIM_I_MCU_RUN_FAST_UA : GL_SIM_I_MCU_RUN_SLOW_UA;
+    }
+    imu = sim_imu_supply_ua();
+    /* always there (the charger's leakage out of the cell only without an
+     * input: with VBUS it is fed from there) */
+    rest = GL_SIM_I_ALWAYS_UA(S.vbat_mv) - (S.vbus_pad ? GL_SIM_I_CHARGER_LEAK_UA : 0.0);
+    rest += sim_flash_supply_ua();
+    /* the display, and the two resistors that hang on DISP */
+    if (disp) {
+        rest += GL_SIM_I_LCD_ON_UA + GL_SIM_I_DISP_PULLDOWN_UA + GL_SIM_I_GRAIN_BIAS_UA;
+    }
+    rest += (S.adc_on ? GL_SIM_I_ADC_UA : 0.0) + (S.opamp_on ? GL_SIM_I_OPAMP_UA : 0.0) +
+            ((gl_sim_grain_lit_mask() != 0u) ? GL_SIM_I_GRAIN_LED_UA : 0.0);
+    if (S.usb_started) {
+        rest += GL_SIM_I_USB_UA;
+    } else if (S.usb_standby) {
+        rest += GL_SIM_I_USB_STANDBY_UA;
+    }
+    /* pins driven against a resistor of the board */
+    if (!S.pin[GL_PIN_CHG_STAT].ext) {
+        rest += GL_SIM_I_CHG_STAT_PULLUP_UA; /* the charger pulls CHG low */
+    }
+    if (sim_pin_out_high(GL_PIN_CHG_INHIBIT)) {
+        rest += GL_SIM_I_CHG_INHIBIT_UA;
+    }
+    if (sim_pin_out_high(GL_PINS_BOOT0_SHARED_WITH)) {
+        rest += GL_SIM_I_BOOT0_PULLDOWN_UA;
+    }
+    if (sim_pin_out_low(GL_PIN_OPAMP_VOUT)) {
+        rest += GL_SIM_I_OPAMP_OUT_LOW_UA;
+    } else if (S.underside_lit && !S.opamp_on) {
+        rest += GL_SIM_I_WAKE_PULLUP_LIT_UA;
+    }
+    if (sim_pin_out_high(GL_PIN_NTC_BIAS)) {
+        rest += (double)S.vdda_mv * 1000.0 / (SIM_NTC_SERIES_OHM + ntc2_ohm_());
+    }
+    if (S.rail_on) {
+        cam = GL_SIM_I_CAM_RAIL_UA;
+    }
+    if (mcu_out != NULL) {
+        *mcu_out = mcu;
+        *imu_out = imu;
+        *cam_out = cam;
+    }
+    return mcu + imu + cam + rest;
+}
+
+/* Charge drawn from the cell while the clock advances by dt with everything
+ * in its present state (states change only between two advances).  The
+ * board hangs on the cell's node: what it draws comes out of the cell
+ * unless a charge is running (the charger then supplies it; charger_step_
+ * books that as the docked load).  Nothing is counted for an MCU held in
+ * reset. */
 static void supply_account_(uint64_t dt)
 {
     const bool fast = (S.clock == (uint8_t)GL_CLOCK_FAST);
     const double s = (double)dt * 1e-6;
-    double mcu, imu, rest;
+    double mcu = 0.0, imu = 0.0, cam = 0.0, total;
 
-    if (S.mcu_mode == (uint8_t)SIM_MCU_RUN) {
+    if (S.shutdown) {
+        S.stats.shutdown_us += dt;
+    } else if (S.mcu_mode == (uint8_t)SIM_MCU_RUN) {
         S.stats.run_us += dt;
         if (fast) {
             S.stats.run_fast_us += dt;
@@ -510,28 +830,15 @@ static void supply_account_(uint64_t dt)
     } else if (S.mcu_mode == (uint8_t)SIM_MCU_IDLE && fast) {
         S.stats.idle_fast_us += dt;
     }
-    if (!S.inited || S.pin[GL_PIN_VBUS_SENSE].ext) {
+    total = load_now_(&mcu, &imu, &cam);
+    S.load_ua = total;
+    if ((!S.inited && !S.shutdown && !S.rom) || chg_charging_state_(S.chg_state)) {
         return;
     }
-    if (S.mcu_mode == (uint8_t)SIM_MCU_STOP) {
-        mcu = GL_SIM_I_MCU_STOP_UA;
-    } else if (S.mcu_mode == (uint8_t)SIM_MCU_IDLE) {
-        mcu = fast ? GL_SIM_I_MCU_IDLE_FAST_UA : GL_SIM_I_MCU_IDLE_SLOW_UA;
-    } else {
-        mcu = fast ? GL_SIM_I_MCU_RUN_FAST_UA : GL_SIM_I_MCU_RUN_SLOW_UA;
-    }
-    imu = sim_imu_supply_ua();
-    rest = GL_SIM_I_ALWAYS_UA + sim_flash_supply_ua() +
-           (sim_pin_out_high(GL_PIN_LCD_DISP) ? GL_SIM_I_LCD_ON_UA : 0.0) +
-           (S.adc_on ? GL_SIM_I_ADC_UA : 0.0) + (S.opamp_on ? GL_SIM_I_OPAMP_UA : 0.0) +
-           ((gl_sim_grain_lit_mask() != 0u) ? GL_SIM_I_GRAIN_LED_UA : 0.0);
     S.stats.charge_mcu_uas += mcu * s;
     S.stats.charge_imu_uas += imu * s;
-    if (S.rail_on) {
-        S.stats.charge_cam_uas += GL_SIM_I_CAM_RAIL_UA * s;
-        rest += GL_SIM_I_CAM_RAIL_UA;
-    }
-    S.stats.charge_uas += (mcu + imu + rest) * s;
+    S.stats.charge_cam_uas += cam * s;
+    S.stats.charge_uas += total * s;
 }
 
 /* Process every event up to and including t_target, then set the clock. */
@@ -560,6 +867,11 @@ static void run_until_(uint64_t t_target)
         if (S.wake_timer_at <= S.now_us) {
             S.wake_timer_at = SIM_NEVER;
             sim_irq_raise(GL_IRQ_WAKE_TIMER);
+            continue;
+        }
+        if (S.vbus_sense_fall_at <= S.now_us) {
+            S.vbus_sense_fall_at = SIM_NEVER;
+            sim_set_input(GL_PIN_VBUS_SENSE, false); /* the divider has discharged the pad */
             continue;
         }
         if (sim_imu_next_event() <= S.now_us) {
@@ -597,6 +909,8 @@ void gl_sim_reset(bool erase_flash)
         S.pin[p].mode = (uint8_t)GL_PIN_MODE_ANALOG; /* MCU reset state */
     }
     S.pin[GL_PIN_CHG_STAT].ext = true; /* pulled up: not charging */
+    S.vbus_sense_fall_at = SIM_NEVER;
+    S.stats.grain_bias_short_us = UINT64_MAX;
     sim_lcd_reset();
     sim_flash_reset(erase_flash);
     sim_imu_reset();
@@ -689,24 +1003,33 @@ bool gl_sim_pin_level(gl_pin_t pin)
     if (sim_pin_out_low(pin)) {
         return false;
     }
-    /* not driven by the MCU: the board decides */
-    switch (pin) {
-    case GL_PIN_LCD_SCS:
-    case GL_PIN_LCD_DISP:
-    case GL_PIN_CAM_PWR_EN:
-    case GL_PIN_NTC_BIAS:
-        return false; /* 100 kohm pull-down (NTC_BIAS: through the divider and the NTC) */
-    case GL_PIN_FLASH_CS:
-    case GL_PIN_IMU_CS:
-        return true;  /* 100 kohm pull-up to V2V8 */
-    case GL_PIN_CHG_INHIBIT:
-        return S.pin[GL_PIN_VBUS_SENSE].ext; /* gate divider on the charger supply */
-    default:
-        return S.pin[pin].ext;
+    /* not driven by the MCU: the board's resistor decides where there is one
+     * (the generated table of the netlist's pin map) ... */
+    {
+        typedef struct {
+            gl_pin_t pin;
+            bool level;
+        } pull_t;
+#define SIM_PULL(logical, level, handover) { logical, (level) != 0 },
+        static const pull_t pulls[] = { GL_PINS_RESET_TABLE(SIM_PULL) };
+#undef SIM_PULL
+        /* (CHG_STAT is in the table for its pull-up; the charger's open drain
+         * wins against it, and the model keeps that in `ext`) */
+        if (pin != GL_PIN_CHG_STAT) {
+            for (size_t i = 0; i < sizeof(pulls) / sizeof(pulls[0]); i++) {
+                if (pulls[i].pin == pin) {
+                    return pulls[i].level;
+                }
+            }
+        }
     }
+    /* ... otherwise whatever is connected from outside */
+    return S.pin[pin].ext;
 }
 
-void gl_sim_mcu_reset(uint32_t reason)
+/* Every pin high impedance and every peripheral stopped, at one instant:
+ * what a reset and the entry into Shutdown have in common. */
+static void mcu_pins_release_(void)
 {
     const bool lcd_cs = cs_asserted_(GL_PIN_LCD_SCS);
     const bool flash_cs = cs_asserted_(GL_PIN_FLASH_CS);
@@ -714,7 +1037,6 @@ void gl_sim_mcu_reset(uint32_t reason)
     const bool disp = sim_pin_out_high(GL_PIN_LCD_DISP);
 
     charger_account_();
-    /* every pin goes high-Z at the same instant */
     for (int p = 0; p < (int)GL_PIN_COUNT; p++) {
         S.pin[p].mode = (uint8_t)GL_PIN_MODE_ANALOG;
         S.pin[p].latch = false;
@@ -735,6 +1057,7 @@ void gl_sim_mcu_reset(uint32_t reason)
     S.extcomin_on = false;
     sim_lcd_extcomin(false, 0);
     S.usb_started = false;
+    S.usb_standby = false;
     S.adc_on = false;
     S.opamp_on = false;
     S.irq_enabled = 0;
@@ -742,8 +1065,46 @@ void gl_sim_mcu_reset(uint32_t reason)
     S.irq_lock = 0;
     S.wake_timer_at = SIM_NEVER;
     S.inited = false;
+    S.mcu_mode = (uint8_t)SIM_MCU_RUN;
+    charger_update_(); /* CHG_INHIBIT is released with the rest */
+}
+
+void gl_sim_mcu_reset(uint32_t reason)
+{
+    mcu_pins_release_();
+    S.rom = false;
+    if (S.shutdown) {
+        /* a reset ends Shutdown; the backend's marker decides at the next
+         * gl_hal_init() whether the marker goes straight back */
+        S.shutdown = false;
+    }
     S.reset_reason = reason;
     sim_trace(GL_SIM_TR_REBOOT, 0xFFu, 0, reason, 0);
+}
+
+void gl_sim_mcu_enter_rom(void)
+{
+    gl_sim_mcu_reset(GL_RESET_SOFTWARE);
+    S.rom = true;
+}
+
+bool gl_sim_mcu_shutdown(void)
+{
+    return S.shutdown;
+}
+
+/* The VBUS pad: 5 V present or not.  The charger and the USB supply of the
+ * MCU follow it at once; the monitor of that supply is an interrupt source
+ * of its own (GL_IRQ_VBUS_CHANGE), whatever the VBUS_SENSE pin reads. */
+static void vbus_pad_set_(bool present)
+{
+    if (present == S.vbus_pad) {
+        return;
+    }
+    charger_account_();
+    S.vbus_pad = present;
+    charger_update_();
+    sim_irq_raise(GL_IRQ_VBUS_CHANGE);
 }
 
 void sim_set_input(gl_pin_t pin, bool level)
@@ -766,6 +1127,13 @@ void sim_set_input(gl_pin_t pin, bool level)
         break;
     case GL_PIN_VBUS_SENSE:
         sim_irq_raise(GL_IRQ_VBUS_CHANGE);
+        if (level && S.shutdown) {
+            /* ship mode: a rising edge on the wake-up pin restarts the MCU */
+            S.shutdown = false;
+            S.reset_reason = GL_RESET_SHIP_WAKE;
+            S.stats.ship_wakes++;
+            sim_trace(GL_SIM_TR_REBOOT, 0xFEu, 0, GL_RESET_SHIP_WAKE, 0);
+        }
         break;
     case GL_PIN_CHG_STAT:
         sim_irq_raise(GL_IRQ_CHG_STAT);
@@ -777,7 +1145,27 @@ void sim_set_input(gl_pin_t pin, bool level)
 
 void gl_sim_set_input(gl_pin_t pin, bool level)
 {
+    if (pin == GL_PIN_VBUS_SENSE) {
+        /* into / out of the cradle: the pad and the pin together */
+        S.vbus_sense_fall_at = SIM_NEVER;
+        vbus_pad_set_(level);
+    }
     sim_set_input(pin, level);
+}
+
+void gl_sim_vbus_remove_lagging(uint32_t lag_ms)
+{
+    vbus_pad_set_(false);
+    if (lag_ms == 0u) {
+        sim_set_input(GL_PIN_VBUS_SENSE, false);
+    } else if (S.pin[GL_PIN_VBUS_SENSE].ext) {
+        S.vbus_sense_fall_at = S.now_us + (uint64_t)lag_ms * 1000u;
+    }
+}
+
+bool gl_sim_vbus_present(void)
+{
+    return S.vbus_pad;
 }
 
 const gl_sim_violations_t *gl_sim_violations(void)
@@ -796,6 +1184,7 @@ const gl_sim_stats_t *gl_sim_stats(void)
 {
     static gl_sim_stats_t snapshot;
     charger_account_();
+    charger_update_();
     snapshot = S.stats;
     if (S.rail_on) {
         snapshot.cam_rail_on_us += S.now_us - S.rail_on_since;
@@ -816,7 +1205,12 @@ bool gl_sim_cam_rail_on(void)
 
 void gl_sim_set_vbat_mv(uint16_t mv)
 {
+    if (S.cell_on) {
+        return; /* the cell model owns the voltage */
+    }
+    charger_account_();
     S.vbat_mv = mv;
+    charger_update_();
 }
 
 void gl_sim_set_vdda_mv(uint16_t mv)
@@ -848,22 +1242,40 @@ uint32_t gl_sim_grain_lit_mask(void)
     return mask;
 }
 
+void gl_sim_usb_host_bus(gl_usb_bus_t bus)
+{
+    const uint8_t before = S.usb_bus;
+    S.usb_bus = (uint8_t)bus;
+    if (bus == GL_USB_BUS_ACTIVE && before != (uint8_t)GL_USB_BUS_ACTIVE && S.usb_standby) {
+        sim_irq_raise(GL_IRQ_USB_WAKE); /* the host resumes the bus */
+    }
+    if (bus == GL_USB_BUS_NONE) {
+        S.usb_host_open = false;
+    }
+}
+
 void gl_sim_usb_host_open(bool open)
 {
     S.usb_host_open = open;
+    if (open) {
+        gl_sim_usb_host_bus(GL_USB_BUS_ACTIVE);
+    }
 }
 
 void gl_sim_usb_host_send(const uint8_t *data, size_t len)
 {
-    if (!S.usb_started) {
+    if (!S.usb_started && !S.usb_standby) {
         return;
     }
+    /* a host that sends is on the bus; out of standby that is the resume,
+     * and the bytes wait until the device has its clocks back */
+    gl_sim_usb_host_bus(GL_USB_BUS_ACTIVE);
     if (len > SIM_USB_PIPE - S.usb_rx_len) {
         len = SIM_USB_PIPE - S.usb_rx_len;
     }
     memcpy(&S.usb_rx[S.usb_rx_len], data, len);
     S.usb_rx_len += len;
-    if (len > 0u) {
+    if (len > 0u && S.usb_started) {
         sim_irq_raise(GL_IRQ_USB_RX);
     }
 }
@@ -893,6 +1305,7 @@ void gl_sim_set_cell_temperature(float temp_c)
     charger_account_();
     S.cell_temp_pinned = true;
     S.cell_temp_c = temp_c;
+    charger_update_();
 }
 
 float gl_sim_cell_temperature(void)
@@ -917,9 +1330,74 @@ double gl_sim_ntc_counts_at(double temp_c)
     return ntc_fraction_(temp_c) * (double)GL_HAL_ADC_FULL_SCALE;
 }
 
+void gl_sim_ntc1_set_fault(gl_sim_ntc1_fault_t fault)
+{
+    charger_account_();
+    S.ntc1_fault = (uint8_t)fault;
+    charger_update_();
+}
+
+void gl_sim_charger_stop_broken(bool broken)
+{
+    charger_account_();
+    S.chg_stop_broken = broken;
+    charger_update_();
+}
+
+void gl_sim_charger_input_low(bool low)
+{
+    charger_account_();
+    S.chg_input_low = low;
+    charger_update_();
+}
+
+gl_sim_chg_state_t gl_sim_charger_state(void)
+{
+    charger_account_();
+    charger_update_(); /* (the board temperature may have been changed through the IMU model) */
+    return (gl_sim_chg_state_t)S.chg_state;
+}
+
+const char *gl_sim_charger_state_name(gl_sim_chg_state_t state)
+{
+    static const char *const names[] = { "NO_INPUT", "DISABLED", "COLD", "HOT", "DONE", "TIMER",
+                                         "FAST", "COOL", "WARM", "TTDM" };
+    return ((unsigned)state < sizeof(names) / sizeof(names[0])) ? names[state] : "?";
+}
+
 bool gl_sim_charger_on(void)
 {
-    return charger_on_();
+    return chg_charging_state_((uint8_t)gl_sim_charger_state());
+}
+
+double gl_sim_charger_out_ua(void)
+{
+    return chg_charging_state_((uint8_t)gl_sim_charger_state()) ? S.chg_out_ua : 0.0;
+}
+
+void gl_sim_cell_enable(float soc)
+{
+    charger_account_();
+    S.cell_on = true;
+    S.cell_soc = (soc < 0.0f) ? 0.0 : (double)soc;
+    S.vbat_mv = (uint16_t)(cell_ocv_mv_(S.cell_soc) + 0.5);
+    charger_update_();
+}
+
+float gl_sim_cell_soc(void)
+{
+    charger_account_();
+    return (float)S.cell_soc;
+}
+
+double gl_sim_load_ua(void)
+{
+    return load_now_(NULL, NULL, NULL);
+}
+
+void gl_sim_set_underside_lit(bool lit)
+{
+    S.underside_lit = lit;
 }
 
 gl_clock_t gl_sim_clock(void)
@@ -1024,7 +1502,37 @@ gl_status_t gl_hal_init(void)
 {
     static const gl_pin_t alt[] = { GL_PIN_SPI1_SCK, GL_PIN_SPI1_MOSI, GL_PIN_SPI1_MISO,
                                     GL_PIN_SPI2_SCK, GL_PIN_SPI2_MOSI, GL_PIN_SPI2_MISO };
+#define SIM_FLOAT(logical) logical,
+    static const gl_pin_t floating[] = { GL_PINS_FLOATING_TABLE(SIM_FLOAT) };
+#undef SIM_FLOAT
+    typedef struct {
+        gl_pin_t pin;
+        bool level, handover;
+    } reset_t;
+#define SIM_RESET(logical, level, handover) { logical, (level) != 0, (handover) != 0 },
+    static const reset_t reset[] = { GL_PINS_RESET_TABLE(SIM_RESET) };
+#undef SIM_RESET
+
     charger_account_();
+    S.rom = false;
+    /* SHIP MODE (gl_hal.h): the marker in the backup domain.  With VBUS the
+     * marker has left ship mode; without it (a reset from any other cause)
+     * it goes straight back - a target backend does not return from here */
+    if (S.ship_marker) {
+        if (S.pin[GL_PIN_VBUS_SENSE].ext) {
+            S.ship_marker = false;
+        } else {
+            for (int p = 0; p < (int)GL_PIN_COUNT; p++) {
+                S.pin[p].mode = (uint8_t)GL_PIN_MODE_ANALOG;
+                S.pin[p].latch = false;
+            }
+            S.shutdown = true;
+            S.inited = false;
+            S.reset_reason = GL_RESET_SHIP_HELD;
+            return GL_ERR_STATE;
+        }
+    }
+    S.shutdown = false;
     for (int p = 0; p < (int)GL_PIN_COUNT; p++) {
         S.pin[p].mode = (uint8_t)GL_PIN_MODE_ANALOG;
         S.pin[p].latch = false;
@@ -1035,21 +1543,24 @@ gl_status_t gl_hal_init(void)
         S.stats.clock_fast_us += S.now_us - S.clock_fast_since;
     }
     S.clock = (uint8_t)GL_CLOCK_SLOW;
-    gl_hal_gpio_write(GL_PIN_CAM_PWR_EN, false);
-    gl_hal_gpio_mode(GL_PIN_CAM_PWR_EN, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_LCD_SCS, false);
-    gl_hal_gpio_mode(GL_PIN_LCD_SCS, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_LCD_DISP, false);
-    gl_hal_gpio_mode(GL_PIN_LCD_DISP, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_LCD_EXTCOMIN, false);
-    gl_hal_gpio_mode(GL_PIN_LCD_EXTCOMIN, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_FLASH_CS, true);
-    gl_hal_gpio_mode(GL_PIN_FLASH_CS, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_IMU_CS, true);
-    gl_hal_gpio_mode(GL_PIN_IMU_CS, GL_PIN_MODE_OUTPUT_PP);
+    S.usb_started = false;
+    S.usb_standby = false;
+    /* 1. the lines that float in reset get their level first */
+    for (size_t i = 0; i < sizeof(floating) / sizeof(floating[0]); i++) {
+        gl_hal_gpio_write(floating[i], false);
+        gl_hal_gpio_mode(floating[i], GL_PIN_MODE_OUTPUT_PP);
+    }
+    /* 2. the pins a board resistor holds: taken over at that level */
+    for (size_t i = 0; i < sizeof(reset) / sizeof(reset[0]); i++) {
+        if (reset[i].handover) {
+            gl_hal_gpio_write(reset[i].pin, reset[i].level);
+            gl_hal_gpio_mode(reset[i].pin, GL_PIN_MODE_OUTPUT_PP);
+        }
+    }
     /* CHG_INHIBIT and NTC_BIAS stay analog: the charger keeps its hardware
-     * default until drivers/power has a temperature (gl_hal.h) */
-    gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT_PULLUP);
+     * default until drivers/power has a reason to stop it (gl_hal.h) */
+    /* 3. inputs without an internal pull; the buses to their peripherals */
+    gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT);
     gl_hal_gpio_mode(GL_PIN_VBUS_SENSE, GL_PIN_MODE_INPUT);
     gl_hal_gpio_mode(GL_PIN_IMU_INT1, GL_PIN_MODE_INPUT);
     gl_hal_gpio_mode(GL_PIN_IMU_INT2, GL_PIN_MODE_INPUT);
@@ -1059,8 +1570,46 @@ gl_status_t gl_hal_init(void)
     S.irq_enabled = 0;
     S.irq_pending = 0;
     S.inited = true;
+    S.mcu_mode = (uint8_t)SIM_MCU_RUN;
     S.wdg_last_kick = S.now_us;
+    charger_update_();
     return GL_OK;
+}
+
+void gl_hal_ship_mode_enter(void)
+{
+    if (S.pin[GL_PIN_VBUS_SENSE].ext) {
+        /* the wake-up is an edge: with VBUS present there would be none */
+        sim_trace(GL_SIM_TR_SHIP, 0, 0, 0, 0);
+        return;
+    }
+    /* what the caller must have switched off (gl_hal.h) */
+    if (sim_pin_out_high(GL_PIN_LCD_DISP) || S.extcomin_on) {
+        sim_violation(&S.viol.stop_mode, "ship mode entered with the display on");
+    }
+    if (S.rail_on || S.usb_started || S.usb_standby || S.adc_on || S.opamp_on) {
+        sim_violation(&S.viol.stop_mode, "ship mode entered with the camera rail, USB, the ADC or "
+                                         "the op-amp on");
+    }
+    if (cs_asserted_(GL_PIN_LCD_SCS) || cs_asserted_(GL_PIN_FLASH_CS) || cs_asserted_(GL_PIN_IMU_CS)) {
+        sim_violation(&S.viol.stop_mode, "ship mode entered with a chip select asserted");
+    }
+    if (sim_pin_out_high(GL_PIN_NTC_BIAS)) {
+        sim_violation(&S.viol.stop_mode, "ship mode entered with NTC_BIAS driven");
+    }
+    if (inhibit_on_()) {
+        sim_violation(&S.viol.power, "ship mode entered with CHG_INHIBIT driven high");
+    }
+    if (S.clock == (uint8_t)GL_CLOCK_FAST) {
+        sim_violation(&S.viol.clock, "ship mode entered with the fast core clock");
+    }
+    sim_trace(GL_SIM_TR_SHIP, 1, 0, 0, 0);
+    mcu_pins_release_();
+    S.shutdown = true;
+    S.ship_marker = true;
+    S.shutdown_since = S.now_us;
+    S.rtc_base_s = 0; /* the low-speed oscillator stops: the clock is "not set" afterwards */
+    S.stats.ship_entries++;
 }
 
 uint32_t gl_hal_reset_reason(void)
@@ -1282,8 +1831,9 @@ gl_clock_t gl_hal_clock_get(void)
     return (gl_clock_t)S.clock;
 }
 
-#define SIM_STOP_WAKE_MASK \
-    (GL_IRQ_IMU_INT1 | GL_IRQ_IMU_INT2 | GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT | GL_IRQ_WAKE_TIMER)
+#define SIM_STOP_WAKE_MASK                                                                      \
+    (GL_IRQ_IMU_INT1 | GL_IRQ_IMU_INT2 | GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT | GL_IRQ_WAKE_TIMER | \
+     GL_IRQ_USB_WAKE)
 
 uint32_t gl_hal_sleep(gl_sleep_mode_t mode)
 {
@@ -1292,14 +1842,14 @@ uint32_t gl_hal_sleep(gl_sleep_mode_t mode)
 
     /* board rules that hold at every sleep: by the time the main loop goes
      * to sleep it must have dealt with a VBUS that went away */
-    if (S.usb_started && !S.pin[GL_PIN_VBUS_SENSE].ext) {
-        sim_violation(&S.viol.power, "USB still started with VBUS absent (VDDUSB unpowered)");
+    if ((S.usb_started || S.usb_standby) && !S.vbus_pad) {
+        sim_violation(&S.viol.power, "USB still on with VBUS absent (its supply pin unpowered)");
     }
     if (mode == GL_SLEEP_STOP) {
         const bool vbus = S.pin[GL_PIN_VBUS_SENSE].ext;
-        if (!vbus && sim_pin_out_low(GL_PIN_CHG_INHIBIT)) {
-            sim_violation(&S.viol.power, "Stop mode with CHG_INHIBIT pulled low and no VBUS: an "
-                                         "inhibit left behind by a sleeping MCU");
+        if (!vbus && inhibit_on_()) {
+            sim_violation(&S.viol.power, "Stop mode with CHG_INHIBIT driven high and no VBUS: a "
+                                         "stop left behind by a sleeping MCU");
         }
         if (vbus && (S.wake_timer_at == SIM_NEVER ||
                      S.wake_timer_at - S.now_us > (uint64_t)GL_SIM_CHG_SUPERVISE_MAX_MS * 1000u)) {
@@ -1536,6 +2086,23 @@ gl_status_t gl_hal_adc_read(gl_adc_ch_t ch, uint16_t n_avg, uint16_t sample_time
         if (!S.opamp_on) {
             sim_violation(&S.viol.analog, "grain channel read with OPAMP1 off");
         }
+        /* rev E: the mid-rail bias of the stage is a divider fed from the
+         * LCD_DISP line (it draws nothing asleep): DISP must be high, and
+         * must have been for GL_PINS_GRAIN_BIAS_DISP_MS */
+        if (!sim_pin_out_high(GL_PIN_LCD_DISP)) {
+            sim_violation(&S.viol.analog, "grain conversion with LCD_DISP low: the bias divider "
+                                          "is not fed");
+        } else {
+            const uint64_t since = S.now_us - S.disp_high_since;
+            if (since < S.stats.grain_bias_short_us) {
+                S.stats.grain_bias_short_us = since;
+            }
+            if (since < (uint64_t)GL_PINS_GRAIN_BIAS_DISP_MS * 1000u) {
+                sim_violation(&S.viol.analog, "grain conversion %u ms after LCD_DISP went high "
+                                              "(the bias needs %u ms)", (unsigned)(since / 1000u),
+                              (unsigned)GL_PINS_GRAIN_BIAS_DISP_MS);
+            }
+        }
         tia_settle_to_now_();
         v = S.tia_level;
         noise = S.grain.noise_counts;
@@ -1657,24 +2224,58 @@ void gl_hal_xvclk_stop(void)
 /* gl_hal.h: USB                                                            */
 /* ======================================================================= */
 
+bool gl_hal_usb_supply_ok(void)
+{
+    /* VBUS_SENSE high AND the MCU's own monitor of its USB supply pin (rev E:
+     * a regulator fed from VBUS and enabled by the 2.8 V rail) */
+    return S.pin[GL_PIN_VBUS_SENSE].ext && S.vbus_pad;
+}
+
 gl_status_t gl_hal_usb_start(void)
 {
+    if (!gl_hal_usb_supply_ok()) {
+        sim_trace(GL_SIM_TR_USB, 2, 0, 0, 0); /* refused: no supply */
+        return GL_ERR_STATE;
+    }
     S.usb_started = true;
+    S.usb_standby = false; /* back from standby: same configuration, no new enumeration */
     sim_trace(GL_SIM_TR_USB, 1, 0, 0, 0);
+    if (S.usb_rx_len > 0u) {
+        sim_irq_raise(GL_IRQ_USB_RX);
+    }
     return GL_OK;
 }
 
 void gl_hal_usb_stop(void)
 {
     S.usb_started = false;
+    S.usb_standby = false;
     S.usb_rx_len = 0;
-    S.irq_pending &= ~GL_IRQ_USB_RX;
+    S.irq_pending &= ~(GL_IRQ_USB_RX | GL_IRQ_USB_WAKE);
     sim_trace(GL_SIM_TR_USB, 0, 0, 0, 0);
+}
+
+gl_usb_bus_t gl_hal_usb_bus(void)
+{
+    return (S.usb_started || S.usb_standby) ? (gl_usb_bus_t)S.usb_bus : GL_USB_BUS_NONE;
+}
+
+gl_status_t gl_hal_usb_standby(void)
+{
+    if (!S.usb_started || S.usb_bus != (uint8_t)GL_USB_BUS_SUSPENDED) {
+        sim_trace(GL_SIM_TR_USB_STANDBY, 0, 0, 0, 0);
+        return GL_ERR_STATE; /* not started, no host, or a host that is talking */
+    }
+    S.usb_started = false;
+    S.usb_standby = true;
+    S.irq_pending &= ~GL_IRQ_USB_RX;
+    sim_trace(GL_SIM_TR_USB_STANDBY, 1, 0, 0, 0);
+    return GL_OK;
 }
 
 bool gl_hal_usb_connected(void)
 {
-    return S.usb_started && S.usb_host_open;
+    return S.usb_started && S.usb_host_open && S.usb_bus == (uint8_t)GL_USB_BUS_ACTIVE;
 }
 
 size_t gl_hal_usb_read(uint8_t *buf, size_t max)

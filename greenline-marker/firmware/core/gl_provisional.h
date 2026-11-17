@@ -1,7 +1,8 @@
 /*
  * gl_provisional.h - every PROVISIONAL hardware fact the firmware depends on.
  *
- * DESIGN_SPEC.md (rev C2 / D) marks facts as VERIFIED or PROVISIONAL.  Anything
+ * DESIGN_SPEC.md (rev D with amendments E1 to E34: the "rev E" board) marks
+ * facts as VERIFIED or PROVISIONAL.  Anything
  * provisional that changes what the firmware does is a named constant HERE
  * and nowhere else, with the reason and what to check.  When a release gate
  * is closed, change the value (if needed), move the constant to its module
@@ -101,12 +102,13 @@
 #define GL_PROV_LCD_FPC_PIN_VSS 9
 #define GL_PROV_LCD_FPC_PIN_VSSA 10
 
-/** EXTCOMIN: 32768 / 547 = 59.905 Hz, the divider DESIGN_SPEC section 4 now
- *  states (rev C2; 546 would be 60.015 Hz, just outside the 1-60 Hz range).
+/** EXTCOMIN: 32768 / 547 = 59.905 Hz, the divider DESIGN_SPEC section 4
+ *  states (546 would be 60.015 Hz, just outside the 1-60 Hz range).
  *  Sharp publishes two ranges (54-65 Hz and 1-60 Hz); which is current is
  *  unconfirmed, and 547 ticks is inside both with any crystal tolerance.
- *  tools/gen_pins.py reads the divider from the spec text and exports it as
- *  GL_PINS_EXTCOMIN_LSE_TICKS; tests/test_pins.c fails if the two differ.
+ *  The netlist's pin map carries the divider (extcomin_lse_ticks);
+ *  tools/gen_pins.py exports it as GL_PINS_EXTCOMIN_LSE_TICKS and
+ *  tests/test_pins.c fails if the two differ.
  *  Still unconfirmed: the order of DISP and EXTCOMIN at switch-on.  The
  *  driver starts EXTCOMIN before raising DISP; a reviewer remembers the
  *  Sharp sequence as DISP first.  Check against the datasheet. */
@@ -336,12 +338,12 @@
 
 /** Absolute accuracy of the IMU's temperature sensor: NOT KNOWN here (the
  *  datasheet was not available; sister parts specify an offset of up to
- *  +-15 K, from memory).  Since rev C2 the CELL NTC is the charge-temperature
- *  input and the two die sensors (IMU, MCU) are plausibility checks only:
- *  the NTC reading must lie within this many kelvin of AT LEAST ONE die
- *  sensor that is alive, or it is not believed and charging stops.  (One,
- *  not both: a die sensor of unknown accuracy must not be able to veto a
- *  healthy NTC; an NTC that has come off the cell or reads a fixed value
+ *  +-15 K, from memory).  The MCU's cell thermistor NTC2 is the firmware's
+ *  temperature input and the two die sensors (IMU, MCU) are plausibility
+ *  checks only: the NTC reading must lie within this many kelvin of AT LEAST
+ *  ONE die sensor that is alive, or it is not believed and the firmware
+ *  stops the charge.  (One, not both: a die sensor of unknown accuracy must
+ *  not be able to veto a healthy NTC; an NTC that reads a fixed value
  *  disagrees with both.) */
 #define GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C 10.0f
 
@@ -363,15 +365,91 @@
 #define GL_PROV_GRAIN_ADC_AVG 16u
 #define GL_PROV_GRAIN_ADC_SAMPLE_US 5u
 /** Time for OPAMP1 and the mid-rail bias (2 x 100 kohm, 100 nF: 5 ms time
- *  constant) to settle after power-up. */
-#define GL_PROV_GRAIN_POWER_SETTLE_MS 25u
+ *  constant) to settle after power-up.  Rev E: the bias divider is fed from
+ *  the LCD_DISP line (it draws nothing asleep), so DISP must be HIGH, and
+ *  must have been for 7 time constants = 35 ms (NETLIST_NOTES 4.10, firmware
+ *  note 12; GL_PINS_GRAIN_BIAS_DISP_MS, which tests/test_pins.c compares
+ *  with this).  gl_grain_fe_power() refuses with DISP low and waits this
+ *  long, which covers the bias whenever DISP was switched on earlier. */
+#define GL_PROV_GRAIN_POWER_SETTLE_MS 35u
 
 /* ---- power -------------------------------------------------------------------- */
 
 /** Battery divider ratio (2 x 1 Mohm, 1 % parts assumed): V_bat = ratio * V_pin. */
 #define GL_PROV_BATT_DIVIDER_RATIO 2.0f
-/** Charging is allowed while the CELL temperature (NTC) is between these
- *  limits (DESIGN_SPEC section 4: 0-45 C) ... */
+
+/* ---- charger: TI BQ25101 (E1) ---------------------------------------------------
+ *
+ * NO DATA SHEET WAS READ FOR THIS FIRMWARE.  What follows is what DESIGN_SPEC
+ * section 4 and electrical/gl1_main/NETLIST_NOTES.md (4.2, 8.2) state - both
+ * PROVISIONAL there, from web-search extracts of TI SLUSBV8 - completed from
+ * memory of the BQ2510x family where the firmware or the simulator's charger
+ * model needs a number.  drivers/power.c and hal/host/gl_sim_core.c use
+ * these constants and nothing else, so a data-sheet reading changes one
+ * place.  RELEASE GATE (DESIGN_SPEC section 7): the thresholds against the
+ * NTC curve. */
+
+/** Fast-charge current, microamperes: K / R_ISET = 135 A-ohm / 6.81 kohm (spec). */
+#define GL_PROV_BQ25101_ICHG_UA 19820.0f
+/** Termination: the charge ends when the current out of the charger falls
+ *  below this fraction of the fast-charge current (spec: 10 %, fixed on the
+ *  BQ25101).  THE CURRENT THAT COUNTS IS THE CHARGER'S OUTPUT CURRENT: the
+ *  board hangs on the same node as the cell (no power path), so whatever the
+ *  marker draws in the cradle is part of it - the reason for E32. */
+#define GL_PROV_BQ25101_TERM_FRACTION 0.10f
+/** Regulation voltage (BQ25101: 4.20 V) and the voltage the charger regulates
+ *  to in its WARM zone (spec: 4.06 V), mV; the cell voltage below which a
+ *  finished charge starts again (from memory of the family: about 100 mV
+ *  under the regulation voltage). */
+#define GL_PROV_BQ25101_VREG_MV 4200u
+#define GL_PROV_BQ25101_VREG_WARM_MV 4060u
+#define GL_PROV_BQ25101_RECHARGE_DROP_MV 100u
+/** The charger's own temperature window, on ITS thermistor NTC1 (spec:
+ *  JEITA profile; "halves the current when cold, lowers the charge voltage
+ *  to 4.06 V when hot and does not charge outside its window").  Degrees C
+ *  as the usual JEITA corners; the real thresholds are voltages on TS and
+ *  depend on the fit of the part's bias current to this NTC: NOT READ. */
+#define GL_PROV_BQ25101_T_COLD_C 0.0f   /* below: no charge */
+#define GL_PROV_BQ25101_T_COOL_C 10.0f  /* below: half current */
+#define GL_PROV_BQ25101_T_WARM_C 45.0f  /* above: 4.06 V */
+#define GL_PROV_BQ25101_T_HOT_C 60.0f   /* above: no charge */
+/** TS pulled to ground (what CHG_INHIBIT does through its MOSFET) disables
+ *  the charger: 1 (extract: "pulling the pin low disables the IC"). */
+#define GL_PROV_BQ25101_TS_LOW_DISABLES 1
+/** TS OPEN (a cracked joint on NTC1) puts the charger into a test mode
+ *  WITHOUT temperature monitoring, safety timer and termination (extract:
+ *  "floating TS pin or pulling high puts part in TTDM"): 1.  The hardware
+ *  window is then GONE, silently; the simulator models it, and the
+ *  firmware's own gate on NTC2 is what is left while the firmware runs. */
+#define GL_PROV_BQ25101_TS_OPEN_IS_TTDM 1
+/** The charger's own safety timer, hours (from memory of the family: a fixed
+ *  10 h fast-charge timer; NOT in the extracts).  0 = model none.  The
+ *  firmware does not rely on it: its own limit is GL_PROV_CHARGE_MAX_MS. */
+#define GL_PROV_BQ25101_SAFETY_TIMER_H 10u
+/** CHG (open drain): LOW while a charge runs - pre-charge, fast charge,
+ *  taper - and released when it has terminated, when the charger is disabled
+ *  (TS low, temperature window, no input) or after a timer fault.  From
+ *  memory of the family: NOT CONFIRMED whether a RE-charge after the first
+ *  termination pulls CHG low again (1 = it does; the firmware works either
+ *  way: with 0 a recharge shows as "full" although current flows). */
+#define GL_PROV_BQ25101_CHG_LOW_ON_RECHARGE 1
+/** Minimum input voltage at which the charger works (docs/research/power.md,
+ *  UNVERIFIED there).  The firmware cannot measure the charger's input; a
+ *  charger that does not charge although it should shows as
+ *  GL_CHGST_NOT_CHARGING (NETLIST_NOTES 4.1: with the Schottky the input is
+ *  below this figure at the low end of a compliant source; E25 removes the
+ *  Schottky). */
+#define GL_PROV_BQ25101_VIN_MIN_MV 4450u
+
+/* ---- the firmware's own charge supervision (NTC2) -------------------------------- */
+
+/** The firmware stops the charge (CHG_INHIBIT high) outside these limits on
+ *  ITS thermistor: DESIGN_SPEC section 4 gave the cell 0-45 C for charging,
+ *  and that is NARROWER than the charger's own window, which goes on to
+ *  60 C at 4.06 V.  With firmware running the charge therefore stops at
+ *  45 C less the guard; without it (ROM loader, a hang, Shutdown) the
+ *  charger's window alone decides.  Whether the cell may be charged in the
+ *  charger's WARM zone is the cell data sheet's answer (release gate). */
 #define GL_PROV_CHARGE_TEMP_MIN_C 0.0f
 #define GL_PROV_CHARGE_TEMP_MAX_C 45.0f
 /** ... measured with this much margin, because the firmware must stop
@@ -380,30 +458,67 @@
  *  case is 1.09 K at 45 C and 0.90 K at 0 C (all eight corners of NTC 1 % at
  *  25 C, B 1 %, series resistor 1 %, with an ADC error of 0.2 % of full
  *  scale; computed again by tests/test_drv_power.c, which fails if it
- *  exceeds the guard).  1.5 K leaves 0.4 K for what is NOT in that sum: the
- *  part's real R-T curve against the B equation, and a temperature
- *  difference between the cell and the NTC beside it (unmeasured: release
- *  gate). */
+ *  exceeds the guard), plus 0.11 to 0.16 K for the output resistance of the
+ *  bias pin (NETLIST_NOTES 4.5).  1.5 K leaves about 0.3 K for what is NOT
+ *  in that sum: the part's real R-T curve against the B equation, and a
+ *  temperature difference between the cell and the NTC beside it
+ *  (unmeasured: release gate). */
 #define GL_PROV_CHARGE_TEMP_GUARD_C 1.5f
 /** ... and resumes only this far inside the guarded window (hysteresis,
  *  our choice). */
 #define GL_PROV_CHARGE_TEMP_HYST_C 2.0f
+/** E32 backstop: after this much CONTINUOUS charging (CHG low the whole
+ *  time) the firmware stops the charge.  6 h is the specification's figure.
+ *  A full charge of the 43 mAh cell at 19.8 mA is about 2.2 h of constant
+ *  current plus the taper; in the charger's COOL zone (half current) it is
+ *  about 4.4 h plus the taper, so a charge from empty below 10 C may be cut
+ *  a few percent short. */
+#define GL_PROV_CHARGE_MAX_MS (6u * 3600u * 1000u)
+/** After the backstop the charge may start again when the cell has fallen
+ *  below this voltage (our choice: otherwise a marker left docked for weeks
+ *  would run its cell down behind a charger that is held off). */
+#define GL_PROV_CHARGE_RESTART_MV 4000u
+/** "Done": CHG released with the cell at or above this voltage.  Below it,
+ *  with nothing the firmware knows of holding the charger, the charger is
+ *  NOT CHARGING although it should (regulation voltage less the recharge
+ *  drop, less 60 mV for the divider and the ADC). */
+#define GL_PROV_CHARGE_DONE_MIN_MV 4040u
 
-/* ---- cell NTC (rev C2) ---------------------------------------------------------- */
+/* ---- E13: no camera read from a hot cell ----------------------------------------- */
 
-/** Murata NCP15XH103F03RC (PROVISIONAL stock): 10 kohm at 25 C, B(25/50) =
- *  3380 K, both 1 %; divider with 10.0 kohm 1 % from the GPIO NTC_BIAS to
- *  the ADC pin NTC_SENSE, the NTC from there to ground.  The firmware uses
- *  the B-parameter equation T = 1 / (1 / T25 + ln(R / R25) / B); the part's
- *  resistance table deviates from it by a fraction of a kelvin between 0 and
- *  50 C (NOT VERIFIED here: no datasheet table was available; replace the
- *  equation by the table if the difference matters). */
+/** No camera read is started when NTC2 READS above this (DESIGN_SPEC section
+ *  6, E13; 60 C is the cell family's discharge limit, bom-verification-opto
+ *  3.4, and a read draws about 96 mA).  The limit is applied to the READING,
+ *  as the specification words it: the reading's error at 60 C is about 1.3 K
+ *  worst case (computed by tests/test_drv_power.c), so the true cell may be
+ *  that much hotter when the gate still lets a read through. */
+#define GL_PROV_READ_TEMP_MAX_C 60.0f
+/** ... and reads are allowed again when it has fallen this far below the
+ *  limit (our choice: 3 K, twice the reading's error, so that a cell sitting
+ *  at the limit does not flicker between the two answers). */
+#define GL_PROV_READ_TEMP_HYST_C 3.0f
+
+/* ---- cell thermistor of the MCU, NTC2 (E2) ---------------------------------------- */
+
+/** Murata NCU15XH103F60RC (E2; it replaces the NCP15XH103F03RC): 10 kohm at
+ *  25 C, B(25/50) = 3380 K NOMINAL, both taken as 1 % (PROVISIONAL: no data
+ *  sheet, no R-T table).  Divider with 10.0 kohm 1 % (R19) from the GPIO
+ *  NTC_BIAS to the ADC pin NTC_SENSE, the NTC (RT2) from there to ground.
+ *
+ *  EVERY R-T NUMBER IN THIS FIRMWARE IS DERIVED FROM THE B EQUATION
+ *      R(T) = R25 * exp(B * (1 / T - 1 / 298.15 K)),   T in kelvin,
+ *  with these two constants, and from nothing else: tests/test_drv_power.c
+ *  computes its table from the same equation.  The part's real curve
+ *  deviates from a one-B equation (typically a few tenths of a kelvin
+ *  between 0 and 60 C for this class of part, more outside: NOT VERIFIED);
+ *  replace the equation by the maker's table when it is in hand. */
 #define GL_PROV_NTC_R25_OHM 10000.0f
 #define GL_PROV_NTC_B_K 3380.0f
 #define GL_PROV_NTC_SERIES_OHM 10000.0f
-/** Time from NTC_BIAS high to the conversion: the divider's 5 kohm source
- *  resistance into the pin and any filter capacitor the schematic adds
- *  (assumed <= 10 nF: 50 us time constant).  Guess until the netlist exists. */
+/** Time from NTC_BIAS high to the conversion.  The netlist puts no capacitor
+ *  on the node (source resistance 2.3 to 7.4 kohm: it settles in
+ *  microseconds, NETLIST_NOTES 4.5); 500 us is kept as margin for whatever
+ *  the layout adds. */
 #define GL_PROV_NTC_SETTLE_US 500u
 /** ADC samples averaged and sampling time per sample (5 kohm source). */
 #define GL_PROV_NTC_ADC_AVG 8u
@@ -424,10 +539,9 @@
 /** Below this cell voltage, with no VBUS, the firmware stops everything it
  *  can (IMU powered down: no wake-on-motion; only the cradle wakes the
  *  device) so that the sleep drain does not take the cell down to its
- *  protection cut-off.  (Since rev C2 the charger is on by default in
- *  hardware, so a cell at its cut-off CAN be recharged; storage mode still
- *  spares the cell the deep discharge.)  Engineering guess, no cell
- *  datasheet. */
+ *  protection cut-off.  (The charger is on by default in hardware, so a
+ *  cell at its cut-off CAN be recharged; storage mode still spares the cell
+ *  the deep discharge.)  Engineering guess, no cell datasheet. */
 #define GL_PROV_BATT_STORAGE_MV 3250u
 
 /* ---- MX25R6435F: timing --------------------------------------------------------- */
@@ -445,13 +559,33 @@
 /* MCU pin assignment                                                       */
 /* ======================================================================= */
 
-/* DESIGN_SPEC section 4 fixes 19 MCU pins (DCMI, MCO, SPI1 MISO, USB,
- * LPTIM1_CH1, OPAMP1).  The other 28 signals have NO assignment yet (the
- * netlist is being designed and will export the final map):
- * hal/stm32u5/gl_pins.h carries this firmware's PROPOSED assignment for
- * them, each row marked GL_PINSRC_PROPOSED, generated and cross-checked
- * against the spec text by tools/gen_pins.py, which is the single place
- * where pins are listed.  The pin map is data of the STM32 backend only;
- * nothing in core, drivers or app depends on which pad a signal is on. */
+/* The pin map is the NETLIST's (electrical/gl1_main/pinmap.json, proven there
+ * against ST's open pin data); hal/stm32u5/gl_pins.h is generated from it by
+ * tools/gen_pins.py (`make pins`) and holds no pin of its own.  The layout
+ * step may still exchange PROPOSED and CHANGED pins: then the header is
+ * regenerated.  What stays PROVISIONAL about the pins is stated in the pin
+ * map: the list of pins the ROM bootloader drives or listens on (memory of
+ * AN2606), what the UCPD pads do, and the electrical limits of the pins.
+ * The pin map is data of the STM32 backend only; nothing in core, drivers
+ * or app depends on which pad a signal is on. */
+
+/* ======================================================================= */
+/* MCU low-power modes (rev E)                                               */
+/* ======================================================================= */
+
+/** Ship mode is the MCU's Shutdown mode, left through the wake-up pin of
+ *  VBUS_SENSE.  From memory of RM0456 / DS13086, NOT READ: which of the four
+ *  inputs of that wake-up line PC13 is (the selection field of PWR_WUCR3; the
+ *  backend's identifier map names it), that a rising edge on it wakes the
+ *  MCU from Shutdown, that the backup registers survive Shutdown, and that
+ *  the pull-downs of PWR_PDCRx are applied in Shutdown when APC is set. */
+#define GL_PROV_SHIP_MODE_IS_SHUTDOWN 1
+/** In the cradle sleep of E32 the USB device may stay attached to a
+ *  SUSPENDED bus and wake the MCU on resume.  Whether the STM32U585 can do
+ *  that from Stop 2 is NOT KNOWN here (the sister families wake on USB from
+ *  Stop 0 / 1 only): 0 = the backend uses Stop 1 while USB is in standby,
+ *  which costs tens of microamperes more and is still far below the
+ *  charger's termination current. */
+#define GL_PROV_USB_WAKE_FROM_STOP2 0
 
 #endif /* GL_PROVISIONAL_H */

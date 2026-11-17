@@ -11,6 +11,15 @@
 #                libm / libc) and the fused-instruction check
 #   make config  regenerate core/gl_config.h, core/gl_font_data.c,
 #                hal/stm32u5/gl_pins.h and tests/solver/gl_solver_vectors.c
+#   make pins    regenerate hal/stm32u5/gl_pins.h from the netlist's pin map
+#                ../electrical/gl1_main/pinmap.json (its single input; the
+#                layout step may still exchange pins: this is the one
+#                command that follows it)
+#   make pins-check
+#                fail if hal/stm32u5/gl_pins.h is stale against pinmap.json,
+#                or if the generator no longer refuses the defects its
+#                self-test seeds into a copy of the pin map (part of
+#                config-check, and with it of every test and cross build)
 #   make diff    NOT part of `make test`: build the solver as shared libraries
 #                (double and single precision) and run tools/diff_solver.py,
 #                the differential test against the Python reference in
@@ -33,9 +42,10 @@
 #   app/*.c       main loop and glue       (app/gl_main.c holds main() and is
 #                                           left out of the host test library)
 #   hal/host/*.c  host simulator backend of hal/gl_hal.h
-#   hal/stm32u5/  STM32U585 backend: NOT compiled by any target here (no
-#                 vendor SDK); only its generated pin table gl_pins.h is
-#                 checked, by tests/test_pins.c
+#   hal/stm32u5/  STM32U585 backend: compiled only by `make cross-hal`
+#                 (against vendor headers that are not in this repository);
+#                 its generated pin table gl_pins.h is checked by
+#                 tests/test_pins.c
 #   tests/synth/*.c  synthetic data generators shared by tests
 #   tests/solver/    reference vectors of the solver (generated) and the
 #                    harness that runs them; see "the solver in two
@@ -110,7 +120,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/tests/%,$(TEST_SRC))
 LIB      := $(BUILD)/libgl.a
 
 .PHONY: all test asan cross cross-hal config config-check clean run-tests diff bench appdiff \
-        bench-vision profile
+        bench-vision profile pins pins-check
 .SECONDARY:
 all: test
 
@@ -234,19 +244,35 @@ cross-hal: config-check
 # ---- generated sources -----------------------------------------------------
 VECTORS_JSON := ../sim/results/reference_vectors.json
 
-config:
+# The pin map of the board: exported by the netlist (electrical/gl1_main/
+# check_pinmap.py), the ONLY input of tools/gen_pins.py.
+PINMAP := ../electrical/gl1_main/pinmap.json
+PINS_H := hal/stm32u5/gl_pins.h
+
+config: pins
 	$(PYTHON) tools/gen_config.py ../design/master_params.yaml core/gl_config.h
 	$(PYTHON) tools/gen_font.py core/gl_font_data.c
-	$(PYTHON) tools/gen_pins.py ../design/DESIGN_SPEC.md hal/stm32u5/gl_pins.h
 	$(PYTHON) tools/gen_vectors.py $(VECTORS_JSON) tests/solver/gl_solver_vectors.c
 
-# Fails if the checked-in generated files are stale.  Skipped (with a note)
-# when python3 or PyYAML is not installed: the generated files are checked in.
+pins:
+	$(PYTHON) tools/gen_pins.py $(PINMAP) $(PINS_H)
+
+# Stale header, or a generator that has stopped refusing bad pin maps: both
+# fail.  Needs python3 only (no PyYAML).
+pins-check:
+	@$(PYTHON) tools/gen_pins.py --check $(PINMAP) $(PINS_H)
+	@$(PYTHON) tools/gen_pins.py --selftest $(PINMAP)
+
+# Fails if the checked-in generated files are stale.  The part that needs
+# PyYAML is skipped (with a note) when it is not installed: the generated
+# files are checked in.  The pin map is checked whenever python3 is there.
 config-check:
+	@if $(PYTHON) -c "import json" 2>/dev/null; then \
+	  $(MAKE) --no-print-directory pins-check; \
+	else echo "pins-check skipped (python3 not available)"; fi
 	@if $(PYTHON) -c "import yaml" 2>/dev/null; then \
 	  $(PYTHON) tools/gen_config.py --check ../design/master_params.yaml core/gl_config.h && \
 	  $(PYTHON) tools/gen_font.py --check core/gl_font_data.c && \
-	  $(PYTHON) tools/gen_pins.py --check ../design/DESIGN_SPEC.md hal/stm32u5/gl_pins.h && \
 	  $(PYTHON) tools/gen_vectors.py --check $(VECTORS_JSON) tests/solver/gl_solver_vectors.c; \
 	else echo "config-check skipped (python3 + PyYAML not available)"; fi
 

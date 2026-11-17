@@ -57,7 +57,9 @@ void gl_grain_fe_all_off(void);
 void gl_grain_fe_led_on(int led);
 
 /** Power the analog chain (ADC + OPAMP1) up, with its settling time, or
- *  down (LEDs off first). */
+ *  down (LEDs off first).  Rev E: the amplifier's bias divider is fed from
+ *  the LCD_DISP line, so powering up needs the display ON (GL_ERR_STATE
+ *  otherwise) and waits GL_PROV_GRAIN_POWER_SETTLE_MS = 35 ms for it. */
 gl_status_t gl_grain_fe_power(bool on);
 
 /**

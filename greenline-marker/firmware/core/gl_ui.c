@@ -143,12 +143,31 @@ static const gl_ui_transition_t table_[] = {
     T(GL_UI_SETTINGS_DIAL, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_SLEEP,
       GL_ACT_ENTER_SLEEP | GL_ACT_SURVEY_RESET),
 
-    /* ---- CRADLE_USB: charging and data.  The cradle accepts the marker one
-     *      way round only and holds it down: nothing is calibrated here ---- */
+    /* ---- CRADLE_USB: charging and data, while a host talks.  The cradle
+     *      accepts the marker one way round only and holds it down: nothing
+     *      is calibrated here.  The state's time limit is the 30 s WITHOUT
+     *      HOST ACTIVITY of DESIGN_SPEC E32: the application restarts it
+     *      (gl_ui_keepalive) whenever a host sends something, so on a wall
+     *      charger, or under an idle host, it runs out and the marker goes
+     *      to sleep in the cradle ---- */
     T(GL_UI_CRADLE_USB, GL_EV_USB_DETACH, GL_G_ALWAYS, GL_UI_SLEEP,
       GL_ACT_USB_STOP | GL_ACT_ENTER_SLEEP),
     T(GL_UI_CRADLE_USB, GL_EV_USB_ATTACH, GL_G_ALWAYS, GL_UI_CRADLE_USB, 0),
     T(GL_UI_CRADLE_USB, GL_EV_BATT_LOW, GL_G_ALWAYS, GL_UI_CRADLE_USB, 0),
+    T(GL_UI_CRADLE_USB, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_CRADLE_USB, 0),
+    T(GL_UI_CRADLE_USB, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_CRADLE_SLEEP,
+      GL_ACT_CRADLE_SLEEP | GL_ACT_REDRAW),
+
+    /* ---- CRADLE_SLEEP (E32): MCU in Stop mode, the display on with a static
+     *      symbol.  Out of it: the host resumes the bus, or the marker is
+     *      lifted out.  VBUS bouncing, motion and taps do not wake it ---- */
+    T(GL_UI_CRADLE_SLEEP, GL_EV_USB_RESUME, GL_G_ALWAYS, GL_UI_CRADLE_USB,
+      GL_ACT_DISPLAY_ON | GL_ACT_USB_START | GL_ACT_REDRAW),
+    T(GL_UI_CRADLE_SLEEP, GL_EV_USB_DETACH, GL_G_ALWAYS, GL_UI_SLEEP,
+      GL_ACT_USB_STOP | GL_ACT_ENTER_SLEEP),
+    T(GL_UI_CRADLE_SLEEP, GL_EV_USB_ATTACH, GL_G_ALWAYS, GL_UI_CRADLE_SLEEP, 0),
+    T(GL_UI_CRADLE_SLEEP, GL_EV_BATT_LOW, GL_G_ALWAYS, GL_UI_CRADLE_SLEEP, 0),
+    T(GL_UI_CRADLE_SLEEP, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_CRADLE_SLEEP, 0),
 
     /* ---- CAL_ZERO: zeroing on any hard flat surface (read, turn the marker
      *      180 degrees in place, read again).  Entered only from the dial;
@@ -182,6 +201,23 @@ static const gl_ui_transition_t table_[] = {
     T(GL_UI_LOW_BATT, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_SLEEP,
       GL_ACT_ENTER_SLEEP | GL_ACT_SURVEY_RESET),
     T(GL_UI_LOW_BATT, GL_EV_BATT_LOW, GL_G_ALWAYS, GL_UI_LOW_BATT, 0),
+    T(GL_UI_LOW_BATT, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_LOW_BATT, 0),
+
+    /* ---- TOO_HOT (E13): the cell is above 60 C; no camera read.  Shown for
+     *      4 s, then sleep; the next placement measures again ---- */
+    T(GL_UI_TOO_HOT, GL_EV_TIMEOUT, GL_G_ALWAYS, GL_UI_SLEEP,
+      GL_ACT_ENTER_SLEEP | GL_ACT_SURVEY_RESET),
+    T(GL_UI_TOO_HOT, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_TOO_HOT, 0),
+
+    /* ---- states in which TOO_HOT changes nothing: asleep; a result that is
+     *      already on the screen stays; the dial and the zeroing use no
+     *      camera (the read that follows them is gated when it starts) ---- */
+    T(GL_UI_SLEEP, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_SLEEP, 0),
+    T(GL_UI_SHOW_RESULT, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_SHOW_RESULT, 0),
+    T(GL_UI_PRECISION_WAIT_SPIN, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_PRECISION_WAIT_SPIN, 0),
+    T(GL_UI_SETTINGS_DIAL, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_SETTINGS_DIAL, 0),
+    T(GL_UI_CAL_ZERO, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_CAL_ZERO, 0),
+    T(GL_UI_ERROR, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_ERROR, 0),
 
     /* ---- from any state ---- */
     T(GL_UI_ANY, GL_EV_USB_ATTACH, GL_G_ALWAYS, GL_UI_CRADLE_USB,
@@ -191,6 +227,9 @@ static const gl_ui_transition_t table_[] = {
       GL_ACT_ABORT_READ | GL_ACT_SURVEY_RESET | GL_ACT_REDRAW),
     T(GL_UI_ANY, GL_EV_FAULT, GL_G_ALWAYS, GL_UI_ERROR,
       GL_ACT_ABORT_READ | GL_ACT_DISPLAY_ON | GL_ACT_REDRAW),
+    /* a camera read was about to start from a cell that is too hot */
+    T(GL_UI_ANY, GL_EV_TOO_HOT, GL_G_ALWAYS, GL_UI_TOO_HOT,
+      GL_ACT_ABORT_READ | GL_ACT_SURVEY_RESET | GL_ACT_DISPLAY_ON | GL_ACT_REDRAW),
     /* VBUS went away in a state that has no row for it (the application has
      * already stopped USB itself, below the UI): leave the cradle business
      * cleanly, whatever the state was */
@@ -209,10 +248,12 @@ static const uint32_t timeout_ms_[GL_UI_STATE_COUNT] = {
     20000,  /* PRECISION_WAIT_SPIN */
     60000,  /* SURVEY_NEXT_DROP */
     30000,  /* SETTINGS_DIAL */
-    0,      /* CRADLE_USB */
+    30000,  /* CRADLE_USB: without host activity (the application restarts it) */
     120000, /* CAL_ZERO */
     5000,   /* ERROR */
     4000,   /* LOW_BATT */
+    4000,   /* TOO_HOT */
+    0,      /* CRADLE_SLEEP */
 };
 
 const gl_ui_transition_t *gl_ui_table(size_t *rows)
@@ -233,7 +274,7 @@ const char *gl_ui_state_name(gl_ui_state_t state)
     static const char *const names[GL_UI_STATE_COUNT] = {
         "SLEEP", "WAKE", "WAIT_STILL", "READ_TILT", "CAPTURE", "SOLVE", "SHOW_RESULT",
         "PRECISION_WAIT_SPIN", "SURVEY_NEXT_DROP", "SETTINGS_DIAL", "CRADLE_USB", "CAL_ZERO",
-        "ERROR", "LOW_BATT"
+        "ERROR", "LOW_BATT", "TOO_HOT", "CRADLE_SLEEP"
     };
     return ((unsigned)state < (unsigned)GL_UI_STATE_COUNT) ? names[state] : "?";
 }
@@ -244,7 +285,7 @@ const char *gl_ui_event_name(gl_ui_event_t ev)
         "NONE", "MOTION", "STILL", "TILT_DONE", "TILT_FAIL", "CAPTURE_DONE", "CAPTURE_NO_STICK",
         "CAPTURE_FAIL", "SOLVE_DONE", "SOLVE_FAIL", "DOUBLE_TAP", "SPIN_DONE", "UPRIGHT", "FLAT",
         "DIAL_STEP", "USB_ATTACH", "USB_DETACH", "BATT_LOW", "CAL_DONE", "CAL_FAIL",
-        "FAULT", "TIMEOUT"
+        "FAULT", "TIMEOUT", "TOO_HOT", "USB_RESUME"
     };
     return ((unsigned)ev < (unsigned)GL_EV_COUNT) ? names[ev] : "?";
 }
@@ -631,6 +672,22 @@ static void screen_settings_(const gl_ui_t *ui, gl_gfx_t *g)
     }
 }
 
+/* Why the charge is not running, for the two cradle screens ("" = it runs,
+ * or nothing stops it). */
+static const char *chg_text_(const gl_ui_view_t *v)
+{
+    switch (v->chg_blocked) {
+    case 1u: return "TOO COLD";
+    case 2u: return "TOO HOT";
+    case 3u: return "TEMP SENSOR";
+    case 4u: return "TIME LIMIT";
+    case 5u: return "CHARGE OFF";
+    case 6u: return "NOT CHARGING";
+    case 7u: return "CHARGER WAITS";
+    default: return "";
+    }
+}
+
 void gl_ui_render(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g)
 {
     char buf[16];
@@ -715,16 +772,46 @@ void gl_ui_render(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g)
         gl_fmt_int(buf, sizeof(buf), (int32_t)v->battery_pct);
         gl_fmt_append(buf, sizeof(buf), "%");
         text_(g, 82, buf, 1);
-        /* a charge the firmware has stopped says why */
-        if (v->chg_blocked == 1u) {
-            text_(g, 96, "TOO COLD", 1);
-        } else if (v->chg_blocked == 2u) {
-            text_(g, 96, "TOO HOT", 1);
-        } else if (v->chg_blocked >= 3u) {
-            text_(g, 96, "TEMP SENSOR", 1);
+        /* a charge that does not run says why */
+        if (v->chg_blocked != 0u) {
+            text_(g, 96, chg_text_(v), 1);
+        } else if (v->chg_full) {
+            text_(g, 96, "FULL", 1);
         } else {
             text_(g, 96, v->usb_connected ? "LINKED" : "CHARGER", 1);
         }
+        break;
+    case GL_UI_CRADLE_SLEEP:
+        /* E32: a STATIC picture - it is drawn when the state is entered and
+         * again only when what it says changes; the MCU sleeps under it.
+         * A large battery: with a bolt = charging, with a tick = full,
+         * with a warning sign and the reason = not charging. */
+        gl_gfx_frame(g, 36, 34, 52, 28, GL_INK_BLACK);
+        gl_gfx_frame(g, 37, 35, 50, 26, GL_INK_BLACK);
+        gl_gfx_rect(g, 88, 42, 4, 12, GL_INK_BLACK);
+        if (v->chg_blocked != 0u) {
+            gl_gfx_icon(g, CX - 5, 42, GL_ICON_WARN, GL_INK_BLACK);
+            text_(g, 74, chg_text_(v), 1);
+        } else if (v->chg_full) {
+            gl_gfx_rect(g, 40, 38, 44, 20, GL_INK_BLACK);
+            gl_gfx_icon(g, CX - 4, 43, GL_ICON_CHECK, GL_INK_WHITE);
+            text_(g, 74, "FULL", 2);
+        } else if (v->charging) {
+            gl_gfx_rect(g, 40, 38, 16, 20, GL_INK_BLACK);
+            gl_gfx_icon(g, CX + 2, 42, GL_ICON_BOLT, GL_INK_BLACK);
+            text_(g, 74, "CHARGING", 1);
+        } else {
+            text_(g, 74, "IN CRADLE", 1);
+        }
+        break;
+    case GL_UI_TOO_HOT:
+        /* E13: a thermometer, and the words */
+        gl_gfx_frame(g, CX - 4, 18, 9, 24, GL_INK_BLACK);
+        gl_gfx_rect(g, CX - 1, 24, 3, 20, GL_INK_BLACK);
+        gl_gfx_disc(g, (float)CX, 46.0f, 7.0f, GL_INK_BLACK);
+        text_(g, 60, "TOO HOT", 2);
+        text_(g, 84, "NO READ", 1);
+        text_(g, 96, "LET IT COOL", 1);
         break;
     case GL_UI_CAL_ZERO:
         /* zeroing: on a hard flat surface, never in the cradle */

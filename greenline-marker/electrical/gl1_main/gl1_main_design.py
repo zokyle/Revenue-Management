@@ -315,17 +315,34 @@ def mcu_pad_of(port_pin):
     return MCU_PAD_NAMES.index(port_pin) + 1
 
 
-#: orientation of U1 the pin map was chosen for.  With the footprint turned
-#: 270 degrees pads 1-16 are on the top edge (pad 1 at the right), 17-32 on the
-#: left edge (17 at the top), 33-48 on the bottom edge (33 at the left) and
-#: 49-64 on the right edge (49 at the bottom).  It is the orientation of the
-#: toolchain demo (routed 261 of 261) and of the YAML's nominal part list
-#: (crystal top right, flash right, IMU left).  The KiCad courtyard of the
-#: LQFP-64 is 13.4 mm square and the MCU sits between the tub posts E (their
-#: keep-outs start at y = 13.75) and the battery (y = -0.2), so NOTHING fits
-#: between the MCU and the battery: the package edge that faces the battery is
-#: the one with the least decoupling work, pads 33-48.
-U1_ROTATION = 270.0
+#: orientation of U1 on the board.  LAYOUT: 0 degrees - pads 1-16 on the LEFT
+#: edge (pad 1 at the top), 17-32 on the BOTTOM edge (17 at the left), 33-48 on
+#: the RIGHT edge (33 at the bottom) and 49-64 on the TOP edge (49 at the
+#: right).  The KiCad courtyard of the LQFP-64 is 13.4 mm across and the MCU
+#: sits between the tub posts E (their keep-outs start at y = 13.75) and the
+#: battery (y = -0.2), so nothing but the stepped corners of the courtyard is
+#: free between the MCU and the battery.
+#:
+#: The pin map below was CHOSEN at the netlist stage for 270 degrees (pads 1-16
+#: toward the cameras, the orientation of the toolchain demo), and the "reason"
+#: texts of its rows still describe that orientation ("camera-facing edge",
+#: "next to the flash" ...).  Nine full routing attempts at 270 degrees stalled
+#: at 94 to 97 %: the camera bus pads D0-D3 and the clock MCO were on the edge
+#: that faces the battery, and the crystal and the photodiode amplifier - the
+#: parts of pads 3 / 4 and 14-17 - stood between the MCU and the cameras, where
+#: the 22 bus lines have to pass.  At 0 degrees D4-D7 and VSYNC leave the top
+#: edge toward the cameras, D0-D3 and MCO the right edge, the crystal is 0.6 /
+#: 3.9 mm from pads 4 / 3 on the left edge and the amplifier's feedback parts
+#: are at pads 15 / 17 in the lower left corner, 6 mm from the photodiode
+#: (LAYOUT_LOG.md).  NO PIN ASSIGNMENT WAS CHANGED for the rotation: the pin
+#: map, its alternate functions and check_pinmap.py's verdict are those of the
+#: netlist stage; only the geometric remarks in the reasons are out of date.
+#: What the rotation costs: HREF / PCLK (pads 20 / 22) and the IMU's interrupt
+#: and chip-select pads are now on the edge that faces the battery, and the USB
+#: pair (pads 44 / 45, right edge) has a longer way to the contact pads.
+U1_ROTATION = 0.0
+#: orientation the "reason" texts of the pin map were written for (see above)
+U1_ROTATION_PINMAP_REASONS = 270.0
 
 S, P, C = "SPEC", "PROPOSED", "CHANGED"
 CAM_OFF = "low or analog while V2V8_CAM is off"
@@ -675,6 +692,22 @@ PLACEMENT = {
 FIDUCIALS_TOP = [(-19.0, 0.9), (18.6, -5.5), (17.3, 8.6)]
 FIDUCIALS_BOTTOM = [(-13.5, -3.0), (14.0, -7.0), (0.0, 11.0)]
 
+#: LAYOUT: the photodiode guard (two no-track bands on B.Cu inside the grain opening, between
+#: the photodiode pads and the LED pads; angles in degrees seen from the opening centre,
+#: counter-clockwise from +x).  See the keep-outs in gl1_main_design().
+PD_GUARD = {"r_inner": 3.35, "r_outer": 3.55,
+            "arcs": (("pd_guard_upper", 10.0, 170.0), ("pd_guard_lower", -170.0, -52.0))}
+
+
+def arc_band(cx, cy, r_inner, r_outer, a0_deg, a1_deg, step_deg=5.0):
+    """Polygon of the band between two radii from angle a0 to a1 (a1 > a0, degrees)."""
+    n = max(2, int(math.ceil((a1_deg - a0_deg) / step_deg)) + 1)
+    angles = [math.radians(a0_deg + (a1_deg - a0_deg) * i / (n - 1)) for i in range(n)]
+    outer = [(cx + r_outer * math.cos(a), cy + r_outer * math.sin(a)) for a in angles]
+    inner = [(cx + r_inner * math.cos(a), cy + r_inner * math.sin(a)) for a in reversed(angles)]
+    return RoundedPolygon(tuple(outer + inner))
+
+
 #: LAYOUT: options of the toolchain's router (gleda.router.RouterOptions) this
 #: board is routed with; build_gl1_main.py passes them on, and they are part of
 #: the fingerprint of the stored routing.  LAYOUT_LOG.md says why each is set.
@@ -692,6 +725,7 @@ ROUTER_TIME_LIMIT = 3600.0
 NET_ROUTING = {
     "OSC32_IN": {"layers": ("F.Cu",), "max_vias": 0, "priority": 3},
     "OSC32_OUT": {"layers": ("F.Cu",), "max_vias": 0, "priority": 3},
+    "PD_K": {"priority": 2},
     "USB_DM": {"priority": 1},
     "USB_DP": {"priority": 1},
 }
@@ -1281,6 +1315,19 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     go = VIA_KO["grain_opening"]
     d.add_keepout(Circle(go["x"], go["y"], go["dia"] / 2.0), layers=ALL_LAYERS,
                   name="grain_opening_no_via", tracks=False, vias=True, copper=False)
+    # LAYOUT: photodiode guard.  Nothing can change layer inside the grain opening (no vias), so
+    # the LED lines, the photodiode's cathode net PD_K and its ground pad are ONE single-layer
+    # puzzle on B.Cu.  The LED pads' inner ring (r 4.43 .. 5.06 from the opening centre) carries
+    # CP0 over the upper eight LEDs and CP1 over six of the lower ones; a PD_K track that leaves
+    # the photodiode (pads within r 2.71) straight toward its amplifier cuts such an arc in two,
+    # and LED lines that dodge through the photodiode field run next to the amplifier's input.
+    # Two thin no-track bands on B.Cu between the photodiode and the LED pads leave exactly the
+    # gaps where no LED arc passes: PD_K leaves through the gap at 180 degrees (toward U1 pad 15),
+    # the photodiode's ground through the open sector at the right.  The bands ADD a restriction;
+    # no rule is relaxed for them (PD_GUARD, LAYOUT_LOG.md "photodiode guard").
+    for gname, a0, a1 in PD_GUARD["arcs"]:
+        d.add_keepout(arc_band(go["x"], go["y"], PD_GUARD["r_inner"], PD_GUARD["r_outer"], a0, a1),
+                      layers=("B.Cu",), name=gname, tracks=True, vias=False, copper=False)
     ps = VIA_KO["pad_slot"]
     half = (ps["length"] - ps["width"]) / 2.0
     d.add_keepout(Slot(-half, ps["y"], half, ps["y"], ps["width"]), layers=ALL_LAYERS,

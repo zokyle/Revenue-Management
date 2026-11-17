@@ -58,9 +58,22 @@
  *                              shown with a question mark, and is forgotten
  *                              when a read ranges a flagstick and when the
  *                              marker goes to sleep.
- *   in the cradle           -> USB screen (charging, data).  The cradle
- *                              takes the marker one way round only and
- *                              holds it down; nothing is calibrated there.
+ *   in the cradle           -> USB screen (charging, data) for as long as a
+ *                              host talks to the marker.  After 30 s without
+ *                              a word from a host - or with none there, on a
+ *                              wall charger - the marker goes to sleep with
+ *                              a STATIC symbol on the display: a battery
+ *                              with a bolt (charging), with a tick ("FULL"),
+ *                              or the reason why the charge is stopped
+ *                              (DESIGN_SPEC E32: an awake marker draws more
+ *                              than the charger's termination current, so a
+ *                              charge would never end).  It wakes when the
+ *                              host resumes the bus and when it is lifted
+ *                              out.  The cradle takes the marker one way
+ *                              round only and holds it down; nothing is
+ *                              calibrated there.
+ *   too hot                 -> no camera read is started from a cell above
+ *                              60 C (E13): "TOO HOT" for 4 s, then sleep.
  *   zeroing                 -> dial item "ZERO" = YES, then lay the marker
  *                              on any HARD FLAT surface (a table, not turf):
  *                              it reads, asks for a 180-degree turn in
@@ -69,7 +82,7 @@
  *                              tilt, so the surface need not be level.
  *                              Putting the marker in the cradle abandons it.
  *
- * RAM: gl_ui_t 44 bytes, gl_ui_view_t 48 bytes.  Stack: gl_ui_render() about 250 bytes.
+ * RAM: gl_ui_t 44 bytes, gl_ui_view_t 52 bytes.  Stack: gl_ui_render() about 250 bytes.
  */
 #ifndef GL_UI_H
 #define GL_UI_H
@@ -94,6 +107,10 @@ typedef enum {
                                   and ran it in the cradle; rev C: never in the cradle) */
     GL_UI_ERROR,
     GL_UI_LOW_BATT,
+    /* rev E (values are reported to the host and logged: append only) */
+    GL_UI_TOO_HOT,           /**< E13: the cell is above 60 C, no camera read; shown 4 s */
+    GL_UI_CRADLE_SLEEP,      /**< E32: in the cradle, no host talking: MCU asleep, a static
+                                  charging / full / stopped symbol on the display */
     GL_UI_STATE_COUNT
 } gl_ui_state_t;
 
@@ -125,6 +142,9 @@ typedef enum {
     GL_EV_CAL_FAIL,          /**< arg = gl_status_t (moved, turn not near 180 degrees, ...) */
     GL_EV_FAULT,             /**< arg = gl_status_t */
     GL_EV_TIMEOUT,           /**< produced by gl_ui_tick() */
+    /* rev E, appended */
+    GL_EV_TOO_HOT,           /**< a camera read was about to start with the cell above 60 C */
+    GL_EV_USB_RESUME,        /**< asleep in the cradle: the host has resumed the bus */
     GL_EV_COUNT
 } gl_ui_event_t;
 
@@ -150,6 +170,8 @@ typedef enum {
 #define GL_ACT_NEW_READ         (1u << 18) /**< forget the previous result (new placement) */
 #define GL_ACT_SPIN_ABANDON     (1u << 19) /**< the Precision spin was given up: stop integrating,
                                                 show the single read for where the marker faces now */
+#define GL_ACT_CRADLE_SLEEP     (1u << 20) /**< E32: USB to standby or off, IMU and flash down, MCU
+                                                to Stop mode; the display STAYS ON with the symbol */
 
 /** Guards of the transition table. */
 typedef enum {
@@ -301,10 +323,16 @@ typedef struct {
     float confidence;        /**< 0..1, as shown (after the application's own reductions) */
     /* status */
     uint8_t battery_pct;
-    bool charging;
+    bool charging;           /**< the charger says a charge is running */
+    bool chg_full;           /**< the charge has terminated (the charger released its status
+                                  output with the cell at its end voltage) */
     bool usb_connected;      /**< host has opened the port */
-    uint8_t chg_blocked;     /**< cradle: 0 = the charger may run; 1 too cold, 2 too hot,
-                                  3 temperature sensor (unknown, faulty or implausible) */
+    uint8_t chg_blocked;     /**< cradle: 0 = nothing stops the charge; the FIRMWARE stopped it:
+                                  1 too cold, 2 too hot, 3 temperature sensor (unknown, faulty
+                                  or implausible), 4 time limit (6 h of continuous charging),
+                                  5 by command; 6 = the CHARGER is not charging and the
+                                  firmware does not know why; 7 = the charger holds itself
+                                  (its own temperature window) */
     uint8_t cal_step;        /**< zeroing: 0 hold still (first read), 1 turn 180 degrees in
                                   place, 2 hold still (second read), 3 saved */
 } gl_ui_view_t;

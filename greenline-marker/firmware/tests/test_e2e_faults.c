@@ -944,7 +944,7 @@ GL_TEST(test_the_power_rules_of_the_simulator_fire)
     p.ntc_fault = (uint8_t)GL_NTC_OK;
     p.mcu_temp_c = 25.0f;
     p.mcu_temp_valid = true;
-    GL_CHECK(gl_power_charge_gate(&p, true, 25.0f, true, true));
+    GL_CHECK(gl_power_charge_gate(&p, 0u, true, 25.0f, true, true));
     gl_hal_wake_timer_start(5);
     (void)gl_hal_sleep(GL_SLEEP_STOP); /* in the cradle, charger on, waking in 5 ms: allowed */
     GL_CHECK_EQ(gl_sim_violations()->power, 1u);

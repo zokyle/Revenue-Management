@@ -1,11 +1,21 @@
 /*
- * test_drv_power.c - battery measurement, the cell NTC, charger status and
- * the charge gate of rev C2 against the simulator: pin configuration (the
- * charger keeps its hardware default until a temperature is known), the
- * exact ADC and bias-pin sequence, the B-parameter conversion against a
- * table, open / short / stuck detection, the tolerance budget behind the
- * guard band, and the CHG_INHIBIT level for every combination of VBUS and
- * temperature (window, guard, hysteresis, plausibility).
+ * test_drv_power.c - battery measurement, the MCU's cell thermistor (NTC2),
+ * the charger of the rev E board (BQ25101, DESIGN_SPEC E1) and the
+ * firmware's supervision of it, against the simulator: pin configuration
+ * (the charger keeps its hardware default; CHG_INHIBIT is driven only to
+ * stop it), the exact ADC and bias-pin sequence, the B-parameter conversion
+ * against a table, open / short / stuck detection, the error budget of a
+ * reading at the charge limits and at the read limit of E13, the level of
+ * CHG_INHIBIT for every combination of VBUS and temperature (window, guard,
+ * hysteresis, plausibility), the 6 h limit of E32, the stop by command, what
+ * the firmware infers from the charger's one status output, and the read
+ * gate of E13.
+ *
+ * THE CHARGER ITSELF IS A MODEL (hal/host/gl_sim_core.c): its temperature
+ * zones, its termination, its timer and its status output are this project's
+ * reading of the part, every threshold PROVISIONAL (core/gl_provisional.h,
+ * GL_PROV_BQ25101_*).  The last tests of this file show what THAT MODEL does
+ * with no firmware at all.  They prove nothing about the chip.
  */
 #include "gl_test.h"
 
@@ -42,7 +52,8 @@ GL_TEST(test_init_leaves_the_charger_in_its_hardware_default)
     gl_sim_reset(true);
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     GL_CHECK(gl_sim_charger_on());
-    GL_CHECK(gl_sim_pin_level(GL_PIN_CHG_INHIBIT)); /* gate held up by its divider */
+    GL_CHECK(!gl_sim_pin_level(GL_PIN_CHG_INHIBIT)); /* the gate of the stop MOSFET: held off */
+    GL_CHECK(!gl_sim_pin_level(GL_PIN_CHG_STAT));    /* the charger pulls its status output low */
     gl_sim_advance_ms(20);
     (void)gl_hal_init();
     gl_power_init(&pw_);
@@ -53,18 +64,23 @@ GL_TEST(test_init_leaves_the_charger_in_its_hardware_default)
     GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_NTC_SENSE), GL_PIN_MODE_ANALOG);
     GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT) && !gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
     GL_CHECK(gl_sim_charger_on());
-    GL_CHECK(pw_.vbus && pw_.charge_enabled && !pw_.inhibit);
+    GL_CHECK(pw_.vbus && pw_.charge_enabled && !pw_.inhibit && pw_.charging);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_CHARGING);
     GL_CHECK_NEAR((double)gl_sim_stats()->chg_in_reset_us, 20000.0, 1.0);
-    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_STAT), GL_PIN_MODE_INPUT_PULLUP);
+    /* inputs WITHOUT an internal pull: CHG_STAT has the board's pull-up (and
+     * is a USB Type-C CC pad), VBUS_SENSE its divider */
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_STAT), GL_PIN_MODE_INPUT);
     GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_VBUS_SENSE), GL_PIN_MODE_INPUT);
     GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_VBAT_SENSE), GL_PIN_MODE_ANALOG);
     GL_CHECK_EQ(pw_.batt_mv, 0);
     GL_CHECK(!pw_.cell_temp_valid && !pw_.mcu_temp_valid);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
     /* outside the cradle: nothing to charge with, nothing enabled */
     fresh_();
     GL_CHECK(!pw_.vbus && !pw_.charging && !pw_.charge_enabled && !pw_.inhibit);
     GL_CHECK(!gl_sim_charger_on());
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_NO_VBUS);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_NO_INPUT);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }
 
@@ -103,8 +119,13 @@ static double ntc_counts_(double t_c)
 
 GL_TEST(test_ntc_conversion_against_a_table)
 {
-    /* anchor rows computed outside this program (Python, double precision):
-     * temperature [C], NTC resistance [ohm], counts at the sense pin */
+    /* anchor rows computed outside this program, in double precision, FROM
+     * THE B EQUATION R = 10 kohm * exp(3380 K * (1/T - 1/298.15 K)) and from
+     * nothing else: no R-T table of the Murata NCU15XH103F60RC has been read
+     * (PROVISIONAL).  Temperature [C], NTC resistance [ohm], counts at the
+     * sense pin.  (The command: python3 -c "import math; r=lambda t:
+     * 10000*math.exp(3380*(1/(t+273.15)-1/298.15)); ..." - the README quotes
+     * its output.) */
     static const struct {
         double t_c, ohm, counts;
     } table[] = {
@@ -182,15 +203,19 @@ GL_TEST(test_ntc_conversion_against_a_table)
     GL_CHECK(gl_power_ntc_counts_to_c((uint16_t)(0.03 * 16383.0), NULL) > 130.0f);
 }
 
-/* The guard band of the charge window against the divider's tolerances:
- * the reading of every corner unit at the two limits. */
-GL_TEST(test_ntc_tolerance_budget_is_inside_the_guard_band)
+/* The error budget of a reading: every corner unit (NTC 1 %, B 1 %, series
+ * resistor 1 %), with and without an ADC error of 0.2 % of full scale, at
+ * the two limits of the firmware's charge window and at the read limit of
+ * E13.  The guard band of the charge window must cover the first two; the
+ * read limit is applied to the reading itself, so its figure is REPORTED. */
+GL_TEST(test_ntc_error_budget_at_the_limits)
 {
-    static const double limit[2] = { (double)GL_PROV_CHARGE_TEMP_MIN_C, (double)GL_PROV_CHARGE_TEMP_MAX_C };
-    double worst[2] = { 0.0, 0.0 }, parts[2] = { 0.0, 0.0 };
+    static const double limit[3] = { (double)GL_PROV_CHARGE_TEMP_MIN_C, (double)GL_PROV_CHARGE_TEMP_MAX_C,
+                                     (double)GL_PROV_READ_TEMP_MAX_C };
+    double worst[3] = { 0.0, 0.0, 0.0 }, parts[3] = { 0.0, 0.0, 0.0 };
 
     gl_sim_reset(true);
-    for (int k = 0; k < 2; k++) {
+    for (int k = 0; k < 3; k++) {
         for (int corner = 0; corner < 8; corner++) {
             const float a = (corner & 1) ? 0.01f : -0.01f;
             const float b = (corner & 2) ? 0.01f : -0.01f;
@@ -212,12 +237,20 @@ GL_TEST(test_ntc_tolerance_budget_is_inside_the_guard_band)
     }
     gl_sim_ntc_set_tolerance(0.0f, 0.0f, 0.0f);
     printf("    reading error of a worst-case unit (NTC 1 %%, B 1 %%, series resistor 1 %%): %.2f K "
-           "at 0 C, %.2f K at 45 C; with an ADC error of 0.2 %% of full scale %.2f K and %.2f K; "
-           "guard band %.1f K\n", parts[0], parts[1], worst[0], worst[1],
-           (double)GL_PROV_CHARGE_TEMP_GUARD_C);
+           "at 0 C, %.2f K at 45 C, %.2f K at 60 C; with an ADC error of 0.2 %% of full scale %.2f K, "
+           "%.2f K and %.2f K; guard band of the charge window %.1f K; hysteresis of the read gate "
+           "%.1f K\n", parts[0], parts[1], parts[2], worst[0], worst[1], worst[2],
+           (double)GL_PROV_CHARGE_TEMP_GUARD_C, (double)GL_PROV_READ_TEMP_HYST_C);
     GL_CHECK(worst[0] < (double)GL_PROV_CHARGE_TEMP_GUARD_C);
     GL_CHECK(worst[1] < (double)GL_PROV_CHARGE_TEMP_GUARD_C);
     GL_CHECK(worst[1] > 1.0); /* why the guard is not 1.0 K */
+    /* E13: the hysteresis of the read gate is at least twice the reading's
+     * error there, so a cell at the limit does not flicker */
+    GL_CHECK(worst[2] < 0.5 * (double)GL_PROV_READ_TEMP_HYST_C);
+    /* the resistance figures of NETLIST_NOTES 4.5, from the same equation */
+    GL_CHECK_NEAR(ntc_ohm_(0.0) / 1000.0, 28.2, 0.05);
+    GL_CHECK_NEAR(ntc_ohm_(45.0) / 1000.0, 4.90, 0.005);
+    GL_CHECK_NEAR(ntc_ohm_(60.0) / 1000.0, 3.04, 0.005);
 }
 
 GL_TEST(test_measure_exact_adc_and_bias_sequence)
@@ -358,27 +391,42 @@ static void expect_gate_(bool allowed)
     GL_CHECK_EQ(pw_.charge_enabled, allowed);
     GL_CHECK_EQ(pw_.inhibit, pw_.vbus && !allowed);
     if (pw_.vbus && !allowed) {
-        /* pulled LOW through an open-drain output */
-        GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
-        GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_OUTPUT_OD);
+        /* driven HIGH, push-pull: the MOSFET pulls the charger's TS pin low */
+        GL_CHECK(gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+        GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_OUTPUT_PP);
+        GL_CHECK(gl_sim_pin_level(GL_PIN_CHG_INHIBIT));
     } else {
-        /* released: back to the reset state of the pin */
-        GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+        /* released: back to the reset state of the pin; the gate resistor
+         * holds the MOSFET off */
+        GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
         GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
+        GL_CHECK(!gl_sim_pin_level(GL_PIN_CHG_INHIBIT));
     }
-    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT)); /* never */
+    /* the model's charger: free, it charges (the model's cell is at 25 C
+     * and not full); stopped, it does not */
     GL_CHECK_EQ(gl_sim_charger_on(), pw_.vbus && allowed);
 }
 
-/* A gate call with the NTC at t and both die sensors agreeing with it. */
+static uint32_t gate_now_ms_; /* the clock handed to the gate */
+
+/* A gate call with NTC2 at t and both die sensors agreeing with it. */
 static bool gate_at_(float t)
 {
+    gate_now_ms_ += 5000u;
+    gl_power_poll_pins(&pw_);
     pw_.cell_temp_c = t;
     pw_.cell_temp_valid = true;
     pw_.ntc_fault = (uint8_t)GL_NTC_OK;
     pw_.mcu_temp_c = t;
     pw_.mcu_temp_valid = true;
-    return gl_power_charge_gate(&pw_, true, t, true, true);
+    return gl_power_charge_gate(&pw_, gate_now_ms_, true, t, true, true);
+}
+
+/* The same with every argument given. */
+static bool gate_(bool cell_fresh, float imu_c, bool imu_ok, bool mcu_fresh)
+{
+    gate_now_ms_ += 5000u;
+    return gl_power_charge_gate(&pw_, gate_now_ms_, cell_fresh, imu_c, imu_ok, mcu_fresh);
 }
 
 GL_TEST(test_charge_gate_window_guard_and_hysteresis)
@@ -388,12 +436,12 @@ GL_TEST(test_charge_gate_window_guard_and_hysteresis)
     const float hy = GL_PROV_CHARGE_TEMP_HYST_C;
 
     fresh_();
-    /* no VBUS: nothing is inhibited, whatever the temperature */
+    /* no VBUS: nothing is stopped, whatever the temperature */
     GL_CHECK(!gate_at_(25.0f));
     expect_gate_(false);
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_NO_VBUS);
     GL_CHECK(!gate_at_(70.0f));
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_NO_VBUS);
 
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
@@ -402,30 +450,42 @@ GL_TEST(test_charge_gate_window_guard_and_hysteresis)
     GL_CHECK(gate_at_(25.0f));
     expect_gate_(true);
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_ALLOWED);
-    /* the pin: on the way to "stop" the latch goes low BEFORE the pin
-     * becomes an output; on the way back it is released before it goes
-     * analog (never a push-pull or a driven-high moment) */
+    /* the pin: on the way to "stop" the latch goes HIGH before the pin
+     * becomes an output; on the way back it is written low and then goes
+     * analog (never an open-drain moment, never a pull) */
     GL_CHECK(!gate_at_(60.0f));
     expect_gate_(false);
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TOO_HOT);
     {
         const size_t n = gl_sim_trace_count();
         const gl_sim_trace_t *w = gl_sim_trace_at(n - 2u), *m = gl_sim_trace_at(n - 1u);
-        GL_CHECK(w->type == GL_SIM_TR_GPIO_WRITE && w->a == (uint8_t)GL_PIN_CHG_INHIBIT && w->b == 0u);
+        GL_CHECK(w->type == GL_SIM_TR_GPIO_WRITE && w->a == (uint8_t)GL_PIN_CHG_INHIBIT && w->b == 1u);
         GL_CHECK(m->type == GL_SIM_TR_GPIO_MODE && m->a == (uint8_t)GL_PIN_CHG_INHIBIT &&
-                 m->b == (uint16_t)GL_PIN_MODE_OUTPUT_OD);
+                 m->b == (uint16_t)GL_PIN_MODE_OUTPUT_PP);
     }
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DISABLED);
     /* upper limit: stays stopped until hi - hysteresis */
     GL_CHECK(!gate_at_(hi - 0.1f));
     GL_CHECK(!gate_at_(hi - hy + 0.1f));
     GL_CHECK(gate_at_(hi - hy - 0.1f));
     expect_gate_(true);
+    {
+        const size_t n = gl_sim_trace_count();
+        const gl_sim_trace_t *w = gl_sim_trace_at(n - 2u), *m = gl_sim_trace_at(n - 1u);
+        GL_CHECK(w->type == GL_SIM_TR_GPIO_WRITE && w->a == (uint8_t)GL_PIN_CHG_INHIBIT && w->b == 0u);
+        GL_CHECK(m->type == GL_SIM_TR_GPIO_MODE && m->a == (uint8_t)GL_PIN_CHG_INHIBIT &&
+                 m->b == (uint16_t)GL_PIN_MODE_ANALOG);
+    }
     /* once allowed it stays allowed up to the guarded limit itself */
     GL_CHECK(gate_at_(hi - 0.1f));
     GL_CHECK(!gate_at_(hi + 0.1f));
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TOO_HOT);
     /* the guard: a reading of 44 C is "too hot" (the true cell may be at 45) */
     GL_CHECK(hi < GL_PROV_CHARGE_TEMP_MAX_C && lo > GL_PROV_CHARGE_TEMP_MIN_C);
+    /* the firmware's window is NARROWER than the charger's own (which goes
+     * on to 60 C at 4.06 V): that is why the firmware has a gate at all */
+    GL_CHECK(GL_PROV_CHARGE_TEMP_MAX_C < GL_PROV_BQ25101_T_HOT_C);
+    GL_CHECK(GL_PROV_CHARGE_TEMP_MIN_C >= GL_PROV_BQ25101_T_COLD_C);
     /* lower limit */
     GL_CHECK(gate_at_(20.0f));
     GL_CHECK(gate_at_(lo + 0.1f));
@@ -451,11 +511,10 @@ GL_TEST(test_charge_gate_window_guard_and_hysteresis)
     /* VBUS removed: the pin is released by the gate itself */
     GL_CHECK(!gate_at_(60.0f));
     expect_gate_(false);
-    GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
     gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
-    gl_power_poll_pins(&pw_);
     GL_CHECK(!gate_at_(60.0f));
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
     GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_NO_VBUS);
 
@@ -471,7 +530,7 @@ GL_TEST(test_charge_gate_window_guard_and_hysteresis)
                 const float t = (pass == 0) ? (-10.0f + 0.1f * (float)k) : (60.0f - 0.1f * (float)k);
                 model = model ? (t >= lo && t <= hi) : (t >= lo + hy && t <= hi - hy);
                 GL_CHECK_EQ(gate_at_(t), model);
-                GL_CHECK_EQ(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT), !model);
+                GL_CHECK_EQ(gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT), !model);
                 if (model) {
                     if (pass == 0) {
                         on_up++;
@@ -481,10 +540,13 @@ GL_TEST(test_charge_gate_window_guard_and_hysteresis)
                 }
             }
         }
-        printf("    charge gate over a sweep of -10..60 C and back: allowed for %.1f K going up "
-               "(%.1f..%.1f C), %.1f K going down (%.1f..%.1f C)\n", 0.1 * (double)on_up,
+        printf("    firmware's charge gate over a sweep of -10..60 C and back: not stopped for %.1f K "
+               "going up (%.1f..%.1f C), %.1f K going down (%.1f..%.1f C)\n", 0.1 * (double)on_up,
                (double)(lo + hy), (double)hi, 0.1 * (double)on_down, (double)lo, (double)(hi - hy));
         GL_CHECK(on_up > 300u && on_down > 300u);
+    }
+    if (gl_sim_violation_total() != 0u) {
+        printf("    first violation: %s\n", gl_sim_violations()->first);
     }
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }
@@ -496,7 +558,7 @@ GL_TEST(test_charge_gate_unknown_faulty_and_implausible_temperatures)
     gl_power_poll_pins(&pw_);
     GL_CHECK(gate_at_(25.0f));
     /* the NTC reading is stale */
-    GL_CHECK(!gl_power_charge_gate(&pw_, false, 25.0f, true, true));
+    GL_CHECK(!gate_(false, 25.0f, true, true));
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TEMP_UNKNOWN);
     expect_gate_(false);
     GL_CHECK(gate_at_(25.0f));
@@ -504,109 +566,463 @@ GL_TEST(test_charge_gate_unknown_faulty_and_implausible_temperatures)
     for (int f = (int)GL_NTC_OPEN; f <= (int)GL_NTC_STUCK; f++) {
         pw_.ntc_fault = (uint8_t)f;
         pw_.cell_temp_valid = false;
-        GL_CHECK(!gl_power_charge_gate(&pw_, true, 25.0f, true, true));
+        GL_CHECK(!gate_(true, 25.0f, true, true));
         GL_CHECK_EQ(pw_.chg_reason, GL_CHG_NTC_FAULT);
         expect_gate_(false);
     }
     pw_.ntc_fault = (uint8_t)GL_NTC_ADC;
-    GL_CHECK(!gl_power_charge_gate(&pw_, true, 25.0f, true, true));
+    GL_CHECK(!gate_(true, 25.0f, true, true));
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TEMP_UNKNOWN);
     GL_CHECK(gate_at_(25.0f));
     /* plausibility: the NTC against the die sensors */
     pw_.cell_temp_c = 25.0f;
     pw_.mcu_temp_c = 25.0f + GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C - 0.5f;
-    GL_CHECK(gl_power_charge_gate(&pw_, true, 0.0f, false, true)); /* IMU dead, MCU agrees */
+    GL_CHECK(gate_(true, 0.0f, false, true)); /* IMU dead, MCU agrees */
     pw_.mcu_temp_c = 25.0f + GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C + 0.5f;
-    GL_CHECK(!gl_power_charge_gate(&pw_, true, 0.0f, false, true)); /* the only one disagrees */
+    GL_CHECK(!gate_(true, 0.0f, false, true)); /* the only one disagrees */
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_IMPLAUSIBLE);
     expect_gate_(false);
-    GL_CHECK(gl_power_charge_gate(&pw_, true, 24.0f, true, true)); /* the IMU vouches for it */
-    GL_CHECK(!gl_power_charge_gate(&pw_, true, 50.0f, true, true)); /* both disagree */
+    GL_CHECK(gate_(true, 24.0f, true, true)); /* the IMU vouches for it */
+    GL_CHECK(!gate_(true, 50.0f, true, true)); /* both disagree */
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_IMPLAUSIBLE);
     /* an NTC that reads a comfortable 25 C on a board that is at 50 C */
     pw_.mcu_temp_c = 50.0f;
-    GL_CHECK(!gl_power_charge_gate(&pw_, true, 49.0f, true, true));
+    GL_CHECK(!gate_(true, 49.0f, true, true));
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_IMPLAUSIBLE);
     /* no die sensor at all: nothing to check the NTC against */
     pw_.mcu_temp_c = 25.0f;
     pw_.mcu_temp_valid = false;
-    GL_CHECK(!gl_power_charge_gate(&pw_, true, 25.0f, false, true));
+    GL_CHECK(!gate_(true, 25.0f, false, true));
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TEMP_UNKNOWN);
     pw_.mcu_temp_valid = true;
-    GL_CHECK(!gl_power_charge_gate(&pw_, true, 25.0f, false, false)); /* MCU reading stale */
-    GL_CHECK(!gl_power_charge_gate(&pw_, true, NAN, true, false));
-    GL_CHECK(gl_power_charge_gate(&pw_, true, 25.0f, false, true));
+    GL_CHECK(!gate_(true, 25.0f, false, false)); /* MCU reading stale */
+    GL_CHECK(!gate_(true, NAN, true, false));
+    GL_CHECK(gate_(true, 25.0f, false, true));
     /* a die sensor cannot make an out-of-window cell acceptable */
     pw_.cell_temp_c = 50.0f;
     pw_.mcu_temp_c = 25.0f;
-    GL_CHECK(!gl_power_charge_gate(&pw_, true, 50.0f, true, true));
+    GL_CHECK(!gate_(true, 50.0f, true, true));
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TOO_HOT);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }
 
-/* The charger model and its rules: what the simulator counts. */
-GL_TEST(test_charger_model_and_rules)
+/* DESIGN_SPEC E32: "firmware asserts CHG_INHIBIT after 6 hours of continuous
+ * charging as a backstop."  Continuous = the charger's status output low at
+ * every gate call; the limit holds until VBUS goes or the cell has fallen
+ * below the restart voltage. */
+GL_TEST(test_charge_time_limit_of_6_hours)
+{
+    const uint32_t step = 5000u;
+    uint32_t t = 1000u, stopped_at = 0;
+    unsigned calls = 0;
+
+    GL_CHECK_EQ(GL_PROV_CHARGE_MAX_MS, 6u * 3600u * 1000u);
+    fresh_();
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    pw_.cell_temp_c = 25.0f;
+    pw_.cell_temp_valid = true;
+    pw_.ntc_fault = (uint8_t)GL_NTC_OK;
+    pw_.mcu_temp_c = 25.0f;
+    pw_.mcu_temp_valid = true;
+    pw_.batt_mv = 4150; /* a cell that hangs at the top without the charge ending */
+    /* a gate call every 5 s, as the application makes them */
+    for (; t < 7u * 3600u * 1000u; t += step) {
+        gl_power_poll_pins(&pw_);
+        calls++;
+        if (!gl_power_charge_gate(&pw_, t, true, 25.0f, true, true)) {
+            stopped_at = t;
+            break;
+        }
+        GL_CHECK(pw_.charging);
+    }
+    GL_CHECK(stopped_at != 0u);
+    printf("    continuous charging: stopped by the firmware after %.4f h (%u gate calls 5 s apart)\n",
+           (double)(stopped_at - 1000u) / 3.6e6, calls);
+    GL_CHECK(stopped_at - 1000u >= GL_PROV_CHARGE_MAX_MS && stopped_at - 1000u <= GL_PROV_CHARGE_MAX_MS + step);
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TIME_LIMIT);
+    GL_CHECK(pw_.time_limit && pw_.temp_ok);
+    expect_gate_(false);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_INHIBITED);
+    /* it holds: hours later, with the cell still up, nothing has changed */
+    for (int k = 0; k < 1000; k++) {
+        t += step;
+        gl_power_poll_pins(&pw_);
+        GL_CHECK(!gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+    }
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TIME_LIMIT);
+    /* a temperature reason comes first, and does not lift the limit */
+    pw_.cell_temp_c = 50.0f;
+    pw_.mcu_temp_c = 50.0f;
+    t += step;
+    GL_CHECK(!gl_power_charge_gate(&pw_, t, true, 50.0f, true, true));
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TOO_HOT);
+    pw_.cell_temp_c = 25.0f;
+    pw_.mcu_temp_c = 25.0f;
+    t += step;
+    GL_CHECK(!gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TIME_LIMIT);
+    /* the cell has run down behind the stopped charger: charging again, with
+     * a fresh limit */
+    pw_.batt_mv = (uint16_t)(GL_PROV_CHARGE_RESTART_MV - 10u);
+    t += step;
+    GL_CHECK(gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_ALLOWED);
+    GL_CHECK(!pw_.time_limit);
+    expect_gate_(true);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK(pw_.charging);
+    GL_CHECK(pw_.chg_run_ms < 60000u);
+    /* an interruption starts the count again: 5 h 59 min, the charger pauses
+     * (its status output released for one call), another 5 h 59 min */
+    {
+        const uint32_t almost = GL_PROV_CHARGE_MAX_MS - 60000u;
+        const uint32_t t0 = t;
+        for (; t - t0 < almost; t += step) {
+            gl_power_poll_pins(&pw_);
+            GL_CHECK(gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+        }
+        GL_CHECK(pw_.chg_run_ms > almost - 2u * step);
+        gl_sim_set_vbat_mv(4200); /* the model's charge is done: CHG released */
+        gl_power_poll_pins(&pw_);
+        GL_CHECK(!pw_.charging);
+        GL_CHECK(gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+        GL_CHECK_EQ(pw_.chg_run_ms, 0u);
+        gl_sim_set_vbat_mv(3900); /* recharge */
+        for (uint32_t t1 = t; t - t1 < almost; t += step) {
+            gl_power_poll_pins(&pw_);
+            GL_CHECK(gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+        }
+        GL_CHECK_EQ(pw_.chg_reason, GL_CHG_ALLOWED);
+    }
+    /* VBUS removed: everything about the limit is forgotten */
+    for (uint32_t t1 = t; t - t1 < 120000u; t += step) {
+        gl_power_poll_pins(&pw_);
+        (void)gl_power_charge_gate(&pw_, t, true, 25.0f, true, true);
+    }
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TIME_LIMIT);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK(!gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_NO_VBUS);
+    GL_CHECK(!pw_.time_limit && pw_.chg_run_ms == 0u);
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* The factory's "stop the charge" (GL_CMD_SET_CHARGE): held until released,
+ * until VBUS goes, or a reset.  Assembly step 13 proves the charger's own
+ * thermistor input and the stop MOSFET with it: the charge must stop when
+ * the firmware pulls TS low. */
+GL_TEST(test_charge_stop_by_command)
 {
     fresh_();
-    gl_sim_set_cell_temperature(50.0f);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    GL_CHECK(gate_at_(25.0f));
+    gl_power_poll_pins(&pw_);
+    GL_CHECK(pw_.charging);
+    gl_power_charge_force(&pw_, true);
+    GL_CHECK(!gate_at_(25.0f));
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_FORCED);
+    expect_gate_(false);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK(!pw_.charging);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_INHIBITED);
+    GL_CHECK(pw_.temp_ok); /* the temperature has nothing against it */
+    /* a temperature reason is named in preference */
+    GL_CHECK(!gate_at_(-3.0f));
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TOO_COLD);
+    GL_CHECK(!gate_at_(25.0f));
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_FORCED);
+    gl_power_charge_force(&pw_, false);
+    GL_CHECK(gate_at_(25.0f));
+    expect_gate_(true);
+    /* VBUS gone: forgotten */
+    gl_power_charge_force(&pw_, true);
+    GL_CHECK(!gate_at_(25.0f));
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
+    GL_CHECK(!gate_at_(25.0f));
+    GL_CHECK(!pw_.forced);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    GL_CHECK(gate_at_(25.0f));
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* What the firmware infers from the charger's ONE status output: a defined
+ * answer for every case the data sheet may give - charging, done, stopped
+ * by its own thermistor, no input - and for the two that do not add up. */
+GL_TEST(test_charger_status_inference)
+{
+    gl_power_t p;
+    memset(&p, 0, sizeof(p));
+    /* the pure function, case by case */
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_NO_INPUT);
+    p.charging = true; /* (a status line that reads low without VBUS) */
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_NO_INPUT);
+    p.vbus = true;
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_CHARGING);
+    p.inhibit = true;
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_STOP_FAILED);
+    p.charging = false;
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_INHIBITED);
+    p.inhibit = false;
+    p.batt_mv = 4150;
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_DONE);
+    p.batt_mv = (uint16_t)GL_PROV_CHARGE_DONE_MIN_MV;
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_DONE);
+    p.batt_mv = (uint16_t)(GL_PROV_CHARGE_DONE_MIN_MV - 1u);
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_NOT_CHARGING);
+    p.batt_mv = 0; /* not measured yet */
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_NOT_CHARGING);
+    p.batt_mv = 3800;
+    p.cell_temp_valid = true;
+    p.cell_temp_c = GL_PROV_BQ25101_T_COLD_C - 0.5f;
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_TEMP_HOLD);
+    p.cell_temp_c = GL_PROV_BQ25101_T_HOT_C + 0.5f;
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_TEMP_HOLD);
+    p.cell_temp_c = 50.0f; /* inside the charger's window: it should charge */
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_NOT_CHARGING);
+    p.cell_temp_c = NAN;
+    GL_CHECK_EQ(gl_power_charger_status(&p), GL_CHGST_NOT_CHARGING);
+    /* the done threshold lies under the voltage at which the model's charger
+     * starts a recharge, with room for the divider and the ADC */
+    GL_CHECK(GL_PROV_CHARGE_DONE_MIN_MV < GL_PROV_BQ25101_VREG_MV - GL_PROV_BQ25101_RECHARGE_DROP_MV);
+    GL_CHECK(GL_PROV_CHARGE_RESTART_MV < GL_PROV_CHARGE_DONE_MIN_MV);
+
+    /* and against the MODEL, through the pins and the ADC */
+    fresh_();
+    gl_sim_set_cell_temperature(25.0f);
+    gl_sim_set_mcu_temperature(25.0f);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    GL_CHECK_EQ(gl_power_measure(&pw_), GL_OK);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_FAST);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_CHARGING);
+    /* done: the model's cell at the regulation voltage */
+    gl_sim_set_vbat_mv(4200);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DONE);
+    GL_CHECK_EQ(gl_power_measure(&pw_), GL_OK);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_DONE);
+    /* ... still done just above the recharge threshold, charging below it */
+    gl_sim_set_vbat_mv(4110);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DONE);
+    GL_CHECK_EQ(gl_power_measure(&pw_), GL_OK);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_DONE);
+    gl_sim_set_vbat_mv(4090);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_FAST);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_CHARGING);
+    gl_sim_set_vbat_mv(3900);
+    /* the charger's own thermistor holds it: too cold, too hot */
+    gl_sim_set_cell_temperature(-4.0f);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_COLD);
+    GL_CHECK_EQ(gl_power_measure(&pw_), GL_OK);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_TEMP_HOLD);
+    gl_sim_set_cell_temperature(63.0f);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_HOT);
+    GL_CHECK_EQ(gl_power_measure(&pw_), GL_OK);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_TEMP_HOLD);
+    gl_sim_set_cell_temperature(25.0f);
+    GL_CHECK_EQ(gl_power_measure(&pw_), GL_OK);
+    /* an input too low for the charger (a weak source behind the cradle's
+     * fuse): VBUS_SENSE reads high, nothing charges */
+    gl_sim_charger_input_low(true);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_NO_INPUT);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK(pw_.vbus);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_NOT_CHARGING);
+    gl_sim_charger_input_low(false);
+    /* the charger's thermistor shorted: its TS input at ground, disabled */
+    gl_sim_ntc1_set_fault(GL_SIM_NTC1_SHORT);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DISABLED);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_NOT_CHARGING);
+    gl_sim_ntc1_set_fault(GL_SIM_NTC1_NORMAL);
+    /* the firmware stops it: inhibited; with the stop MOSFET open the stop
+     * does not stop, and the status says so */
+    gl_power_charge_force(&pw_, true);
+    GL_CHECK(!gl_power_charge_gate(&pw_, 1000u, true, 25.0f, true, true));
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_INHIBITED);
+    gl_sim_charger_stop_broken(true);
+    GL_CHECK(gl_sim_charger_on());
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_STOP_FAILED);
+    gl_sim_charger_stop_broken(false);
+    gl_power_charge_force(&pw_, false);
+    GL_CHECK(gl_power_charge_gate(&pw_, 2000u, true, 25.0f, true, true));
+    /* the charger's thermistor OPEN: by GL_PROV_BQ25101_TS_OPEN_IS_TTDM it
+     * then has no temperature window.  At 70 C it charges; the firmware's
+     * gate on NTC2 stops it (TS pulled low wins) and flags the charger */
+    gl_sim_ntc1_set_fault(GL_SIM_NTC1_OPEN);
+    gl_sim_set_cell_temperature(70.0f);
+    gl_sim_set_mcu_temperature(70.0f);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_TTDM);
+    GL_CHECK_EQ(gl_power_measure(&pw_), GL_OK);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_CHARGING);
+    GL_CHECK(!pw_.ntc1_suspect);
+    GL_CHECK(!gl_power_charge_gate(&pw_, 3000u, true, 70.0f, true, true));
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TOO_HOT);
+    GL_CHECK(pw_.ntc1_suspect);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DISABLED);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK_EQ(pw_.chg_status, GL_CHGST_INHIBITED);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* DESIGN_SPEC E13: no camera read is started when the cell thermistor reads
+ * above 60 C. */
+GL_TEST(test_read_gate_at_60_c)
+{
+    const float lim = GL_PROV_READ_TEMP_MAX_C, hy = GL_PROV_READ_TEMP_HYST_C;
+    gl_power_t p;
+
+    GL_CHECK_NEAR(lim, 60.0, 1e-6);
+    memset(&p, 0, sizeof(p));
+    p.cell_temp_valid = true;
+    p.ntc_fault = (uint8_t)GL_NTC_OK;
+    /* the limit is on the reading: at 60.0 a read still starts, above it not */
+    p.cell_temp_c = lim;
+    GL_CHECK(gl_power_read_allowed(&p, true, 20.0f, true, true));
+    p.cell_temp_c = lim + 0.1f;
+    GL_CHECK(!gl_power_read_allowed(&p, true, 20.0f, true, true));
+    GL_CHECK(p.read_hot);
+    /* hysteresis: allowed again only below limit - hysteresis */
+    p.cell_temp_c = lim - 0.1f;
+    GL_CHECK(!gl_power_read_allowed(&p, true, 20.0f, true, true));
+    p.cell_temp_c = lim - hy + 0.1f;
+    GL_CHECK(!gl_power_read_allowed(&p, true, 20.0f, true, true));
+    p.cell_temp_c = lim - hy - 0.1f;
+    GL_CHECK(gl_power_read_allowed(&p, true, 20.0f, true, true));
+    GL_CHECK(!p.read_hot);
+    p.cell_temp_c = lim - 0.1f; /* and stays allowed up to the limit */
+    GL_CHECK(gl_power_read_allowed(&p, true, 20.0f, true, true));
+    /* a sweep up and down against an independent model of the rule */
+    {
+        bool hot = false;
+        for (int pass = 0; pass < 2; pass++) {
+            for (int k = 0; k <= 400; k++) {
+                const float t = (pass == 0) ? (40.0f + 0.1f * (float)k) : (80.0f - 0.1f * (float)k);
+                hot = hot ? !(t < lim - hy) : (t > lim);
+                p.cell_temp_c = t;
+                GL_CHECK_EQ(gl_power_read_allowed(&p, true, 20.0f, true, true), !hot);
+            }
+        }
+    }
+    /* the die sensors do not overrule a valid NTC2, either way */
+    p.cell_temp_c = 30.0f;
+    p.mcu_temp_c = 90.0f;
+    p.mcu_temp_valid = true;
+    GL_CHECK(gl_power_read_allowed(&p, true, 90.0f, true, true));
+    p.cell_temp_c = 65.0f;
+    p.mcu_temp_c = 20.0f;
+    GL_CHECK(!gl_power_read_allowed(&p, true, 20.0f, true, true));
+    /* NTC2 with nothing to say (stale, or a fault): the hotter die sensor
+     * that is alive stands in */
+    memset(&p, 0, sizeof(p));
+    p.cell_temp_c = 20.0f;
+    p.cell_temp_valid = true;
+    p.mcu_temp_valid = true;
+    p.mcu_temp_c = 61.0f;
+    GL_CHECK(!gl_power_read_allowed(&p, false, 30.0f, true, true)); /* stale NTC2; MCU die 61 */
+    p.read_hot = false;
+    p.mcu_temp_c = 30.0f;
+    GL_CHECK(!gl_power_read_allowed(&p, false, 62.0f, true, true)); /* IMU die 62 */
+    p.read_hot = false;
+    GL_CHECK(gl_power_read_allowed(&p, false, 40.0f, true, true));
+    p.ntc_fault = (uint8_t)GL_NTC_OPEN;
+    p.cell_temp_valid = false;
+    p.cell_temp_c = NAN;
+    GL_CHECK(gl_power_read_allowed(&p, true, 40.0f, true, true));
+    GL_CHECK(!gl_power_read_allowed(&p, true, 70.0f, true, false)); /* only the IMU's is fresh */
+    p.read_hot = false;
+    GL_CHECK(!gl_power_read_allowed(&p, true, 0.0f, false, true) == (p.mcu_temp_c > lim));
+    /* no temperature at all: allowed (power.h says why) */
+    p.read_hot = false;
+    GL_CHECK(gl_power_read_allowed(&p, false, NAN, false, false));
+    GL_CHECK(gl_power_read_allowed(&p, true, 99.0f, false, false));
+}
+
+/* The rules the simulator has for the charger pins and for sleeping with a
+ * charger around: each is made to fire here. */
+GL_TEST(test_charger_rules_of_the_simulator)
+{
+    fresh_();
+    gl_sim_set_cell_temperature(50.0f); /* inside the charger's window, outside the firmware's */
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     gl_power_poll_pins(&pw_);
-    /* the charger started by itself; the measurement stops it */
-    GL_CHECK(gl_sim_charger_on());
+    /* the charger started by itself, in its WARM zone; the firmware's
+     * measurement stops it */
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_WARM);
     gl_sim_advance_ms(3);
     GL_CHECK_EQ(gl_power_measure_temps(&pw_), GL_OK);
-    GL_CHECK(!gl_power_charge_gate(&pw_, true, 50.0f, true, true));
+    GL_CHECK(!gl_power_charge_gate(&pw_, 0u, true, 50.0f, true, true));
     GL_CHECK(!gl_sim_charger_on());
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TOO_HOT);
     {
         const gl_sim_stats_t *st = gl_sim_stats();
         GL_CHECK(st->chg_outside_us >= 3000u && st->chg_outside_us < 6000u);
         GL_CHECK_EQ(st->chg_outside_longest_us, st->chg_outside_us);
+        GL_CHECK_EQ(st->chg_warm_us, st->chg_outside_us);
+        GL_CHECK_EQ(st->chg_hw_outside_us, 0u); /* never outside the charger's own window */
     }
     for (int k = 0; k < 6; k++) {
         gl_sim_advance_ms(10000);
         gl_hal_watchdog_kick();
     }
-    GL_CHECK(gl_sim_stats()->chg_outside_us < 6000u); /* inhibited: nothing added */
+    GL_CHECK(gl_sim_stats()->chg_outside_us < 6000u); /* stopped: nothing added */
     GL_CHECK(gl_sim_stats()->inhibit_us >= 60000000u);
     if (gl_sim_violation_total() != 0u) {
         printf("    first violation: %s\n", gl_sim_violations()->first);
     }
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
-    /* rule: charging on outside the window for longer than the limit */
+    /* rule: a charge running outside the firmware's window for longer than
+     * the limit while firmware runs */
     gl_power_charge_release(&pw_);
     gl_sim_advance_ms(GL_SIM_CHG_REACT_MAX_MS + 100u);
     GL_CHECK_EQ(gl_sim_violations()->power, 1u);
     GL_CHECK(strstr(gl_sim_violations()->first, "charging for") != NULL);
-    /* rule: CHG_INHIBIT may only pull low */
-    gl_hal_gpio_write(GL_PIN_CHG_INHIBIT, false);
-    gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_OUTPUT_PP);
-    GL_CHECK_EQ(gl_sim_violations()->power, 2u);
+    /* rule: CHG_INHIBIT is push-pull or analog - an open-drain output stops
+     * nothing, a pull half opens the MOSFET */
+    gl_hal_gpio_write(GL_PIN_CHG_INHIBIT, true);
     gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_OUTPUT_OD);
-    /* rule: Stop mode with the pin low and VBUS gone */
+    GL_CHECK_EQ(gl_sim_violations()->power, 2u);
+    GL_CHECK(gl_sim_charger_on()); /* released open drain: the charger is not stopped */
+    gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_INPUT_PULLUP);
+    GL_CHECK_EQ(gl_sim_violations()->power, 3u);
+    gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_OUTPUT_PP);
+    GL_CHECK_EQ(gl_sim_violations()->power, 3u);
+    GL_CHECK(!gl_sim_charger_on());
+    /* rule: Stop mode with the pin high and VBUS gone */
     gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
     gl_hal_irq_enable(GL_IRQ_WAKE_TIMER, true);
     gl_hal_wake_timer_start(5);
     (void)gl_hal_sleep(GL_SLEEP_STOP);
-    GL_CHECK_EQ(gl_sim_violations()->power, 3u);
+    GL_CHECK_EQ(gl_sim_violations()->power, 4u);
     /* the driver's own way out of that state is clean */
     gl_power_poll_pins(&pw_);
-    (void)gl_power_charge_gate(&pw_, true, 25.0f, true, true);
+    (void)gl_power_charge_gate(&pw_, 0u, true, 25.0f, true, true);
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
     (void)gl_hal_irq_take();
     gl_hal_wake_timer_start(5);
     (void)gl_hal_sleep(GL_SLEEP_STOP);
-    GL_CHECK_EQ(gl_sim_violations()->power, 3u);
+    GL_CHECK_EQ(gl_sim_violations()->power, 4u);
     /* rule: Stop mode in the cradle without a wake-up soon enough */
     gl_sim_set_cell_temperature(22.0f);
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     (void)gl_hal_irq_take();
     gl_hal_wake_timer_start(GL_SIM_CHG_SUPERVISE_MAX_MS + 2000u);
     (void)gl_hal_sleep(GL_SLEEP_STOP);
-    GL_CHECK_EQ(gl_sim_violations()->power, 4u);
+    GL_CHECK_EQ(gl_sim_violations()->power, 5u);
     (void)gl_hal_irq_take();
     gl_hal_wake_timer_start(GL_SIM_CHG_SUPERVISE_MAX_MS - 2000u);
     (void)gl_hal_sleep(GL_SLEEP_STOP);
-    GL_CHECK_EQ(gl_sim_violations()->power, 4u);
+    GL_CHECK_EQ(gl_sim_violations()->power, 5u);
 }
 
 GL_TEST(test_status_pins_and_interrupts)
@@ -614,19 +1030,185 @@ GL_TEST(test_status_pins_and_interrupts)
     fresh_();
     gl_hal_irq_enable(GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT, true);
     GL_CHECK_EQ(gl_hal_irq_take(), 0u);
+    /* into the cradle: VBUS rises, and the charger pulls its status low */
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
-    GL_CHECK_EQ(gl_hal_irq_take(), GL_IRQ_VBUS_CHANGE);
-    gl_power_poll_pins(&pw_);
-    GL_CHECK(pw_.vbus && !pw_.charging);
-    gl_sim_set_input(GL_PIN_CHG_STAT, false); /* STAT pulled low: charging */
-    GL_CHECK_EQ(gl_hal_irq_take(), GL_IRQ_CHG_STAT);
+    GL_CHECK_EQ(gl_hal_irq_take(), GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT);
     gl_power_poll_pins(&pw_);
     GL_CHECK(pw_.vbus && pw_.charging);
-    gl_sim_set_input(GL_PIN_CHG_STAT, true);
+    /* the charge ends: an edge on the status line, nothing on VBUS */
+    gl_sim_set_vbat_mv(4200);
+    GL_CHECK_EQ(gl_hal_irq_take(), GL_IRQ_CHG_STAT);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK(pw_.vbus && !pw_.charging);
+    /* a recharge */
+    gl_sim_set_vbat_mv(4000);
+    GL_CHECK_EQ(gl_hal_irq_take(), GL_IRQ_CHG_STAT);
+    /* out of the cradle: both */
     gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
     GL_CHECK_EQ(gl_hal_irq_take(), GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT);
     gl_power_poll_pins(&pw_);
     GL_CHECK(!pw_.vbus && !pw_.charging);
+    /* the board as it leaves the cradle: the USB supply of the MCU goes at
+     * once (its monitor is an interrupt source of its own), the VBUS_SENSE
+     * pin follows when the divider has discharged the pad */
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    (void)gl_hal_irq_take();
+    GL_CHECK(gl_hal_usb_supply_ok());
+    gl_sim_vbus_remove_lagging((uint32_t)GL_PINS_VBUS_REMOVAL_SEEN_MS);
+    GL_CHECK((gl_hal_irq_take() & GL_IRQ_VBUS_CHANGE) != 0u);
+    GL_CHECK(gl_hal_gpio_read(GL_PIN_VBUS_SENSE)); /* still reads high ... */
+    GL_CHECK(!gl_hal_usb_supply_ok());             /* ... and the supply is gone */
+    GL_CHECK(!gl_sim_charger_on());
+    GL_CHECK_EQ(gl_hal_usb_start(), GL_ERR_STATE); /* the supply-valid bit is not set on it */
+    gl_sim_advance_ms((uint32_t)GL_PINS_VBUS_REMOVAL_SEEN_MS - 1u);
+    GL_CHECK(gl_hal_gpio_read(GL_PIN_VBUS_SENSE));
+    gl_sim_advance_ms(1);
+    GL_CHECK(!gl_hal_gpio_read(GL_PIN_VBUS_SENSE));
+    GL_CHECK((gl_hal_irq_take() & GL_IRQ_VBUS_CHANGE) != 0u);
+}
+
+/*
+ * THE HARDWARE MODEL ON ITS OWN: the MCU is held in reset the whole time, no
+ * firmware runs, CHG_INHIBIT is high impedance.  What the model's BQ25101
+ * does with its own thermistor across the temperature range - which is what
+ * protects the cell in the ROM loader, behind a hung firmware, in ship mode
+ * and with the MCU unpowered.  This is a test of THE MODEL (thresholds
+ * PROVISIONAL): it shows what the firmware is entitled to expect of the
+ * hardware, not what the chip does.
+ */
+GL_TEST(test_hardware_model_charger_alone_over_temperature)
+{
+    static const struct {
+        float t_c;
+        gl_sim_chg_state_t want;
+        const char *what;
+    } row[] = {
+        { -20.0f, GL_SIM_CHG_COLD, "no charge" },      { -0.5f, GL_SIM_CHG_COLD, "no charge" },
+        { 0.5f, GL_SIM_CHG_COOL, "half current" },     { 9.5f, GL_SIM_CHG_COOL, "half current" },
+        { 10.5f, GL_SIM_CHG_FAST, "19.8 mA to 4.20 V" }, { 25.0f, GL_SIM_CHG_FAST, "19.8 mA to 4.20 V" },
+        { 44.5f, GL_SIM_CHG_FAST, "19.8 mA to 4.20 V" }, { 45.5f, GL_SIM_CHG_WARM, "to 4.06 V only" },
+        { 59.5f, GL_SIM_CHG_WARM, "to 4.06 V only" },  { 60.5f, GL_SIM_CHG_HOT, "no charge" },
+        { 85.0f, GL_SIM_CHG_HOT, "no charge" },
+    };
+    gl_sim_reset(true); /* and NO gl_hal_init(): the MCU stays in reset */
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    for (size_t i = 0; i < GL_ARRAY_LEN(row); i++) {
+        const gl_sim_stats_t *st;
+        uint64_t on0, alone0, warm0, cool0;
+        gl_sim_set_cell_temperature(row[i].t_c);
+        st = gl_sim_stats();
+        on0 = st->chg_in_reset_us;
+        alone0 = st->chg_alone_outside_us;
+        warm0 = st->chg_warm_us;
+        cool0 = st->chg_cool_us;
+        gl_sim_advance_ms(60000);
+        st = gl_sim_stats();
+        GL_CHECK_EQ(gl_sim_charger_state(), row[i].want);
+        printf("    cell at %5.1f C, no firmware: %-5s (%s); charged for %2.0f of 60 s\n",
+               (double)row[i].t_c, gl_sim_charger_state_name(gl_sim_charger_state()), row[i].what,
+               (double)(st->chg_in_reset_us - on0) / 1e6);
+        if (row[i].want == GL_SIM_CHG_COLD || row[i].want == GL_SIM_CHG_HOT) {
+            GL_CHECK_EQ(st->chg_in_reset_us - on0, 0u);
+            GL_CHECK(gl_sim_pin_level(GL_PIN_CHG_STAT)); /* status released */
+        } else {
+            GL_CHECK_EQ(st->chg_in_reset_us - on0, 60000000u);
+            GL_CHECK(!gl_sim_pin_level(GL_PIN_CHG_STAT));
+        }
+        GL_CHECK_EQ(st->chg_warm_us - warm0, (row[i].want == GL_SIM_CHG_WARM) ? 60000000u : 0u);
+        GL_CHECK_EQ(st->chg_cool_us - cool0, (row[i].want == GL_SIM_CHG_COOL) ? 60000000u : 0u);
+        /* charging outside the firmware's 0..45 C with nobody there: only in
+         * the charger's WARM zone */
+        GL_CHECK_EQ(st->chg_alone_outside_us - alone0, (row[i].want == GL_SIM_CHG_WARM) ? 60000000u : 0u);
+    }
+    /* never a charge outside the charger's own window, and nothing counted
+     * against a firmware that was not running */
+    GL_CHECK_EQ(gl_sim_stats()->chg_hw_outside_us, 0u);
+    GL_CHECK_EQ(gl_sim_stats()->chg_outside_us, 0u);
+    GL_CHECK_EQ(gl_sim_stats()->chg_on_us, 0u);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+    /* in the WARM zone the charger regulates to 4.06 V: a cell above that
+     * gets nothing */
+    gl_sim_set_cell_temperature(50.0f);
+    gl_sim_set_vbat_mv(4100);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DONE);
+    gl_sim_set_vbat_mv(3900);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_WARM);
+    /* WHAT THE MODEL DOES NOT PROTECT AGAINST: its thermistor open.  The
+     * charger then has no window (GL_PROV_BQ25101_TS_OPEN_IS_TTDM), and with
+     * no firmware nothing else has one */
+    gl_sim_ntc1_set_fault(GL_SIM_NTC1_OPEN);
+    gl_sim_set_cell_temperature(70.0f);
+    gl_sim_advance_ms(60000);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_TTDM);
+    printf("    cell at  70.0 C, no firmware, the charger's thermistor OPEN: %s - charged for %.0f of "
+           "60 s outside its own window (NOT MET in hardware alone; the firmware's gate covers it "
+           "while it runs)\n", gl_sim_charger_state_name(gl_sim_charger_state()),
+           (double)gl_sim_stats()->chg_hw_outside_us / 1e6);
+    GL_CHECK_EQ(gl_sim_stats()->chg_hw_outside_us, 60000000u); /* PINNED: NOT MET */
+}
+
+/* The hardware model and the END of a charge (the reason for E32): the
+ * charger terminates when ITS OUTPUT current falls below 10 % of 19.8 mA,
+ * and the board hangs on the same node as the cell.  With the MCU drawing
+ * nothing (held in reset) the model's charge ends; with the ROM loader
+ * running (several milliamperes, a guess) it never does, and what ends it
+ * is the charger's own timer - if it has one (from memory).  A MODEL: the
+ * cell is a guess too. */
+GL_TEST(test_hardware_model_termination_needs_a_small_load)
+{
+    const double i_term = (double)GL_PROV_BQ25101_TERM_FRACTION * (double)GL_PROV_BQ25101_ICHG_UA;
+    double hours = 0.0;
+
+    /* (a) MCU in reset: nothing but the always-on parts on the node */
+    gl_sim_reset(true);
+    gl_sim_cell_enable(0.90f);
+    gl_sim_set_cell_temperature(25.0f);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_FAST);
+    GL_CHECK(gl_sim_load_ua() < 20.0);
+    for (int k = 0; k < 6 * 60 && gl_sim_charger_on(); k++) {
+        gl_sim_advance_ms(60000);
+        hours += 1.0 / 60.0;
+    }
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DONE);
+    GL_CHECK_EQ(gl_sim_stats()->chg_terminations, 1u);
+    GL_CHECK(gl_sim_pin_level(GL_PIN_CHG_STAT));
+    printf("    model, MCU in reset (load %.1f uA): from 90 %% the charge terminates after %.2f h at "
+           "%.1f %%, cell %.0f mV; termination threshold %.2f mA\n", gl_sim_load_ua(), hours,
+           100.0 * (double)gl_sim_cell_soc(), 4200.0 - 0.0, i_term / 1000.0);
+    GL_CHECK(hours > 0.1 && hours < 3.0);
+    GL_CHECK(gl_sim_cell_soc() > 0.97f);
+
+    /* (b) the ROM loader running: its draw is above the termination current */
+    gl_sim_reset(true);
+    gl_sim_cell_enable(0.90f);
+    gl_sim_set_cell_temperature(25.0f);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    gl_sim_mcu_enter_rom();
+    GL_CHECK(gl_sim_load_ua() > i_term);
+    for (int k = 0; k < 9 * 60; k++) {
+        gl_sim_advance_ms(60000);
+    }
+    GL_CHECK(gl_sim_charger_on()); /* 9 h later: still "charging", the cell held at 4.2 V */
+    GL_CHECK_EQ(gl_sim_stats()->chg_terminations, 0u);
+    GL_CHECK(!gl_sim_pin_level(GL_PIN_CHG_STAT));
+    GL_CHECK(gl_sim_charger_out_ua() > i_term);
+    printf("    model, ROM loader running (load %.1f mA, a guess): after 9 h the charger still charges, "
+           "%.2f mA out, cell held at %.1f %% - NO termination (NOT MET in hardware alone)\n",
+           gl_sim_load_ua() / 1000.0, gl_sim_charger_out_ua() / 1000.0, 100.0 * (double)gl_sim_cell_soc());
+    for (int k = 0; k < 90; k++) {
+        gl_sim_advance_ms(60000);
+    }
+    if (GL_PROV_BQ25101_SAFETY_TIMER_H != 0u) {
+        /* the charger's own timer (GL_PROV_BQ25101_SAFETY_TIMER_H, FROM MEMORY) */
+        GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_TIMER);
+        GL_CHECK_EQ(gl_sim_stats()->chg_timer_faults, 1u);
+        printf("    ... until the charger's own safety timer (%u h, from memory of the family: "
+               "PROVISIONAL) ends it\n", (unsigned)GL_PROV_BQ25101_SAFETY_TIMER_H);
+    } else {
+        GL_CHECK(gl_sim_charger_on());
+    }
+    GL_CHECK_EQ(gl_sim_stats()->chg_hw_outside_us, 0u);
 }
 
 int main(void)
@@ -634,12 +1216,18 @@ int main(void)
     GL_RUN(test_init_leaves_the_charger_in_its_hardware_default);
     GL_RUN(test_conversion_and_percent);
     GL_RUN(test_ntc_conversion_against_a_table);
-    GL_RUN(test_ntc_tolerance_budget_is_inside_the_guard_band);
+    GL_RUN(test_ntc_error_budget_at_the_limits);
     GL_RUN(test_measure_exact_adc_and_bias_sequence);
     GL_RUN(test_ntc_open_short_and_stuck_are_detected);
     GL_RUN(test_charge_gate_window_guard_and_hysteresis);
     GL_RUN(test_charge_gate_unknown_faulty_and_implausible_temperatures);
-    GL_RUN(test_charger_model_and_rules);
+    GL_RUN(test_charge_time_limit_of_6_hours);
+    GL_RUN(test_charge_stop_by_command);
+    GL_RUN(test_charger_status_inference);
+    GL_RUN(test_read_gate_at_60_c);
+    GL_RUN(test_charger_rules_of_the_simulator);
     GL_RUN(test_status_pins_and_interrupts);
+    GL_RUN(test_hardware_model_charger_alone_over_temperature);
+    GL_RUN(test_hardware_model_termination_needs_a_small_load);
     return gl_test_summary();
 }

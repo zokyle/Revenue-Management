@@ -57,6 +57,15 @@ gl_status_t gl_grain_fe_power(bool on)
         (void)gl_hal_opamp_enable(false);
         return gl_hal_adc_power(false);
     }
+    /* Rev E board: the mid-rail bias of the amplifier is a divider fed from
+     * the LCD_DISP line (from the always-on rail it would draw 14 uA for
+     * ever).  With the display off there is no bias and a measurement would
+     * be noise: refused.  With it on, the wait below (35 ms = 7 time
+     * constants of 50 kohm x 100 nF) covers the bias whenever DISP went
+     * high (NETLIST_NOTES 4.10, firmware note 12). */
+    if (!gl_hal_gpio_read(GL_PIN_LCD_DISP)) {
+        return GL_ERR_STATE;
+    }
     gl_grain_fe_all_off();
     gl_hal_gpio_mode(GL_PIN_OPAMP_VINP, GL_PIN_MODE_ANALOG);
     gl_hal_gpio_mode(GL_PIN_OPAMP_VINM, GL_PIN_MODE_ANALOG);

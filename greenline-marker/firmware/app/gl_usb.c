@@ -63,7 +63,8 @@ static gl_status_t get_status_(void *ctx, gl_proto_status_t *st)
                         : (int16_t)INT16_MIN;
     st->ui_state = app->ui.state;
     st->flags = (uint8_t)((app->power.vbus ? 1u : 0u) | (app->power.charging ? 2u : 0u) |
-                          (app->power.charge_enabled ? 4u : 0u) | (app->proto.unlocked ? 8u : 0u));
+                          (app->power.charge_enabled ? 4u : 0u) | (app->proto.unlocked ? 8u : 0u) |
+                          (app->ship_armed ? 16u : 0u));
     st->last_error = app->last_error;
     st->reads_total = app->reads_total;
     st->rtc_s = gl_hal_rtc_seconds();
@@ -288,16 +289,75 @@ static gl_status_t set_time_(void *ctx, uint32_t rtc_s)
     return GL_OK;
 }
 
-/* In the ROM bootloader CHG_INHIBIT is high-Z: the charger runs on its
- * hardware default and NOTHING supervises the cell temperature, for as long
- * as the host keeps the device there.  The firmware cannot change that; what
- * it can do is refuse to go there unless the charge gate is satisfied right
- * now (VBUS present, temperature known, plausible and well inside the
- * window). */
+/* In the ROM bootloader CHG_INHIBIT is high-Z: the charger runs on its own,
+ * inside ITS temperature window (rev E: it has a thermistor of its own),
+ * which is wider than the firmware's - it goes on to 60 C at a reduced
+ * voltage - and with no time limit but the charger's.  The firmware cannot
+ * change that; what it does is refuse to go there unless its own gate is
+ * satisfied right now (VBUS present, temperature known, plausible and well
+ * inside ITS window), so that an update starts from a permitted
+ * temperature. */
 static bool dfu_allowed_(void *ctx)
 {
     const gl_app_t *app = (const gl_app_t *)ctx;
     return app->power.vbus && app->power.temp_ok;
+}
+
+/* ---- rev E: ship mode, the power report, the factory's charge stop ----------------- */
+
+static gl_status_t ship_mode_(void *ctx, bool arm, bool *armed)
+{
+    *armed = gl_app_ship_mode_arm((gl_app_t *)ctx, arm);
+    return GL_OK;
+}
+
+static int16_t temp_x10_(bool valid, float t)
+{
+    return valid ? (int16_t)gl_roundi(gl_clampf(t, -100.0f, 200.0f) * 10.0f)
+                 : (int16_t)GL_PROTO_TEMP_NONE;
+}
+
+static gl_status_t get_power_(void *ctx, gl_proto_power_t *pw)
+{
+    gl_app_t *app = (gl_app_t *)ctx;
+    const gl_power_t *p = &app->power;
+    const gl_status_t st = gl_app_power_refresh(app); /* measured now (not during a read) */
+    const bool fresh = (st == GL_OK);
+    const uint32_t minutes = p->chg_run_ms / 60000u;
+
+    pw->battery_mv = p->batt_mv;
+    pw->cell_temp_c_x10 = temp_x10_(p->cell_temp_valid, p->cell_temp_c);
+    pw->mcu_temp_c_x10 = temp_x10_(p->mcu_temp_valid, p->mcu_temp_c);
+    pw->imu_temp_c_x10 = temp_x10_(app->temp_valid, app->temp_c);
+    pw->ntc_fault = p->ntc_fault;
+    pw->chg_status = p->chg_status;
+    pw->chg_reason = p->chg_reason;
+    pw->cradle = (uint8_t)gl_app_cradle_state(app);
+    pw->flags = (uint16_t)((p->vbus ? GL_PROTO_PWR_VBUS : 0u) |
+                           (p->charging ? GL_PROTO_PWR_CHG_LOW : 0u) |
+                           (p->inhibit ? GL_PROTO_PWR_INHIBIT : 0u) |
+                           (gl_hal_usb_supply_ok() ? GL_PROTO_PWR_USB_SUPPLY : 0u) |
+                           (app->ship_armed ? GL_PROTO_PWR_SHIP_ARMED : 0u) |
+                           (p->read_hot ? GL_PROTO_PWR_READ_HOT : 0u) |
+                           (p->ntc1_suspect ? GL_PROTO_PWR_NTC1_SUSPECT : 0u) |
+                           (p->time_limit ? GL_PROTO_PWR_TIME_LIMIT : 0u) |
+                           (p->forced ? GL_PROTO_PWR_FORCED : 0u) |
+                           (fresh ? GL_PROTO_PWR_CELL_FRESH : 0u));
+    pw->charge_min = (uint16_t)((minutes > 65535u) ? 65535u : minutes);
+    /* a measurement that failed still gets an answer: the fields say what
+     * is not valid (ntc_fault, GL_PROTO_TEMP_NONE) */
+    return (st == GL_ERR_BUSY) ? GL_ERR_BUSY : GL_OK;
+}
+
+static gl_status_t set_charge_(void *ctx, bool stop)
+{
+    gl_app_t *app = (gl_app_t *)ctx;
+    if (!app->power.vbus) {
+        return GL_ERR_STATE;
+    }
+    gl_power_charge_force(&app->power, stop);
+    (void)gl_app_power_refresh(app); /* takes effect, and is seen, at once */
+    return GL_OK;
 }
 
 static gl_status_t reboot_(void *ctx, bool rom_dfu)
@@ -332,6 +392,9 @@ void gl_usb_bind(gl_app_t *app)
     app->ops.set_time = set_time_;
     app->ops.reboot = reboot_;
     app->ops.dfu_allowed = dfu_allowed_;
+    app->ops.ship_mode = ship_mode_;
+    app->ops.get_power = get_power_;
+    app->ops.set_charge = set_charge_;
     gl_proto_init(&app->proto, &app->ops);
 }
 
@@ -405,6 +468,7 @@ void gl_usb_service(gl_app_t *app, uint32_t now_ms)
             break;
         }
         app->usb_last_rx_ms = now_ms;
+        app->usb_activity = true;
         gl_proto_feed(&app->proto, buf, n);
     }
     /* a partial frame left behind by a host that stopped mid-frame */
@@ -433,7 +497,27 @@ void gl_usb_service(gl_app_t *app, uint32_t now_ms)
     if (app->reboot_pending) {
         gl_hal_delay_ms(20); /* let the response leave */
         app->reboot_pending = false;
+        if (app->reboot_how == (uint8_t)GL_REBOOT_ROM_DFU) {
+            /* Rev E board: the IMU's two interrupt lines sit on pins the ROM
+             * loader listens on as an SPI clock and data input (NETLIST_NOTES
+             * 3.5, firmware note 11).  Leave them STATIC: the IMU is powered
+             * down, which unroutes data-ready from INT2 and the wake-up from
+             * INT1.  The display goes off too (its pull-down would do that at
+             * the reset anyway). */
+            (void)gl_imu_stop(&app->imu);
+            gl_lcd_off(&app->lcd);
+        }
         gl_hal_reboot((gl_reboot_t)app->reboot_how);
-        /* not reached on the target */
+        /* NOT REACHED ON THE TARGET.  The host backend records the request
+         * and returns: put back what was switched off for the ROM loader, so
+         * that a test can go on with the same application object. */
+        if (app->reboot_how == (uint8_t)GL_REBOOT_ROM_DFU && app->awake) {
+            (void)gl_lcd_on(&app->lcd);
+            if (app->imu_ok && gl_imu_start_measure(&app->imu) != GL_OK) {
+                app->imu_ok = false;
+            }
+            app->last_sample_ms = gl_hal_tick_ms();
+            app->redraw = true;
+        }
     }
 }

@@ -1,4 +1,5 @@
-/* power.c - battery, cell temperature, charger status, charge gate.  See power.h. */
+/* power.c - battery, the MCU's cell thermistor, the BQ25101's status, the
+ * firmware's charge gate and the temperature gate of a read.  See power.h. */
 #include "power.h"
 
 #include <math.h>
@@ -20,16 +21,19 @@
 #define KELVIN_0C 273.15f
 #define KELVIN_25C 298.15f
 
-/* CHG_INHIBIT.  Stop: latch low first, then open drain (the pin never
- * drives high).  Release: latch high (high-Z while still open drain), then
- * back to analog, the state the pin has after reset. */
+/* CHG_INHIBIT (E1): a push-pull output on the gate of the MOSFET that pulls
+ * the charger's TS pin to ground.  Stop: latch HIGH first, then push-pull.
+ * Release: latch low (the gate is discharged actively if the pin is still an
+ * output), then back to ANALOG, the state the pin has after reset; the
+ * 100 kohm on the gate holds the MOSFET off from there.  Both are written
+ * every time, whatever this module believes the pin to be. */
 static void inhibit_(gl_power_t *p, bool stop)
 {
     if (stop) {
-        gl_hal_gpio_write(GL_PIN_CHG_INHIBIT, false);
-        gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_OUTPUT_OD);
-    } else {
         gl_hal_gpio_write(GL_PIN_CHG_INHIBIT, true);
+        gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_OUTPUT_PP);
+    } else {
+        gl_hal_gpio_write(GL_PIN_CHG_INHIBIT, false);
         gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_ANALOG);
     }
     p->inhibit = stop;
@@ -41,8 +45,9 @@ void gl_power_init(gl_power_t *p)
     memset(p, 0, sizeof(*p));
     p->chg_reason = (uint8_t)GL_CHG_NO_VBUS;
     p->ntc_fault = (uint8_t)GL_NTC_ADC; /* nothing measured yet */
-    /* CHG_INHIBIT and NTC_BIAS: not touched (see power.h) */
-    gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT_PULLUP);
+    /* CHG_INHIBIT and NTC_BIAS: not touched (see power.h).  CHG_STAT has the
+     * board's pull-up and VBUS_SENSE its divider: no internal pull on either */
+    gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT);
     gl_hal_gpio_mode(GL_PIN_VBUS_SENSE, GL_PIN_MODE_INPUT);
     gl_hal_gpio_mode(GL_PIN_VBAT_SENSE, GL_PIN_MODE_ANALOG);
     gl_hal_gpio_mode(GL_PIN_NTC_SENSE, GL_PIN_MODE_ANALOG);
@@ -199,27 +204,85 @@ gl_status_t gl_power_measure(gl_power_t *p)
     return (st_t != GL_OK) ? st_t : st_n;
 }
 
+gl_chg_status_t gl_power_charger_status(const gl_power_t *p)
+{
+    if (!p->vbus) {
+        return GL_CHGST_NO_INPUT;
+    }
+    if (p->charging) {
+        /* CHG low: a charge runs.  With CHG_INHIBIT high that cannot be */
+        return p->inhibit ? GL_CHGST_STOP_FAILED : GL_CHGST_CHARGING;
+    }
+    if (p->inhibit) {
+        return GL_CHGST_INHIBITED;
+    }
+    if (p->cell_temp_valid && isfinite(p->cell_temp_c) &&
+        (p->cell_temp_c < GL_PROV_BQ25101_T_COLD_C || p->cell_temp_c > GL_PROV_BQ25101_T_HOT_C)) {
+        return GL_CHGST_TEMP_HOLD; /* the charger's own thermistor, as far as NTC2 can tell */
+    }
+    if (p->batt_mv >= GL_PROV_CHARGE_DONE_MIN_MV) {
+        return GL_CHGST_DONE;
+    }
+    /* (a cell voltage that has not been measured yet, 0, also ends here:
+     * the application measures before it believes this answer) */
+    return GL_CHGST_NOT_CHARGING;
+}
+
 void gl_power_poll_pins(gl_power_t *p)
 {
     p->vbus = gl_hal_gpio_read(GL_PIN_VBUS_SENSE);
+    /* the charger's CHG output pulls the line low while a charge runs; with
+     * no VBUS the board's pull-up holds it high */
     p->charging = !gl_hal_gpio_read(GL_PIN_CHG_STAT);
     p->charge_enabled = p->vbus && !p->inhibit;
+    p->chg_status = (uint8_t)gl_power_charger_status(p);
 }
 
-bool gl_power_charge_gate(gl_power_t *p, bool cell_fresh, float imu_temp_c, bool imu_temp_valid,
-                          bool mcu_temp_fresh)
+void gl_power_charge_force(gl_power_t *p, bool stop)
+{
+    p->forced = stop;
+}
+
+/* E32: account the time since the last gate call as charging if the charger
+ * said "charging" then and says so now; anything else starts the count
+ * again.  Returns true while the limit holds. */
+static bool time_limit_(gl_power_t *p, uint32_t now_ms)
+{
+    if (p->gate_timed && p->charging && !p->inhibit) {
+        const uint32_t dt = (uint32_t)(now_ms - p->chg_last_ms);
+        p->chg_run_ms = (dt > UINT32_MAX - p->chg_run_ms) ? UINT32_MAX : (p->chg_run_ms + dt);
+    } else if (!p->charging) {
+        p->chg_run_ms = 0;
+    }
+    p->gate_timed = true;
+    p->chg_last_ms = now_ms;
+    if (p->chg_run_ms >= GL_PROV_CHARGE_MAX_MS) {
+        p->time_limit = true;
+    } else if (p->time_limit && p->batt_mv != 0u && p->batt_mv < GL_PROV_CHARGE_RESTART_MV) {
+        /* the cell has run down behind the stopped charger: let it charge
+         * again, with a fresh limit */
+        p->time_limit = false;
+    }
+    return p->time_limit;
+}
+
+bool gl_power_charge_gate(gl_power_t *p, uint32_t now_ms, bool cell_fresh, float imu_temp_c,
+                          bool imu_temp_valid, bool mcu_temp_fresh)
 {
     const float lo = GL_PROV_CHARGE_TEMP_MIN_C + GL_PROV_CHARGE_TEMP_GUARD_C;
     const float hi = GL_PROV_CHARGE_TEMP_MAX_C - GL_PROV_CHARGE_TEMP_GUARD_C;
     const float t = p->cell_temp_c;
     uint8_t reason;
+    bool limit;
 
     if (!p->vbus) {
-        /* nothing to gate; never leave the pin low without VBUS */
+        /* nothing to gate; never leave the charger stopped without VBUS */
         gl_power_charge_release(p);
         p->chg_reason = (uint8_t)GL_CHG_NO_VBUS;
+        p->chg_status = (uint8_t)gl_power_charger_status(p);
         return false;
     }
+    limit = time_limit_(p, now_ms);
     if (!cell_fresh) {
         reason = (uint8_t)GL_CHG_TEMP_UNKNOWN;
     } else if (p->ntc_fault != (uint8_t)GL_NTC_OK) {
@@ -251,16 +314,68 @@ bool gl_power_charge_gate(gl_power_t *p, bool cell_fresh, float imu_temp_c, bool
             } else {
                 reason = (t < 0.5f * (lo + hi)) ? (uint8_t)GL_CHG_TOO_COLD : (uint8_t)GL_CHG_TOO_HOT;
             }
+            /* The charger's own thermistor should have stopped this charge:
+             * NTC2, believed by a die sensor, is outside the charger's window
+             * by more than the two readings can differ, and CHG still says
+             * "charging".  The gate stops it (the reason above); the flag
+             * says that the hardware window is not there. */
+            if (p->charging && !p->inhibit &&
+                (t < GL_PROV_BQ25101_T_COLD_C - 2.0f * GL_PROV_CHARGE_TEMP_GUARD_C ||
+                 t > GL_PROV_BQ25101_T_HOT_C + 2.0f * GL_PROV_CHARGE_TEMP_GUARD_C)) {
+                p->ntc1_suspect = true;
+            }
         }
     }
     p->temp_ok = (reason == (uint8_t)GL_CHG_ALLOWED);
+    /* a temperature reason comes first (it is the one that says something
+     * about the cell); then the command, then the time limit */
+    if (p->temp_ok && p->forced) {
+        reason = (uint8_t)GL_CHG_FORCED;
+    } else if (p->temp_ok && limit) {
+        reason = (uint8_t)GL_CHG_TIME_LIMIT;
+    }
     p->chg_reason = reason;
-    inhibit_(p, !p->temp_ok);
+    inhibit_(p, reason != (uint8_t)GL_CHG_ALLOWED);
+    p->chg_status = (uint8_t)gl_power_charger_status(p);
     return p->charge_enabled;
 }
 
 void gl_power_charge_release(gl_power_t *p)
 {
     p->temp_ok = false;
+    p->time_limit = false;
+    p->forced = false;
+    p->chg_run_ms = 0;
+    p->gate_timed = false;
     inhibit_(p, false);
+    p->chg_status = (uint8_t)gl_power_charger_status(p);
+}
+
+bool gl_power_read_allowed(gl_power_t *p, bool cell_fresh, float imu_temp_c, bool imu_temp_valid,
+                           bool mcu_temp_fresh)
+{
+    const bool have_cell = cell_fresh && p->cell_temp_valid &&
+                           p->ntc_fault == (uint8_t)GL_NTC_OK && isfinite(p->cell_temp_c);
+    const bool have_imu = imu_temp_valid && isfinite(imu_temp_c);
+    const bool have_mcu = mcu_temp_fresh && p->mcu_temp_valid && isfinite(p->mcu_temp_c);
+    float t;
+
+    if (have_cell) {
+        t = p->cell_temp_c;
+    } else if (have_imu || have_mcu) {
+        /* NTC2 has nothing to say: the hotter die sensor stands in */
+        t = have_imu ? imu_temp_c : p->mcu_temp_c;
+        if (have_imu && have_mcu && p->mcu_temp_c > t) {
+            t = p->mcu_temp_c;
+        }
+    } else {
+        p->read_hot = false; /* no temperature at all: see power.h */
+        return true;
+    }
+    if (p->read_hot) {
+        p->read_hot = !(t < GL_PROV_READ_TEMP_MAX_C - GL_PROV_READ_TEMP_HYST_C);
+    } else {
+        p->read_hot = (t > GL_PROV_READ_TEMP_MAX_C);
+    }
+    return !p->read_hot;
 }

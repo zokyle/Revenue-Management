@@ -42,7 +42,9 @@
 #define GL_PROTO_OVERHEAD 8u
 #define GL_PROTO_MAX_PAYLOAD 1024u
 #define GL_PROTO_MAX_FRAME (GL_PROTO_MAX_PAYLOAD + GL_PROTO_OVERHEAD)
-#define GL_PROTO_VERSION 1u
+/* 2: GL_CMD_SHIP_MODE, GL_CMD_GET_POWER, GL_CMD_SET_CHARGE added (rev E); a
+ * host tells from GET_INFO which commands a unit has. */
+#define GL_PROTO_VERSION 2u
 
 #define GL_PROTO_RESPONSE_FLAG 0x80u
 #define GL_PROTO_STREAM_FLAG 0x40u
@@ -65,8 +67,20 @@ typedef enum {
     GL_CMD_STREAM = 0x0C,       /**< -> source mask (2), period ms (2)  <- - */
     GL_CMD_SET_TIME = 0x0D,     /**< -> RTC seconds (4)     <- - */
     GL_CMD_UNLOCK = 0x0E,       /**< -> "GLFC" unlocks, anything else locks  <- - */
-    GL_CMD_REBOOT = 0x0F        /**< -> "BOOT" normal reset, "DFU!" ROM DFU (needs UNLOCK: the ROM
+    GL_CMD_REBOOT = 0x0F,       /**< -> "BOOT" normal reset, "DFU!" ROM DFU (needs UNLOCK: the ROM
                                      bootloader has no time-out)  <- - (sent before reset) */
+    /* rev E: power */
+    GL_CMD_SHIP_MODE = 0x10,    /**< -> "SHIP" arms ship mode, "STAY" disarms it  <- armed (1).
+                                     ARMED, the marker enters ship mode (DESIGN_SPEC E13: its
+                                     lowest-power state, wake-on-motion off) when it is next
+                                     lifted out of the cradle, and leaves it only when VBUS
+                                     appears again.  Until then it answers as usual */
+    GL_CMD_GET_POWER = 0x11,    /**< -> -                   <- gl_proto_power_t, 16 bytes: the
+                                     cell thermistor, the charger, the cradle state */
+    GL_CMD_SET_CHARGE = 0x12    /**< -> 1 = hold the charge stopped, 0 = automatic  <- -
+                                     (needs UNLOCK; forgotten when VBUS goes or the MCU
+                                     resets).  For the station test that proves the
+                                     charger's own thermistor input and its stop */
 } gl_proto_cmd_t;
 
 /** Calibration procedures for GL_CMD_START_CAL. */
@@ -110,7 +124,9 @@ typedef struct {
     uint16_t battery_mv;
     int16_t temperature_c_x10;
     uint8_t ui_state;          /**< gl_ui_state_t */
-    uint8_t flags;             /**< bit0 VBUS, bit1 charging, bit2 charge enabled, bit3 unlocked */
+    uint8_t flags;             /**< bit0 VBUS, bit1 charging (the charger says so), bit2 the
+                                    firmware does not stop the charge, bit3 unlocked, bit4 ship
+                                    mode armed */
     uint16_t last_error;       /**< gl_status_t of the last failed operation */
     uint32_t reads_total;
     uint32_t rtc_s;
@@ -124,6 +140,36 @@ typedef struct {
     uint32_t newest_seq;
 } gl_proto_log_info_t;
 #define GL_PROTO_LOG_INFO_LEN 16u
+
+/** Temperature that could not be measured, in the x10 fields below. */
+#define GL_PROTO_TEMP_NONE INT16_MIN
+
+/** GL_CMD_GET_POWER.  The enumerations are those of drivers/power.h; they
+ *  are carried as bytes (this module does not include drivers). */
+typedef struct {
+    uint16_t battery_mv;
+    int16_t cell_temp_c_x10;   /**< the MCU's cell thermistor (NTC2), GL_PROTO_TEMP_NONE if not valid */
+    int16_t mcu_temp_c_x10;    /**< MCU die sensor */
+    int16_t imu_temp_c_x10;    /**< IMU die sensor */
+    uint8_t ntc_fault;         /**< gl_ntc_fault_t of the last NTC2 measurement */
+    uint8_t chg_status;        /**< gl_chg_status_t: what the charger does, as far as known */
+    uint8_t chg_reason;        /**< gl_chg_reason_t: why the firmware stops the charge, if it does */
+    uint8_t cradle;            /**< 0 out of the cradle, 1 in it and awake (USB), 2 asleep in it */
+    uint16_t flags;            /**< GL_PROTO_PWR_* */
+    uint16_t charge_min;       /**< minutes of continuous charging so far */
+} gl_proto_power_t;
+#define GL_PROTO_POWER_LEN 16u
+#define GL_PROTO_PWR_VBUS (1u << 0)
+#define GL_PROTO_PWR_CHG_LOW (1u << 1)      /**< the charger's status output is low: charging */
+#define GL_PROTO_PWR_INHIBIT (1u << 2)      /**< the firmware drives CHG_INHIBIT high */
+#define GL_PROTO_PWR_USB_SUPPLY (1u << 3)   /**< the MCU's USB supply is valid */
+#define GL_PROTO_PWR_SHIP_ARMED (1u << 4)
+#define GL_PROTO_PWR_READ_HOT (1u << 5)     /**< E13: too hot for a camera read */
+#define GL_PROTO_PWR_NTC1_SUSPECT (1u << 6) /**< a charge ran outside the charger's own window */
+#define GL_PROTO_PWR_TIME_LIMIT (1u << 7)   /**< the 6 h limit holds the charge stopped */
+#define GL_PROTO_PWR_FORCED (1u << 8)       /**< a command holds the charge stopped */
+#define GL_PROTO_PWR_CELL_FRESH (1u << 9)   /**< the temperatures were measured within the last
+                                                 supervision period */
 
 /** Application callbacks.  Any pointer may be NULL: the command then
  *  answers GL_ERR_UNSUPPORTED.  All are called from gl_proto_feed(). */
@@ -155,6 +201,12 @@ typedef struct {
      *  the answer to GL_CMD_REBOOT "DFU!" is sent; false answers
      *  GL_ERR_STATE.  NULL = always. */
     bool (*dfu_allowed)(void *ctx);
+    /** Arm (true) or disarm ship mode; *armed receives the state afterwards. */
+    gl_status_t (*ship_mode)(void *ctx, bool arm, bool *armed);
+    /** Measure and report the power state. */
+    gl_status_t (*get_power)(void *ctx, gl_proto_power_t *pw);
+    /** Hold the charge stopped (true) or give it back to the gate (false). */
+    gl_status_t (*set_charge)(void *ctx, bool stop);
 } gl_proto_ops_t;
 
 typedef struct {
@@ -202,5 +254,6 @@ size_t gl_proto_encode(uint8_t *out, size_t cap, uint8_t seq, uint8_t cmd, const
 void gl_proto_info_encode(const gl_proto_info_t *info, uint8_t out[GL_PROTO_INFO_LEN]);
 void gl_proto_status_encode(const gl_proto_status_t *st, uint8_t out[GL_PROTO_STATUS_LEN]);
 void gl_proto_log_info_encode(const gl_proto_log_info_t *li, uint8_t out[GL_PROTO_LOG_INFO_LEN]);
+void gl_proto_power_encode(const gl_proto_power_t *pw, uint8_t out[GL_PROTO_POWER_LEN]);
 
 #endif /* GL_PROTO_H */

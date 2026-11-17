@@ -1,9 +1,15 @@
 /*
- * test_board.c - the board changes of DESIGN_SPEC rev C2 section 4 as the
- * HAL and the simulator see them, below the application:
+ * test_board.c - the rules of the rev E board (DESIGN_SPEC section 4,
+ * electrical/gl1_main/NETLIST_NOTES.md section 7) as the HAL and the
+ * simulator see them, below the application:
  *
+ *   - the lines WITHOUT a board resistor, which float in reset: gl_hal_init()
+ *     gives each its level before it touches any other pin;
  *   - the chip selects during reset: the board's pull resistors hold them
  *     inactive, and gl_hal_init() takes each pin over at that very level;
+ *   - the pins gl_hal_init() must NOT drive: CHG_INHIBIT, NTC_BIAS, the
+ *     charger's status input (no internal pull), the camera-facing pins;
+ *   - every pin in its resting state of the pin map when the marker sleeps;
  *   - the core clock: gl_hal_clock_set() is recorded, costs its lock time,
  *     can fail, and the rules about it (pairing, no Stop mode while fast,
  *     no heavy computation while slow) are counted;
@@ -11,8 +17,9 @@
  *   - the MCU reset of the model (gl_sim_mcu_reset), which the charger
  *     tests use for "reset" and "watchdog reset".
  *
- * The charger and the cell NTC are in tests/test_drv_power.c and, with the
- * whole firmware, in tests/test_e2e_faults.c.
+ * The charger and the cell thermistor are in tests/test_drv_power.c and,
+ * with the whole firmware, in tests/test_e2e_faults.c and
+ * tests/test_e2e_power.c.
  */
 #include "gl_test.h"
 
@@ -25,11 +32,25 @@
 
 typedef struct {
     gl_pin_t pin;
-    bool level; /* the board's pull = the inactive level */
+    bool level;    /* the level the board's resistor gives the undriven pin */
+    bool handover; /* gl_hal_init() makes it an output at that level */
 } reset_row_t;
-#define RROW(logical, level) { logical, (level) != 0 },
+#define RROW(logical, level, handover) { logical, (level) != 0, (handover) != 0 },
 static const reset_row_t reset_[] = { GL_PINS_RESET_TABLE(RROW) };
 #undef RROW
+
+#define FROW(logical) logical,
+static const gl_pin_t floating_[] = { GL_PINS_FLOATING_TABLE(FROW) };
+#undef FROW
+
+typedef struct {
+    gl_pin_t pin;
+    int fn, pull, rail, sleep;
+} pin_row_t;
+#define PROW(logical, port, pin, pad, fn, af, pull, board, exti, rail, sleep, src) \
+    { logical, fn, pull, rail, sleep },
+static const pin_row_t pins_[] = { GL_PINS_TABLE(PROW) };
+#undef PROW
 
 GL_TEST(test_chip_selects_are_inactive_through_reset_and_init)
 {
@@ -39,6 +60,8 @@ GL_TEST(test_chip_selects_are_inactive_through_reset_and_init)
         GL_CHECK_EQ(gl_sim_pin_mode(reset_[i].pin), GL_PIN_MODE_ANALOG);
         GL_CHECK_EQ(gl_sim_pin_level(reset_[i].pin), reset_[i].level);
     }
+    /* the gate of the charger's stop MOSFET is held off: the charger is free */
+    GL_CHECK(!gl_sim_pin_level(GL_PIN_CHG_INHIBIT));
     GL_CHECK(!gl_sim_pin_level(GL_PIN_LCD_SCS));  /* active high: not selected */
     GL_CHECK(!gl_sim_pin_level(GL_PIN_LCD_DISP)); /* display off */
     GL_CHECK(gl_sim_pin_level(GL_PIN_FLASH_CS));  /* active low: not selected */
@@ -53,6 +76,15 @@ GL_TEST(test_chip_selects_are_inactive_through_reset_and_init)
     for (size_t i = 0; i < GL_ARRAY_LEN(reset_); i++) {
         const long w = tr_find(0, GL_SIM_TR_GPIO_WRITE, (int)reset_[i].pin);
         const long m = tr_find(0, GL_SIM_TR_GPIO_MODE, (int)reset_[i].pin);
+        if (!reset_[i].handover) {
+            /* an input, an analog pin, or an output that rests analog
+             * (CHG_INHIBIT, the PWDN line on the BOOT0 pad): gl_hal_init()
+             * never drives it */
+            GL_CHECK(w < 0);
+            GL_CHECK(!gl_sim_pin_drives_high(reset_[i].pin) && !gl_sim_pin_drives_low(reset_[i].pin));
+            GL_CHECK_EQ(gl_sim_pin_level(reset_[i].pin), reset_[i].level);
+            continue;
+        }
         GL_CHECK(w >= 0 && m > w);
         if (w >= 0 && m > w) {
             GL_CHECK_EQ(gl_sim_trace_at((size_t)w)->b, reset_[i].level ? 1u : 0u);
@@ -91,8 +123,8 @@ GL_TEST(test_chip_selects_are_inactive_through_reset_and_init)
             }
         }
         GL_CHECK_EQ(active, 0u);
-        printf("    reset and gl_hal_init(): %u of the %u trace records leave a chip select, DISP "
-               "or the camera rail enable away from its pull level\n", active,
+        printf("    reset and gl_hal_init(): %u of the %u trace records leave a chip select, DISP, "
+               "the camera rail enable or the charger's stop away from its pull level\n", active,
                (unsigned)gl_sim_trace_count());
     }
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
@@ -116,6 +148,100 @@ GL_TEST(test_chip_selects_are_inactive_through_reset_and_init)
     GL_CHECK_EQ(gl_sim_violations()->spi, 2u);
 }
 
+/* Rev E, firmware note 15: six lines have no resistor on the board and float
+ * while the MCU is in reset or in the ROM loader (EXTCOMIN, the clock and
+ * data-out lines of both SPI buses, the left camera's PWDN).  gl_hal_init()
+ * gives each its level BEFORE it configures any other pin, and none of them
+ * is left floating afterwards.  Notes 3 and 5: the charger's status input
+ * gets no internal pull and is never driven (it is a USB Type-C CC pad). */
+GL_TEST(test_floating_lines_get_their_level_first)
+{
+    size_t first_other = SIZE_MAX, last_floating = 0;
+    unsigned n_float_records = 0;
+
+    gl_sim_reset(true);
+    for (size_t i = 0; i < GL_ARRAY_LEN(floating_); i++) {
+        /* in reset: analog, and nothing on the board holds them */
+        GL_CHECK_EQ(gl_sim_pin_mode(floating_[i]), GL_PIN_MODE_ANALOG);
+    }
+    GL_CHECK_EQ(gl_hal_init(), GL_OK);
+    for (size_t k = 0; k < gl_sim_trace_count(); k++) {
+        const gl_sim_trace_t *t = gl_sim_trace_at(k);
+        bool is_floating = false;
+        if (t->type != (uint8_t)GL_SIM_TR_GPIO_MODE && t->type != (uint8_t)GL_SIM_TR_GPIO_WRITE) {
+            continue;
+        }
+        for (size_t i = 0; i < GL_ARRAY_LEN(floating_); i++) {
+            is_floating = is_floating || (t->a == (uint8_t)floating_[i]);
+        }
+        if (is_floating && first_other == SIZE_MAX) {
+            n_float_records++;
+            last_floating = k;
+        } else if (!is_floating && first_other == SIZE_MAX) {
+            first_other = k;
+        }
+    }
+    /* each of them written low and made an output (2 records each) before
+     * the first record of any other pin */
+    GL_CHECK_EQ(n_float_records, 2u * (unsigned)GL_ARRAY_LEN(floating_));
+    GL_CHECK(first_other != SIZE_MAX && last_floating < first_other);
+    for (size_t i = 0; i < GL_ARRAY_LEN(floating_); i++) {
+        const long w = tr_find(0, GL_SIM_TR_GPIO_WRITE, (int)floating_[i]);
+        const long m = tr_find(0, GL_SIM_TR_GPIO_MODE, (int)floating_[i]);
+        const gl_pin_mode_t mode = gl_sim_pin_mode(floating_[i]);
+        GL_CHECK(w >= 0 && m > w && (size_t)m < first_other);
+        if (w >= 0 && m > w) {
+            GL_CHECK_EQ(gl_sim_trace_at((size_t)w)->b, 0u);
+            GL_CHECK_EQ(gl_sim_trace_at((size_t)m)->b, (unsigned)GL_PIN_MODE_OUTPUT_PP);
+        }
+        /* afterwards: driven low, or handed to its bus peripheral */
+        GL_CHECK(gl_sim_pin_drives_low(floating_[i]) || mode == GL_PIN_MODE_ALTERNATE);
+    }
+    printf("    gl_hal_init(): the first %u pin records are the %u lines that float in reset, each "
+           "written low and then made an output\n", n_float_records, (unsigned)GL_ARRAY_LEN(floating_));
+    /* the pins gl_hal_init() must leave alone */
+    GL_CHECK(tr_find(0, GL_SIM_TR_GPIO_WRITE, (int)GL_PIN_CHG_INHIBIT) < 0);
+    GL_CHECK(tr_find(0, GL_SIM_TR_GPIO_MODE, (int)GL_PIN_CHG_INHIBIT) < 0);
+    GL_CHECK(tr_find(0, GL_SIM_TR_GPIO_WRITE, (int)GL_PIN_NTC_BIAS) < 0);
+    GL_CHECK(tr_find(0, GL_SIM_TR_GPIO_MODE, (int)GL_PIN_NTC_BIAS) < 0);
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_NTC_BIAS), GL_PIN_MODE_ANALOG);
+    /* interrupt inputs: plain inputs, no internal pull */
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_STAT), GL_PIN_MODE_INPUT);
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_VBUS_SENSE), GL_PIN_MODE_INPUT);
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_IMU_INT1), GL_PIN_MODE_INPUT);
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_IMU_INT2), GL_PIN_MODE_INPUT);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+    /* every camera-facing pin is parked: analog, or driven low */
+    for (size_t i = 0; i < GL_ARRAY_LEN(pins_); i++) {
+        if (pins_[i].rail == GL_PINRAIL_PARKED) {
+            GL_CHECK(gl_sim_pin_mode(pins_[i].pin) == GL_PIN_MODE_ANALOG || gl_sim_pin_drives_low(pins_[i].pin));
+        }
+    }
+    /* the rules the model has for the two charger pins */
+    gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT_PULLUP); /* an internal pull on the CC pad */
+    GL_CHECK_EQ(gl_sim_violations()->power, 1u);
+    gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_OUTPUT_PP);    /* driven */
+    GL_CHECK_EQ(gl_sim_violations()->power, 2u);
+    gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT);
+    GL_CHECK_EQ(gl_sim_violations()->power, 2u);
+    gl_hal_gpio_write(GL_PIN_CHG_INHIBIT, true);
+    gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_OUTPUT_OD); /* an open-drain "high" stops nothing */
+    GL_CHECK_EQ(gl_sim_violations()->power, 3u);
+    GL_CHECK(!gl_sim_pin_level(GL_PIN_CHG_INHIBIT));
+    gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_OUTPUT_PP); /* push-pull high: the stop */
+    GL_CHECK_EQ(gl_sim_violations()->power, 3u);
+    GL_CHECK(gl_sim_pin_level(GL_PIN_CHG_INHIBIT));
+    gl_hal_gpio_write(GL_PIN_CHG_INHIBIT, false);
+    gl_hal_gpio_mode(GL_PIN_CHG_INHIBIT, GL_PIN_MODE_ANALOG);
+    /* the op-amp output has a 150 kohm to the rail: driven while the op-amp
+     * is off it draws through it */
+    GL_CHECK_EQ(gl_sim_violations()->analog, 0u);
+    gl_hal_gpio_write(GL_PIN_OPAMP_VOUT, false);
+    gl_hal_gpio_mode(GL_PIN_OPAMP_VOUT, GL_PIN_MODE_OUTPUT_PP);
+    GL_CHECK_EQ(gl_sim_violations()->analog, 1u);
+}
+
 GL_TEST(test_mcu_reset_of_the_model)
 {
     static gl_lcd_t lcd;
@@ -136,6 +262,9 @@ GL_TEST(test_mcu_reset_of_the_model)
     GL_CHECK(!gl_sim_cam_rail_on());                         /* pull-down on the enable */
     GL_CHECK(!gl_sim_lcd()->disp && !gl_sim_lcd()->extcomin); /* pull-down, LPTIM reset */
     for (size_t i = 0; i < GL_ARRAY_LEN(reset_); i++) {
+        if (reset_[i].pin == GL_PIN_CHG_STAT) {
+            continue; /* the charger's open drain decides against the pull-up */
+        }
         GL_CHECK_EQ(gl_sim_pin_level(reset_[i].pin), reset_[i].level);
     }
     GL_CHECK_EQ(gl_sim_clock(), GL_CLOCK_SLOW);
@@ -363,6 +492,7 @@ GL_TEST(test_backend_starts_the_watchdog_first)
 int main(void)
 {
     GL_RUN(test_chip_selects_are_inactive_through_reset_and_init);
+    GL_RUN(test_floating_lines_get_their_level_first);
     GL_RUN(test_mcu_reset_of_the_model);
     GL_RUN(test_core_clock_calls_are_recorded_and_checked);
     GL_RUN(test_extcomin_divides_32768_by_547);

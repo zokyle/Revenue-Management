@@ -33,17 +33,38 @@
  *   ADC/OPAMP   battery divider, the cell-temperature divider (NTC_BIAS,
  *               10.0 kohm, NTC_SENSE, the NTC to ground) and the grain
  *               photodiode stage, driven by the charlieplex pin states
- *   charger     the rev C2 circuit: the charger runs whenever VBUS is present
- *               and CHG_INHIBIT is not pulled low - with the MCU in reset
- *               (before gl_hal_init) as much as with firmware running.  The
- *               TRUE cell temperature is a property of the model; the time
- *               the charger runs with it outside 0..45 C is measured
+ *   charger     the rev E circuit (DESIGN_SPEC E1): a model of the BQ25101
+ *               with ITS OWN thermistor NTC1 on the cell.  It charges
+ *               whenever VBUS is present, its own temperature window allows
+ *               it and CHG_INHIBIT is not driven HIGH - with the MCU in
+ *               reset, in the ROM loader, hung or in ship mode as much as
+ *               with firmware running: the firmware's opinion is not asked.
+ *               JEITA zones, termination at 10 % of the charge current,
+ *               recharge, a safety timer, CHG as an open-drain status output,
+ *               TS low = disabled, TS open = no limits.  EVERY THRESHOLD AND
+ *               BEHAVIOUR OF IT IS PROVISIONAL (core/gl_provisional.h,
+ *               GL_PROV_BQ25101_*): the model encodes this project's reading
+ *               of the part, it proves nothing about the chip.  The TRUE
+ *               cell temperature is a property of the model
+ *   cell        optional (gl_sim_cell_enable): a 43 mAh cell with an
+ *               open-circuit voltage curve and an internal resistance, so
+ *               that a charge tapers and the charger can - or cannot - see
+ *               its termination current.  Off by default: VBAT is then the
+ *               fixed value of gl_sim_set_vbat_mv
+ *   MCU states  running / idle / Stop 2, held in reset, in the ROM loader
+ *               (gl_sim_mcu_enter_rom), and SHUTDOWN = ship mode
+ *               (gl_hal_ship_mode_enter): every pin high-impedance, nothing
+ *               runs, only VBUS on its wake-up pin restarts the MCU
  *   core clock  SLOW / FAST as set by gl_hal_clock_set: every call is in the
  *               trace, the time spent FAST and the heavy computation done
  *               while SLOW are counted
- *   board pulls the level each chip select has while the MCU does not drive
- *               it (reset, ROM bootloader): gl_sim_pin_level()
- *   USB         byte pipes to an imaginary host
+ *   board pulls the level each pin of GL_PINS_RESET_TABLE has while the MCU
+ *               does not drive it (reset, ROM bootloader, ship mode):
+ *               gl_sim_pin_level()
+ *   USB         byte pipes to an imaginary host that can be absent, active
+ *               or suspended; the USB supply of the MCU, which goes away
+ *               with VBUS at once while VBUS_SENSE may lag behind
+ *               (gl_sim_vbus_remove_lagging)
  *
  * It CHECKS, and counts in gl_sim_violations_t:
  *   - the camera rail rule (every camera-facing pin ANALOG or driven low
@@ -68,18 +89,29 @@
  *     started, the ADC or the op-amp powered, or a chip select asserted
  *   - more than one grain LED lit, ADC use while unpowered
  *   - the watchdog not kicked for longer than its period
- *   - USB left started, at a sleep, with VBUS absent
- *   - the charger rules of rev C2 (counted as `power`):
- *       Stop mode entered with CHG_INHIBIT pulled low and VBUS absent (an
- *       inhibit left behind by a sleeping MCU: nothing would ever lift it);
+ *   - USB left on (started or in standby), at a sleep, without its supply
+ *   - the charger rules of rev E (counted as `power`):
+ *       Stop mode or ship mode entered with CHG_INHIBIT driven high and VBUS
+ *       absent (a stop left behind by a sleeping MCU: the next cradle would
+ *       not charge until the firmware wakes, and the gate resistor draws
+ *       28 uA meanwhile);
  *       Stop mode entered with VBUS present and no wake-up within
- *       GL_SIM_CHG_SUPERVISE_MAX_MS (nobody would supervise the charge);
- *       the charger running for longer than GL_SIM_CHG_REACT_MAX_MS at a
- *       stretch with the true cell temperature outside 0..45 C while
- *       firmware runs;
- *       CHG_INHIBIT driven push-pull or driven high (it may only pull low)
+ *       GL_SIM_CHG_SUPERVISE_MAX_MS (the firmware's own supervision - its
+ *       narrower window, its time limit - would not come round);
+ *       a charge running for longer than GL_SIM_CHG_REACT_MAX_MS at a
+ *       stretch with the true cell temperature outside the FIRMWARE's
+ *       window, 0..45 C, while firmware runs;
+ *       CHG_INHIBIT as an open-drain output or with an internal pull (it
+ *       drives a MOSFET gate: push-pull or analog, nothing else);
+ *       CHG_STAT driven, or with an internal pull (an input with the board's
+ *       pull-up, on a USB Type-C CC pad of the MCU)
+ *   - ship mode entered with a device left on: the display, the camera rail,
+ *     USB, the ADC or the op-amp, a chip select asserted, NTC_BIAS driven
+ *     (counted as `stop_mode`)
  *   - NTC_BIAS still driven at a Stop-mode entry; an NTC conversion before
- *     the divider has settled (counted as `analog`)
+ *     the divider has settled; OPAMP_VOUT driven while the op-amp is off;
+ *     a grain measurement with LCD_DISP low or not yet high for
+ *     GL_PINS_GRAIN_BIAS_DISP_MS (counted as `analog`)
  *   - Stop mode entered with the fast core clock (counted as `clock`)
  *
  * The device models encode THIS PROJECT'S UNDERSTANDING of the parts (the
@@ -134,7 +166,9 @@ typedef enum {
     GL_SIM_TR_SLEEP,          /**< a = mode, c = microseconds slept (low 32 bits) */
     GL_SIM_TR_REBOOT,         /**< a = gl_reboot_t */
     GL_SIM_TR_IRQ_ENABLE,     /**< a = enable, c = mask */
-    GL_SIM_TR_CLOCK           /**< a = gl_clock_t asked for, b = gl_clock_t before the call */
+    GL_SIM_TR_CLOCK,          /**< a = gl_clock_t asked for, b = gl_clock_t before the call */
+    GL_SIM_TR_SHIP,           /**< gl_hal_ship_mode_enter(): a = 1 entered, 0 refused (VBUS present) */
+    GL_SIM_TR_USB_STANDBY     /**< gl_hal_usb_standby(): a = 1 entered, 0 refused */
 } gl_sim_tr_type_t;
 
 typedef enum {
@@ -175,17 +209,27 @@ bool gl_sim_pin_drives_high(gl_pin_t pin);
 bool gl_sim_pin_drives_low(gl_pin_t pin);
 /**
  * The electrical level of a pin as the BOARD sees it: the MCU's level where
- * it drives, otherwise the level of the board's pull resistor (DESIGN_SPEC
- * section 4: 100 kohm pull-down on LCD_SCS, LCD_DISP and CAM_PWR_EN,
- * 100 kohm pull-ups on FLASH_CS and IMU_CS; CHG_INHIBIT follows its gate
- * divider: high while VBUS is present) or the external level set for an
- * input.  Valid before gl_hal_init() too: that is the reset state.  For a
- * pin with neither driver nor pull the result is false.
+ * it drives, otherwise the level of the board's resistor (GL_PINS_RESET_TABLE,
+ * generated from the netlist's pin map: pull-downs on LCD_SCS, LCD_DISP,
+ * CAM_PWR_EN, CHG_INHIBIT and the BOOT0 pad, pull-ups on FLASH_CS, IMU_CS
+ * and OPAMP_VOUT) or the level an external circuit puts on the pin (the
+ * charger on CHG_STAT, the VBUS divider, the IMU).  Valid before
+ * gl_hal_init() and in ship mode too.  For a pin with neither driver nor
+ * pull the result is false.
  */
 bool gl_sim_pin_level(gl_pin_t pin);
-/** Set the level an external circuit puts on an input pin (IMU interrupts
- *  are driven by the IMU model; use this for CHG_STAT and VBUS_SENSE). */
+/** Set the level an external circuit puts on an input pin.  The IMU
+ *  interrupts are driven by the IMU model and CHG_STAT by the CHARGER model
+ *  (a level set here lasts until the model next looks).  VBUS_SENSE: the
+ *  marker is put into (true) or lifted out of (false) the cradle - the VBUS
+ *  pad, the USB supply and the pin together, at once. */
 void gl_sim_set_input(gl_pin_t pin, bool level);
+/** Lift the marker out of the cradle as the board does it: VBUS and the USB
+ *  supply of the MCU are gone NOW, the VBUS_SENSE pin follows `lag_ms` later
+ *  (the divider discharges the pad: up to GL_PINS_VBUS_REMOVAL_SEEN_MS). */
+void gl_sim_vbus_remove_lagging(uint32_t lag_ms);
+/** True while 5 V is on the VBUS pad (whatever VBUS_SENSE reads). */
+bool gl_sim_vbus_present(void);
 
 /**
  * An MCU reset WITHOUT a power cycle (reset pin, watchdog, software reset):
@@ -195,6 +239,15 @@ void gl_sim_set_input(gl_pin_t pin, bool level);
  * the charger's hardware default are all there is.  `reason`: GL_RESET_*.
  */
 void gl_sim_mcu_reset(uint32_t reason);
+/** The same reset, after which ST's ROM loader runs (an update): the pins
+ *  stay as the reset left them and the MCU draws GL_SIM_I_MCU_ROM_UA from
+ *  the cell node until the next gl_hal_init(). */
+void gl_sim_mcu_enter_rom(void);
+/** True from gl_hal_ship_mode_enter() until VBUS wakes the MCU (or a reset
+ *  ends it for a moment: gl_hal_init() then goes back, see gl_hal.h).
+ *  While it is true no firmware runs: a test stops calling the main loop,
+ *  and calls gl_app_init() again when this has become false. */
+bool gl_sim_mcu_shutdown(void);
 
 /* ---- rule violations ------------------------------------------------------------ */
 
@@ -211,7 +264,7 @@ typedef struct {
     unsigned analog;          /**< ADC / op-amp misuse, several grain LEDs lit */
     unsigned watchdog;        /**< not kicked within the watchdog period */
     unsigned deadlock;        /**< gl_hal_sleep with nothing that could ever wake it */
-    unsigned power;           /**< USB started without VBUS; the charger rules (see above) */
+    unsigned power;           /**< USB on without its supply; the charger rules (see above) */
     unsigned clock;           /**< Stop mode with the fast core clock */
     char first[160];          /**< description of the first violation of any kind */
 } gl_sim_violations_t;
@@ -243,12 +296,20 @@ typedef struct {
     uint64_t stage_instr[GL_TRACE_COUNT]; /**< instructions the cost table gives for the work
                                                reported at each trace point (whatever the
                                                time charged for them) */
-    /* supply (the current model below; nothing is counted while VBUS is present: the
-     * cradle supplies the board then).  Unit: microampere-seconds = microcoulombs */
-    double charge_uas;         /**< drawn from the cell in all */
+    /* supply (the current model below).  Unit: microampere-seconds = microcoulombs.
+     * The board hangs on the cell's node (the charger has no power path): what it
+     * draws comes out of the cell, unless a charge is running - then the charger
+     * supplies it, and it is counted as load_docked_uas instead */
+    double charge_uas;         /**< drawn from the cell in all (the protection circuit's own
+                                    GL_SIM_I_CELL_PCM_UA included) */
     double charge_cam_uas;     /**< of it: the camera rail */
-    double charge_mcu_uas;     /**< the MCU (run, idle sleep, Stop 2) */
+    double charge_mcu_uas;     /**< the MCU (run, idle sleep, Stop 2, Shutdown) */
     double charge_imu_uas;     /**< the IMU */
+    double load_docked_uas;    /**< what the board drew from the cell's node while VBUS was
+                                    present, charging or not: the part of the charger's
+                                    output current that is NOT charge current, and the
+                                    figure its termination threshold is up against */
+    uint64_t docked_us;        /**< time VBUS was present */
     uint64_t run_us;           /**< MCU running (not in gl_hal_sleep / gl_hal_delay_ms) */
     uint64_t run_fast_us;      /**< ... of it with the fast clock */
     uint64_t idle_fast_us;     /**< idle sleep (or a millisecond delay) with the fast clock */
@@ -262,13 +323,28 @@ typedef struct {
     /* cell temperature divider */
     uint32_t ntc_reads;        /**< conversions of GL_ADC_CH_CELL_NTC with the bias driven */
     uint64_t ntc_bias_us;      /**< total time NTC_BIAS was driven high */
-    /* charger (the model, not what the firmware believes) */
-    uint64_t chg_on_us;        /**< time the charger ran (VBUS present, CHG_INHIBIT not low) */
-    uint64_t chg_outside_us;   /**< of it, with the true cell temperature outside 0..45 C
-                                    while firmware was running */
+    /* charger (the MODEL of the BQ25101, not what the firmware believes) */
+    uint64_t chg_on_us;        /**< time a charge ran while firmware was running */
+    uint64_t chg_outside_us;   /**< of it, with the true cell temperature outside the
+                                    FIRMWARE's window, 0..45 C */
     uint64_t chg_outside_longest_us; /**< the longest single stretch of that */
-    uint64_t chg_in_reset_us;  /**< time the charger ran before gl_hal_init (MCU in reset) */
-    uint64_t inhibit_us;       /**< time CHG_INHIBIT was pulled low */
+    uint64_t chg_in_reset_us;  /**< time a charge ran with NO firmware: MCU in reset, in the
+                                    ROM loader or in ship mode */
+    uint64_t chg_alone_outside_us; /**< of THAT, with the cell outside 0..45 C: the charger's
+                                    WARM zone (45..60 C, 4.06 V) on its own */
+    uint64_t chg_hw_outside_us; /**< time a charge ran with the cell outside the CHARGER's own
+                                    window, 0..60 C, whoever was running: 0 unless its
+                                    thermistor NTC1 is open */
+    uint64_t chg_warm_us;      /**< time a charge ran in the charger's WARM zone (4.06 V) */
+    uint64_t chg_cool_us;      /**< ... in its COOL zone (half current) */
+    uint32_t chg_terminations; /**< charges the charger ended by itself (termination current) */
+    uint32_t chg_timer_faults; /**< charges its safety timer ended */
+    uint64_t inhibit_us;       /**< time CHG_INHIBIT was driven high */
+    uint32_t ship_entries;     /**< gl_hal_ship_mode_enter() calls that entered ship mode */
+    uint32_t ship_wakes;       /**< times VBUS woke the MCU from ship mode */
+    uint64_t shutdown_us;      /**< time spent in ship mode */
+    uint64_t grain_bias_short_us; /**< shortest DISP-high time seen before a grain conversion
+                                    (UINT64_MAX: none measured) */
 } gl_sim_stats_t;
 
 const gl_sim_stats_t *gl_sim_stats(void);
@@ -338,11 +414,11 @@ void gl_sim_imu_power_glitch(void);
  *  the IMU's (one board, one temperature); calling this pins it. */
 void gl_sim_set_mcu_temperature(float temp_c);
 
-/* ---- cell temperature, NTC divider and charger -------------------------------- */
+/* ---- cell temperature, the two thermistors, charger and cell ------------------- */
 
-/** The TRUE cell temperature (what the NTC sits on, and what the charge
- *  rules are judged by).  By default it follows the IMU's temperature (one
- *  board, one temperature); calling this pins it. */
+/** The TRUE cell temperature (what both NTCs sit on, what the charger model
+ *  acts on and what the charge rules are judged by).  By default it follows
+ *  the IMU's temperature (one board, one temperature); calling this pins it. */
 void gl_sim_set_cell_temperature(float temp_c);
 float gl_sim_cell_temperature(void);
 
@@ -362,13 +438,67 @@ void gl_sim_ntc_set_tolerance(float r25_rel, float b_rel, float series_rel);
  *  precision, for the tests of the driver's conversion. */
 double gl_sim_ntc_counts_at(double temp_c);
 
-/** True while the charger of the model is running: VBUS present and
- *  CHG_INHIBIT not pulled low (the firmware's opinion is not asked). */
+/** NTC2 is the MCU's thermistor (the functions above).  NTC1 is the
+ *  CHARGER's, on its TS pin; the MCU cannot see it. */
+typedef enum {
+    GL_SIM_NTC1_NORMAL = 0,
+    GL_SIM_NTC1_OPEN,     /**< a cracked joint: TS floats.  The charger then has NO temperature
+                               window, no safety timer and no termination
+                               (GL_PROV_BQ25101_TS_OPEN_IS_TTDM) */
+    GL_SIM_NTC1_SHORT     /**< TS at ground: the charger is disabled */
+} gl_sim_ntc1_fault_t;
+void gl_sim_ntc1_set_fault(gl_sim_ntc1_fault_t fault);
+
+/** What the charger of the model is doing. */
+typedef enum {
+    GL_SIM_CHG_NO_INPUT = 0,  /**< no VBUS, or an input below what the charger needs */
+    GL_SIM_CHG_DISABLED,      /**< TS held at ground: CHG_INHIBIT is driven high (or NTC1 shorted) */
+    GL_SIM_CHG_COLD,          /**< its thermistor below 0 C: no charge */
+    GL_SIM_CHG_HOT,           /**< its thermistor above 60 C: no charge */
+    GL_SIM_CHG_DONE,          /**< terminated; starts again when the cell has fallen 100 mV */
+    GL_SIM_CHG_TIMER,         /**< its safety timer has expired; cleared by VBUS or TS toggling */
+    GL_SIM_CHG_FAST,          /**< charging: 19.8 mA, to 4.20 V */
+    GL_SIM_CHG_COOL,          /**< charging at half current (0..10 C) */
+    GL_SIM_CHG_WARM,          /**< charging to 4.06 V (45..60 C) */
+    GL_SIM_CHG_TTDM           /**< charging with NTC1 open: no limits of any kind */
+} gl_sim_chg_state_t;
+gl_sim_chg_state_t gl_sim_charger_state(void);
+const char *gl_sim_charger_state_name(gl_sim_chg_state_t state);
+/** True while a charge runs (one of the last four states): the charger's
+ *  CHG output is low then. */
 bool gl_sim_charger_on(void);
-/** Longest stretch the charger may run outside 0..45 C before it counts as
- *  a violation, and the longest Stop-mode sleep allowed in the cradle. */
+/** Current out of the charger right now, microamperes (cell + board). */
+double gl_sim_charger_out_ua(void);
+/** Make the charger's input too low for it (a weak USB source behind the
+ *  cradle's fuse: NETLIST_NOTES 4.1): VBUS_SENSE reads high, the charger
+ *  does not charge. */
+void gl_sim_charger_input_low(bool low);
+/** Break the firmware's stop: the MOSFET on the charger's TS pin (or its gate
+ *  connection) is open, CHG_INHIBIT high pulls nothing. */
+void gl_sim_charger_stop_broken(bool broken);
+/** Longest stretch a charge may run with the cell outside the firmware's
+ *  window (0..45 C) while firmware runs before it counts as a violation,
+ *  and the longest Stop-mode sleep allowed in the cradle. */
 #define GL_SIM_CHG_REACT_MAX_MS 10000u
 #define GL_SIM_CHG_SUPERVISE_MAX_MS 10000u
+
+/** Switch the CELL model on, at a state of charge of 0..1.  From then on
+ *  VBAT follows the cell (open-circuit voltage curve, GL_SIM_CELL_R_OHM)
+ *  and the charge that goes into it and out of it; gl_sim_set_vbat_mv() is
+ *  ignored.  The curve and the resistance are guesses for a 43 mAh pouch
+ *  cell (no data sheet): good for "does the charge terminate", not for a
+ *  charge time. */
+void gl_sim_cell_enable(float soc);
+float gl_sim_cell_soc(void);
+#define GL_SIM_CELL_MAH 43.0
+#define GL_SIM_CELL_R_OHM 1.5
+/** What the board draws from the cell's node right now, microamperes (the
+ *  supply model below, with the MCU in its present mode). */
+double gl_sim_load_ua(void);
+/** Light on the underside (the grain opening): with the op-amp off the
+ *  photodiode then draws GL_SIM_I_WAKE_PULLUP_LIT_UA through the 150 kohm
+ *  that holds the wake line of the ROM loader high (NETLIST_NOTES 4.10). */
+void gl_sim_set_underside_lit(bool lit);
 
 /* ---- core clock ----------------------------------------------------------------- */
 
@@ -429,8 +559,10 @@ uint64_t gl_sim_stage_instr(gl_trace_point_t point, uint32_t work);
 /* ---- supply current model (ESTIMATE; every figure PROVISIONAL) ----------------------
  *
  * Currents at the cell, microamperes (all rails are linear regulators, so
- * load current = cell current).  FROM MEMORY of the datasheets or from the
- * unverified figures of docs/research; none is a measurement of this board.
+ * load current = cell current).  EVERY ONE IS A DATA-SHEET FIGURE FROM
+ * MEMORY, a figure of docs/research (unverified there) or of
+ * electrical/gl1_main/NETLIST_NOTES.md (PROVISIONAL there), or a plain
+ * guess, as each line says.  None is a measurement: no board exists.
  */
 /** Both OVM7692 awake: 2 x 120 mW from 2.8 V (docs/research/micro-cameras.md,
  *  unverified), for as long as the camera rail is on. */
@@ -445,6 +577,21 @@ uint64_t gl_sim_stage_instr(gl_trace_point_t point, uint32_t work);
 #define GL_SIM_I_MCU_RUN_SLOW_UA 2800.0
 #define GL_SIM_I_MCU_IDLE_SLOW_UA 900.0
 #define GL_SIM_I_MCU_STOP_UA 9.0
+/** Stop 1 instead of Stop 2 while the USB device is in standby
+ *  (GL_PROV_USB_WAKE_FROM_STOP2 = 0).  From memory, LOW CONFIDENCE. */
+#define GL_SIM_I_MCU_STOP1_UA 70.0
+/** Shutdown mode (ship mode), no RTC, low-speed oscillator off: 0.11 to
+ *  0.21 uA in the data sheet as remembered. */
+#define GL_SIM_I_MCU_SHUTDOWN_UA 0.2
+/** ST's ROM loader running with USB: a GUESS (the core at a few MHz, the
+ *  48 MHz oscillator and the USB core). */
+#define GL_SIM_I_MCU_ROM_UA 4000.0
+/** USB started: the 48 MHz oscillator with clock recovery (0.38 mA) and the
+ *  USB core (about 1.3 mA), both on VDD = the cell's node (the transceiver
+ *  itself is fed from VBUS).  From memory, LOW CONFIDENCE.  In standby (bus
+ *  suspended, clocks stopped): a guess. */
+#define GL_SIM_I_USB_UA 1700.0
+#define GL_SIM_I_USB_STANDBY_UA 20.0
 /** LSM6DSV16X: accelerometer + gyroscope in high-performance mode, the
  *  accelerometer alone in high-performance mode, in low-power mode (the
  *  wake-on-motion setting, 15 Hz), both off. */
@@ -452,12 +599,56 @@ uint64_t gl_sim_stage_instr(gl_trace_point_t point, uint32_t work);
 #define GL_SIM_I_IMU_ACCEL_UA 190.0
 #define GL_SIM_I_IMU_WAKE_UA 5.0
 #define GL_SIM_I_IMU_OFF_UA 3.0
-/** Everything that is always there: MCP1700 quiescent 1.6, battery divider
- *  2 Mohm at 3.8 V 1.9, the cell's protection circuit 3 (docs/research/power.md). */
-#define GL_SIM_I_ALWAYS_UA 6.5
-/** Memory LCD with DISP on (15 uW static + EXTCOMIN); flash in standby / in
- *  deep power-down / while programming or erasing; ADC and op-amp powered;
- *  one grain LED lit. */
+/** What is always there on the rev E board (NETLIST_NOTES 4.12), part by
+ *  part:
+ *    the 2.8 V regulator MCP1700, quiescent (docs/research: 1.6 uA);
+ *    the battery divider, 2 x 1 Mohm across the cell: 1.9 uA at 3.8 V
+ *      (computed from the cell voltage of the model);
+ *    the cell's protection circuit (docs/research/power.md: 3 uA).  It sits
+ *      between the cell and the board's pads: a bench supply on the pads
+ *      does not see it, the cell does;
+ *    the charger with no input: leakage out of the cell (75 nA: the title of
+ *      a data-sheet copy seen in a search, NETLIST_NOTES 4.2);
+ *    the camera regulator LP5907, disabled (from memory: 0.2 uA typical,
+ *      1 uA at most);
+ *    E26: the USB-supply regulator is an LP5907 whose ENABLE pin is held at
+ *      the 2.8 V rail.  That part has, from memory of its data sheet, an
+ *      internal 1 Mohm pull-down on the enable pin: 2.8 uA, always.  NOT
+ *      CONFIRMED, and not in NETLIST_NOTES (which still has the old
+ *      regulator): if it is wrong, every sleep figure is 2.8 uA lower.
+ *  The two thermistors draw nothing asleep: NTC1 is biased by the charger
+ *  from VBUS only, NTC2 only while NTC_BIAS is driven (2.8 V across 10 kohm
+ *  + the NTC: 140 uA at 25 C, computed by the model). */
+#define GL_SIM_I_REG_2V8_UA 1.6
+#define GL_SIM_R_VBAT_DIVIDER_OHM 2.0e6
+#define GL_SIM_I_CELL_PCM_UA 3.0
+#define GL_SIM_I_CHARGER_LEAK_UA 0.075
+#define GL_SIM_I_REG_CAM_OFF_UA 0.2
+#define GL_SIM_I_REG_USB_EN_UA 2.8
+/** The always-on parts at a cell voltage (the sum of the list above). */
+#define GL_SIM_I_ALWAYS_UA(vbat_mv)                                                         \
+    (GL_SIM_I_REG_2V8_UA + (double)(vbat_mv) * 1000.0 / GL_SIM_R_VBAT_DIVIDER_OHM +          \
+     GL_SIM_I_CELL_PCM_UA + GL_SIM_I_CHARGER_LEAK_UA + GL_SIM_I_REG_CAM_OFF_UA +             \
+     GL_SIM_I_REG_USB_EN_UA)
+/** The 150 kohm on the op-amp output (it holds a ROM-loader input high) with
+ *  LIGHT on the photodiode and the op-amp off: 4.5 to 5.2 uA (NETLIST_NOTES
+ *  4.10); nothing in the dark. */
+#define GL_SIM_I_WAKE_PULLUP_LIT_UA 5.2
+/** Resistors that draw only while a pin is driven against them (NETLIST_NOTES
+ *  4.2, 4.6, 4.8, 4.10): DISP high (100 kohm pull-down) and the grain bias
+ *  divider that hangs on DISP (200 kohm); CHG pulled low by the charger
+ *  (100 kohm pull-up); CHG_INHIBIT high (100 kohm on the gate); the right
+ *  camera's PWDN high (the 10 kohm BOOT0 resistor); the op-amp output driven
+ *  low against its 150 kohm. */
+#define GL_SIM_I_DISP_PULLDOWN_UA 28.0
+#define GL_SIM_I_GRAIN_BIAS_UA 14.0
+#define GL_SIM_I_CHG_STAT_PULLUP_UA 28.0
+#define GL_SIM_I_CHG_INHIBIT_UA 28.0
+#define GL_SIM_I_BOOT0_PULLDOWN_UA 280.0
+#define GL_SIM_I_OPAMP_OUT_LOW_UA 19.0
+/** Memory LCD with DISP on (15 uW static + EXTCOMIN; with DISP off NO FIGURE
+ *  IS KNOWN and none is counted); flash in standby / in deep power-down /
+ *  while programming or erasing; ADC and op-amp powered; one grain LED lit. */
 #define GL_SIM_I_LCD_ON_UA 6.0
 #define GL_SIM_I_FLASH_STANDBY_UA 5.0
 #define GL_SIM_I_FLASH_DPD_UA 0.1
@@ -524,9 +715,17 @@ uint32_t gl_sim_grain_lit_mask(void);
 
 /* ---- USB model ---------------------------------------------------------------------- */
 
-/** The imaginary host opens / closes the CDC port. */
+/** The imaginary host opens / closes the CDC port.  Opening it also makes
+ *  the bus ACTIVE (a host is there and talks). */
 void gl_sim_usb_host_open(bool open);
-/** Host -> device bytes (dropped if the device has not started USB). */
+/** What the host does on the bus: GL_USB_BUS_NONE (no host: a wall charger;
+ *  the state after gl_sim_reset), GL_USB_BUS_ACTIVE, GL_USB_BUS_SUSPENDED
+ *  (the PC has gone to sleep).  Going to ACTIVE while the device is in
+ *  standby is the "resume": it raises GL_IRQ_USB_WAKE. */
+void gl_sim_usb_host_bus(gl_usb_bus_t bus);
+/** Host -> device bytes.  Dropped if the device has not started USB; if it
+ *  is in standby the host resumes the bus first and the bytes wait in the
+ *  pipe (a real host repeats what is not acknowledged). */
 void gl_sim_usb_host_send(const uint8_t *data, size_t len);
 /** Device -> host bytes received so far; returns the count copied and
  *  removes them from the pipe. */

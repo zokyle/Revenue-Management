@@ -16,8 +16,9 @@
  *    drivers.  Interrupt sources latch a bit in a pending mask that the
  *    cooperative main loop collects with gl_hal_irq_take().
  *  - Pins are LOGICAL names (gl_pin_t).  The mapping to pads and alternate
- *    functions lives in hal/stm32u5/gl_pins.h (generated from the
- *    DESIGN_SPEC pin table).  A driver never names a port or a pad.
+ *    functions lives in hal/stm32u5/gl_pins.h, GENERATED from the netlist's
+ *    pin map (electrical/gl1_main/pinmap.json, `make pins`).  A driver never
+ *    names a port or a pad.
  *  - Chip selects, PWDN, DISP and the charlieplex pins are ordinary GPIOs
  *    driven by the drivers, so that the host simulator can check the exact
  *    pin sequences (camera rail rule, active-high LCD chip select, ...).
@@ -25,7 +26,7 @@
  *  - Units are in the names: _ms, _us, _hz, _mv.
  *  - EVERY stop / disable / power-down call (gl_hal_dcmi_stop,
  *    gl_hal_xvclk_stop, gl_hal_extcomin_stop, gl_hal_usb_stop,
- *    gl_hal_adc_power(false), gl_hal_opamp_enable(false),
+ *    gl_hal_usb_standby, gl_hal_adc_power(false), gl_hal_opamp_enable(false),
  *    gl_hal_wake_timer_start(0), gl_hal_clock_set(GL_CLOCK_SLOW)) must be
  *    safe at any time after
  *    gl_hal_init(), in particular BEFORE the matching start has ever been
@@ -53,19 +54,32 @@ extern "C" {
 
 /**
  * Bring up clocks (the SLOW clock, see gl_hal_clock_set), the tick, GPIO
- * defaults and the always-on peripherals.  After this call every
- * camera-facing pin is ANALOG, the camera rail enable is driven low, the LCD
- * chip select and DISP are driven low and all chip selects of active-low
- * devices are driven high - each at the level its board pull resistor
- * already holds during reset (DESIGN_SPEC section 4: 100 kohm pull-down on
- * the LCD chip select and DISP, 100 kohm pull-ups on the flash and IMU chip
- * selects), written to the output latch BEFORE the pin becomes an output, so
- * that no chip select moves at the hand-over.
+ * defaults and the always-on peripherals.  The pin work is done in THIS
+ * ORDER (rev E board, electrical/gl1_main/NETLIST_NOTES.md section 7):
  *
- * CHG_INHIBIT and NTC_BIAS are NOT touched: they stay ANALOG (high-Z), the
- * MCU's reset state.  The charger is ON BY DEFAULT in hardware; only
- * drivers/power pulls CHG_INHIBIT low, and only as the result of a
- * temperature measurement (see drivers/power.h for the state table).
+ *  1. the lines that have no pull resistor on the board and therefore float
+ *     while the MCU is in reset (GL_PINS_FLOATING_TABLE: EXTCOMIN, SPI1 and
+ *     SPI2 clock and data-out, the left camera's PWDN) are driven LOW, before
+ *     any other pin is configured;
+ *  2. the camera rail enable is driven low, the LCD chip select and DISP are
+ *     driven low and the chip selects of the active-low devices are driven
+ *     high - each at the level its board resistor already holds during reset
+ *     (GL_PINS_RESET_TABLE, hand-over 1), written to the output latch BEFORE
+ *     the pin becomes an output, so that no chip select moves;
+ *  3. the interrupt inputs become inputs WITHOUT an internal pull (CHG_STAT
+ *     has the board's pull-up, VBUS_SENSE its divider, the IMU drives its two
+ *     lines), and the bus pins go to their peripherals (the two MISO pins
+ *     with an internal pull-down: they float between transfers).
+ *
+ * Every other pin stays ANALOG: every camera-facing pin but the one of step
+ * 1, the analog inputs, the grain lines, the USB pins, and CHG_INHIBIT and
+ * NTC_BIAS.  The charger is ON BY DEFAULT in hardware (BQ25101, E1); only
+ * drivers/power drives CHG_INHIBIT, and only to STOP it (see drivers/power.h
+ * for the state table).
+ *
+ * SHIP MODE (gl_hal_ship_mode_enter): if the previous run entered ship mode
+ * and this start was not caused by VBUS, a target backend goes straight back
+ * to ship mode from here and does not return.
  */
 gl_status_t gl_hal_init(void);
 
@@ -75,6 +89,10 @@ gl_status_t gl_hal_init(void);
 #define GL_RESET_SOFTWARE   (1u << 2)
 #define GL_RESET_WATCHDOG   (1u << 3)
 #define GL_RESET_BROWNOUT   (1u << 4)
+#define GL_RESET_SHIP_WAKE  (1u << 5)  /**< the marker left ship mode because VBUS appeared */
+#define GL_RESET_SHIP_HELD  (1u << 6)  /**< HOST BACKEND ONLY: gl_hal_init() found the marker in
+                                            ship mode without VBUS and left it there.  A target
+                                            backend does not return from gl_hal_init() then */
 /** Reset cause flags latched at boot (GL_RESET_*); cleared by reading. */
 uint32_t gl_hal_reset_reason(void);
 
@@ -89,6 +107,32 @@ void gl_hal_reboot(gl_reboot_t how);
 
 /** Refresh the independent watchdog (period chosen by the backend, >= 4 s). */
 void gl_hal_watchdog_kick(void);
+
+/**
+ * SHIP MODE (DESIGN_SPEC E13): the lowest-power state of the MCU that still
+ * wakes when VBUS appears.  STM32U585: Shutdown mode, wake-up pin of
+ * VBUS_SENSE (GL_PINS_WKUP_VBUS_SENSE), rising edge.  NOTHING is retained
+ * but the backup domain, in which the backend leaves a marker: no RAM, no
+ * register, no pin state (every pin is high-impedance; the board's
+ * resistors hold the chip selects, DISP, the camera rail enable and
+ * CHG_INHIBIT, and the backend applies the MCU's Shutdown pull-downs to the
+ * lines that have none).  The low-speed oscillator and the RTC are stopped:
+ * the clock is "not set" afterwards.  No watchdog runs.
+ *
+ * The CALLER has, before the call: switched the display off, powered the IMU
+ * and the flash down, stopped USB, the ADC and the op-amp, left the camera
+ * rail off, released CHG_INHIBIT and NTC_BIAS (ANALOG), and seen VBUS absent
+ * (the wake-up is an edge: with VBUS present the call returns at once on
+ * the target and nothing happens).
+ *
+ * The way out is a reset through the wake-up pin: gl_hal_init() runs again
+ * and gl_hal_reset_reason() carries GL_RESET_SHIP_WAKE.  A reset from any
+ * other cause (a glitch on NRST) with VBUS absent goes back to ship mode
+ * from inside gl_hal_init().  Does not return on the target; the host
+ * backend records the request, puts its board model into that state and
+ * returns, so that tests can observe it.
+ */
+void gl_hal_ship_mode_enter(void);
 
 /** 96-bit unique device identifier, little-endian words. */
 void gl_hal_unique_id(uint8_t out[12]);
@@ -171,17 +215,23 @@ typedef enum {
     GL_PIN_OPAMP_VOUT,     /**< OPAMP1 output = ADC1 input */
     /* --- power --- */
     GL_PIN_VBAT_SENSE,     /**< ADC input behind the 2 x 1 Mohm divider */
-    GL_PIN_CHG_STAT,       /**< MCP73831 STAT, input with pull-up, low = charging */
-    GL_PIN_CHG_INHIBIT,    /**< rev C2: open-drain MCU pin on the gate of the PROG MOSFET.
-                                LOW = charging STOPPED; released (high-Z) = the hardware
-                                default, charging ON whenever VBUS is present.  Never
-                                push-pull, never driven high (drivers/power.h) */
-    GL_PIN_VBUS_SENSE,     /**< digital input from the VBUS divider, high = in cradle */
+    GL_PIN_CHG_STAT,       /**< BQ25101 CHG (open drain) with the board's 100 kohm pull-up to
+                                V2V8: low = charging.  INPUT, no internal pull, never
+                                driven: the pad is a USB Type-C CC pad of the MCU */
+    GL_PIN_CHG_INHIBIT,    /**< rev E (E1): PUSH-PULL output on the gate of the N-MOSFET that
+                                pulls the charger's TS input to ground.  HIGH = charging
+                                STOPPED; ANALOG (or low) = the hardware default, the
+                                charger runs by itself whenever VBUS is present and its
+                                own thermistor allows it.  The MCU can only stop the
+                                charge (drivers/power.h) */
+    GL_PIN_VBUS_SENSE,     /**< digital input from the VBUS divider (100 k : 100 k on the
+                                pad), high = in cradle; also the wake-up pin of ship mode */
     /* --- USB --- */
     GL_PIN_USB_DM,
     GL_PIN_USB_DP,
-    /* --- cell temperature (rev C2), appended: the order is the trace format --- */
-    GL_PIN_NTC_BIAS,       /**< top of the NTC divider (10.0 kohm to NTC_SENSE, the 10 kohm
+    /* --- cell temperature, the MCU's thermistor NTC2 (E2); appended: the order is the
+     *     trace format --- */
+    GL_PIN_NTC_BIAS,       /**< top of the NTC2 divider (10.0 kohm to NTC_SENSE, the 10 kohm
                                 NTC from there to ground): push-pull HIGH only while a
                                 conversion runs, ANALOG otherwise */
     GL_PIN_NTC_SENSE,      /**< ADC input at the divider's mid point */
@@ -227,16 +277,20 @@ bool gl_hal_gpio_read(gl_pin_t pin);
 
 #define GL_IRQ_IMU_INT1     (1u << 0)  /**< rising edge on IMU INT1 (wake-on-motion) */
 #define GL_IRQ_IMU_INT2     (1u << 1)  /**< rising edge on IMU INT2 (data ready / tap) */
-#define GL_IRQ_VBUS_CHANGE  (1u << 2)  /**< either edge on VBUS sense */
-#define GL_IRQ_CHG_STAT     (1u << 3)  /**< either edge on charger STAT */
+#define GL_IRQ_VBUS_CHANGE  (1u << 2)  /**< either edge on VBUS sense, or the USB supply
+                                            (gl_hal_usb_supply_ok) coming or going */
+#define GL_IRQ_CHG_STAT     (1u << 3)  /**< either edge on the charger's status output */
 #define GL_IRQ_WAKE_TIMER   (1u << 4)  /**< gl_hal_wake_timer_start() expired */
 #define GL_IRQ_USB_RX       (1u << 5)  /**< bytes waiting in the CDC receive buffer */
 #define GL_IRQ_DCMI_DONE    (1u << 6)  /**< strip capture finished or failed */
 #define GL_IRQ_TICK         (1u << 7)  /**< periodic tick while awake (optional) */
+#define GL_IRQ_USB_WAKE     (1u << 8)  /**< the host resumed (or reset) the bus while the USB
+                                            device was in standby (gl_hal_usb_standby) */
 
 /** Enable or disable the sources in `mask` (all are disabled after init).
  *  Enabled sources also wake the MCU from Stop mode where the hardware
- *  allows it (INT1, VBUS, STAT, wake timer: yes; USB_RX, DCMI: Sleep only). */
+ *  allows it (INT1, INT2, VBUS, STAT, wake timer, USB_WAKE: yes; USB_RX,
+ *  DCMI: Sleep only). */
 void gl_hal_irq_enable(uint32_t mask, bool enable);
 
 /** Atomically fetch and clear the pending-source mask. */
@@ -482,13 +536,45 @@ void gl_hal_extcomin_stop(void);
 /* USB CDC-ACM device                                                       */
 /* ======================================================================= */
 
-/** Enable the USB device (sets the USB-supply-valid bit; only call while
- *  VBUS is present) / disable it and power the transceiver down.  The
- *  application stops USB as soon as it sees VBUS gone, whatever its UI is
- *  doing; the host backend counts USB left started without VBUS as a
- *  violation. */
+/**
+ * The USB supply pin of the MCU may be declared valid: VBUS_SENSE reads high
+ * AND the MCU's own monitor of that pin reports the supply ready (rev E: the
+ * 3.3 V regulator behind it is enabled by the 2.8 V rail and fed from VBUS).
+ * VBUS_SENSE alone does not say it: when the marker is lifted out the USB
+ * supply is gone within about a millisecond, while the divider on the pad
+ * still reads high for up to GL_PINS_VBUS_REMOVAL_SEEN_MS.  A change of this
+ * answer raises GL_IRQ_VBUS_CHANGE.
+ */
+bool gl_hal_usb_supply_ok(void);
+
+/** Enable the USB device, or bring it back from standby (no new
+ *  enumeration).  Sets the USB-supply-valid bit, and therefore refuses with
+ *  GL_ERR_STATE unless gl_hal_usb_supply_ok().  gl_hal_usb_stop() disables
+ *  it, clears the bit and powers the transceiver down; the application
+ *  calls it as soon as it sees the supply gone, whatever its UI is doing
+ *  (the host backend counts USB left on without its supply as a violation). */
 gl_status_t gl_hal_usb_start(void);
 void gl_hal_usb_stop(void);
+
+/** What the host is doing on the bus. */
+typedef enum {
+    GL_USB_BUS_NONE = 0,   /**< no host: nothing has reset the bus since gl_hal_usb_start()
+                                (a wall charger, or USB not started) */
+    GL_USB_BUS_SUSPENDED,  /**< a host configured the device and has stopped the bus */
+    GL_USB_BUS_ACTIVE      /**< a host is there and its frames arrive */
+} gl_usb_bus_t;
+gl_usb_bus_t gl_hal_usb_bus(void);
+
+/**
+ * STANDBY (the cradle sleep of DESIGN_SPEC E32): keep the device attached to
+ * a SUSPENDED bus with its clocks stopped, so that GL_SLEEP_STOP is allowed;
+ * when the host resumes or resets the bus GL_IRQ_USB_WAKE is raised and the
+ * application calls gl_hal_usb_start() again.  GL_ERR_STATE unless the bus
+ * is suspended right now (a device may not sleep under a host that is
+ * talking: the application then detaches with gl_hal_usb_stop()).  In
+ * standby gl_hal_usb_connected() is false and nothing is received or sent.
+ */
+gl_status_t gl_hal_usb_standby(void);
 
 /** True once the host has configured the device and opened the port (DTR). */
 bool gl_hal_usb_connected(void);

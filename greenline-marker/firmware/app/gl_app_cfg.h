@@ -9,9 +9,14 @@
 #ifndef GL_APP_CFG_H
 #define GL_APP_CFG_H
 
-#define GL_APP_FW_VERSION 0x0002u /* major << 8 | minor: 0.2, phase 2 after its review */
+#define GL_APP_FW_VERSION 0x0003u /* major << 8 | minor: 0.3, phase 3 (the rev E board) */
 #define GL_APP_FW_BUILD 20261113u
-#define GL_APP_HW_REV 3u          /* 'C' */
+/* The board this firmware is for: revision E (DESIGN_SPEC rev D with the
+ * amendments E1 to E34).  The rev C2 board (another charger, CHG_INHIBIT of
+ * the opposite polarity) is NOT supported any more.  GET_INFO reports the
+ * number; where a letter is shown it is 'A' + number - 1. */
+#define GL_APP_HW_REV 5u
+#define GL_APP_HW_REV_LETTER ((char)('A' + (int)GL_APP_HW_REV - 1)) /* 'E' */
 
 /* ---- stillness, motion, gestures (IMU at 240 Hz, 32-sample blocks) -------- */
 
@@ -122,11 +127,25 @@
 #define GL_APP_SLEEP_HOUSEKEEP_MS 16000u
 /** Battery measurement interval while awake / in the cradle. */
 #define GL_APP_BATT_PERIOD_MS 30000u
-/* Charge supervision (rev C2: the charger is on by default, CHG_INHIBIT can
- * only stop it): how often the cell NTC is read while VBUS is present, and
- * how old a reading may be before it counts as unknown (two missed checks). */
+/* Charge supervision (rev E: the BQ25101 charges by itself inside its own
+ * temperature window; CHG_INHIBIT can only stop it): how often the MCU's
+ * cell thermistor is read while VBUS is present - awake, and asleep in the
+ * cradle - and how old a reading may be before it counts as unknown (two
+ * missed checks). */
 #define GL_APP_CHG_TEMP_PERIOD_MS 5000u
 #define GL_APP_CELL_TEMP_MAX_AGE_MS 12000u
+/* The charger does not charge although nothing the firmware knows of holds
+ * it (GL_CHGST_NOT_CHARGING), or charges although the firmware stops it
+ * (GL_CHGST_STOP_FAILED): called a fault, shown and logged, when it has
+ * lasted this long (the charger needs a moment to detect its input). */
+#define GL_APP_CHG_FAULT_AFTER_MS 30000u
+/* E13: a camera read starts only on a cell temperature that is at most this
+ * old; an older one is measured again first (1.1 ms). */
+#define GL_APP_READ_TEMP_MAX_AGE_MS 5000u
+/* Ship mode (E13), armed by a command: entered when VBUS has been absent for
+ * this long after the marker was lifted out of the cradle (spring-pin
+ * bounce must be over: the way back is a rising edge of VBUS). */
+#define GL_APP_SHIP_SETTLE_MS 1000u
 /* The estimator hand-over (app/gl_app.c build_measurement_, shown_confidence_). */
 #define GL_APP_DEFAULT_DISTANCE_M 3.0f        /* the estimator's default_distance */
 #define GL_APP_EST_SIGMA_DISP_PX 0.08f        /* the estimator's sigma_disp */
@@ -179,6 +198,14 @@
 #define GL_APP_LOGEV_ESTIMATE 8u    /* follows every read record: arg = GL_APP_ESTFLAG_* */
 #define GL_APP_LOGEV_CHARGE 9u      /* the charge gate changed its mind: arg = gl_chg_reason_t
                                        | (cell temperature in 0.1 C, -9999 = unknown) << 8 */
+#define GL_APP_LOGEV_SHIP 10u       /* ship mode: arg = cell voltage in mV at the entry */
+#define GL_APP_LOGEV_TOO_HOT 11u    /* a camera read was refused (E13): arg = the temperature
+                                       that refused it, 0.1 C */
+#define GL_APP_LOGEV_CHARGER 12u    /* the charger: arg = gl_chg_status_t | cell mV << 8.
+                                       Logged when a charge ends by itself (DONE) and when
+                                       the charger's behaviour is a fault (NOT_CHARGING or
+                                       STOP_FAILED for GL_APP_CHG_FAULT_AFTER_MS, or a
+                                       charge outside the charger's own window) */
 
 /* GL_APP_LOGEV_ESTIMATE: what the estimator said about the read just logged */
 #define GL_APP_ESTFLAG_SOURCE_MASK 0x0003u   /* gl_aim_source_t */

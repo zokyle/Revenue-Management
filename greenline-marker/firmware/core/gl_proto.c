@@ -65,6 +65,22 @@ void gl_proto_log_info_encode(const gl_proto_log_info_t *li, uint8_t out[GL_PROT
     gl_wr_u32(&w, li->newest_seq);
 }
 
+void gl_proto_power_encode(const gl_proto_power_t *pw, uint8_t out[GL_PROTO_POWER_LEN])
+{
+    gl_wr_t w;
+    gl_wr_init(&w, out, GL_PROTO_POWER_LEN);
+    gl_wr_u16(&w, pw->battery_mv);
+    gl_wr_i16(&w, pw->cell_temp_c_x10);
+    gl_wr_i16(&w, pw->mcu_temp_c_x10);
+    gl_wr_i16(&w, pw->imu_temp_c_x10);
+    gl_wr_u8(&w, pw->ntc_fault);
+    gl_wr_u8(&w, pw->chg_status);
+    gl_wr_u8(&w, pw->chg_reason);
+    gl_wr_u8(&w, pw->cradle);
+    gl_wr_u16(&w, pw->flags);
+    gl_wr_u16(&w, pw->charge_min);
+}
+
 /* ---- command handlers --------------------------------------------------- */
 /* Each handler reads the request payload (in, n) and appends response data
  * to `out` (positioned after the status byte).  It returns the status. */
@@ -310,12 +326,65 @@ static gl_status_t h_reboot(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr_t 
         return GL_ERR_STATE;
     }
     /* The application may have a reason of its own to refuse the ROM
-     * bootloader right now (rev C2: nothing supervises the charge there). */
+     * bootloader right now. */
     if (memcmp(in, "DFU!", 4) == 0 && p->ops->dfu_allowed != NULL &&
         !p->ops->dfu_allowed(p->ops->ctx)) {
         return GL_ERR_STATE;
     }
     return GL_OK; /* the reboot itself happens after the response is sent */
+}
+
+static gl_status_t h_ship_mode(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr_t *out)
+{
+    bool armed = false;
+    gl_status_t st;
+    (void)n;
+    if (p->ops->ship_mode == NULL) {
+        return GL_ERR_UNSUPPORTED;
+    }
+    if (memcmp(in, "SHIP", 4) != 0 && memcmp(in, "STAY", 4) != 0) {
+        return GL_ERR_PARAM;
+    }
+    st = p->ops->ship_mode(p->ops->ctx, memcmp(in, "SHIP", 4) == 0, &armed);
+    if (st == GL_OK) {
+        gl_wr_u8(out, armed ? 1u : 0u);
+    }
+    return st;
+}
+
+static gl_status_t h_get_power(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr_t *out)
+{
+    gl_proto_power_t pw;
+    uint8_t blob[GL_PROTO_POWER_LEN];
+    gl_status_t st;
+    (void)in;
+    (void)n;
+    if (p->ops->get_power == NULL) {
+        return GL_ERR_UNSUPPORTED;
+    }
+    memset(&pw, 0, sizeof(pw));
+    st = p->ops->get_power(p->ops->ctx, &pw);
+    if (st == GL_OK) {
+        gl_proto_power_encode(&pw, blob);
+        gl_wr_bytes(out, blob, sizeof(blob));
+    }
+    return st;
+}
+
+static gl_status_t h_set_charge(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr_t *out)
+{
+    (void)n;
+    (void)out;
+    if (p->ops->set_charge == NULL) {
+        return GL_ERR_UNSUPPORTED;
+    }
+    if (!p->unlocked) {
+        return GL_ERR_STATE; /* a factory operation, like SET_CAL */
+    }
+    if (in[0] > 1u) {
+        return GL_ERR_PARAM;
+    }
+    return p->ops->set_charge(p->ops->ctx, in[0] != 0u);
 }
 
 typedef struct {
@@ -341,6 +410,9 @@ static const cmd_entry_t cmd_table_[] = {
     { GL_CMD_SET_TIME, 4, 4, h_set_time },
     { GL_CMD_UNLOCK, 4, 4, h_unlock },
     { GL_CMD_REBOOT, 4, 4, h_reboot },
+    { GL_CMD_SHIP_MODE, 4, 4, h_ship_mode },
+    { GL_CMD_GET_POWER, 0, 0, h_get_power },
+    { GL_CMD_SET_CHARGE, 1, 1, h_set_charge },
 };
 
 static void dispatch_(gl_proto_t *p, uint8_t seq, uint8_t cmd, const uint8_t *payload, size_t n)

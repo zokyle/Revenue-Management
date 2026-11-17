@@ -32,6 +32,11 @@ static struct {
     bool dfu_refused;        /* the application's own veto of the ROM bootloader */
     int dfu_asked;
     int reboot_tx_frames_at_call;
+    bool ship_armed;         /* rev E commands */
+    int ship_calls;
+    int power_calls;
+    int set_charge_calls;
+    bool charge_stop;
 } app;
 
 static void m_tx(void *ctx, const uint8_t *frame, size_t len)
@@ -171,9 +176,44 @@ static bool m_dfu_allowed(void *ctx)
     return !app.dfu_refused;
 }
 
+static gl_status_t m_ship_mode(void *ctx, bool arm, bool *armed)
+{
+    (void)ctx;
+    app.ship_calls++;
+    app.ship_armed = arm;
+    *armed = arm;
+    return GL_OK;
+}
+
+static gl_status_t m_get_power(void *ctx, gl_proto_power_t *pw)
+{
+    (void)ctx;
+    app.power_calls++;
+    pw->battery_mv = 3987;
+    pw->cell_temp_c_x10 = -53;                /* -5.3 C */
+    pw->mcu_temp_c_x10 = 241;
+    pw->imu_temp_c_x10 = GL_PROTO_TEMP_NONE;  /* IMU off */
+    pw->ntc_fault = 0;
+    pw->chg_status = 3;
+    pw->chg_reason = 5;
+    pw->cradle = 2;
+    pw->flags = (uint16_t)(GL_PROTO_PWR_VBUS | GL_PROTO_PWR_INHIBIT | GL_PROTO_PWR_FORCED);
+    pw->charge_min = 361;
+    return GL_OK;
+}
+
+static gl_status_t m_set_charge(void *ctx, bool stop)
+{
+    (void)ctx;
+    app.set_charge_calls++;
+    app.charge_stop = stop;
+    return GL_OK;
+}
+
 static const gl_proto_ops_t ops = {
     NULL, m_tx, m_get_info, m_get_status, m_get_settings, m_set_settings, m_get_cal, m_set_cal,
-    m_start_cal, m_log_info, m_log_read, m_log_erase, m_stream, m_set_time, m_reboot, m_dfu_allowed
+    m_start_cal, m_log_info, m_log_read, m_log_erase, m_stream, m_set_time, m_reboot, m_dfu_allowed,
+    m_ship_mode, m_get_power, m_set_charge
 };
 
 static gl_proto_t proto;
@@ -821,6 +861,79 @@ GL_TEST(test_stream_frames)
     GL_CHECK_EQ(app.tx_frames, 2);
 }
 
+/* Rev E: ship mode, the power report and the factory's charge stop. */
+GL_TEST(test_power_commands)
+{
+    uint8_t seq, cmd;
+    const uint8_t *pl;
+    int n;
+
+    fresh();
+    /* SHIP_MODE: "SHIP" arms, "STAY" disarms, anything else is refused; no
+     * UNLOCK needed (it is undone by docking the marker) */
+    request(1, GL_CMD_SHIP_MODE, "SHIP", 4);
+    n = response(0, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 2);
+    GL_CHECK_EQ(cmd, GL_CMD_SHIP_MODE | GL_PROTO_RESPONSE_FLAG);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    GL_CHECK_EQ(pl[1], 1);
+    GL_CHECK(app.ship_armed);
+    request(2, GL_CMD_SHIP_MODE, "STAY", 4);
+    n = response(1, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 2);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    GL_CHECK_EQ(pl[1], 0);
+    GL_CHECK(!app.ship_armed);
+    request(3, GL_CMD_SHIP_MODE, "ship", 4);
+    n = response(2, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK_EQ(pl[0], GL_ERR_PARAM);
+    request(4, GL_CMD_SHIP_MODE, "SHIP!", 5); /* wrong length: refused by the table */
+    n = response(3, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK(pl[0] != GL_OK);
+    GL_CHECK_EQ(app.ship_calls, 2);
+
+    /* GET_POWER: 16 bytes, little-endian, field by field */
+    request(5, GL_CMD_GET_POWER, NULL, 0);
+    n = response(4, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 1 + (int)GL_PROTO_POWER_LEN);
+    GL_CHECK_EQ(cmd, GL_CMD_GET_POWER | GL_PROTO_RESPONSE_FLAG);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    GL_CHECK_EQ(gl_get_u16(&pl[1]), 3987);
+    GL_CHECK_EQ((int16_t)gl_get_u16(&pl[3]), -53);
+    GL_CHECK_EQ((int16_t)gl_get_u16(&pl[5]), 241);
+    GL_CHECK_EQ((int16_t)gl_get_u16(&pl[7]), GL_PROTO_TEMP_NONE);
+    GL_CHECK_EQ(pl[9], 0);
+    GL_CHECK_EQ(pl[10], 3);
+    GL_CHECK_EQ(pl[11], 5);
+    GL_CHECK_EQ(pl[12], 2);
+    GL_CHECK_EQ(gl_get_u16(&pl[13]), GL_PROTO_PWR_VBUS | GL_PROTO_PWR_INHIBIT | GL_PROTO_PWR_FORCED);
+    GL_CHECK_EQ(gl_get_u16(&pl[15]), 361);
+    GL_CHECK_EQ(app.power_calls, 1);
+
+    /* SET_CHARGE: a factory operation, needs UNLOCK; 0 or 1 */
+    request(6, GL_CMD_SET_CHARGE, "\x01", 1);
+    n = response(5, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+    GL_CHECK_EQ(app.set_charge_calls, 0);
+    request(7, GL_CMD_UNLOCK, "GLFC", 4);
+    request(8, GL_CMD_SET_CHARGE, "\x01", 1);
+    n = response(7, &seq, &cmd, &pl);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    GL_CHECK(app.charge_stop);
+    request(9, GL_CMD_SET_CHARGE, "\x00", 1);
+    n = response(8, &seq, &cmd, &pl);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    GL_CHECK(!app.charge_stop);
+    request(10, GL_CMD_SET_CHARGE, "\x02", 1);
+    n = response(9, &seq, &cmd, &pl);
+    GL_CHECK_EQ(pl[0], GL_ERR_PARAM);
+    GL_CHECK_EQ(app.set_charge_calls, 2);
+    (void)n;
+}
+
 int main(void)
 {
     GL_RUN(test_crc16_vectors);
@@ -834,5 +947,6 @@ int main(void)
     GL_RUN(test_garbage_split_and_back_to_back);
     GL_RUN(test_random_noise_fuzz);
     GL_RUN(test_stream_frames);
+    GL_RUN(test_power_commands);
     return gl_test_summary();
 }

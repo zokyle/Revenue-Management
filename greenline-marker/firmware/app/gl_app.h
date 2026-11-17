@@ -18,6 +18,13 @@
  *      whenever nothing needs the fast clocks, idle sleep while the camera
  *      rail is on or USB is running
  *
+ * In the cradle (DESIGN_SPEC E32): awake with USB for as long as a host
+ * talks; after 30 s without it the marker sleeps in Stop mode with a static
+ * symbol on the display, USB in standby under a suspended host and off
+ * otherwise, and wakes when the host resumes, when it is lifted out and
+ * when the charger changes its status; the cell temperature and the charger
+ * are still looked at every 5 s.  Ship mode (E13): gl_app_ship_mode_arm().
+ *
  * Everything the firmware remembers lives in gl_app_t (static storage in
  * app/gl_main.c; the host tests allocate their own).  Nothing is allocated
  * dynamically.
@@ -167,6 +174,23 @@ typedef struct {
     bool vbus_pending;        /**< a VBUS edge is being debounced */
     uint32_t vbus_settle_ms;
     bool storage_mode;        /**< cell nearly empty: IMU off, only the cradle wakes the device */
+    /* ---- rev E: cradle sleep (E32), ship mode and the read's temperature gate (E13) ---- */
+    bool cradle_sleep;        /**< asleep IN the cradle: MCU in Stop mode, display on with the
+                                   static symbol, IMU off, USB in standby or off */
+    bool usb_standby;         /**< USB attached to a suspended bus, clocks stopped: the host's
+                                   resume wakes the marker (GL_IRQ_USB_WAKE) */
+    bool ship_armed;          /**< ship mode will be entered when the marker has left the cradle */
+    bool ship_pending;        /**< ... it has: asleep with the IMU off, waiting out the bounce */
+    uint32_t ship_due_ms;     /**< when ship mode is entered */
+    bool halted;              /**< HOST BUILD ONLY: ship mode has been entered (the target does
+                                   not return from gl_hal_ship_mode_enter); the main loop
+                                   does nothing until gl_app_init() is called again */
+    bool chg_odd;             /**< the charger's status is NOT_CHARGING or STOP_FAILED ... */
+    uint32_t chg_odd_since_ms; /**< ... since then */
+    bool chg_fault;           /**< ... for GL_APP_CHG_FAULT_AFTER_MS: shown and logged */
+    uint8_t chg_shown;        /**< what the cradle screens last showed (redraw on a change) */
+    uint8_t chg_status_logged; /**< gl_chg_status_t of the last GL_APP_LOGEV_CHARGER */
+    bool ntc1_logged;         /**< the "charge outside the charger's own window" event is logged */
     uint16_t sleep_ticks;     /**< housekeeping wake-ups since the device went to sleep */
     uint16_t last_error;      /**< gl_status_t of the last failed operation */
     uint32_t reads_total;
@@ -199,6 +223,8 @@ typedef struct {
     uint16_t stream_period_ms;
     uint32_t stream_next_ms;
     uint32_t usb_last_rx_ms;
+    bool usb_activity;        /**< the host has sent bytes since the main loop last looked (E32:
+                                   the cradle state lasts for as long as a host talks) */
     gl_imu_raw_t last_raw;    /**< newest IMU sample (for the stream) */
     gl_log_iter_t log_iter;
     bool log_iter_valid;
@@ -224,6 +250,45 @@ void gl_app_run_once(gl_app_t *app);
 
 /** Post a UI event from outside the loop (tests, future ISRs via a lock). */
 void gl_app_post(gl_app_t *app, gl_ui_event_t ev, int32_t arg);
+
+/* ---- rev E: power interfaces (also behind GL_CMD_SHIP_MODE / GET_POWER / SET_CHARGE) -- */
+
+/** Where the marker is as far as the cradle goes. */
+typedef enum {
+    GL_CRADLE_OUT = 0,   /**< no VBUS */
+    GL_CRADLE_LINK,      /**< in the cradle, awake: USB started (or about to be) */
+    GL_CRADLE_SLEEP      /**< in the cradle, asleep with the static symbol (E32) */
+} gl_cradle_state_t;
+gl_cradle_state_t gl_app_cradle_state(const gl_app_t *app);
+
+/**
+ * SHIP MODE (E13).  Arm: the next time the marker is lifted out of the
+ * cradle it does not go to its ordinary sleep but, GL_APP_SHIP_SETTLE_MS
+ * after VBUS has gone, into ship mode: display off, IMU and flash powered
+ * down (no wake-on-motion), CHG_INHIBIT released, MCU in its lowest-power
+ * state (gl_hal_ship_mode_enter).  Only VBUS brings it back, and that is a
+ * reset: gl_app_init() runs, the boot event in the log carries
+ * GL_RESET_SHIP_WAKE.  Armed is a state in RAM: a reset disarms.  Disarm:
+ * false.  Returns the state afterwards.
+ */
+bool gl_app_ship_mode_arm(gl_app_t *app, bool arm);
+
+/**
+ * The cell temperature the firmware acts on: the MCU's thermistor (NTC2).
+ * Returns true and writes *temp_c if the last measurement is valid and at
+ * most GL_APP_CELL_TEMP_MAX_AGE_MS old (`now_ms` = gl_hal_tick_ms()).  The
+ * fields behind it are app->power.cell_temp_c / cell_temp_valid / ntc_fault
+ * and app->cell_temp_ms; the charger's status is app->power.chg_status
+ * (gl_chg_status_t), the reason the firmware stops a charge
+ * app->power.chg_reason (gl_chg_reason_t).  While VBUS is present they are
+ * refreshed every GL_APP_CHG_TEMP_PERIOD_MS, out of the cradle with the
+ * battery (GL_APP_BATT_PERIOD_MS, while awake) and before every camera read.
+ */
+bool gl_app_cell_temperature(const gl_app_t *app, uint32_t now_ms, float *temp_c);
+
+/** Measure battery and temperatures now and apply the charge gate (what
+ *  GL_CMD_GET_POWER does before it answers).  Not during a read. */
+gl_status_t gl_app_power_refresh(gl_app_t *app);
 
 /**
  * Compose the result view again from app->est and the current read, exactly

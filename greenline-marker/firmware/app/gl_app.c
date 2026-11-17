@@ -33,7 +33,7 @@ typedef char gl_app_horizon_samples_fit_the_solver_[
 
 #define ALL_IRQS                                                                          \
     (GL_IRQ_IMU_INT1 | GL_IRQ_IMU_INT2 | GL_IRQ_VBUS_CHANGE | GL_IRQ_CHG_STAT |           \
-     GL_IRQ_WAKE_TIMER | GL_IRQ_USB_RX | GL_IRQ_DCMI_DONE | GL_IRQ_TICK)
+     GL_IRQ_WAKE_TIMER | GL_IRQ_USB_RX | GL_IRQ_DCMI_DONE | GL_IRQ_TICK | GL_IRQ_USB_WAKE)
 
 /* ======================================================================= */
 /* small services                                                           */
@@ -102,7 +102,15 @@ static void irq_setup_(gl_app_t *app)
     uint32_t on = GL_IRQ_VBUS_CHANGE | GL_IRQ_WAKE_TIMER;
     if (app->awake) {
         on |= GL_IRQ_IMU_INT2 | GL_IRQ_CHG_STAT;
-    } else {
+    } else if (app->cradle_sleep) {
+        /* asleep in the cradle (E32): the charger's status, and the host's
+         * resume if USB is in standby; motion does not wake it (the IMU is
+         * off) */
+        on |= GL_IRQ_CHG_STAT;
+        if (app->usb_standby) {
+            on |= GL_IRQ_USB_WAKE;
+        }
+    } else if (!app->ship_pending) {
         on |= GL_IRQ_IMU_INT1;
     }
     if (app->usb_on) {
@@ -214,9 +222,56 @@ static void temp_refresh_(gl_app_t *app, uint32_t now)
     }
 }
 
-/* Apply the charge gate from what is known NOW (drivers/power.h has the
- * rules).  The cell NTC is the input; the IMU's and the MCU's die sensors
- * only vouch for it.  A reading counts as known only if it is fresh. */
+/* What the two cradle screens show about the charge, as one number (a
+ * change of it is a reason to draw again): gl_ui_view_t.chg_blocked in the
+ * low bits, then "charging" and "full". */
+static uint8_t chg_view_(const gl_app_t *app, uint8_t *blocked, bool *full)
+{
+    uint8_t b;
+    bool f = false;
+    switch ((gl_chg_reason_t)app->power.chg_reason) {
+    case GL_CHG_ALLOWED:
+    case GL_CHG_NO_VBUS: b = 0u; break;
+    case GL_CHG_TOO_COLD: b = 1u; break;
+    case GL_CHG_TOO_HOT: b = 2u; break;
+    case GL_CHG_TIME_LIMIT: b = 4u; break;
+    case GL_CHG_FORCED: b = 5u; break;
+    default: b = 3u; break; /* unknown, NTC fault, implausible */
+    }
+    if (b == 0u && app->power.vbus) {
+        /* the firmware stops nothing: what does the charger do? */
+        switch ((gl_chg_status_t)app->power.chg_status) {
+        case GL_CHGST_DONE: f = true; break;
+        case GL_CHGST_TEMP_HOLD: b = 7u; break;
+        case GL_CHGST_NOT_CHARGING:
+        case GL_CHGST_STOP_FAILED: b = app->chg_fault ? 6u : 0u; break;
+        default: break;
+        }
+    } else if (app->chg_fault && app->power.chg_status == (uint8_t)GL_CHGST_STOP_FAILED) {
+        b = 6u; /* the firmware's stop does not stop */
+    }
+    if (blocked != NULL) {
+        *blocked = b;
+        *full = f;
+    }
+    return (uint8_t)(b | (app->power.charging ? 0x10u : 0u) | (f ? 0x20u : 0u));
+}
+
+/* Append a record to the log from wherever the marker is: asleep the flash
+ * is in deep power-down (the driver wakes it for the append) and is put
+ * back afterwards. */
+static void log_event_any_(gl_app_t *app, uint16_t code, int32_t arg)
+{
+    gl_app_log_event(app, code, arg);
+    if (!app->awake && app->flash_ok) {
+        (void)gl_mx25r_sleep(&app->flash);
+    }
+}
+
+/* Apply the firmware's charge gate from what is known NOW (drivers/power.h
+ * has the rules), and look at what the charger makes of it.  NTC2 is the
+ * input; the IMU's and the MCU's die sensors only vouch for it.  A reading
+ * counts as known only if it is fresh. */
 static void charge_gate_(gl_app_t *app, uint32_t now)
 {
     const bool cell_fresh = app->cell_seen &&
@@ -226,33 +281,79 @@ static void charge_gate_(gl_app_t *app, uint32_t now)
     const bool mcu_t = app->cell_seen && app->power.mcu_temp_valid &&
                        (uint32_t)(now - app->mcu_temp_ms) <= GL_APP_CELL_TEMP_MAX_AGE_MS;
     const uint8_t before = app->power.chg_reason;
+    uint8_t status, shown;
+    bool odd;
 
-    (void)gl_power_charge_gate(&app->power, cell_fresh, app->temp_c, imu_t, mcu_t);
+    (void)gl_power_charge_gate(&app->power, now, cell_fresh, app->temp_c, imu_t, mcu_t);
+    /* the pin has just moved, perhaps: the charger's answer */
+    gl_power_poll_pins(&app->power);
+    status = app->power.chg_status;
     if (app->power.chg_reason != before) {
-        if (app->awake) {
-            /* reason in the low byte, the cell temperature in 0.1 C above it
-             * (not logged while asleep: the flash is in deep power-down) */
-            const int32_t t10 = app->power.cell_temp_valid
-                                    ? (int32_t)gl_roundi(gl_clampf(app->power.cell_temp_c, -100.0f,
-                                                                   200.0f) * 10.0f)
-                                    : -9999;
-            gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_CHARGE,
-                             (int32_t)app->power.chg_reason | (int32_t)((uint32_t)t10 << 8));
-        }
-        if (app->ui.state == (uint8_t)GL_UI_CRADLE_USB) {
+        /* reason in the low byte, the cell temperature in 0.1 C above it */
+        const int32_t t10 = app->power.cell_temp_valid
+                                ? (int32_t)gl_roundi(gl_clampf(app->power.cell_temp_c, -100.0f,
+                                                               200.0f) * 10.0f)
+                                : -9999;
+        log_event_any_(app, (uint16_t)GL_APP_LOGEV_CHARGE,
+                       (int32_t)app->power.chg_reason | (int32_t)((uint32_t)t10 << 8));
+    }
+    /* A charger that does not do what everything the firmware knows says it
+     * should: for a moment that is the charger finding its input; when it
+     * lasts it is a fault (input too low for it, its safety timer, its
+     * thermistor shorted, the part dead - or a stop that does not stop). */
+    odd = app->power.vbus &&
+          (status == (uint8_t)GL_CHGST_NOT_CHARGING || status == (uint8_t)GL_CHGST_STOP_FAILED) &&
+          (app->power.batt_mv != 0u || status == (uint8_t)GL_CHGST_STOP_FAILED);
+    if (!odd) {
+        app->chg_odd = false;
+        app->chg_fault = false;
+    } else if (!app->chg_odd) {
+        app->chg_odd = true;
+        app->chg_odd_since_ms = now;
+    } else if (!app->chg_fault &&
+               (uint32_t)(now - app->chg_odd_since_ms) >= GL_APP_CHG_FAULT_AFTER_MS) {
+        app->chg_fault = true;
+    }
+    /* the log: a charge that ended by itself, and the faults, once each */
+    if (!app->power.vbus) {
+        app->chg_status_logged = (uint8_t)GL_CHGST_NO_INPUT;
+    } else if ((status == (uint8_t)GL_CHGST_DONE || (app->chg_fault && odd)) &&
+               status != app->chg_status_logged) {
+        app->chg_status_logged = status;
+        log_event_any_(app, (uint16_t)GL_APP_LOGEV_CHARGER,
+                       (int32_t)status | (int32_t)((uint32_t)app->power.batt_mv << 8));
+    } else if (status == (uint8_t)GL_CHGST_CHARGING) {
+        app->chg_status_logged = status;
+    }
+    if (app->power.ntc1_suspect && !app->ntc1_logged) {
+        /* a charge was running outside the charger's own window: its
+         * thermistor is not doing its job.  The gate has stopped it */
+        app->ntc1_logged = true;
+        log_event_any_(app, (uint16_t)GL_APP_LOGEV_CHARGER,
+                       (int32_t)0x80 | (int32_t)((uint32_t)app->power.batt_mv << 8));
+    }
+    shown = chg_view_(app, NULL, NULL);
+    if (shown != app->chg_shown) {
+        app->chg_shown = shown;
+        if (app->ui.state == (uint8_t)GL_UI_CRADLE_USB || app->ui.state == (uint8_t)GL_UI_CRADLE_SLEEP) {
             app->redraw = true;
         }
     }
 }
 
 /* Measure the cell and the die temperatures and apply the gate: at a VBUS
- * edge (the charger has just started by itself), at boot in the cradle, and
- * every GL_APP_CHG_TEMP_PERIOD_MS while VBUS is present. */
+ * edge, at boot in the cradle, and every GL_APP_CHG_TEMP_PERIOD_MS while
+ * VBUS is present - awake or asleep in the cradle.  Asleep there the cell
+ * voltage is measured with them (nothing else does it then, and "full" and
+ * the restart after the time limit are judged by it). */
 static void charge_supervise_(gl_app_t *app, uint32_t now)
 {
+    gl_status_t st;
     app->next_chg_ms = now + GL_APP_CHG_TEMP_PERIOD_MS;
     gl_power_poll_pins(&app->power);
-    if (gl_power_measure_temps(&app->power) != GL_OK) {
+    st = (app->awake && app->power.batt_mv != 0u) ? gl_power_measure_temps(&app->power)
+                                                  : gl_power_measure(&app->power);
+    if (st != GL_OK) {
         app->last_error = (uint16_t)GL_ERR_IO;
     }
     app->cell_seen = true;
@@ -262,11 +363,94 @@ static void charge_supervise_(gl_app_t *app, uint32_t now)
     charge_gate_(app, now);
 }
 
+gl_status_t gl_app_power_refresh(gl_app_t *app)
+{
+    const uint32_t now = gl_hal_tick_ms();
+    gl_status_t st;
+    if (app->capture_active || app->tilt_active) {
+        return GL_ERR_BUSY; /* not while the camera rail loads the cell or a read runs */
+    }
+    gl_power_poll_pins(&app->power);
+    st = gl_power_measure(&app->power);
+    app->cell_seen = true;
+    app->cell_temp_ms = now;
+    app->mcu_temp_ms = now;
+    app->next_chg_ms = now + GL_APP_CHG_TEMP_PERIOD_MS;
+    temp_refresh_(app, now);
+    charge_gate_(app, now);
+    return st;
+}
+
+bool gl_app_cell_temperature(const gl_app_t *app, uint32_t now_ms, float *temp_c)
+{
+    if (!app->cell_seen || !app->power.cell_temp_valid ||
+        (uint32_t)(now_ms - app->cell_temp_ms) > GL_APP_CELL_TEMP_MAX_AGE_MS) {
+        return false;
+    }
+    if (temp_c != NULL) {
+        *temp_c = app->power.cell_temp_c;
+    }
+    return true;
+}
+
+gl_cradle_state_t gl_app_cradle_state(const gl_app_t *app)
+{
+    if (!app->power.vbus) {
+        return GL_CRADLE_OUT;
+    }
+    return app->cradle_sleep ? GL_CRADLE_SLEEP : GL_CRADLE_LINK;
+}
+
+bool gl_app_ship_mode_arm(gl_app_t *app, bool arm)
+{
+    app->ship_armed = arm;
+    if (!arm) {
+        app->ship_pending = false;
+    }
+    return app->ship_armed;
+}
+
+/* E13: no camera read from a cell above 60 C.  The temperature it is judged
+ * by is at most GL_APP_READ_TEMP_MAX_AGE_MS old (measured here if not).
+ * Returns false, logs and tells the UI if the read must not start. */
+static bool read_temp_ok_(gl_app_t *app, uint32_t now, bool measure)
+{
+    bool imu_t, mcu_t, cell_fresh;
+    if (measure && (!app->cell_seen ||
+                    (uint32_t)(now - app->cell_temp_ms) > GL_APP_READ_TEMP_MAX_AGE_MS)) {
+        if (gl_power_measure_temps(&app->power) != GL_OK) {
+            app->last_error = (uint16_t)GL_ERR_IO;
+        }
+        app->cell_seen = true;
+        app->cell_temp_ms = now;
+        app->mcu_temp_ms = now;
+    }
+    cell_fresh = app->cell_seen &&
+                 (uint32_t)(now - app->cell_temp_ms) <= GL_APP_CELL_TEMP_MAX_AGE_MS;
+    imu_t = app->imu_ok && app->temp_valid &&
+            (uint32_t)(now - app->temp_ms) <= GL_APP_TEMP_MAX_AGE_MS;
+    mcu_t = cell_fresh && app->power.mcu_temp_valid;
+    if (gl_power_read_allowed(&app->power, cell_fresh, app->temp_c, imu_t, mcu_t)) {
+        return true;
+    }
+    {
+        float t = app->power.cell_temp_c;
+        if (!(cell_fresh && app->power.cell_temp_valid)) {
+            t = (mcu_t && (!imu_t || app->power.mcu_temp_c > app->temp_c)) ? app->power.mcu_temp_c
+                                                                         : app->temp_c;
+        }
+        gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_TOO_HOT,
+                         (int32_t)gl_roundi(gl_clampf(t, -100.0f, 200.0f) * 10.0f));
+    }
+    gl_app_post(app, GL_EV_TOO_HOT, 0);
+    return false;
+}
+
 /* ======================================================================= */
 /* core clock: fast only for the compute-heavy part of a read               */
 /* ======================================================================= */
 
-/* DESIGN_SPEC rev C2: 160 MHz from the PLL during a read, slow otherwise.
+/* DESIGN_SPEC section 4: 160 MHz from the PLL during a read, slow otherwise.
  * "During a read" is: from the start of the capture (the vision runs on
  * every strip) to the end of the putt solve.  A PLL that does not lock is
  * not an error: everything works at the slow clock, only later. */
@@ -373,23 +557,35 @@ static void imu_failed_(gl_app_t *app, gl_status_t st, uint32_t now)
 /* wake and sleep                                                           */
 /* ======================================================================= */
 
+/* Start USB, or bring it back from standby.  The backend refuses while the
+ * MCU's USB supply is not valid (gl_hal_usb_supply_ok): the cradle state
+ * then tries again with every supervision period. */
 static void usb_start_(gl_app_t *app)
 {
     if (!app->usb_on && gl_hal_usb_start() == GL_OK) {
         app->usb_on = true;
+        app->usb_standby = false;
+        app->usb_activity = false;
         gl_proto_rx_reset(&app->proto);
     }
     irq_setup_(app);
 }
 
+/* The host side of a USB session is over (stopped, or parked in standby). */
+static void usb_session_end_(gl_app_t *app)
+{
+    app->usb_on = false;
+    app->stream_mask = 0;
+    app->six.active = false;
+    gl_proto_disconnect(&app->proto);
+}
+
 static void usb_stop_(gl_app_t *app)
 {
-    if (app->usb_on) {
+    if (app->usb_on || app->usb_standby) {
         gl_hal_usb_stop();
-        app->usb_on = false;
-        app->stream_mask = 0;
-        app->six.active = false;
-        gl_proto_disconnect(&app->proto);
+        app->usb_standby = false;
+        usb_session_end_(app);
     }
     if (app->log_erasing) {
         /* the erase is driven from the USB service: without it, give up.
@@ -425,6 +621,8 @@ static void wake_(gl_app_t *app, uint32_t now)
     if (!app->awake) {
         app->awake = true;
         app->storage_mode = false;
+        app->cradle_sleep = false;
+        app->ship_pending = false;
         gl_motion_init(&app->motion, GL_IMU_ACCEL_G_PER_LSB_2G, GL_IMU_GYRO_RAD_S_PER_LSB_1000);
         app->last_sample_ms = now;
         if (!app->imu_ok) {
@@ -449,15 +647,15 @@ static void enter_sleep_(gl_app_t *app)
     app->six.active = false;
     gl_motion_spin_end(&app->motion);
     gl_lcd_off(&app->lcd);
-    if (app->usb_on) {
+    if (app->usb_on || app->usb_standby) {
         usb_stop_(app);
     }
-    /* Rev C2: the charger is on by default in hardware and CHG_INHIBIT can
-     * only stop it.  A sleeping MCU must not leave it stopped: without VBUS
-     * the pin is released here, so that the next cradle charges the cell
-     * even if this firmware never wakes again.  (With VBUS present the
-     * device does not sleep: see the end of this function; the gate keeps
-     * whatever it decided.) */
+    /* The charger runs by itself and CHG_INHIBIT can only stop it.  A
+     * sleeping MCU must not leave it stopped: without VBUS the pin is
+     * released here, so that the next cradle charges the cell even if this
+     * firmware never wakes again.  (With VBUS present the marker does not
+     * take this sleep: see the end of this function; the gate keeps whatever
+     * it decided.) */
     gl_power_poll_pins(&app->power);
     if (!app->power.vbus) {
         gl_power_charge_release(&app->power);
@@ -465,14 +663,23 @@ static void enter_sleep_(gl_app_t *app)
         app->vbus_acted = false; /* "no VBUS" is dealt with: USB stopped above, pin released */
     }
     app->awake = false;
+    app->cradle_sleep = false;
     app->sleep_since_ms = now;
     app->sleep_ticks = 0;
+    /* Ship mode has been armed and the marker is out of the cradle: no
+     * wake-on-motion from here on (lifting it out IS motion); the MCU
+     * follows into its lowest-power state when the contacts have stopped
+     * bouncing (gl_app_run_once). */
+    app->ship_pending = app->ship_armed && !app->power.vbus;
+    app->ship_due_ms = now + GL_APP_SHIP_SETTLE_MS;
     /* A cell that is nearly empty is left alone: IMU off (no wake-on-motion,
      * only the cradle wakes the device), so that the sleep drain does not
      * take it to its protection cut-off (GL_PROV_BATT_STORAGE_MV). */
     app->storage_mode = app->power.storage && !app->power.vbus;
-    if (app->storage_mode) {
-        gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_STORAGE, (int32_t)app->power.batt_mv);
+    if (app->storage_mode || app->ship_pending) {
+        if (app->storage_mode) {
+            gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_STORAGE, (int32_t)app->power.batt_mv);
+        }
         if (gl_imu_stop(&app->imu) != GL_OK) {
             app->imu_ok = false; /* retried at the housekeeping wake-ups */
         }
@@ -490,12 +697,103 @@ static void enter_sleep_(gl_app_t *app)
         (void)gl_mx25r_sleep(&app->flash);
     }
     irq_setup_(app);
-    /* The device does not sleep in the cradle: whatever brought the UI here
-     * (an error, the low-battery screen), VBUS takes it back to the cradle
-     * state, where charging is supervised. */
+    /* This sleep is not for the cradle: whatever brought the UI here (an
+     * error, the low-battery screen), VBUS takes it back to the cradle
+     * state, which has its own sleep (cradle_sleep_) and its supervision. */
     if (app->power.vbus) {
         gl_app_post(app, GL_EV_USB_ATTACH, 0);
     }
+}
+
+/* E32: asleep IN the cradle.  An awake marker draws more than the charger's
+ * termination current from the node the charger feeds, so the charge would
+ * never end.  After 30 s without a word from a host (the UI's time limit on
+ * the cradle state) the marker therefore goes down to what a charging
+ * symbol needs: MCU in Stop mode, the display ON with a static picture (the
+ * memory LCD keeps it; its polarity signal keeps running from the low-power
+ * timer), IMU and flash powered down.  USB: under a host that has suspended
+ * the bus the device stays attached in standby and the host's resume wakes
+ * the marker; under a host that is merely silent, or with none (a wall
+ * charger), it detaches - a device may not sleep under a running bus.  The
+ * cell temperature and the charger are still looked at every
+ * GL_APP_CHG_TEMP_PERIOD_MS; a change of the charger's status and the
+ * removal of VBUS wake it at once. */
+static void cradle_sleep_(gl_app_t *app, uint32_t now)
+{
+    abort_read_(app);
+    app->zero.active = false;
+    app->six.active = false;
+    gl_motion_spin_end(&app->motion);
+    if (app->usb_on) {
+        if (gl_hal_usb_bus() == GL_USB_BUS_SUSPENDED && gl_hal_usb_standby() == GL_OK) {
+            app->usb_standby = true;
+            usb_session_end_(app);
+            if (app->log_erasing) {
+                app->log_erasing = false;
+                gl_log_erase_cancel(&app->log);
+            }
+        } else {
+            usb_stop_(app);
+        }
+    }
+    if (!app->lcd.on) {
+        const gl_status_t st = gl_lcd_on(&app->lcd);
+        if (st != GL_OK) {
+            app->last_error = (uint16_t)st;
+        }
+    }
+    app->awake = false;
+    app->cradle_sleep = true;
+    app->storage_mode = false;
+    app->ship_pending = false;
+    app->sleep_since_ms = now;
+    app->sleep_ticks = 0;
+    /* nothing to sense in the cradle: the IMU is powered down (it comes back
+     * with every way out: wake_() and enter_sleep_() configure it) */
+    if (app->imu_ok && gl_imu_stop(&app->imu) != GL_OK) {
+        app->imu_ok = false;
+    }
+    app->temp_valid = false; /* the IMU's die sensor is off with it */
+    if (app->flash_ok) {
+        (void)gl_mx25r_sleep(&app->flash);
+    }
+    app->next_chg_ms = now; /* a full measurement at once: the symbol is drawn from it */
+    app->redraw = true;
+    irq_setup_(app);
+}
+
+/* Ship mode (E13): everything off, the MCU in its lowest-power state; only
+ * VBUS brings the marker back, through a reset.  Called when ship mode has
+ * been armed, the marker has left the cradle and VBUS has stayed away for
+ * GL_APP_SHIP_SETTLE_MS. */
+static void ship_enter_(gl_app_t *app)
+{
+    gl_power_poll_pins(&app->power);
+    if (app->power.vbus) {
+        return; /* back in the cradle: stays armed for the next lift */
+    }
+    /* the last record of this life (the flash is woken for it) */
+    gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_SHIP, (int32_t)app->power.batt_mv);
+    abort_read_(app);
+    gl_lcd_off(&app->lcd);
+    if (app->usb_on || app->usb_standby) {
+        usb_stop_(app);
+    }
+    (void)gl_imu_stop(&app->imu); /* power-down: no wake-on-motion, both interrupt lines static */
+    if (app->flash_ok) {
+        (void)gl_mx25r_sleep(&app->flash);
+    }
+    gl_grain_fe_all_off();
+    (void)gl_hal_opamp_enable(false);
+    (void)gl_hal_adc_power(false);
+    gl_power_charge_release(&app->power); /* CHG_INHIBIT analog: the charger is free */
+    gl_hal_wake_timer_start(0);
+    gl_hal_irq_enable(ALL_IRQS, false);
+    app->irq_mask = 0;
+    gl_hal_ship_mode_enter();
+    /* NOT REACHED ON THE TARGET.  The host backend returns: nothing more
+     * runs until gl_app_init() is called again (as after the wake-up reset) */
+    app->halted = true;
 }
 
 /* ======================================================================= */
@@ -507,17 +805,17 @@ static void enter_sleep_(gl_app_t *app)
  * interrupt only makes the loop run sooner, a lost latch costs time, not
  * the supervision).  The HARDWARE rules are applied here, at once and
  * whatever the UI is doing.  With VBUS gone, USB is stopped (the
- * USB-supply-valid bit must not stay set with VDDUSB unpowered) and
+ * USB-supply-valid bit must not stay set with the supply pin unpowered) and
  * CHG_INHIBIT is released.  With VBUS there, the charger has ALREADY
- * started by itself (rev C2): the cell temperature is measured in this very
- * loop pass and the charge is stopped if it must be.  What the UI is told
- * is debounced. */
+ * started by itself if its own thermistor lets it: the cell temperature is
+ * measured in this very loop pass and the firmware stops the charge if it
+ * has a reason to.  What the UI is told is debounced. */
 static void vbus_edge_(gl_app_t *app, uint32_t now)
 {
     gl_power_poll_pins(&app->power);
     app->vbus_acted = app->power.vbus; /* this level has now been dealt with */
     if (!app->power.vbus) {
-        if (app->usb_on) {
+        if (app->usb_on || app->usb_standby) {
             usb_stop_(app);
         }
         charge_gate_(app, now); /* no VBUS: releases the pin */
@@ -541,7 +839,7 @@ static void vbus_settled_(gl_app_t *app, uint32_t now)
     } else if (app->power.vbus && app->ui.state == (uint8_t)GL_UI_CRADLE_USB && !app->usb_on) {
         usb_start_(app); /* VBUS bounced: USB was stopped at the first low */
     }
-    if (!app->power.vbus && app->usb_on) {
+    if (!app->power.vbus && (app->usb_on || app->usb_standby)) {
         usb_stop_(app);
     }
     charge_gate_(app, now);
@@ -569,6 +867,12 @@ static void battery_service_(gl_app_t *app, uint32_t now)
     app->next_chg_ms = now + GL_APP_CHG_TEMP_PERIOD_MS;
     temp_refresh_(app, now);
     charge_gate_(app, now);
+    /* E13: a marker that wakes too hot says so at once, before the tilt read
+     * (the read itself is gated again where the cameras would start) */
+    if (!app->power.vbus &&
+        (app->ui.state == (uint8_t)GL_UI_WAKE || app->ui.state == (uint8_t)GL_UI_WAIT_STILL)) {
+        (void)read_temp_ok_(app, now, false);
+    }
     /* Below the LOW threshold the battery symbol on the screens shows it;
      * the device keeps working.  Below CRITICAL it shows the low-battery
      * screen and goes to sleep (the UI's BATT_LOW event): no camera read is
@@ -695,6 +999,9 @@ static void capture_start_(gl_app_t *app)
         /* the camera rail draws about 90 mA from a very small cell */
         gl_app_post(app, GL_EV_BATT_LOW, 0);
         return;
+    }
+    if (!read_temp_ok_(app, gl_hal_tick_ms(), true)) {
+        return; /* E13: no camera read above 60 C; the UI has been told */
     }
     app->read_id++;
     clock_(app, true); /* the vision of a read is 58 to 88 million instructions (README) */
@@ -1666,6 +1973,9 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
     if ((a & GL_ACT_REDRAW) != 0u) {
         app->redraw = true;
     }
+    if ((a & GL_ACT_CRADLE_SLEEP) != 0u) {
+        cradle_sleep_(app, now);
+    }
     if ((a & GL_ACT_ENTER_SLEEP) != 0u) {
         if (app->awake) {
             forget_dialled_(app); /* while the flash is still awake */
@@ -1683,13 +1993,7 @@ static void draw_(gl_app_t *app)
     app->view.battery_pct = app->power.percent;
     app->view.charging = app->power.charging;
     app->view.usb_connected = app->usb_on && gl_hal_usb_connected();
-    switch ((gl_chg_reason_t)app->power.chg_reason) {
-    case GL_CHG_ALLOWED:
-    case GL_CHG_NO_VBUS: app->view.chg_blocked = 0u; break;
-    case GL_CHG_TOO_COLD: app->view.chg_blocked = 1u; break;
-    case GL_CHG_TOO_HOT: app->view.chg_blocked = 2u; break;
-    default: app->view.chg_blocked = 3u; break; /* unknown, NTC fault, implausible */
-    }
+    app->chg_shown = chg_view_(app, &app->view.chg_blocked, &app->view.chg_full);
     app->view.cal_step = app->zero.active ? app->zero.step : 0u;
     gl_ui_render(&app->ui, &app->view, &app->gfx);
     gl_hal_trace(GL_TRACE_RENDER, 0u);
@@ -1713,6 +2017,13 @@ gl_status_t gl_app_init(gl_app_t *app)
         first_err = st;
     }
     reset = gl_hal_reset_reason();
+    if ((reset & GL_RESET_SHIP_HELD) != 0u) {
+        /* HOST BACKEND ONLY: the marker is in ship mode and VBUS is not
+         * there; a target backend has gone back to ship mode inside
+         * gl_hal_init() and never comes here */
+        app->halted = true;
+        return GL_ERR_STATE;
+    }
     gl_event_init(&app->events);
 
     gl_settings_defaults(&app->settings);
@@ -1729,8 +2040,9 @@ gl_status_t gl_app_init(gl_app_t *app)
     gl_power_init(&app->power);
     app->vbus_acted = app->power.vbus;
     if (app->power.vbus) {
-        /* booted in the cradle: the charger is already running (hardware
-         * default); measure the cell before anything slower is done */
+        /* booted in the cradle: the charger is already running if its own
+         * thermistor lets it (hardware default); measure the cell before
+         * anything slower is done */
         charge_supervise_(app, gl_hal_tick_ms());
     }
     gl_gfx_init(&app->gfx);
@@ -1854,6 +2166,12 @@ static void sleep_(gl_app_t *app)
             wait = (g > 0) ? (uint32_t)g : 1u;
         }
     }
+    if (app->ship_pending) {
+        const int32_t d = (int32_t)(app->ship_due_ms - now);
+        if (d < (int32_t)wait) {
+            wait = (d > 0) ? (uint32_t)d : 1u;
+        }
+    }
     /* Never sleep over a VBUS level that has not been dealt with: if it
      * changed during this pass (spring-pin bounce, a marker lifted out while
      * the loop was busy), the next pass handles it first - USB is not left
@@ -1880,17 +2198,21 @@ static void sleep_(gl_app_t *app)
  * cell is measured, to catch it falling to the storage threshold. */
 static void sleep_housekeeping_(gl_app_t *app, uint32_t now)
 {
+    /* the IMU is switched off on purpose in storage mode, asleep in the
+     * cradle and on the way into ship mode */
+    const bool imu_off = app->storage_mode || app->cradle_sleep || app->ship_pending;
     app->sleep_ticks++;
     if (!app->imu_ok) {
         imu_recover_(app, now);
-    } else if (!app->storage_mode) {
+    } else if (!imu_off) {
         const gl_status_t st = gl_imu_verify(&app->imu);
         if (st != GL_OK) {
             imu_failed_(app, st, now);
         }
     }
-    /* (VBUS itself is looked at on EVERY wake-up, by gl_app_run_once) */
-    if (!app->storage_mode && (app->sleep_ticks % GL_APP_SLEEP_BATT_EVERY) == 0u) {
+    /* (VBUS itself is looked at on EVERY wake-up, by gl_app_run_once; in the
+     * cradle the supervision measures the cell every few seconds) */
+    if (!imu_off && (app->sleep_ticks % GL_APP_SLEEP_BATT_EVERY) == 0u) {
         gl_power_poll_pins(&app->power);
         if (gl_power_measure(&app->power) == GL_OK && app->power.storage && !app->power.vbus) {
             app->storage_mode = true;
@@ -1949,10 +2271,15 @@ static void imu_pump_(gl_app_t *app, uint32_t irq, uint32_t now)
 
 void gl_app_run_once(gl_app_t *app)
 {
-    const uint32_t irq = gl_hal_irq_take();
-    uint32_t now = gl_hal_tick_ms();
+    uint32_t irq;
+    uint32_t now;
     gl_event_t e;
 
+    if (app->halted) {
+        return; /* HOST BUILD ONLY: in ship mode; the target is in Shutdown */
+    }
+    irq = gl_hal_irq_take();
+    now = gl_hal_tick_ms();
     app->loops++;
     if (!app->wdg_hold) {
         gl_hal_watchdog_kick();
@@ -1971,8 +2298,26 @@ void gl_app_run_once(gl_app_t *app)
     if (app->vbus_pending && (int32_t)(now - app->vbus_settle_ms) >= 0) {
         vbus_settled_(app, now);
     }
+    /* The USB supply of the MCU, by its LEVEL like VBUS: the supply-valid bit
+     * must not stay set when the supply has gone - and the supply goes about
+     * 20 ms before VBUS_SENSE says so (gl_hal_usb_supply_ok). */
+    if ((app->usb_on || app->usb_standby) && !gl_hal_usb_supply_ok()) {
+        usb_stop_(app);
+    }
+    if ((irq & GL_IRQ_USB_WAKE) != 0u && app->usb_standby) {
+        gl_app_post(app, GL_EV_USB_RESUME, 0); /* the host has resumed the bus */
+    }
+    if (app->ship_pending && !app->awake && !app->vbus_pending &&
+        app->ui.state == (uint8_t)GL_UI_SLEEP && (int32_t)(now - app->ship_due_ms) >= 0) {
+        ship_enter_(app);
+        if (app->halted) {
+            return;
+        }
+        /* VBUS was back: not entered */
+        app->ship_pending = false;
+    }
     if (!app->awake) {
-        if ((irq & GL_IRQ_IMU_INT1) != 0u) {
+        if ((irq & GL_IRQ_IMU_INT1) != 0u && !app->cradle_sleep && !app->ship_pending) {
             bool woke = false;
             if (app->imu_ok) {
                 (void)gl_imu_wake_source(&app->imu, &woke); /* reading clears the latch */
@@ -2007,6 +2352,11 @@ void gl_app_run_once(gl_app_t *app)
     if (app->power.vbus) {
         if ((int32_t)(now - app->next_chg_ms) >= 0 && !app->capture_active && !app->tilt_active) {
             charge_supervise_(app, now);
+            /* USB could not be started when the cradle state was entered (its
+             * supply was not up yet): try again */
+            if (app->ui.state == (uint8_t)GL_UI_CRADLE_USB && !app->usb_on && gl_hal_usb_supply_ok()) {
+                usb_start_(app);
+            }
         } else if (!app->power.inhibit &&
                    (!app->cell_seen ||
                     (uint32_t)(now - app->cell_temp_ms) > GL_APP_CELL_TEMP_MAX_AGE_MS)) {
@@ -2015,6 +2365,15 @@ void gl_app_run_once(gl_app_t *app)
     }
     if (app->usb_on) {
         gl_usb_service(app, now);
+        /* E32: the cradle state lasts for as long as a host talks.  "Talks":
+         * it has sent something, it is being sent a stream it asked for, or
+         * a log erase it started is running. */
+        if (app->ui.state == (uint8_t)GL_UI_CRADLE_USB &&
+            (app->usb_activity || app->log_erasing || app->six.active ||
+             (app->stream_mask != 0u && gl_hal_usb_connected()))) {
+            gl_ui_keepalive(&app->ui, now);
+        }
+        app->usb_activity = false;
     }
     /* the work above can take real time (a capture start waits for the
      * sensor, a raw strip takes half a second to log): the UI is given the
