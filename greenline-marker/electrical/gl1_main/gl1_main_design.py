@@ -10,11 +10,14 @@ through KiCad's DRC and the output stage; ``build_netlist.py`` is the earlier
 stage without copper.  ``LAYOUT_LOG.md`` records every routing attempt and
 says why the parts are where they are.
 
-Implements DESIGN_SPEC rev D with the amendments E1 to E16.  The ones that
+Implements DESIGN_SPEC rev D with the amendments E1 to E28.  The ones that
 change the netlist: E1 (charger TI BQ25101 with a hardware thermistor input),
 E2 (two cell thermistors, Murata NCU15XH103F60RC), E3 (named LED parts),
-E4 (four top-side test points) and the stated order of the seven underside
-pads.
+E4 (four top-side test points), the stated order of the seven underside
+pads, E24 (J1 0.5 mm toward the rear of the mechanical model's box), E25 (the
+series Schottky D17 is replaced by the ideal-diode switch U12, TI LM66100),
+E26 (U11 is an LP5907-3.3 enabled by V2V8), E27 (2.2 uF, 150 kohm, sense
+divider on the pad side) and E28 (J1 wired mirrored against the tail order).
 
 Sources of truth (read-only):
 
@@ -46,6 +49,7 @@ in ONE table each, so that each can be corrected in one place:
     BQ25101_BALLS (+ BQ25101_PITCH, BQ25101_PAD_D)   charger ball map
     LCD_TAIL (+ LCD_TAIL_PIN1_EDGE)                  LCD tail order and pin-1 edge
     VEMD8080_PADS                                    photodiode land pattern
+    LM66100_PINS                                     ideal-diode switch U12 (E25), from memory
 
     /usr/bin/python3 -B electrical/gl1_main/gl1_main_design.py     # prints the checks
 """
@@ -91,21 +95,33 @@ CAM_R = (CAM["right"]["x"], CAM["right"]["y"])
 CAM_BODY = (CAM["body_dx"], CAM["body_dy"])          # 3.47 x 2.95
 CAM_HEIGHT = CAM["height"]                           # 2.76
 _J1 = next(p for p in Y["top_side_parts"] if p["ref"] == "J1")
-#: The YAML point of J1 is used as the footprint ANCHOR of the KiCad FH12 land pattern, because
-#: that is what mechanical/cad/board_import.py (check C) compares.  It is NOT where the
-#: mechanical model has the connector: the model draws the YAML box (dx x dy) CENTRED on the
-#: point, with the mouth on its rear edge (J1_BOX[1], y = -16.8, where the LCD-tail keep-out
-#: ends).  The body of the land pattern lies 1.6 mm behind its anchor, so on the board the
-#: rear face of J1 is at y = -18.3, 1.5 mm behind the modelled mouth, and the body covers the
-#: tail keep-out.  The contract cannot be met as written either: with the rear face at
-#: y = -16.8 the signal pads would end at y = -9.9, 0.3 mm inside the cell.  OPEN ITEM for the
-#: YAML / mechanical owner; check_netlist_rules.py row "PCB k2" measures it, NETLIST_NOTES 5.1
-#: has the numbers.
-J1_XY = (_J1["x"], _J1["y"])
+#: J1 - spec amendment E24 OVERRIDES the YAML point of J1 (the YAML is corrected at the next
+#: revision letter): "J1 moves 0.5 mm toward the rear: mouth at y = -17.30, body to y = -11.70,
+#: signal pads end at y = -10.40 (0.20 mm clear of the cell at y = -10.20)".
+#: The mechanical model (YAML) still draws a box dx x dy CENTRED on the YAML point (0, -13.9)
+#: with the mouth on its rear edge, y = -16.8 (J1_BOX).  The KiCad FH12 land pattern has its
+#: anchor 4.40 mm in front of the rear face of its body and its signal pads end 6.90 mm in front
+#: of that face (both measured on the placed footprint by check_netlist_rules.py, row "PCB k2").
+#: DEPARTURE from the YAML, by E24: anchor at y = -12.90 (YAML point: -13.90), rear face of the
+#: body (the mouth) at -17.30, body to -11.70, signal pads to -10.40.  mechanical/cad/board_import.py
+#: (check C) compares the ANCHOR with the YAML point and therefore reports J1 as 1.00 mm off
+#: until the YAML is corrected; the mechanical JSON carries the real body box.
+J1_YAML_XY = (_J1["x"], _J1["y"])                    # (0, -13.9): the model's box centre, NOT the anchor
+J1_MOUTH_Y = -17.30                                  # E24 (typed here: the YAML does not have it yet)
+J1_SIGNAL_PAD_END_Y = -10.40                         # E24
+J1_BODY_REAR_BEHIND_ANCHOR = 4.40                    # KiCad Hirose_FH12-10S-0.5SH land pattern (measured, row PCB k2)
+J1_XY = (_J1["x"], round(J1_MOUTH_Y + J1_BODY_REAR_BEHIND_ANCHOR, 4))    # anchor (0, -12.90)
 J1_HEIGHT = _J1["h"]
-#: the box the mechanical model draws for J1: (x min, y min, x max, y max)
+#: the box the mechanical model draws for J1 from the YAML: (x min, y min, x max, y max)
 J1_BOX = (_J1["x"] - _J1["dx"] / 2.0, _J1["y"] - _J1["dy"] / 2.0,
           _J1["x"] + _J1["dx"] / 2.0, _J1["y"] + _J1["dy"] / 2.0)
+#: E24 leaves the signal pads 0.20 mm from the cell.  KiCad's courtyard of the land pattern
+#: reaches 0.50 mm beyond the pad ends, i.e. 0.30 mm INTO the YAML box of the cell.  The
+#: battery-body placement keep-out (toolchain check and KiCad rule area work on courtyards)
+#: therefore has a notch of exactly J1's courtyard width and this depth at its rear edge.
+#: Nothing else can use the notch (J1's courtyard fills it); J1's body and pads are outside
+#: the cell box, which is what mechanical/cad/board_import.py tests.  RECORDED DEPARTURE.
+J1_COURTYARD_NOTCH = {"half_w": 5.55, "depth": 0.30}
 LCD_EXIT_EDGE = Y["lcd"]["fpc_exit_edge"]            # "rear": the tail leaves the glass toward -y
 _U9 = next(p for p in Y["top_side_parts"] if p["ref"] == "U9")
 LED_RING = BOT["grain_led_ring"]
@@ -258,8 +274,22 @@ VEMD8080_PADS = {
 }
 VEMD8080_PAD_SIZE = 0.55
 
+#: PROVISIONAL - FROM MEMORY of TI's data sheet SLVSEZ8 (LM66100, 5.5 V 1.5 A ideal diode with
+#: input-polarity protection, SC-70-6 "DCK"); NOT read from any file in this repository and the
+#: installed KiCad library has no symbol for the part.  pad -> (pin name, electrical type).
+#: Spec E25: "enable pin tied to its output so that it blocks reverse current; wiring PROVISIONAL
+#: until the data sheet is read".  As remembered: the switch is ON while CE is BELOW VIN, so with
+#: CE on VOUT it opens as soon as VOUT rises above VIN (reverse-current blocking); ST is an
+#: open-drain status output that may be left open; pad 4 has no internal connection.  A wrong
+#: row here mis-wires U12: replace this table from SLVSEZ8, nothing else changes.
+LM66100_PINS = {
+    "1": ("VIN", "power_in"), "2": ("GND", "power_in"), "3": ("CE", "input"),
+    "4": ("NC", "nc"), "5": ("ST", "open_drain"), "6": ("VOUT", "power_out"),
+}
+LM66100_HEIGHT = 1.1           # PROVISIONAL (SC-70 maximum, memory)
+
 #: PROVISIONAL - every number behind the supply-chain table of NETLIST_NOTES 4.1
-#: (cradle USB connector -> fuse -> spring pins -> Schottky D17 -> VBUS_D).
+#: (cradle USB connector -> fuse -> spring pins -> ideal-diode switch U12 (E25) -> VBUS_D).
 #: None of them was read from a data sheet.  ``charger_vin_min`` is the figure
 #: docs/research/power.md records for the BQ2510x ("4.45-6.45 V operating
 #: input", marked UNVERIFIED there); what the charger does below it (input
@@ -268,8 +298,10 @@ SUPPLY_CHAIN = {
     "load_A": 0.030,                 # 19.8 mA charge + up to 1 mA charger + up to 8 mA VDDUSB + divider
     "cable_ohm": 0.5,                # 1 m of USB cable, both conductors
     "contacts_ohm": 0.1,             # two spring-pin contacts (VBUS and GND)
-    "fuse_ohm": {"typical": 2.0, "worst": 5.0},      # cradle PTC (gl1_cradle_design.PTC, from memory)
-    "schottky_V": {"typical": 0.30, "worst": 0.35},  # D17 at 30 mA (memory; not in the research)
+    # E25: "The cradle fuse is chosen for no more than 1.5 ohm after a trip"
+    "fuse_ohm": {"typical": 0.8, "worst": 1.5},      # cradle PTC: E25 limit as "worst"; typical from memory
+    # E25: LM66100 on-resistance (memory: about 0.08 ohm typical at 5 V, 0.15 ohm taken as worst)
+    "switch_ohm": {"typical": 0.08, "worst": 0.15},
     "charger_vin_min": 4.45,
     # (case, source voltage at the cradle's USB connector, parts)
     "cases": (("low limit of a compliant USB source, worst parts", 4.75, "worst"),
@@ -286,7 +318,7 @@ def supply_chain_rows():
     rows = []
     for name, src, parts in s["cases"]:
         pad = src - s["load_A"] * (s["cable_ohm"] + s["contacts_ohm"] + s["fuse_ohm"][parts])
-        vd = pad - s["schottky_V"][parts]
+        vd = pad - s["load_A"] * s["switch_ohm"][parts]
         rows.append((name, src, pad, vd, vd - s["charger_vin_min"]))
     return rows
 
@@ -491,8 +523,10 @@ CAM_BUS = ("D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "PCLK", "HREF", "VSYN
 #: ball map reaches the arrays (LAYOUT_LOG.md).  It must be revisited when the
 #: real ball map replaces the stand-in.  The twelfth element stays unconnected.
 CAM_ARRAY_MAP = {
-    "U2": {sig: (i // 4, i % 4 + 1) for i, sig in enumerate(CAM_BUS)},
-    "U3": {sig: (i // 4, i % 4 + 1) for i, sig in enumerate(CAM_BUS)},
+    "U2": {"D0": (2, 4), "D1": (2, 3), "PCLK": (2, 2), "D3": (2, 1), "D5": (1, 3), "HREF": (1, 2),
+           "D6": (1, 1), "D7": (0, 4), "VSYNC": (0, 3), "D4": (0, 2), "D2": (0, 1)},
+    "U3": {"D0": (0, 4), "D1": (0, 3), "PCLK": (0, 2), "D3": (0, 1), "D5": (1, 4), "HREF": (1, 3),
+           "D6": (1, 2), "D7": (1, 1), "VSYNC": (2, 4), "D4": (2, 3), "D2": (2, 2)},
 }
 CAM_ARRAYS = {"U2": ("RN1", "RN2", "RN3"), "U3": ("RN4", "RN5", "RN6")}
 
@@ -509,7 +543,7 @@ WSON8 = "Package_SON:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4mm"
 SOT23 = "Package_TO_SOT_SMD:SOT-23"
 SOT235 = "Package_TO_SOT_SMD:SOT-23-5"
 SOT236 = "Package_TO_SOT_SMD:SOT-23-6"
-SOD323 = "Diode_SMD:D_SOD-323"
+SC706 = "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 FPC10 = "Connector_FFC-FPC:Hirose_FH12-10S-0.5SH_1x10-1MP_P0.50mm_Horizontal"
 XTAL3215 = "Crystal:Crystal_SMD_3215-2Pin_3.2x1.5mm"
 
@@ -657,40 +691,40 @@ def foot_land_footprint():
 #: * R24 (line 1 of the LED ring, now on PB0 / pad 26) and R15 (now on the VBUS
 #:   pad net) still sit where their old nets were: legal, not sensible.
 PLACEMENT = {
-    "U1": (0.0, 6.7, U1_ROTATION),
-    "U6": (11.50, 6.40, 0.0), "U4": (-10.80, 4.00, 0.0), "U8": (-10.90, 9.60, 0.0),
-    "Y1": (9.75, 10.40, 0.0), "U10": (-12.90, -13.05, 0.0), "U9": (-9.90, -12.40, 0.0),
-    "U7": (8.70, -12.15, 0.0), "U11": (13.45, -12.30, 0.0), "D17": (-11.20, -15.80, 0.0),
-    "Q1": (-7.60, -15.50, 0.0), "RN1": (-6.40, 15.40, 0.0), "RN2": (-9.00, 12.80, 90.0),
-    "RN3": (-11.60, 12.80, 90.0), "RN4": (6.40, 15.40, 0.0), "RN5": (9.00, 12.80, 90.0),
-    "RN6": (11.60, 12.80, 90.0), "C6": (-7.25, 3.95, 90.0), "C2": (-7.25, 1.95, 90.0),
-    "C1": (-7.25, 9.45, 90.0), "C12": (7.20, 11.85, 90.0), "C3": (7.25, 8.25, 90.0),
-    "C4": (2.80, 14.40, 90.0), "C7": (-2.80, 14.40, 90.0), "C8": (-2.40, 16.00, 0.0),
-    "R1": (-4.40, 16.00, 0.0), "C9": (7.25, 1.00, 90.0), "C5": (-8.30, 3.00, 90.0),
-    "C11": (12.30, 10.40, 90.0), "C10": (2.40, 16.00, 0.0), "R8": (4.40, 16.00, 0.0),
-    "R2": (7.25, 6.35, 90.0), "R3": (7.25, 4.40, 90.0), "R9": (8.30, 1.00, 90.0),
-    "C13": (15.35, 8.30, 90.0), "C14": (-7.20, 12.15, 90.0), "C15": (-12.50, 15.00, 90.0),
-    "C16": (-13.40, 12.95, 90.0), "R6": (-14.40, 12.95, 90.0), "R4": (-16.00, 12.15, 90.0),
-    "C18": (6.20, 12.15, 90.0), "C17": (12.50, 15.00, 90.0), "C19": (13.40, 12.95, 90.0),
-    "R7": (14.40, 12.95, 90.0), "R5": (16.00, 12.15, 90.0), "C25": (-8.30, 10.40, 90.0),
-    "C24": (-13.50, 8.60, 90.0), "R10": (-15.00, 9.15, 0.0), "R28": (-6.20, 11.85, 90.0),
-    "C33": (-8.30, 8.40, 90.0), "C29": (-6.00, 13.60, 0.0), "C30": (-9.75, 1.75, 0.0),
-    "C31": (-11.70, 1.75, 0.0), "RT2": (-9.40, 0.40, 0.0), "R19": (-11.40, 0.40, 0.0),
-    "R21": (-7.25, 6.70, 90.0), "R22": (-8.30, 6.50, 90.0), "R31": (-9.35, 6.70, 90.0),
-    "R20": (-10.40, 6.70, 90.0), "R29": (-12.30, 6.70, 90.0), "R30": (-13.35, 6.65, 90.0),
-    "C34": (-14.35, 6.70, 90.0), "R17": (-16.00, 7.90, 0.0), "R18": (-18.00, 7.90, 0.0),
-    "R23": (9.40, 2.90, 0.0), "R24": (11.40, 2.90, 0.0), "R25": (13.40, 2.90, 0.0),
-    "R26": (10.40, 1.90, 0.0), "R27": (12.40, 1.90, 0.0), "RT1": (-6.55, -10.70, 0.0),
-    "C27": (-8.50, -10.70, 0.0), "R14": (-10.45, -10.70, 0.0), "R12": (-12.40, -10.70, 0.0),
-    "C28": (-15.50, -12.50, 90.0), "C26": (-8.70, -12.30, 90.0), "R11": (-7.70, -12.30, 90.0),
-    "R13": (-6.70, -12.30, 90.0), "C32": (6.15, -11.50, 90.0), "C21": (6.15, -13.45, 90.0),
-    "R15": (6.15, -15.40, 90.0), "C20": (9.30, -14.60, 0.0), "C23": (12.30, -14.75, 0.0),
-    "C22": (15.90, -12.20, 90.0), "R16": (17.60, -1.40, 90.0), "TP1": (-18.20, 3.40, 0.0),
-    "TP2": (10.60, -16.20, 0.0), "TP3": (-17.30, 9.60, 0.0), "TP4": (18.40, 2.60, 0.0),
+    "C1": (-6.98, 0.72, 180.0), "C2": (6.20, 1.95, 0.0), "C3": (-5.90, 13.20, 180.0),
+    "C4": (-6.30, 11.80, 90.0), "C5": (5.80, 12.90, 90.0), "C6": (5.10, 0.72, 0.0),
+    "C7": (-7.25, 4.60, 90.0), "C8": (-8.20, 4.60, 90.0), "C9": (7.25, 10.00, 270.0),
+    "C10": (-10.10, 4.60, 270.0), "C11": (-10.48, 6.60, 180.0), "C12": (-7.98, 6.60, 180.0),
+    "C13": (18.30, 7.20, 270.0), "C14": (-6.60, 14.70, 270.0), "C15": (-6.40, 16.30, 0.0),
+    "C16": (-12.62, 10.30, 90.0), "C17": (15.95, 11.40, 90.0), "C18": (7.10, 16.60, 180.0),
+    "C19": (14.40, 9.20, 0.0), "C20": (10.81, -12.30, 90.0), "C21": (6.02, -13.45, 90.0),
+    "C22": (13.00, -15.00, 0.0), "C23": (15.85, -12.10, 90.0), "C24": (-15.75, -12.10, 270.0),
+    "C25": (-10.65, -11.90, 270.0), "C26": (-19.60, 0.00, 270.0), "C27": (-18.00, -0.50, 0.0),
+    "C28": (-8.45, -10.72, 180.0), "C29": (-8.86, 0.72, 180.0), "C30": (11.95, 1.70, 0.0),
+    "C31": (11.95, 2.65, 0.0), "C32": (6.02, -11.50, 90.0), "C33": (-8.20, 2.60, 270.0),
+    "C34": (-9.15, 2.60, 270.0), "Q1": (-17.30, 5.90, 0.0), "R1": (-9.15, 4.60, 270.0),
+    "R2": (-2.45, 14.45, 90.0), "R3": (12.40, 9.15, 0.0), "R4": (-12.50, 8.90, 0.0),
+    "R5": (6.30, 14.40, 0.0), "R6": (-12.50, 7.95, 0.0), "R7": (-12.50, 6.05, 0.0),
+    "R8": (-12.50, 7.00, 0.0), "R9": (8.95, 7.00, 0.0), "R10": (-13.20, -14.80, 0.0),
+    "R11": (-19.60, 2.00, 90.0), "R12": (-14.40, 6.90, 0.0), "R13": (-18.00, 2.50, 0.0),
+    "R14": (-18.00, 3.45, 0.0), "R15": (-6.55, -10.72, 0.0), "R16": (-9.50, -12.50, 90.0),
+    "R17": (-12.50, 5.10, 0.0), "R18": (-12.50, 4.15, 0.0), "R19": (-12.50, 3.20, 0.0),
+    "R20": (6.98, 0.72, 0.0), "R21": (9.65, -14.60, 0.0), "R22": (10.90, -15.55, 0.0),
+    "R23": (8.95, 7.95, 0.0), "R24": (8.95, 8.90, 0.0), "R25": (8.95, 6.05, 0.0),
+    "R26": (8.95, 5.10, 0.0), "R27": (2.45, 14.45, 90.0), "R28": (-7.25, 2.60, 270.0),
+    "R29": (-10.10, 2.60, 90.0), "R30": (-11.05, 2.60, 270.0), "R31": (-5.10, 0.72, 180.0),
+    "RN1": (-8.40, 11.62, 270.0), "RN2": (-10.90, 11.60, 270.0), "RN3": (-14.20, 12.92, 270.0),
+    "RN4": (8.85, 11.95, 270.0), "RN5": (11.35, 11.95, 270.0), "RN6": (14.20, 12.92, 270.0),
+    "RT1": (-12.62, 0.40, 0.0), "RT2": (-10.74, 0.40, 0.0), "TP1": (-17.00, 0.62, 0.0),
+    "TP2": (8.00, -15.25, 0.0), "TP3": (17.40, 10.25, 0.0), "TP4": (18.40, 0.60, 0.0),
+    "U1": (0.00, 6.70, U1_ROTATION), "U4": (9.50, 2.60, 90.0), "U6": (14.35, 5.90, 0.0),
+    "U7": (8.42, -12.30, 0.0), "U8": (-13.20, -12.40, 0.0), "U9": (-18.40, 1.00, 180.0),
+    "U10": (-7.65, -16.05, 0.0), "U11": (13.33, -12.60, 0.0), "U12": (-7.25, -12.85, 0.0),
+    "Y1": (-8.75, 8.30, 180.0),
 }
 
-FIDUCIALS_TOP = [(-19.0, 0.9), (18.6, -5.5), (17.3, 8.6)]
-FIDUCIALS_BOTTOM = [(-13.5, -3.0), (14.0, -7.0), (0.0, 11.0)]
+FIDUCIALS_TOP = [(-16.8, 9.3), (18.9, -4.5), (8.6, -17.2)]
+FIDUCIALS_BOTTOM = [(-13.5, -3.0), (14.0, -7.0), (-17.0, 7.5)]
 
 #: LAYOUT: the photodiode guard (two no-track bands on B.Cu inside the grain opening, between
 #: the photodiode pads and the LED pads; angles in degrees seen from the opening centre,
@@ -711,7 +745,7 @@ def arc_band(cx, cy, r_inner, r_outer, a0_deg, a1_deg, step_deg=5.0):
 #: LAYOUT: options of the toolchain's router (gleda.router.RouterOptions) this
 #: board is routed with; build_gl1_main.py passes them on, and they are part of
 #: the fingerprint of the stored routing.  LAYOUT_LOG.md says why each is set.
-ROUTER_OPTIONS = {"escape_neighbours": False, "escape_attempts": 6}
+ROUTER_OPTIONS = {"escape_neighbours": False, "escape_attempts": 6, "escape_freeze": False}
 #: seconds after which the router starts no new work (what is open then is
 #: reported as unrouted and the build fails)
 ROUTER_TIME_LIMIT = 3600.0
@@ -927,9 +961,9 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
         # "an unpopulated resistor position from that ball to ground" (BQ25100 fallback, ball C1)
         ("R14", "6k04", "CHG_STAT", "GND", "power", "NOT FITTED: pre-charge / termination resistor of the "
                                                     "BQ25100 fallback (value PROVISIONAL)"),
-        ("C28", "100n", "VBUS", "GND", "power", "U10 VBUS (pad side of the Schottky) - ADDED"),
+        ("C28", "100n", "VBUS", "GND", "power", "U10 VBUS / U12 VIN (pad side of the ideal-diode switch) - ADDED"),
         # spec rail table, row VBUS: loads "BQ25101 IN, VBUS-sense divider" - the divider is on the
-        # pad side of the Schottky, as the table has it (values: NETLIST_NOTES 4.3)
+        # pad side of the series switch, as the table has it (values: NETLIST_NOTES 4.3)
         ("R15", "100k", "VBUS", "VBUS_SENSE", "power", "VBUS sense divider, top (0.5 x VBUS at the pad)"),
         ("R16", "100k", "VBUS_SENSE", "GND", "power", "VBUS sense divider, bottom; with R15 it bleeds C28"),
         # spec: "2 x 1 Mohm divider with 100 nF to an ADC pin"
@@ -1065,15 +1099,25 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     d.net("VBAT", "U7.VIN")
     v2v8.append("U7.VOUT")
     gnd.append("U7.GND")
-    # spec rail table: VDDUSB from MCP1700T-3302E/TT fed from VBUS (after the Schottky), MCU pin only
-    add(Part("U11", "MCP1700-3.3", SOT23,
-             pins={"GND": ("1", "power_in"), "VOUT": ("2", "power_out"), "VIN": ("3", "power_in")},
-             mpn="MCP1700T-3302E/TT", manufacturer="Microchip", distributor="Digi-Key",
-             distributor_pn="product page 652676 (SKU not seen)", height_mm=1.2, group="power",
-             description="LDO 3.3 V 250 mA, SOT-23 (VDDUSB, present only in the cradle)",
-             fields=_status(PROV, "order code -3302 from DESIGN_SPEC and docs/sourcing.csv; see U7")))
-    d.net("VBUS_D", "U11.VIN")
-    d.net("VDDUSB", "U11.VOUT")
+    # spec E26 (replaces the rail table's MCP1700T-3302E/TT): "The 3.3 V regulator for the
+    # processor's USB supply pin becomes one with an enable input (TI LP5907MFX-3.3/NOPB, the
+    # same family as the camera regulator) and is enabled by the 2.8 V rail".  Same pin table
+    # as U8.  Fed from VBUS_D (behind the ideal-diode switch), MCU pin only.  The enable pin
+    # sits on V2V8 itself: PROVISIONAL (memory of the LP5907 data sheet) it has an internal
+    # pull-down of about 1 Mohm, i.e. about 2.8 uA from the always-on rail (NETLIST_NOTES 11).
+    add(Part("U11", "LP5907-3.3", SOT235,
+             pins={"IN": ("1", "power_in"), "GND": ("2", "power_in"), "EN": ("3", "input"),
+                   "NC": ("4", "nc"), "OUT": ("5", "power_out")},
+             mpn="LP5907MFX-3.3/NOPB", manufacturer="Texas Instruments", distributor=BY_MPN,
+             distributor_pn="LP5907MFX-3.3/NOPB", height_mm=1.45, group="power",
+             description="LDO 3.3 V 250 mA with enable, SOT-23-5 (VDDUSB, present only in the cradle; "
+                         "enabled by V2V8, spec E26)",
+             fields=_status(PROV, "order code from DESIGN_SPEC E26; pin order as U8 (KiCad symbol "
+                                  "LP5907MFX-3.3); enable threshold and the enable pin's pull-down "
+                                  "current from memory")))
+    d.net("VBUS_D", "U11.IN")
+    d.net("VDDUSB", "U11.OUT")
+    v2v8.append("U11.EN")
     gnd.append("U11.GND")
     # spec rail table: V2V8_CAM from LP5907MFX-2.8/NOPB, EN from the MCU with 100k pull-down
     add(Part("U8", "LP5907-2.8", SOT235,
@@ -1098,7 +1142,7 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
              fields=_status(PROV, "part from DESIGN_SPEC E1; ball map, land pattern, TS thresholds and "
                                   "the order code (YFPR reel / YFPT small reel) from web-search extracts "
                                   "of TI SLUSBV8C, not the data sheet (BQ25101_BALLS)")))
-    d.net("VBUS_D", "U9.IN", netclass="Power", power_flag=True)   # fed from VBUS through D17
+    d.net("VBUS_D", "U9.IN", netclass="Power")                    # fed from VBUS through U12 (power_out)
     d.net("VBAT", "U9.OUT", netclass="Power", power_flag=True)    # also driven by the cell (BT1)
     d.net("CHG_ISET", "U9.ISET")
     d.net("CHG_TS", "U9.TS")
@@ -1130,15 +1174,23 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
                                            "thermal adhesive at assembly"), Purpose=role)))
         d.net(net, "%s.1" % ref)
         gnd.append("%s.2" % ref)
-    # spec: "Series Schottky from pad to charger"; E6: "30 V 0.5 A SOD-323 class part (Diodes B0530WS-7-F)"
-    add(Part("D17", "B0530WS", SOD323, pins={"K": ("1", "passive"), "A": ("2", "passive")},
-             mpn="B0530WS-7-F", manufacturer="Diodes Incorporated", distributor="Digi-Key",
-             distributor_pn="B0530WS-FDICT-ND", unit_price=0.30, height_mm=1.1, group="power",
-             description="Schottky 30 V 0.5 A SOD-323 (VBUS pad to charger)",
-             fields=_status(RES, "MPN, ratings, Digi-Key PN research-confirmed; body height and "
-                                 "VF at 25 mA not seen")))
-    d.net("VBUS", "D17.A", netclass="Power", power_flag=True)     # from the cradle
-    d.net("VBUS_D", "D17.K")
+    # spec E25 (replaces "Series Schottky from pad to charger", the former D17): "an ideal-diode
+    # switch (TI LM66100DCKR, SC-70-6, enable pin tied to its output so that it blocks reverse
+    # current; wiring PROVISIONAL until the data sheet is read)".  IN = VBUS pad side, OUT = VBUS_D,
+    # CE = VBUS_D.  ST (status) is not used.  Pin table: LM66100_PINS (PROVISIONAL, from memory).
+    sw_pins = {name: (pad, etype) for pad, (name, etype) in LM66100_PINS.items()}
+    add(Part("U12", "LM66100", SC706, pins=sw_pins, mpn="LM66100DCKR",
+             manufacturer="Texas Instruments", distributor=BY_MPN, distributor_pn="LM66100DCKR",
+             height_mm=LM66100_HEIGHT, group="power",
+             description="Ideal-diode switch 5.5 V 1.5 A, SC-70-6 (VBUS pad to charger; replaces the "
+                         "Schottky D17, spec E25); PIN TABLE PROVISIONAL",
+             fields=_status(PROV, "part and wiring from DESIGN_SPEC E25; pin table, CE polarity, "
+                                  "on-resistance and height from memory of TI SLVSEZ8, not read "
+                                  "(LM66100_PINS)")))
+    d.net("VBUS", "U12.VIN", netclass="Power", power_flag=True)   # from the cradle
+    d.net("VBUS_D", "U12.VOUT", "U12.CE")
+    d.no_connect("U12.ST")
+    gnd.append("U12.GND")
     # spec: "USBLC6-2SC6 clamps VBUS, D+, D-"
     add(Part("U10", "USBLC6-2SC6", SOT236,
              pins={"IO1A": ("1", "passive"), "GND": ("2", "power_in"), "IO2A": ("3", "passive"),
@@ -1199,8 +1251,8 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
                          "PROVISIONAL (tail pin n on pad %s)" % ("n" if straight else "11 - n"),
              fields=_status(PROV, "top-contact FH12A on the bottom-contact FH12 land pattern "
                                   "(spec); pin order and pin-1 edge of the tail PROVISIONAL (LCD_TAIL, "
-                                  "LCD_TAIL_PIN1_EDGE); the body lies 1.5 mm behind the mechanical model's "
-                                  "box (open item, NETLIST_NOTES 5.1); Digi-Key PN from docs/sourcing.csv")),
+                                  "LCD_TAIL_PIN1_EDGE); placed per spec E24 (mouth at y -17.30), which "
+                                  "overrides the YAML point; Digi-Key PN from docs/sourcing.csv")),
         J1_XY, J1_ROTATION)
     d.net("SPI1_SCK", "J1.SCLK")
     d.net("SPI1_MOSI", "J1.SI")
@@ -1295,7 +1347,13 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     d.add_plane("V2V8", "In2.Cu", routable=True)               # layout choice of the toolchain demo
     # ---- keep-outs of the mechanical contract ------------------------------------------------
     bb = BAT["body"]
-    d.add_keepout(RoundedPolygon.rect(bb["x"], bb["y"], bb["dx"], bb["dy"]), layers=("F.Cu",),
+    bx0, bx1 = bb["x"] - bb["dx"] / 2.0, bb["x"] + bb["dx"] / 2.0
+    by0, by1 = bb["y"] - bb["dy"] / 2.0, bb["y"] + bb["dy"] / 2.0
+    nw, nd = J1_COURTYARD_NOTCH["half_w"], J1_COURTYARD_NOTCH["depth"]
+    # the YAML box of the cell with the notch for J1's courtyard (E24, see J1_COURTYARD_NOTCH)
+    d.add_keepout(RoundedPolygon(((bx0, by0), (J1_XY[0] - nw, by0), (J1_XY[0] - nw, by0 + nd),
+                                  (J1_XY[0] + nw, by0 + nd), (J1_XY[0] + nw, by0), (bx1, by0),
+                                  (bx1, by1), (bx0, by1))), layers=("F.Cu",),
                   name="battery_body", tracks=False, vias=False, copper=False, footprints=True)
     size = KO["post_feet"]["size"]
     for i, (x, y) in enumerate(KO["post_feet"]["centres"], start=1):

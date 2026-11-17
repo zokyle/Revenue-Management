@@ -245,7 +245,13 @@ void gl_power_charge_force(gl_power_t *p, bool stop)
 
 /* E32: account the time since the last gate call as charging if the charger
  * said "charging" then and says so now; anything else starts the count
- * again.  Returns true while the limit holds. */
+ * again.  Returns true while the limit holds.
+ *
+ * The limit is lifted again (VBUS staying) only for a cell that was SEEN at
+ * or above the restart voltage while the limit held and has fallen below it
+ * since: the marker left docked under a host that keeps it awake.  A cell
+ * that is still under that voltage after six hours of charging is not given
+ * another six: the stop then holds until the marker is lifted out. */
 static bool time_limit_(gl_power_t *p, uint32_t now_ms)
 {
     if (p->gate_timed && p->charging && !p->inhibit) {
@@ -257,11 +263,20 @@ static bool time_limit_(gl_power_t *p, uint32_t now_ms)
     p->gate_timed = true;
     p->chg_last_ms = now_ms;
     if (p->chg_run_ms >= GL_PROV_CHARGE_MAX_MS) {
+        if (!p->time_limit) {
+            p->limit_cell_was_up = false;
+        }
         p->time_limit = true;
-    } else if (p->time_limit && p->batt_mv != 0u && p->batt_mv < GL_PROV_CHARGE_RESTART_MV) {
-        /* the cell has run down behind the stopped charger: let it charge
-         * again, with a fresh limit */
-        p->time_limit = false;
+    }
+    if (p->time_limit && p->batt_mv != 0u) {
+        if (p->batt_mv >= GL_PROV_CHARGE_RESTART_MV) {
+            p->limit_cell_was_up = true;
+        } else if (p->limit_cell_was_up && p->chg_run_ms < GL_PROV_CHARGE_MAX_MS) {
+            /* the cell has run down behind the stopped charger: let it charge
+             * again, with a fresh limit */
+            p->time_limit = false;
+            p->limit_cell_was_up = false;
+        }
     }
     return p->time_limit;
 }
@@ -344,6 +359,7 @@ void gl_power_charge_release(gl_power_t *p)
 {
     p->temp_ok = false;
     p->time_limit = false;
+    p->limit_cell_was_up = false;
     p->forced = false;
     p->chg_run_ms = 0;
     p->gate_timed = false;

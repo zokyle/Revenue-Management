@@ -19,6 +19,7 @@
  */
 #include "gl_test.h"
 
+#include "gl_pins.h"
 #include "gl_provisional.h"
 #include "gl_trace_util.h"
 #include "power.h"

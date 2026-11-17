@@ -50,8 +50,11 @@
  *                so the charger may never see the end of a charge; the
  *                application therefore sleeps in the cradle, and this is
  *                the backstop for when it cannot (a host that keeps
- *                talking).  Released when VBUS goes or when the cell has
- *                fallen below GL_PROV_CHARGE_RESTART_MV.
+ *                talking).  Released when VBUS goes, or when the cell,
+ *                having been at or above GL_PROV_CHARGE_RESTART_MV with the
+ *                limit in force, has fallen below it (a cell that is still
+ *                under that voltage after 6 h of charging gets no second
+ *                6 h: stopped until the marker is lifted out).
  *   a command    the factory's "stop the charge" (gl_power_charge_force):
  *                assembly step 13 proves NTC1 and the MOSFET with it.
  *
@@ -153,6 +156,9 @@ typedef struct {
     float cell_temp_c;    /**< cell temperature from NTC2, degrees C */
     /* the firmware's own limits on a charge */
     bool time_limit;      /**< the E32 backstop has fired and still holds */
+    bool limit_cell_was_up; /**< ... and the cell has been seen at or above
+                               GL_PROV_CHARGE_RESTART_MV since: only then does a fall
+                               below it lift the limit */
     bool forced;          /**< a command holds the charge stopped */
     bool ntc1_suspect;    /**< a charge was running with NTC2 (valid, plausible) outside the
                                charger's OWN window: the charger's thermistor is not

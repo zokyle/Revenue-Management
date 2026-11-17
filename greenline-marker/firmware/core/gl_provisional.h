@@ -474,9 +474,12 @@
  *  about 4.4 h plus the taper, so a charge from empty below 10 C may be cut
  *  a few percent short. */
 #define GL_PROV_CHARGE_MAX_MS (6u * 3600u * 1000u)
-/** After the backstop the charge may start again when the cell has fallen
- *  below this voltage (our choice: otherwise a marker left docked for weeks
- *  would run its cell down behind a charger that is held off). */
+/** After the backstop the charge may start again when the cell, having been
+ *  seen at or above this voltage while the charge was stopped, has fallen
+ *  below it (our choice: otherwise a marker left docked for weeks under a
+ *  host that keeps it awake would run its cell down behind a charger that
+ *  is held off).  A cell that never reached it in 6 h stays stopped until
+ *  VBUS goes (drivers/power.c). */
 #define GL_PROV_CHARGE_RESTART_MV 4000u
 /** "Done": CHG released with the cell at or above this voltage.  Below it,
  *  with nothing the firmware knows of holding the charger, the charger is
