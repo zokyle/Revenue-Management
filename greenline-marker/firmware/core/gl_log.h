@@ -158,6 +158,18 @@ void gl_log_iter_begin(const gl_log_t *log, gl_log_iter_t *it);
 gl_status_t gl_log_iter_next(const gl_log_t *log, gl_log_iter_t *it, gl_log_rec_t *rec,
                              uint8_t *buf, size_t cap);
 
+/**
+ * Position an iterator for a download that RESUMES: the next records
+ * returned are those of the sector that holds record `seq` and of every
+ * newer sector.  Records older than `seq` may still come first (those in
+ * front of it in its sector): the caller skips them by their sequence
+ * number.  If `seq` is older than everything retained the iterator starts
+ * at the oldest record, if it is newer than everything at the head sector.
+ * Reads one 16-byte header per sector, like the mount.  GL_ERR_IO if the
+ * flash cannot be read (the iterator is then at the oldest record).
+ */
+gl_status_t gl_log_iter_seek(const gl_log_t *log, gl_log_iter_t *it, uint32_t seq);
+
 /** Read part of a record's payload (for records larger than the caller's
  *  buffer). */
 gl_status_t gl_log_read_payload(const gl_log_t *log, const gl_log_rec_t *rec, uint32_t offset,
@@ -206,6 +218,7 @@ gl_status_t gl_log_stats(const gl_log_t *log, gl_log_stats_t *out);
 #define GL_STORE_ID_CAL_CAM_R 0x13u
 #define GL_STORE_ID_CAL_GRAIN 0x14u
 #define GL_STORE_ID_COURSE 0x15u  /* learned stick height */
+#define GL_STORE_ID_CAL_DEVICE 0x16u /* display rotation, serial number */
 
 typedef struct {
     uint8_t id;            /**< 0 = slot free */
@@ -257,7 +270,11 @@ typedef enum {
     GL_LOG_REC_READ = 0x01,      /**< one completed read: gl_log_read_t */
     GL_LOG_REC_RAW_CHUNK = 0x02, /**< part of a raw image strip: gl_log_raw_hdr_t + pixels */
     GL_LOG_REC_EVENT = 0x03,     /**< boot, error, calibration: gl_log_event_t */
-    GL_LOG_REC_GRAIN = 0x04      /**< raw grain measurement (16 x dark, on, dark) */
+    GL_LOG_REC_GRAIN = 0x04,     /**< raw grain measurement (16 x dark, on, dark) */
+    /* phase 3: the replay records (core/gl_fieldlog.h) */
+    GL_LOG_REC_MEAS = 0x05,      /**< one placement as handed to the estimator */
+    GL_LOG_REC_READ2 = 0x06,     /**< context, options, estimate and fit record of a read */
+    GL_LOG_REC_TILT = 0x07       /**< a placement without a camera read */
 } gl_log_rec_type_t;
 
 #define GL_LOG_READ_FLAG_STICK_FOUND   (1u << 0)

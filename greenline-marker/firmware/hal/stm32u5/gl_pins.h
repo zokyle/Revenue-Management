@@ -3,10 +3,11 @@
  * pin map and run `make pins`.
  *
  *   source   electrical/gl1_main/pinmap.json
- *   sha256   37c034526369b4414efee9939714328d8aee391d31614ef7457d06a1f4d41f08
- *   design   gl1_main, STM32U585RIT6 (LQFP-64), DESIGN_SPEC rev D with amendments E1 to E16
- *   status   NETLIST STAGE - nothing built; the layout step may still move
- *            PROPOSED / CHANGED pins
+ *   sha256   d33ff53f50f03bd3f67acb52451f26e7305b8ed6c1e1344bd8811ec5dd3972e4
+ *   design   gl1_main, STM32U585RIT6 (LQFP-64), DESIGN_SPEC rev D with amendments E1 to E34 (in the netlist: E1 to E4 and E24 to E28)
+ *   status   LAYOUT STAGE - the board is routed with exactly these pins and passed
+ *            KiCad's DRC; nothing has been built. The pin assignments are final
+ *            for this board revision; a change now means a new routing run
  *   proof    checks_passed true, partial false: ST STM32_open_pin_data
  *            (STM32U585RITx, package LQFP64, STM32U575/585)
  *            6 statements of that proof are PROVISIONAL (ROM bootloader pin list,
@@ -24,7 +25,7 @@
 #ifndef GL_PINS_H
 #define GL_PINS_H
 
-#define GL_PINS_SOURCE_SHA256 "37c034526369b4414efee9939714328d8aee391d31614ef7457d06a1f4d41f08"
+#define GL_PINS_SOURCE_SHA256 "d33ff53f50f03bd3f67acb52451f26e7305b8ed6c1e1344bd8811ec5dd3972e4"
 
 /* Function kind (the pin map's "mode"): what GL_PIN_MODE_ALTERNATE means. */
 #define GL_PINFN_GPIO   0 /* OUT_PP: no alternate function, a push-pull output */
@@ -291,12 +292,10 @@
  *  1. Regenerate gl_pins.h from pinmap.json (every row marked CHANGED moved).
  *     -> this file; `make pins`, `make pins-check`
  *  2. CHG_INHIBIT (PH1) is a PUSH-PULL output, HIGH = stop charging (it turns on
- *     Q1, which pulls the charger's TS input low); analog or low = charger on. The
- *     present firmware (drivers/power.c, inhibit_(): latch low, then open drain)
- *     does NOTHING on this board - the gate of Q1 never goes high - so the
- *     firmware's own 0 to 45 C charge gate is inoperative until inhibit_() drives
- *     the pin push-pull HIGH. Until then only the charger's hardware TS window
- *     acts.
+ *     Q1, which pulls the charger's TS input low); analog or low = charger on.
+ *     drivers/power.c inhibit_() does exactly this since firmware phase 3
+ *     (push-pull HIGH to stop, analog to release); with the MCU off or hung only
+ *     the charger's hardware TS window acts.
  *     -> GL_PINS_CHG_INHIBIT_ACTIVE_HIGH; drivers/power.c inhibit_()
  *  3. CHG_STAT is on PA15 (EXTI15): the BQ25101's open-drain CHG output with a 100
  *     kohm pull-up to V2V8, low = charging, high = not charging, done or no VBUS.
@@ -307,8 +306,8 @@
  *        drivers/power.c
  *  4. EXTI lines: IMU_INT1 PA7 = EXTI7 (WKUP8), IMU_INT2 PA5 = EXTI5, VBUS_SENSE
  *     PC13 = EXTI13 (WKUP2), CHG_STAT PA15 = EXTI15. hal/stm32u5/gl_hal_stm32u5.c
- *     hard-codes EXTI13 / 5 / 9 / 0 (vectors and compile-time asserts): three of
- *     the four must move.
+ *     builds its vectors and compile-time asserts from the GL_PINS_EXTI_* numbers
+ *     of the generated header.
  *     -> GL_PINS_EXTI_*; hal/stm32u5/gl_hal_stm32u5.c builds its vectors from them
  *  5. UCPD (PROVISIONAL, RM0456 / DS13086 not read): PA15 and PB15 are the UCPD1
  *     CC pads, PB5 and PB14 their dead-battery control pads. After reset a high

@@ -1,0 +1,25 @@
+- Camera bus (11 nets after the series arrays): 576.6 mm of track for 293.0 mm of spanning trees (x1.97), 48 vias.
+- All routed signal nets: 2120 mm of track for 1477 mm of spanning trees (x1.44), 23 nets over x1.5.
+- U2: ball-to-MCU lengths 15.3 to 99.5 mm, PCLK 99.5 mm; the other ten lines are -84.2 to -26.9 mm against PCLK (-589 to -188 ps).
+- U3: ball-to-MCU lengths 18.1 to 105.2 mm, PCLK 27.8 mm; the other ten lines are -9.7 to +77.5 mm against PCLK (-68 to +542 ps).
+- Vias: 278 (76 of them plane connections); by class CamPower 14, Default 138, Fine 35, Power 91.
+- Smallest via-to-pad gap on the top side: 0.100 mm to a pad of its own net (TP2.1), 0.134 mm to a pad of another net (R23.2).
+- Smallest solder-mask web, bottom: 0.360 mm (D1.1 / D2.2); 0 touching openings of different nets.
+- Smallest solder-mask web, top: 0.150 mm (U4.10 / U4.11); 0 touching openings of different nets.
+- Copper to edge: routed copper 0.321 mm (track CAM_D4 B.Cu), pads 0.355 mm (pad R4.2).
+- IMU: nearest via 0.35 mm (GND), nearest top-layer track of a foreign net -0.03 mm (CP1_MCU), nearest part 0.51 mm (R24); to U7 / U8 / U9 / U11: 12.3 / 23.7 / 26.2 / 12.8 mm; tracks under the body: B.Cu: SPI1_MOSI; F.Cu: CP1_MCU, GND, IMU_CS, IMU_INT1, IMU_INT2, SPI2_MISO, SPI2_MOSI, SPI2_SCK, V2V8; In2.Cu: CAM_PCLK, SPI2_MISO; copper in the F.Cu rule area: none.
+- Crystal: OSC32_IN 7.6 mm, 0 via(s), OSC32_OUT 4.8 mm, 0 via(s); nearest foreign track on the same layer 0.30 mm (CAM_EN, F.Cu).
+- Photodiode input PD_K: 33.6 mm, 1 via(s); nearest foreign track on the same layer 0.23 mm (GND, B.Cu); nearest camera-clock copper (MCO / CAM_XVCLK) to the amplifier nets 8.4 mm (B.Cu / F.Cu); feedback parts R28 / C33 0.60 mm / 1.53 mm from their MCU pads, 9.5 mm from the charger, 15.8 mm from R9.
+- USB pair: D- 41.7 mm, D+ 41.2 mm, vias 6 / 2, largest distance between the two lines 13.58 mm.
+- Crystal ground guard (GND pour on F.Cu, box x -12.1..-7.9, y 5.2..9.9): KiCad filled 7.21 mm2 in 1 piece(s) beside Y1 / C11 / C12; it is not a closed ring.
+- Fine track (narrower than 0.15 mm): 218.3 mm on 28 nets; per layer B.Cu 52.8, F.Cu 133.7, In2.Cu 31.8; 40.6 mm of it within 1 mm and 99.5 mm within 2 mm of a camera ball field, the farthest 5.31 mm away. Fine areas: pad field + 5.0 mm, 174.6 mm2 in all.
+- Camera supply balls, copper path to the nearest capacitor of the net: U2.D1 (DOVDD) -> C14 9.91 mm (straight 4.4); U2.D5 (AVDD) -> C14 5.94 mm (straight 2.4); U2.E3 (DVDD) -> C16 4.18 mm (straight 2.96); U3.D1 (DOVDD) -> C18 5.02 mm (straight 2.07); U3.D5 (AVDD) -> C17 7.71 mm (straight 6.67); U3.E3 (DVDD) -> C19 7.11 mm (straight 3.21).
+- Crystal: OSC32_IN 7.58 mm, OSC32_OUT 4.84 mm; vias inside the no-via box: GND (-10.50, 6.45), V2V8 (-9.40, 5.60) (foreign: V2V8 (-9.40, 5.60)); nearest foreign via to crystal copper (pads included) 0.275 mm (CAM_EN); nearest foreign top-layer track 0.168 mm (VBUS_SENSE); below the ground plane under the body: B.Cu: CAM_D1, CAM_L_PWDN_MCU, CAM_SCL_L; In2.Cu: CAM_D6, CAM_EN, CAM_HREF, CAM_SCL_R.
+- PD_K: 33.62 mm (B.Cu 28.22, F.Cu 5.42), 1 via(s). LED / clock / bus nets within 0.5 mm on the same layer (pads and vias included): CP0 B.Cu min 0.197 mm, 0.00 mm long. On the adjacent layer over or under PD_K copper: CAM_HREF on In2.Cu (2.00 mm); CP3 on In2.Cu (2.17 mm); CP4 on In2.Cu (0.30 mm); LCD_DISP on In2.Cu (1.20 mm); V2V8 on In2.Cu (0.64 mm).
+- Fill GND on F.Cu: 7.2 mm2 (0.5 % of the board), 1 piece(s); smallest distance to foreign track / via 0.2 mm (track V2V8_CAM).
+- Fill GND on In1.Cu: 1147.5 mm2 (86.0 % of the board), 1 piece(s); smallest distance to foreign track / via 0.2 mm (via CAM_D3 (-0.30, 7.55)).
+- Fill V2V8 on In2.Cu: 787.3 mm2 (59.0 % of the board), 4 piece(s); smallest distance to foreign track / via 0.2 mm (track CAM_XVCLK).
+- Fill GND on B.Cu: 26.3 mm2 (2.0 % of the board), 1 piece(s); smallest distance to foreign track / via 0.2 mm (track CP0).
+- Layer 3 (In2.Cu) carries 461 mm of track; 408 of 888 mm of bottom-layer track (46 %) has no In2 fill above it (worst: CAM_SDA 33.7, CP3 19.1, CP0 19.0, CAM_D3 17.6, CAM_VSYNC 16.7, CHG_STAT 15.0).
+- Vias: 278, tenting 'both'; 37 under the cell body. IMU: nearest via pad 0.350 mm outside the body outline (GND); U4 rotation 90 degrees.
+- No-via areas: nearest via pad 0.161 mm from the grain opening (dia 13) and 0.200 mm from the pad slot (rule margin 0.15 mm).

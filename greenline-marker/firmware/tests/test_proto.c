@@ -37,6 +37,13 @@ static struct {
     int power_calls;
     int set_charge_calls;
     bool charge_stop;
+    int factory_calls;
+    uint8_t factory_cmd;
+    size_t factory_len;
+    gl_status_t factory_status;
+    bool factory_overflow;
+    int seek_calls;
+    uint32_t seek_seq;
 } app;
 
 static void m_tx(void *ctx, const uint8_t *frame, size_t len)
@@ -210,10 +217,42 @@ static gl_status_t m_set_charge(void *ctx, bool stop)
     return GL_OK;
 }
 
+/* The factory commands: the protocol layer checks length and unlock and
+ * hands everything else on.  The mock records the call and answers with a
+ * recognisable payload: the command id, the request length, then the request. */
+static gl_status_t m_factory(void *ctx, uint8_t cmd, const uint8_t *in, size_t n, uint8_t *out,
+                             size_t cap, size_t *len)
+{
+    (void)ctx;
+    app.factory_calls++;
+    app.factory_cmd = cmd;
+    app.factory_len = n;
+    if (app.factory_status != GL_OK) {
+        return app.factory_status;
+    }
+    if (app.factory_overflow) {
+        *len = cap + 1u; /* a callee that claims more than it was given */
+        return GL_OK;
+    }
+    out[0] = cmd;
+    out[1] = (uint8_t)n;
+    memcpy(&out[2], in, (n < 16u) ? n : 16u);
+    *len = 2u + ((n < 16u) ? n : 16u);
+    return GL_OK;
+}
+
+static gl_status_t m_log_seek(void *ctx, uint32_t seq)
+{
+    (void)ctx;
+    app.seek_calls++;
+    app.seek_seq = seq;
+    return GL_OK;
+}
+
 static const gl_proto_ops_t ops = {
     NULL, m_tx, m_get_info, m_get_status, m_get_settings, m_set_settings, m_get_cal, m_set_cal,
     m_start_cal, m_log_info, m_log_read, m_log_erase, m_stream, m_set_time, m_reboot, m_dfu_allowed,
-    m_ship_mode, m_get_power, m_set_charge
+    m_ship_mode, m_get_power, m_set_charge, m_factory, m_log_seek
 };
 
 static gl_proto_t proto;
@@ -869,34 +908,46 @@ GL_TEST(test_power_commands)
     int n;
 
     fresh();
-    /* SHIP_MODE: "SHIP" arms, "STAY" disarms, anything else is refused; no
-     * UNLOCK needed (it is undone by docking the marker) */
+    /* SHIP_MODE: "SHIP" arms, "STAY" disarms, anything else is refused.
+     * Phase 3: ARMING needs UNLOCK (the unlock rule of gl_proto.h) - locked,
+     * it is refused and the application is not asked */
     request(1, GL_CMD_SHIP_MODE, "SHIP", 4);
     n = response(0, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+    GL_CHECK_EQ(app.ship_calls, 0);
+    GL_CHECK(!app.ship_armed);
+    request(1, GL_CMD_UNLOCK, "GLFC", 4);
+    (void)response(1, &seq, &cmd, &pl);
+    request(1, GL_CMD_SHIP_MODE, "SHIP", 4);
+    n = response(2, &seq, &cmd, &pl);
     GL_CHECK_EQ(n, 2);
     GL_CHECK_EQ(cmd, GL_CMD_SHIP_MODE | GL_PROTO_RESPONSE_FLAG);
     GL_CHECK_EQ(pl[0], GL_OK);
     GL_CHECK_EQ(pl[1], 1);
     GL_CHECK(app.ship_armed);
+    /* ... disarming does not (locked again first) */
+    request(2, GL_CMD_UNLOCK, "lock", 4);
+    (void)response(3, &seq, &cmd, &pl);
     request(2, GL_CMD_SHIP_MODE, "STAY", 4);
-    n = response(1, &seq, &cmd, &pl);
+    n = response(4, &seq, &cmd, &pl);
     GL_CHECK_EQ(n, 2);
     GL_CHECK_EQ(pl[0], GL_OK);
     GL_CHECK_EQ(pl[1], 0);
     GL_CHECK(!app.ship_armed);
     request(3, GL_CMD_SHIP_MODE, "ship", 4);
-    n = response(2, &seq, &cmd, &pl);
+    n = response(5, &seq, &cmd, &pl);
     GL_CHECK_EQ(n, 1);
     GL_CHECK_EQ(pl[0], GL_ERR_PARAM);
     request(4, GL_CMD_SHIP_MODE, "SHIP!", 5); /* wrong length: refused by the table */
-    n = response(3, &seq, &cmd, &pl);
+    n = response(6, &seq, &cmd, &pl);
     GL_CHECK_EQ(n, 1);
     GL_CHECK(pl[0] != GL_OK);
     GL_CHECK_EQ(app.ship_calls, 2);
 
     /* GET_POWER: 16 bytes, little-endian, field by field */
     request(5, GL_CMD_GET_POWER, NULL, 0);
-    n = response(4, &seq, &cmd, &pl);
+    n = response(7, &seq, &cmd, &pl);
     GL_CHECK_EQ(n, 1 + (int)GL_PROTO_POWER_LEN);
     GL_CHECK_EQ(cmd, GL_CMD_GET_POWER | GL_PROTO_RESPONSE_FLAG);
     GL_CHECK_EQ(pl[0], GL_OK);
@@ -914,24 +965,263 @@ GL_TEST(test_power_commands)
 
     /* SET_CHARGE: a factory operation, needs UNLOCK; 0 or 1 */
     request(6, GL_CMD_SET_CHARGE, "\x01", 1);
-    n = response(5, &seq, &cmd, &pl);
+    n = response(8, &seq, &cmd, &pl);
     GL_CHECK_EQ(n, 1);
     GL_CHECK_EQ(pl[0], GL_ERR_STATE);
     GL_CHECK_EQ(app.set_charge_calls, 0);
     request(7, GL_CMD_UNLOCK, "GLFC", 4);
     request(8, GL_CMD_SET_CHARGE, "\x01", 1);
-    n = response(7, &seq, &cmd, &pl);
+    n = response(10, &seq, &cmd, &pl);
     GL_CHECK_EQ(pl[0], GL_OK);
     GL_CHECK(app.charge_stop);
     request(9, GL_CMD_SET_CHARGE, "\x00", 1);
-    n = response(8, &seq, &cmd, &pl);
+    n = response(11, &seq, &cmd, &pl);
     GL_CHECK_EQ(pl[0], GL_OK);
     GL_CHECK(!app.charge_stop);
     request(10, GL_CMD_SET_CHARGE, "\x02", 1);
-    n = response(9, &seq, &cmd, &pl);
+    n = response(12, &seq, &cmd, &pl);
     GL_CHECK_EQ(pl[0], GL_ERR_PARAM);
     GL_CHECK_EQ(app.set_charge_calls, 2);
     (void)n;
+}
+
+/* Phase 3: the factory commands are routed to ONE callback after the
+ * protocol layer has checked the length against its table and the unlock
+ * rule; the command bit map says what an instance has. */
+GL_TEST(test_factory_routing_unlock_rule_and_bit_map)
+{
+    static gl_proto_ops_t bare;
+    uint8_t seq, cmd;
+    const uint8_t *pl;
+    uint8_t map[8];
+    uint8_t big[5 + 16 * 16 + 1]; /* the longest request sent below, and one byte more */
+    int idx = 0;
+    int n;
+
+    fresh();
+    /* a reading command: handed on with its payload, the answer handed back */
+    request(1, GL_CMD_GET_IDENT, "\x03", 1);
+    n = response(idx++, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 4);
+    GL_CHECK_EQ(cmd, GL_CMD_GET_IDENT | GL_PROTO_RESPONSE_FLAG);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    GL_CHECK_EQ(pl[1], GL_CMD_GET_IDENT);
+    GL_CHECK_EQ(pl[2], 1);
+    GL_CHECK_EQ(pl[3], 3);
+    GL_CHECK_EQ(app.factory_calls, 1);
+    /* a wrong length never reaches the application */
+    request(2, GL_CMD_GET_IDENT, "ab", 2);
+    n = response(idx++, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK_EQ(pl[0], GL_ERR_PARAM);
+    request(3, GL_CMD_CAM_CAPTURE, "123456789", 9);
+    (void)response(idx++, &seq, &cmd, &pl);
+    GL_CHECK_EQ(pl[0], GL_ERR_PARAM);
+    GL_CHECK_EQ(app.factory_calls, 1);
+    /* the application's error is the answer, with no data */
+    app.factory_status = GL_ERR_BUSY;
+    request(4, GL_CMD_GET_SENSORS, NULL, 0);
+    n = response(idx++, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK_EQ(pl[0], GL_ERR_BUSY);
+    app.factory_status = GL_OK;
+    /* a callee that claims more than the buffer holds: GL_ERR_FULL, not a frame of garbage */
+    app.factory_overflow = true;
+    request(5, GL_CMD_GET_SENSORS, NULL, 0);
+    n = response(idx++, &seq, &cmd, &pl);
+    GL_CHECK_EQ(n, 1);
+    GL_CHECK_EQ(pl[0], GL_ERR_FULL);
+    app.factory_overflow = false;
+
+    /* THE UNLOCK RULE, command by command (gl_proto.h).  Locked: refused
+     * before the application is asked.  Unlocked: handed on. */
+    {
+        static const struct {
+            uint8_t cmd;
+            uint8_t n;
+            uint8_t p[9];
+            bool guarded;
+        } rule[] = {
+            { GL_CMD_GET_IDENT, 0, { 0 }, false },
+            { GL_CMD_GET_SENSORS, 0, { 0 }, false },
+            { GL_CMD_CAM_ID, 1, { 0 }, false },
+            { GL_CMD_CAM_CAPTURE, 9, { 0 }, false }, /* (length checked later) */
+            { GL_CMD_CAM_DATA, 6, { 0 }, false },
+            { GL_CMD_CAM_FIELD, 1, { 0 }, false },
+            { GL_CMD_DISPLAY_TEST, 2, { 1, 5 }, false },
+            { GL_CMD_GRAIN_TEST, 1, { GL_GRAIN_MODE_DARK }, false },
+            { GL_CMD_GRAIN_TEST, 1, { GL_GRAIN_MODE_CYCLE }, false },
+            { GL_CMD_GRAIN_TEST, 1, { GL_GRAIN_MODE_STORE }, true },
+            { GL_CMD_LEVEL_ZERO, 2, { GL_ZERO_OP_STATUS, 0 }, false },
+            { GL_CMD_LEVEL_ZERO, 2, { GL_ZERO_OP_CANCEL, 0 }, false },
+            { GL_CMD_LEVEL_ZERO, 2, { GL_ZERO_OP_ARM, 1 }, true },
+            { GL_CMD_CAL_STATUS, 0, { 0 }, false },
+            { GL_CMD_SET_CAM_HORIZON, 9, { 0 }, true },
+            { GL_CMD_DISPLAY_ROT, 1, { 0 }, false },
+            { GL_CMD_DISPLAY_ROT, 5, { 1 }, true },
+            { GL_CMD_SLEEP_TEST, 3, { 1, 0, 0 }, true },
+            { GL_CMD_SERIAL, 0, { 0 }, false },
+            { GL_CMD_SERIAL, 4, "SNUM", true },
+        };
+        for (size_t i = 0; i < GL_ARRAY_LEN(rule); i++) {
+            const int calls = app.factory_calls;
+            GL_CHECK_EQ(gl_proto_needs_unlock(rule[i].cmd, rule[i].p, rule[i].n), rule[i].guarded);
+            if (rule[i].cmd == GL_CMD_CAM_CAPTURE) {
+                continue;
+            }
+            request((uint8_t)(10 + i), rule[i].cmd, rule[i].p, rule[i].n);
+            (void)response(idx++, &seq, &cmd, &pl);
+            GL_CHECK_EQ(pl[0], rule[i].guarded ? GL_ERR_STATE : GL_OK);
+            GL_CHECK_EQ(app.factory_calls, calls + (rule[i].guarded ? 0 : 1));
+        }
+        memset(big, 0, sizeof(big));
+        GL_CHECK(gl_proto_needs_unlock(GL_CMD_TILT_TEMPCO, big, 53));
+        GL_CHECK(gl_proto_needs_unlock(GL_CMD_SET_GRAIN_FLOOR, big, 81));
+        GL_CHECK(gl_proto_needs_unlock(GL_CMD_SHIP_MODE, (const uint8_t *)"SHIP", 4));
+        GL_CHECK(!gl_proto_needs_unlock(GL_CMD_SHIP_MODE, (const uint8_t *)"STAY", 4));
+        GL_CHECK(gl_proto_needs_unlock(GL_CMD_REBOOT, (const uint8_t *)"DFU!", 4));
+        GL_CHECK(!gl_proto_needs_unlock(GL_CMD_REBOOT, (const uint8_t *)"BOOT", 4));
+        GL_CHECK(!gl_proto_needs_unlock(GL_CMD_LOG_SEEK, big, 4));
+        GL_CHECK(!gl_proto_needs_unlock(GL_CMD_LOG_READ, big, 1));
+        GL_CHECK(!gl_proto_needs_unlock(GL_CMD_SET_SETTINGS, big, 12)); /* the user's own */
+        request(60, GL_CMD_UNLOCK, "GLFC", 4);
+        idx++;
+        for (size_t i = 0; i < GL_ARRAY_LEN(rule); i++) {
+            const int calls = app.factory_calls;
+            if (!rule[i].guarded) {
+                continue;
+            }
+            request((uint8_t)(70 + i), rule[i].cmd, rule[i].p, rule[i].n);
+            (void)response(idx++, &seq, &cmd, &pl);
+            GL_CHECK_EQ(pl[0], GL_OK);
+            GL_CHECK_EQ(app.factory_calls, calls + 1);
+            GL_CHECK_EQ(app.factory_cmd, rule[i].cmd);
+            GL_CHECK_EQ(app.factory_len, rule[i].n);
+        }
+        /* the long ones: at their shortest and longest lengths, and one beyond */
+        big[0] = 16;
+        request(90, GL_CMD_TILT_TEMPCO, big, 5 + 16 * 16);
+        (void)response(idx++, &seq, &cmd, &pl);
+        GL_CHECK_EQ(pl[0], GL_OK);
+        request(91, GL_CMD_TILT_TEMPCO, big, 5 + 16 * 16 + 1);
+        (void)response(idx++, &seq, &cmd, &pl);
+        GL_CHECK_EQ(pl[0], GL_ERR_PARAM);
+        request(92, GL_CMD_SET_GRAIN_FLOOR, big, 1 + 4 * 64);
+        (void)response(idx++, &seq, &cmd, &pl);
+        GL_CHECK_EQ(pl[0], GL_OK);
+        request(93, GL_CMD_SET_GRAIN_FLOOR, big, 1 + 4 * 19);
+        (void)response(idx++, &seq, &cmd, &pl);
+        GL_CHECK_EQ(pl[0], GL_ERR_PARAM);
+        /* USB gone: locked again */
+        gl_proto_disconnect(&proto);
+        GL_CHECK(!proto.unlocked);
+    }
+    /* LOG_SEEK */
+    {
+        const uint8_t s[4] = { 0x78, 0x56, 0x34, 0x12 };
+        app.tx_len = 0;
+        request(1, GL_CMD_LOG_SEEK, s, 4);
+        n = response(0, &seq, &cmd, &pl);
+        GL_CHECK_EQ(n, 1);
+        GL_CHECK_EQ(pl[0], GL_OK);
+        GL_CHECK_EQ(app.seek_calls, 1);
+        GL_CHECK_EQ(app.seek_seq, 0x12345678u);
+        request(2, GL_CMD_LOG_SEEK, s, 3);
+        (void)response(1, &seq, &cmd, &pl);
+        GL_CHECK_EQ(pl[0], GL_ERR_PARAM);
+    }
+    /* the bit map: everything with all callbacks; without the factory
+     * callback those commands are absent and answer UNSUPPORTED */
+    gl_proto_command_map(&proto, map);
+    {
+        unsigned bits = 0;
+        for (unsigned c = 0; c < 64u; c++) {
+            bits += ((unsigned)map[c / 8u] >> (c % 8u)) & 1u;
+        }
+        GL_CHECK_EQ(bits, 35u);
+        GL_CHECK(map[0] == 0xFEu && map[1] == 0xFFu); /* commands 1 .. 15 */
+        GL_CHECK(!(map[4] & 0x10u));                  /* 0x24 does not exist */
+    }
+    memset(&bare, 0, sizeof(bare));
+    bare.tx = m_tx;
+    gl_proto_init(&proto, &bare);
+    gl_proto_command_map(&proto, map);
+    GL_CHECK(map[0] == ((1u << GL_CMD_PING)) && map[1] == (1u << (GL_CMD_UNLOCK - 8)));
+    GL_CHECK_EQ(map[2] | map[3] | map[4] | map[5] | map[6] | map[7], 0);
+    app.tx_len = 0;
+    request(1, GL_CMD_GET_IDENT, NULL, 0);
+    (void)response(0, &seq, &cmd, &pl);
+    GL_CHECK_EQ(pl[0], GL_ERR_UNSUPPORTED);
+    request(2, GL_CMD_LOG_SEEK, big, 4);
+    (void)response(1, &seq, &cmd, &pl);
+    GL_CHECK_EQ(pl[0], GL_ERR_UNSUPPORTED);
+}
+
+/* The fixed-layout records of the factory commands, byte for byte. */
+GL_TEST(test_factory_record_layouts)
+{
+    uint8_t b[GL_PROTO_GRAIN_LEN + 4];
+    gl_proto_capture_t c = { 1, 1, 0x0102, 0x0304, 0x0280, 0x0060, 0x0000F000u, 3, 250, 0x0123,
+                             0x00000048u, 0xDEADBEEFu };
+    gl_proto_field_t f = { 1, 0, 88, 391, 2880, 2160, 320, 750, 181, 136, 0 };
+    gl_proto_zero_t z;
+    gl_proto_sensors_t s;
+    gl_proto_ident_t id;
+
+    GL_CHECK_EQ(GL_PROTO_IDENT_LEN, 72);
+    GL_CHECK_EQ(GL_PROTO_SENSORS_LEN, 28);
+    GL_CHECK_EQ(GL_PROTO_CAPTURE_LEN, 26);
+    GL_CHECK_EQ(GL_PROTO_FIELD_LEN, 20);
+    GL_CHECK_EQ(GL_PROTO_GRAIN_LEN, 108);
+    GL_CHECK_EQ(GL_PROTO_ZERO_LEN, 36);
+    GL_CHECK_EQ(GL_PROTO_SIX_LEN, 80);
+    /* every response of a factory command fits a frame with its status byte */
+    GL_CHECK(GL_PROTO_CAM_DATA_MAX + 5u <= GL_PROTO_MAX_PAYLOAD);
+
+    memset(b, 0xEE, sizeof(b));
+    gl_proto_capture_encode(&c, b);
+    GL_CHECK_EQ(b[GL_PROTO_CAPTURE_LEN], 0xEE);
+    GL_CHECK(b[0] == 1 && b[1] == 1 && gl_get_u16(&b[2]) == 0x0102 && gl_get_u16(&b[4]) == 0x0304 &&
+             gl_get_u16(&b[6]) == 640 && gl_get_u16(&b[8]) == 96 && gl_get_u32(&b[10]) == 61440u &&
+             b[14] == 3 && b[15] == 250 && gl_get_u16(&b[16]) == 0x0123 &&
+             gl_get_u32(&b[18]) == 72u && gl_get_u32(&b[22]) == 0xDEADBEEFu);
+    memset(b, 0xEE, sizeof(b));
+    gl_proto_field_encode(&f, b);
+    GL_CHECK_EQ(b[GL_PROTO_FIELD_LEN], 0xEE);
+    GL_CHECK(gl_get_u16(&b[2]) == 88 && gl_get_u16(&b[4]) == 391 && gl_get_u16(&b[6]) == 2880 &&
+             gl_get_u16(&b[8]) == 2160 && gl_get_u16(&b[10]) == 320 && gl_get_u16(&b[12]) == 750 &&
+             b[14] == 181 && b[15] == 136);
+    memset(&z, 0, sizeof(z));
+    z.state = GL_ZERO_STATE_DONE;
+    z.seat = 1;
+    z.attempts = 2;
+    z.bias_x = 0.0035f;
+    z.turn_rad = 3.1f;
+    z.time_s = 0x11223344u;
+    memset(b, 0xEE, sizeof(b));
+    gl_proto_zero_encode(&z, b);
+    GL_CHECK_EQ(b[GL_PROTO_ZERO_LEN], 0xEE);
+    GL_CHECK(b[0] == GL_ZERO_STATE_DONE && b[1] == 1 && b[3] == 2 && gl_get_f32(&b[4]) == 0.0035f &&
+             gl_get_f32(&b[16]) == 3.1f && gl_get_u32(&b[32]) == 0x11223344u);
+    memset(&s, 0, sizeof(s));
+    s.battery_mv = 3987;
+    s.cell_temp_c_x10 = -53;
+    s.sleep_ms = 40012;
+    s.uptime_ms = 0x01020304u;
+    memset(b, 0xEE, sizeof(b));
+    gl_proto_sensors_encode(&s, b);
+    GL_CHECK_EQ(b[GL_PROTO_SENSORS_LEN], 0xEE);
+    GL_CHECK(gl_get_u16(&b[0]) == 3987 && (int16_t)gl_get_u16(&b[4]) == -53 &&
+             gl_get_u32(&b[18]) == 40012u && gl_get_u32(&b[22]) == 0x01020304u);
+    memset(&id, 0, sizeof(id));
+    id.proto_version = 3;
+    id.hw_letter = 'E';
+    id.serial = 0xCAFEF00Du;
+    id.commands[7] = 0x80;
+    memset(b, 0xEE, sizeof(b));
+    gl_proto_ident_encode(&id, b);
+    GL_CHECK_EQ(b[GL_PROTO_IDENT_LEN], 0xEE);
+    GL_CHECK(b[0] == 3 && b[3] == 'E' && gl_get_u32(&b[36]) == 0xCAFEF00Du && b[71] == 0x80);
 }
 
 int main(void)
@@ -948,5 +1238,7 @@ int main(void)
     GL_RUN(test_random_noise_fuzz);
     GL_RUN(test_stream_frames);
     GL_RUN(test_power_commands);
+    GL_RUN(test_factory_routing_unlock_rule_and_bit_map);
+    GL_RUN(test_factory_record_layouts);
     return gl_test_summary();
 }

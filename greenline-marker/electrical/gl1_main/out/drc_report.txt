@@ -1,0 +1,16 @@
+** Drc report for gl1_main.kicad_pcb **
+
+** Found 2 DRC violations **
+[silk_overlap]: Silkscreen overlap
+    Rule: board setup constraints silk; Severity: warning
+    @(112.2464 mm, 91.2300 mm): Line on F.Silkscreen
+    @(-3.2000 mm, -2.3100 mm): Polygon on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(-5.7250 mm, -4.1600 mm): Polygon on F.Silkscreen
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** End of Report **

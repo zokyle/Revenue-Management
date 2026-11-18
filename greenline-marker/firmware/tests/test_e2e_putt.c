@@ -228,6 +228,29 @@ static unsigned label_mismatch_(int cx, int y, const char *text)
     return bad;
 }
 
+/* What stands where the confidence bar is (E33): the five boxes with
+ * `boxes` filled in the NORMAL state, the word APPROX in the APPROX state,
+ * nothing without a solution.  Returns the number of panel pixels of that
+ * place (x 44 .. 84, rows 102 .. 112) that differ. */
+static unsigned bar_place_mismatch_(gl_ui_show_t show, int boxes)
+{
+    static gl_gfx_t ref;
+    unsigned bad = 0;
+    gl_gfx_init(&ref);
+    gl_gfx_set_clip(&ref, true);
+    if (show == GL_UI_SHOW_NORMAL) {
+        gl_gfx_conf_bar(&ref, 64 - 16, 105, boxes, 5);
+    } else if (show == GL_UI_SHOW_APPROX) {
+        gl_gfx_text_centred(&ref, 64, 104, "APPROX", 1, GL_INK_BLACK);
+    }
+    for (int y = 102; y <= 112; y++) {
+        for (int x = 44; x <= 84; x++) {
+            bad += (seen_black_(x, y) != !gl_gfx_get(&ref, x, y)) ? 1u : 0u;
+        }
+    }
+    return bad;
+}
+
 /* The fall-line arrow of the result screen: where its ink lies relative to
  * the centre of the rose.  Returns the direction (rad, CCW from up) from the
  * centre to the ink's centroid, or NAN. */
@@ -316,13 +339,13 @@ static void to_ref_(const gl_measurements_t *m, gl_ref_meas_t *r)
 /* The records of the estimator call the application has just made. */
 static unsigned app_records_(gl_ref_meas_t rec[GL_REF_MAX_DROPS], unsigned *ball)
 {
-    if (app.solve_drops <= 1u) {
+    if (!app.solve_survey) {
         to_ref_(&app.meas_cur, &rec[0]);
         *ball = 0;
         return 1;
     }
     for (unsigned i = 0; i < app.solve_drops; i++) {
-        to_ref_(&app.meas[i], &rec[i]);
+        to_ref_(&app.solve_meas[i], &rec[i]);
     }
     *ball = app.solve_ball;
     return app.solve_drops;
@@ -489,7 +512,7 @@ static void fw_est_(gl_ref_est_t *e)
 }
 
 typedef struct {
-    bool expect_line;       /* the marker lies at the ball: a line must be drawn */
+    bool expect_line;       /* a line must be drawn (E33: every state but "no solution") */
     bool on_screen;         /* ... and inside the aperture */
     bool solved;            /* the aim is a solution (solid line, break quoted) */
     bool check_truth;       /* compare with the reference on the true scene */
@@ -543,8 +566,12 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
         GL_CHECK_EQ(tru.status, GL_OK);
     }
     if (dump_ != NULL) {
-        fprintf(dump_, "{\"name\": \"%s\", \"method\": %d, \"past\": %.9g, \"use_grain\": %d, "
-                       "\"near_miss\": %.9g, \"ball_index\": %u, \"drops\": [",
+        /* (%.17g: the options EXACTLY as the application passed them.  With
+         * nine digits the pace 0.15f reached Python as 0.150000006 where the
+         * firmware has 0.15000000596046448, and on the knife-edge putt of
+         * the 7 % scene the reference then took the other branch) */
+        fprintf(dump_, "{\"name\": \"%s\", \"method\": %d, \"past\": %.17g, \"use_grain\": %d, "
+                       "\"near_miss\": %.17g, \"ball_index\": %u, \"drops\": [",
                 name, opt.method, opt.past, opt.use_grain, opt.near_miss, ball);
         for (unsigned i = 0; i < n; i++) {
             fprintf(dump_, "%s", (i > 0) ? ", " : "");
@@ -607,9 +634,15 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
     }
     gl_ui_result_text(&app.ui, &app.view, &row->text);
     row->boxes = gl_ui_conf_boxes(app.view.confidence);
-    GL_CHECK_EQ(app.view.line_here, x->expect_line);
+    /* E33: a line in the NORMAL and the APPROX state, none without a
+     * solution; E29: nothing else takes the line away (a Survey placement
+     * that is "not the ball" does not exist any more) */
+    GL_CHECK_EQ(gl_ui_view_show(&app.view) != GL_UI_SHOW_NONE, x->expect_line);
+    GL_CHECK_EQ(x->expect_line, x->solved);
+    GL_CHECK(app.line_here);
     /* drawn turned round when the ball lies behind the marker */
     turned_ = fabsf(app.view.ball_az_rad) > 0.5f * GL_PI_F;
+    GL_CHECK_EQ(bar_place_mismatch_(gl_ui_view_show(&app.view), row->boxes), 0u);
     measure_line_(&ln);
     if (x->expect_line) {
         /* the view's aim is the estimate's, turned into the marker's present frame */
@@ -632,8 +665,7 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
             GL_CHECK(cov_off < 0.25);
             GL_CHECK(!isnan(ink));
             row->dashed = ink < 0.3;
-            GL_CHECK_EQ(row->dashed,
-                        !app.view.solved || !(app.view.distance_m > 0.0f) || !app.view.flag_found);
+            GL_CHECK_EQ(row->dashed, gl_ui_view_show(&app.view) == GL_UI_SHOW_APPROX);
             if (row->dashed) {
                 most_dashed_ink_ = (ink > most_dashed_ink_) ? ink : most_dashed_ink_;
             } else {
@@ -663,18 +695,21 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
                 /* through the ball position, 246 px beyond the screen centre */
                 GL_CHECK(miss < 3.0);
                 GL_CHECK(ln.rows >= 30u);
-                /* SOLID only for a solution of a putt whose distance is known
-                 * (measured or dialled) and whose direction the cameras
-                 * measured; long dashes for anything else - an aim that is
-                 * not a solution, an assumed distance, the flag-out fallback
-                 * - told from the panel's pixels in the gaps of the dashes. */
+                /* SOLID only in the NORMAL state of DESIGN_SPEC E33; long
+                 * dashes in the APPROX state (an assumed or dialled distance,
+                 * the flag-out fallback, the secant plane, a pace that cannot
+                 * be met, a slope near the critical one) - told from the
+                 * panel's pixels in the gaps of the dashes. */
                 {
                     const double ink = ink_in_the_dash_gaps_(seen_angle_(app.view.aim_rad),
                                                              seen_angle_(app.view.ball_az_rad));
                     GL_CHECK(!isnan(ink));
                     row->dashed = ink < 0.3;
-                    GL_CHECK_EQ(row->dashed, !app.view.solved || !(app.view.distance_m > 0.0f) ||
-                                                 !app.view.flag_found);
+                    GL_CHECK_EQ(row->dashed, gl_ui_view_show(&app.view) == GL_UI_SHOW_APPROX);
+                    /* (and the renderer's own caution holds: never solid
+                     * without a known distance and a measured flagstick) */
+                    GL_CHECK(row->dashed || (app.view.solved && app.view.distance_m > 0.0f &&
+                                             app.view.flag_found && !app.view.distance_assumed));
                     if (row->dashed) {
                         most_dashed_ink_ = (ink > most_dashed_ink_) ? ink : most_dashed_ink_;
                     } else {
@@ -694,9 +729,23 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
             }
         }
     } else {
-        /* a Survey drop along the line: no aim line on the screen */
-        GL_CHECK(!ln.found);
-        GL_CHECK(strcmp(row->text.note, "PUT AT BALL") == 0);
+        /* NO SOLUTION (E33): the message, and no line - the picture is the
+         * same whatever the aim (the panel shows gl_ui_render() of the view,
+         * checked above; here: of the view with another aim) */
+        static gl_gfx_t other;
+        gl_ui_view_t v = app.view;
+        unsigned bad = 0;
+        v.aim_rad += 0.11f;
+        gl_gfx_init(&other);
+        gl_ui_render(&app.ui, &v, &other);
+        for (unsigned i = 0; i < GL_GFX_BYTES; i++) {
+            bad += (other.px[i] != gl_sim_lcd()->mem[i]) ? 1u : 0u;
+        }
+        GL_CHECK_EQ(bad, 0u);
+        GL_CHECK(strcmp(row->text.note, "NOT SOLVED") == 0 || strcmp(row->text.note, "NO SOLUTION") == 0 ||
+                 strcmp(row->text.note, "TOO STEEP") == 0);
+        GL_CHECK(row->text.brk[0] == '\0' && row->text.plays[0] == '\0');
+        row->drawn_aim = (double)NAN;
     }
 
     /* ---- the numbers shown, against the reference ---- */
@@ -725,7 +774,9 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
             }
         }
         GL_CHECK_NEAR(shown_number_(row->text.slope), ref.slope_pct, 0.051);
-        if (!x->solved || (assumed && !dialled)) {
+        if (!x->solved) {
+            GL_CHECK(row->text.brk[0] == '\0');
+        } else if (assumed && !dialled) {
             GL_CHECK(strcmp(row->text.brk, "BREAK ?") == 0);
         } else if (fabs(ref.break_cups) < 0.045) {
             GL_CHECK(strcmp(row->text.brk, "STRAIGHT") == 0);
@@ -740,10 +791,12 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
         if (row->text.plays[0] != '\0') {
             GL_CHECK_EQ(label_mismatch_(64, 24, row->text.plays), 0u);
         }
-        if (row->text.note[0] != '\0' && app.view.flag_found) {
+        if (row->text.note[0] != '\0' && app.view.flag_found && x->solved) {
             GL_CHECK_EQ(label_mismatch_(64, 36, row->text.note), 0u);
         }
-        GL_CHECK_EQ(label_mismatch_(64, 92, row->text.brk), 0u);
+        if (x->solved) {
+            GL_CHECK_EQ(label_mismatch_(64, 92, row->text.brk), 0u);
+        }
     }
     if (dump_ != NULL) {
         fprintf(dump_, "\"view\": {");
@@ -751,13 +804,15 @@ static void check_result_(const char *name, const expect_t *x, const gl_ref_meas
         dump_num_("drawn_aim_read_frame", row->drawn_aim, false);
         dump_num_("yaw", yaw, false);
         dump_num_("confidence_shown", (double)app.view.confidence, false);
-        fprintf(dump_, "\"dashed\": %s, ", row->dashed ? "true" : "false");
+        fprintf(dump_, "\"dashed\": %s, \"show\": %d, \"steep_ratio\": %.9g, ",
+                row->dashed ? "true" : "false", (int)gl_ui_view_show(&app.view),
+                isfinite(app.steep_ratio) ? (double)app.steep_ratio : 1e30);
         fprintf(dump_, "\"line_here\": %s, \"solved\": %s, \"boxes\": %d}, \"shown\": {\"distance\": "
                        "\"%s\", \"plays\": \"%s\", \"note\": \"%s\", \"slope\": \"%s\", \"break\": "
-                       "\"%s\", \"mode\": \"%s\"}}\n",
-                app.view.line_here ? "true" : "false", app.view.solved ? "true" : "false", row->boxes,
+                       "\"%s\", \"mode\": \"%s\", \"state\": \"%s\"}}\n",
+                app.line_here ? "true" : "false", app.view.solved ? "true" : "false", row->boxes,
                 row->text.distance, row->text.plays, row->text.note, row->text.slope, row->text.brk,
-                row->text.mode);
+                row->text.mode, row->text.state);
     }
     /* ---- the board: nothing objected, the fast clock is off again ---- */
     if (gl_sim_violation_total() != 0u) {
@@ -1119,32 +1174,77 @@ GL_TEST(test_precision_read_line_and_numbers)
 /* 3. Survey with 2, 3 and 4 drops                                          */
 /* ======================================================================= */
 
-/* The true-scene record of the drop just read, into the Survey's list. */
+/* The true-scene record of the placement just read, into the Survey's list
+ * (by stored placement), and the list of those the application handed to
+ * the estimator, in its order (truth_). */
+static gl_ref_meas_t truth_all_[GL_REF_MAX_DROPS];
+
 static void survey_truth_(void)
 {
     gl_ref_meas_t rec;
     const unsigned k = app.survey.count - 1u;
     to_ref_(&app.meas[k], &rec);
-    truth_record_(&rec, &truth_[k]);
+    truth_record_(&rec, &truth_all_[k]);
+    for (unsigned i = 0; i < app.solve_drops && app.solve_survey; i++) {
+        truth_[i] = truth_all_[app.solve_src[i]];
+    }
+    if (!app.solve_survey) {
+        truth_[0] = truth_all_[k];
+    }
 }
 
+/* The estimate of the placements the application holds, made again with
+ * the SAME records in another array order and with the ball's record at
+ * another index.  perm[i] = which of the application's records goes to
+ * position i. */
+static gl_status_t reestimate_(const unsigned *perm, unsigned n, unsigned ball_pos, gl_estimate_t *out)
+{
+    static gl_measurements_t drops[GL_SOLVER_MAX_DROPS];
+    static gl_solver_work_t work;
+    for (unsigned i = 0; i < n; i++) {
+        drops[i] = app.solve_meas[perm[i]];
+    }
+    return gl_solver_estimate_survey(drops, n, ball_pos, &app.solve_opt, &work, out);
+}
+
+/* Every real of two estimates, bit for bit. */
+static unsigned estimate_bits_differ_(const gl_estimate_t *a, const gl_estimate_t *b)
+{
+    unsigned n = 0;
+#define SAME_(f) n += (memcmp(&a->f, &b->f, sizeof(a->f)) != 0) ? 1u : 0u
+    SAME_(phi_rad); SAME_(aim_azimuth_device_rad); SAME_(v0_mps); SAME_(plays_like_m);
+    SAME_(break_m); SAME_(break_cups); SAME_(distance_m); SAME_(bearing_rad); SAME_(slope_pct);
+    SAME_(fall_line_azimuth_device_rad); SAME_(dz_hole_m); SAME_(patch); SAME_(confidence);
+    SAME_(aim_source); SAME_(solve_status); SAME_(fit_converged); SAME_(base_hidden);
+    SAME_(flag_missing); SAME_(range_missing); SAME_(a_r_mps2);
+#undef SAME_
+    return n;
+}
+
+/*
+ * DESIGN_SPEC E29: the Survey finishes at the ball.  The placement the
+ * marker stands on is always the ball; a line is drawn after every
+ * placement from the second on (and after the first: that is a Quick Read).
+ */
 GL_TEST(test_survey_two_three_and_four_drops)
 {
     expect_t x;
+    gl_estimate_t again;
     memset(&x, 0, sizeof(x));
     x.solved = true;
+    x.expect_line = true;
+    x.on_screen = true;
     x.check_truth = true;
     x.truth_tol_mrad = 6.0;
 
-    /* ---- 2 drops, walking back from the hole: 3 m short of the hole
-     *      first, then the ball at 6 m.  The newest drop is the farthest:
-     *      the marker lies at the ball and the line is drawn there. ---- */
+    /* ---- 2 placements, the new way round: 3 m short of the hole first,
+     *      then the ball at 6 m ---- */
     world_defaults_();
     scene_(3.0, -0.02, -0.006, -0.014);
     power_on_();
     GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 12000));
     double_tap_();
-    double_tap_(); /* Precision prompt, then Survey: the shown read is drop 1 */
+    double_tap_(); /* Precision prompt, then Survey: the shown read is placement 1 */
     GL_CHECK_EQ(app.ui.state, GL_UI_SURVEY_NEXT_DROP);
     GL_CHECK_EQ(app.survey.count, 1);
     survey_truth_();
@@ -1152,21 +1252,22 @@ GL_TEST(test_survey_two_three_and_four_drops)
     GL_CHECK_EQ(app.survey.count, 2);
     survey_truth_();
     GL_CHECK_EQ(app.solve_drops, 2);
-    GL_CHECK_EQ(app.solve_ball, 1); /* the newest drop is the ball */
-    GL_CHECK(app.line_here);
+    GL_CHECK_EQ(app.solve_ball, 1); /* the placement the marker stands on is the ball */
     GL_CHECK_EQ(app.solver_work.fit.n_drops, 2);
     GL_CHECK_NEAR(app.solver_work.fit.stations_m[1], 3.0, 0.15);
-    x.expect_line = true;
-    x.on_screen = true;
-    check_result_("Survey 2 drops (3 m, then the ball at 6 m)", &x, truth_);
+    check_result_("Survey 2: 3 m short of the hole, then the ball at 6 m", &x, truth_);
     GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.mode, "D2") == 0);
     GL_CHECK_NEAR(app.est.distance_m, 6.0, 0.15);
-    /* the slope shown is the tilt AT THE BALL, drop 2 */
+    /* the slope shown is the tilt AT THE BALL, placement 2 */
     GL_CHECK_NEAR(app.view.slope_pct, 100.0 * sqrt(0.010 * 0.010 + 0.020 * 0.020), 0.06);
 
-    /* ---- 3 drops, the usual way round: ball (6 m), half way (3 m), back
-     *      to the ball.  At the second drop the marker is NOT at the ball:
-     *      numbers, no line. ---- */
+    /* ---- the OLD order: the ball (6 m) first, then half way (3 m).  Until
+     *      phase 3 the second result had no line ("PUT AT BALL").  Now the
+     *      marker, 3 m from the hole, is the ball of a 3 m putt, with its
+     *      line.  The 6 m placement lies BEHIND that ball: the estimator
+     *      has no station for it, it is not handed over, and the result is
+     *      the one of this placement alone.  Back at 6 m: all three are
+     *      used (the first is "at the ball": station 0). ---- */
     world_defaults_();
     scene_(6.0, 0.04, 0.012, -0.020);
     power_on_();
@@ -1177,61 +1278,122 @@ GL_TEST(test_survey_two_three_and_four_drops)
     replace_marker_(3.0, -0.02, -0.004, -0.015);
     GL_CHECK_EQ(app.survey.count, 2);
     survey_truth_();
-    GL_CHECK_EQ(app.solve_ball, 0); /* the putt starts at drop 1 */
-    GL_CHECK(!app.line_here);
-    x.expect_line = false;
-    x.check_truth = false;
-    check_result_("Survey 3 drops: at drop 2 (3 m), not at the ball", &x, truth_);
+    GL_CHECK(app.solve_survey);
+    GL_CHECK_EQ(app.solve_drops, 1); /* the 6 m placement is behind the ball: not used */
+    GL_CHECK_EQ(app.solve_src[0], 1);
+    GL_CHECK_EQ(app.solver_work.fit.n_drops, 1);
+    GL_CHECK_NEAR(app.est.distance_m, 3.0, 0.08); /* from where it lies */
+    check_result_("Survey, old order: 6 m, then 3 m (the putt from 3 m, alone)", &x, truth_);
     GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.mode, "D2") == 0);
-    GL_CHECK_NEAR(app.est.distance_m, 6.0, 0.15); /* from the ball, not from where it lies */
-    replace_marker_(6.0, 0.03, 0.012, -0.020); /* back at the ball, a little differently placed */
+    replace_marker_(6.0, 0.03, 0.012, -0.020); /* back at 6 m, a little differently placed */
     GL_CHECK_EQ(app.survey.count, 3);
     survey_truth_();
     GL_CHECK_EQ(app.solve_drops, 3);
     GL_CHECK_EQ(app.solve_ball, 2);
-    GL_CHECK(app.line_here);
     GL_CHECK_EQ(app.solver_work.fit.n_drops, 3);
-    x.expect_line = true;
-    x.check_truth = true;
-    check_result_("Survey 3 drops (ball 6 m, 3 m, ball again)", &x, truth_);
+    GL_CHECK_NEAR(app.solver_work.fit.stations_m[1], 0.0, 0.2); /* the first 6 m placement: at the ball */
+    GL_CHECK_NEAR(app.solver_work.fit.stations_m[2], 3.0, 0.15);
+    check_result_("Survey 3: 6 m, 3 m, 6 m again", &x, truth_);
     GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.mode, "D3") == 0);
 
-    /* ---- 4 drops: ball (9 m), 6 m, 2 m, ball again ---- */
+    /* ---- 4 placements, E29's example: 2 m from the hole, 6 m, then the
+     *      ball at 9 m (and a fourth, 9 m again).  A LINE AFTER EVERY ONE.
+     *      After the third, the same three records are handed to the
+     *      estimator again in the OLD order - the ball first - and the
+     *      estimate must be the same. ---- */
     world_defaults_();
-    scene_(9.0, 0.02, -0.010, 0.012);
+    scene_(2.0, 0.05, -0.004, 0.020);
     power_on_();
     GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 12000));
+    check_result_("Survey, E29 order, placement 1 (2 m): a Quick Read", &x, NULL);
     double_tap_();
     double_tap_();
     survey_truth_();
     replace_marker_(6.0, 0.00, -0.008, 0.016);
     survey_truth_();
-    GL_CHECK(!app.line_here);
-    replace_marker_(2.0, 0.05, -0.004, 0.020);
+    GL_CHECK_EQ(app.survey.count, 2);
+    GL_CHECK_EQ(app.solve_ball, 1);
+    check_result_("Survey, E29 order, placement 2 (6 m)", &x, truth_);
+    replace_marker_(9.0, 0.02, -0.010, 0.012);
     survey_truth_();
     GL_CHECK_EQ(app.survey.count, 3);
-    GL_CHECK_EQ(app.solve_ball, 0);
-    GL_CHECK(!app.line_here);
-    x.expect_line = false;
-    x.check_truth = false;
-    check_result_("Survey 4 drops: at drop 3 (2 m), not at the ball", &x, truth_);
-    replace_marker_(9.0, -0.01, -0.010, 0.012);
+    GL_CHECK_EQ(app.solve_drops, 3);
+    GL_CHECK_EQ(app.solve_ball, 2);
+    GL_CHECK_NEAR(app.est.distance_m, 9.0, 0.3);
+    check_result_("Survey, E29 order, placement 3: the ball at 9 m", &x, truth_);
+    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.mode, "D3") == 0);
+    GL_CHECK(app.est.phi_rad > 0.0f); /* rises to the left along the whole line */
+    GL_CHECK(app.est.plays_like_m > app.est.distance_m + 0.30f); /* uphill */
+    {
+        /* THE SAME PLACEMENTS, OLD ORDER AND NEW.  new: [2 m, 6 m, 9 m] with
+         * the ball last (what the application has just solved).  old: the
+         * ball first, then toward the hole: [9 m, 6 m, 2 m], ball index 0 -
+         * the order a golfer walked before E29, and the order the reference
+         * takes (estimate_survey: "ball first").  Also the two orders in
+         * between. */
+        static const unsigned orders[][3] = { { 2, 1, 0 }, { 2, 0, 1 }, { 0, 2, 1 }, { 1, 0, 2 }, { 0, 1, 2 } };
+        double worst_aim = 0.0, worst_v0 = 0.0;
+        unsigned identical = 0;
+        for (unsigned k = 0; k < 5u; k++) {
+            unsigned ball_pos = 0;
+            double d;
+            for (unsigned i = 0; i < 3u; i++) {
+                if (orders[k][i] == 2u) {
+                    ball_pos = i;
+                }
+            }
+            GL_CHECK_EQ(reestimate_(orders[k], 3, ball_pos, &again), GL_OK);
+            GL_CHECK_EQ(again.aim_source, app.est.aim_source);
+            GL_CHECK_EQ(again.solve_status, app.est.solve_status);
+            d = 1000.0 * fabs((double)gl_wrap_pi(again.aim_azimuth_device_rad - app.est.aim_azimuth_device_rad));
+            worst_aim = (d > worst_aim) ? d : worst_aim;
+            d = fabs((double)again.v0_mps / (double)app.est.v0_mps - 1.0);
+            worst_v0 = (d > worst_v0) ? d : worst_v0;
+            identical += (estimate_bits_differ_(&again, &app.est) == 0u) ? 1u : 0u;
+            GL_CHECK_NEAR(again.distance_m, app.est.distance_m, 0.0);
+            GL_CHECK_NEAR(again.slope_pct, app.est.slope_pct, 0.0);
+        }
+        /* the same records with the ball's record moved (the two others in
+         * their order) give the same bits; with the other two exchanged the
+         * sums of the fit are formed in another order: last-bit effects */
+        GL_CHECK_EQ(reestimate_(orders[4], 3, 2, &again), GL_OK);
+        GL_CHECK_EQ(estimate_bits_differ_(&again, &app.est), 0u);
+        GL_CHECK(worst_aim < 0.05);
+        GL_CHECK(worst_v0 < 1e-4);
+        printf("    the 3 placements of the E29 example handed to the estimator in 5 orders (ball first "
+               "= the old order, ball last = the new one, and 3 between): aim within %.4f mrad, speed "
+               "within %.1e, %u of 5 bit-identical\n", worst_aim, worst_v0, identical);
+        {
+            /* and the estimate IS the old order's: what a firmware that took
+             * the farthest placement as the ball would have computed from
+             * placements made ball-first.  The reference agrees (check_result_
+             * above ran it ball first on these records). */
+            static const unsigned old_order[3] = { 2, 1, 0 };
+            GL_CHECK_EQ(reestimate_(old_order, 3, 0, &again), GL_OK);
+            GL_CHECK_NEAR(again.aim_azimuth_device_rad, app.est.aim_azimuth_device_rad, 5e-5);
+            GL_CHECK_NEAR(again.break_cups, app.est.break_cups, 1e-3);
+            printf("    old order (9 m ball first, 6 m, 2 m): aim %.3f mrad, break %.3f cups; new order "
+                   "(2 m, 6 m, 9 m ball last): aim %.3f mrad, break %.3f cups\n",
+                   1000.0 * (double)again.aim_azimuth_device_rad, (double)again.break_cups,
+                   1000.0 * (double)app.est.aim_azimuth_device_rad, (double)app.est.break_cups);
+        }
+    }
+    replace_marker_(9.0, -0.01, -0.010, 0.012); /* a fourth placement, at the ball again */
     survey_truth_();
     GL_CHECK_EQ(app.survey.count, 4);
     GL_CHECK_EQ(app.solve_drops, 4);
     GL_CHECK_EQ(app.solve_ball, 3);
     GL_CHECK_EQ(app.solver_work.fit.n_drops, 4);
-    x.expect_line = true;
-    x.check_truth = true;
-    check_result_("Survey 4 drops (ball 9 m, 6 m, 2 m, ball again)", &x, truth_);
+    check_result_("Survey 4: 2 m, 6 m, 9 m, 9 m again", &x, truth_);
     GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.mode, "D4") == 0);
-    GL_CHECK(app.est.phi_rad > 0.0f); /* rises to the left along the whole line */
-    GL_CHECK(app.est.plays_like_m > app.est.distance_m + 0.30f); /* uphill */
-    /* a fifth placement is a new read, not a fifth drop */
+    /* a FIFTH placement is a new read, not a fifth drop */
     replace_marker_(9.0, 0.00, -0.010, 0.012);
     GL_CHECK_EQ(app.ui.survey_count, 0);
+    GL_CHECK_EQ(app.survey.count, 0);
     GL_CHECK_EQ(app.solve_drops, 1);
-    GL_CHECK(app.line_here && app.view.drop == 0u);
+    GL_CHECK(app.view.drop == 0u);
+    check_result_("after a Survey of 4: the fifth placement is a plain read", &x, NULL);
+    GL_CHECK(rows_[n_rows_ - 1u].text.mode[0] == '\0');
 }
 
 /* ======================================================================= */
@@ -1355,6 +1517,12 @@ GL_TEST(test_left_camera_only_read_keeps_the_bearing)
     GL_CHECK(app.view.confidence < 0.5f * conf_stereo);
     measure_line_(&ln_dialled);
     GL_CHECK(ln_dialled.found);
+    /* E33: a dialled distance is a FALLBACK - the line is dashed and marked
+     * APPROX (until phase 3 it was solid, with only "NO RANGE" to tell it
+     * from a measured putt) */
+    GL_CHECK_EQ(gl_ui_view_show(&app.view), GL_UI_SHOW_APPROX);
+    GL_CHECK(rows_[n_rows_ - 1u].dashed);
+    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.state, "APPROX") == 0);
 
     /* the same with NOTHING dialled: the estimator falls back to its 3 m
      * default.  The aim was solved for a distance nobody measured or
@@ -1377,9 +1545,10 @@ GL_TEST(test_left_camera_only_read_keeps_the_bearing)
     GL_CHECK(app.view.solved); /* the estimator did solve: for its 3 m */
     measure_line_(&ln_assumed);
     GL_CHECK(ln_assumed.found);
-    GL_CHECK(ln_assumed.rows + 15u < ln_dialled.rows);
-    printf("    aim line: solid on %u rows with 5 m dialled, dashed on %u rows with nothing dialled\n",
-           ln_dialled.rows, ln_assumed.rows);
+    GL_CHECK_EQ(gl_ui_view_show(&app.view), GL_UI_SHOW_APPROX);
+    GL_CHECK(rows_[n_rows_ - 1u].dashed);
+    printf("    aim line: dashed on %u rows with 5 m dialled, dashed on %u rows with nothing dialled "
+           "(both are fallbacks: APPROX)\n", ln_dialled.rows, ln_assumed.rows);
 }
 
 GL_TEST(test_ambiguous_read_lowers_the_confidence)
@@ -1475,14 +1644,20 @@ GL_TEST(test_estimator_fallbacks_reached_by_real_reads)
     to_ref_(&app.meas_cur, &rec);
     truth_record_(&rec, &tru);
     memset(&x, 0, sizeof(x));
-    x.expect_line = true;
-    x.on_screen = false; /* the best iterate points far off the screen */
+    x.expect_line = false; /* E33: no solution, no line */
+    x.on_screen = false;
     x.solved = false;
     check_result_("Best effort: 7 % cross slope at Stimp 14 (not solvable)", &x, &tru);
-    GL_CHECK_EQ(app.view.note, GL_UI_NOTE_NOT_SOLVED);
-    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.note, "NOT SOLVED") == 0);
-    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.brk, "BREAK ?") == 0);
+    /* E31: and the screen says WHY - 7 % is 1.25 of the 5.6 % a ball still
+     * stops on at Stimp 14 */
+    GL_CHECK_EQ(gl_ui_view_show(&app.view), GL_UI_SHOW_NONE);
+    GL_CHECK_EQ(app.view.note, GL_UI_NOTE_TOO_STEEP);
+    GL_CHECK_NEAR(app.steep_ratio, 0.070 / (1.83 * 1.83 / (2.0 * 14.0 * 0.3048) / 7.00475), 0.02);
+    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.note, "TOO STEEP") == 0);
+    GL_CHECK(rows_[n_rows_ - 1u].text.brk[0] == '\0');
     GL_CHECK(rows_[n_rows_ - 1u].text.plays[0] == '\0');
+    printf("    ... shown as \"TOO STEEP\" without a line: steepness ratio %.2f (limit %.2f)\n",
+           (double)app.steep_ratio, (double)GL_UI_STEEP_RATIO);
     GL_CHECK(app.view.confidence <= 0.2f + 1e-6f);
     GL_CHECK(rows_[n_rows_ - 1u].boxes <= 1);
     GL_CHECK_NEAR(app.view.confidence, expected_confidence_(), 1e-6);
@@ -1506,7 +1681,7 @@ GL_TEST(test_estimator_fallbacks_reached_by_real_reads)
     to_ref_(&app.meas_cur, &rec);
     truth_record_(&rec, &tru);
     check_result_("Best effort: 6.5 % downhill at Stimp 14 (no bracket)", &x, &tru);
-    GL_CHECK_EQ(app.view.note, GL_UI_NOTE_NOT_SOLVED);
+    GL_CHECK_EQ(app.view.note, GL_UI_NOTE_TOO_STEEP);
     GL_CHECK(rows_[n_rows_ - 1u].boxes <= 1);
 
     /* ---- a twisted green, surveyed: the cross slope grows from 6.2 % at the
@@ -1540,15 +1715,18 @@ GL_TEST(test_estimator_fallbacks_reached_by_real_reads)
     memset(&x, 0, sizeof(x));
     x.expect_line = true;
     x.on_screen = false; /* 24 degrees off the visor axis: the parallel through the centre */
-    x.solved = true;     /* a solution - of the secant plane: drawn solid */
+    x.solved = true;     /* a solution - of the secant plane: a fallback, drawn DASHED (E33) */
     check_result_("Secant plane: twisted green, Survey of 3 drops, Stimp 8", &x, truth_);
-    GL_CHECK_EQ(app.view.note, GL_UI_NOTE_APPROX);
-    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.note, "APPROX") == 0);
+    GL_CHECK_EQ(gl_ui_view_show(&app.view), GL_UI_SHOW_APPROX);
+    GL_CHECK(rows_[n_rows_ - 1u].dashed);
+    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.state, "APPROX") == 0);
+    /* ... and of the reasons it has, the screen names the first: the slope
+     * near the hole is the critical one for this green speed (E31) */
+    GL_CHECK_EQ(app.view.note, GL_UI_NOTE_TOO_STEEP);
+    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.note, "TOO STEEP") == 0);
+    GL_CHECK(app.steep_ratio > GL_UI_STEEP_RATIO);
+    printf("    ... shown dashed, APPROX, \"TOO STEEP\": steepness ratio %.2f\n", (double)app.steep_ratio);
     GL_CHECK_NEAR(app.view.confidence, expected_confidence_(), 1e-6);
-    memset(&x, 0, sizeof(x));
-    x.expect_line = true;
-    x.on_screen = false;
-    x.solved = false;
 
     /* ---- method B2 from the settings: the turf horizon enters the fit ---- */
     world_defaults_();
@@ -1590,33 +1768,48 @@ GL_TEST(test_fallback_mappings_that_no_read_produces)
         const char *name;
         uint8_t source, status;
         bool fit_converged, poor_horizon;
+        float steepen;          /* the fitted slopes are multiplied by this (1 = as read) */
         uint8_t note;
-        bool solved;
+        const char *text;       /* the message as drawn */
+        uint8_t show;           /* gl_ui_show_t */
     } cases[] = {
-        { "Mapping only: secant plane (aim_source 1)", GL_AIM_FROM_PLANE, GL_SOLVE_OK, true, false,
-          GL_UI_NOTE_APPROX, true },
+        { "Mapping only: secant plane (aim_source 1)", GL_AIM_FROM_PLANE, GL_SOLVE_OK, true, false, 1.0f,
+          GL_UI_NOTE_APPROX, "", GL_UI_SHOW_APPROX },
         { "Mapping only: pace limited on the patch", GL_AIM_FROM_PATCH, GL_SOLVE_PACE_LIMITED, true,
-          false, GL_UI_NOTE_PACE, true },
+          false, 1.0f, GL_UI_NOTE_PACE, "PACE LIMIT", GL_UI_SHOW_APPROX },
         /* a kept near miss of the patch solve (within 5 mm of the hole centre):
-         * an aim on the fitted surface, said to be approximate */
+         * an aim on the fitted surface, said to be approximate.  THE SAME
+         * STATE as "pace limited": the two builds end knife-edge putts in
+         * the one or the other (tests/test_solver.c) */
         { "Mapping only: near miss kept (patch, NO_CONVERGENCE)", GL_AIM_FROM_PATCH,
-          GL_SOLVE_NO_CONVERGENCE, true, false, GL_UI_NOTE_APPROX, true },
-        { "Mapping only: best effort, aim on the screen", GL_AIM_BEST_EFFORT, GL_SOLVE_NO_CONVERGENCE,
-          true, false, GL_UI_NOTE_NOT_SOLVED, false },
-        { "Mapping only: straight (aim_source 3)", GL_AIM_STRAIGHT, GL_SOLVE_INVALID, true, false,
-          GL_UI_NOTE_NO_SOLUTION, false },
-        { "Mapping only: fit stopped on its limit", GL_AIM_FROM_PATCH, GL_SOLVE_OK, false, false,
-          GL_UI_NOTE_FIT, true },
-        { "Mapping only: poor horizon (B2)", GL_AIM_FROM_PATCH, GL_SOLVE_OK, true, true,
-          GL_UI_NOTE_HORIZON, true },
+          GL_SOLVE_NO_CONVERGENCE, true, false, 1.0f, GL_UI_NOTE_APPROX, "", GL_UI_SHOW_APPROX },
+        { "Mapping only: best effort", GL_AIM_BEST_EFFORT, GL_SOLVE_NO_CONVERGENCE, true, false, 1.0f,
+          GL_UI_NOTE_NOT_SOLVED, "NOT SOLVED", GL_UI_SHOW_NONE },
+        { "Mapping only: straight (aim_source 3)", GL_AIM_STRAIGHT, GL_SOLVE_INVALID, true, false, 1.0f,
+          GL_UI_NOTE_NO_SOLUTION, "NO SOLUTION", GL_UI_SHOW_NONE },
+        { "Mapping only: fit stopped on its limit", GL_AIM_FROM_PATCH, GL_SOLVE_OK, false, false, 1.0f,
+          GL_UI_NOTE_FIT, "FIT NOT DONE", GL_UI_SHOW_APPROX },
+        { "Mapping only: poor horizon (B2)", GL_AIM_FROM_PATCH, GL_SOLVE_OK, true, true, 1.0f,
+          GL_UI_NOTE_HORIZON, "POOR HORIZON", GL_UI_SHOW_APPROX },
+        /* E31: a solved result on a slope near the critical one */
+        { "Mapping only: solved, slope 0.85 of critical", GL_AIM_FROM_PATCH, GL_SOLVE_OK, true, false,
+          -0.85f, GL_UI_NOTE_TOO_STEEP, "TOO STEEP", GL_UI_SHOW_APPROX },
+        { "Mapping only: solved, slope 0.75 of critical", GL_AIM_FROM_PATCH, GL_SOLVE_OK, true, false,
+          -0.75f, GL_UI_NOTE_NONE, "", GL_UI_SHOW_NORMAL },
+        { "Mapping only: best effort, slope 1.1 of critical", GL_AIM_BEST_EFFORT, GL_SOLVE_UNREACHABLE,
+          true, false, -1.1f, GL_UI_NOTE_TOO_STEEP, "TOO STEEP", GL_UI_SHOW_NONE },
     };
     gl_estimate_t base;
     unsigned black_solid = 0;
+    float base_ratio;
 
     world_defaults_();
     power_on_();
     GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 12000));
     base = app.est;
+    base_ratio = app.steep_ratio;
+    GL_CHECK_EQ(gl_ui_view_show(&app.view), GL_UI_SHOW_NORMAL);
+    GL_CHECK(base_ratio > 0.2f && base_ratio < 0.4f); /* 2.3 % at Stimp 10: 0.30 of 7.8 % */
     {
         line_t ln;
         measure_line_(&ln);
@@ -1627,11 +1820,19 @@ GL_TEST(test_fallback_mappings_that_no_read_produces)
         gl_ui_result_text_t t;
         line_t ln;
         double conf;
+        const bool solved = (cases[i].source == GL_AIM_FROM_PATCH || cases[i].source == GL_AIM_FROM_PLANE);
         app.est = base;
         app.est.aim_source = cases[i].source;
         app.est.solve_status = cases[i].status;
         app.est.fit_converged = cases[i].fit_converged;
         app.est.poor_horizon = cases[i].poor_horizon;
+        if (cases[i].steepen < 0.0f) {
+            /* (negative: the wanted ratio; the patch is scaled to it) */
+            const float k = -cases[i].steepen / base_ratio;
+            for (int j = 0; j < 5; j++) {
+                app.est.patch[j] = base.patch[j] * k;
+            }
+        }
         if (cases[i].poor_horizon) {
             app.est.confidence = 0.8f * base.confidence; /* what the estimator does */
         }
@@ -1645,27 +1846,38 @@ GL_TEST(test_fallback_mappings_that_no_read_produces)
         GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
         gl_ui_result_text(&app.ui, &app.view, &t);
         GL_CHECK_EQ(app.view.note, cases[i].note);
-        GL_CHECK(strcmp(t.note, gl_ui_note_text((gl_ui_note_t)cases[i].note)) == 0);
-        GL_CHECK_EQ(app.view.solved, cases[i].solved);
+        GL_CHECK(strcmp(t.note, cases[i].text) == 0);
+        GL_CHECK_EQ(app.view.solved, solved);
+        GL_CHECK_EQ(app.view.show, cases[i].show);
+        GL_CHECK_EQ(gl_ui_view_show(&app.view), cases[i].show);
+        GL_CHECK_EQ(bar_place_mismatch_((gl_ui_show_t)cases[i].show, gl_ui_conf_boxes(app.view.confidence)), 0u);
+        if (cases[i].steepen < 0.0f) {
+            GL_CHECK_NEAR(app.steep_ratio, -cases[i].steepen, 0.002);
+        }
         conf = expected_confidence_();
         GL_CHECK_NEAR(app.view.confidence, conf, 1e-6);
         measure_line_(&ln);
-        GL_CHECK(ln.found);
-        if (ln.found) {
-            GL_CHECK(fabs(orient_diff_(atan(ln.k), (double)app.view.aim_rad)) < 0.0061);
-        }
-        if (cases[i].solved) {
-            /* a solution: the solid line, the break quoted */
-            GL_CHECK(ln.rows + 14u >= black_solid); /* (a message label covers 11 rows) */
-            GL_CHECK(strcmp(t.brk, "BREAK ?") != 0);
-            GL_CHECK(t.plays[0] != '\0');
-        } else {
-            /* not a solution: long dashes (fewer rows carry the line), no
-             * break, no plays-like distance, at most one confidence box */
-            GL_CHECK(ln.rows + 20u < black_solid);
-            GL_CHECK(strcmp(t.brk, "BREAK ?") == 0);
+        if (cases[i].show == GL_UI_SHOW_NONE) {
+            /* no solution: NO line, no break, no plays-like distance */
+            GL_CHECK(!ln.found);
+            GL_CHECK(t.brk[0] == '\0');
             GL_CHECK(t.plays[0] == '\0');
-            GL_CHECK(gl_ui_conf_boxes(app.view.confidence) <= 1);
+            GL_CHECK(t.state[0] == '\0');
+        } else {
+            GL_CHECK(ln.found);
+            if (ln.found) {
+                GL_CHECK(fabs(orient_diff_(atan(ln.k), (double)app.view.aim_rad)) < 0.0061);
+            }
+            GL_CHECK(strcmp(t.brk, "BREAK ?") != 0 && t.brk[0] != '\0');
+            GL_CHECK(t.plays[0] != '\0');
+            if (cases[i].show == GL_UI_SHOW_NORMAL) {
+                GL_CHECK(ln.rows + 14u >= black_solid); /* (a message label covers 11 rows) */
+                GL_CHECK(t.state[0] == '\0');
+            } else {
+                /* a fallback: long dashes (fewer rows carry the line), APPROX */
+                GL_CHECK(ln.rows + 20u < black_solid);
+                GL_CHECK(strcmp(t.state, "APPROX") == 0);
+            }
         }
         if (cases[i].source == GL_AIM_STRAIGHT) {
             GL_CHECK_EQ(gl_ui_conf_boxes(app.view.confidence), 0);
@@ -1673,10 +1885,10 @@ GL_TEST(test_fallback_mappings_that_no_read_produces)
         if (!cases[i].fit_converged) {
             GL_CHECK_NEAR(app.view.confidence, 0.7 * (double)base.confidence, 1e-6);
         }
-        printf("    %-46s note \"%s\", %s line on %u rows (solid: %u), break \"%s\", confidence "
-               "%.3f -> %d of 5 boxes\n", cases[i].name, t.note, cases[i].solved ? "solid" : "dashed",
-               ln.rows, black_solid, t.brk, (double)app.view.confidence,
-               gl_ui_conf_boxes(app.view.confidence));
+        printf("    %-50s %-7s message \"%s\", line on %u rows (solid: %u), break \"%s\"\n",
+               cases[i].name,
+               (cases[i].show == GL_UI_SHOW_NORMAL) ? "NORMAL" : ((cases[i].show == GL_UI_SHOW_APPROX) ? "APPROX" : "NONE"),
+               t.note, ln.found ? ln.rows : 0u, black_solid, t.brk);
     }
     app.est = base;
 }

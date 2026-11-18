@@ -448,11 +448,16 @@ void gl_solver_measurements_init(gl_measurements_t *m);
  * no longer stops on), the miss is not a continuous function of the aim.
  * There a change of one micro-radian of an input can move the result by
  * more than a display step or into another (aim_source, solve_status) class
- * (measured: 0.1 % of reads at 0.80-0.85 of critical, 3.4 % at 0.95-1.00,
- * 12.8 % above 1.03; none below 0.55).  The best iterate of a failed solve
- * (aim_source 2) is whatever the search last had; only its class is
- * defined.  This is the reference's behaviour; the display marks such
- * results (README "The solver: decisions and open points").
+ * (phase-2 review, on its own random reads: 0.1 % at 0.80-0.85 of critical,
+ * 3.4 % at 0.95-1.00, 12.8 % above 1.03; none below 0.55.  Phase 3, with
+ * the ratio the display uses, core/gl_ui.h gl_ui_steep_ratio, `make
+ * steep-sweep`: none below 0.90, 0.4 % at 0.90-0.95, 2.9 % at 0.95-1.00,
+ * 15 % at 1.00-1.05 for this solver in single precision).  The best iterate
+ * of a failed solve (aim_source 2) is whatever the search last had; only
+ * its class is defined.  This is the reference's behaviour and is not
+ * changed here; THE DISPLAY deals with it (DESIGN_SPEC E31, E33): from 0.80
+ * of the critical slope a solved result is shown as "TOO STEEP" with a
+ * dashed line, and an aim that is not a solution is not drawn at all.
  *
  * Returns GL_ERR_PARAM for an input no placement produces (NULL pointer;
  * f_px or baseline_m not finite and positive; h_cam_m or the tilt not

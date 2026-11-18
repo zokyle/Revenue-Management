@@ -67,6 +67,10 @@ typedef struct {
     double t_pick_s, t_place_s;
     double jolt_at_s, jolt_len_s;
     double turn_at_s, turn_len_s, turn_rad;
+    /* from tilt_step_at_s on the marker lies tilted differently by this much
+     * (rise/run, world frame): it was nudged and seated itself anew.
+     * 0 = never */
+    double tilt_step_at_s, tilt_step_x, tilt_step_y;
 } world_t;
 
 static world_t W;
@@ -109,8 +113,11 @@ static inline void imu_fn_(void *ctx, uint64_t t_us, float a[3], float g[3])
     const double t = (double)t_us * 1e-6;
     const double psi = heading_(t);
     /* the slope vector seen from the turned marker: R(-psi) c */
-    const double cx = cos(psi) * W.slope_x + sin(psi) * W.slope_y;
-    const double cy = -sin(psi) * W.slope_x + cos(psi) * W.slope_y;
+    const bool stepped = (W.tilt_step_at_s > 0.0 && t >= W.tilt_step_at_s);
+    const double wx = W.slope_x + (stepped ? W.tilt_step_x : 0.0);
+    const double wy = W.slope_y + (stepped ? W.tilt_step_y : 0.0);
+    const double cx = cos(psi) * wx + sin(psi) * wy;
+    const double cy = -sin(psi) * wx + cos(psi) * wy;
     const gl_vec3_t u = up_of_(cx, cy);
     const double rate = heading_rate_(t);
     (void)ctx;

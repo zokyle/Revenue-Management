@@ -32,7 +32,16 @@ firmware is a port of) on the same records and compares:
     0.5 mrad, the launch speed within 0.1 %, the break within 0.01 cup, the
     confidence within 1e-4; of an aim that is not a solution only the class;
   * the drawn aim with the reference's, within the display's quantisation
-    (6.5 mrad = 0.37 degree; lines that leave the aperture are not measured).
+    (6.5 mrad = 0.37 degree; lines that leave the aperture are not measured);
+  * the DISPLAY STATE of DESIGN_SPEC E33 (0 normal: solid line and confidence
+    bar; 1 approximate: dashed line; 2 no solution: no line), worked out here
+    from the reference's estimate by a rule written in this file, with the
+    state the firmware rendered - and the dashes the test measured in the
+    pixels with that state.
+
+The options of the call (pace, near-miss distance) are written by the test
+with 17 significant digits and are taken here as written: the reference runs
+with exactly the numbers the firmware ran with.
 
 Exit status 0 if every record agrees, 1 otherwise.  It prints the table
 that the firmware README quotes.
@@ -45,6 +54,24 @@ from dataclasses import replace
 
 METHODS = {0: "B1", 1: "B0", 2: "B2", 3: "STRAIGHT"}
 DISPLAY_TOL_MRAD = 6.5
+STEEP_RATIO = 0.80  # core/gl_ui.h GL_UI_STEEP_RATIO (DESIGN_SPEC E31)
+G = 9.80665
+STATE_NAMES = {0: "normal", 1: "approx", 2: "none"}
+
+
+def display_state(est, distance_known):
+    """DESIGN_SPEC E33 from a reference Estimate, written independently of
+    core/gl_ui.c: 0 = normal (solid line, confidence bar), 1 = approximate
+    (dashed line), 2 = no solution (no line)."""
+    if est.aim_source not in (0, 1) or int(est.solve_status) > 4:
+        return 2
+    a, b, c, d = (float(v) for v in est.patch[:4])
+    s_crit = est.a_r / ((5.0 / 7.0) * G)
+    steep = max(math.hypot(a, b), math.hypot(a + c * est.distance, b + d * est.distance)) / s_crit
+    normal = (est.aim_source == 0 and int(est.solve_status) == 0 and not est.flag_missing
+              and not est.range_missing and distance_known and est.fit.converged and not est.poor_horizon
+              and steep < STEEP_RATIO)
+    return 0 if normal else 1
 
 
 def wrap(a):
@@ -151,8 +178,20 @@ def main(argv):
                         worst_c = max(worst_c, d)
                     else:
                         worst_fw = max(worst_fw, d)
+            # the display state (E33): this file's rule on the reference's estimate against
+            # what the firmware rendered
+            ball = rec["drops"][rec["ball_index"]]
+            known = not (est.flag_missing or est.range_missing) or ball.get("user_distance") is not None
+            state = display_state(est, known)
+            if rec["view"].get("show") != state:
+                why.append("display state %s, the reference says %s" %
+                           (STATE_NAMES.get(rec["view"].get("show"), "?"), STATE_NAMES[state]))
             drawn = rec["view"]["drawn_aim_read_frame"]
             dtxt = diff = "-"
+            if state == 2:
+                dtxt = "no line"
+                if drawn is not None:
+                    why.append("a line was measured on a screen that must have none")
             if drawn is not None:
                 dd = orient(drawn - ref["aim_azimuth_device"])
                 dtxt = "%+9.2f" % (1000 * drawn)
@@ -160,23 +199,17 @@ def main(argv):
                 worst_draw = max(worst_draw, abs(dd))
                 if abs(dd) > DISPLAY_TOL_MRAD * 1e-3:
                     why.append("drawn aim %.2f mrad from the reference" % (1000 * dd))
-                # a SOLID line only for a solution (by the reference) of a putt whose distance was
-                # measured or dialled AND whose flagstick the cameras saw: a flag-out result (the
-                # visor axis taken for the line to the hole) is tentative whatever was dialled
-                # (phase-2 review); the firmware reports what its pixels are
-                ball = rec["drops"][rec["ball_index"]]
-                known = not (est.flag_missing or est.range_missing) or ball.get("user_distance") is not None
-                firm = solved and known and not est.flag_missing
-                if bool(rec["view"].get("dashed")) != (not firm):
-                    why.append("line drawn %s, the reference says %s" %
-                               ("dashed" if rec["view"].get("dashed") else "solid",
-                                "solved, flag seen, distance known" if firm
-                                else "not a solution / flag out / distance unknown"))
+                # a SOLID line only in the normal state; the test reports what the pixels are
+                if bool(rec["view"].get("dashed")) != (state == 1):
+                    why.append("line drawn %s, the reference's state is %s" %
+                               ("dashed" if rec["view"].get("dashed") else "solid", STATE_NAMES[state]))
                 if rec["view"].get("dashed"):
                     dtxt += " dashed"
             sh = rec["shown"]
             shown = ", ".join(x for x in (sh["distance"], sh["plays"] or "no plays-like", sh["break"], sh["slope"],
-                                          sh["note"], "%d/5" % rec["view"]["boxes"], sh["mode"]) if x)
+                                          sh["note"],
+                                          ("%d/5" % rec["view"]["boxes"]) if state == 0 else sh.get("state", ""),
+                                          sh["mode"]) if x)
             print("%-60s | %+9.2f %9s | %+9.2f | %9s | %7s | %s" %
                   (rec["name"], 1000 * ref["aim_azimuth_device"],
                    ("%+9.2f" % (1000 * tru.aim_azimuth_device)) if tru is not None else "-",

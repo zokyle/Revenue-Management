@@ -1,0 +1,26 @@
+{
+ "design": "gl1_main",
+ "error_count": 0,
+ "errors_by_code": {},
+ "findings": [
+  {
+   "code": "plane_partial",
+   "message": "the pour of GND on F.Cu has a shape: the router connects pads to whole-board planes only, so this net is routed with tracks and the pour joins just the pads and vias that happen to lie in it",
+   "net": "GND",
+   "refs": [],
+   "severity": "warning"
+  },
+  {
+   "code": "plane_partial",
+   "message": "the pour of GND on B.Cu has a shape: the router connects pads to whole-board planes only, so this net is routed with tracks and the pour joins just the pads and vias that happen to lie in it",
+   "net": "GND",
+   "refs": [],
+   "severity": "warning"
+  }
+ ],
+ "ok": true,
+ "warning_count": 2,
+ "warnings_by_code": {
+  "plane_partial": 2
+ }
+}

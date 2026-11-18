@@ -283,6 +283,7 @@ typedef struct {
     uint32_t watchdog_kicks;
     uint32_t reboots;
     uint8_t last_reboot;       /**< gl_reboot_t of the most recent request */
+    uint32_t boot_confirms;    /**< gl_hal_boot_confirm() calls */
     uint32_t frames_captured;  /**< completed DCMI captures */
     /** Time both sensors had their pads enabled before both had been
      *  released once since the rail came on (the power-up window that
@@ -476,6 +477,14 @@ void gl_sim_charger_input_low(bool low);
 /** Break the firmware's stop: the MOSFET on the charger's TS pin (or its gate
  *  connection) is open, CHG_INHIBIT high pulls nothing. */
 void gl_sim_charger_stop_broken(bool broken);
+/** The other reading of the charger's status output (gl_provisional.h,
+ *  GL_PROV_BQ25101_CHG_LOW_ON_RECHARGE: NOT CONFIRMED which is right): CHG is
+ *  low during the FIRST charge cycle only; a recharge after a termination
+ *  runs with CHG released, until VBUS goes or the charger is disabled
+ *  through TS.  The reset default is !GL_PROV_BQ25101_CHG_LOW_ON_RECHARGE.
+ *  gl_sim_charger_on() and the statistics keep telling what the charger
+ *  DOES; only the pin differs. */
+void gl_sim_charger_stat_first_cycle_only(bool first_only);
 /** Longest stretch a charge may run with the cell outside the firmware's
  *  window (0..45 C) while firmware runs before it counts as a violation,
  *  and the longest Stop-mode sleep allowed in the cradle. */
@@ -614,8 +623,8 @@ uint64_t gl_sim_stage_instr(gl_trace_point_t point, uint32_t work);
  *    E26: the USB-supply regulator is an LP5907 whose ENABLE pin is held at
  *      the 2.8 V rail.  That part has, from memory of its data sheet, an
  *      internal 1 Mohm pull-down on the enable pin: 2.8 uA, always.  NOT
- *      CONFIRMED, and not in NETLIST_NOTES (which still has the old
- *      regulator): if it is wrong, every sleep figure is 2.8 uA lower.
+ *      CONFIRMED (NETLIST_NOTES section 11 states the same figure, also
+ *      from memory): if it is wrong, every sleep figure is 2.8 uA lower.
  *  The two thermistors draw nothing asleep: NTC1 is biased by the charger
  *  from VBUS only, NTC2 only while NTC_BIAS is driven (2.8 V across 10 kohm
  *  + the NTC: 140 uA at 25 C, computed by the model). */

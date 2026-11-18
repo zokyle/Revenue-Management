@@ -69,15 +69,29 @@ USB_MOUTH_Y = CPCB["usb_mouth_y"] - Y0               # -12.3: 1.3 mm beyond the 
 PIN_NAMES = ("VBUS", "DM", "DP", "GND", "SWDIO", "SWCLK", "NRST")
 CONSUMER_PINS = tuple(CR["pins"]["populated_consumer"])            # VBUS, D-, D+, GND
 
-#: PROVISIONAL - Mill-Max 0914 long-stroke spring pin.  Series, stroke and
-#: working height: docs/research/bom-verification-opto.md ("confirmed" from a
-#: distributor series page).  Tail, barrel and plunger diameters are NOT
-#: confirmed there; they are the numbers mechanical/cad/params.py assumes
-#: ("PROVISIONAL until the drawing is read").  Hole = tail + 0.14, as the
-#: mechanical model drills it.  Correct the pin here, in one place.
+#: PROVISIONAL - Mill-Max 0914 long-stroke spring pin.  Correct the pin here, in one place.
+#: Series, stroke and working height: docs/research/bom-verification-opto.md ("confirmed"
+#: from a distributor series page).
+#: REVIEW FIX (docs/SOURCING.md rev 3, cradle-05 and design action A6 - search extracts of
+#: Mill-Max data, NOT the drawing): solder tail 0.025 in = 0.635 mm, minimum mounting hole
+#: 0.029 in = 0.737 mm.  The table had the mechanical model's assumption (tail 0.76 in a 0.90
+#: hole), which that data contradicts.  ``hole_dia`` is the FINISHED plated hole: 0.80 mm
+#: nominal, so that a +-0.05 mm hole tolerance stays above Mill-Max's 0.737 mm minimum (fab
+#: note); diametral play 0.165 mm nominal (it was 0.265).
+#: OPEN, NOT RESOLVED HERE - TAIL LENGTH: 8.3 mm overall (element14) less 6.96 mm above the
+#: board leaves about 1.34 mm of tail (a subtraction of two extracts, not a reading) in a
+#: 1.6 mm board (``tail_length_estimate`` / BOARD_THICKNESS): the tail would end about 0.26 mm
+#: inside the hole and cannot form a fillet on the far side.  Ways out, none of which this
+#: package may take alone: the long-tail variant 0914-1-15-20-77-14-11-0 (``mpn_long_tail``;
+#: 11.35 mm overall per element14's title, PROVISIONAL; it stands about 2.8 mm out below the
+#: board: check the pocket under the board), or a thinner cradle board (YAML
+#: cradle.pcb.thickness and top_z).  Barrel and plunger diameters are still the mechanical
+#: model's assumptions.
 MILLMAX_0914 = {
     "mpn": "0914-0-15-20-77-14-11-0",
-    "tail_dia": 0.76, "hole_dia": 0.90, "pad_dia": 1.60, "barrel_dia": 1.83,
+    "mpn_long_tail": "0914-1-15-20-77-14-11-0",
+    "tail_dia": 0.635, "min_mounting_hole": 0.737, "hole_dia": 0.80, "pad_dia": 1.60, "barrel_dia": 1.83,
+    "overall_length": 8.3, "tail_length_estimate": 1.34,
     "height_above_board": 6.96,                      # maximum working height (free plunger tip)
     "working_height": CR["pins"]["working_height"],   # 5.82 with the marker on its feet
 }
@@ -94,8 +108,16 @@ MILLMAX_0914 = {
 #: from memory of the Bourns MF-FSMF series table and must be read from the
 #: data sheet: if its post-trip resistance (R1max) is above the limit, the next
 #: part of the series up to 0.5 A hold is fitted on the same 0603 footprint.
-PTC = {"mpn": "MF-FSMF035X-2", "manufacturer": "Bourns", "hold_mA": 350, "trip_mA": 750,
-       "v_max": 6, "r_typ_ohm": 0.8, "r_max_ohm": 1.4, "r1max_limit_ohm": 1.5,
+#: REVIEW FIX (docs/SOURCING.md rev 3, design action A5): the part is now Littelfuse
+#: 0603L035YR (6 V, hold 0.35 A, trip 0.75 A, 1.0 ohm maximum after a trip - a DigiKey listing
+#: seen by the sourcing report, not the data sheet: PROVISIONAL), which leaves 0.5 ohm under
+#: E25's limit.  The Bourns MF-FSMF035X-2 (1.4 ohm from memory, 0.1 ohm of margin) is the
+#: second source on the same pads.  DEVIATION from E6's "trip about 0.5 A" (PROPOSED there):
+#: 0.75 A; E25 widened only the hold range and no 0603 part with a 0.5 A trip that meets
+#: 1.5 ohm was seen by the sourcing report.
+PTC = {"mpn": "0603L035YR", "manufacturer": "Littelfuse", "hold_mA": 350, "trip_mA": 750,
+       "alternate": "Bourns MF-FSMF035X-2 (1.4 ohm maximum after a trip, from memory)",
+       "v_max": 6, "r_typ_ohm": 0.8, "r_max_ohm": 1.0, "r1max_limit_ohm": 1.5,
        "hold_window_mA": (200, 500), "footprint": "Fuse:Fuse_0603_1608Metric", "height": 0.85}
 
 #: PROVISIONAL - clearance hole for an M2 thread-forming screw; the YAML gives
@@ -209,6 +231,13 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
         "The TOP face lies against a plastic ceiling: only J1 and the spring pins stand on it.",
         "Spring pins SP1-SP7 are soldered square to the board in a jig (mechanical/README).",
         "Lead-free assembly (SAC305), RoHS-compliant parts (DESIGN_SPEC E5).",
+        "SP1-SP7: FINISHED plated hole 0.80 mm +-0.05 (Mill-Max minimum mounting hole for the 0.635 mm "
+        "tail of the 0914 pin: 0.737 mm; PROVISIONAL until the Mill-Max drawing is read). OPEN: the "
+        "standard pin's tail (about 1.34 mm) is shorter than this 1.6 mm board - do not order before "
+        "the pin variant / board thickness is decided (electrical/README.md).",
+        "J1 land pattern: the four outer ground pads are 1.07 mm long (0.04 mm shorter than KiCad's "
+        "USB4105 pattern) to keep 0.20 mm from the peg holes: confirm against the GCT USB4105 drawing "
+        "before ordering.",
     ]
 
     # ---- USB-C receptacle, top side, mouth toward -y, overhanging the rear edge ----------
@@ -244,13 +273,14 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
         d.net("GND", "%s.2" % ref)
     # ---- spec E6 / E25: "a resettable fuse in VBUS", hold 0.2 to 0.5 A, no more than 1.5 ohm after a trip ----
     f1 = Part("F1", "PTC %.1fA" % (PTC["hold_mA"] / 1000.0), PTC["footprint"], pins=two_pin(),
-              mpn=PTC["mpn"], manufacturer=PTC["manufacturer"], distributor=BY_MPN,
-              distributor_pn=PTC["mpn"], side=BOTTOM, height_mm=PTC["height"], group="usb",
+              mpn=PTC["mpn"], manufacturer=PTC["manufacturer"], distributor="Digi-Key",
+              distributor_pn="F2903CT-ND (per one search extract)", side=BOTTOM,
+              height_mm=PTC["height"], group="usb",
               description="Resettable fuse, hold %d mA, trip %d mA, %d V, 0603"
                           % (PTC["hold_mA"], PTC["trip_mA"], PTC["v_max"]),
-              fields=_status(PROV, "ratings from DESIGN_SPEC E6 (PROPOSED); order code, voltage and "
-                                   "resistance from memory: any 0603 PTC with hold 0.2 to 0.5 A, "
-                                   ">= 6 V, <= 1.5 ohm after a trip fits (E25)"))
+              fields=_status(PROV, "part per docs/SOURCING.md action A5 (listing data: 6 V, 1.0 ohm "
+                                   "maximum after a trip; data sheet not read); trip 0.75 A departs from "
+                                   "E6's 'about 0.5 A'; alternate: %s; height from memory" % PTC["alternate"]))
     f1.place(*place["F1"][:2], place["F1"][2])
     d.add(f1)
     d.net("VBUS_IN", "J1.VBUS", "F1.1", netclass="Power", power_flag=True)   # from the USB host
@@ -288,9 +318,12 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
                   height_mm=MILLMAX_0914["height_above_board"], group="pins",
                   dnp=pname not in fitted,
                   description="Spring pin, long stroke, 0.59 N at the working height",
-                  fields=dict(_status(PROV, "series and stroke research-confirmed; tail, barrel and "
-                                            "plunger diameters and the land pattern are not (MILLMAX_0914); "
-                                            "Digi-Key PN from docs/sourcing.csv"),
+                  fields=dict(_status(PROV, "series and stroke research-confirmed; tail 0.635 mm and "
+                                            "minimum hole 0.737 mm from docs/SOURCING.md A6 (search extracts, "
+                                            "not the drawing); TAIL LENGTH about 1.34 mm in a 1.6 mm board is "
+                                            "OPEN (long-tail variant %s or a thinner board); barrel and plunger "
+                                            "diameters assumed (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv"
+                                            % MILLMAX_0914["mpn_long_tail"]),
                               Purpose="pin %d: %s%s" % (i, pname, "" if pname in fitted
                                                          else " (factory fixture only)")))
         sp.place(round(x, 4), round(PIN_Y, 4), 0.0)

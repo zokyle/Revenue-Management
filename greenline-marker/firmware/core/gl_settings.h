@@ -11,7 +11,12 @@
  * first byte is the VERSION OF THE LAYOUT; a record is never interpreted
  * with the fields of another version:
  *
- *   version 2 (written by this firmware)
+ *   version 3 (written by this firmware; phase 3)
+ *   0 version = 3      1 stimp_x2        2 units          3 past_cm
+ *   4 grass            5 grain_enable    6 raw_log_level  7 method
+ *   8..9 manual_distance_cm              10 surface       11 tilt_log
+ *
+ *   version 2 (phase 2; still READ, and converted: surface TURF, tilt log OFF)
  *   0 version = 2      1 stimp_x2        2 units          3 past_cm
  *   4 grass            5 grain_enable    6 raw_log_level  7 method
  *   8..9 manual_distance_cm              10..11 reserved (0)
@@ -33,7 +38,8 @@
 
 #include "gl_types.h"
 
-#define GL_SETTINGS_VERSION 2u
+#define GL_SETTINGS_VERSION 3u
+#define GL_SETTINGS_VERSION_PHASE2 2u
 #define GL_SETTINGS_VERSION_PHASE1 1u
 #define GL_SETTINGS_BLOB_LEN 12u
 
@@ -91,6 +97,25 @@ typedef enum {
     GL_RAWLOG_COUNT
 } gl_rawlog_t;
 
+/** Which stored level zero a read uses (DESIGN_SPEC E11).  The values are
+ *  those of gl_cal_seat_t. */
+typedef enum {
+    GL_SURFACE_TURF = 0, /**< DEFAULT: the marker rests on its whole base face (grass) */
+    GL_SURFACE_HARD = 1, /**< it stands on its three ball feet (a hard plate, a bench, a
+                              putting mat on a hard floor) */
+    GL_SURFACE_COUNT
+} gl_surface_t;
+
+/** The tilt logger (docs/VALIDATION_PLAN.md section 6, item 1). */
+typedef enum {
+    GL_TILTLOG_OFF = 0,
+    GL_TILTLOG_ON = 1,   /**< every placement writes a tilt record to the field log, whether
+                              or not a camera read follows and succeeds */
+    GL_TILTLOG_ONLY = 2, /**< the same, and the CAMERAS STAY OFF: the placement is solved as
+                              a flag-out read (tilt-only plane, tentative line) */
+    GL_TILTLOG_COUNT
+} gl_tiltlog_t;
+
 typedef struct {
     uint8_t stimp_x2;            /**< green speed in half feet, 12..28 */
     uint8_t units;               /**< gl_units_t */
@@ -99,6 +124,8 @@ typedef struct {
     uint8_t grain_enable;        /**< 0 = off (factory default), 1 = on */
     uint8_t raw_log_level;       /**< gl_rawlog_t */
     uint8_t method;              /**< gl_method_t */
+    uint8_t surface;             /**< gl_surface_t */
+    uint8_t tilt_log;            /**< gl_tiltlog_t */
     uint16_t manual_distance_cm; /**< 0 = none; else the dialled distance */
 } gl_settings_t;
 
@@ -112,8 +139,8 @@ gl_status_t gl_settings_validate(const gl_settings_t *s);
 /** Serialise to GL_SETTINGS_BLOB_LEN bytes. */
 void gl_settings_encode(const gl_settings_t *s, uint8_t out[GL_SETTINGS_BLOB_LEN]);
 
-/** Parse and validate a version-2 record, or convert a version-1 one (see
- *  the file comment).  GL_ERR_PARAM on a short buffer, GL_ERR_UNSUPPORTED on
+/** Parse and validate a version-3 record, or convert a version-2 or
+ *  version-1 one (see the file comment).  GL_ERR_PARAM on a short buffer, GL_ERR_UNSUPPORTED on
  *  any other version, GL_ERR_RANGE on an out-of-range field (of the record's
  *  OWN version).  `s` is only modified on GL_OK. */
 gl_status_t gl_settings_decode(const uint8_t *blob, size_t len, gl_settings_t *s);
@@ -142,6 +169,8 @@ typedef enum {
     GL_ITEM_DISTANCE, /**< manual distance for the flag-out fallback */
     GL_ITEM_RAWLOG,
     GL_ITEM_METHOD,   /**< estimator method: B1 (default) or B2 */
+    GL_ITEM_SURFACE,  /**< level zero used: TURF (base face, default) or HARD (ball feet) */
+    GL_ITEM_TILTLOG,  /**< tilt logger: OFF, ON, ONLY (cameras off) */
     GL_ITEM_COUNT
 } gl_item_t;
 

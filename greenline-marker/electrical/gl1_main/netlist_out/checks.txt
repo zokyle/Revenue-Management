@@ -1,2 +1,3 @@
-gleda checks for gl1_main: 0 error(s), 0 warning(s)
-no findings
+gleda checks for gl1_main: 0 error(s), 2 warning(s)
+WARNING [plane_partial] the pour of GND on F.Cu has a shape: the router connects pads to whole-board planes only, so this net is routed with tracks and the pour joins just the pads and vias that happen to lie in it
+WARNING [plane_partial] the pour of GND on B.Cu has a shape: the router connects pads to whole-board planes only, so this net is routed with tracks and the pour joins just the pads and vias that happen to lie in it

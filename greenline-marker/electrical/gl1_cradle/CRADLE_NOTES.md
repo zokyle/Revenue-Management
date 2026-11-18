@@ -55,7 +55,7 @@ differently from the letter of its source; section 6) or **FAIL**.
 | USB-C | USB-C receptacle (USB 2.0; YAML: GCT USB4105, rear exit), the USB mouth at the YAML edge (usb_mouth_y -35.5) | J1 USB4105-GF-A, top side, body front at marker y -35.50 (1.3 mm beyond the board edge); SBU1 / SBU2 not connected | pass |
 | USB-C land | (KiCad DRC, rule set) 0.20 mm between a hole wall and foreign copper | J1 uses the project copy of KiCad's USB4105 land pattern: the four outer ground pads are 0.04 mm shorter; smallest distance from a locating-peg hole to a pad of J1 0.236 mm (library footprint: 0.194); one pad object per wide land instead of two coincident ones (B1 on A12, B12 on A1, B4 on A9, B9 on A4); the stored file equals the library file with exactly these changes *(DEVIATION from the maker's land pattern, PROVISIONAL; no design rule is relaxed. The merged pad objects are a workaround for the toolchain's router, which cannot join coincident pads; the copper is unchanged)* | **departure** |
 | CC | 5.1 kohm from CC1 and from CC2 to ground | R1: CC1 (A5) - GND, R2: CC2 (B5) - GND, one resistor each | pass |
-| fuse | a resettable fuse in VBUS (E6); E25: chosen for no more than 1.5 ohm after a trip (hold current 0.2 to 0.5 A) | F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold 350 mA, trip 750 mA, 1.4 ohm at most after a trip (PROVISIONAL part MF-FSMF035X-2, ratings from memory) | pass |
+| fuse | a resettable fuse in VBUS (E6); E25: chosen for no more than 1.5 ohm after a trip (hold current 0.2 to 0.5 A) | F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold 350 mA, trip 750 mA, 1.0 ohm at most after a trip (PROVISIONAL part 0603L035YR, ratings from the listing data in docs/SOURCING.md A5; trip 0.75 A departs from E6's 'about 0.5 A') | pass |
 | ESD | USBLC6-2SC6 on VBUS / D+ / D- | U1: D- through pins 1 + 6, D+ through pins 3 + 4, pin 5 on VBUS_IN (C1 100n), pin 2 GND *(ADDED: C1 100 nF at the VBUS pin of U1; the clamp sits on the connector side of the fuse)* | pass |
 | top side | nothing on the top side may reach the pocket ceiling (YAML note) | height limit 0.0 mm on the whole top side, J1 and SP1-SP7 exempt; every other part is on the bottom | pass |
 | pin tables | (task) the pin -> pad table of every library-backed part agrees with a second source | U1 against the installed KiCad symbol USBLC6-2SC6, J1 against USB_C_Receptacle_USB2.0_16P (pad numbers and pin names): all agree *(the spring pins and the fuse have one or two interchangeable pads)* | pass |
@@ -108,19 +108,24 @@ output to 19.8 mA whatever the system draws).
 | voltage | 6 V or more. A sink with Rd only never sees more than 5.5 V |
 | what it does not do | protect against a wet slot: water between the pins draws milliamperes and corrodes; no fuse sees that (spec). The marker must be dry before docking |
 
-Part: Bourns MF-FSMF035X-2 (0603) is named as an example, **PROVISIONAL**: order code, hold
-and trip current, voltage (6 V) and the resistance after a trip (1.4 ohm) are from memory
-and must be read from the data sheet. The REQUIREMENT is E25's: any 0603 PTC with a hold
-current of 0.2 to 0.5 A, 6 V or more and no more than 1.5 ohm after a trip fits the
-footprint. The ratings sit in the table `PTC` of the design file (the earlier example,
-MF-FSMF020X-2, was remembered with up to 5 ohm and is why E25 was written).
+Part (changed after the layout review, per `docs/SOURCING.md` action A5): Littelfuse
+0603L035YR (0603, 6 V, hold 0.35 A, trip 0.75 A, 1.0 ohm at most after a trip), which leaves
+0.5 ohm under E25's limit. **PROVISIONAL**: the ratings are a distributor listing seen by the
+sourcing report, not the data sheet. Second source on the same pads: Bourns MF-FSMF035X-2
+(1.4 ohm from memory, 0.1 ohm of margin only). **Deviation**: the trip current is 0.75 A where
+E6 proposed "about 0.5 A"; E25 widened only the hold range, and the sourcing report saw no
+0603 part with a 0.5 A trip that meets 1.5 ohm. The REQUIREMENT is E25's: any 0603 PTC with a
+hold current of 0.2 to 0.5 A, 6 V or more and no more than 1.5 ohm after a trip fits the
+footprint. The ratings sit in the table `PTC` of the design file. `docs/sourcing.csv` row
+cradle-02 still names MF-FSMF020X-2 (3.5 ohm, fails E25): for the sourcing owner.
 
 ## 5. PROVISIONAL items
 
 | Table / item | What is not known |
 |---|---|
-| `MILLMAX_0914` | tail, barrel and plunger diameters, the hole (0.90) and pad (1.60) of the pin: the numbers of the mechanical model; only series, stroke and working height are RESEARCH |
-| `PTC` | the order code and every rating of the example part |
+| `MILLMAX_0914` | tail 0.635 mm and minimum mounting hole 0.737 mm are search extracts of Mill-Max data recorded in `docs/SOURCING.md` (cradle-05, action A6), not the drawing; the finished hole is 0.80 mm (it was 0.90 for an assumed 0.76 mm tail); pad 1.60, barrel and plunger diameters are still the mechanical model's assumptions. **OPEN: the tail is about 1.34 mm long (8.3 mm overall less 6.96 mm above the board, a subtraction of two extracts) in a 1.6 mm board**, so it would end about 0.26 mm inside the hole. To decide outside this package: the long-tail variant 0914-1-15-20-77-14-11-0 (about 2.8 mm stands out below the board: check the pocket) or a thinner board (YAML `cradle.pcb.thickness`, `top_z`). Do not order the board before that |
+| `PTC` | the ratings of the part are a distributor listing, not the data sheet; height from memory |
+| USB-C land | the four outer ground pads are 1.07 mm long, 0.04 mm shorter than KiCad's GCT USB4105 pattern, to keep 0.20 mm from the peg holes: to be confirmed against the GCT drawing |
 | `SCREW_HOLE_DIA`, `SCREW_HEAD_DIA` | 2.2 mm hole (what the mechanical model drills), 4.0 mm head: an M2 thread-forming screw that has not been selected |
 | J1 | body envelope 8.94 x 7.35 x 3.26 mm (mechanical model); that the KiCad land pattern's front (3.675 mm before its anchor) is the mouth of the shell; the four shortened ground pads of the project copy (section 6) against GCT's drawing |
 | R1, R2, C1 | MPNs from memory |
@@ -176,7 +181,7 @@ board, routing, KiCad DRC, outputs verified against the model, schematic round t
 | placement | J1 and the seven spring pins on the top side at their YAML positions; F1, U1, C1, R1, R2 and the four service pads J2 on the bottom; three fiducials per side |
 | routing | 29 of 29 connections, 9 vias, 127 mm of track (x1.10 of the spanning trees), router run time about 2 s |
 | KiCad DRC | 0 errors, 0 unconnected; 1 cosmetic warning (`silk_overlap`: the "GND" label touches the pin-1 dot of J2). Nothing is excluded |
-| outputs | Gerbers (2 copper layers, mask, paste, silkscreen, outline), drill (9 vias 0.25, 4 slots 0.60 for the shell, 7 holes 0.90 for the spring pins, NPTH 2 x 0.65 and 4 x 2.20), position file (10 rows), BOM 7 lines and the same BOM with a status column (`out/assembly/gl1_cradle-bom-status.csv`: 6 PROVISIONAL, 1 RESEARCH), netlist and mechanical JSON, STEP, renders, fab README |
+| outputs | Gerbers (2 copper layers, mask, paste, silkscreen, outline), drill (9 vias 0.25, 4 slots 0.60 for the shell, 7 holes 0.80 for the spring pins, NPTH 2 x 0.65 and 4 x 2.20), position file (10 rows), BOM 7 lines and the same BOM with a status column (`out/assembly/gl1_cradle-bom-status.csv`: 6 PROVISIONAL, 1 RESEARCH), netlist and mechanical JSON, STEP, renders, fab README |
 
 **The mirror, checked.** The YAML lists the marker's pads seen from above: VBUS at x = -7.62 ...
 NRST at x = +7.62. This board is drawn in the same frame, also seen from above, and its pins
@@ -210,4 +215,18 @@ top-side pad 0.269 mm (own net) and 0.170 mm (other net); smallest solder-mask w
 pads 0.236 mm from the locating-peg holes of the receptacle.
 
 **Open for the mechanical owner**: the 1.3 mm overhang of the receptacle (section 7); the
-Mill-Max pin dimensions (`MILLMAX_0914`), which set the 0.90 mm holes.
+Mill-Max pin dimensions (`MILLMAX_0914`): the holes are now 0.80 mm for the 0.635 mm tail of
+the sourcing data, where `mechanical/cad/params.py` still assumes a 0.76 mm tail in a 0.90 mm
+hole; the tail length against the 1.6 mm board (section 5); the M2 x 5 screw that bottoms
+0.4 mm before its head seats (`docs/SOURCING.md` A20).
+
+**Service pads (review)**: SP5 to SP7 and J2 carry SWDIO, SWCLK and NRST with no clamp and no
+series resistor, like the marker's own pads (the specification names VBUS, D+ and D- only);
+they are fitted in the factory fixture only. J2 has no reference-voltage pad and the seven
+pads carry no always-on rail: a debug probe must be set to a fixed 2.8 V target level (that
+PA13 / PA14 tolerate a 3.3 V drive is from memory, PROVISIONAL). A marker without its cell is
+fed through the 20 mA charger in the cradle: enough for SWD programming, not for a camera
+read; what the charger does with no battery connected has not been read.
+
+**Reproducibility (review)**: the silkscreen legend group now gets its identifier from the
+seeded generator (`gl1_main/silk_text.py`); two builds give byte-identical `.kicad_pcb` files.

@@ -1,0 +1,483 @@
+{
+ "anchor_offsets": [
+  {
+   "anchor": [
+    0.0,
+    -12.9
+   ],
+   "body_centre": [
+    0.0,
+    -14.5
+   ],
+   "offset": 1.6,
+   "ref": "J1"
+  }
+ ],
+ "bom": {
+  "cost_per_board": 62.75,
+  "lines": 37,
+  "parts_dnp": 1,
+  "parts_fitted": 103,
+  "unpriced_refs": [
+   "C1",
+   "C2",
+   "C3",
+   "C4",
+   "C9",
+   "C10",
+   "C13",
+   "C14",
+   "C15",
+   "C17",
+   "C18",
+   "C28",
+   "C29",
+   "C30",
+   "C31",
+   "C34",
+   "C5",
+   "C6",
+   "C7",
+   "C16",
+   "C19",
+   "C20",
+   "C21",
+   "C24",
+   "C25",
+   "C32",
+   "C8",
+   "C11",
+   "C12",
+   "C22",
+   "C23",
+   "C26",
+   "C27",
+   "C33",
+   "D1",
+   "D3",
+   "D5",
+   "D7",
+   "D9",
+   "D11",
+   "D13",
+   "D15",
+   "D2",
+   "D4",
+   "D6",
+   "D8",
+   "D10",
+   "D12",
+   "D14",
+   "D16",
+   "J1",
+   "PD1",
+   "Q1",
+   "R1",
+   "R2",
+   "R19",
+   "R3",
+   "R10",
+   "R12",
+   "R13",
+   "R15",
+   "R16",
+   "R20",
+   "R21",
+   "R22",
+   "R29",
+   "R30",
+   "R4",
+   "R5",
+   "R6",
+   "R7",
+   "R8",
+   "R9",
+   "R11",
+   "R17",
+   "R18",
+   "R23",
+   "R24",
+   "R25",
+   "R26",
+   "R27",
+   "R28",
+   "R31",
+   "RN1",
+   "RN2",
+   "RN3",
+   "RN4",
+   "RN5",
+   "RN6",
+   "RT1",
+   "RT2",
+   "U1",
+   "U6",
+   "U7",
+   "U9",
+   "U11",
+   "U12"
+  ]
+ },
+ "copper": {
+  "confined": true,
+  "fine_areas": [
+   "fine_U2",
+   "fine_U3"
+  ],
+  "fine_pitch_arrays": [
+   "U2",
+   "U3"
+  ],
+  "length_by_width": {
+   "0.100": {
+    "B.Cu": 52.773,
+    "F.Cu": 133.701,
+    "In2.Cu": 31.802,
+    "total": 218.276
+   },
+   "0.150": {
+    "B.Cu": 778.257,
+    "F.Cu": 600.027,
+    "In2.Cu": 379.286,
+    "total": 1757.57
+   },
+   "0.300": {
+    "B.Cu": 56.508,
+    "F.Cu": 214.879,
+    "In2.Cu": 50.217,
+    "total": 321.604
+   }
+  },
+  "min_via_to_own_pad_gap": {
+   "bottom": 0.4049,
+   "top": 0.1
+  },
+  "narrow_farthest": {
+   "distance_mm": 5.312,
+   "layer": "B.Cu",
+   "nearest_array": "U3",
+   "net": "CAM_SDA",
+   "x": 4.0,
+   "y": 12.45
+  },
+  "narrow_in_fine_areas_mm": 218.276,
+  "narrow_length_mm": 218.276,
+  "narrow_nets": [
+   "CAM_L_D0",
+   "CAM_L_D1",
+   "CAM_L_D2",
+   "CAM_L_D3",
+   "CAM_L_D4",
+   "CAM_L_D5",
+   "CAM_L_D6",
+   "CAM_L_D7",
+   "CAM_L_HREF",
+   "CAM_L_PCLK",
+   "CAM_L_PWDN",
+   "CAM_L_VSYNC",
+   "CAM_R_D0",
+   "CAM_R_D1",
+   "CAM_R_D2",
+   "CAM_R_D3",
+   "CAM_R_D4",
+   "CAM_R_D5",
+   "CAM_R_D6",
+   "CAM_R_D7",
+   "CAM_R_HREF",
+   "CAM_R_PCLK",
+   "CAM_R_PWDN",
+   "CAM_R_VSYNC",
+   "CAM_SCL_L",
+   "CAM_SCL_R",
+   "CAM_SDA",
+   "CAM_XVCLK"
+  ],
+  "narrow_outside_fine_areas_mm": 0.0,
+  "offender_count": 0,
+  "offenders": [],
+  "standard_track": 0.15,
+  "tracks": 2570,
+  "vias": 278
+ },
+ "drc": "KiCad DRC 0 error(s), 0 unconnected, 2 warning(s) (silk_over_copper 1, silk_overlap 1)",
+ "drc_clean": true,
+ "drill_tables": {
+  "gl1_main-NPTH.drl": [
+   [
+    1.15,
+    1
+   ]
+  ],
+  "gl1_main-PTH.drl": [
+   [
+    0.25,
+    278
+   ]
+  ]
+ },
+ "files": [
+  {
+   "bytes": 1670,
+   "path": "assembly/README.txt",
+   "sha256": "5249fe7c46142b9a7b2e5542ecc48e4877d22915dfa843549ca6030a5d5e3690"
+  },
+  {
+   "bytes": 6748,
+   "path": "assembly/gl1_main-bom.csv",
+   "sha256": "132d63e03f2e5b8e85413827975563f9291efd139d2c74fb464f60c7e9b87cfe"
+  },
+  {
+   "bytes": 8993,
+   "path": "assembly/gl1_main-pos.csv",
+   "sha256": "644bd795e35277684e9cff65b5d688695a7582a4e5325ca41812f54c508acb68"
+  },
+  {
+   "bytes": 7449,
+   "path": "fab/README.txt",
+   "sha256": "be83eb859df6e7586e066b096580d031218420039dc592564175a8e69840c924"
+  },
+  {
+   "bytes": 61942,
+   "path": "fab/gl1_main-B_Cu.gbr",
+   "sha256": "981ab75768a8c7debad7179e4122e93f09ead498ba792b8fcfe5cd9bffef630c"
+  },
+  {
+   "bytes": 3660,
+   "path": "fab/gl1_main-B_Mask.gbr",
+   "sha256": "a8e62f0829e617ece3721613c488d73f39a280ec296e56ac0252efefb917f688"
+  },
+  {
+   "bytes": 3080,
+   "path": "fab/gl1_main-B_Paste.gbr",
+   "sha256": "956af2b8bc1ae33b7dfba3016a1073da9b36c0429a229d3e07baa97b53f9d4eb"
+  },
+  {
+   "bytes": 6787,
+   "path": "fab/gl1_main-B_Silkscreen.gbr",
+   "sha256": "dc9297a0d901fb6cf47823c99b3f949e1816bcc90736c38b6c3b0d9d63d6016b"
+  },
+  {
+   "bytes": 810,
+   "path": "fab/gl1_main-Edge_Cuts.gbr",
+   "sha256": "a2807e85ecf45c88884dac0eae690610ca7853beedca6e4b62a0e5292e1abced"
+  },
+  {
+   "bytes": 108408,
+   "path": "fab/gl1_main-F_Cu.gbr",
+   "sha256": "009e63fafa090c2f6b1c6f60f67b606e41a2f2ff982c082e50670a8785ef8ca6"
+  },
+  {
+   "bytes": 13927,
+   "path": "fab/gl1_main-F_Mask.gbr",
+   "sha256": "94ea441ad5b8452209020d995ea31629d1d476c4fde86842ff682dcdfe3bb2d3"
+  },
+  {
+   "bytes": 13463,
+   "path": "fab/gl1_main-F_Paste.gbr",
+   "sha256": "25acb11c84925ddad915bcb091306327cea9959ec9ee32120895e30ecc3679d0"
+  },
+  {
+   "bytes": 26652,
+   "path": "fab/gl1_main-F_Silkscreen.gbr",
+   "sha256": "909055f7ba8158ca39cd263b860d91b7922f7b7cb1688b2ba85e2207e2053073"
+  },
+  {
+   "bytes": 162412,
+   "path": "fab/gl1_main-In1_Cu.gbr",
+   "sha256": "656c8781ba3e714089fa3a3a2b45a33e7538b4a1e3a7f582e5c1efd5775db27b"
+  },
+  {
+   "bytes": 121146,
+   "path": "fab/gl1_main-In2_Cu.gbr",
+   "sha256": "bf4bc007d3cdaff41b14e2279ecb961a2cfc68b77f5f06e83bccac463923d027"
+  },
+  {
+   "bytes": 18483,
+   "path": "fab/gl1_main-NPTH-drl_map.gbr",
+   "sha256": "427eeea67649f4caacd3117d260e13fceef8a073a448efbe21d1184ad40b9cd2"
+  },
+  {
+   "bytes": 295,
+   "path": "fab/gl1_main-NPTH.drl",
+   "sha256": "95cdd7da8b3ab285d744001851880fa71b16703feca960db4e7c4672008c2f32"
+  },
+  {
+   "bytes": 41385,
+   "path": "fab/gl1_main-PTH-drl_map.gbr",
+   "sha256": "4cb7119d109df20ac5bd692969f8300b178b4139be36cd50e11a7031543e17cf"
+  },
+  {
+   "bytes": 3497,
+   "path": "fab/gl1_main-PTH.drl",
+   "sha256": "fccc2ab68de65bde06aa93e393d9d02c4a5a4aaa34b8941f1cbdaaef9f924d0d"
+  },
+  {
+   "bytes": 3645,
+   "path": "fab/gl1_main-job.gbrjob",
+   "sha256": "f60e41057ec17ad6f2aabc73bad1a8684a0eabbc94f83a1c9932ff4031751b4e"
+  },
+  {
+   "bytes": 5779,
+   "path": "gl1_main-assembly.zip",
+   "sha256": "b1a163dc5b6331dfb714ae1f7e61abcec341192647f9bd8f8ea9dfdec8d7aeaa"
+  },
+  {
+   "bytes": 549104,
+   "path": "gl1_main-board.step",
+   "sha256": "689a79c10a36c834bced844bd65cede45ae67e90b76d18cdc1b30422225644f9"
+  },
+  {
+   "bytes": 141840,
+   "path": "gl1_main-fab.zip",
+   "sha256": "266674cb6ae0d899f3f61674f261f775f47182112aaefe26e6becf1649dd0190"
+  },
+  {
+   "bytes": 113254,
+   "path": "gl1_main-mechanical.json",
+   "sha256": "f7c40a750e0382bd231c56caef1b17adca7767a0faeb638ab39f043f71d077eb"
+  },
+  {
+   "bytes": 97632,
+   "path": "gl1_main-netlist.json",
+   "sha256": "cfa3bbcd949fe0d672349e77ccffd6350f037b77e47025a2a5ac1005e41bae37"
+  },
+  {
+   "bytes": 147504,
+   "path": "renders/gl1_main-In1_Cu.png",
+   "sha256": "f8964c7107a08286df318b5e87dedb6d0a444305164ac655e55b6bc9826ac385"
+  },
+  {
+   "bytes": 311356,
+   "path": "renders/gl1_main-In1_Cu.svg",
+   "sha256": "9fc8154a39013f619dbd221cfae776387c4e91d032296e7d96073c53b3693cda"
+  },
+  {
+   "bytes": 134393,
+   "path": "renders/gl1_main-In2_Cu.png",
+   "sha256": "7b39e944a203aaff882d53c055aa944836cbf0bc46d2ec4cfafe3411dc9358b1"
+  },
+  {
+   "bytes": 289249,
+   "path": "renders/gl1_main-In2_Cu.svg",
+   "sha256": "95120dd16b3daf40f1ea15d9cb612c34449b8da2aa61d87ab6c1a6e556028c38"
+  },
+  {
+   "bytes": 138546,
+   "path": "renders/gl1_main-bottom.png",
+   "sha256": "4e6e4907b149a3e241a4096ffe6e39e9247dff029d78cf5fedfd414e315062fe"
+  },
+  {
+   "bytes": 385247,
+   "path": "renders/gl1_main-bottom.svg",
+   "sha256": "53f38f55074f8e356ab1afc344071ebf7705250aefba349ed9dc848905b16a47"
+  },
+  {
+   "bytes": 202643,
+   "path": "renders/gl1_main-top.png",
+   "sha256": "2ef0b91df7ee852e233683527a7e4f67238537f9b3fe576d7a2d3dcea97f743d"
+  },
+  {
+   "bytes": 584939,
+   "path": "renders/gl1_main-top.svg",
+   "sha256": "95ae6d5e3ea0d09147a5e8528b96ef3350f094dc786c032622a59fa8d926a31d"
+  },
+  {
+   "bytes": 1344,
+   "path": "renders/renders.json",
+   "sha256": "48c949c808f9c800fc5f82457858dcdf9dc02a4a9aa176aa4cc517aa2819d4b0"
+  }
+ ],
+ "ok": true,
+ "position_rows": 103,
+ "problems": [],
+ "renders": {
+  "In1_Cu": {
+   "dpi": 600,
+   "file": "gl1_main-In1_Cu.png",
+   "layers": [
+    "In1.Cu",
+    "Edge.Cuts"
+   ],
+   "mirrored": false,
+   "origin_px": [
+    522.205,
+    433.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    1045,
+    956
+   ],
+   "svg": "gl1_main-In1_Cu.svg",
+   "view": "In1.Cu seen from above",
+   "x_sign": 1
+  },
+  "In2_Cu": {
+   "dpi": 600,
+   "file": "gl1_main-In2_Cu.png",
+   "layers": [
+    "In2.Cu",
+    "Edge.Cuts"
+   ],
+   "mirrored": false,
+   "origin_px": [
+    522.205,
+    433.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    1045,
+    956
+   ],
+   "svg": "gl1_main-In2_Cu.svg",
+   "view": "In2.Cu seen from above",
+   "x_sign": 1
+  },
+  "bottom": {
+   "dpi": 600,
+   "file": "gl1_main-bottom.png",
+   "layers": [
+    "B.Cu",
+    "B.Fab",
+    "B.SilkS",
+    "Edge.Cuts"
+   ],
+   "mirrored": true,
+   "origin_px": [
+    522.595,
+    433.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    1045,
+    956
+   ],
+   "svg": "gl1_main-bottom.svg",
+   "view": "bottom side seen from below (mirrored)",
+   "x_sign": -1
+  },
+  "top": {
+   "dpi": 600,
+   "file": "gl1_main-top.png",
+   "layers": [
+    "F.Cu",
+    "F.Fab",
+    "F.SilkS",
+    "Edge.Cuts"
+   ],
+   "mirrored": false,
+   "origin_px": [
+    522.205,
+    433.205
+   ],
+   "px_per_mm": 23.622047,
+   "size_px": [
+    1045,
+    956
+   ],
+   "svg": "gl1_main-top.svg",
+   "view": "top side seen from above",
+   "x_sign": 1
+  }
+ }
+}

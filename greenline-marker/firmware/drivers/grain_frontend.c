@@ -99,6 +99,30 @@ static unsigned scan_led_(unsigned cycle, unsigned i)
     return ((step & 1u) == 0u) ? pair : (8u + pair);
 }
 
+gl_status_t gl_grain_fe_dark(unsigned n, uint16_t *mean, uint16_t *min, uint16_t *max)
+{
+    uint32_t sum = 0;
+    uint16_t lo = 0xFFFFu, hi = 0;
+    if (n == 0u || n > 256u || mean == NULL || min == NULL || max == NULL) {
+        return GL_ERR_PARAM;
+    }
+    gl_grain_fe_all_off();
+    for (unsigned i = 0; i < n; i++) {
+        uint16_t c = 0;
+        const gl_status_t st = sample_(&c);
+        if (st != GL_OK) {
+            return st;
+        }
+        sum += c;
+        lo = (c < lo) ? c : lo;
+        hi = (c > hi) ? c : hi;
+    }
+    *mean = (uint16_t)((sum + n / 2u) / n);
+    *min = lo;
+    *max = hi;
+    return GL_OK;
+}
+
 gl_status_t gl_grain_fe_measure_cycle(gl_grain_raw_t *raw, unsigned cycle)
 {
     gl_status_t st = GL_OK;

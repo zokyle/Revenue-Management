@@ -50,7 +50,7 @@ done
 if [ -n "$SU" ]; then
     # shellcheck disable=SC2086
     cat $SU | awk -F'\t' '{ n = split($1, p, ":"); printf "  %6d  %-34s %s\n", $2, p[n], $3 }' |
-        sort -rn | head -12
+        sort -rn | head -24
 fi
 
 echo "== forbidden symbol check"

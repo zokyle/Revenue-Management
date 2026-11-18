@@ -430,8 +430,16 @@
  *  taper - and released when it has terminated, when the charger is disabled
  *  (TS low, temperature window, no input) or after a timer fault.  From
  *  memory of the family: NOT CONFIRMED whether a RE-charge after the first
- *  termination pulls CHG low again (1 = it does; the firmware works either
- *  way: with 0 a recharge shows as "full" although current flows). */
+ *  termination pulls CHG low again (1 = it does).  The other reading - CHG
+ *  signals the FIRST charge cycle only, which is how this builder remembers
+ *  the status pin of the BQ2510x / BQ2404x family being described - is a
+ *  variant of the simulator's model (gl_sim_charger_stat_first_cycle_only;
+ *  0 here makes it the default) and tests/test_e2e_power.c pins what the
+ *  firmware does on it: a recharge shows as "full" although current flows,
+ *  and the 6 h limit of E32, which counts the time CHG is low, does NOT see
+ *  a recharge that an awake marker keeps from terminating (NOT MET for that
+ *  variant; README open issue 39).  TO BE READ in TI SLUSBV8 before the
+ *  status line is relied on for anything but the first cycle. */
 #define GL_PROV_BQ25101_CHG_LOW_ON_RECHARGE 1
 /** Minimum input voltage at which the charger works (docs/research/power.md,
  *  UNVERIFIED there).  The firmware cannot measure the charger's input; a

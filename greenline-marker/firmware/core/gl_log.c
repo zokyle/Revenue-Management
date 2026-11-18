@@ -418,6 +418,30 @@ gl_status_t gl_log_iter_next(const gl_log_t *log, gl_log_iter_t *it, gl_log_rec_
     return GL_ERR_EMPTY;
 }
 
+gl_status_t gl_log_iter_seek(const gl_log_t *log, gl_log_iter_t *it, uint32_t seq)
+{
+    gl_log_iter_t scan, best;
+    gl_log_iter_begin(log, it);
+    scan = *it;
+    best = *it;
+    while (scan.sectors_left > 0u) {
+        sector_hdr_t h;
+        bool valid = false, blank = false;
+        if (read_sector_hdr_(log, scan.sector, &h, &valid, &blank) != GL_OK) {
+            return GL_ERR_IO;
+        }
+        if (valid && h.seq == scan.expect_seq) {
+            if (h.first_rec_seq > seq) {
+                break; /* this sector and all newer ones begin after `seq` */
+            }
+            best = scan;
+        }
+        iter_advance_(log, &scan);
+    }
+    *it = best;
+    return GL_OK;
+}
+
 gl_status_t gl_log_read_payload(const gl_log_t *log, const gl_log_rec_t *rec, uint32_t offset,
                                 uint8_t *buf, size_t len)
 {

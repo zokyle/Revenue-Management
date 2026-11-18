@@ -153,6 +153,57 @@ static void load_store_(gl_app_t *app)
     if (gl_store_get(&app->store, (uint8_t)GL_STORE_ID_COURSE, &d, &n) == GL_OK) {
         (void)gl_stick_height_decode(d, n, &app->stick_height);
     }
+    if (gl_store_get(&app->store, (uint8_t)GL_STORE_ID_CAL_DEVICE, &d, &n) == GL_OK) {
+        (void)gl_cal_device_decode(d, n, &app->cal_dev);
+    }
+}
+
+/* ---- calibration records: identity and storage (also for app/gl_factory.c) ---- */
+
+void gl_app_cal_ids(const gl_app_t *app, uint8_t flags[5], uint16_t crc[5])
+{
+    uint8_t blob[GL_CAL_MAX_BLOB_LEN];
+    /* the CRC of a version-2 record is its last two bytes */
+    gl_cal_tilt_encode(&app->cal_tilt, blob);
+    crc[0] = gl_get_u16(&blob[GL_CAL_TILT_BLOB_LEN - 2u]);
+    gl_cal_cam_encode(&app->cal_cam[GL_CAM_LEFT], blob);
+    crc[1] = gl_get_u16(&blob[GL_CAL_CAM_BLOB_LEN - 2u]);
+    gl_cal_cam_encode(&app->cal_cam[GL_CAM_RIGHT], blob);
+    crc[2] = gl_get_u16(&blob[GL_CAL_CAM_BLOB_LEN - 2u]);
+    gl_cal_grain_encode(&app->cal_grain, blob);
+    crc[3] = gl_get_u16(&blob[GL_CAL_GRAIN_BLOB_LEN - 2u]);
+    gl_cal_device_encode(&app->cal_dev, blob);
+    crc[4] = gl_get_u16(&blob[GL_CAL_DEVICE_BLOB_LEN - 2u]);
+    flags[0] = app->cal_tilt.flags;
+    flags[1] = app->cal_cam[GL_CAM_LEFT].flags;
+    flags[2] = app->cal_cam[GL_CAM_RIGHT].flags;
+    flags[3] = app->cal_grain.flags;
+    flags[4] = app->cal_dev.flags;
+}
+
+gl_status_t gl_app_cal_store(gl_app_t *app, uint8_t cal_id)
+{
+    uint8_t blob[GL_CAL_MAX_BLOB_LEN];
+    switch (cal_id) {
+    case GL_CAL_ID_TILT:
+        gl_cal_tilt_encode(&app->cal_tilt, blob);
+        return gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_TILT, blob, GL_CAL_TILT_BLOB_LEN);
+    case GL_CAL_ID_CAM_L:
+        gl_cal_cam_encode(&app->cal_cam[GL_CAM_LEFT], blob);
+        return gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_CAM_L, blob, GL_CAL_CAM_BLOB_LEN);
+    case GL_CAL_ID_CAM_R:
+        gl_cal_cam_encode(&app->cal_cam[GL_CAM_RIGHT], blob);
+        return gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_CAM_R, blob, GL_CAL_CAM_BLOB_LEN);
+    case GL_CAL_ID_GRAIN:
+        gl_cal_grain_encode(&app->cal_grain, blob);
+        return gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_GRAIN, blob, GL_CAL_GRAIN_BLOB_LEN);
+    case GL_CAL_ID_DEVICE:
+        gl_cal_device_encode(&app->cal_dev, blob);
+        return gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_DEVICE, blob,
+                                GL_CAL_DEVICE_BLOB_LEN);
+    default:
+        return GL_ERR_NOT_FOUND;
+    }
 }
 
 /* One raw-strip log record being assembled (978 bytes: static, not stack). */
@@ -598,6 +649,16 @@ static void usb_stop_(gl_app_t *app)
 }
 
 /* Stop a tilt read / capture.  Afterwards the camera rail is off. */
+bool gl_app_camera_allowed(gl_app_t *app)
+{
+    return read_temp_ok_(app, gl_hal_tick_ms(), true);
+}
+
+void gl_app_clock_fast(gl_app_t *app, bool fast)
+{
+    clock_(app, fast);
+}
+
 static void abort_read_(gl_app_t *app)
 {
     app->tilt_active = false;
@@ -619,6 +680,7 @@ static void wake_(gl_app_t *app, uint32_t now)
         }
     }
     if (!app->awake) {
+        gl_factory_on_wake(app, now);
         app->awake = true;
         app->storage_mode = false;
         app->cradle_sleep = false;
@@ -676,7 +738,8 @@ static void enter_sleep_(gl_app_t *app)
      * only the cradle wakes the device), so that the sleep drain does not
      * take it to its protection cut-off (GL_PROV_BATT_STORAGE_MV). */
     app->storage_mode = app->power.storage && !app->power.vbus;
-    if (app->storage_mode || app->ship_pending) {
+    gl_factory_on_sleep(app, now);
+    if (app->storage_mode || app->ship_pending || gl_factory_sleep_no_motion(app)) {
         if (app->storage_mode) {
             gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_STORAGE, (int32_t)app->power.batt_mv);
         }
@@ -892,6 +955,46 @@ static void battery_service_(gl_app_t *app, uint32_t now)
 
 /* Turn the still blocks accumulated in the motion averager into a slope
  * reading (temperature-compensated, calibrated, zeroing bias NOT removed). */
+/* Block-slope statistics of a tilt average: one calibrated slope per still
+ * 133 ms block; their RMS about the mean is the "scatter". */
+static void tstat_reset_(gl_app_tilt_stat_t *s)
+{
+    memset(s, 0, sizeof(*s));
+}
+
+static void tstat_add_(gl_app_t *app)
+{
+    gl_app_tilt_stat_t *s = &app->tstat;
+    gl_vec3_t a;
+    gl_vec2_t slope;
+    a.x = app->motion.avg.prev_mean_a[0];
+    a.y = app->motion.avg.prev_mean_a[1];
+    a.z = app->motion.avg.prev_mean_a[2];
+    a = gl_tilt_apply_cal(&app->cal_tilt, a, app->temp_valid ? app->temp_c : app->cal_tilt.t0_c);
+    if (gl_tilt_slope(a, &slope) != GL_OK || s->n == 0xFFFFu) {
+        return;
+    }
+    s->sum_x += slope.x;
+    s->sum_y += slope.y;
+    s->sq_x += slope.x * slope.x;
+    s->sq_y += slope.y * slope.y;
+    s->n++;
+}
+
+static float tstat_scatter_(const gl_app_tilt_stat_t *s)
+{
+    float n, vx, vy;
+    if (s->n < 2u) {
+        return 0.0f;
+    }
+    n = (float)s->n;
+    vx = s->sq_x / n - (s->sum_x / n) * (s->sum_x / n);
+    vy = s->sq_y / n - (s->sum_y / n) * (s->sum_y / n);
+    vx = (vx > 0.0f) ? vx : 0.0f;
+    vy = (vy > 0.0f) ? vy : 0.0f;
+    return sqrtf(0.5f * (vx + vy));
+}
+
 static gl_status_t tilt_measure_(gl_app_t *app, gl_vec2_t *slope_raw, gl_vec3_t *up,
                                  gl_vec3_t *gyro_bias)
 {
@@ -913,7 +1016,70 @@ static gl_status_t tilt_measure_(gl_app_t *app, gl_vec2_t *slope_raw, gl_vec3_t 
     }
     *up = gl_vec3_unit(acal);
     *gyro_bias = mean.gyro_rad_s;
+    /* for the field log: the uncalibrated mean and the scatter of the block
+     * slopes that went into it */
+    app->tilt_accel_g = mean.accel_g;
+    app->tilt_noise_g = mean.accel_noise_g;
+    app->tilt_blocks = (uint8_t)((mean.blocks_still < 255u) ? mean.blocks_still : 255u);
+    app->tilt_scatter = tstat_scatter_(&app->tstat);
     return GL_OK;
+}
+
+/* A tilt record of the field log (core/gl_fieldlog.h): a placement without
+ * a camera read. */
+static int16_t t_x10_(bool valid, float t)
+{
+    return valid ? (int16_t)gl_roundi(gl_clampf(t, -100.0f, 200.0f) * 10.0f) : (int16_t)INT16_MIN;
+}
+
+static void tilt_log_(gl_app_t *app, uint8_t kind, uint16_t read_id, uint8_t seat,
+                      gl_vec2_t slope_raw, gl_vec2_t slope, gl_vec3_t gyro_bias, float yaw_rad)
+{
+    gl_fieldlog_tilt_t t;
+    uint8_t buf[GL_FIELDLOG_TILT_LEN];
+    uint8_t flags[5];
+    uint16_t crc[5];
+
+    if (!app->storage_ok) {
+        return;
+    }
+    gl_app_cal_ids(app, flags, crc);
+    memset(&t, 0, sizeof(t));
+    t.kind = kind;
+    t.seat = seat;
+    t.read_id = read_id;
+    t.rtc_s = gl_hal_rtc_seconds();
+    t.tick_ms = gl_hal_tick_ms();
+    t.slope_raw = slope_raw;
+    t.slope = slope;
+    t.accel_g = app->tilt_accel_g;
+    t.gyro_bias = gyro_bias;
+    t.tilt_scatter = app->tilt_scatter;
+    t.accel_noise_g = app->tilt_noise_g;
+    t.yaw_rad = yaw_rad;
+    t.imu_temp_c_x100 = (int16_t)gl_roundi(gl_clampf(app->temp_c, -300.0f, 300.0f) * 100.0f);
+    t.cell_temp_c_x10 = t_x10_(app->power.cell_temp_valid, app->power.cell_temp_c);
+    t.mcu_temp_c_x10 = t_x10_(app->power.mcu_temp_valid, app->power.mcu_temp_c);
+    t.batt_mv = app->power.batt_mv;
+    t.cal_tilt_crc = crc[0];
+    t.cal_tilt_flags = flags[0];
+    t.tilt_blocks = app->tilt_blocks;
+    gl_fieldlog_tilt_encode(&t, buf);
+    if (gl_log_append(&app->log, (uint8_t)GL_LOG_REC_TILT, 0, buf, sizeof(buf), NULL) != GL_OK) {
+        app->last_error = (uint16_t)GL_ERR_IO;
+    }
+}
+
+/* The placement in app->cur ended without a result (too hot, no flagstick,
+ * a camera or solver fault): its tilt is logged all the same, once. */
+static void tilt_log_unsolved_(gl_app_t *app, uint8_t kind)
+{
+    if (app->tilt_logged || !app->cur.tilt_valid) {
+        return;
+    }
+    app->tilt_logged = true;
+    tilt_log_(app, kind, app->read_id, app->seat_used, app->cur.slope_raw, app->cur.slope,
+              app->cur.gyro_bias, 0.0f);
 }
 
 /* Experimental grain reading (only when enabled in the settings; ships
@@ -930,6 +1096,7 @@ static void grain_read_(gl_app_t *app)
     bool moved = true;
 
     app->grain_valid = false;
+    app->grain_ran = false;
     if (app->settings.grain_enable == 0u) {
         return;
     }
@@ -944,18 +1111,41 @@ static void grain_read_(gl_app_t *app)
                 fabsf((float)(after.az - before.az) * k) > 0.02f;
     }
     raw_p->motion = moved;
+    memset(&rd, 0, sizeof(rd));
     if (gl_grain_process(raw_p, &app->cal_grain, &rd) == GL_OK && rd.valid) {
         app->grain_valid = true;
-        app->grain_modulation = rd.red.modulation;
-        app->grain_azimuth_rad = rd.red.azimuth_rad;
+    }
+    /* the values are kept for the field log whether or not they are valid */
+    app->grain_ran = true;
+    app->grain_modulation = rd.red.modulation;
+    app->grain_azimuth_rad = rd.red.azimuth_rad;
+    app->grain_nir_mod = rd.nir.modulation;
+    app->grain_nir_az = rd.nir.azimuth_rad;
+    app->grain_reject = rd.reject;
+    for (unsigned i = 0; i < GL_GRAIN_LEDS; i++) {
+        app->grain_signal[i] = (uint16_t)gl_clampi(gl_roundi(rd.signal[i]), 0, 65535);
     }
 }
 
 static void tilt_start_(gl_app_t *app)
 {
+    tstat_reset_(&app->tstat);
+    app->still_ms = gl_hal_tick_ms();
+    for (unsigned i = 0; i < (unsigned)GL_FIELDLOG_T_COUNT; i++) {
+        app->stage_ms[i] = 0xFFFFu;
+    }
+    app->cam_on_ms = 0;
     gl_tilt_avg_reset(&app->motion.avg);
     app->tilt_active = true;
     gl_motion_set_strict(&app->motion, true); /* any movement now aborts the read */
+}
+
+/* Milliseconds since the tilt average of the current read started (the
+ * stage times of the field log), 0xFFFE at most. */
+static uint16_t stage_now_(const gl_app_t *app)
+{
+    const uint32_t d = (uint32_t)(gl_hal_tick_ms() - app->still_ms);
+    return (uint16_t)((d < 0xFFFEu) ? d : 0xFFFEu);
 }
 
 /* The 1 s average of a read is complete. */
@@ -974,23 +1164,60 @@ static void tilt_finish_(gl_app_t *app)
     if (app->ui.read_kind == (uint8_t)GL_READ_PRECISION) {
         /* the re-read after the spin: combined with the first one in solve_() */
         app->reread_slope_raw = slope_raw;
+        if (app->settings.tilt_log != (uint8_t)GL_TILTLOG_OFF) {
+            gl_vec2_t s2;
+            s2.x = slope_raw.x - app->zero_used.x;
+            s2.y = slope_raw.y - app->zero_used.y;
+            tilt_log_(app, (uint8_t)GL_FIELDLOG_TILT_REREAD, app->read_id, app->seat_used,
+                      slope_raw, s2, gyro_bias, gl_spin_yaw(&app->motion.spin));
+        }
     } else {
+        /* E11: the zero of the seat the SURFACE setting names (TURF = the
+         * base face, the default), or the only one there is */
+        gl_vec2_t zero;
+        app->seat_used = (uint8_t)gl_cal_tilt_zero(
+            &app->cal_tilt, (gl_cal_seat_t)app->settings.surface, &zero);
+        app->zero_used = zero;
         memset(&app->cur, 0, sizeof(app->cur));
         app->cur.tilt_valid = true;
         app->cur.up = up;
         app->cur.gyro_bias = gyro_bias;
         app->cur.slope_raw = slope_raw;
-        app->cur.slope.x = slope_raw.x - app->cal_tilt.flip_bias_x;
-        app->cur.slope.y = slope_raw.y - app->cal_tilt.flip_bias_y;
+        app->cur.slope.x = slope_raw.x - zero.x;
+        app->cur.slope.y = slope_raw.y - zero.y;
         app->cur.temp_c = app->temp_c;
+        app->cameras_off = false;
+        app->tilt_logged = false;
         grain_read_(app);
+        if (app->settings.tilt_log != (uint8_t)GL_TILTLOG_OFF) {
+            /* the tilt logger: every placement, with the id the read that
+             * follows will carry */
+            app->tilt_logged = true;
+            tilt_log_(app, (uint8_t)GL_FIELDLOG_TILT_PLACEMENT, (uint16_t)(app->read_id + 1u),
+                      app->seat_used, slope_raw, app->cur.slope, gyro_bias, 0.0f);
+        }
     }
+    app->stage_ms[GL_FIELDLOG_T_TILT_DONE] = stage_now_(app);
     gl_app_post(app, GL_EV_TILT_DONE, 0);
 }
 
 /* ======================================================================= */
 /* capture                                                                  */
 /* ======================================================================= */
+
+/* For the field log: when the camera rail came on in this read, and for
+ * how long it was on (it goes off when the last strip has been captured,
+ * before the last group has been analysed).  Looked at once per loop pass
+ * while a capture runs: resolution a few milliseconds. */
+static void cam_rail_watch_(gl_app_t *app)
+{
+    if (!app->cam_seen_on && app->cam.powered) {
+        app->cam_seen_on = true;
+    } else if (app->cam_seen_on && !app->cam.powered && app->cam_on_ms == 0u) {
+        const uint32_t on = (uint32_t)(gl_hal_tick_ms() - app->cam_on_at_ms);
+        app->cam_on_ms = (uint16_t)((on < 0xFFFFu) ? ((on != 0u) ? on : 1u) : 0xFFFFu);
+    }
+}
 
 static void capture_start_(gl_app_t *app)
 {
@@ -1000,11 +1227,29 @@ static void capture_start_(gl_app_t *app)
         gl_app_post(app, GL_EV_BATT_LOW, 0);
         return;
     }
+    app->fac.cap_valid = false; /* the read uses the image memory a factory capture lies in */
+    if (app->settings.tilt_log == (uint8_t)GL_TILTLOG_ONLY) {
+        /* TILT-ONLY MODE: the cameras stay off (no rail, no E13 gate to
+         * ask); the placement is solved as a flag-out read */
+        app->read_id++;
+        app->cameras_off = true;
+        app->cur.flag_found = false;
+        app->cur.bearing_valid = false;
+        gl_app_post(app, GL_EV_CAPTURE_SKIPPED, 0);
+        return;
+    }
     if (!read_temp_ok_(app, gl_hal_tick_ms(), true)) {
+        app->read_id++; /* the refused read has an id of its own in the log */
+        tilt_log_unsolved_(app, (uint8_t)GL_FIELDLOG_TILT_TOO_HOT);
         return; /* E13: no camera read above 60 C; the UI has been told */
     }
     app->read_id++;
     clock_(app, true); /* the vision of a read is 58 to 88 million instructions (README) */
+    /* the rail comes on at the start of gl_read_start() (the power-up
+     * sequence takes about 0.1 s of it) */
+    app->cam_seen_on = false;
+    app->cam_on_at_ms = gl_hal_tick_ms();
+    app->stage_ms[GL_FIELDLOG_T_CAM_ON] = stage_now_(app);
     st = gl_read_start(&app->read, app->cur.up, GL_APP_LRRL_REPEATS);
     if (st != GL_OK) {
         clock_(app, false);
@@ -1014,6 +1259,7 @@ static void capture_start_(gl_app_t *app)
         return;
     }
     app->capture_active = true;
+    cam_rail_watch_(app);
     irq_setup_(app);
 }
 
@@ -1075,6 +1321,7 @@ static void capture_step_(gl_app_t *app)
 {
     const uint32_t progress = app->read.progress;
     const gl_status_t st = gl_read_step(&app->read);
+    cam_rail_watch_(app);
     if (st == GL_ERR_BUSY) {
         if (app->read.progress != progress) {
             /* The UI's limit on the CAPTURE state is a limit on the time
@@ -1091,6 +1338,7 @@ static void capture_step_(gl_app_t *app)
     }
     /* finished one way or another: the camera rail is off */
     app->capture_active = false;
+    app->stage_ms[GL_FIELDLOG_T_CAPTURE_DONE] = stage_now_(app);
     gl_motion_set_strict(&app->motion, false);
     irq_setup_(app);
     if (st == GL_OK) {
@@ -1106,8 +1354,12 @@ static void capture_step_(gl_app_t *app)
         /* a band-only bearing (GL_READ_TIER_BEARING) is not aimed at - and
          * not logged either: a read without a flagstick writes no record */
         app->cur.bearing_valid = false;
+        /* ... but its tilt is (a READ2 record with the same id follows if a
+         * dialled distance lets the placement be solved) */
+        tilt_log_unsolved_(app, (uint8_t)GL_FIELDLOG_TILT_NOT_SOLVED);
         gl_app_post(app, GL_EV_CAPTURE_NO_STICK, 0);
     } else {
+        tilt_log_unsolved_(app, (uint8_t)GL_FIELDLOG_TILT_NOT_SOLVED);
         app->last_error = (uint16_t)st;
         gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_FAULT, (int32_t)st);
         gl_app_post(app, GL_EV_CAPTURE_FAIL, (int32_t)st);
@@ -1270,44 +1522,47 @@ static void survey_store_(gl_app_t *app)
 }
 
 /*
- * Which stored drop is the ball, and does the marker lie there now?
- *
- * The estimator takes the Survey "ball first": the drop FARTHEST from the
- * flagstick defines the putt, the others are samples along the line.  The
- * marker lies wherever the golfer put it down last, and the aim line on the
- * screen means something only if that is the ball.  So:
- *   - the ball is the stored drop with the largest estimator range;
- *   - if the newest drop is that one, or is within
- *     GL_APP_SURVEY_AT_BALL_FRACTION of its range (the golfer came back to
- *     the ball; two drops this close are not two stations), the newest drop
- *     IS taken as the ball, and the result is in its frame: the line can be
- *     drawn;
- *   - otherwise the marker lies somewhere along the line: the numbers are
- *     shown, no line (gl_ui_view_t.line_here false);
- *   - if no drop was ranged, the newest one is a plain tilt-only read.
+ * Which stored placements go to the estimator with the ball's (E29: the
+ * newest).  GATE, DO NOT SYNTHESISE applies here too: the estimator - which
+ * is frozen - puts every placement at a station min(max(D - range, 0), D)
+ * along the line from the ball to the hole.  A placement FARTHER from the
+ * hole than the ball has no station there; clamped to 0 its tilt and its
+ * hole height would be taken as measured AT the ball (two placements 3 m
+ * apart gave a curvature of -0.011 /m that way, tests/test_e2e.c).  So:
+ *   - a placement nearer the hole than the ball: used (a station on the line);
+ *   - one about as far as the ball - the ball within
+ *     GL_APP_SURVEY_AT_BALL_FRACTION of its range - is another reading at the
+ *     ball (the golfer came back to it): used, at station 0;
+ *   - one clearly farther than the ball: NOT handed over.  The result shown
+ *     at the marker's place is then made of the placements from there to the
+ *     hole only (a golfer who walks from the ball toward the hole gets, at
+ *     each stop, the putt from that stop; "Dn" still counts the stops);
+ *   - one that was not ranged cannot be judged: handed over, the estimator
+ *     ignores it (as the reference does).
+ * The ball's record is last in what is handed over; the estimator does not
+ * care where it is (tests/test_solver.c; tests/test_e2e_putt.c runs the same
+ * placements ball first and ball last).
  */
-static unsigned survey_ball_(const gl_app_t *app, bool *at_ball)
+static void survey_select_(gl_app_t *app)
 {
     const unsigned n = app->survey.count;
-    float far = -1.0f, newest = -1.0f;
-    unsigned ball = 0;
+    const float ball = drop_range_(&app->meas[n - 1u]);
+    unsigned k = 0;
 
-    for (unsigned i = 0; i < n; i++) {
+    for (unsigned i = 0; i + 1u < n; i++) {
         const float r = drop_range_(&app->meas[i]);
-        if (r > far) {
-            far = r;
-            ball = i;
+        if (r > 0.0f && ball > 0.0f && ball < GL_APP_SURVEY_AT_BALL_FRACTION * r) {
+            continue; /* behind the ball */
         }
-        if (i + 1u == n) {
-            newest = r;
-        }
+        app->solve_meas[k] = app->meas[i];
+        app->solve_src[k] = (uint8_t)i;
+        k++;
     }
-    if (!(far > 0.0f) || newest >= GL_APP_SURVEY_AT_BALL_FRACTION * far) {
-        *at_ball = true;
-        return n - 1u;
-    }
-    *at_ball = false;
-    return ball;
+    app->solve_meas[k] = app->meas[n - 1u];
+    app->solve_src[k] = (uint8_t)(n - 1u);
+    app->solve_ball = (uint8_t)k;
+    app->solve_drops = (uint8_t)(k + 1u);
+    app->solve_survey = true;
 }
 
 /*
@@ -1366,47 +1621,29 @@ static float shown_confidence_(const gl_app_t *app)
     return gl_clampf(conf, 0.0f, 1.0f);
 }
 
-/* The one plain message of a result: the most serious condition wins. */
-static uint8_t note_(const gl_app_t *app)
+/* The display state of the result (DESIGN_SPEC E33) and its one plain
+ * message: core/gl_ui.c, gl_ui_classify(), fed from the estimate. */
+static gl_ui_show_t classify_(gl_app_t *app, bool distance_known, gl_ui_note_t *note)
 {
     const gl_app_read_t *c = &app->cur;
     const gl_estimate_t *e = &app->est;
+    gl_ui_class_in_t in;
 
-    if (e->aim_source == (uint8_t)GL_AIM_STRAIGHT) {
-        return (uint8_t)GL_UI_NOTE_NO_SOLUTION;
-    }
-    if (e->aim_source == (uint8_t)GL_AIM_BEST_EFFORT) {
-        return (uint8_t)GL_UI_NOTE_NOT_SOLVED;
-    }
-    if (e->flag_missing) {
-        return (uint8_t)GL_UI_NOTE_NO_FLAG;
-    }
-    if (e->range_missing) {
-        return (uint8_t)GL_UI_NOTE_NO_RANGE;
-    }
-    if (e->aim_source == (uint8_t)GL_AIM_FROM_PLANE ||
-        (e->aim_source == (uint8_t)GL_AIM_FROM_PATCH && e->solve_status != (uint8_t)GL_SOLVE_OK &&
-         e->solve_status != (uint8_t)GL_SOLVE_PACE_LIMITED)) {
-        /* the secant plane's solution, or a kept near miss of the patch
-         * solve (within GL_APP_NEAR_MISS_M of the hole centre) */
-        return (uint8_t)GL_UI_NOTE_APPROX;
-    }
-    if (e->solve_status == (uint8_t)GL_SOLVE_PACE_LIMITED) {
-        return (uint8_t)GL_UI_NOTE_PACE;
-    }
-    if (!e->fit_converged) {
-        return (uint8_t)GL_UI_NOTE_FIT;
-    }
-    if (e->poor_horizon) {
-        return (uint8_t)GL_UI_NOTE_HORIZON; /* method B2 only */
-    }
-    if (c->flag_found && c->tier == (uint8_t)GL_READ_TIER_LEFT) {
-        return (uint8_t)GL_UI_NOTE_ONE_CAMERA;
-    }
-    if (c->flag_found && c->ambiguous) {
-        return (uint8_t)GL_UI_NOTE_AMBIGUOUS;
-    }
-    return (uint8_t)GL_UI_NOTE_NONE;
+    memset(&in, 0, sizeof(in));
+    in.aim_source = e->aim_source;
+    in.solve_status = e->solve_status;
+    in.flag_missing = e->flag_missing;
+    in.range_missing = e->range_missing;
+    in.fit_converged = e->fit_converged;
+    in.poor_horizon = e->poor_horizon;
+    in.distance_known = distance_known;
+    /* E31: from what the estimator returned, nothing else */
+    app->steep_ratio = gl_ui_steep_ratio(e->patch[0], e->patch[1], e->patch[2], e->patch[3],
+                                         e->distance_m, e->a_r_mps2);
+    in.steep_ratio = app->steep_ratio;
+    in.one_camera = c->flag_found && c->tier == (uint8_t)GL_READ_TIER_LEFT;
+    in.ambiguous = c->flag_found && c->ambiguous;
+    return gl_ui_classify(&in, note);
 }
 
 /*
@@ -1435,12 +1672,18 @@ static void compose_view_(gl_app_t *app)
     const bool dialled = gl_settings_manual_distance_m(&app->settings) > 0.0f;
     const bool assumed = e->flag_missing || e->range_missing;
 
+    gl_ui_note_t note = GL_UI_NOTE_NONE;
+
     v->have_result = true;
+    v->recalled = false;
+    v->age_s = 0;
     /* a solution of the putt on the estimated surface (patch or its secant
-     * plane); anything else is drawn as a tentative line */
+     * plane); anything else has no line */
     v->solved = (e->aim_source == (uint8_t)GL_AIM_FROM_PATCH ||
                  e->aim_source == (uint8_t)GL_AIM_FROM_PLANE);
-    v->line_here = app->line_here;
+    /* E33: normal / approximate / no solution, and the one message */
+    v->show = (uint8_t)classify_(app, !(assumed && !dialled), &note);
+    v->note = (uint8_t)note;
     v->flag_found = !e->flag_missing;
     v->precision = c->precision;
     v->distance_assumed = assumed;
@@ -1460,10 +1703,11 @@ static void compose_view_(gl_app_t *app)
     v->slope_pct = e->slope_pct;
     v->break_cups = e->break_cups;
     v->confidence = shown_confidence_(app);
-    v->note = note_(app);
     v->drop = (c->stored && app->survey.count > 0u) ? app->survey.count : 0u;
     /* from the read frame to the marker's present frame */
     v->aim_rad = gl_wrap_pi(e->aim_azimuth_device_rad - c->view_yaw_rad);
+    /* E12: the renderer turns the line by the stored rotation of the glass */
+    v->display_rot_rad = app->cal_dev.display_rot_rad;
     v->fall_line_rad = gl_wrap_pi(e->fall_line_azimuth_device_rad - c->view_yaw_rad);
     v->ball_az_rad = gl_wrap_pi(-c->view_yaw_rad);
 }
@@ -1551,6 +1795,222 @@ static void log_read_(gl_app_t *app)
                                 << GL_APP_ESTFLAG_ROLLS_SHIFT)));
 }
 
+/* The replay records of the read just solved (core/gl_fieldlog.h): every
+ * placement the estimator was handed, then context, estimate and fit.
+ * One record at a time is assembled in a static buffer (684 bytes: not on
+ * the stack). */
+static uint8_t fieldlog_buf_[GL_FIELDLOG_READ_LEN];
+
+typedef char gl_app_fieldlog_buf_holds_a_placement_[
+    (GL_FIELDLOG_MEAS_MAX <= GL_FIELDLOG_READ_LEN) ? 1 : -1];
+
+static void fieldlog_meas_(gl_app_t *app)
+{
+    if (!app->storage_ok) {
+        return;
+    }
+    for (unsigned i = 0; i < app->solve_drops; i++) {
+        const gl_measurements_t *m = app->solve_survey ? &app->solve_meas[i] : &app->meas_cur;
+        const size_t n = gl_fieldlog_meas_encode(app->read_id, (uint8_t)i, app->solve_drops,
+                                                 i == app->solve_ball, m, fieldlog_buf_,
+                                                 sizeof(fieldlog_buf_));
+        if (n == 0u || gl_log_append(&app->log, (uint8_t)GL_LOG_REC_MEAS, 0, fieldlog_buf_, n,
+                                     NULL) != GL_OK) {
+            app->last_error = (uint16_t)GL_ERR_IO;
+        }
+    }
+}
+
+static void fieldlog_read_(gl_app_t *app, gl_status_t solver_ret)
+{
+    const gl_app_read_t *c = &app->cur;
+    const gl_read_result_t *res = &app->read.result;
+    gl_fieldlog_ctx_t x;
+
+    if (!app->storage_ok) {
+        return;
+    }
+    memset(&x, 0, sizeof(x));
+    x.read_id = app->read_id;
+    x.rtc_s = gl_hal_rtc_seconds();
+    x.tick_ms = gl_hal_tick_ms();
+    x.fw_version = (uint16_t)GL_APP_FW_VERSION;
+    x.fw_build = GL_APP_FW_BUILD;
+    x.solver_version = gl_solver_version();
+    x.hw_rev = (uint8_t)GL_APP_HW_REV;
+    x.cal_version = (uint8_t)GL_CAL_VERSION;
+    gl_app_cal_ids(app, x.cal_flags, x.cal_crc);
+    gl_settings_encode(&app->settings, x.settings);
+    x.n_drops = app->solve_drops;
+    x.ball_index = app->solve_ball;
+    x.solver_ret = (uint8_t)solver_ret;
+    x.tier = c->tier;
+    x.base = c->base;
+    x.seat = app->seat_used;
+    x.note = app->view.note;
+    x.groups_ok = c->flag_found ? res->groups_ok : 0u;
+    x.flags = (uint16_t)((c->precision ? GL_FIELDLOG_F_PRECISION : 0u) |
+                         ((app->solve_drops > 1u) ? GL_FIELDLOG_F_SURVEY : 0u) |
+                         (c->flag_found ? GL_FIELDLOG_F_FLAG_FOUND : 0u) |
+                         (c->ambiguous ? GL_FIELDLOG_F_AMBIGUOUS : 0u) |
+                         ((c->flag_found && c->top_valid) ? GL_FIELDLOG_F_TOP_VALID : 0u) |
+                         (app->grain_ran ? GL_FIELDLOG_F_GRAIN_RAN : 0u) |
+                         (app->grain_valid ? GL_FIELDLOG_F_GRAIN_VALID : 0u) |
+                         (app->line_here ? GL_FIELDLOG_F_LINE_HERE : 0u) |
+                         (app->cameras_off ? GL_FIELDLOG_F_CAMERAS_OFF : 0u) |
+                         /* solid exactly when the renderer draws it solid: the NORMAL
+                          * state of DESIGN_SPEC E33 (core/gl_ui.c) */
+                         ((solver_ret == GL_OK && gl_ui_view_show(&app->view) == GL_UI_SHOW_NORMAL)
+                              ? GL_FIELDLOG_F_SOLID_LINE : 0u));
+    x.slope_raw = c->slope_raw;
+    x.slope = c->slope;
+    x.zero = app->zero_used;
+    if (c->precision) {
+        x.spin_slope_raw = app->spin_slope_raw;
+        x.reread_slope_raw = app->reread_slope_raw;
+    }
+    x.view_yaw_rad = c->view_yaw_rad;
+    x.up = c->up;
+    x.gyro_bias = c->gyro_bias;
+    x.tilt_scatter = app->tilt_scatter;
+    x.accel_noise_g = app->tilt_noise_g;
+    x.tilt_blocks = app->tilt_blocks;
+    x.imu_temp_c_x100 = (int16_t)gl_roundi(gl_clampf(c->temp_c, -300.0f, 300.0f) * 100.0f);
+    x.cell_temp_c_x10 = t_x10_(app->power.cell_temp_valid, app->power.cell_temp_c);
+    x.mcu_temp_c_x10 = t_x10_(app->power.mcu_temp_valid, app->power.mcu_temp_c);
+    x.batt_mv = app->power.batt_mv;
+    if (app->grain_ran) {
+        x.grain_red_mod = app->grain_modulation;
+        x.grain_red_az = app->grain_azimuth_rad;
+        x.grain_nir_mod = app->grain_nir_mod;
+        x.grain_nir_az = app->grain_nir_az;
+        x.grain_reject = app->grain_reject;
+        memcpy(x.grain_signal, app->grain_signal, sizeof(x.grain_signal));
+    }
+    if (c->flag_found) {
+        x.bearing_rad = c->bearing_rad;
+        x.disparity_px = c->disparity_px;
+        x.disparity_sigma_px = c->disparity_sigma_px;
+        x.base_elev_rad = c->base_elev_rad;
+        x.top_elev_rad = c->top_valid ? c->top_elev_rad : 0.0f;
+        x.quality[0] = pct_(res->quality.rows_used_frac);
+        x.quality[1] = (uint8_t)gl_clampi(gl_roundi(res->quality.line_contrast), 0, 255);
+        x.quality[2] = pct_(res->quality.sharpness_match);
+        x.quality[3] = pct_(res->quality.sat_fraction);
+        x.quality[4] = res->quality.sun ? 1u : 0u;
+    }
+    if (c->range_valid) {
+        x.diag_range_m = c->range.range_m;
+        x.diag_range_sigma_m = c->range.sigma_m;
+    }
+    x.stick_height_m = app->stick_height.height_m;
+    x.stick_height_sigma_m = app->stick_height.sigma_m;
+    memcpy(x.stage_ms, app->stage_ms, sizeof(x.stage_ms));
+    x.cam_on_ms = app->cam_on_ms;
+    x.shown_aim_rad = app->view.aim_rad;
+    x.shown_confidence = app->view.confidence;
+    x.display_rot_rad = app->cal_dev.display_rot_rad;
+    if (gl_fieldlog_read_encode(&x, &app->solve_opt, &app->est, &app->solver_work.fit,
+                                fieldlog_buf_, sizeof(fieldlog_buf_)) == 0u ||
+        gl_log_append(&app->log, (uint8_t)GL_LOG_REC_READ2, 0, fieldlog_buf_,
+                      GL_FIELDLOG_READ_LEN, NULL) != GL_OK) {
+        app->last_error = (uint16_t)GL_ERR_IO;
+    }
+}
+
+/* ======================================================================= */
+/* Recall (DESIGN_SPEC E30)                                                  */
+/* ======================================================================= */
+
+/* A result has just been made and goes onto the screen: from here on the
+ * marker is watched (the rule is with its constants in gl_app_cfg.h). */
+static void recall_result_made_(gl_app_t *app)
+{
+    app->result_ms = gl_hal_tick_ms();
+    app->recall_rest_x = app->motion.rest_x;
+    app->recall_rest_y = app->motion.rest_y;
+    /* (a result made without the marker ever having been seen at rest
+     * cannot be compared with anything later) */
+    app->recall_spoiled = !app->motion.have_rest;
+    app->recall_checking = false;
+    gl_rot_int_start(&app->recall_rot, app->cur.gyro_bias);
+}
+
+/* One IMU sample, while a result is on the screen or the marker has just
+ * been woken with a result that may be recalled. */
+static void recall_watch_(gl_app_t *app, unsigned flags, uint32_t dt_ms)
+{
+    const bool shown = (app->ui.state == (uint8_t)GL_UI_SHOW_RESULT) && app->view.have_result;
+    bool gone = false;
+
+    if (!shown && !app->recall_checking) {
+        return;
+    }
+    gl_rot_int_add(&app->recall_rot, app->motion.gyro_rad_s, (float)dt_ms * 0.001f);
+    if (gl_rot_int_angle(&app->recall_rot) > GL_APP_RECALL_MAX_TURN_RAD) {
+        gone = true; /* turned on the spot */
+    }
+    if ((flags & GL_MOTION_F_BLOCK_STILL) != 0u &&
+        (fabsf(app->motion.avg.prev_mean_a[0] - app->recall_rest_x) > GL_APP_RECALL_DISPLACE_G ||
+         fabsf(app->motion.avg.prev_mean_a[1] - app->recall_rest_y) > GL_APP_RECALL_DISPLACE_G)) {
+        gone = true; /* it lies differently now */
+    }
+    if (app->recall_checking) {
+        if (app->motion.posture.stable == GL_POSTURE_UPRIGHT ||
+            app->motion.posture.stable == GL_POSTURE_OTHER) {
+            gone = true; /* in the hand */
+        }
+        if ((flags & GL_MOTION_F_BLOCK) != 0u && (flags & GL_MOTION_F_BLOCK_STILL) == 0u) {
+            if (app->recall_moving < 255u) {
+                app->recall_moving++;
+            }
+            if (app->recall_moving > GL_APP_RECALL_MOVING_BLOCKS) {
+                gone = true; /* more movement than a tap leaves behind */
+            }
+        }
+    }
+    if (gone) {
+        app->recall_spoiled = true;
+        if (app->recall_checking) {
+            app->recall_checking = false;
+            gl_app_post(app, GL_EV_LIFTED, 0); /* the UI: forget it, a new read follows */
+        }
+    }
+}
+
+/* The marker has been woken (wake_() has restarted the IMU): if the UI
+ * still offers the stored result, start watching for a lift. */
+static void recall_wake_(gl_app_t *app)
+{
+    app->recall_checking = false;
+    if (!app->ui.recall) {
+        return;
+    }
+    if (app->recall_spoiled || !app->view.have_result || !app->imu_ok ||
+        (uint32_t)(gl_hal_tick_ms() - app->result_ms) > GL_APP_RECALL_MAX_AGE_MS) {
+        gl_app_post(app, GL_EV_LIFTED, 0);
+        return;
+    }
+    app->recall_checking = true;
+    app->recall_moving = 0;
+    gl_rot_int_start(&app->recall_rot, app->cur.gyro_bias);
+}
+
+/* GL_ACT_RECALL: tapped awake, at rest, not lifted - the stored result
+ * again, with its age.  No read: no tilt average, no camera, no solve, and
+ * nothing is written to the log. */
+static void recall_show_(gl_app_t *app)
+{
+    /* (the tick counts through Stop mode; the RTC is not used: it reads 0
+     * until a host has set it) */
+    app->recall_checking = false;
+    app->view.recalled = true;
+    app->view.age_s = (uint32_t)(gl_hal_tick_ms() - app->result_ms) / 1000u;
+    app->recalls++;
+    /* the watch goes on while it is on the screen again */
+    gl_rot_int_start(&app->recall_rot, app->cur.gyro_bias);
+}
+
 static void solve_(gl_app_t *app, bool precision_reread)
 {
     gl_app_read_t *c = &app->cur;
@@ -1578,7 +2038,7 @@ static void solve_(gl_app_t *app, bool precision_reread)
     }
     /* the solve needs the fast clock as much as the vision does: a typical
      * estimate is 0.3 million instructions, the step budget below allows
-     * 107 million (README "Solver") */
+     * 105 million (351 per RK4 step by the cost table; README "Run time") */
     clock_(app, true);
     build_measurement_(app, &app->meas_cur);
     gl_solver_default_options(opt);
@@ -1597,34 +2057,46 @@ static void solve_(gl_app_t *app, bool precision_reread)
      * decimetres in most of those cases - is not shown instead. */
     opt->near_miss_m = GL_APP_NEAR_MISS_M;
     /* The one deliberate difference from the reference: a budget on the
-     * work.  The costliest estimate found needs 0.63 million RK4 steps
-     * (4 s at 160 MHz, 14 s at 48 MHz at the pessimistic end of the timing
-     * model), the bound from the loop counters is six times that - beyond
-     * the 32 s watchdog without the PLL.  With the budget an estimate
-     * integrates at most 306 004 steps; a solve that is cut ends as what
-     * these putts end as anyway: NOT SOLVED, a tentative line. */
+     * work.  The costliest estimate found needs 575,247 RK4 steps without
+     * it (tests/test_solver.c: 202 million instructions by the cost table,
+     * 1.9 to 3.8 s at 160 MHz and 6.3 to 12.6 s at 48 MHz over the range of
+     * the timing model), the bound from the loop counters is 3.84 million
+     * steps - beyond the 32 s watchdog without the PLL.  With the budget an
+     * estimate integrates at most 306 004 steps; a solve that is cut ends
+     * as what these putts end as anyway: no solution (DESIGN_SPEC E33: the
+     * message "NOT SOLVED" or "TOO STEEP", and no line). */
     opt->max_steps = GL_APP_SOLVE_MAX_STEPS;
     gl_hal_watchdog_kick(); /* the solve blocks the loop: start it with a fresh period */
+    app->stage_ms[GL_FIELDLOG_T_SOLVE_START] = stage_now_(app);
     app->solve_drops = 1;
     app->solve_ball = 0;
+    app->solve_src[0] = (uint8_t)((app->survey.count > 0u) ? (app->survey.count - 1u) : 0u);
+    app->solve_survey = false;
     app->line_here = true;
     if (c->stored && app->survey.count >= 2u) {
         /* the newest drop is the current read: keep its record in step with
-         * what has just been built (a Precision combination changes it) */
-        bool at_ball = true;
+         * what has just been built (a Precision combination changes it).
+         * DESIGN_SPEC E29: THE PLACEMENT THE MARKER STANDS ON IS THE BALL -
+         * the newest drop defines the putt, the earlier ones are samples
+         * along its line.  So every result of a Survey has its line.  (Until
+         * phase 3 the ball was the drop farthest from the flagstick, and at
+         * any other drop the screen said "PUT AT BALL" without a line.) */
         app->meas[app->survey.count - 1u] = app->meas_cur;
-        app->solve_drops = app->survey.count;
-        app->solve_ball = (uint8_t)survey_ball_(app, &at_ball);
-        app->line_here = at_ball;
-        st = gl_solver_estimate_survey(app->meas, app->solve_drops, app->solve_ball, opt,
+        survey_select_(app);
+        st = gl_solver_estimate_survey(app->solve_meas, app->solve_drops, app->solve_ball, opt,
                                        &app->solver_work, &app->est);
     } else {
         st = gl_solver_estimate(&app->meas_cur, opt, &app->solver_work, &app->est);
     }
     gl_hal_trace(GL_TRACE_SOLVE, (st == GL_OK) ? app->est.n_steps : 0u);
     clock_(app, false);
+    app->stage_ms[GL_FIELDLOG_T_SOLVE_DONE] = stage_now_(app);
     app->solver_status = st;
+    /* what the estimator was handed is logged whatever it made of it: a
+     * read that could not be solved is the one most worth replaying */
+    fieldlog_meas_(app);
     if (st != GL_OK) {
+        tilt_log_unsolved_(app, (uint8_t)GL_FIELDLOG_TILT_NOT_SOLVED);
         /* GL_ERR_PARAM / GL_ERR_RANGE: an input no placement should produce,
          * or arithmetic that left the finite range.  (The solver's own
          * fallbacks - flag missing, not ranged, secant plane, best iterate -
@@ -1635,7 +2107,10 @@ static void solve_(gl_app_t *app, bool precision_reread)
         return;
     }
     compose_view_(app);
+    recall_result_made_(app);
     log_read_(app);
+    fieldlog_read_(app, st);
+    app->tilt_logged = true; /* the READ2 record carries the tilt */
     app->reads_total++;
     if (!app->est.flag_missing && !app->est.range_missing) {
         forget_dialled_(app); /* (after the view: it has no use for it either) */
@@ -1650,8 +2125,21 @@ static void solve_(gl_app_t *app, bool precision_reread)
 static void zero_start_(gl_app_t *app)
 {
     memset(&app->zero, 0, sizeof(app->zero));
+    /* From the menu: the user's zeroing on a hard flat surface - the BALL
+     * seat (E11).  Armed by the factory (GL_CMD_LEVEL_ZERO): the seat it
+     * named; the marker lies on that seat plate now. */
+    app->zero.seat = (uint8_t)GL_CAL_SEAT_BALL;
+    if (app->fac.zero.state == (uint8_t)GL_ZERO_STATE_ARMED) {
+        app->zero.seat = app->fac.zero.seat;
+        app->zero.armed = true;
+        app->fac.zero.state = (uint8_t)GL_ZERO_STATE_RUNNING;
+        app->fac.zero.attempts++;
+    }
     if (app->power.vbus) {
         /* never in the cradle: it takes the marker one way round only */
+        if (app->zero.armed) {
+            gl_factory_zero_result(app, GL_ERR_STATE, app->zero.m1, app->zero.m1, 0.0f, 0.0f);
+        }
         gl_app_post(app, GL_EV_CAL_FAIL, (int32_t)GL_ERR_STATE);
         return;
     }
@@ -1662,6 +2150,9 @@ static void zero_start_(gl_app_t *app)
 
 static void zero_fail_(gl_app_t *app, gl_status_t st)
 {
+    if (app->zero.armed) {
+        gl_factory_zero_result(app, st, app->zero.m1, app->zero.m1, 0.0f, app->zero.scatter);
+    }
     app->zero.active = false;
     app->last_error = (uint16_t)st;
     gl_app_post(app, GL_EV_CAL_FAIL, (int32_t)st);
@@ -1698,6 +2189,7 @@ static void zero_sample_(gl_app_t *app, unsigned flags, uint32_t dt_ms, uint32_t
     if (!z->averaging) {
         if ((flags & GL_MOTION_F_AT_REST) != 0u) {
             gl_tilt_avg_reset(&app->motion.avg);
+            tstat_reset_(&app->tstat);
             z->averaging = true;
         }
         return;
@@ -1715,6 +2207,20 @@ static void zero_sample_(gl_app_t *app, unsigned flags, uint32_t dt_ms, uint32_t
         zero_fail_(app, st);
         return;
     }
+    if (app->tilt_scatter > z->scatter) {
+        z->scatter = app->tilt_scatter;
+    }
+    {
+        /* both reads of a zeroing go to the field log (the two separate
+         * tilt readings VALIDATION_PLAN 3.3 asks for) */
+        gl_vec2_t zero_now, s2;
+        (void)gl_cal_tilt_zero(&app->cal_tilt, (gl_cal_seat_t)z->seat, &zero_now);
+        s2.x = slope_raw.x - zero_now.x;
+        s2.y = slope_raw.y - zero_now.y;
+        tilt_log_(app, (uint8_t)((z->step == 0u) ? GL_FIELDLOG_TILT_ZERO_1 : GL_FIELDLOG_TILT_ZERO_2),
+                  app->read_id, z->seat, slope_raw, s2, gyro_bias,
+                  (z->step == 0u) ? 0.0f : gl_rot_int_yaw(&z->rot, z->up1));
+    }
     if (z->step == 0u) {
         z->m1 = slope_raw;
         z->up1 = up;
@@ -1724,7 +2230,7 @@ static void zero_sample_(gl_app_t *app, unsigned flags, uint32_t dt_ms, uint32_t
         app->redraw = true;
     } else {
         gl_vec2_t bias, surface;
-        uint8_t blob[GL_CAL_TILT_BLOB_LEN];
+        const gl_cal_tilt_t before = app->cal_tilt;
         const float yaw = gl_rot_int_yaw(&z->rot, z->up1);
         st = gl_tilt_flip_solve(z->m1, slope_raw, yaw, &bias, &surface);
         if (st == GL_OK &&
@@ -1735,16 +2241,23 @@ static void zero_sample_(gl_app_t *app, unsigned flags, uint32_t dt_ms, uint32_t
             zero_fail_(app, st); /* turn not near 180 degrees, or implausible */
             return;
         }
-        app->cal_tilt.flip_bias_x = bias.x;
-        app->cal_tilt.flip_bias_y = bias.y;
-        app->cal_tilt.flip_temp_c = app->temp_valid ? app->temp_c : app->cal_tilt.t0_c;
-        app->cal_tilt.flip_time_s = gl_hal_rtc_seconds();
-        app->cal_tilt.flags |= (uint8_t)GL_CAL_TILT_FLAG_FLIP;
-        gl_cal_tilt_encode(&app->cal_tilt, blob);
-        st = gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_TILT, blob, sizeof(blob));
+        gl_cal_tilt_set_zero(&app->cal_tilt, (gl_cal_seat_t)z->seat, bias,
+                             app->temp_valid ? app->temp_c : app->cal_tilt.t0_c,
+                             gl_hal_rtc_seconds(), z->scatter);
+        st = gl_app_cal_store(app, (uint8_t)GL_CAL_ID_TILT);
         if (st != GL_OK && st != GL_ERR_NOT_FOUND) {
+            app->cal_tilt = before; /* not stored: not adopted either */
             zero_fail_(app, st);
             return;
+        }
+        if (z->armed) {
+            if (st != GL_OK) {
+                /* the factory wants it STORED: a unit without storage fails */
+                app->cal_tilt = before;
+                zero_fail_(app, st);
+                return;
+            }
+            gl_factory_zero_result(app, GL_OK, bias, surface, yaw, z->scatter);
         }
         gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_ZEROED,
                          (int32_t)gl_roundi(1.0e6f * sqrtf(bias.x * bias.x + bias.y * bias.y)));
@@ -1781,7 +2294,6 @@ gl_status_t gl_app_start_cal(gl_app_t *app, uint8_t procedure, uint8_t arg)
         if (arg == 6u) {
             gl_vec3_t offset;
             gl_mat3_t m;
-            uint8_t blob[GL_CAL_TILT_BLOB_LEN];
             gl_status_t st;
             if (app->six.done_mask != 0x3Fu) {
                 return GL_ERR_STATE;
@@ -1799,13 +2311,11 @@ gl_status_t gl_app_start_cal(gl_app_t *app, uint8_t procedure, uint8_t arg)
                 app->cal_tilt.t0_c = app->temp_c;
             }
             app->cal_tilt.flags |= (uint8_t)GL_CAL_TILT_FLAG_FACTORY;
-            gl_cal_tilt_encode(&app->cal_tilt, blob);
             app->six.done_mask = 0;
-            return gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_TILT, blob, sizeof(blob));
+            return gl_app_cal_store(app, (uint8_t)GL_CAL_ID_TILT);
         }
         return GL_ERR_PARAM;
     case GL_CALPROC_GRAIN_WHITE: {
-        uint8_t blob[GL_CAL_GRAIN_BLOB_LEN];
         gl_status_t st = gl_grain_fe_measure(&grain_raw_, GL_GRAIN_MAX_CYCLES);
         if (st == GL_OK) {
             st = gl_grain_white_reference(&grain_raw_, &app->cal_grain);
@@ -1814,16 +2324,16 @@ gl_status_t gl_app_start_cal(gl_app_t *app, uint8_t procedure, uint8_t arg)
         if (st != GL_OK) {
             return st;
         }
-        gl_cal_grain_encode(&app->cal_grain, blob);
-        return gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_GRAIN, blob, sizeof(blob));
+        return gl_app_cal_store(app, (uint8_t)GL_CAL_ID_GRAIN);
     }
     case GL_CALPROC_ABORT:
         app->six.active = false;
         return GL_OK;
     default:
-        /* GL_CALPROC_GRAIN_FLOOR (needs readings on turf, outside the cradle)
-         * and GL_CALPROC_CAM_HORIZON (needs the factory target) are not
-         * implemented in phase 1 */
+        /* GL_CALPROC_GRAIN_FLOOR (readings on turf, outside the cradle) and
+         * GL_CALPROC_CAM_HORIZON (a frame of the factory target) are not
+         * procedures of the unit: the PC measures and writes the result with
+         * GL_CMD_SET_GRAIN_FLOOR / GL_CMD_SET_CAM_HORIZON (app/gl_factory.c) */
         return GL_ERR_UNSUPPORTED;
     }
 }
@@ -1868,6 +2378,10 @@ static void imu_sample_(gl_app_t *app, uint32_t now)
         dt_ms = 100u; /* the loop was busy (capture start, flash): do not over-integrate */
     }
     flags = gl_motion_sample(&app->motion, &raw, dt_ms, &app->events);
+    if ((flags & GL_MOTION_F_BLOCK_STILL) != 0u &&
+        (app->tilt_active || (app->zero.active && app->zero.averaging))) {
+        tstat_add_(app); /* one block slope more for the scatter of this average */
+    }
     if (app->tilt_active && (flags & GL_MOTION_F_BLOCK_STILL) != 0u &&
         app->motion.avg.blocks_still >= GL_APP_TILT_BLOCKS) {
         tilt_finish_(app);
@@ -1878,6 +2392,7 @@ static void imu_sample_(gl_app_t *app, uint32_t now)
     if (app->six.active && (flags & GL_MOTION_F_BLOCK) != 0u) {
         six_face_block_(app, flags);
     }
+    recall_watch_(app, flags, dt_ms);
     if (app->usb_on) {
         gl_usb_stream_imu(app, &raw);
     }
@@ -1907,10 +2422,18 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
     }
     if ((a & GL_ACT_NEW_READ) != 0u) {
         app->view.have_result = false;
+        app->recall_checking = false;
         gl_motion_spin_end(&app->motion);
     }
     if ((a & GL_ACT_DISPLAY_ON) != 0u) {
+        const bool was_asleep = !app->awake;
         wake_(app, now);
+        if (was_asleep) {
+            recall_wake_(app); /* E30 */
+        }
+    }
+    if ((a & GL_ACT_RECALL) != 0u) {
+        recall_show_(app);
     }
     if ((a & GL_ACT_USB_START) != 0u) {
         usb_start_(app);
@@ -1922,6 +2445,11 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
         int lo = 0, hi = 1; /* the "ZERO" item: NO / YES */
         if (app->ui.item < GL_UI_ITEM_ZERO) {
             gl_settings_item_range((gl_item_t)app->ui.item, &lo, &hi);
+        } else if (app->ui.item == GL_UI_ITEM_INFO) {
+            hi = (int)app->ui.info_pages - 1; /* the pages of the INFO screen */
+            if (hi < 0) {
+                hi = 0;
+            }
         }
         gl_motion_dial_begin(&app->motion, (int)app->ui.dial_value, lo, hi);
     }
@@ -1966,6 +2494,9 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
             app->cur.precision = false;
             compose_view_(app);
         }
+        /* E30: where the marker lies now, and how, is not what it was when
+         * the result was made: this result is not offered again later */
+        app->recall_spoiled = true;
     }
     if ((a & GL_ACT_CAL_ZERO_START) != 0u) {
         zero_start_(app);
@@ -1984,6 +2515,26 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
     }
 }
 
+/* What the INFO item of the dial shows (regulatory and information screen):
+ * hardware and firmware version, the serial number - the stored one, else
+ * the one derived from the processor's unique number - and the text block. */
+static void info_view_(gl_app_t *app)
+{
+    gl_ui_view_t *v = &app->view;
+    uint32_t serial = app->cal_dev.serial;
+
+    if ((app->cal_dev.flags & GL_CAL_DEV_FLAG_SERIAL) == 0u) {
+        uint8_t uid[12];
+        gl_hal_unique_id(uid);
+        serial = gl_cal_serial_from_uid(uid);
+    }
+    v->info_hw = GL_APP_HW_REV_LETTER;
+    v->info_fw = (uint16_t)GL_APP_FW_VERSION;
+    gl_cal_serial_text(serial, v->info_serial);
+    v->info_text = GL_REGULATORY_TEXT;
+    app->ui.info_pages = (uint8_t)gl_ui_info_pages(v->info_text);
+}
+
 static void draw_(gl_app_t *app)
 {
     app->redraw = false;
@@ -1995,7 +2546,10 @@ static void draw_(gl_app_t *app)
     app->view.usb_connected = app->usb_on && gl_hal_usb_connected();
     app->chg_shown = chg_view_(app, &app->view.chg_blocked, &app->view.chg_full);
     app->view.cal_step = app->zero.active ? app->zero.step : 0u;
-    gl_ui_render(&app->ui, &app->view, &app->gfx);
+    info_view_(app);
+    if (!gl_factory_draw(app)) { /* a display test pattern holds the screen */
+        gl_ui_render(&app->ui, &app->view, &app->gfx);
+    }
     gl_hal_trace(GL_TRACE_RENDER, 0u);
     if (gl_lcd_update(&app->lcd, &app->gfx, NULL) != GL_OK) {
         app->last_error = (uint16_t)GL_ERR_IO;
@@ -2031,7 +2585,9 @@ gl_status_t gl_app_init(gl_app_t *app)
     gl_cal_cam_defaults(&app->cal_cam[GL_CAM_LEFT], 0);
     gl_cal_cam_defaults(&app->cal_cam[GL_CAM_RIGHT], 1);
     gl_cal_grain_defaults(&app->cal_grain);
+    gl_cal_device_defaults(&app->cal_dev);
     gl_stick_height_reset(&app->stick_height);
+    app->seat_used = (uint8_t)GL_CAL_SEAT_NONE;
 
     /* drivers: every one first puts its pins into the safe state */
     gl_ov7692_init(&app->cam, NULL); /* camera rail off, camera-facing pins parked */
@@ -2084,6 +2640,7 @@ gl_status_t gl_app_init(gl_app_t *app)
     gl_read_set_strip_hook(&app->read, strip_hook_, app);
     gl_motion_init(&app->motion, GL_IMU_ACCEL_G_PER_LSB_2G, GL_IMU_GYRO_RAD_S_PER_LSB_1000);
     gl_ui_init(&app->ui, &app->settings, gl_hal_tick_ms());
+    info_view_(app);
     gl_usb_bind(app);
     app->solver_status = GL_ERR_STATE; /* no read solved yet */
 
@@ -2172,6 +2729,12 @@ static void sleep_(gl_app_t *app)
             wait = (d > 0) ? (uint32_t)d : 1u;
         }
     }
+    {
+        const uint32_t f = gl_factory_time_left_ms(app, now);
+        if (f != 0u && f < wait) {
+            wait = f;
+        }
+    }
     /* Never sleep over a VBUS level that has not been dealt with: if it
      * changed during this pass (spring-pin bounce, a marker lifted out while
      * the loop was busy), the next pass handles it first - USB is not left
@@ -2206,9 +2769,17 @@ static void sleep_(gl_app_t *app)
  * cell is measured, to catch it falling to the storage threshold. */
 static void sleep_housekeeping_(gl_app_t *app, uint32_t now)
 {
+    /* E30: a result older than GL_APP_RECALL_MAX_AGE_MS is not offered again
+     * (decided here, every 16 s, so that the 49.7-day wrap of the tick can
+     * never make an old result young) */
+    if (app->view.have_result && !app->recall_spoiled &&
+        (uint32_t)(now - app->result_ms) > GL_APP_RECALL_MAX_AGE_MS) {
+        app->recall_spoiled = true;
+    }
     /* the IMU is switched off on purpose in storage mode, asleep in the
      * cradle and on the way into ship mode */
-    const bool imu_off = app->storage_mode || app->cradle_sleep || app->ship_pending;
+    const bool imu_off = app->storage_mode || app->cradle_sleep || app->ship_pending ||
+                         gl_factory_sleep_no_motion(app);
     app->sleep_ticks++;
     if (!app->imu_ok) {
         imu_recover_(app, now);
@@ -2377,12 +2948,20 @@ void gl_app_run_once(gl_app_t *app)
          * it has sent something, it is being sent a stream it asked for, or
          * a log erase it started is running. */
         if (app->ui.state == (uint8_t)GL_UI_CRADLE_USB &&
-            (app->usb_activity || app->log_erasing || app->six.active ||
+            (app->usb_activity || app->log_erasing || app->six.active || app->fac.pattern != 0u ||
              (app->stream_mask != 0u && gl_hal_usb_connected()))) {
             gl_ui_keepalive(&app->ui, now);
         }
         app->usb_activity = false;
     }
+    /* E34: this image has run its main loop for a while - tell the boot stub
+     * (it would otherwise count this start as one that ended badly if a
+     * watchdog reset follows) */
+    if (!app->boot_confirmed && now >= GL_APP_BOOT_CONFIRM_MS) {
+        app->boot_confirmed = true;
+        gl_hal_boot_confirm();
+    }
+    gl_factory_service(app, now);
     /* the work above can take real time (a capture start waits for the
      * sensor, a raw strip takes half a second to log): the UI is given the
      * time as it is NOW, never an older one than it has already seen */

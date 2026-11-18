@@ -87,6 +87,15 @@
 /** One-sigma of the averaged base / top row used for the elevation
  *  uncertainty (covers the +0.3 row bias at the turf horizon), rows. */
 #define GL_APP_ELEV_SIGMA_ROWS 0.3f
+/** Rail-time bound (DESIGN_SPEC E15: camera rail on for 2.2 to 2.8 s).  A
+ *  read with several lines in the band probes each with one group before it
+ *  follows one.  The whole read gets GL_APP_LRRL_REPEATS +
+ *  GL_APP_PROBE_FREE_GROUPS groups; the line followed never fewer than
+ *  GL_APP_MIN_FOLLOW_GROUPS (with four candidates: 4 + 4 = 8 groups).  With
+ *  one free group the read of three lines keeps the rail on for 2.82 s by
+ *  the model (make bench-vision), with none for 2.56 s: none. */
+#define GL_APP_PROBE_FREE_GROUPS 0u
+#define GL_APP_MIN_FOLLOW_GROUPS 4u
 /** Groups that must succeed for a read to count as "flagstick measured". */
 #define GL_APP_MIN_GROUPS 2u
 
@@ -149,7 +158,10 @@
 /* The estimator hand-over (app/gl_app.c build_measurement_, shown_confidence_). */
 #define GL_APP_DEFAULT_DISTANCE_M 3.0f        /* the estimator's default_distance */
 #define GL_APP_EST_SIGMA_DISP_PX 0.08f        /* the estimator's sigma_disp */
-#define GL_APP_SURVEY_AT_BALL_FRACTION 0.85f  /* newest drop within this of the farthest: at the ball */
+/* Survey (E29): a stored placement is handed to the estimator with the ball's
+ * unless it is clearly FARTHER from the hole than the ball - the ball's range
+ * below this fraction of its own (app/gl_app.c, survey_select_). */
+#define GL_APP_SURVEY_AT_BALL_FRACTION 0.85f
 #define GL_APP_CONF_ONE_CAMERA 0.6f
 #define GL_APP_CONF_AMBIGUOUS 0.6f
 #define GL_APP_CONF_FIT_NOT_DONE 0.7f
@@ -159,12 +171,41 @@
  * close to the hole centre is the aim (a tenth of the hole radius). */
 #define GL_APP_NEAR_MISS_M 0.005f
 /* gl_solver_options_t.max_steps: RK4 steps one estimate may integrate (plus
- * one roll of at most 6004).  A typical read needs 1000, the costliest
- * solve that still ENDED WITH A RESULT in 40 000 random reads 303 000; the
- * costliest without the budget 629 000.  351 host instructions per step:
- * 105 million instructions, 1.0 to 2.0 s at 160 MHz, 3.3 to 6.6 s at 48 MHz
- * with the timing model's 1.5 to 3 cycles per instruction (NOT MEASURED). */
+ * one roll of at most 6004).  DESIGN_SPEC E33 states the number.  A typical
+ * read needs 1000; among the 340 estimator vectors the costliest solve of
+ * the single build needs 208,952 and none exceeds the budget; the costliest
+ * estimate found without a budget needs 575,247 (tests/test_solver.c prints
+ * all three).  351 host instructions per step: 105 million instructions,
+ * 1.0 to 2.0 s at 160 MHz, 3.3 to 6.6 s at 48 MHz with the timing model's
+ * 1.5 to 3 cycles per instruction (NOT MEASURED). */
 #define GL_APP_SOLVE_MAX_STEPS 300000u
+/* ---- Recall (DESIGN_SPEC E30): "not lifted since the last result" ----------
+ * The stored result is shown again only if NONE of these was seen from the
+ * moment it came onto the screen (app/gl_app.c, recall_watch_):
+ *   - while it was on the screen, and from the wake-up until the marker is
+ *     at rest: the gyro, integrated with the read's own bias, turned by more
+ *     than GL_APP_RECALL_MAX_TURN_RAD about any axis (a twist on the spot);
+ *   - a still 133 ms block whose mean gravity direction differs from the one
+ *     the marker rested in at its read by more than GL_APP_RECALL_DISPLACE_G
+ *     on an axis (4 mg = 4 mrad of tilt: a tenth of what a read calls motion
+ *     while a result is shown, and about four times what the accelerometer's
+ *     offset drifts over 10 K - data sheet figure from memory, PROVISIONAL);
+ *   - after the wake-up: a posture other than flat, or more than
+ *     GL_APP_RECALL_MOVING_BLOCKS moving 133 ms blocks before it is at rest.
+ *     (A disturbance that lasts d makes ceil(d / 133 ms) + 1 moving blocks:
+ *     the block after a disturbed one is not "still" either, its mean has
+ *     jumped.  A tap leaves 2, a nudge of 0.2 s leaves 3; picking the marker
+ *     up and putting it down takes longer);
+ *   - the Precision spin was begun and given up (the marker may lie anywhere).
+ * While the marker SLEEPS nothing is measured: a lift is seen because it
+ * wakes the marker and is still going on when the samples start.  A turn
+ * that is over before the IMU delivers its first sample is not seen
+ * (NOT VERIFIED on hardware: the IMU's start-up time out of wake-on-motion). */
+#define GL_APP_RECALL_MAX_TURN_RAD 0.035f /* 2 degrees */
+#define GL_APP_RECALL_DISPLACE_G 0.004f
+#define GL_APP_RECALL_MOVING_BLOCKS 3u
+/** A result older than this is not recalled: a tap then makes a new read. */
+#define GL_APP_RECALL_MAX_AGE_MS (24u * 3600u * 1000u)
 /** How long "SAVED" stays on the screen after a zeroing. */
 #define GL_APP_ZERO_SAVED_MS 1500u
 /** Largest device bias a zeroing may store (rise/run); more means the

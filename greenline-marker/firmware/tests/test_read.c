@@ -59,6 +59,14 @@ static void scene_cb_(void *ctx, gl_cam_id_t cam, uint16_t x0, uint16_t y0, uint
     c->frames++;
 }
 
+/* false: without the rail-time bound of DESIGN_SPEC E15 (probe_done_ in
+ * app/gl_read.c), to show what the bound costs */
+static bool bound_groups_ = true;
+/* true: the read runs on the 160 MHz clock, as in the application (the
+ * other tests of this file run it on the 48 MHz clock the simulator starts
+ * with, as they always have: their figures are pinned to that timing) */
+static bool fast_clock_ = false;
+
 static gl_status_t run_read_(uint32_t phase_us)
 {
     const gl_vec3_t up = { 0.0f, 0.0f, 1.0f };
@@ -69,6 +77,10 @@ static gl_status_t run_read_(uint32_t phase_us)
     gl_sim_cam_set_phase_us(GL_CAM_RIGHT, phase_us);
     gl_ov7692_init(&cam_, NULL);
     gl_read_init(&rd_, &cam_);
+    rd_.bound_groups = bound_groups_;
+    if (fast_clock_) {
+        (void)gl_hal_clock_set(GL_CLOCK_FAST);
+    }
     C.frames = 0;
     st = gl_read_start(&rd_, up, GL_APP_LRRL_REPEATS);
     if (st == GL_OK) {
@@ -399,6 +411,8 @@ typedef struct {
     int n_rng;
     double rng_rms_pct, rng_z_rms;               /* fused range as the application computes it */
     double rail_ms;
+    double rail_max_ms;                          /* longest camera-rail time of a read */
+    int max_probed, min_follow, max_strips;      /* candidates probed; groups for the line followed */
     int n_sun;
 } stat_t;
 
@@ -426,6 +440,18 @@ static void run_case_(const char *name, setup_fn_t fn, int variant, int trials, 
         C.trial_seed = gl_scene_u32(&rng);
         st = run_read_((uint32_t)(gl_scene_uniform(&rng) * 33000.0));
         o->rail_ms += (double)res->rail_on_ms / (double)trials;
+        if ((double)res->rail_on_ms > o->rail_max_ms) {
+            o->rail_max_ms = (double)res->rail_on_ms;
+        }
+        if ((int)res->n_probed > o->max_probed) {
+            o->max_probed = (int)res->n_probed;
+        }
+        if ((int)res->strips_captured > o->max_strips) {
+            o->max_strips = (int)res->strips_captured;
+        }
+        if (res->n_probed > 1u && (t == 0 || (int)res->follow_groups < o->min_follow || o->min_follow == 0)) {
+            o->min_follow = (int)res->follow_groups;
+        }
         o->n_sun += res->quality.sun ? 1 : 0;
         if (st != GL_OK && st != GL_ERR_NO_STICK) {
             o->n_other++;
@@ -838,6 +864,105 @@ GL_TEST(test_other_objects)
     run_list_(list, GL_ARRAY_LEN(list), st);
 }
 
+/* ---- 5b. DESIGN_SPEC E15: the camera rail is on for 2.2 to 2.8 s ------------------------ */
+/* A read that finds several lines in the horizon band gives each a group of
+ * its own before it follows one.  Until phase 3 the line followed then got
+ * all 8 groups: 3.36 s of rail with a person behind the stick (three lines),
+ * NOT MET.  Now the read has 8 groups in all (app/gl_read.c, probe_done_).
+ * This test runs the scenes with several lines both ways - the bound on
+ * (the firmware) and off - and shows what the bound costs. */
+GL_TEST(test_rail_time_is_bounded_with_several_lines)
+{
+    static const struct {
+        const char *name;
+        setup_fn_t fn;
+        int variant;
+    } scenes[] = {
+        { "A_nominal", setup_nominal_, 0 },          { "A_person_behind", setup_person_, 0 },
+        { "A_person_0.6m", setup_person_, 1 },       { "A_person_2m", setup_person_, 2 },
+        { "A_pole2_7px", setup_pole2_, 0 },          { "A_pole2_far_weak", setup_pole2_, 2 },
+        { "A_pole2_far_strong", setup_pole2_, 3 },   { "B_pole2_far_weak", setup_pole2_, 12 },
+        { "B_pole2_far_strong", setup_pole2_, 13 },  { "A_glare_sun_in", setup_glare_, 3 },
+        { "A_combo", setup_combo_, 0 },
+    };
+    const int trials = 2 * TRIALS;
+    double worst_on = 0.0, worst_off = 0.0, sum_on = 0.0, sum_off = 0.0, sum_r_on = 0.0, sum_r_off = 0.0;
+    int n_multi = 0, over_on = 0, over_off = 0;
+
+    fast_clock_ = true; /* the application's clock during a capture */
+
+    printf("    %d reads per scene; rail = camera rail on, the longest read of the scene; d rms = "
+           "disparity error rms, px; rng = fused range error rms, %%\n", trials);
+    printf("    %-20s | probed | bound ON: groups  strips  rail ms  d rms    rng %%  stereo | bound OFF: "
+           "strips  rail ms  d rms    rng %%  stereo\n", "scene");
+    for (size_t i = 0; i < GL_ARRAY_LEN(scenes); i++) {
+        stat_t on, off;
+        bound_groups_ = true;
+        run_case_(scenes[i].name, scenes[i].fn, scenes[i].variant, trials, &on);
+        bound_groups_ = false;
+        run_case_(scenes[i].name, scenes[i].fn, scenes[i].variant, trials, &off);
+        bound_groups_ = true;
+        printf("    %-20s | %6d |         %d + %d   %5d  %7.0f  %6.4f  %5.2f  %3d/%-3d |            %5d  %7.0f  "
+               "%6.4f  %5.2f  %3d/%-3d\n", scenes[i].name, on.max_probed,
+               (on.max_probed > 1) ? on.max_probed : 0,
+               (on.max_probed > 1) ? on.min_follow : (int)GL_APP_LRRL_REPEATS, on.max_strips,
+               on.rail_max_ms, on.d_rms, on.rng_rms_pct, on.n_stereo, on.n, off.max_strips,
+               off.rail_max_ms, off.d_rms, off.rng_rms_pct, off.n_stereo, off.n);
+        fflush(stdout);
+        /* THE REQUIREMENT: no read keeps the rail on for more than 2.8 s */
+        GL_CHECK(on.rail_max_ms <= 2800.0);
+        /* never more than 8 groups = 32 strips in all */
+        GL_CHECK(on.max_strips <= 4 * (int)GL_APP_LRRL_REPEATS);
+        /* the bound does not change which line is taken, nor make a read fail */
+        GL_CHECK_EQ(on.n_wrong_unflagged, 0);
+        GL_CHECK_EQ(on.n_gross, 0);
+        if (trials >= 2 * STAT_READS) {
+            GL_CHECK(on.n_stereo + 2 >= off.n_stereo);
+        }
+        worst_on = (on.rail_max_ms > worst_on) ? on.rail_max_ms : worst_on;
+        worst_off = (off.rail_max_ms > worst_off) ? off.rail_max_ms : worst_off;
+        over_on += (on.rail_max_ms > 2800.0) ? 1 : 0;
+        over_off += (off.rail_max_ms > 2800.0) ? 1 : 0;
+        if (on.max_probed > 1 && on.n_good >= 4 && off.n_good >= 4) {
+            GL_CHECK(on.min_follow >= (int)GL_APP_MIN_FOLLOW_GROUPS);
+            GL_CHECK(on.min_follow + on.max_probed >= (int)GL_APP_LRRL_REPEATS);
+            if (strcmp(scenes[i].name, "A_combo") != 0) {
+                /* (the combination scene - glare, trees, texture and a sway -
+                 * has 5 % of range error either way: it would hide the others) */
+                sum_on += on.d_rms * on.d_rms;
+                sum_off += off.d_rms * off.d_rms;
+                sum_r_on += on.rng_rms_pct * on.rng_rms_pct;
+                sum_r_off += off.rng_rms_pct * off.rng_rms_pct;
+                n_multi++;
+            }
+        } else if (on.max_probed <= 1) {
+            /* one line in the band: the bound changes nothing at all */
+            GL_CHECK_NEAR(on.d_rms, off.d_rms, 0.0);
+            GL_CHECK_NEAR(on.rail_max_ms, off.rail_max_ms, 0.0);
+        }
+    }
+    GL_CHECK(n_multi >= 4 || trials < 2 * STAT_READS);
+    if (n_multi > 0) {
+        const double d_on = sqrt(sum_on / n_multi), d_off = sqrt(sum_off / n_multi);
+        const double r_on = sqrt(sum_r_on / n_multi), r_off = sqrt(sum_r_off / n_multi);
+        printf("    longest rail time: %.0f ms with the bound (limit 2800), %.0f ms without it (%d scene%s "
+               "over the limit)\n", worst_on, worst_off, over_off, (over_off == 1) ? "" : "s");
+        printf("    cost, over the %d scenes with several lines: disparity rms %.4f px with the bound, "
+               "%.4f px without; range rms %.2f %% against %.2f %%\n", n_multi, d_on, d_off, r_on, r_off);
+        if (trials >= 2 * STAT_READS) {
+            /* without the bound the requirement is NOT met (what phase 2 pinned) */
+            GL_CHECK(worst_off > 2800.0);
+            /* the cost that was accepted: the frame-noise part of the
+             * disparity error grows, the range error stays far below the
+             * 5 % a read with everything against it has (A_combo) */
+            GL_CHECK(r_on < 1.3 * r_off + 0.05);
+            GL_CHECK(d_on < 1.3 * d_off + 0.002);
+        }
+    }
+    GL_CHECK_EQ(over_on, 0);
+    fast_clock_ = false;
+}
+
 /* ---- 6. glare, sensor patterns, a dirty window ---------------------------------------- */
 GL_TEST(test_glare_sensor_and_windows)
 {
@@ -986,6 +1111,7 @@ int main(int argc, char **argv)
     GL_RUN(test_lowest_point_and_base_class);
     GL_RUN(test_flag_over_the_tip);
     GL_RUN(test_other_objects);
+    GL_RUN(test_rail_time_is_bounded_with_several_lines);
     GL_RUN(test_glare_sensor_and_windows);
     GL_RUN(test_trees_and_combination);
     GL_RUN(test_no_flagstick);

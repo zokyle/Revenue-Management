@@ -18,6 +18,11 @@
  *      whenever nothing needs the fast clocks, idle sleep while the camera
  *      rail is on or USB is running
  *
+ * What a result looks like (E33), the Survey that finishes at the ball
+ * (E29), the recall of the last result by a tap (E30) and "TOO STEEP" (E31)
+ * are described in core/gl_ui.h; the regulatory and information screen is
+ * the INFO item of the settings dial (text: app/gl_regulatory.h).
+ *
  * In the cradle (DESIGN_SPEC E32): awake with USB for as long as a host
  * talks; after 30 s without it the marker sleeps in Stop mode with a static
  * symbol on the display, USB in standby under a suspended host and off
@@ -29,11 +34,12 @@
  * app/gl_main.c; the host tests allocate their own).  Nothing is allocated
  * dynamically.
  *
- * RAM: sizeof(gl_app_t) is about 321 kB, of which 301 kB are the image
+ * RAM: sizeof(gl_app_t) is about 323 kB, of which 301 kB are the image
  * buffers and vision work areas of gl_read_t (see gl_read.h).  The exact
- * figure is in the `make cross` size table (bss of gl_main); gl_app.c and
- * gl_usb.c add 1.8 kB of static scratch (one raw-strip log record, two raw
- * grain measurements).
+ * figure is in the `make cross` size table (bss of gl_main) and in the
+ * README, "Memory"; gl_app.c, gl_factory.c and gl_usb.c add 3.6 kB of
+ * static scratch (one raw-strip log record, one field-log record, two raw
+ * grain measurements, the factory commands' buffers).
  * Stack (arm-none-eabi-gcc -Os, -fstack-usage; the frames and the chains
  * are listed in the README, "Memory"): the deepest chain is the putt solve,
  * about 1.7 kB below main(); the vision's is about 1.4 kB; the logging, USB
@@ -47,12 +53,15 @@
 #include "gl_app_cfg.h"
 #include "gl_cal.h"
 #include "gl_event.h"
+#include "gl_factory.h"
+#include "gl_fieldlog.h"
 #include "gl_gfx.h"
 #include "gl_log.h"
 #include "gl_motion.h"
 #include "gl_proto.h"
 #include "gl_range.h"
 #include "gl_read.h"
+#include "gl_regulatory.h"
 #include "gl_settings.h"
 #include "gl_solver.h"
 #include "gl_tilt.h"
@@ -108,7 +117,18 @@ typedef struct {
     gl_vec3_t up1;
     gl_rot_int_t rot;         /**< gyro integration from the end of read 1 */
     uint32_t saved_at_ms;
+    uint8_t seat;             /**< gl_cal_seat_t being zeroed: the ball seat from the menu (a
+                                   hard flat surface), the armed seat from the factory */
+    bool armed;               /**< started by the factory's armed zeroing */
+    float scatter;            /**< worse block scatter of the reads so far */
 } gl_app_zero_t;
+
+/** Statistics of the 133 ms block slopes of one tilt average (the "tilt
+ *  samples summary" of the field log). */
+typedef struct {
+    float sum_x, sum_y, sq_x, sq_y;
+    uint16_t n;
+} gl_app_tilt_stat_t;
 
 /** Six-face factory calibration (USB START_CAL): one still average per face. */
 typedef struct {
@@ -118,7 +138,7 @@ typedef struct {
     gl_vec3_t meas[6];
 } gl_app_six_face_t;
 
-typedef struct {
+typedef struct gl_app {
     /* ---- drivers ---- */
     gl_imu_t imu;
     gl_lcd_t lcd;
@@ -142,6 +162,7 @@ typedef struct {
     gl_cal_tilt_t cal_tilt;
     gl_cal_cam_t cal_cam[GL_CAM_COUNT];
     gl_cal_grain_t cal_grain;
+    gl_cal_device_t cal_dev;  /**< display rotation (E12), serial number */
     gl_stick_height_t stick_height;
     /* ---- UI ---- */
     gl_ui_t ui;
@@ -211,11 +232,53 @@ typedef struct {
     gl_solver_work_t solver_work; /**< work area of the fit; .fit = fit record of `est` */
     gl_status_t solver_status; /**< what the solver returned for the shown read */
     gl_solver_options_t solve_opt; /**< the options of that call */
-    uint8_t solve_drops;      /**< placements handed to it: 1 = meas_cur, else meas[0..n-1] */
-    uint8_t solve_ball;       /**< Survey: index of the drop taken as the ball */
-    bool line_here;           /**< the marker lies at the ball: the aim line applies here */
+    uint8_t solve_drops;      /**< placements handed to it: meas_cur alone, or solve_meas[0..n-1] */
+    uint8_t solve_ball;       /**< Survey: index, in solve_meas, of the placement at the ball
+                                   (E29: the newest, handed over last) */
+    bool solve_survey;        /**< the call was gl_solver_estimate_survey() on solve_meas */
+    uint8_t solve_src[GL_SOLVER_MAX_DROPS]; /**< which stored placement each handed one is */
+    gl_measurements_t solve_meas[GL_SOLVER_MAX_DROPS]; /**< Survey: the placements handed over -
+                                   the stored ones that are not behind the ball (survey_select_) */
+    bool line_here;           /**< always true since DESIGN_SPEC E29 (the placement the marker
+                                   stands on IS the ball); kept because the log records it */
+    float steep_ratio;        /**< gl_ui_steep_ratio() of the estimate shown (E31) */
+    /* ---- Recall (E30): may the result be shown again after it went off the screen? ---- */
+    uint32_t result_ms;       /**< when the result shown was made (gl_hal_tick_ms) */
+    float recall_rest_x, recall_rest_y; /**< block-mean gravity direction the marker rested in
+                                   when that result was made, g */
+    gl_rot_int_t recall_rot;  /**< gyro integration while the result is on the screen, and
+                                   from a wake-up until the marker is at rest */
+    bool recall_spoiled;      /**< the marker was turned or tilted while the result was shown,
+                                   or a Precision spin was given up: no recall */
+    bool recall_checking;     /**< woken with a result that may be recalled: watching for a
+                                   lift until the marker is at rest */
+    uint8_t recall_moving;    /**< moving blocks since that wake-up */
+    uint32_t recalls;         /**< results shown again since boot (diagnostics) */
     gl_app_zero_t zero;
     gl_app_six_face_t six;
+    /* ---- phase 3: what the field log records about a read (core/gl_fieldlog) ---- */
+    gl_app_tilt_stat_t tstat; /**< block slopes of the tilt average in progress */
+    gl_vec3_t tilt_accel_g;   /**< uncalibrated mean of the last tilt average */
+    float tilt_scatter;       /**< its block scatter (rise/run RMS) */
+    float tilt_noise_g;
+    uint8_t tilt_blocks;
+    uint8_t seat_used;        /**< gl_cal_seat_t whose zero the current read removed */
+    gl_vec2_t zero_used;
+    bool tilt_logged;         /**< a tilt record has been written for the current placement */
+    bool cameras_off;         /**< the current read was made in tilt-only mode */
+    bool grain_ran;
+    uint8_t grain_reject;
+    float grain_nir_mod, grain_nir_az;
+    uint16_t grain_signal[16];
+    uint32_t still_ms;        /**< when the tilt average of the current read started */
+    uint32_t cam_on_at_ms;
+    bool cam_seen_on;         /**< the camera rail has been seen on in the current read */
+    uint16_t stage_ms[GL_FIELDLOG_T_COUNT];
+    uint16_t cam_on_ms;
+    uint32_t log_seek_seq;    /**< GL_CMD_LOG_SEEK: records below this number are skipped */
+    bool boot_confirmed;      /**< the boot stub has been told that this image runs (E34) */
+    /* ---- phase 3: factory commands (app/gl_factory.c) ---- */
+    gl_factory_t fac;
     /* ---- USB ---- */
     gl_proto_t proto;
     gl_proto_ops_t ops;
@@ -299,6 +362,22 @@ gl_status_t gl_app_power_refresh(gl_app_t *app);
  */
 void gl_app_recompose_view(gl_app_t *app);
 
+/* ---- phase 3: used by app/gl_factory.c ------------------------------------------ */
+/** E13 for the factory's camera commands: measures the cell if the last
+ *  reading is older than 5 s and applies the read gate (above 60 C: false,
+ *  logged as GL_APP_LOGEV_TOO_HOT). */
+bool gl_app_camera_allowed(gl_app_t *app);
+/** The 160 MHz clock for a camera capture (and back). */
+void gl_app_clock_fast(gl_app_t *app, bool fast);
+/** Flags and CRC-16 of the five calibration records as they would be stored
+ *  now (tilt, left camera, right camera, grain, device). */
+void gl_app_cal_ids(const gl_app_t *app, uint8_t flags[5], uint16_t crc[5]);
+/** Encode and store one calibration record from RAM (gl_cal_id_t). */
+gl_status_t gl_app_cal_store(gl_app_t *app, uint8_t cal_id);
+/** How long a boot must have run its main loop before the boot stub is told
+ *  that this image works (gl_hal_boot_confirm, DESIGN_SPEC E34). */
+#define GL_APP_BOOT_CONFIRM_MS 10000u
+
 /* ---- used by app/gl_usb.c --------------------------------------------------- */
 
 /** Bind the protocol callbacks (gl_usb.c). */
@@ -325,7 +404,8 @@ void gl_app_log_event(gl_app_t *app, uint16_t code, int32_t arg);
  *                 six faces have been captured)
  *   GRAIN_WHITE   measure the white tile now and store the LED gains
  *   ABORT         stop a running face average
- *   GRAIN_FLOOR, CAM_HORIZON   GL_ERR_UNSUPPORTED in phase 1
+ *   GRAIN_FLOOR, CAM_HORIZON   GL_ERR_UNSUPPORTED: they are GL_CMD_SET_GRAIN_FLOOR and
+ *                 GL_CMD_SET_CAM_HORIZON (the PC supplies the measurement)
  */
 gl_status_t gl_app_start_cal(gl_app_t *app, uint8_t procedure, uint8_t arg);
 

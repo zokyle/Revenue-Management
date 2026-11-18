@@ -1,0 +1,83 @@
+{
+  "board": "gl1_main.kicad_pcb",
+  "cosmetic_allow_list": {
+    "lib_footprint_issues": "footprint library not configured (headless run)",
+    "lib_footprint_mismatch": "footprint differs from library copy",
+    "silk_edge_clearance": "silkscreen close to the board edge",
+    "silk_over_copper": "silkscreen clipped by solder mask openings",
+    "silk_overlap": "silkscreen items overlapping each other",
+    "text_height": "text smaller than the fab's legibility limit",
+    "text_thickness": "text stroke thinner than the fab's legibility limit"
+  },
+  "custom_rules": [
+    "gleda min track width of net class Default",
+    "gleda min track width of net class CamPower",
+    "gleda min track width of net class Fine",
+    "gleda min track width of net class Power",
+    "gleda fine class CamPower outside the fine areas",
+    "gleda fine class Fine outside the fine areas",
+    "gl1 zone clearance for every zone"
+  ],
+  "error_count": 0,
+  "errors": {},
+  "footprint_errors": 0,
+  "items": [
+    {
+      "description": "Silkscreen overlap",
+      "items": [
+        {
+          "description": "Line on F.Silkscreen",
+          "kicad_x": 112.2464,
+          "kicad_y": 91.23,
+          "x": 12.2464,
+          "y": 8.77
+        },
+        {
+          "description": "Polygon on F.Silkscreen",
+          "kicad_x": -3.2,
+          "kicad_y": -2.31,
+          "x": -103.2,
+          "y": 102.31
+        }
+      ],
+      "rule": "board setup constraints silk",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_overlap"
+    },
+    {
+      "description": "Silkscreen clipped by solder mask",
+      "items": [
+        {
+          "description": "Polygon on F.Silkscreen",
+          "kicad_x": -5.725,
+          "kicad_y": -4.16,
+          "x": -105.725,
+          "y": 104.16
+        }
+      ],
+      "rule": "Local override",
+      "section": "violations",
+      "severity": "warning",
+      "type": "silk_over_copper"
+    }
+  ],
+  "severity_overrides": {
+    "lib_footprint_issues": {
+      "reason": "headless runs have no global footprint library table, so every footprint would be flagged 'library not found'",
+      "severity": "ignore"
+    },
+    "lib_footprint_mismatch": {
+      "reason": "placed footprints legitimately differ from their library copy (hidden reference, BOM properties), which KiCad reports for every generated footprint",
+      "severity": "ignore"
+    }
+  },
+  "tampered_checks": [],
+  "unconnected": 0,
+  "warning_count": 2,
+  "warnings": {
+    "silk_over_copper": 1,
+    "silk_overlap": 1
+  },
+  "zones_filled": 4
+}

@@ -1,0 +1,1421 @@
+{
+ "all_stages": [
+  "checks",
+  "rules",
+  "pinmap",
+  "board",
+  "route",
+  "drc",
+  "outputs",
+  "schematic",
+  "mechanical",
+  "quality"
+ ],
+ "complete_run": true,
+ "counts": {
+  "bare_copper_parts": 11,
+  "bottom_side": 24,
+  "fiducials": 6,
+  "net_classes": {
+   "CamPower": 3,
+   "Default": 58,
+   "Fine": 28,
+   "Power": 6
+  },
+  "nets": 95,
+  "no_connect_pins": 20,
+  "pads_on_nets": 400,
+  "parts_dnp": 1,
+  "parts_fitted": 103,
+  "parts_on_the_bom": 104,
+  "parts_total": 121,
+  "top_side": 97
+ },
+ "criteria": {
+  "100 % of the connections routed, audit clean": true,
+  "KiCad DRC: 0 errors, 0 unconnected, nothing excluded": true,
+  "design checks: 0 errors": true,
+  "mechanical import check passes": false,
+  "outputs verified against the model": true,
+  "pin map check clean": true,
+  "schematic netlist round trip matches": true,
+  "spec rules: no row failed, self-test caught every seeded defect": true
+ },
+ "design": "gl1_main",
+ "passed": false,
+ "stages": {
+  "board": {
+   "passed": true,
+   "pcb": "gl1_main.kicad_pcb",
+   "project": "gl1_main.kicad_pro",
+   "zone_clearance_rule_appended": true
+  },
+  "checks": {
+   "errors": 0,
+   "errors_by_code": {},
+   "passed": true,
+   "warning_messages": [
+    "the pour of GND on F.Cu has a shape: the router connects pads to whole-board planes only, so this net is routed with tracks and the pour joins just the pads and vias that happen to lie in it",
+    "the pour of GND on B.Cu has a shape: the router connects pads to whole-board planes only, so this net is routed with tracks and the pour joins just the pads and vias that happen to lie in it"
+   ],
+   "warnings": 2,
+   "warnings_by_code": {
+    "plane_partial": 2
+   }
+  },
+  "drc": {
+   "cosmetic_allow_list": [
+    "lib_footprint_issues",
+    "lib_footprint_mismatch",
+    "silk_edge_clearance",
+    "silk_over_copper",
+    "silk_overlap",
+    "text_height",
+    "text_thickness"
+   ],
+   "custom_rules": 7,
+   "errors": 0,
+   "errors_by_type": {},
+   "passed": true,
+   "tampered": [],
+   "tracks_written": 2570,
+   "unconnected": 0,
+   "vias_written": 278,
+   "warnings_by_type": {
+    "silk_over_copper": 1,
+    "silk_overlap": 1
+   }
+  },
+  "mechanical": {
+   "exit_status": 1,
+   "keepouts_missing": [],
+   "only_failure_is_j1_e24": true,
+   "passed": false,
+   "result": "FAIL FAILED (1): LCD connector J1: x, y: board (0.0, -12.9), YAML (0.0, -13.9)",
+   "warnings": [
+    "warning: keep-out battery_body of the board file: battery body: DIFFERS from the YAML"
+   ]
+  },
+  "outputs": {
+   "anchor_offsets": [
+    {
+     "anchor": [
+      0.0,
+      -12.9
+     ],
+     "body_centre": [
+      0.0,
+      -14.5
+     ],
+     "offset": 1.6,
+     "ref": "J1"
+    }
+   ],
+   "bom": {
+    "cost_per_board": 62.75,
+    "lines": 37,
+    "parts_dnp": 1,
+    "parts_fitted": 103,
+    "unpriced_refs": [
+     "C1",
+     "C2",
+     "C3",
+     "C4",
+     "C9",
+     "C10",
+     "C13",
+     "C14",
+     "C15",
+     "C17",
+     "C18",
+     "C28",
+     "C29",
+     "C30",
+     "C31",
+     "C34",
+     "C5",
+     "C6",
+     "C7",
+     "C16",
+     "C19",
+     "C20",
+     "C21",
+     "C24",
+     "C25",
+     "C32",
+     "C8",
+     "C11",
+     "C12",
+     "C22",
+     "C23",
+     "C26",
+     "C27",
+     "C33",
+     "D1",
+     "D3",
+     "D5",
+     "D7",
+     "D9",
+     "D11",
+     "D13",
+     "D15",
+     "D2",
+     "D4",
+     "D6",
+     "D8",
+     "D10",
+     "D12",
+     "D14",
+     "D16",
+     "J1",
+     "PD1",
+     "Q1",
+     "R1",
+     "R2",
+     "R19",
+     "R3",
+     "R10",
+     "R12",
+     "R13",
+     "R15",
+     "R16",
+     "R20",
+     "R21",
+     "R22",
+     "R29",
+     "R30",
+     "R4",
+     "R5",
+     "R6",
+     "R7",
+     "R8",
+     "R9",
+     "R11",
+     "R17",
+     "R18",
+     "R23",
+     "R24",
+     "R25",
+     "R26",
+     "R27",
+     "R28",
+     "R31",
+     "RN1",
+     "RN2",
+     "RN3",
+     "RN4",
+     "RN5",
+     "RN6",
+     "RT1",
+     "RT2",
+     "U1",
+     "U6",
+     "U7",
+     "U9",
+     "U11",
+     "U12"
+    ]
+   },
+   "bom_status": {
+    "by_status": {
+     "PROVISIONAL": 31,
+     "RESEARCH": 6
+    },
+    "lines": 37
+   },
+   "copper": {
+    "confined": true,
+    "fine_areas": [
+     "fine_U2",
+     "fine_U3"
+    ],
+    "fine_pitch_arrays": [
+     "U2",
+     "U3"
+    ],
+    "length_by_width": {
+     "0.100": {
+      "B.Cu": 52.773,
+      "F.Cu": 133.701,
+      "In2.Cu": 31.802,
+      "total": 218.276
+     },
+     "0.150": {
+      "B.Cu": 778.257,
+      "F.Cu": 600.027,
+      "In2.Cu": 379.286,
+      "total": 1757.57
+     },
+     "0.300": {
+      "B.Cu": 56.508,
+      "F.Cu": 214.879,
+      "In2.Cu": 50.217,
+      "total": 321.604
+     }
+    },
+    "min_via_to_own_pad_gap": {
+     "bottom": 0.4049,
+     "top": 0.1
+    },
+    "narrow_farthest": {
+     "distance_mm": 5.312,
+     "layer": "B.Cu",
+     "nearest_array": "U3",
+     "net": "CAM_SDA",
+     "x": 4.0,
+     "y": 12.45
+    },
+    "narrow_in_fine_areas_mm": 218.276,
+    "narrow_length_mm": 218.276,
+    "narrow_nets": [
+     "CAM_L_D0",
+     "CAM_L_D1",
+     "CAM_L_D2",
+     "CAM_L_D3",
+     "CAM_L_D4",
+     "CAM_L_D5",
+     "CAM_L_D6",
+     "CAM_L_D7",
+     "CAM_L_HREF",
+     "CAM_L_PCLK",
+     "CAM_L_PWDN",
+     "CAM_L_VSYNC",
+     "CAM_R_D0",
+     "CAM_R_D1",
+     "CAM_R_D2",
+     "CAM_R_D3",
+     "CAM_R_D4",
+     "CAM_R_D5",
+     "CAM_R_D6",
+     "CAM_R_D7",
+     "CAM_R_HREF",
+     "CAM_R_PCLK",
+     "CAM_R_PWDN",
+     "CAM_R_VSYNC",
+     "CAM_SCL_L",
+     "CAM_SCL_R",
+     "CAM_SDA",
+     "CAM_XVCLK"
+    ],
+    "narrow_outside_fine_areas_mm": 0.0,
+    "offender_count": 0,
+    "standard_track": 0.15,
+    "tracks": 2570,
+    "vias": 278
+   },
+   "drc_clean": true,
+   "drill_tables": {
+    "gl1_main-NPTH.drl": [
+     [
+      1.15,
+      1
+     ]
+    ],
+    "gl1_main-PTH.drl": [
+     [
+      0.25,
+      278
+     ]
+    ]
+   },
+   "fab_readme_mentions": {
+    "ENIG": true,
+    "plugged": true,
+    "tented": true
+   },
+   "fab_zip": "gl1_main-fab.zip",
+   "fab_zip_bytes": 141840,
+   "files": 34,
+   "passed": true,
+   "position_rows": 103,
+   "problems": []
+  },
+  "pinmap": {
+   "against_st_pin_data": true,
+   "exit_status": 0,
+   "lines": [
+    "data: ST STM32_open_pin_data (STM32U585RITx, package LQFP64, STM32U575/585)",
+    "RESULT: PASS - 264 checks passed, 0 failed; 5 PROVISIONAL statements above",
+    "SELF-TEST: 20 seeded defects, 20 caught, 0 missed"
+   ],
+   "passed": true,
+   "pinmap_json_in_out": true
+  },
+  "quality": {
+   "figures": {
+    "all_signal_nets": {
+     "nets_over_1_5": 23,
+     "signal_length_mm": 2119.818,
+     "signal_ratio": 1.435,
+     "signal_tree_mm": 1476.809
+    },
+    "camera_bus": {
+     "length_mm": 576.59,
+     "nets": 11,
+     "ratio": 1.968,
+     "tree_mm": 293.03,
+     "vias": 48
+    },
+    "camera_nets": {
+     "CAM_D0": {
+      "length_mm": 38.31,
+      "pads": 3,
+      "ratio": 1.23,
+      "tree_mm": 31.106,
+      "vias": 4
+     },
+     "CAM_D1": {
+      "length_mm": 39.533,
+      "pads": 3,
+      "ratio": 1.3,
+      "tree_mm": 30.374,
+      "vias": 3
+     },
+     "CAM_D2": {
+      "length_mm": 30.603,
+      "pads": 3,
+      "ratio": 1.14,
+      "tree_mm": 26.921,
+      "vias": 4
+     },
+     "CAM_D3": {
+      "length_mm": 41.922,
+      "pads": 3,
+      "ratio": 1.48,
+      "tree_mm": 28.374,
+      "vias": 4
+     },
+     "CAM_D4": {
+      "length_mm": 36.631,
+      "pads": 3,
+      "ratio": 1.62,
+      "tree_mm": 22.638,
+      "vias": 3
+     },
+     "CAM_D5": {
+      "length_mm": 29.062,
+      "pads": 3,
+      "ratio": 1.28,
+      "tree_mm": 22.661,
+      "vias": 3
+     },
+     "CAM_D6": {
+      "length_mm": 102.714,
+      "pads": 3,
+      "ratio": 4.53,
+      "tree_mm": 22.661,
+      "vias": 5
+     },
+     "CAM_D7": {
+      "length_mm": 29.701,
+      "pads": 3,
+      "ratio": 1.34,
+      "tree_mm": 22.153,
+      "vias": 4
+     },
+     "CAM_EN": {
+      "length_mm": 17.495,
+      "pads": 3,
+      "ratio": 1.49,
+      "tree_mm": 11.769,
+      "vias": 2
+     },
+     "CAM_HREF": {
+      "length_mm": 90.168,
+      "pads": 3,
+      "ratio": 2.89,
+      "tree_mm": 31.223,
+      "vias": 6
+     },
+     "CAM_L_D0": {
+      "length_mm": 11.286,
+      "pads": 2,
+      "ratio": 1.98,
+      "tree_mm": 5.71,
+      "vias": 2
+     },
+     "CAM_L_D1": {
+      "length_mm": 6.178,
+      "pads": 2,
+      "ratio": 1.08,
+      "tree_mm": 5.71,
+      "vias": 0
+     },
+     "CAM_L_D2": {
+      "length_mm": 6.527,
+      "pads": 2,
+      "ratio": 1.38,
+      "tree_mm": 4.746,
+      "vias": 0
+     },
+     "CAM_L_D3": {
+      "length_mm": 4.032,
+      "pads": 2,
+      "ratio": 1.01,
+      "tree_mm": 4.003,
+      "vias": 0
+     },
+     "CAM_L_D4": {
+      "length_mm": 4.224,
+      "pads": 2,
+      "ratio": 1.05,
+      "tree_mm": 4.039,
+      "vias": 0
+     },
+     "CAM_L_D5": {
+      "length_mm": 4.024,
+      "pads": 2,
+      "ratio": 1.23,
+      "tree_mm": 3.269,
+      "vias": 0
+     },
+     "CAM_L_D6": {
+      "length_mm": 3.369,
+      "pads": 2,
+      "ratio": 1.1,
+      "tree_mm": 3.062,
+      "vias": 0
+     },
+     "CAM_L_D7": {
+      "length_mm": 9.331,
+      "pads": 2,
+      "ratio": 2.99,
+      "tree_mm": 3.125,
+      "vias": 2
+     },
+     "CAM_L_DVDD": {
+      "length_mm": 4.184,
+      "pads": 2,
+      "ratio": 1.31,
+      "tree_mm": 3.192,
+      "vias": 2
+     },
+     "CAM_L_HREF": {
+      "length_mm": 2.627,
+      "pads": 2,
+      "ratio": 1.03,
+      "tree_mm": 2.562,
+      "vias": 0
+     },
+     "CAM_L_PCLK": {
+      "length_mm": 4.117,
+      "pads": 2,
+      "ratio": 1.03,
+      "tree_mm": 4.003,
+      "vias": 0
+     },
+     "CAM_L_PWDN": {
+      "length_mm": 8.533,
+      "pads": 2,
+      "ratio": 1.51,
+      "tree_mm": 5.645,
+      "vias": 2
+     },
+     "CAM_L_PWDN_MCU": {
+      "length_mm": 8.697,
+      "pads": 2,
+      "ratio": 1.04,
+      "tree_mm": 8.338,
+      "vias": 2
+     },
+     "CAM_L_VSYNC": {
+      "length_mm": 8.724,
+      "pads": 2,
+      "ratio": 2.41,
+      "tree_mm": 3.625,
+      "vias": 2
+     },
+     "CAM_PCLK": {
+      "length_mm": 104.758,
+      "pads": 3,
+      "ratio": 3.25,
+      "tree_mm": 32.282,
+      "vias": 7
+     },
+     "CAM_R_D0": {
+      "length_mm": 7.639,
+      "pads": 2,
+      "ratio": 1.81,
+      "tree_mm": 4.23,
+      "vias": 0
+     },
+     "CAM_R_D1": {
+      "length_mm": 9.43,
+      "pads": 2,
+      "ratio": 2.23,
+      "tree_mm": 4.23,
+      "vias": 2
+     },
+     "CAM_R_D2": {
+      "length_mm": 6.969,
+      "pads": 2,
+      "ratio": 1.38,
+      "tree_mm": 5.06,
+      "vias": 0
+     },
+     "CAM_R_D3": {
+      "length_mm": 12.358,
+      "pads": 2,
+      "ratio": 3.87,
+      "tree_mm": 3.191,
+      "vias": 2
+     },
+     "CAM_R_D4": {
+      "length_mm": 4.643,
+      "pads": 2,
+      "ratio": 1.07,
+      "tree_mm": 4.353,
+      "vias": 2
+     },
+     "CAM_R_D5": {
+      "length_mm": 3.094,
+      "pads": 2,
+      "ratio": 1.0,
+      "tree_mm": 3.106,
+      "vias": 0
+     },
+     "CAM_R_D6": {
+      "length_mm": 3.654,
+      "pads": 2,
+      "ratio": 1.1,
+      "tree_mm": 3.313,
+      "vias": 0
+     },
+     "CAM_R_D7": {
+      "length_mm": 7.347,
+      "pads": 2,
+      "ratio": 2.22,
+      "tree_mm": 3.313,
+      "vias": 0
+     },
+     "CAM_R_DVDD": {
+      "length_mm": 7.114,
+      "pads": 2,
+      "ratio": 2.05,
+      "tree_mm": 3.467,
+      "vias": 2
+     },
+     "CAM_R_HREF": {
+      "length_mm": 3.846,
+      "pads": 2,
+      "ratio": 1.37,
+      "tree_mm": 2.813,
+      "vias": 2
+     },
+     "CAM_R_PCLK": {
+      "length_mm": 5.056,
+      "pads": 2,
+      "ratio": 1.58,
+      "tree_mm": 3.191,
+      "vias": 0
+     },
+     "CAM_R_PWDN": {
+      "length_mm": 17.978,
+      "pads": 2,
+      "ratio": 4.47,
+      "tree_mm": 4.023,
+      "vias": 2
+     },
+     "CAM_R_PWDN_MCU": {
+      "length_mm": 10.437,
+      "pads": 3,
+      "ratio": 1.05,
+      "tree_mm": 9.984,
+      "vias": 2
+     },
+     "CAM_R_VSYNC": {
+      "length_mm": 4.175,
+      "pads": 2,
+      "ratio": 1.25,
+      "tree_mm": 3.353,
+      "vias": 0
+     },
+     "CAM_SCL_L": {
+      "length_mm": 19.764,
+      "pads": 3,
+      "ratio": 1.08,
+      "tree_mm": 18.239,
+      "vias": 3
+     },
+     "CAM_SCL_R": {
+      "length_mm": 54.353,
+      "pads": 3,
+      "ratio": 1.82,
+      "tree_mm": 29.791,
+      "vias": 5
+     },
+     "CAM_SDA": {
+      "length_mm": 58.514,
+      "pads": 4,
+      "ratio": 1.49,
+      "tree_mm": 39.146,
+      "vias": 6
+     },
+     "CAM_VSYNC": {
+      "length_mm": 33.185,
+      "pads": 3,
+      "ratio": 1.47,
+      "tree_mm": 22.638,
+      "vias": 5
+     },
+     "CAM_XVCLK": {
+      "length_mm": 37.641,
+      "pads": 3,
+      "ratio": 1.26,
+      "tree_mm": 29.824,
+      "vias": 3
+     },
+     "MCO": {
+      "length_mm": 2.813,
+      "pads": 2,
+      "ratio": 1.01,
+      "tree_mm": 2.786,
+      "vias": 0
+     }
+    },
+    "camera_skew": {
+     "U2": {
+      "lines": {
+       "D0": {
+        "array_to_mcu_mm": 27.82,
+        "ball_to_array_mm": 11.29,
+        "minus_pclk_mm": -60.38,
+        "total_mm": 39.11
+       },
+       "D1": {
+        "array_to_mcu_mm": 30.85,
+        "ball_to_array_mm": 6.18,
+        "minus_pclk_mm": -62.46,
+        "total_mm": 37.03
+       },
+       "D2": {
+        "array_to_mcu_mm": 16.83,
+        "ball_to_array_mm": 6.51,
+        "minus_pclk_mm": -76.16,
+        "total_mm": 23.33
+       },
+       "D3": {
+        "array_to_mcu_mm": 30.19,
+        "ball_to_array_mm": 4.03,
+        "minus_pclk_mm": -65.27,
+        "total_mm": 34.22
+       },
+       "D4": {
+        "array_to_mcu_mm": 15.29,
+        "ball_to_array_mm": 4.22,
+        "minus_pclk_mm": -79.97,
+        "total_mm": 19.52
+       },
+       "D5": {
+        "array_to_mcu_mm": 12.73,
+        "ball_to_array_mm": 4.02,
+        "minus_pclk_mm": -82.74,
+        "total_mm": 16.75
+       },
+       "D6": {
+        "array_to_mcu_mm": 11.99,
+        "ball_to_array_mm": 3.35,
+        "minus_pclk_mm": -84.15,
+        "total_mm": 15.34
+       },
+       "D7": {
+        "array_to_mcu_mm": 8.7,
+        "ball_to_array_mm": 9.33,
+        "minus_pclk_mm": -81.46,
+        "total_mm": 18.03
+       },
+       "HREF": {
+        "array_to_mcu_mm": 70.0,
+        "ball_to_array_mm": 2.63,
+        "minus_pclk_mm": -26.86,
+        "total_mm": 72.63
+       },
+       "PCLK": {
+        "array_to_mcu_mm": 95.37,
+        "ball_to_array_mm": 4.12,
+        "minus_pclk_mm": 0.0,
+        "total_mm": 99.49
+       },
+       "VSYNC": {
+        "array_to_mcu_mm": 9.58,
+        "ball_to_array_mm": 8.72,
+        "minus_pclk_mm": -81.19,
+        "total_mm": 18.3
+       }
+      },
+      "longest_mm": 99.49,
+      "pclk_mm": 99.49,
+      "shortest_mm": 15.34,
+      "spread_against_pclk_mm": [
+       -84.15,
+       -26.86
+      ],
+      "spread_against_pclk_ps": [
+       -589.1,
+       -188.0
+      ]
+     },
+     "U3": {
+      "lines": {
+       "D0": {
+        "array_to_mcu_mm": 13.42,
+        "ball_to_array_mm": 7.64,
+        "minus_pclk_mm": -6.7,
+        "total_mm": 21.06
+       },
+       "D1": {
+        "array_to_mcu_mm": 8.68,
+        "ball_to_array_mm": 9.43,
+        "minus_pclk_mm": -9.65,
+        "total_mm": 18.11
+       },
+       "D2": {
+        "array_to_mcu_mm": 13.76,
+        "ball_to_array_mm": 6.97,
+        "minus_pclk_mm": -7.03,
+        "total_mm": 20.73
+       },
+       "D3": {
+        "array_to_mcu_mm": 11.73,
+        "ball_to_array_mm": 12.36,
+        "minus_pclk_mm": -3.67,
+        "total_mm": 24.09
+       },
+       "D4": {
+        "array_to_mcu_mm": 22.53,
+        "ball_to_array_mm": 4.64,
+        "minus_pclk_mm": -0.59,
+        "total_mm": 27.17
+       },
+       "D5": {
+        "array_to_mcu_mm": 17.74,
+        "ball_to_array_mm": 3.09,
+        "minus_pclk_mm": -6.93,
+        "total_mm": 20.83
+       },
+       "D6": {
+        "array_to_mcu_mm": 101.56,
+        "ball_to_array_mm": 3.65,
+        "minus_pclk_mm": 77.45,
+        "total_mm": 105.21
+       },
+       "D7": {
+        "array_to_mcu_mm": 21.01,
+        "ball_to_array_mm": 7.35,
+        "minus_pclk_mm": 0.59,
+        "total_mm": 28.35
+       },
+       "HREF": {
+        "array_to_mcu_mm": 23.87,
+        "ball_to_array_mm": 3.85,
+        "minus_pclk_mm": -0.05,
+        "total_mm": 27.71
+       },
+       "PCLK": {
+        "array_to_mcu_mm": 22.7,
+        "ball_to_array_mm": 5.06,
+        "minus_pclk_mm": 0.0,
+        "total_mm": 27.76
+       },
+       "VSYNC": {
+        "array_to_mcu_mm": 23.61,
+        "ball_to_array_mm": 4.18,
+        "minus_pclk_mm": 0.02,
+        "total_mm": 27.78
+       }
+      },
+      "longest_mm": 105.21,
+      "pclk_mm": 27.76,
+      "shortest_mm": 18.11,
+      "spread_against_pclk_mm": [
+       -9.65,
+       77.45
+      ],
+      "spread_against_pclk_ps": [
+       -67.5,
+       542.1
+      ]
+     }
+    },
+    "camera_skew_note": "lengths along the copper, ball to array pad plus array pad to MCU pad (the resistor body is the same for every line); 7 ps/mm assumed.  At a 12 MHz pixel clock the period is 83.3 ns: a spread of 40 mm is 0.28 ns, 0.3 % of the period, and small against the RC of the 220 ohm series element with the bus capacitance (220 ohm x about 15 pF = 3.3 ns, the same for every line)",
+    "copper_to_edge": {
+     "note": "edge = board outline, the locating slot and the NPTH hole wall; rule 0.30 mm",
+     "pad": "pad R4.2",
+     "pad_mm": 0.3547,
+     "routed_copper_mm": 0.3209,
+     "routed_item": "track CAM_D4 B.Cu"
+    },
+    "crystal_guard": {
+     "area_mm2": 7.21,
+     "pieces": 1
+    },
+    "imu": {
+     "copper_in_the_F_Cu_keepout_under_the_body": [],
+     "distance_to_regulators_and_charger_mm": {
+      "U11": 12.77,
+      "U7": 12.35,
+      "U8": 23.71,
+      "U9": 26.2
+     },
+     "nearest_foreign_top_track_mm": -0.025,
+     "nearest_foreign_top_track_net": "CP1_MCU",
+     "nearest_part": "R24",
+     "nearest_part_mm": 0.51,
+     "nearest_via_mm": 0.35,
+     "nearest_via_net": "GND",
+     "nets_with_tracks_under_the_body": {
+      "B.Cu": [
+       "SPI1_MOSI"
+      ],
+      "F.Cu": [
+       "CP1_MCU",
+       "GND",
+       "IMU_CS",
+       "IMU_INT1",
+       "IMU_INT2",
+       "SPI2_MISO",
+       "SPI2_MOSI",
+       "SPI2_SCK",
+       "V2V8"
+      ],
+      "In2.Cu": [
+       "CAM_PCLK",
+       "SPI2_MISO"
+      ]
+     },
+     "note": "distances from the body outline (3.0 x 2.5 mm); tracks under the body on F.Cu can only be the stubs of its own pads outside the rule area under_U4; inner and bottom layers are not restricted by the spec"
+    },
+    "review": {
+     "b_cu_reference": {
+      "b_cu_track_mm": 888.0,
+      "percent": 46.0,
+      "without_in2_fill_above_mm": 408.0,
+      "worst": [
+       [
+        "CAM_SDA",
+        33.7
+       ],
+       [
+        "CP3",
+        19.1
+       ],
+       [
+        "CP0",
+        19.0
+       ],
+       [
+        "CAM_D3",
+        17.6
+       ],
+       [
+        "CAM_VSYNC",
+        16.7
+       ],
+       [
+        "CHG_STAT",
+        15.0
+       ]
+      ]
+     },
+     "camera_supply": [
+      {
+       "ball": "U2.D1",
+       "capacitor": "C14",
+       "net": "V2V8_CAM",
+       "path_mm": 9.91,
+       "pin": "DOVDD",
+       "straight_mm": 4.4
+      },
+      {
+       "ball": "U2.D5",
+       "capacitor": "C14",
+       "net": "V2V8_CAM",
+       "path_mm": 5.94,
+       "pin": "AVDD",
+       "straight_mm": 2.4
+      },
+      {
+       "ball": "U2.E3",
+       "capacitor": "C16",
+       "net": "CAM_L_DVDD",
+       "path_mm": 4.18,
+       "pin": "DVDD",
+       "straight_mm": 2.96
+      },
+      {
+       "ball": "U3.D1",
+       "capacitor": "C18",
+       "net": "V2V8_CAM",
+       "path_mm": 5.02,
+       "pin": "DOVDD",
+       "straight_mm": 2.07
+      },
+      {
+       "ball": "U3.D5",
+       "capacitor": "C17",
+       "net": "V2V8_CAM",
+       "path_mm": 7.71,
+       "pin": "AVDD",
+       "straight_mm": 6.67
+      },
+      {
+       "ball": "U3.E3",
+       "capacitor": "C19",
+       "net": "CAM_R_DVDD",
+       "path_mm": 7.11,
+       "pin": "DVDD",
+       "straight_mm": 3.21
+      }
+     ],
+     "crystal": {
+      "OSC32_IN_mm": 7.58,
+      "OSC32_OUT_mm": 4.84,
+      "box": [
+       -11.95,
+       5.33,
+       -7.95,
+       9.6
+      ],
+      "foreign_vias_in_box": [
+       "V2V8 (-9.40, 5.60)"
+      ],
+      "nearest_foreign_top_track": {
+       "mm": 0.168,
+       "net": "VBUS_SENSE"
+      },
+      "nearest_foreign_via": {
+       "at": [
+        -7.35,
+        8.25
+       ],
+       "mm": 0.275,
+       "net": "CAM_EN"
+      },
+      "tracks_under_the_body_below_the_ground_plane": {
+       "B.Cu": [
+        "CAM_D1",
+        "CAM_L_PWDN_MCU",
+        "CAM_SCL_L"
+       ],
+       "In2.Cu": [
+        "CAM_D6",
+        "CAM_EN",
+        "CAM_HREF",
+        "CAM_SCL_R"
+       ]
+      },
+      "vias_in_box": [
+       "GND (-10.50, 6.45)",
+       "V2V8 (-9.40, 5.60)"
+      ]
+     },
+     "fine": {
+      "farthest_from_ball_field_mm": 5.31,
+      "fine_area_margin_mm": 5.0,
+      "fine_area_mm2": 174.6,
+      "nets": 28,
+      "per_layer_mm": {
+       "B.Cu": 52.8,
+       "F.Cu": 133.7,
+       "In2.Cu": 31.8
+      },
+      "total_mm": 218.3,
+      "within_1mm_mm": 40.6,
+      "within_2mm_mm": 99.5
+     },
+     "imu": {
+      "nearest_via_to_body_mm": 0.35,
+      "net": "GND",
+      "rotation_deg": 90.0
+     },
+     "in2_track_mm": 461.0,
+     "no_via_areas": {
+      "margin_mm": 0.15,
+      "nearest_via_pad_to_grain_opening_mm": 0.161,
+      "nearest_via_pad_to_pad_slot_mm": 0.2
+     },
+     "pd_k": {
+      "length_mm": 33.62,
+      "length_per_layer_mm": {
+       "B.Cu": 28.22,
+       "F.Cu": 5.42
+      },
+      "switching_nets_within_0.5_mm_same_layer": [
+       {
+        "layer": "B.Cu",
+        "length_within_0.5_mm": 0.0,
+        "min_mm": 0.197,
+        "net": "CP0"
+       }
+      ],
+      "tracks_over_or_under_on_the_adjacent_layer": [
+       {
+        "net": "CAM_HREF",
+        "on": "In2.Cu",
+        "overlap_mm": 2.0,
+        "pd_k_layer": "B.Cu"
+       },
+       {
+        "net": "CP3",
+        "on": "In2.Cu",
+        "overlap_mm": 2.17,
+        "pd_k_layer": "B.Cu"
+       },
+       {
+        "net": "CP4",
+        "on": "In2.Cu",
+        "overlap_mm": 0.3,
+        "pd_k_layer": "B.Cu"
+       },
+       {
+        "net": "LCD_DISP",
+        "on": "In2.Cu",
+        "overlap_mm": 1.2,
+        "pd_k_layer": "B.Cu"
+       },
+       {
+        "net": "V2V8",
+        "on": "In2.Cu",
+        "overlap_mm": 0.64,
+        "pd_k_layer": "B.Cu"
+       }
+      ],
+      "vias": 1
+     },
+     "vias": {
+      "tenting": "both",
+      "total": 278,
+      "under_the_cell": 37
+     },
+     "zones": [
+      {
+       "area_mm2": 7.2,
+       "coverage_percent": 0.5,
+       "layer": "F.Cu",
+       "min_clearance_to_foreign_track_or_via_mm": 0.2,
+       "nearest": "track V2V8_CAM",
+       "net": "GND",
+       "pieces": 1
+      },
+      {
+       "area_mm2": 1147.5,
+       "coverage_percent": 86.0,
+       "layer": "In1.Cu",
+       "min_clearance_to_foreign_track_or_via_mm": 0.2,
+       "nearest": "via CAM_D3 (-0.30, 7.55)",
+       "net": "GND",
+       "pieces": 1
+      },
+      {
+       "area_mm2": 787.3,
+       "coverage_percent": 59.0,
+       "layer": "In2.Cu",
+       "min_clearance_to_foreign_track_or_via_mm": 0.2,
+       "nearest": "track CAM_XVCLK",
+       "net": "V2V8",
+       "pieces": 4
+      },
+      {
+       "area_mm2": 26.3,
+       "coverage_percent": 2.0,
+       "layer": "B.Cu",
+       "min_clearance_to_foreign_track_or_via_mm": 0.2,
+       "nearest": "track CP0",
+       "net": "GND",
+       "pieces": 1
+      }
+     ]
+    },
+    "router_warnings": [
+     "CAM_D6: 102.7 mm of track for a 22.7 mm spanning tree (x4.5), 5 via(s)",
+     "CAM_PCLK: 104.8 mm of track for a 32.3 mm spanning tree (x3.2), 7 via(s)",
+     "CAM_HREF: 90.2 mm of track for a 31.2 mm spanning tree (x2.9), 6 via(s)",
+     "CAM_R_PWDN: 18.0 mm of track for a 4.0 mm spanning tree (x4.5), 2 via(s)",
+     "CP0: 59.4 mm of track for a 23.1 mm spanning tree (x2.6), 5 via(s)"
+    ],
+    "sensitive_nets": {
+     "crystal": {
+      "nearest_foreign_track_same_layer": {
+       "gap_mm": 0.299,
+       "layer": "F.Cu",
+       "net": "CAM_EN"
+      },
+      "nets": {
+       "OSC32_IN": {
+        "length_mm": 7.581,
+        "vias": 0
+       },
+       "OSC32_OUT": {
+        "length_mm": 4.84,
+        "vias": 0
+       }
+      }
+     },
+     "photodiode_input": {
+      "feedback_parts_to_charger_mm": 9.5,
+      "feedback_parts_to_clock_resistor_mm": 15.8,
+      "feedback_parts_to_their_mcu_pads_mm": {
+       "C33": 1.53,
+       "R28": 0.6
+      },
+      "nearest_foreign_track_same_layer": {
+       "gap_mm": 0.225,
+       "layer": "B.Cu",
+       "net": "GND"
+      },
+      "nets": {
+       "PD_K": {
+        "length_mm": 33.624,
+        "vias": 1
+       }
+      },
+      "to_camera_clock_copper_mm": {
+       "distance": 8.38,
+       "layers": [
+        "B.Cu",
+        "F.Cu"
+       ]
+      }
+     },
+     "usb_pair": {
+      "USB_DM_mm": 41.68,
+      "USB_DP_mm": 41.19,
+      "largest_separation_mm": 13.58,
+      "note": "full-speed USB (12 Mbit/s): the router has no differential-pair mode; the two nets are ordinary tracks",
+      "vias": {
+       "USB_DM": 6,
+       "USB_DP": 2
+      }
+     }
+    },
+    "solder_mask": {
+     "bottom": {
+      "between": [
+       "D1.1",
+       "D2.2"
+      ],
+      "openings": 53,
+      "smallest_web_mm": 0.36,
+      "touching_openings_of_different_nets": 0
+     },
+     "top": {
+      "between": [
+       "U4.10",
+       "U4.11"
+      ],
+      "openings": 377,
+      "smallest_web_mm": 0.15,
+      "touching_openings_of_different_nets": 0
+     }
+    },
+    "solder_mask_note": "mask openings are drawn 1:1 on the pads (board expansion 0.000 mm); an open via on the top side counts as an opening of its pad size",
+    "via_to_top_pad": {
+     "other_net": {
+      "gap_mm": 0.134,
+      "pad": "R23.2",
+      "via_net": "SPI1_MISO",
+      "via_x": 9.65,
+      "via_y": 8.65
+     },
+     "own_net": {
+      "gap_mm": 0.1,
+      "pad": "TP2.1",
+      "via_net": "V2V8",
+      "via_x": 7.15,
+      "via_y": -15.25
+     }
+    },
+    "vias": {
+     "by_net_class": {
+      "CamPower": 14,
+      "Default": 138,
+      "Fine": 35,
+      "Power": 91
+     },
+     "on_plane_nets": 76,
+     "total": 278
+    }
+   },
+   "passed": true,
+   "review_pictures": [
+    "gl1_main-copper-F_Cu.png",
+    "gl1_main-copper-In1_Cu.png",
+    "gl1_main-copper-In2_Cu.png",
+    "gl1_main-copper-B_Cu.png",
+    "gl1_main-assembly-top.png",
+    "gl1_main-assembly-bottom.png",
+    "gl1_main-silk-top.png"
+   ]
+  },
+  "route": {
+   "audit_violations": 0,
+   "connections_routed": 306,
+   "connections_total": 306,
+   "failures": {},
+   "nets": 95,
+   "passed": true,
+   "plane_pieces": {
+    "GND/B.Cu": 4,
+    "GND/F.Cu": 7,
+    "GND/In1.Cu": 4,
+    "V2V8/In2.Cu": 54
+   },
+   "quality": {
+    "nets_over_1_5": 23,
+    "signal_length_mm": 2119.818,
+    "signal_ratio": 1.435,
+    "signal_tree_mm": 1476.809,
+    "warnings": [
+     "CAM_D6: 102.7 mm of track for a 22.7 mm spanning tree (x4.5), 5 via(s)",
+     "CAM_PCLK: 104.8 mm of track for a 32.3 mm spanning tree (x3.2), 7 via(s)",
+     "CAM_HREF: 90.2 mm of track for a 31.2 mm spanning tree (x2.9), 6 via(s)",
+     "CAM_R_PWDN: 18.0 mm of track for a 4.0 mm spanning tree (x4.5), 2 via(s)",
+     "CP0: 59.4 mm of track for a 23.1 mm spanning tree (x2.6), 5 via(s)"
+    ]
+   },
+   "routed_percent": 100.0,
+   "router_options": {
+    "escape_attempts": 6,
+    "escape_freeze": false,
+    "escape_neighbours": false,
+    "max_iterations": 400,
+    "patience": 40,
+    "plane_layer_cost": 2.0
+   },
+   "track_length_by_layer_mm": {
+    "B.Cu": 887.538,
+    "F.Cu": 948.607,
+    "In2.Cu": 461.305
+   },
+   "track_length_mm": 2297.45,
+   "tracks": 2570,
+   "unrouted": [],
+   "vias": 278
+  },
+  "rules": {
+   "as_specified": 58,
+   "departures": [
+    "rail VDDUSB",
+    "cam 2d",
+    "grain c",
+    "grain d",
+    "E1 b",
+    "PCB c",
+    "PCB k2"
+   ],
+   "failed": [],
+   "open_not_met": [],
+   "passed": true,
+   "rows": 66,
+   "selftest_defects": 43,
+   "selftest_missed": 0,
+   "workarounds": [
+    "bare copper"
+   ]
+  },
+  "schematic": {
+   "passed": true,
+   "pdf": "schematic/gl1_main-schematic.pdf",
+   "pdf_pages": 8,
+   "previews": [
+    "schematic/gl1_main-schematic-1.png",
+    "schematic/gl1_main-schematic-2.png",
+    "schematic/gl1_main-schematic-3.png",
+    "schematic/gl1_main-schematic-4.png",
+    "schematic/gl1_main-schematic-5.png",
+    "schematic/gl1_main-schematic-6.png",
+    "schematic/gl1_main-schematic-7.png",
+    "schematic/gl1_main-schematic-8.png"
+   ],
+   "project": "gl1_main.kicad_pro",
+   "root": "gl1_main.kicad_sch",
+   "round_trip": {
+    "components_compared": 112,
+    "nets_compared": 95,
+    "ok": true,
+    "pads_compared": 400,
+    "problems": [],
+    "unconnected_compared": 20
+   },
+   "sheets": [
+    {
+     "file": "gl1_main_mcu.kicad_sch",
+     "name": "mcu",
+     "paper": "A4",
+     "parts": 19
+    },
+    {
+     "file": "gl1_main_camera.kicad_sch",
+     "name": "camera",
+     "paper": "A4",
+     "parts": 20
+    },
+    {
+     "file": "gl1_main_power.kicad_sch",
+     "name": "power",
+     "paper": "A4",
+     "parts": 31
+    },
+    {
+     "file": "gl1_main_sensor.kicad_sch",
+     "name": "sensor",
+     "paper": "A4",
+     "parts": 4
+    },
+    {
+     "file": "gl1_main_display.kicad_sch",
+     "name": "display",
+     "paper": "A4",
+     "parts": 4
+    },
+    {
+     "file": "gl1_main_grain.kicad_sch",
+     "name": "grain",
+     "paper": "A4",
+     "parts": 28
+    },
+    {
+     "file": "gl1_main_service.kicad_sch",
+     "name": "service",
+     "paper": "A4",
+     "parts": 6
+    }
+   ],
+   "symbol_library": "gleda.kicad_sym",
+   "symbols": [
+    "4x220R",
+    "BQ25101",
+    "BSS138",
+    "C",
+    "Cradle_pads",
+    "LCD_FPC_10",
+    "LED",
+    "LM66100",
+    "LP5907-3.3",
+    "LSM6DSV16X",
+    "MCP1700-2.8",
+    "MX25R6435F",
+    "OVM7692",
+    "Pad",
+    "R",
+    "STM32U585RIT6",
+    "TwoPin",
+    "USBLC6-2SC6",
+    "VEMD8080",
+    "XTAL"
+   ]
+  }
+ },
+ "stages_run": [
+  "checks",
+  "rules",
+  "pinmap",
+  "board",
+  "route",
+  "drc",
+  "outputs",
+  "schematic",
+  "mechanical",
+  "quality"
+ ]
+}

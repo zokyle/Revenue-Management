@@ -87,29 +87,27 @@ static gl_status_t set_settings_(void *ctx, const gl_settings_t *s)
 static gl_status_t get_cal_(void *ctx, uint8_t cal_id, uint8_t *blob, size_t cap, size_t *len)
 {
     const gl_app_t *app = (const gl_app_t *)ctx;
+    if (cap < GL_CAL_MAX_BLOB_LEN) {
+        return GL_ERR_FULL;
+    }
     switch (cal_id) {
     case GL_CAL_ID_TILT:
-        if (cap < GL_CAL_TILT_BLOB_LEN) {
-            return GL_ERR_FULL;
-        }
         gl_cal_tilt_encode(&app->cal_tilt, blob);
         *len = GL_CAL_TILT_BLOB_LEN;
         return GL_OK;
     case GL_CAL_ID_CAM_L:
     case GL_CAL_ID_CAM_R:
-        if (cap < GL_CAL_CAM_BLOB_LEN) {
-            return GL_ERR_FULL;
-        }
         gl_cal_cam_encode(&app->cal_cam[(cal_id == GL_CAL_ID_CAM_L) ? GL_CAM_LEFT : GL_CAM_RIGHT],
                           blob);
         *len = GL_CAL_CAM_BLOB_LEN;
         return GL_OK;
     case GL_CAL_ID_GRAIN:
-        if (cap < GL_CAL_GRAIN_BLOB_LEN) {
-            return GL_ERR_FULL;
-        }
         gl_cal_grain_encode(&app->cal_grain, blob);
         *len = GL_CAL_GRAIN_BLOB_LEN;
+        return GL_OK;
+    case GL_CAL_ID_DEVICE:
+        gl_cal_device_encode(&app->cal_dev, blob);
+        *len = GL_CAL_DEVICE_BLOB_LEN;
         return GL_OK;
     default:
         return GL_ERR_NOT_FOUND;
@@ -118,61 +116,95 @@ static gl_status_t get_cal_(void *ctx, uint8_t cal_id, uint8_t *blob, size_t cap
 
 /* SET_CAL.  The record is decoded into a temporary, stored, and adopted in
  * RAM only when the store has acknowledged it: a refused or failed command
- * changes NOTHING (it used to decode straight into the live calibration and
- * then fail in the store when the frame carried trailing bytes, leaving RAM
- * and flash different until the next reset).  The length must be exactly
- * that of the record. */
+ * changes NOTHING.  The length must be exactly that of the record in ITS
+ * version: a version-1 record (a backup made with phase-2 firmware) is
+ * accepted and converted, and what is stored is always the present version
+ * (encoded again from the decoded values, CRC and all).  The device record
+ * must carry the serial of the unique number IT carries (checked by its
+ * decoder); that number need not be this processor's - GET_IDENT says
+ * whether it is. */
 static gl_status_t set_cal_(void *ctx, uint8_t cal_id, const uint8_t *blob, size_t len)
 {
     gl_app_t *app = (gl_app_t *)ctx;
+    const bool v1 = (len >= 1u && blob[0] == GL_CAL_VERSION_PHASE1);
     gl_status_t st;
-    gl_cal_tilt_t tilt;
-    gl_cal_cam_t cam;
-    gl_cal_grain_t grain;
 
     switch (cal_id) {
-    case GL_CAL_ID_TILT:
-        if (len != GL_CAL_TILT_BLOB_LEN) {
+    case GL_CAL_ID_TILT: {
+        const gl_cal_tilt_t before = app->cal_tilt;
+        gl_cal_tilt_t tilt;
+        if (len != (v1 ? GL_CAL_TILT_BLOB_LEN_V1 : GL_CAL_TILT_BLOB_LEN)) {
             return GL_ERR_PARAM;
         }
         st = gl_cal_tilt_decode(blob, len, &tilt);
-        if (st == GL_OK) {
-            st = gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_TILT, blob, len);
+        if (st != GL_OK) {
+            return st;
         }
-        if (st == GL_OK) {
-            app->cal_tilt = tilt;
-        }
-        return st;
-    case GL_CAL_ID_CAM_L:
-    case GL_CAL_ID_CAM_R: {
-        const gl_cam_id_t c = (cal_id == GL_CAL_ID_CAM_L) ? GL_CAM_LEFT : GL_CAM_RIGHT;
-        if (len != GL_CAL_CAM_BLOB_LEN) {
-            return GL_ERR_PARAM;
-        }
-        st = gl_cal_cam_decode(blob, len, &cam);
-        if (st == GL_OK) {
-            st = gl_app_store_put(app, (uint8_t)((c == GL_CAM_LEFT) ? GL_STORE_ID_CAL_CAM_L
-                                                                    : GL_STORE_ID_CAL_CAM_R),
-                                  blob, len);
-        }
-        if (st == GL_OK) {
-            app->cal_cam[c] = cam;
-            gl_read_set_cal(&app->read, &app->cal_cam[GL_CAM_LEFT], &app->cal_cam[GL_CAM_RIGHT]);
+        app->cal_tilt = tilt;
+        st = gl_app_cal_store(app, cal_id);
+        if (st != GL_OK) {
+            app->cal_tilt = before;
         }
         return st;
     }
-    case GL_CAL_ID_GRAIN:
-        if (len != GL_CAL_GRAIN_BLOB_LEN) {
+    case GL_CAL_ID_CAM_L:
+    case GL_CAL_ID_CAM_R: {
+        const gl_cam_id_t c = (cal_id == GL_CAL_ID_CAM_L) ? GL_CAM_LEFT : GL_CAM_RIGHT;
+        const gl_cal_cam_t before = app->cal_cam[c];
+        gl_cal_cam_t cam;
+        if (len != (v1 ? GL_CAL_CAM_BLOB_LEN_V1 : GL_CAL_CAM_BLOB_LEN)) {
+            return GL_ERR_PARAM;
+        }
+        st = gl_cal_cam_decode(blob, len, &cam);
+        if (st != GL_OK) {
+            return st;
+        }
+        app->cal_cam[c] = cam;
+        st = gl_app_cal_store(app, cal_id);
+        if (st != GL_OK) {
+            app->cal_cam[c] = before;
+            return st;
+        }
+        gl_read_set_cal(&app->read, &app->cal_cam[GL_CAM_LEFT], &app->cal_cam[GL_CAM_RIGHT]);
+        return GL_OK;
+    }
+    case GL_CAL_ID_GRAIN: {
+        const gl_cal_grain_t before = app->cal_grain;
+        gl_cal_grain_t grain;
+        if (len != (v1 ? GL_CAL_GRAIN_BLOB_LEN_V1 : GL_CAL_GRAIN_BLOB_LEN)) {
             return GL_ERR_PARAM;
         }
         st = gl_cal_grain_decode(blob, len, &grain);
-        if (st == GL_OK) {
-            st = gl_app_store_put(app, (uint8_t)GL_STORE_ID_CAL_GRAIN, blob, len);
+        if (st != GL_OK) {
+            return st;
         }
-        if (st == GL_OK) {
-            app->cal_grain = grain;
+        app->cal_grain = grain;
+        st = gl_app_cal_store(app, cal_id);
+        if (st != GL_OK) {
+            app->cal_grain = before;
         }
         return st;
+    }
+    case GL_CAL_ID_DEVICE: {
+        const gl_cal_device_t before = app->cal_dev;
+        gl_cal_device_t dev;
+        if (len != GL_CAL_DEVICE_BLOB_LEN) {
+            return GL_ERR_PARAM;
+        }
+        st = gl_cal_device_decode(blob, len, &dev);
+        if (st != GL_OK) {
+            return st;
+        }
+        app->cal_dev = dev;
+        st = gl_app_cal_store(app, cal_id);
+        if (st != GL_OK) {
+            app->cal_dev = before;
+            return st;
+        }
+        app->view.display_rot_rad = dev.display_rot_rad;
+        app->redraw = true;
+        return GL_OK;
+    }
     default:
         return GL_ERR_NOT_FOUND;
     }
@@ -214,6 +246,9 @@ static gl_status_t log_read_(void *ctx, bool restart, uint8_t *buf, size_t cap, 
     if (app->log_erasing) {
         return GL_ERR_BUSY;
     }
+    if (restart) {
+        app->log_seek_seq = 0; /* from the oldest record */
+    }
     if (restart || !app->log_iter_valid) {
         gl_log_iter_begin(&app->log, &app->log_iter);
         app->log_iter_valid = true;
@@ -229,6 +264,9 @@ static gl_status_t log_read_(void *ctx, bool restart, uint8_t *buf, size_t cap, 
         }
         if (st != GL_OK) {
             return st;
+        }
+        if (rec.seq < app->log_seek_seq) {
+            continue; /* GL_CMD_LOG_SEEK: the host has this record already */
         }
         need = 8u + (size_t)rec.len;
         if (need > cap) {
@@ -249,6 +287,25 @@ static gl_status_t log_read_(void *ctx, bool restart, uint8_t *buf, size_t cap, 
         }
         *len += need;
     }
+}
+
+/* LOG_SEEK: the download resumes at record `seq`.  The iterator is put on
+ * the sector that holds it (2044 header reads at most, as at the mount);
+ * the records in front of it in that sector are skipped by log_read_(). */
+static gl_status_t log_seek_(void *ctx, uint32_t seq)
+{
+    gl_app_t *app = (gl_app_t *)ctx;
+    gl_status_t st;
+    if (!app->storage_ok) {
+        return GL_ERR_NOT_FOUND;
+    }
+    if (app->log_erasing) {
+        return GL_ERR_BUSY;
+    }
+    st = gl_log_iter_seek(&app->log, &app->log_iter, seq);
+    app->log_iter_valid = (st == GL_OK);
+    app->log_seek_seq = seq;
+    return st;
 }
 
 static gl_status_t log_erase_(void *ctx)
@@ -395,6 +452,8 @@ void gl_usb_bind(gl_app_t *app)
     app->ops.ship_mode = ship_mode_;
     app->ops.get_power = get_power_;
     app->ops.set_charge = set_charge_;
+    app->ops.factory = gl_factory_cmd;
+    app->ops.log_seek = log_seek_;
     gl_proto_init(&app->proto, &app->ops);
 }
 
@@ -430,8 +489,13 @@ static void streams_(gl_app_t *app)
         a.z = app->motion.avg.prev_mean_a[2];
         a = gl_tilt_apply_cal(&app->cal_tilt, a, app->temp_valid ? app->temp_c : app->cal_tilt.t0_c);
         (void)gl_tilt_slope(a, &slope);
-        gl_put_f32(&p[0], slope.x - app->cal_tilt.flip_bias_x);
-        gl_put_f32(&p[4], slope.y - app->cal_tilt.flip_bias_y);
+        {
+            /* the zero a read would remove now (the SURFACE setting, E11) */
+            gl_vec2_t zero;
+            (void)gl_cal_tilt_zero(&app->cal_tilt, (gl_cal_seat_t)app->settings.surface, &zero);
+            gl_put_f32(&p[0], slope.x - zero.x);
+            gl_put_f32(&p[4], slope.y - zero.y);
+        }
         p[8] = gl_tilt_avg_last_still(&app->motion.avg) ? 1u : 0u;
         (void)gl_proto_send_stream(&app->proto, GL_STREAM_TILT, p, 9);
     }

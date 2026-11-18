@@ -310,10 +310,10 @@ def rules(design):
         "enabled by the 2.8 V rail; fed from VBUS behind the series switch; MCU VDDUSB pin only; 1 uF in, "
         "1 uF out",
         "U11 (LP5907MFX-3.3/NOPB, SOT-23-5): IN VBUS_D (C22 2u2), OUT VDDUSB (C23 2u2), EN on V2V8, pad 4 "
-        "open; net VDDUSB = U1 pad 48, U11.OUT, C9, C23",
+        "open; net VDDUSB = U1 pad 48, U11.OUT, C9, C23, TP5 (test pad, added)",
         mpn("U11") == "LP5907MFX-3.3/NOPB" and "SOT-23-5" in P["U11"].footprint_name
         and on("VBUS_D", "U11.IN") and on("V2V8", "U11.EN") and on("GND", "U11.GND")
-        and only("VDDUSB", "U1.VDDUSB", "U11.OUT", "C9.1", "C23.1")
+        and only("VDDUSB", "U1.VDDUSB", "U11.OUT", "C9.1", "C23.1", "TP5.1")
         and "C22" in caps("VBUS_D", "2u2") and "C23" in caps("VDDUSB", "2u2"),
         "DEVIATION: 2.2 uF nominal where the rail table says 1 uF (accepted by E27). With EN on V2V8 the "
         "USB supply pin cannot rise before the main supply (E26). PROVISIONAL, from memory: the enable pin "
@@ -639,7 +639,9 @@ def rules(design):
         and xs_yaml[0] == -7.62 and xs_yaml[-1] == 7.62
         and on("SWDIO", "U1.PA13") and on("SWCLK", "U1.PA14") and on("NRST", "U1.NRST"),
         "seen from below with the visor away, VBUS is on the right: the same statement mirrored")
-    tps = {"TP1": "VBAT", "TP2": "V2V8", "TP3": "V2V8_CAM", "TP4": "GND"}
+    # TP5 (VDDUSB) is ADDED to the four test points of E4 (review: E14 sets a board-test limit for
+    # that rail and it had no pad)
+    tps = {"TP1": "VBAT", "TP2": "V2V8", "TP3": "V2V8_CAM", "TP4": "GND", "TP5": "VDDUSB"}
     tp_ok = True
     for ref, name in tps.items():
         p = P.get(ref)
@@ -650,7 +652,8 @@ def rules(design):
                 and tuple(q[0].layers) == ("F.Cu",) and p.footprint.pads[0].kind == "conn"
     row("E4", "Test points on the top side (E4), 1.0 mm bare round pads reachable by spring probes "
         "before the unit is closed: VBAT, V2V8, V2V8_CAM, GND",
-        "TP1 VBAT, TP2 V2V8, TP3 V2V8_CAM, TP4 GND: round dia 1.0 pads on F.Cu, mask open, no paste",
+        "TP1 VBAT, TP2 V2V8, TP3 V2V8_CAM, TP4 GND, and ADDED TP5 VDDUSB (E14 gives that rail a "
+        "board-test limit): round dia 1.0 pads on F.Cu, mask open, no paste",
         tp_ok and sorted(p.ref for p in design.parts if p.ref_prefix == "TP") == sorted(tps),
         "board test powers the board through BT1 / BT2 (the cell-lead pads)")
     row("imu area", "No copper pours or vias under the IMU body on the top layer; keep it away from "
@@ -703,8 +706,11 @@ def rules(design):
     kos = {k.name: k for k in design.keepouts}
     row("PCB e", "Vias tented and plugged on the underside, and no via at all inside the grain opening "
         "or the pad slot",
-        "via_tenting 'bottom', via_protection text; rule areas grain_opening_no_via, pad_slot_no_via",
-        design.via_tenting == "bottom" and "plugged" in design.via_protection
+        "via_tenting %r (the top side is tented too: the cell lies on it), via_protection text; rule "
+        "areas grain_opening_no_via, pad_slot_no_via and a second area %.1f mm larger round each"
+        % (design.via_tenting, G.NO_VIA_MARGIN),
+        design.via_tenting in ("bottom", "both") and "plugged" in design.via_protection
+        and "BOTTOM" in design.via_protection
         and kos["grain_opening_no_via"].vias and kos["pad_slot_no_via"].vias)
     row("PCB f", "Layer 2 solid ground", "plane GND on In1.Cu (whole board, not routable)",
         any(pl.net == "GND" and pl.layer == "In1.Cu" and pl.shape is None and not pl.routable

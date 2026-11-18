@@ -72,9 +72,10 @@ def write_bom_with_status(design, path):
     by_ref = design.parts_by_ref
     groups = outputs.bom_groups(design)
     counts = {}
+    sourcing = sourcing_rows()
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh, lineterminator="\n")
-        w.writerow(BOM_STATUS_COLUMNS)
+        w.writerow(list(BOM_STATUS_COLUMNS) + list(SOURCING_COLUMNS))
         for g in groups:
             statuses = sorted({by_ref[r].fields.get("Status", "") for r in g["refs"]})
             notes = sorted({by_ref[r].fields.get("StatusNote", "") for r in g["refs"]} - {""})
@@ -83,8 +84,40 @@ def write_bom_with_status(design, path):
             w.writerow([g["item"], g["qty"], " ".join(g["refs"]), g["value"], g["description"],
                         g["footprint"], g["mpn"], g["manufacturer"], g["distributor"],
                         g["distributor_pn"], "" if g["unit_price"] is None else "%.2f" % g["unit_price"],
-                        "DNP" if g["dnp"] else "", status, "; ".join(notes)])
+                        "DNP" if g["dnp"] else "", status, "; ".join(notes)]
+                       + sourcing_cells(sourcing, g["mpn"]))
     return len(groups), counts
+
+
+#: REVIEW ADDITION: three columns copied from docs/sourcing.csv (read-only; matched by MPN) so
+#: that the availability doubts and the approved alternates are visible on the BOM itself.
+SOURCING_COLUMNS = ("Sourcing risk (docs/sourcing.csv)", "Approved alternates (docs/sourcing.csv)",
+                    "Sourcing row / status / checked on")
+SOURCING_CSV = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                                             "docs", "sourcing.csv"))
+
+
+def sourcing_rows(path=SOURCING_CSV):
+    """{MPN: [row, ...]} of docs/sourcing.csv ({} when the file is not there)."""
+    rows = {}
+    if not os.path.exists(path):
+        return rows
+    with open(path, newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            rows.setdefault((r.get("mpn") or "").strip(), []).append(r)
+    return rows
+
+
+def sourcing_cells(rows, mpn):
+    hits = rows.get((mpn or "").strip(), [])
+    if not hits:
+        return ["NOT IN docs/sourcing.csv", "", ""]
+    # a board row (main-NN / cradle-NN) first, then replacement / candidate rows
+    hits = sorted(hits, key=lambda r: (not (r.get("bom_ref") or "").startswith(("main", "cradle")),))
+    r = hits[0]
+    label = (r.get("bom_ref") or r.get("item") or "").split(":")[0].strip()
+    return [(r.get("risk") or "").strip(), (r.get("alternative") or "").strip(),
+            "%s / %s / %s" % (label, (r.get("status") or "").strip(), (r.get("checked_on") or "").strip())]
 
 
 def part_counts(design):

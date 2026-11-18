@@ -171,17 +171,16 @@ INPUT_MODES = ("EXTI", "IN", "ANALOG")
 FIRMWARE_NOTES = [
     "Regenerate gl_pins.h from pinmap.json (every row marked CHANGED moved).",
     "CHG_INHIBIT (PH1) is a PUSH-PULL output, HIGH = stop charging (it turns on Q1, which pulls the "
-    "charger's TS input low); analog or low = charger on. The present firmware (drivers/power.c, "
-    "inhibit_(): latch low, then open drain) does NOTHING on this board - the gate of Q1 never goes "
-    "high - so the firmware's own 0 to 45 C charge gate is inoperative until inhibit_() drives the pin "
-    "push-pull HIGH. Until then only the charger's hardware TS window acts.",
+    "charger's TS input low); analog or low = charger on. drivers/power.c inhibit_() does "
+    "exactly this since firmware phase 3 (push-pull HIGH to stop, analog to release); with the MCU off "
+    "or hung only the charger's hardware TS window acts.",
     "CHG_STAT is on PA15 (EXTI15): the BQ25101's open-drain CHG output with a 100 kohm pull-up to V2V8, "
     "low = charging, high = not charging, done or no VBUS. No internal pull is needed. With the BQ25100 "
     "fallback fitted every internal pull on PA15 must be off (it also has the JTDI pull-up until the "
     "firmware switches to SWD only).",
     "EXTI lines: IMU_INT1 PA7 = EXTI7 (WKUP8), IMU_INT2 PA5 = EXTI5, VBUS_SENSE PC13 = EXTI13 (WKUP2), "
-    "CHG_STAT PA15 = EXTI15. hal/stm32u5/gl_hal_stm32u5.c hard-codes EXTI13 / 5 / 9 / 0 (vectors and "
-    "compile-time asserts): three of the four must move.",
+    "CHG_STAT PA15 = EXTI15. hal/stm32u5/gl_hal_stm32u5.c builds its vectors and compile-time "
+    "asserts from the GL_PINS_EXTI_* numbers of the generated header.",
     "UCPD (PROVISIONAL, RM0456 / DS13086 not read): PA15 and PB15 are the UCPD1 CC pads, PB5 and PB14 "
     "their dead-battery control pads. After reset a high level on PB5 (SPI1_MOSI) switches a 5.1 kohm "
     "pull-down onto PA15, a high level on PB14 (SPI2_MISO) one onto PB15 (SPI2_MOSI: 0.55 mA while it is "
@@ -982,6 +981,53 @@ def by_sig_by_pin(by_sig, pin):
 # ---------------------------------------------------------------------------
 # export
 # ---------------------------------------------------------------------------
+#: REVIEW ADDITIONS.  NOT entries of FIRMWARE_NOTES: firmware/tools/gen_pins.py requires every
+#: firmware note to match one of its own rules, and this package may not edit it.  The firmware
+#: owner promotes them (a rule each) when they are taken up.
+OPEN_ITEMS_FOR_FIRMWARE = [
+    "IMU axes: U4 is NOT at rotation 0 on the board - see 'imu_mounting'. firmware/core/"
+    "gl_provisional.h (GL_PROV_IMU_MARKER_*) still has the identity placeholder; with it the two "
+    "in-plane tilt axes are exchanged and one is inverted.",
+    "Ship mode (Shutdown), PROVISIONAL - RM0456 not read: PB5 (SPI1_MOSI, UCPD1_DBCC1) and PB14 "
+    "(SPI2_MISO, UCPD1_DBCC2) have no board pull and float while the pads are high-impedance. If the "
+    "dead-battery switch acts in Shutdown and UCPD_DBDIS is not retained, a floating-high PB5 puts "
+    "5.1 kohm on PA15 against R13 (100 kohm to V2V8): 2.8 V / 105 kohm = 27 uA, more than five times "
+    "the 5 uA ship-mode limit (E13 / E23). Read RM0456 on PWR_UCPDR in Shutdown; if the risk is real, "
+    "apply the PWR pull-downs (PWR_PDCRB bits 5 and 14 with APC) before entering Shutdown, or ask for "
+    "100 kohm pull-downs on SPI1_MOSI and SPI2_MISO on the next board. Board test: measure the "
+    "ship-mode current at the cell-lead pads BT1 / BT2.",
+    "First programming of a blank board is by SWD only (pads 5 to 7 through the factory fixture): BOOT0 "
+    "is tied low through R2 and has no pad (E34). That a blank STM32U5 does not enter its ROM loader "
+    "by itself is PROVISIONAL (memory).",
+    "SWDIO, SWCLK and NRST go from the underside pads straight to the MCU with no clamp and no series "
+    "resistor (the specification names only VBUS, D+ and D- for the clamp): a known EVT limitation; "
+    "include the three service pads in the ESD test plan.",
+]
+
+
+def imu_mounting(design):
+    """Orientation of the IMU on the board and the axis map it implies.  PROVISIONAL: it assumes
+    that at footprint rotation 0 (pin 1 at the top left of KiCad's LGA-14 3 x 2.5 mm land pattern,
+    long side along x) the sensor's X axis points along board +x, Y along board +y and Z up - ST's
+    axis drawing has NOT been read."""
+    u4 = design.part("U4")
+    rot = float(u4.rotation) % 360.0
+    table = {0.0: ((0, +1), (1, +1)), 90.0: ((1, -1), (0, +1)),
+             180.0: ((0, -1), (1, -1)), 270.0: ((1, +1), (0, -1))}
+    if rot not in table or u4.side != "top":
+        raise ValueError("U4 rotation %r / side %r: no axis map" % (u4.rotation, u4.side))
+    (xa, xs), (ya, ys) = table[rot]
+    return {"ref": "U4", "x": u4.x, "y": u4.y, "side": u4.side, "rotation_deg_ccw_seen_from_above": rot,
+            "marker_x": {"sensor_axis": xa, "sign": xs}, "marker_y": {"sensor_axis": ya, "sign": ys},
+            "marker_z": {"sensor_axis": 2, "sign": +1},
+            "gl_provisional_h": {"GL_PROV_IMU_MARKER_X_AXIS": xa, "GL_PROV_IMU_MARKER_X_SIGN": xs,
+                                 "GL_PROV_IMU_MARKER_Y_AXIS": ya, "GL_PROV_IMU_MARKER_Y_SIGN": ys,
+                                 "GL_PROV_IMU_MARKER_Z_AXIS": 2, "GL_PROV_IMU_MARKER_Z_SIGN": +1},
+            "status": "PROVISIONAL: holds only if ST's axis drawing of the LSM6DSV16X matches KiCad's "
+                      "LGA-14 land pattern at rotation 0 (X along the long side toward pins 5-7 ... not "
+                      "read); marker frame: +x right, +y forward (toward the hole), +z up, seen from above"}
+
+
 def export(path, pindata, design, rep, changed, partial):
     rows = []
     for r in G.pinmap_rows():
@@ -1004,9 +1050,17 @@ def export(path, pindata, design, rep, changed, partial):
             for ref, colour, _x, _y, _rot, az, a, c in G.led_positions()]
     data = {
         "design": design.name, "mcu": "STM32U585RIT6", "package": "LQFP-64",
-        "spec": "DESIGN_SPEC rev D with amendments E1 to E16",
+        "spec": "DESIGN_SPEC rev D with amendments E1 to E34 (in the netlist: E1 to E4 and E24 to E28)",
         "u1_rotation_assumed_deg": G.U1_ROTATION,
-        "status": "NETLIST STAGE - nothing built; the layout step may still move PROPOSED / CHANGED pins",
+        "status": "LAYOUT STAGE - the board is routed with exactly these pins and passed KiCad's DRC; "
+                  "nothing has been built. The pin assignments are final for this board revision; a "
+                  "change now means a new routing run",
+        "reason_texts": "the geometric remarks in the 'reason' of each row ('camera-facing edge', 'next "
+                        "to the flash' ...) were written for U1 at %g degrees; on the board U1 is at %g "
+                        "degrees. The assignments and their electrical reasons stand; ignore the geometry"
+                        % (G.U1_ROTATION_PINMAP_REASONS, G.U1_ROTATION),
+        "imu_mounting": imu_mounting(design),
+        "open_items_for_firmware": OPEN_ITEMS_FOR_FIRMWARE,
         "verification": {
             "checks_passed": not rep.fails, "partial": partial, "source": pindata.source,
             "data_sha256": pindata.hashes, "failures": rep.fails,

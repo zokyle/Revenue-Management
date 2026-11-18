@@ -3,7 +3,7 @@
 #   make test    build everything for the host with
 #                gcc -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror
 #                and run every tests/test_*.c executable
-#   make asan    the same under -fsanitize=address,undefined
+#   make asan    the same under -fsanitize=address,undefined,float-cast-overflow
 #   make cross   compile core/, drivers/ and app/ (NOT hal/stm32u5, NOT hal/host)
 #                with arm-none-eabi-gcc for the Cortex-M33 and print the size
 #                table, the largest stack frames, the forbidden-symbol check
@@ -34,6 +34,37 @@
 #                record the application handed to the estimator, and run
 #                the PYTHON reference on the same records
 #                (tools/app_diff.py)
+#   make cross-hal STM32_HEADERS=<dir>
+#                compile (ONLY compile) hal/stm32u5/gl_hal_stm32u5.c against
+#                the vendor's header files in <dir>; skipped with a message
+#                without them
+#   make boot-cross [STM32_HEADERS=<dir>]
+#                the boot stub of DESIGN_SPEC E34 (boot/): its portable part
+#                with the cross flags; with the vendor's device header it is
+#                also linked (no library) and must fit its 8 kB page
+#   make release-gate
+#                exit 1 while the USB ids (app/gl_usb_ids.h) or the regulatory
+#                text of the INFO screen (app/gl_regulatory.h) are the named
+#                placeholders; RELEASE=1 makes every build fail the same way
+#   make tooltest / make replay-demo / make glsim
+#                NOT part of `make test`: the PC tool tools/glctl against the
+#                firmware on the host simulator (build/host/glsim), the replay
+#                of logged reads through the Python reference
+#   make bench-vision / make profile
+#                NOT part of `make test`: what a read costs (cost table of the
+#                simulator; callgrind)
+#   make steep-sweep
+#                NOT part of `make test`: the sweep the "TOO STEEP" threshold
+#                of DESIGN_SPEC E31 was chosen from (tools/steep_sweep.py)
+#   make readme-logs
+#                run test, cross, appdiff, tooltest, bench-vision, diff (and
+#                cross-hal / boot-cross if STM32_HEADERS is set) and keep
+#                their output in build/readme/ - about 20 minutes
+#   make readme-check
+#                compare every figure README.md quotes through
+#                tools/readme_check.py with those logs; fails on a difference
+#                (`python3 tools/readme_check.py --update` rewrites the
+#                generated blocks of the README from the logs)
 #   make clean
 #
 # Layout rules the wildcards rely on:
@@ -82,8 +113,20 @@ WARN     := -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -ffp
 # Extra checks for firmware code (core, drivers, app): no silent double
 # arithmetic, no variable-length arrays, every global function declared.
 FW_WARN  := -Wdouble-promotion -Wvla -Wmissing-prototypes -Wstrict-prototypes -Wundef
-INC      := -Icore -Idrivers -Ihal -Ihal/host -Ihal/stm32u5 -Iapp -Itests -Itests/synth -Itests/solver \
-            -Itests/vision_ref
+INC      := -Icore -Idrivers -Ihal -Ihal/host -Ihal/stm32u5 -Iapp -Iboot -Itests -Itests/synth \
+            -Itests/solver -Itests/vision_ref
+
+# RELEASE=1: a release build.  It defines GL_RELEASE_BUILD for every compiler
+# invocation, and app/gl_usb_ids.h then stops the build while the USB vendor
+# and product ids are the named placeholders (DESIGN_SPEC E34: none is
+# assigned), as does app/gl_regulatory.h while the regulatory text of the INFO
+# screen is its placeholder.  `make release-gate` asks both questions alone.
+RELEASE  ?= 0
+ifeq ($(RELEASE),1)
+RELDEF   := -DGL_RELEASE_BUILD
+else
+RELDEF   :=
+endif
 
 CORE_SRC    := $(sort $(wildcard core/*.c))
 DRV_SRC     := $(sort $(wildcard drivers/*.c))
@@ -98,7 +141,12 @@ SOLVERT_SRC := tests/solver/gl_solver_vectors.c tests/solver/gl_solver_run.c
 # the phase-1 vision code, frozen: the oracle of tests/test_vision_equiv.c
 VISREF_SRC  := tests/vision_ref/gl_vision_ref.c
 
-FW_SRC   := $(CORE_SRC) $(DRV_SRC) $(APP_LIB_SRC)
+# the portable part of the boot stub (boot/gl_boot_logic.c): in the host
+# library for tests/test_boot.c and tools/boot_check.c; on the target it is
+# a program of its own (`make boot-cross`), never part of the application
+BOOT_SRC := boot/gl_boot_logic.c
+
+FW_SRC   := $(CORE_SRC) $(DRV_SRC) $(APP_LIB_SRC) $(BOOT_SRC)
 AUX_SRC  := $(HOSTHAL_SRC) $(SYNTH_SRC) $(SOLVERT_SRC) $(VISREF_SRC)
 
 # ---- host flavours (selected by the recursive invocations below) ----------
@@ -108,7 +156,7 @@ HOSTOPT  ?= -O2 -g
 # Extra -D for the tests (the sanitizer build runs fewer reads per scene of
 # tests/test_read.c: it is 3-4 times slower).
 TESTDEF  ?=
-HOSTFLAGS := $(WARN) $(HOSTOPT) $(SAN) $(TESTDEF) -fno-common -MMD -MP $(INC)
+HOSTFLAGS := $(WARN) $(HOSTOPT) $(SAN) $(TESTDEF) $(RELDEF) -fno-common -MMD -MP $(INC)
 
 FW_OBJ   := $(patsubst %.c,$(BUILD)/%.o,$(FW_SRC))
 AUX_OBJ  := $(patsubst %.c,$(BUILD)/%.o,$(AUX_SRC))
@@ -120,7 +168,8 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/tests/%,$(TEST_SRC))
 LIB      := $(BUILD)/libgl.a
 
 .PHONY: all test asan cross cross-hal config config-check clean run-tests diff bench appdiff \
-        bench-vision profile pins pins-check
+        bench-vision profile pins pins-check boot-cross release-gate tooltest replay-demo glsim \
+        steep-sweep readme-logs readme-check
 .SECONDARY:
 all: test
 
@@ -149,6 +198,10 @@ $(BUILD)/drivers/%.o: drivers/%.c
 	@echo "  CC      $<"
 	$(Q)$(HOSTCC) $(HOSTFLAGS) $(FW_WARN) -c $< -o $@
 $(BUILD)/app/%.o: app/%.c
+	@mkdir -p $(dir $@)
+	@echo "  CC      $<"
+	$(Q)$(HOSTCC) $(HOSTFLAGS) $(FW_WARN) -c $< -o $@
+$(BUILD)/boot/%.o: boot/%.c
 	@mkdir -p $(dir $@)
 	@echo "  CC      $<"
 	$(Q)$(HOSTCC) $(HOSTFLAGS) $(FW_WARN) -c $< -o $@
@@ -197,7 +250,7 @@ XBUILD     := build/cross
 CROSS_CC   := $(CROSS)gcc
 CROSS_FLAGS := $(WARN) $(FW_WARN) -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 \
                -mfloat-abi=hard -Os -ffunction-sections -fdata-sections \
-               -fstack-usage -fno-common -MMD -MP -Icore -Idrivers -Ihal -Iapp
+               -fstack-usage -fno-common -MMD -MP $(RELDEF) -Icore -Idrivers -Ihal -Iapp
 XSRC       := $(CORE_SRC) $(DRV_SRC) $(APP_SRC)
 XOBJ       := $(patsubst %.c,$(XBUILD)/%.o,$(XSRC))
 
@@ -209,6 +262,57 @@ $(XBUILD)/%.o: %.c
 cross: config-check $(XOBJ)
 	@echo "$(CROSS_CC) $(CROSS_FLAGS)"
 	@PYTHON="$(PYTHON)" sh tools/cross_report.sh "$(CROSS)" $(XOBJ)
+	@echo "== RAM: the application object and its large parts (ARM sizeof, bytes; tools/cross_sizes.c)"
+	$(Q)$(CROSS_CC) $(filter-out -MMD -MP -fstack-usage,$(CROSS_FLAGS)) -c tools/cross_sizes.c -o $(XBUILD)/cross_sizes.o
+	@$(CROSS)nm -S -t d $(XBUILD)/cross_sizes.o | awk '$$4 ~ /^glsz_/ { sub(/^glsz_/, "", $$4); printf "  %-18s %7d\n", $$4, $$2 + 0 }' | sort -k2,2nr
+	@$(MAKE) --no-print-directory boot-cross
+
+# ---- the boot stub (DESIGN_SPEC E34; boot/) ---------------------------------
+# A program of its own in page 0 of the flash.  `make boot-cross` (also the
+# last step of `make cross`) compiles its portable part with the flags of the
+# cross build and prints its size.  With STM32_HEADERS=<dir> (the vendor
+# headers of `make cross-hal`) it also compiles the STM32U585 part against
+# the DEVICE header and LINKS the stub with boot/gl_boot.ld - no C library,
+# no start-up file, no HAL - and fails if it does not fit its 8 kB page, has
+# data, or needs a library function.  Linked is not run: there is no
+# hardware (README, release gates).
+BOOTBUILD  := build/boot
+BOOT_FLAGS := $(WARN) $(FW_WARN) -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard \
+              -Os -ffunction-sections -fdata-sections -fstack-usage -fno-common \
+              -ffreestanding -DSTM32U585xx $(RELDEF) -Iboot
+
+boot-cross:
+	@sh tools/boot_cross.sh "$(STM32_HEADERS)" "$(CROSS)" "$(BOOTBUILD)" "$(BOOT_FLAGS)"
+
+# ---- release gate: the USB ids, the regulatory text ----------------------------
+# Exits non-zero while app/gl_usb_ids.h holds the named placeholders.
+ifeq ($(RELEASE),1)
+# every test and cross target begins with config-check: a release build stops
+# here, whatever objects an earlier build has left behind
+config-check: release-gate
+boot-cross: release-gate
+endif
+
+release-gate:
+	@mkdir -p build
+	@bad=0; \
+	if echo '#include "gl_usb_ids.h"' | $(HOSTCC) -DGL_RELEASE_BUILD -Iapp -fsyntax-only -x c - \
+	      2>build/release-gate.log; then \
+	  echo "release-gate: USB vendor / product ids are assigned"; \
+	else \
+	  echo "release-gate: REFUSED - the USB vendor and product ids are placeholders"; \
+	  echo "  (app/gl_usb_ids.h: GL_USB_VID_PLACEHOLDER / GL_USB_PID_PLACEHOLDER; DESIGN_SPEC E34)"; \
+	  sed 's/^/  | /' build/release-gate.log | head -4; bad=1; \
+	fi; \
+	if echo '#include "gl_regulatory.h"' | $(HOSTCC) -DGL_RELEASE_BUILD -Iapp -fsyntax-only -x c - \
+	      2>build/release-gate-text.log; then \
+	  echo "release-gate: the regulatory text of the INFO screen is supplied"; \
+	else \
+	  echo "release-gate: REFUSED - the regulatory text of the INFO screen is the placeholder"; \
+	  echo "  (app/gl_regulatory.h: GL_REGULATORY_TEXT_IS_PLACEHOLDER; the text comes from docs/COMPLIANCE.md)"; \
+	  sed 's/^/  | /' build/release-gate-text.log | head -4; bad=1; \
+	fi; \
+	test $$bad -eq 0
 
 # ---- the STM32 backend against the vendor's headers (compile only) ---------
 # hal/stm32u5/gl_hal_stm32u5.c is written against ST's STM32U5 HAL.  No vendor
@@ -234,8 +338,8 @@ HAL_NEED   := cmsis_device_u5/Include/stm32u585xx.h stm32u5xx_hal_driver/Inc/stm
               CMSIS_5/CMSIS/Core/Include/core_cm33.h
 HAL_FLAGS  := $(WARN) $(FW_WARN) -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 \
               -mfloat-abi=hard -Os -ffunction-sections -fdata-sections \
-              -fstack-usage -fno-common -DSTM32U585xx -DUSE_HAL_DRIVER \
-              -Icore -Idrivers -Ihal -Ihal/stm32u5 -Iapp
+              -fstack-usage -fno-common -DSTM32U585xx -DUSE_HAL_DRIVER $(RELDEF) \
+              -Icore -Idrivers -Ihal -Ihal/stm32u5 -Iapp -Iboot
 
 cross-hal: config-check
 	@sh tools/cross_hal.sh "$(STM32_HEADERS)" "$(CROSS)" "$(HALBUILD)" "$(HAL_FLAGS)" \
@@ -317,6 +421,18 @@ diff: $(DIFFDIR)/libglsolver64.so $(DIFFDIR)/libglsolver32.so
 	$(PYTHON) tools/diff_solver.py --lib $(DIFFDIR)/libglsolver64.so --vectors --random $(DIFF_N)
 	$(PYTHON) tools/diff_solver.py --lib $(DIFFDIR)/libglsolver32.so --single --vectors --random $(DIFF_N)
 
+# ---- DESIGN_SPEC E31: the sweep the "TOO STEEP" threshold was chosen from ------
+# tools/steep_sweep.py: how often the aim flips on a one-microradian change of
+# the tilt, by the steepness ratio core/gl_ui.c computes - with the Python
+# reference and with the firmware's single-precision solver (needs the
+# reference's Python environment, like `make diff`; about 8 minutes).
+STEEP_REF ?= 20000
+STEEP_FW  ?= 100000
+STEEP_THR := $(shell sed -n 's/^.define GL_UI_STEEP_RATIO \([0-9.]*\)f.*/\1/p' core/gl_ui.h)
+steep-sweep: $(DIFFDIR)/libglsolver32.so
+	$(PYTHON) tools/steep_sweep.py --lib $(DIFFDIR)/libglsolver32.so --ref $(STEEP_REF) --fw $(STEEP_FW) \
+	    --threshold $(STEEP_THR)
+
 # ---- application-level differential check (not part of `make test`) -----------
 # tests/test_e2e_putt.c runs the whole firmware on the simulator and dumps every
 # estimator call the application made; tools/app_diff.py runs the Python
@@ -329,6 +445,62 @@ appdiff: config-check
 	@mkdir -p $(dir $(APPDIFF_REC))
 	./build/host/tests/test_e2e_putt $(APPDIFF_REC) > build/appdiff/test_e2e_putt.log
 	$(PYTHON) tools/app_diff.py $(APPDIFF_REC)
+
+# ---- the PC tool against the host simulator (not part of `make test`) ---------
+# build/host/glsim is the whole firmware on the simulated board with its USB
+# port on stdin / stdout (tools/glsim_host.c); tools/glctl --sim talks to it.
+# `make tooltest` runs tools/glctl/selftest.py: every protocol command through
+# glctl against that program, the log download with resume, the decoder
+# against the firmware's own values, the REPLAY of the logged reads through
+# the Python reference (needs the reference's environment: numpy, scipy), the
+# image stamping tool against the boot stub's own check, and the release gate.
+# `make replay-demo` is the replay part alone.
+build/host/glsim: tools/glsim_host.c config-check
+	@$(MAKE) --no-print-directory build/host/libgl.a BUILD=build/host SAN=
+	$(Q)$(HOSTCC) $(WARN) -O2 -g $(INC) tools/glsim_host.c build/host/libgl.a -lm -o $@
+build/host/boot_check: tools/boot_check.c boot/gl_boot_logic.c boot/gl_boot.h
+	@mkdir -p build/host
+	$(Q)$(HOSTCC) $(WARN) -O2 -g -Iboot tools/boot_check.c boot/gl_boot_logic.c -o $@
+
+glsim: build/host/glsim
+
+tooltest: build/host/glsim build/host/boot_check
+	$(PYTHON) tools/glctl/selftest.py --glsim build/host/glsim --boot-check build/host/boot_check \
+	    --out build/tooltest --make "$(MAKE)"
+
+replay-demo: build/host/glsim
+	$(PYTHON) tools/glctl/selftest.py --glsim build/host/glsim --out build/tooltest --replay-only
+
+# ---- the README's figures against the runs ------------------------------------
+# `make readme-logs` runs the targets whose output the README quotes and keeps
+# each output in build/readme/<target>.log (about 45 minutes: test 5, asan 20,
+# diff 9, steep-sweep 8; every step must succeed).  With STM32_HEADERS set it
+# also keeps cross-hal and boot-cross.  `make readme-check` then runs
+# tools/readme_check.py: every block of README.md between
+#     <!-- readme-check:begin NAME -->  and  <!-- readme-check:end NAME -->
+# must be, character for character, what the script generates from those logs,
+# and every single figure the script binds (its CHECKS table) must be in the
+# README as the logs have it.  `python3 tools/readme_check.py --update`
+# rewrites the blocks; the prose around them is a person's.
+RDLOG := build/readme
+readme-logs:
+	@mkdir -p $(RDLOG)
+	@for t in test cross appdiff tooltest replay-demo bench-vision bench diff steep-sweep asan; do \
+	  echo "== readme-logs: make $$t"; \
+	  $(MAKE) --no-print-directory $$t > $(RDLOG)/$$t.log 2>&1 || { echo "!! make $$t failed: $(RDLOG)/$$t.log"; exit 1; }; \
+	  tail -1 $(RDLOG)/$$t.log; \
+	done
+	@if [ -n "$(STM32_HEADERS)" ]; then \
+	  for t in cross-hal boot-cross; do \
+	    echo "== readme-logs: make $$t"; \
+	    $(MAKE) --no-print-directory $$t STM32_HEADERS="$(STM32_HEADERS)" > $(RDLOG)/$$t.log 2>&1 || exit 1; \
+	    tail -1 $(RDLOG)/$$t.log; \
+	  done; \
+	fi
+	@date -u '+logs complete %Y-%m-%d %H:%M UTC' > $(RDLOG)/stamp.txt; cat $(RDLOG)/stamp.txt
+
+readme-check:
+	@$(PYTHON) tools/readme_check.py --logs $(RDLOG) --readme README.md
 
 clean:
 	rm -rf build

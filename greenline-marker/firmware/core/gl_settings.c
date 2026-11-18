@@ -24,6 +24,8 @@ void gl_settings_defaults(gl_settings_t *s)
     s->grain_enable = 0; /* grain ships DISABLED */
     s->raw_log_level = (uint8_t)GL_RAWLOG_OFF;
     s->method = (uint8_t)GL_METHOD_B1; /* B2 is an option, off by default */
+    s->surface = (uint8_t)GL_SURFACE_TURF; /* E11: the base-face zero is the default */
+    s->tilt_log = (uint8_t)GL_TILTLOG_OFF;
     s->manual_distance_cm = 0;
 }
 
@@ -34,7 +36,8 @@ gl_status_t gl_settings_validate(const gl_settings_t *s)
         s->grass >= (uint8_t)GL_GRASS_COUNT || s->grain_enable > 1u ||
         s->raw_log_level >= (uint8_t)GL_RAWLOG_COUNT ||
         (s->method != (uint8_t)GL_METHOD_B1 && s->method != (uint8_t)GL_METHOD_B2) ||
-        s->manual_distance_cm > GL_MANUAL_DISTANCE_MAX_CM) {
+        s->manual_distance_cm > GL_MANUAL_DISTANCE_MAX_CM ||
+        s->surface >= (uint8_t)GL_SURFACE_COUNT || s->tilt_log >= (uint8_t)GL_TILTLOG_COUNT) {
         return GL_ERR_RANGE;
     }
     return GL_OK;
@@ -52,6 +55,8 @@ void gl_settings_encode(const gl_settings_t *s, uint8_t out[GL_SETTINGS_BLOB_LEN
     out[6] = s->raw_log_level;
     out[7] = s->method;
     gl_put_u16(&out[8], s->manual_distance_cm);
+    out[10] = s->surface;
+    out[11] = s->tilt_log;
 }
 
 gl_status_t gl_settings_decode(const uint8_t *blob, size_t len, gl_settings_t *s)
@@ -68,7 +73,19 @@ gl_status_t gl_settings_decode(const uint8_t *blob, size_t len, gl_settings_t *s
     t.grain_enable = blob[5];
     t.raw_log_level = blob[6];
     t.manual_distance_cm = gl_get_u16(&blob[8]);
+    t.surface = (uint8_t)GL_SURFACE_TURF;
+    t.tilt_log = (uint8_t)GL_TILTLOG_OFF;
     if (blob[0] == GL_SETTINGS_VERSION) {
+        t.past_cm = blob[3];
+        t.method = blob[7];
+        t.surface = blob[10];
+        t.tilt_log = blob[11];
+    } else if (blob[0] == GL_SETTINGS_VERSION_PHASE2) {
+        /* bytes 10 and 11 were reserved (0): anything else is not a
+         * version-2 record */
+        if (blob[10] != 0u || blob[11] != 0u) {
+            return GL_ERR_RANGE;
+        }
         t.past_cm = blob[3];
         t.method = blob[7];
     } else if (blob[0] == GL_SETTINGS_VERSION_PHASE1) {
@@ -124,6 +141,8 @@ const char *gl_settings_item_name(gl_item_t item)
     case GL_ITEM_DISTANCE: return "DIST";
     case GL_ITEM_RAWLOG: return "RAW LOG";
     case GL_ITEM_METHOD: return "METHOD";
+    case GL_ITEM_SURFACE: return "SURFACE";
+    case GL_ITEM_TILTLOG: return "TILT LOG";
     default: return "?";
     }
 }
@@ -143,6 +162,8 @@ void gl_settings_item_range(gl_item_t item, int *min, int *max)
     case GL_ITEM_DISTANCE: *max = 196; break; /* 196 half feet = 29.9 m; clamped in cm */
     case GL_ITEM_RAWLOG: *max = (int)GL_RAWLOG_COUNT - 1; break;
     case GL_ITEM_METHOD: *max = GL_METHOD_CHOICES - 1; break;
+    case GL_ITEM_SURFACE: *max = (int)GL_SURFACE_COUNT - 1; break;
+    case GL_ITEM_TILTLOG: *max = (int)GL_TILTLOG_COUNT - 1; break;
     default: *max = 0; break;
     }
 }
@@ -159,6 +180,8 @@ int gl_settings_item_get(const gl_settings_t *s, gl_item_t item)
         return gl_roundi((float)s->manual_distance_cm / distance_step_cm(s->units));
     case GL_ITEM_RAWLOG: return (int)s->raw_log_level;
     case GL_ITEM_METHOD: return (s->method == (uint8_t)GL_METHOD_B2) ? 1 : 0;
+    case GL_ITEM_SURFACE: return (int)s->surface;
+    case GL_ITEM_TILTLOG: return (int)s->tilt_log;
     default: return 0;
     }
 }
@@ -183,6 +206,8 @@ void gl_settings_item_set(gl_settings_t *s, gl_item_t item, int value)
     case GL_ITEM_METHOD:
         s->method = (uint8_t)((value != 0) ? GL_METHOD_B2 : GL_METHOD_B1);
         break;
+    case GL_ITEM_SURFACE: s->surface = (uint8_t)value; break;
+    case GL_ITEM_TILTLOG: s->tilt_log = (uint8_t)value; break;
     default: break;
     }
 }
@@ -214,6 +239,7 @@ void gl_settings_item_format(const gl_settings_t *s, gl_item_t item, char *out, 
     static const char *const units_name[GL_UNITS_COUNT] = { "FEET", "METRES", "PACES" };
     static const char *const grass_name[GL_GRASS_COUNT] = { "BENT", "POA", "BERMUDA" };
     static const char *const raw_name[GL_RAWLOG_COUNT] = { "OFF", "FIRST", "ALL" };
+    static const char *const tilt_name[GL_TILTLOG_COUNT] = { "OFF", "ON", "ONLY" };
     const char *txt = NULL;
 
     if (cap == 0u) {
@@ -239,6 +265,8 @@ void gl_settings_item_format(const gl_settings_t *s, gl_item_t item, char *out, 
     case GL_ITEM_GRASS: txt = grass_name[s->grass % GL_GRASS_COUNT]; break;
     case GL_ITEM_GRAIN: txt = (s->grain_enable != 0u) ? "ON" : "OFF"; break;
     case GL_ITEM_RAWLOG: txt = raw_name[s->raw_log_level % GL_RAWLOG_COUNT]; break;
+    case GL_ITEM_SURFACE: txt = (s->surface == (uint8_t)GL_SURFACE_HARD) ? "HARD" : "TURF"; break;
+    case GL_ITEM_TILTLOG: txt = tilt_name[s->tilt_log % GL_TILTLOG_COUNT]; break;
     case GL_ITEM_DISTANCE:
         if (s->manual_distance_cm == 0u) {
             txt = "--";

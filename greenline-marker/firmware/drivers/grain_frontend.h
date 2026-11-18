@@ -63,6 +63,14 @@ void gl_grain_fe_led_on(int led);
 gl_status_t gl_grain_fe_power(bool on);
 
 /**
+ * The photodiode amplifier's DARK OFFSET: `n` (1..256) readings with every
+ * LED off; their mean, smallest and largest, in ADC counts.  The analog
+ * chain must be powered.  This is the bare-board test of assembly step 11a
+ * (a leaky photodiode input shows as an offset, or as a spread).
+ */
+gl_status_t gl_grain_fe_dark(unsigned n, uint16_t *mean, uint16_t *min, uint16_t *max);
+
+/**
  * Measure one cycle (all 16 LEDs, dark / on / dark each) into
  * raw->s[cycle][].  The analog chain must be powered.  The LEDs are off on
  * return, also on an error.  `cycle` < GL_GRAIN_MAX_CYCLES.

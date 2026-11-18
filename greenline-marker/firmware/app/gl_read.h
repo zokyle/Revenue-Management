@@ -25,8 +25,11 @@
  * stronger one nearer the middle of the picture - is then read for N
  * groups, and result.ambiguous says if another line passed too, or if a
  * stronger line right beside the one taken could not be measured.  Each
- * extra candidate costs one group: about 0.17 s of camera time plus its
- * analysis.  If the first group of the line being followed shows nothing
+ * probed candidate costs one group (0.31 s of camera rail by the timing
+ * model), and the camera rail must not stay on for more than 2.8 s
+ * (DESIGN_SPEC E15): the line that is followed gets N groups less one per
+ * probed candidate, at least GL_APP_MIN_FOLLOW_GROUPS (two candidates:
+ * 2 + 6, three: 3 + 5, four: 4 + 4 groups; result.follow_groups).  If the first group of the line being followed shows nothing
  * in the left camera the read ends there (rail off after 5 captures).
  *
  * WHAT COMES OUT (result.tier): the stereo read; or the left camera alone
@@ -39,7 +42,7 @@
  *
  * TIMING OF L R R L.  The two sensors free-run and are not synchronised, so
  * the four strips of a group are not equally spaced in time (measured in
- * the simulator: 42 / 33 / 58 ms with a 9 ms phase offset).  The mean time
+ * the simulator: 43 / 33 / 57 ms with a 9 ms phase offset).  The mean time
  * of the two L strips then differs from that of the two R strips by up to
  * about +-14 ms, and a swaying stick would leave a disparity error of
  * (sway rate x that difference).  The frame-end time of every strip is
@@ -113,6 +116,9 @@ typedef struct {
     uint8_t n_shoulders;          /**< band "lines" dropped as the shoulder of a much stronger
                                        line inside their own template width */
     uint8_t n_probed;             /**< candidates examined with an L R R L group of their own */
+    uint8_t follow_groups;        /**< L R R L groups given to the line that was followed: N,
+                                       or fewer when several candidates were probed first (the
+                                       rail-time bound of E15) */
     float cand_score;             /**< score of the candidate followed */
     float band_noise;             /**< pixel noise of the band, grey rms */
     /** Turf-horizon samples of the band as angles relative to gravity
@@ -144,6 +150,10 @@ typedef struct {
     void *strip_ctx;
     bool time_correction;         /**< apply the L R R L timing correction (default true; the
                                        switch exists so that tests can show what it is worth) */
+    bool bound_groups;            /**< bound the groups of a read with several candidates
+                                       (DESIGN_SPEC E15, see probe_done_ in gl_read.c; default
+                                       true; the switch exists so that tests can show what
+                                       the bound costs) */
     /* ---- sequence state ---- */
     uint8_t phase;                /**< gl_read_phase_t */
     uint8_t repeats;              /**< N */

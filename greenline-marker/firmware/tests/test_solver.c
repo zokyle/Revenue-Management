@@ -26,6 +26,7 @@
 #include "gl_solver.h"
 #include "gl_solver_run.h"
 #include "gl_test.h"
+#include "gl_ui.h"
 
 #define PI 3.14159265358979323846
 /** A YARDSTICK, not the resolution of the firmware's line: the step in which
@@ -1532,6 +1533,143 @@ GL_TEST(test_single_precision_roll_noise_by_distance)
     GL_CHECK(max_by_bin[3] <= 20.0 * tol_miss);
 }
 
+/* ---- phase 3: the display state of an estimate in the two builds ---------------
+ *
+ * DESIGN_SPEC E33 maps every estimate to one of three display states
+ * (core/gl_ui.c, gl_ui_classify).  The final check of phase 2 found
+ * estimates on which the single-precision firmware build and the double
+ * build end in different (aim source, solve status) classes although both
+ * run with the firmware's tolerances: the near-miss vectors 1, 3, 4, 9 and
+ * 16, where the single build ends NO_CONVERGENCE (its best iterate kept as
+ * a near miss) and the double build PACE_LIMITED.  Both are aims on the
+ * fitted patch through the hole; the rule gives them ONE state on purpose.
+ * Here: every estimator vector, the application's options (near miss 5 mm,
+ * 300,000 steps), single build against double build with the same
+ * tolerances - the state must be the same in every case - and, for the
+ * record, against the reference's own tolerances (1e-9 m).
+ */
+static gl_ui_show_t show_of_(const gl_vec_est_result_t *r, gl_ui_note_t *note, float *ratio)
+{
+    gl_ui_class_in_t in;
+    memset(&in, 0, sizeof(in));
+    in.aim_source = r->aim_source;
+    in.solve_status = r->solve_status;
+    in.flag_missing = r->flag_missing != 0u;
+    in.range_missing = r->range_missing != 0u;
+    in.fit_converged = r->fit_converged != 0u;
+    in.poor_horizon = r->poor_horizon != 0u;
+    in.distance_known = !(in.flag_missing || in.range_missing);
+    in.steep_ratio = gl_ui_steep_ratio((float)r->patch[0], (float)r->patch[1], (float)r->patch[2],
+                                       (float)r->patch[3], (float)r->distance, (float)r->a_r);
+    if (ratio != NULL) {
+        *ratio = in.steep_ratio;
+    }
+    return gl_ui_classify(&in, note);
+}
+
+GL_TEST(test_display_state_is_the_same_in_both_builds)
+{
+    static const char *const names[3] = { "NORMAL", "APPROX", "NONE" };
+    unsigned n = 0, class_differs = 0, state_differs = 0, note_differs = 0, tight_differs = 0;
+    unsigned by_state[3] = { 0, 0, 0 }, pair_seen = 0, knife = 0, other = 0, other_id = 0;
+
+    gl_vec32_set_max_steps(300000u);
+    gl_vec64_set_max_steps(300000u);
+    printf("    cases whose (aim source, solve status) differs between the single and the double "
+           "build, both with the firmware's tolerances, near miss 5 mm, 300,000 steps:\n");
+    for (unsigned i = 0; i < gl_vec_n_est; i++) {
+        gl_vec_est_case_t c = gl_vec_est[i];
+        gl_vec_est_result_t r32, r64, r64t;
+        gl_ui_note_t n32 = GL_UI_NOTE_NONE, n64 = GL_UI_NOTE_NONE, n64t = GL_UI_NOTE_NONE;
+        gl_ui_show_t s32, s64, s64t;
+        float ratio32 = 0.0f, ratio64 = 0.0f;
+
+        c.near_miss = 0.005; /* the application's setting, in every case */
+        gl_vec32_estimate(&c, GL_VEC_TOL_DEFAULT, 0, &r32);
+        gl_vec64_estimate(&c, GL_VEC_TOL_SINGLE, 0, &r64);
+        gl_vec64_estimate(&c, GL_VEC_TOL_CASE, 0, &r64t);
+        if (r32.status != 0 || r64.status != 0 || r64t.status != 0) {
+            GL_CHECK(r32.status == r64.status); /* (refused alike) */
+            continue;
+        }
+        n++;
+        s32 = show_of_(&r32, &n32, &ratio32);
+        s64 = show_of_(&r64, &n64, &ratio64);
+        s64t = show_of_(&r64t, &n64t, NULL);
+        by_state[s32]++;
+        if (r32.aim_source != r64.aim_source || r32.solve_status != r64.solve_status) {
+            class_differs++;
+            printf("      group %u id %3u: single source %u status %u -> %s \"%s\" (ratio %.3f) | double "
+                   "source %u status %u -> %s \"%s\" (ratio %.3f)\n", (unsigned)c.group, (unsigned)c.id,
+                   (unsigned)r32.aim_source, (unsigned)r32.solve_status, names[s32],
+                   gl_ui_note_text(n32), (double)ratio32, (unsigned)r64.aim_source,
+                   (unsigned)r64.solve_status, names[s64], gl_ui_note_text(n64), (double)ratio64);
+            if (c.group == 2u && (c.id == 1u || c.id == 3u || c.id == 4u || c.id == 9u || c.id == 16u)) {
+                /* the pair of the phase-2 final check */
+                pair_seen++;
+                GL_CHECK_EQ(r32.aim_source, 0u);
+                GL_CHECK_EQ(r64.aim_source, 0u);
+                GL_CHECK_EQ(r32.solve_status, 4u); /* NO_CONVERGENCE: a near miss, kept */
+                GL_CHECK_EQ(r64.solve_status, 1u); /* PACE_LIMITED */
+                GL_CHECK_EQ(s32, GL_UI_SHOW_APPROX);
+                GL_CHECK_EQ(s64, GL_UI_SHOW_APPROX);
+            }
+        }
+        /* THE REQUIREMENT: the same display state in both builds */
+        GL_CHECK_EQ(s32, s64);
+        state_differs += (s32 != s64) ? 1u : 0u;
+        note_differs += (n32 != n64) ? 1u : 0u;
+        if (s32 != s64t) {
+            tight_differs++;
+            printf("      (against the reference's tolerances) group %u id %3u: single %s \"%s\", double at "
+                   "1e-9 m %s \"%s\", ratio %.3f\n", (unsigned)c.group, (unsigned)c.id, names[s32],
+                   gl_ui_note_text(n32), names[s64t], gl_ui_note_text(n64t), (double)ratio32);
+            if (n32 == GL_UI_NOTE_TOO_STEEP && n64t == GL_UI_NOTE_TOO_STEEP) {
+                /* a tolerance effect where the screen says, in both, that the
+                 * result is not to be trusted */
+                knife++;
+            } else {
+                /* NOT MET against the reference's tolerances (pinned below):
+                 * the firmware shows a NORMAL result where the reference at
+                 * 1e-9 m does not converge and keeps its best iterate as a
+                 * near miss.  The case is a putt asked to die at the hole
+                 * (its `past` is printed): at 1e-9 m the pace cannot be met
+                 * to the tolerance, at the firmware's 1 mm it is.  The two
+                 * aims and speeds, to show that only the label differs: */
+                other++;
+                other_id = c.id;
+                GL_CHECK_EQ(c.group, 2u);
+                GL_CHECK_EQ(s32, GL_UI_SHOW_NORMAL);
+                GL_CHECK_EQ(s64t, GL_UI_SHOW_APPROX);
+                GL_CHECK_EQ(r32.solve_status, 0u);
+                GL_CHECK_EQ(r64t.aim_source, 0u);
+                GL_CHECK(1e3 * angle_diff(r32.phi, r64t.phi) < 0.1);
+                GL_CHECK(fabs(r32.v0 / r64t.v0 - 1.0) < 2e-3);
+                printf("        NOT MET: NORMAL in the firmware (status OK at its tolerances), APPROX by the "
+                       "reference at 1e-9 m (status %u, a kept near miss); past %.2f m; aim %.3f against "
+                       "%.3f mrad, speed %.4f against %.4f m/s\n", (unsigned)r64t.solve_status, c.past,
+                       1e3 * r32.phi, 1e3 * r64t.phi, r32.v0, r64t.v0);
+            }
+        }
+    }
+    gl_vec32_set_max_steps(0u);
+    gl_vec64_set_max_steps(0u);
+    printf("    %u estimator vectors: the class differs in %u, the DISPLAY STATE in %u, the message in %u "
+           "(single build: %u NORMAL, %u APPROX, %u NONE)\n", n, class_differs, state_differs,
+           note_differs, by_state[0], by_state[1], by_state[2]);
+    printf("    against the double build at the reference's own tolerances (1e-9 m) the state differs in "
+           "%u: %u are \"TOO STEEP\" in both (a dashed line in the one, no line in the other); %u is "
+           "NOT MET (near-miss case %u)\n", tight_differs, knife, other, other_id);
+    GL_CHECK_EQ(state_differs, 0u);
+    GL_CHECK_EQ(note_differs, 0u);
+    GL_CHECK_EQ(pair_seen, 5u);
+    GL_CHECK(n >= 330u);
+    /* THE PIN (NOT MET against the reference at its own tolerances): one case */
+    GL_CHECK_EQ(other, 1u);
+    GL_CHECK_EQ(other_id, 13u);
+    GL_CHECK_EQ(knife + other, tight_differs);
+}
+
 int main(void)
 {
     GL_RUN(test_api_and_sizes);
@@ -1546,6 +1684,7 @@ int main(void)
     GL_RUN(test_hostile_inputs_give_defined_results);
     GL_RUN(test_rolls_and_steps_are_bounded);
     GL_RUN(test_near_miss_cases);
+    GL_RUN(test_display_state_is_the_same_in_both_builds);
     GL_RUN(test_step_budget_and_the_plane_solved_once);
     GL_RUN(test_absurd_inputs_are_refused);
     GL_RUN(test_horizon_fit_converges_at_the_resolution_of_its_parameters);

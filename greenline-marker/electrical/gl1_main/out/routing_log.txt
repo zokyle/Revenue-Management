@@ -1,0 +1,586 @@
+router: 95 nets, grid 0.050 mm (849 x 773), layers F.Cu/In2.Cu/B.Cu, kernel numba
+escape U2: iteration 1: 16 unit(s) in conflict, 0 open, price 4
+escape U2: iteration 2: 12 unit(s) in conflict, 0 open, price 6
+escape U2: iteration 3: 12 unit(s) in conflict, 0 open, price 8
+escape U2: iteration 4: 12 unit(s) in conflict, 0 open, price 11
+escape U2: iteration 5: 11 unit(s) in conflict, 0 open, price 15
+escape U2: iteration 6: 12 unit(s) in conflict, 0 open, price 22
+escape U2: iteration 7: 9 unit(s) in conflict, 0 open, price 30
+escape U2: iteration 8: 9 unit(s) in conflict, 0 open, price 42
+escape U2: iteration 9: 8 unit(s) in conflict, 0 open, price 59
+escape U2: iteration 10: 9 unit(s) in conflict, 0 open, price 83
+escape U2: iteration 11: 10 unit(s) in conflict, 0 open, price 116
+escape U2: iteration 12: 8 unit(s) in conflict, 0 open, price 162
+escape U2: iteration 13: 8 unit(s) in conflict, 0 open, price 227
+escape U2: iteration 14: 8 unit(s) in conflict, 0 open, price 317
+escape U2: iteration 15: 8 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 16: 8 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 17: 9 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 18: 7 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 19: 7 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 20: 7 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 21: 6 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 22: 7 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 23: 7 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 24: 7 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 25: 6 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 26: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 27: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 28: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 29: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 30: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 31: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 32: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 33: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 34: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 35: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 36: 5 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 37: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 38: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 39: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 40: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 41: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 42: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 43: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 44: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 45: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 46: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 47: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 48: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 49: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 50: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 51: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 52: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 53: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 54: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 55: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 56: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 57: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 58: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 59: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 60: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 61: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 62: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 63: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 64: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 65: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 66: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 67: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 68: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 69: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 70: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 71: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 72: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 73: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 74: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 75: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 76: 4 unit(s) in conflict, 0 open, price 400
+escape U2: iteration 77: 4 unit(s) in conflict, 0 open, price 400
+escape U2: no progress for 40 iterations
+escape U2: back to the state after iteration 37 (4 open)
+escape U2: 20 of 20 pad(s) fanned out in 77 iteration(s)
+escape U3: iteration 1: 19 unit(s) in conflict, 0 open, price 4
+escape U3: iteration 2: 18 unit(s) in conflict, 0 open, price 6
+escape U3: iteration 3: 16 unit(s) in conflict, 0 open, price 8
+escape U3: iteration 4: 14 unit(s) in conflict, 0 open, price 11
+escape U3: iteration 5: 14 unit(s) in conflict, 0 open, price 15
+escape U3: iteration 6: 17 unit(s) in conflict, 0 open, price 22
+escape U3: iteration 7: 16 unit(s) in conflict, 0 open, price 30
+escape U3: iteration 8: 17 unit(s) in conflict, 0 open, price 42
+escape U3: iteration 9: 17 unit(s) in conflict, 0 open, price 59
+escape U3: iteration 10: 17 unit(s) in conflict, 0 open, price 83
+escape U3: iteration 11: 18 unit(s) in conflict, 0 open, price 116
+escape U3: iteration 12: 17 unit(s) in conflict, 0 open, price 162
+escape U3: iteration 13: 17 unit(s) in conflict, 0 open, price 227
+escape U3: iteration 14: 17 unit(s) in conflict, 0 open, price 317
+escape U3: iteration 15: 17 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 16: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 17: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 18: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 19: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 20: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 21: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 22: 17 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 23: 17 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 24: 18 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 25: 18 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 26: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 27: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 28: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 29: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 30: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 31: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 32: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 33: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 34: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 35: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 36: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 37: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 38: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 39: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 40: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 41: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 42: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 43: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 44: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 45: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 46: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 47: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 48: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 49: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 50: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 51: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 52: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 53: 17 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 54: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 55: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 56: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 57: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 58: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 59: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 60: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 61: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 62: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 63: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 64: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 65: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 66: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 67: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 68: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 69: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 70: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 71: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 72: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 73: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 74: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 75: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 76: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 77: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 78: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 79: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 80: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 81: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 82: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 83: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 84: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 85: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 86: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 87: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 88: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 89: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 90: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 91: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 92: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 93: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 94: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 95: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 96: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 97: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 98: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 99: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 100: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 101: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 102: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 103: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 104: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 105: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 106: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 107: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 108: 12 unit(s) in conflict, 0 open, price 400
+escape U3: no progress for 40 iterations
+escape U3: back to the state after iteration 68 (10 open)
+escape U3: iteration 1: 19 unit(s) in conflict, 0 open, price 4
+escape U3: iteration 2: 19 unit(s) in conflict, 0 open, price 6
+escape U3: iteration 3: 17 unit(s) in conflict, 0 open, price 8
+escape U3: iteration 4: 19 unit(s) in conflict, 0 open, price 11
+escape U3: iteration 5: 19 unit(s) in conflict, 0 open, price 15
+escape U3: iteration 6: 19 unit(s) in conflict, 0 open, price 22
+escape U3: iteration 7: 19 unit(s) in conflict, 0 open, price 30
+escape U3: iteration 8: 19 unit(s) in conflict, 0 open, price 42
+escape U3: iteration 9: 19 unit(s) in conflict, 0 open, price 59
+escape U3: iteration 10: 19 unit(s) in conflict, 0 open, price 83
+escape U3: iteration 11: 20 unit(s) in conflict, 0 open, price 116
+escape U3: iteration 12: 20 unit(s) in conflict, 0 open, price 162
+escape U3: iteration 13: 20 unit(s) in conflict, 0 open, price 227
+escape U3: iteration 14: 18 unit(s) in conflict, 0 open, price 317
+escape U3: iteration 15: 19 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 16: 18 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 17: 17 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 18: 18 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 19: 19 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 20: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 21: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 22: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 23: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 24: 16 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 25: 18 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 26: 18 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 27: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 28: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 29: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 30: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 31: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 32: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 33: 17 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 34: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 35: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 36: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 37: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 38: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 39: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 40: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 41: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 42: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 43: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 44: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 45: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 46: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 47: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 48: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 49: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 50: 15 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 51: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 52: 14 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 53: 13 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 54: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 55: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 56: 12 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 57: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 58: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 59: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 60: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 61: 9 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 62: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 63: 9 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 64: 9 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 65: 9 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 66: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 67: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 68: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 69: 9 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 70: 8 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 71: 9 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 72: 8 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 73: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 74: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 75: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 76: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 77: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 78: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 79: 7 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 80: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 81: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 82: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 83: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 84: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 85: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 86: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 87: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 88: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 89: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 90: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 91: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 92: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 93: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 94: 8 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 95: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 96: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 97: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 98: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 99: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 100: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 101: 5 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 102: 5 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 103: 8 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 104: 7 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 105: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 106: 7 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 107: 5 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 108: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 109: 5 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 110: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 111: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 112: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 113: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 114: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 115: 5 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 116: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 117: 11 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 118: 10 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 119: 6 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 120: 7 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 121: 7 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 122: 7 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 123: 7 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 124: 7 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 125: 5 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 126: 5 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 127: 5 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 128: 4 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 129: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 130: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 131: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 132: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 133: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 134: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 135: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 136: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 137: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 138: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 139: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 140: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 141: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 142: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 143: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 144: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 145: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 146: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 147: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 148: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 149: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 150: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 151: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 152: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 153: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 154: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 155: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 156: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 157: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 158: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 159: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 160: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 161: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 162: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 163: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 164: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 165: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 166: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 167: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 168: 2 unit(s) in conflict, 0 open, price 400
+escape U3: iteration 169: 2 unit(s) in conflict, 0 open, price 400
+escape U3: no progress for 40 iterations
+escape U3: back to the state after iteration 129 (2 open)
+escape U3: 20 of 20 pad(s) fanned out in 277 iteration(s)
+main stage: 344 unit(s)
+iteration 1: 177 unit(s) in conflict, 0 open, price 4
+iteration 2: 158 unit(s) in conflict, 0 open, price 6
+iteration 3: 144 unit(s) in conflict, 0 open, price 8
+iteration 4: 131 unit(s) in conflict, 1 open, price 11
+iteration 5: 129 unit(s) in conflict, 0 open, price 15
+iteration 6: 125 unit(s) in conflict, 1 open, price 22
+iteration 7: 120 unit(s) in conflict, 1 open, price 30
+iteration 8: 106 unit(s) in conflict, 1 open, price 42
+iteration 9: 99 unit(s) in conflict, 1 open, price 59
+iteration 10: 88 unit(s) in conflict, 0 open, price 83
+iteration 11: 79 unit(s) in conflict, 0 open, price 116
+iteration 12: 71 unit(s) in conflict, 1 open, price 162
+iteration 13: 59 unit(s) in conflict, 0 open, price 227
+iteration 14: 54 unit(s) in conflict, 0 open, price 317
+iteration 15: 50 unit(s) in conflict, 0 open, price 400
+iteration 16: 48 unit(s) in conflict, 0 open, price 400
+iteration 17: 47 unit(s) in conflict, 0 open, price 400
+iteration 18: 50 unit(s) in conflict, 0 open, price 400
+iteration 19: 37 unit(s) in conflict, 0 open, price 400
+iteration 20: 37 unit(s) in conflict, 0 open, price 400
+iteration 21: 41 unit(s) in conflict, 0 open, price 400
+iteration 22: 35 unit(s) in conflict, 0 open, price 400
+iteration 23: 37 unit(s) in conflict, 0 open, price 400
+iteration 24: 39 unit(s) in conflict, 0 open, price 400
+iteration 25: 41 unit(s) in conflict, 0 open, price 400
+iteration 26: 39 unit(s) in conflict, 0 open, price 400
+iteration 27: 40 unit(s) in conflict, 0 open, price 400
+iteration 28: 37 unit(s) in conflict, 0 open, price 400
+iteration 29: 35 unit(s) in conflict, 0 open, price 400
+iteration 30: 38 unit(s) in conflict, 0 open, price 400
+iteration 31: 36 unit(s) in conflict, 0 open, price 400
+iteration 32: 32 unit(s) in conflict, 0 open, price 400
+iteration 33: 30 unit(s) in conflict, 0 open, price 400
+iteration 34: 33 unit(s) in conflict, 0 open, price 400
+iteration 35: 28 unit(s) in conflict, 0 open, price 400
+iteration 36: 26 unit(s) in conflict, 0 open, price 400
+iteration 37: 25 unit(s) in conflict, 0 open, price 400
+iteration 38: 26 unit(s) in conflict, 0 open, price 400
+iteration 39: 24 unit(s) in conflict, 0 open, price 400
+iteration 40: 22 unit(s) in conflict, 0 open, price 400
+iteration 41: 22 unit(s) in conflict, 0 open, price 400
+iteration 42: 23 unit(s) in conflict, 0 open, price 400
+iteration 43: 22 unit(s) in conflict, 0 open, price 400
+iteration 44: 22 unit(s) in conflict, 0 open, price 400
+iteration 45: 22 unit(s) in conflict, 0 open, price 400
+iteration 46: 23 unit(s) in conflict, 0 open, price 400
+iteration 47: 20 unit(s) in conflict, 0 open, price 400
+iteration 48: 20 unit(s) in conflict, 0 open, price 400
+iteration 49: 17 unit(s) in conflict, 0 open, price 400
+iteration 50: 16 unit(s) in conflict, 0 open, price 400
+iteration 51: 17 unit(s) in conflict, 0 open, price 400
+iteration 52: 14 unit(s) in conflict, 0 open, price 400
+iteration 53: 15 unit(s) in conflict, 0 open, price 400
+iteration 54: 15 unit(s) in conflict, 0 open, price 400
+iteration 55: 15 unit(s) in conflict, 0 open, price 400
+iteration 56: 15 unit(s) in conflict, 0 open, price 400
+iteration 57: 15 unit(s) in conflict, 0 open, price 400
+iteration 58: 15 unit(s) in conflict, 0 open, price 400
+iteration 59: 15 unit(s) in conflict, 0 open, price 400
+iteration 60: 17 unit(s) in conflict, 0 open, price 400
+iteration 61: 13 unit(s) in conflict, 0 open, price 400
+iteration 62: 13 unit(s) in conflict, 0 open, price 400
+iteration 63: 14 unit(s) in conflict, 0 open, price 400
+iteration 64: 15 unit(s) in conflict, 0 open, price 400
+iteration 65: 12 unit(s) in conflict, 0 open, price 400
+iteration 66: 14 unit(s) in conflict, 0 open, price 400
+iteration 67: 13 unit(s) in conflict, 0 open, price 400
+iteration 68: 14 unit(s) in conflict, 0 open, price 400
+iteration 69: 12 unit(s) in conflict, 0 open, price 400
+iteration 70: 12 unit(s) in conflict, 0 open, price 400
+iteration 71: 12 unit(s) in conflict, 0 open, price 400
+iteration 72: 12 unit(s) in conflict, 0 open, price 400
+iteration 73: 12 unit(s) in conflict, 0 open, price 400
+iteration 74: 14 unit(s) in conflict, 0 open, price 400
+iteration 75: 14 unit(s) in conflict, 0 open, price 400
+iteration 76: 13 unit(s) in conflict, 0 open, price 400
+iteration 77: 13 unit(s) in conflict, 0 open, price 400
+iteration 78: 13 unit(s) in conflict, 0 open, price 400
+iteration 79: 13 unit(s) in conflict, 0 open, price 400
+iteration 80: 13 unit(s) in conflict, 0 open, price 400
+iteration 81: 13 unit(s) in conflict, 0 open, price 400
+iteration 82: 13 unit(s) in conflict, 0 open, price 400
+iteration 83: 14 unit(s) in conflict, 0 open, price 400
+iteration 84: 15 unit(s) in conflict, 0 open, price 400
+iteration 85: 16 unit(s) in conflict, 0 open, price 400
+iteration 86: 14 unit(s) in conflict, 0 open, price 400
+iteration 87: 14 unit(s) in conflict, 0 open, price 400
+iteration 88: 15 unit(s) in conflict, 0 open, price 400
+iteration 89: 14 unit(s) in conflict, 0 open, price 400
+iteration 90: 11 unit(s) in conflict, 0 open, price 400
+iteration 91: 13 unit(s) in conflict, 0 open, price 400
+iteration 92: 11 unit(s) in conflict, 0 open, price 400
+iteration 93: 11 unit(s) in conflict, 0 open, price 400
+iteration 94: 11 unit(s) in conflict, 0 open, price 400
+iteration 95: 12 unit(s) in conflict, 0 open, price 400
+iteration 96: 13 unit(s) in conflict, 0 open, price 400
+iteration 97: 13 unit(s) in conflict, 0 open, price 400
+iteration 98: 13 unit(s) in conflict, 0 open, price 400
+iteration 99: 13 unit(s) in conflict, 1 open, price 400
+iteration 100: 13 unit(s) in conflict, 0 open, price 400
+iteration 101: 12 unit(s) in conflict, 0 open, price 400
+iteration 102: 11 unit(s) in conflict, 0 open, price 400
+iteration 103: 12 unit(s) in conflict, 0 open, price 400
+iteration 104: 14 unit(s) in conflict, 0 open, price 400
+iteration 105: 13 unit(s) in conflict, 0 open, price 400
+iteration 106: 14 unit(s) in conflict, 1 open, price 400
+iteration 107: 15 unit(s) in conflict, 0 open, price 400
+iteration 108: 20 unit(s) in conflict, 0 open, price 400
+iteration 109: 17 unit(s) in conflict, 0 open, price 400
+iteration 110: 21 unit(s) in conflict, 0 open, price 400
+iteration 111: 20 unit(s) in conflict, 0 open, price 400
+iteration 112: 19 unit(s) in conflict, 0 open, price 400
+iteration 113: 16 unit(s) in conflict, 0 open, price 400
+iteration 114: 16 unit(s) in conflict, 0 open, price 400
+iteration 115: 17 unit(s) in conflict, 0 open, price 400
+iteration 116: 17 unit(s) in conflict, 0 open, price 400
+iteration 117: 16 unit(s) in conflict, 0 open, price 400
+iteration 118: 16 unit(s) in conflict, 0 open, price 400
+iteration 119: 15 unit(s) in conflict, 0 open, price 400
+iteration 120: 16 unit(s) in conflict, 0 open, price 400
+iteration 121: 13 unit(s) in conflict, 0 open, price 400
+iteration 122: 15 unit(s) in conflict, 0 open, price 400
+iteration 123: 12 unit(s) in conflict, 0 open, price 400
+iteration 124: 12 unit(s) in conflict, 0 open, price 400
+iteration 125: 13 unit(s) in conflict, 0 open, price 400
+iteration 126: 12 unit(s) in conflict, 0 open, price 400
+iteration 127: 10 unit(s) in conflict, 0 open, price 400
+iteration 128: 10 unit(s) in conflict, 0 open, price 400
+iteration 129: 10 unit(s) in conflict, 0 open, price 400
+iteration 130: 10 unit(s) in conflict, 0 open, price 400
+iteration 131: 11 unit(s) in conflict, 0 open, price 400
+iteration 132: 10 unit(s) in conflict, 0 open, price 400
+iteration 133: 10 unit(s) in conflict, 0 open, price 400
+iteration 134: 10 unit(s) in conflict, 0 open, price 400
+iteration 135: 10 unit(s) in conflict, 0 open, price 400
+iteration 136: 10 unit(s) in conflict, 0 open, price 400
+iteration 137: 10 unit(s) in conflict, 0 open, price 400
+iteration 138: 10 unit(s) in conflict, 0 open, price 400
+iteration 139: 10 unit(s) in conflict, 0 open, price 400
+iteration 140: 10 unit(s) in conflict, 0 open, price 400
+iteration 141: 10 unit(s) in conflict, 0 open, price 400
+iteration 142: 10 unit(s) in conflict, 0 open, price 400
+iteration 143: 10 unit(s) in conflict, 0 open, price 400
+iteration 144: 10 unit(s) in conflict, 0 open, price 400
+iteration 145: 11 unit(s) in conflict, 0 open, price 400
+iteration 146: 11 unit(s) in conflict, 0 open, price 400
+iteration 147: 8 unit(s) in conflict, 0 open, price 400
+iteration 148: 8 unit(s) in conflict, 0 open, price 400
+iteration 149: 8 unit(s) in conflict, 0 open, price 400
+iteration 150: 8 unit(s) in conflict, 0 open, price 400
+iteration 151: 8 unit(s) in conflict, 0 open, price 400
+iteration 152: 8 unit(s) in conflict, 0 open, price 400
+iteration 153: 8 unit(s) in conflict, 0 open, price 400
+iteration 154: 8 unit(s) in conflict, 0 open, price 400
+iteration 155: 8 unit(s) in conflict, 0 open, price 400
+iteration 156: 8 unit(s) in conflict, 0 open, price 400
+iteration 157: 8 unit(s) in conflict, 0 open, price 400
+iteration 158: 8 unit(s) in conflict, 0 open, price 400
+iteration 159: 8 unit(s) in conflict, 0 open, price 400
+iteration 160: 8 unit(s) in conflict, 0 open, price 400
+iteration 161: 8 unit(s) in conflict, 0 open, price 400
+iteration 162: 8 unit(s) in conflict, 0 open, price 400
+iteration 163: 8 unit(s) in conflict, 0 open, price 400
+iteration 164: 8 unit(s) in conflict, 0 open, price 400
+iteration 165: 8 unit(s) in conflict, 0 open, price 400
+iteration 166: 8 unit(s) in conflict, 0 open, price 400
+iteration 167: 8 unit(s) in conflict, 0 open, price 400
+iteration 168: 8 unit(s) in conflict, 0 open, price 400
+iteration 169: 8 unit(s) in conflict, 0 open, price 400
+iteration 170: 8 unit(s) in conflict, 0 open, price 400
+iteration 171: 8 unit(s) in conflict, 0 open, price 400
+iteration 172: 8 unit(s) in conflict, 0 open, price 400
+iteration 173: 8 unit(s) in conflict, 0 open, price 400
+iteration 174: 8 unit(s) in conflict, 0 open, price 400
+iteration 175: 8 unit(s) in conflict, 0 open, price 400
+iteration 176: 9 unit(s) in conflict, 0 open, price 400
+iteration 177: 9 unit(s) in conflict, 0 open, price 400
+iteration 178: 10 unit(s) in conflict, 0 open, price 400
+iteration 179: 10 unit(s) in conflict, 0 open, price 400
+iteration 180: 9 unit(s) in conflict, 0 open, price 400
+iteration 181: 9 unit(s) in conflict, 0 open, price 400
+iteration 182: 10 unit(s) in conflict, 0 open, price 400
+iteration 183: 10 unit(s) in conflict, 0 open, price 400
+iteration 184: 8 unit(s) in conflict, 0 open, price 400
+iteration 185: 12 unit(s) in conflict, 0 open, price 400
+iteration 186: 13 unit(s) in conflict, 0 open, price 400
+iteration 187: 10 unit(s) in conflict, 0 open, price 400
+no progress for 40 iterations
+back to the state after iteration 147 (8 open)
+end game round 1: 4 unit(s) open
+end game round 2: 1 unit(s) open
+plane V2V8: U1.1, U1.64, C3.1, C4.1 is cut off from the plane - adding a track to R1.1
+plane V2V8: U1.32, C2.1, R20.2 is cut off from the plane - adding a track to U4.5
+plane V2V8: C1.1, R31.2 is cut off from the plane - adding a track to U1.19
+plane V2V8: U4.8 is cut off from the plane - adding a track to U4.5
+end game round 1: 5 unit(s) open
+end game round 2: 3 unit(s) open
+plane V2V8: U1.1, U1.64, C3.1, C4.1 is cut off from the plane - adding a track to R1.1
+plane V2V8: C1.1, R31.2 is cut off from the plane - adding a track to U1.19
+end game round 1: 5 unit(s) open
+plane V2V8: U1.1, U1.64, C3.1, C4.1 is cut off from the plane - adding a track to R1.1
+plane V2V8: C1.1, R31.2 is cut off from the plane - adding a track to U1.19
+end game round 1: 7 unit(s) open
+end game round 2: 4 unit(s) open
+wave 1 done after 187 iteration(s): 0 unit(s) open
+improve pass 1: 55.9 mm / 4 via(s) saved
+net improvement: 10 net(s) rerouted, 10.6 mm / 1 via(s) saved
+plane V2V8: U1.1, U1.64, C3.1, C4.1 is cut off from the plane - adding a track to C1.1
+plane V2V8: J1.3, J1.4, J1.5 is cut off from the plane - adding a track to C32.1
+end game round 1: 2 unit(s) open
+end game round 2: 1 unit(s) open
+plane V2V8: U1.1, U1.64, C3.1, C4.1 is cut off from the plane - adding a track to C1.1
+end game round 1: 2 unit(s) open
+plane V2V8: U1.1, U1.64, C3.1, C4.1 is cut off from the plane - adding a track to C1.1
+end game round 1: 3 unit(s) open
+end game round 2: 1 unit(s) open
+look at CAM_D6: 102.7 mm of track for a 22.7 mm spanning tree (x4.5), 5 via(s)
+look at CAM_PCLK: 104.8 mm of track for a 32.3 mm spanning tree (x3.2), 7 via(s)
+look at CAM_HREF: 90.2 mm of track for a 31.2 mm spanning tree (x2.9), 6 via(s)
+look at CAM_R_PWDN: 18.0 mm of track for a 4.0 mm spanning tree (x4.5), 2 via(s)
+look at CP0: 59.4 mm of track for a 23.1 mm spanning tree (x2.6), 5 via(s)
+routed 306/306 connections (100.0 %) of 95 nets, 2570 tracks, 278 vias, 2297.4 mm, 0 audit violation(s)

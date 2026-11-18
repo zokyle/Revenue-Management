@@ -341,7 +341,6 @@ int main(int argc, char **argv)
         memset(&v, 0, sizeof(v));
         v.have_result = true;
         v.solved = true;
-        v.line_here = true;
         v.flag_found = true;
         v.distance_m = 6.0f;
         v.plays_like_m = 7.4f;

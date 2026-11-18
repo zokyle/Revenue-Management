@@ -324,7 +324,7 @@ GL_TEST(test_charge_gate_ntc_faults_and_plausibility)
     {
         gl_log_iter_t it;
         gl_log_rec_t rec;
-        uint8_t buf[128];
+        uint8_t buf[1024]; /* (the replay records of phase 3 are up to 684 bytes) */
         unsigned n = 0, hot = 0, fault = 0;
         gl_log_iter_begin(&app.log, &it);
         while (gl_log_iter_next(&app.log, &it, &rec, buf, sizeof(buf)) == GL_OK) {

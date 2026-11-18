@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 """GreenLine GL-1 main board - netlist and layout as code (gleda 0.4.0).
 
-STAGE: LAYOUT.  Nothing has been built.  This file holds every part, net, net
+STAGE: LAYOUT, revised after the three layout reviews of 2026-11-18 (every change is marked
+"REVIEW FIX" or "REVIEW ADDITION" where it is made; LAYOUT_LOG.md has the list).  Nothing has
+been built.  This file holds every part, net, net
 class, footprint, the MCU pin map, the mechanical contract of the board
 (outline, locating features, keep-outs, height limits) and the placement
 (``PLACEMENT``, ``CAM_ARRAY_MAP``, the fiducials, ``ROUTER_OPTIONS``).
@@ -557,14 +559,29 @@ RES = "RESEARCH"
 #: bias: NETLIST_NOTES 4.7 has the (PROVISIONAL) effective values per node.
 #: "2u2" is used where the spec's "1 uF" sits at 3.3 to 5.3 V and something
 #: depends on about 1 uF being there (VBUS_D, VDDUSB, the charger output).
+#: REVIEW FIX (docs/SOURCING.md rev 3, design actions A1 and A2): the 1 uF line was Murata
+#: GRM155R61A105KE15D (OBSOLETE) and the 2.2 uF line GRM155R61A225KE95D (being discontinued,
+#: no US stock seen).  They are now the replacements the sourcing report names: Samsung
+#: CL05A105KP5NNNC and Murata GRM155R61A225KE01D (second source Samsung CL05A225KP5NSNC).
+#: Still PROVISIONAL: no DC-bias curve of either replacement has been read (sourcing A3).
+#: value -> (MPN, text, manufacturer, distributor, distributor PN)
 CAPS = {
-    "100n": ("GRM155R71C104KA88D", "100 nF 16 V X7R"),
-    "10n": ("GRM155R71H103KA88D", "10 nF 50 V X7R"),
-    "1u": ("GRM155R61A105KE15D", "1 uF 10 V X5R"),
-    "2u2": ("GRM155R61A225KE95D", "2.2 uF 10 V X5R"),
-    "4u7": ("GRM155R60J475ME47D", "4.7 uF 6.3 V X5R"),
-    "6p8": ("GRM1555C1H6R8CA01D", "6.8 pF 50 V C0G +-0.25 pF"),
-    "10p": ("GRM1555C1H100JA01D", "10 pF 50 V C0G 5 %"),
+    "100n": ("GRM155R71C104KA88D", "100 nF 16 V X7R", "Murata", "Digi-Key", "490-3261-1-ND"),
+    "10n": ("GRM155R71H103KA88D", "10 nF 50 V X7R", "Murata", None, None),
+    "1u": ("CL05A105KP5NNNC", "1 uF 10 V X5R", "Samsung Electro-Mechanics", None, None),
+    "2u2": ("GRM155R61A225KE01D", "2.2 uF 10 V X5R", "Murata", None, None),
+    "4u7": ("GRM155R60J475ME47D", "4.7 uF 6.3 V X5R", "Murata", None, None),
+    "6p8": ("GRM1555C1H6R8CA01D", "6.8 pF 50 V C0G +-0.25 pF", "Murata", None, None),
+    "10p": ("GRM1555C1H100JA01D", "10 pF 50 V C0G 5 %", "Murata", None, None),
+}
+#: status note per capacitor value where it differs from the default
+CAP_NOTES = {
+    "1u": "MPN per docs/SOURCING.md action A1 (replaces the obsolete GRM155R61A105KE15D); "
+          "DC-bias curve not read (A3)",
+    "2u2": "MPN per docs/SOURCING.md action A2 (replaces GRM155R61A225KE95D, being discontinued; "
+           "that KE01D is Murata's successor is the report's inference); DC-bias curve not read (A3)",
+    "100n": "MPN from memory, Digi-Key code from docs/SOURCING.md A17; the sourcing report records a "
+            "conflicting not-recommended-for-new-designs flag",
 }
 #: value -> MPN (Yageo RC0402, 1 %).  From memory: PROVISIONAL.
 RESISTORS = {
@@ -573,6 +590,8 @@ RESISTORS = {
     "6k81": "RC0402FR-076K81L", "10k": "RC0402FR-0710KL", "100k": "RC0402FR-07100KL",
     "150k": "RC0402FR-07150KL", "470k": "RC0402FR-07470KL", "1M": "RC0402FR-071ML",
 }
+#: order codes seen by the sourcing report (docs/SOURCING.md action A17)
+RESISTOR_ORDER_CODES = {"68R": ("Digi-Key", "311-68.0LRCT-ND")}
 #: spec E2: "Murata NCU15XH103F60RC, 0402, B 3380 K ... PROVISIONAL stock"
 NTC_MPN = "NCU15XH103F60RC"
 #: spec E3
@@ -586,18 +605,20 @@ def _status(status, note=""):
 
 
 def _cap(ref, value, group, purpose):
-    mpn, text = CAPS[value]
-    return Part(ref, value, C0402, pins=two_pin(), mpn=mpn, manufacturer="Murata",
-                distributor=BY_MPN, distributor_pn=mpn, height_mm=0.55, group=group,
+    mpn, text, maker, dist, dist_pn = CAPS[value]
+    return Part(ref, value, C0402, pins=two_pin(), mpn=mpn, manufacturer=maker,
+                distributor=dist or BY_MPN, distributor_pn=dist_pn or mpn, height_mm=0.55, group=group,
                 description="MLCC 0402 %s" % text,
-                fields=dict(_status(PROV, "MPN from memory; value per DESIGN_SPEC / NETLIST_NOTES"),
+                fields=dict(_status(PROV, CAP_NOTES.get(value, "MPN from memory; value per DESIGN_SPEC / "
+                                                               "NETLIST_NOTES")),
                             Purpose=purpose))
 
 
 def _res(ref, value, group, purpose, dnp=False):
     mpn = RESISTORS[value]
+    dist, dist_pn = RESISTOR_ORDER_CODES.get(value, (BY_MPN, mpn))
     return Part(ref, value, R0402, pins=two_pin(), mpn=mpn, manufacturer="Yageo",
-                distributor=BY_MPN, distributor_pn=mpn, height_mm=0.40, group=group, dnp=dnp,
+                distributor=dist, distributor_pn=dist_pn, height_mm=0.40, group=group, dnp=dnp,
                 description="Resistor 0402 1 %% %s" % value,
                 fields=dict(_status(PROV, "MPN from memory; value per DESIGN_SPEC / NETLIST_NOTES"),
                             Purpose=purpose))
@@ -679,49 +700,83 @@ def foot_land_footprint():
 # ---------------------------------------------------------------------------
 # 6. Nominal placement (top side unless computed).  ref -> (x, y, rotation)
 # ---------------------------------------------------------------------------
-#: NOMINAL.  U2, U3, J1, the battery pads, the underside pads, LEDs, photodiode
-#: and foot lands are computed from the YAML and are not in this table.
-#: Constraints the nominal placement already shows (NETLIST_NOTES section 8):
+#: LAYOUT (the placement the board is routed with; LAYOUT_LOG.md has the history).  U2, U3,
+#: J1, the battery pads, the underside pads, LEDs, photodiode and foot lands are computed
+#: from the YAML and are not in this table.  What the placement observes:
 #: * U1: its pad copper is 0.45 mm from the cell body; 0.80 mm is the most any
 #:   placement can give (13.4 mm courtyard between the cell and the post feet).
-#: * RT1 (the charger's NTC) is 2.5 mm from the charger U9 and over the cell
-#:   proper, not over its protection-board end (x < about -13); aim for 3 mm.
-#: * every pad keeps 0.2 mm from the post-foot keep-out squares (R4, R5, R10, C29
-#:   were 0.18 to 0.19 mm).
-#: * R24 (line 1 of the LED ring, now on PB0 / pad 26) and R15 (now on the VBUS
-#:   pad net) still sit where their old nets were: legal, not sensible.
+#: * charger U9 with C26 / C27 / R11 next to the cell-lead pads BT1 / BT2; both NTCs (RT1,
+#:   RT2) in the row along the cell edge (bodies 0.35 mm from it), over the cell proper;
+#:   RT1 5.8 mm from U9.
+#: * every pad keeps 0.2 mm from the post-foot keep-out squares.
+#: * camera regulator U8 at the left edge beside the left camera (PH0 / pad 5 side); the IMU
+#:   U4 right of the MCU, 12 mm and more from every regulator and 26 mm from the charger.
+#: * crystal Y1 with C11 / C12 below it, 1.5 mm left of pads 3 / 4, inside CRYSTAL_ZONE (REVIEW
+#:   FIX); photodiode amplifier parts R28 / C33 at pads 15 / 17; R9 (33 ohm) at pad 41; the six
+#:   220 ohm arrays below / beside each camera.
+#: * camera supply capacitors - REVIEW, ONLY PARTLY MET: the reviewers asked for a 100 nF within
+#:   about 2 mm of track of every supply ball.  Capacitors 1.45 mm beside the balls (C15 left
+#:   and C14 right of U2, C18 / C17 at U3) were placed and routed in 23 variants; none completed
+#:   (97.4 to 99.3 %; LAYOUT_LOG.md, attempts 29 to 51): a part inside the escape window of a
+#:   camera is more than this router can route round.  What stands: C14 / C15 right of U2 and
+#:   C18 left of U3 as in the first layout, just outside the escape window; C17 0.25 mm further
+#:   from post B+; the 1 uF DVDD capacitors C16 / C19 moved to the side of each fan-out pocket,
+#:   3 mm from their ball (they were 5.5 and 6.7 mm away).  The measured ball-to-capacitor
+#:   paths are in out/layout_quality.md.  C19 is no longer next to post B+.
+#: * the SCCB pull-ups R6 / R8 stand upright in the column left of the crystal zone, with a via
+#:   lane between them and the zone; R7 left of the cell-edge row below U8; R4 between the slot
+#:   and the zone.
+#: * the test points outside the cell, clear of the post feet: TP1 VBAT (-17.0, 0.6),
+#:   TP2 V2V8 (8.0, -15.25), TP3 V2V8_CAM (-14.6, 9.0), TP4 GND (18.4, 0.6), TP5 VDDUSB
+#:   (18.6, -2.2; added after the review).
+#: * C5 (4.7 uF bulk on V2V8) stands in the cell-edge row at x = -14.5, about 9 mm from U1:
+#:   it had to leave the right camera's array corner (LAYOUT_LOG.md, attempt w06).  The four
+#:   100 nF capacitors C1 to C4 are at their supply pins; V2V8 is a plane on layer 3.
 PLACEMENT = {
     "C1": (-6.98, 0.72, 180.0), "C2": (6.20, 1.95, 0.0), "C3": (-5.90, 13.20, 180.0),
-    "C4": (-6.30, 11.80, 90.0), "C5": (5.80, 12.90, 90.0), "C6": (5.10, 0.72, 0.0),
-    "C7": (-7.25, 4.60, 90.0), "C8": (-8.20, 4.60, 90.0), "C9": (7.25, 10.00, 270.0),
-    "C10": (-10.10, 4.60, 270.0), "C11": (-10.48, 6.60, 180.0), "C12": (-7.98, 6.60, 180.0),
-    "C13": (18.30, 7.20, 270.0), "C14": (-6.60, 14.70, 270.0), "C15": (-6.40, 16.30, 0.0),
-    "C16": (-12.62, 10.30, 90.0), "C17": (15.95, 11.40, 90.0), "C18": (7.10, 16.60, 180.0),
-    "C19": (14.40, 9.20, 0.0), "C20": (10.81, -12.30, 90.0), "C21": (6.02, -13.45, 90.0),
-    "C22": (13.00, -15.00, 0.0), "C23": (15.85, -12.10, 90.0), "C24": (-15.75, -12.10, 270.0),
-    "C25": (-10.65, -11.90, 270.0), "C26": (-19.60, 0.00, 270.0), "C27": (-18.00, -0.50, 0.0),
+    "C4": (-6.30, 11.80, 90.0), "C5": (-14.50, 0.45, 0.0), "C6": (5.10, 0.72, 0.0),
+    "C7": (-7.25, 4.40, 90.0), "C8": (-8.20, 4.40, 90.0), "C9": (7.25, 10.00, 270.0),
+    "C10": (-10.10, 4.40, 270.0), "C11": (-11.20, 6.24, 270.0), "C12": (-8.70, 6.24, 270.0),
+    "C13": (17.20, 9.30, 0.0), "C14": (-6.60, 14.70, 270.0), "C15": (-6.40, 16.30, 0.0),
+    "C16": (-12.625, 12.75, 270.0), "C17": (16.20, 11.40, 90.0), "C18": (7.10, 16.60, 180.0),
+    "C19": (7.10, 12.75, 270.0), "C20": (10.81, -12.30, 90.0), "C21": (6.02, -13.45, 90.0),
+    "C22": (13.00, -15.00, 0.0), "C23": (15.85, -12.10, 90.0), "C24": (-19.30, 4.90, 90.0),
+    "C25": (-14.40, 7.35, 90.0), "C26": (-19.60, 0.00, 270.0), "C27": (-18.00, -0.50, 0.0),
     "C28": (-8.45, -10.72, 180.0), "C29": (-8.86, 0.72, 180.0), "C30": (11.95, 1.70, 0.0),
-    "C31": (11.95, 2.65, 0.0), "C32": (6.02, -11.50, 90.0), "C33": (-8.20, 2.60, 270.0),
-    "C34": (-9.15, 2.60, 270.0), "Q1": (-17.30, 5.90, 0.0), "R1": (-9.15, 4.60, 270.0),
-    "R2": (-2.45, 14.45, 90.0), "R3": (12.40, 9.15, 0.0), "R4": (-12.50, 8.90, 0.0),
-    "R5": (6.30, 14.40, 0.0), "R6": (-12.50, 7.95, 0.0), "R7": (-12.50, 6.05, 0.0),
-    "R8": (-12.50, 7.00, 0.0), "R9": (8.95, 7.00, 0.0), "R10": (-13.20, -14.80, 0.0),
-    "R11": (-19.60, 2.00, 90.0), "R12": (-14.40, 6.90, 0.0), "R13": (-18.00, 2.50, 0.0),
+    "C31": (11.95, 2.65, 0.0), "C32": (6.02, -11.50, 90.0), "C33": (-8.20, 2.55, 270.0),
+    "C34": (-9.15, 2.55, 270.0), "Q1": (-13.20, -12.40, 0.0), "R1": (-9.15, 4.40, 270.0),
+    "R2": (-2.45, 14.45, 90.0), "R3": (12.40, 9.15, 0.0), "R4": (-12.65, 9.75, 90.0),
+    "R5": (6.05, 14.40, 0.0), "R6": (-13.40, 7.89, 90.0), "R7": (-15.00, 3.35, 0.0),
+    "R8": (-13.40, 6.01, 90.0), "R9": (8.95, 7.00, 0.0), "R10": (-14.40, 5.45, 90.0),
+    "R11": (-19.60, 2.00, 90.0), "R12": (-13.20, -14.80, 0.0), "R13": (-18.00, 2.50, 0.0),
     "R14": (-18.00, 3.45, 0.0), "R15": (-6.55, -10.72, 0.0), "R16": (-9.50, -12.50, 90.0),
-    "R17": (-12.50, 5.10, 0.0), "R18": (-12.50, 4.15, 0.0), "R19": (-12.50, 3.20, 0.0),
+    "R17": (-12.90, 4.60, 0.0), "R18": (-12.90, 3.65, 0.0), "R19": (-12.90, 2.70, 0.0),
     "R20": (6.98, 0.72, 0.0), "R21": (9.65, -14.60, 0.0), "R22": (10.90, -15.55, 0.0),
-    "R23": (8.95, 7.95, 0.0), "R24": (8.95, 8.90, 0.0), "R25": (8.95, 6.05, 0.0),
-    "R26": (8.95, 5.10, 0.0), "R27": (2.45, 14.45, 90.0), "R28": (-7.25, 2.60, 270.0),
-    "R29": (-10.10, 2.60, 90.0), "R30": (-11.05, 2.60, 270.0), "R31": (-5.10, 0.72, 180.0),
-    "RN1": (-8.40, 11.62, 270.0), "RN2": (-10.90, 11.60, 270.0), "RN3": (-14.20, 12.92, 270.0),
+    "R23": (8.95, 7.95, 0.0), "R24": (8.86, 0.72, 0.0), "R25": (2.55, 16.20, 0.0),
+    "R26": (-2.55, 16.20, 180.0), "R27": (2.45, 14.45, 90.0), "R28": (-7.25, 2.55, 270.0),
+    "R29": (-10.10, 2.55, 90.0), "R30": (-11.05, 2.55, 270.0), "R31": (-5.10, 0.72, 180.0),
+    "RN1": (-8.40, 11.62, 270.0), "RN2": (-10.90, 11.60, 270.0), "RN3": (-14.35, 12.92, 270.0),
     "RN4": (8.85, 11.95, 270.0), "RN5": (11.35, 11.95, 270.0), "RN6": (14.20, 12.92, 270.0),
     "RT1": (-12.62, 0.40, 0.0), "RT2": (-10.74, 0.40, 0.0), "TP1": (-17.00, 0.62, 0.0),
-    "TP2": (8.00, -15.25, 0.0), "TP3": (17.40, 10.25, 0.0), "TP4": (18.40, 0.60, 0.0),
-    "U1": (0.00, 6.70, U1_ROTATION), "U4": (9.50, 2.60, 90.0), "U6": (14.35, 5.90, 0.0),
-    "U7": (8.42, -12.30, 0.0), "U8": (-13.20, -12.40, 0.0), "U9": (-18.40, 1.00, 180.0),
+    "TP2": (8.00, -15.25, 0.0), "TP3": (-14.60, 9.00, 0.0), "TP4": (18.40, 0.60, 0.0),
+    "TP5": (18.60, -2.20, 0.0),
+    "U1": (0.00, 6.70, U1_ROTATION), "U4": (9.50, 3.00, 90.0), "U6": (15.60, 5.90, 0.0),
+    "U7": (8.42, -12.30, 0.0), "U8": (-16.90, 5.98, 90.0), "U9": (-18.40, 1.00, 180.0),
     "U10": (-7.65, -16.05, 0.0), "U11": (13.33, -12.60, 0.0), "U12": (-7.25, -12.85, 0.0),
-    "Y1": (-8.75, 8.30, 180.0),
+    "Y1": (-9.95, 8.30, 180.0),
 }
+
+#: REVIEW FIX: "both" (was "bottom").  The specification asks for tenting and plugging on the
+#: underside; the top side is tented too because the cell lies on it.
+VIA_TENTING = "both"
+#: REVIEW FIX: margin added round the two no-via areas of the wetted underside (grain opening,
+#: pad slot) for the position tolerance of the base-plate opening / adhesive sheet against the
+#: board, and round the IMU body.  The YAML-sized areas stay as they are (the mechanical import
+#: compares them); the margin is a second rule area each.
+NO_VIA_MARGIN = 0.15
+U4_NO_VIA_MARGIN = 0.3
+#: grows the pad field of each camera into its fine area (see "fine areas" in gl1_main_design())
+FINE_AREA_MARGIN = 5.0
 
 FIDUCIALS_TOP = [(-16.8, 9.3), (18.9, -4.5), (8.6, -17.2)]
 FIDUCIALS_BOTTOM = [(-13.5, -3.0), (14.0, -7.0), (-17.0, 7.5)]
@@ -729,8 +784,28 @@ FIDUCIALS_BOTTOM = [(-13.5, -3.0), (14.0, -7.0), (-17.0, 7.5)]
 #: LAYOUT: the photodiode guard (two no-track bands on B.Cu inside the grain opening, between
 #: the photodiode pads and the LED pads; angles in degrees seen from the opening centre,
 #: counter-clockwise from +x).  See the keep-outs in gl1_main_design().
+#: REVIEW FIX: the lower band ended at -52 degrees and the LED line CP2 came in through the gap
+#: from -52 to +10 degrees and ran 0.15 mm beside the cathode pads.  The lower band now runs to
+#: -10 degrees: what is left open is the gap at 180 degrees (PD_K's exit) and 20 degrees at the
+#: right for the photodiode's ground pad.  PD_SHIELD (below) adds the copper the router cannot.
 PD_GUARD = {"r_inner": 3.35, "r_outer": 3.55,
-            "arcs": (("pd_guard_upper", 10.0, 170.0), ("pd_guard_lower", -170.0, -52.0))}
+            "arcs": (("pd_guard_upper", 10.0, 170.0), ("pd_guard_lower", 190.0, 350.0))}
+#: REVIEW FIX: static shield of the photodiode input PD_K (the 470 kohm summing node).
+#: * "pour": a GND pour on B.Cu over the photodiode field (disc of this radius round the opening
+#:   centre) and along PD_K's exit corridor (x0, y0, x1, y1).  KiCad fills what the tracks leave
+#:   free, 0.20 mm from PD_K, and ties it to the photodiode's anode pad (GND): leakage from an LED
+#:   line on the wetted underside lands on ground, not on the input.  GND, not VBIAS: the router
+#:   has no guard-trace mode and VBIAS has no copper here; a ground guard leaves a STATIC leakage
+#:   (1.4 V across the gap) which the LED-on minus LED-off difference removes.
+#: * "in2": no track on In2.Cu over the photodiode field (disc of "in2_radius"), so no LED line
+#:   runs over the cathode pads on the adjacent layer and the V2V8 fill covers them.  Over the
+#:   exit corridor In2 stays open ("in2_corridor" False): with it closed too the LED lines, which
+#:   may not change layer inside the grain opening, did not all find a way (LAYOUT_LOG.md); what
+#:   crosses PD_K there is measured by the build (layout_quality.md).
+#: None switches either off.
+PD_SHIELD = {"pour_radius": 3.30, "corridor": (-7.6, -5.0, -3.0, -3.0), "pour": True, "in2": True,
+             "in2_radius": 3.60, "in2_corridor": False}
+PD_SHIELD["in2"] = False      # see LAYOUT_LOG.md: with the In2 keep-out the LED lines did not complete
 
 
 def arc_band(cx, cy, r_inner, r_outer, a0_deg, a1_deg, step_deg=5.0):
@@ -742,10 +817,40 @@ def arc_band(cx, cy, r_inner, r_outer, a0_deg, a1_deg, step_deg=5.0):
     return RoundedPolygon(tuple(outer + inner))
 
 
+#: LAYOUT: ground guard of the 32.768 kHz crystal - a GND pour on F.Cu in this box (x0, y0,
+#: x1, y1) round Y1, C11 and C12, on top of the solid ground plane of layer 2 under them.  KiCad
+#: fills what the tracks leave free (zone clearance 0.20 mm) and ties it to the ground pads of
+#: C11 / C12; the router does not use the pour (toolchain check warning ``plane_partial``, the
+#: one warning of this board).  It is NOT a closed ring: layout_quality reports its area and
+#: what runs next to the crystal nets.  None switches it off.
+CRYSTAL_GUARD = (-12.05, 5.22, -7.90, 9.95)
+#: REVIEW FIX: the crystal's own territory.  Two CAM_HREF vias stood inside the Y1 outline,
+#: 0.15 mm from the crystal pads, and punched the ground plane under it.  Now:
+#: * Y1 and its load capacitors stand 1.2 mm further from the MCU, so that MCU pads 5 to 11 have
+#:   a column for their vias between the pad ends (x = -6.45) and the zone (x = -7.95);
+#: * "no_via": no via of any net in this box (x0, y0, x1, y1), except in the "gnd_window"
+#:   between the two load capacitors, where their ground vias go - so layer 2 is unbroken ground
+#:   under the crystal and what runs on layers 3 and 4 below is shielded by it;
+#: * "moat": no-track bands on F.Cu round the group (left, bottom, top, and the MCU side except
+#:   the opening the two crystal tracks use), so no foreign track can run beside the crystal
+#:   nets on the top layer.  The GND pour CRYSTAL_GUARD may fill the bands.
+CRYSTAL_ZONE = {
+    "no_via": (-11.95, 5.33, -7.95, 9.60),
+    "gnd_window": (-10.90, 5.33, -9.00, 6.90),
+    "moat": (("crystal_moat_left", -12.05, 5.22, -11.85, 9.95),
+             # the bottom band is open under the ground window: the capacitors' ground vias and the
+             # via of R1.1 (V2V8, a DC rail) stand in the window
+             ("crystal_moat_bottom_l", -12.05, 5.22, -10.90, 5.42),
+             ("crystal_moat_bottom_r", -9.00, 5.22, -7.90, 5.42),
+             ("crystal_moat_top", -12.05, 9.65, -7.90, 9.95),
+             ("crystal_moat_mcu_side", -8.10, 5.22, -7.90, 8.65)),
+}
+
 #: LAYOUT: options of the toolchain's router (gleda.router.RouterOptions) this
 #: board is routed with; build_gl1_main.py passes them on, and they are part of
 #: the fingerprint of the stored routing.  LAYOUT_LOG.md says why each is set.
-ROUTER_OPTIONS = {"escape_neighbours": False, "escape_attempts": 6, "escape_freeze": False}
+ROUTER_OPTIONS = {"escape_neighbours": False, "escape_attempts": 6, "escape_freeze": False,
+                  "max_iterations": 400, "patience": 40, "plane_layer_cost": 2.0}
 #: seconds after which the router starts no new work (what is open then is
 #: reported as unrouted and the build fails)
 ROUTER_TIME_LIMIT = 3600.0
@@ -756,12 +861,27 @@ ROUTER_TIME_LIMIT = 3600.0
 #: they and the USB pair are routed before the rest so that they get the direct
 #: way.  The router has no guard-trace and no differential-pair mode: what runs
 #: how close to these nets is measured afterwards (layout_quality.py).
+#: REVIEW FIX: two no-track walls on B.Cu inside the photodiode field (x0, y0, x1, y1).  With the
+#: guard bands alone an LED line could still enter through the gap at 180 degrees, run under the
+#: cathode pads and leave through the gap at 0 degrees (CP2 did, in the first layout and again in
+#: the first re-route).  The walls join the bands to the pad rows: the field is cut into the
+#: part PD_K lives in (open only at 180 degrees) and the corner of the anode pad (open only at
+#: 0 degrees), so nothing can pass THROUGH it.
+PD_WALLS = (("pd_wall_upper", 1.25, -4.90, 1.45, -0.70), ("pd_wall_lower", 1.90, -6.85, 2.10, -5.50))
+PD_K_ROUTING = {"priority": 4, "layers": ("F.Cu", "B.Cu"), "max_vias": 1}
 NET_ROUTING = {
     "OSC32_IN": {"layers": ("F.Cu",), "max_vias": 0, "priority": 3},
     "OSC32_OUT": {"layers": ("F.Cu",), "max_vias": 0, "priority": 3},
-    "PD_K": {"priority": 2},
+    # REVIEW FIX: PD_K first of all nets, top and bottom layer only, ONE via: B.Cu from the
+    # photodiode out through the gap at 180 degrees, one via outside the grain opening, F.Cu over
+    # the ground plane to R28 / C33 / MCU pad 15 (it had 28 mm and 3 vias)
+    "PD_K": PD_K_ROUTING,
     "USB_DM": {"priority": 1},
     "USB_DP": {"priority": 1},
+    # the five LED lines: a single-layer puzzle on B.Cu inside the grain opening (no via there);
+    # routed early they take the direct way round the ring (LAYOUT_LOG.md, attempts w00 to w06)
+    "CP0": {"priority": 2}, "CP1": {"priority": 2}, "CP2": {"priority": 2},
+    "CP3": {"priority": 2}, "CP4": {"priority": 2},
 }
 
 
@@ -852,9 +972,11 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     d.add_netclass("CamPower", track_width=0.15, clearance=0.10,
                    description="camera supply balls: a 0.15 mm track with the fine clearance, "
                                "confined to the same fine areas")
-    d.via_tenting = "bottom"
-    d.via_protection = ("plugged with solder mask from the BOTTOM side and tented there "
-                        "(IPC-4761 type III-a); the top side of the vias stays open")
+    # REVIEW FIX: tented on BOTH sides (was "bottom").  With open top vias 25 via pads lay bare
+    # under the pouch cell and the mask webs between via openings and foreign pads were 0.13 mm.
+    d.via_tenting = VIA_TENTING
+    d.via_protection = ("plugged with solder mask from the BOTTOM side (IPC-4761 type III-a) and "
+                        "tented on both sides")
     d.fab_notes += [
         "The bottom side is a wetted surface in use: no open via holes there, and no via at all "
         "inside the grain opening (dia 13 at 0, -4) or the pad slot (17.44 x 2.2 at y -17).",
@@ -862,13 +984,29 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
         "on the bottom side inside a dia 2.5 zone without tracks and vias.",
         "Layer 2 (In1.Cu) is a solid ground plane.",
         "0.100 mm track and gap (3.94 mil) inside the two fine areas round the cameras: the "
-        "fabricator must accept it in writing (DESIGN_SPEC E7, release gate).",
+        "fabricator must accept it in writing (DESIGN_SPEC E7, release gate). The acceptance must cover "
+        "ALL THREE routing layers - F.Cu, In2.Cu (layer 3) and B.Cu: fine-class tracks change layer "
+        "inside the fine areas, so 0.100 mm track and 0.100 mm gap occur on the inner layer and on the "
+        "bottom as well as on the top (lengths per layer under TRACKS AS ROUTED; DEPARTURE from the "
+        "specification's 'used only to escape the camera BGAs', recorded in electrical/README.md).",
         "Lead-free assembly (SAC305), RoHS-compliant parts, no conformal coating (DESIGN_SPEC E5).",
         "Solder mask is drawn 1:1 on every land. U9 (6 balls on 0.4 mm, lands 0.23 mm) and U2 / U3 "
         "(25 balls on 0.5 mm, lands 0.20 mm): whatever mask compensation the fabricator applies must "
         "leave a mask web of at least 0.075 mm between the openings of these parts.",
-        "Vias: 0.50 mm pad, 0.25 mm finished hole, through only. Every via is tented on the BOTTOM "
-        "side and plugged from the bottom (see via protection); on the top side the via pads are open.",
+        "Vias: 0.50 mm pad, through only, tented on both sides and plugged from the bottom (see via "
+        "protection). HOLE SIZE - QUESTION FOR THE FABRICATOR, to be answered with the E7 question: the "
+        "specification says '0.25 mm drill'; the design data carries 0.25 mm as the hole size and the "
+        "toolchain's README line calls it the finished hole. Intended: 0.25 mm DRILL (tool) on the "
+        "0.50 mm pad, finished hole about 0.20 mm. If the fabricator reads 0.25 mm as the FINISHED size "
+        "it drills 0.30 to 0.35 mm, which leaves 0.075 to 0.10 mm of ring and less hole-to-copper "
+        "distance than the 0.20 mm the design keeps: not accepted without review.",
+        "Plane (zone) clearance: 0.20 mm everywhere (the build adds a KiCad rule for it; the generated "
+        "fine-class rule alone would let the fill come to 0.127 mm of camera-side nets outside the fine "
+        "areas).",
+        "Layer 3 (In2.Cu) is the V2V8 supply fill AND a routing layer: it is not a solid plane (the real "
+        "coverage is in layout_quality.md).",
+        "BT1 / BT2 (cell-lead pads), the test points and the seven underside contact pads carry no "
+        "solder paste.",
     ]
 
     def add(part, xy=None, rot=0.0):
@@ -1012,7 +1150,7 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     add(Part("Y1", "32.768k", XTAL3215, pins=two_pin(), mpn="ABS07-120-32.768KHZ-T",
              manufacturer="Abracon", distributor="Digi-Key",
              distributor_pn="product page 3724043 (SKU not seen)",
-             unit_price=0.68, height_mm=0.9, group="mcu",
+             unit_price=0.99, height_mm=0.9, group="mcu",                 # price: sourcing A17 height_mm=0.9, group="mcu",
              description="Crystal 32.768 kHz, 6 pF, 55 kohm, 3.2 x 1.5 mm",
              fields=_status(RES, "MPN and CL research-confirmed; KiCad land pattern drawn for the "
                                  "Epson FC-135, not checked against Abracon's; Digi-Key PN not seen")))
@@ -1091,7 +1229,7 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     add(Part("U7", "MCP1700-2.8", SOT23,
              pins={"GND": ("1", "power_in"), "VOUT": ("2", "power_out"), "VIN": ("3", "power_in")},
              mpn="MCP1700T-2802E/TT", manufacturer="Microchip", distributor="Digi-Key",
-             distributor_pn="product page 5148837 (SKU not seen)", height_mm=1.2, group="power",
+             distributor_pn="MCP1700T-2802E/TTCT-ND", height_mm=1.2, group="power",
              description="LDO 2.8 V 250 mA, 1.6 uA quiescent, SOT-23 (always on)",
              fields=_status(PROV, "family, pin order, Iq research-confirmed for the 3.0 V part "
                                   "(-3002); the 2.8 V order code -2802 is from DESIGN_SPEC and a "
@@ -1135,7 +1273,7 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     # spec E1: "TI BQ25101YFP (4.20 V, DSBGA-6, 0.4 mm ball pitch, all six balls on the perimeter)"
     chg_pins = {pin: (ball, etype) for ball, (pin, etype) in BQ25101_BALLS.items()}
     add(Part("U9", "BQ25101", charger_footprint(), pins=chg_pins, mpn="BQ25101YFPR",
-             manufacturer="Texas Instruments", distributor=BY_MPN, distributor_pn="BQ25101YFPR",
+             manufacturer="Texas Instruments", distributor="Digi-Key", distributor_pn="296-39933-1-ND",
              height_mm=BQ25101_HEIGHT, group="power",
              description="Li-ion linear charger 4.20 V, 10-250 mA, TS (JEITA) and open-drain CHG, "
                          "DSBGA-6 1.6 x 0.9 mm; BALL MAP PROVISIONAL. Fallback on the footprint: BQ25100YFP",
@@ -1166,7 +1304,7 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     for ref, net, role in (("RT1", "CHG_TS", "NTC1: charger TS (hardware charge-temperature window)"),
                            ("RT2", "NTC_SENSE", "NTC2: MCU (supervision, no read above 60 C, display)")):
         add(Part(ref, "NTC 10k", R0402, pins=two_pin(), mpn=NTC_MPN,
-                 manufacturer="Murata", distributor=BY_MPN, distributor_pn=NTC_MPN,
+                 manufacturer="Murata", distributor="Digi-Key", distributor_pn="490-18149-1-ND",
                  height_mm=0.55, group="power",
                  description="NTC thermistor 10 kohm 1 %, B 3380 K, 0402 (cell temperature)",
                  fields=dict(_status(PROV, "MPN from DESIGN_SPEC E2 (stock PROVISIONAL); B value as used "
@@ -1204,7 +1342,9 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     d.net("USB_DP", "U10.IO2A", "U10.IO2B")
     gnd.append("U10.GND")
     # spec: "Two solder pads for the cell leads sit in the strip beyond the protection-board end"
-    bt = F.battery_tab(BAT_PAD_SIZE[0], BAT_PAD_SIZE[1])
+    # REVIEW FIX: the cell leads are soldered by hand and the pads are the bench-supply contact of
+    # the board test: bare ENIG, NO solder paste (the toolchain default is paste)
+    bt = F.battery_tab(BAT_PAD_SIZE[0], BAT_PAD_SIZE[1], paste=False)
     (bx1, by1), (bx2, by2) = battery_pad_positions()
     add(Part("BT1", "BAT+", bt, pins={"1": "1"}, in_bom=False, height_mm=0.0, group="power",
              description="cell + lead solder pad (PowerStream GM201030-PCB is not a board part)"),
@@ -1224,8 +1364,8 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
                    "GND2": ("7", "power_in"), "VDD": ("8", "power_in"), "INT2": ("9", "output"),
                    "OCS_AUX": ("10", "nc"), "SDO_AUX": ("11", "nc"), "CS": ("12", "input"),
                    "SCL": ("13", "input"), "SDA": ("14", "input")},
-             mpn="LSM6DSV16XTR", manufacturer="STMicroelectronics", distributor="Digi-Key",
-             distributor_pn="497-LSM6DSV16XTRCT-ND", unit_price=4.42, height_mm=0.86,
+             mpn="LSM6DSV16XTR", manufacturer="STMicroelectronics", distributor="Newark",
+             distributor_pn="62AK1744", unit_price=5.75, height_mm=0.86,     # sourcing A13: Digi-Key out of stock
              group="sensor", description="6-axis IMU, LGA-14L 2.5 x 3.0 x 0.83 mm",
              fields=_status(RES, "MPN, package, pin map, Digi-Key PN research-confirmed; wiring of "
                                  "pins 2 and 3 and any INT1 power-on restriction: PROVISIONAL")))
@@ -1322,7 +1462,10 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     # spec E4: "Test points on the top side, 1.0 mm bare round pads reachable by spring probes
     # before the unit is closed: VBAT, V2V8, V2V8_CAM, GND"
     tp = F.test_pad(TEST_POINT_DIA)
-    for ref, net in (("TP1", "VBAT"), ("TP2", "V2V8"), ("TP3", "V2V8_CAM"), ("TP4", "GND")):
+    # REVIEW FIX: TP5 on VDDUSB is ADDED to the four test points of E4 - E14 sets a board-test
+    # limit for that rail (3.3 V +-3 %) and it could only be probed on 0402 pads
+    for ref, net in (("TP1", "VBAT"), ("TP2", "V2V8"), ("TP3", "V2V8_CAM"), ("TP4", "GND"),
+                     ("TP5", "VDDUSB")):
         add(Part(ref, net, tp, pins={"1": "1"}, in_bom=False, height_mm=0.0, group="service",
                  description="test point %s (top side, bare dia %g mm pad)" % (net, TEST_POINT_DIA)))
         if net == "GND":
@@ -1345,6 +1488,10 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     # ---- planes -------------------------------------------------------------------------------
     d.add_plane("GND", "In1.Cu")                               # spec: "Layer 2 solid ground"
     d.add_plane("V2V8", "In2.Cu", routable=True)               # layout choice of the toolchain demo
+    if CRYSTAL_GUARD:
+        gx0, gy0, gx1, gy1 = CRYSTAL_GUARD
+        d.add_plane("GND", "F.Cu", priority=1,
+                    shape=RoundedPolygon.rect((gx0 + gx1) / 2.0, (gy0 + gy1) / 2.0, gx1 - gx0, gy1 - gy0))
     # ---- keep-outs of the mechanical contract ------------------------------------------------
     bb = BAT["body"]
     bx0, bx1 = bb["x"] - bb["dx"] / 2.0, bb["x"] + bb["dx"] / 2.0
@@ -1373,6 +1520,25 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     go = VIA_KO["grain_opening"]
     d.add_keepout(Circle(go["x"], go["y"], go["dia"] / 2.0), layers=ALL_LAYERS,
                   name="grain_opening_no_via", tracks=False, vias=True, copper=False)
+    if NO_VIA_MARGIN:
+        d.add_keepout(Circle(go["x"], go["y"], go["dia"] / 2.0 + NO_VIA_MARGIN), layers=ALL_LAYERS,
+                      name="grain_opening_no_via_margin", tracks=False, vias=True, copper=False)
+    if PD_SHIELD:
+        from shapely.geometry import Point as _Pt, box as _bx
+        cx0, cy0, cx1, cy1 = PD_SHIELD["corridor"]
+        if PD_SHIELD.get("pour"):
+            g = _Pt(go["x"], go["y"]).buffer(PD_SHIELD["pour_radius"], 32).union(_bx(cx0, cy0, cx1, cy1))
+            d.add_plane("GND", "B.Cu", priority=1,
+                        shape=RoundedPolygon(tuple((round(x, 4), round(y, 4))
+                                                   for x, y in list(g.exterior.coords)[:-1])))
+        if PD_SHIELD.get("in2"):
+            g = _Pt(go["x"], go["y"]).buffer(PD_SHIELD["in2_radius"], 32)
+            if PD_SHIELD.get("in2_corridor"):
+                g = g.union(_bx(cx0, cy0, cx1, cy1))
+            d.add_keepout(RoundedPolygon(tuple((round(x, 4), round(y, 4))
+                                               for x, y in list(g.exterior.coords)[:-1])),
+                          layers=("In2.Cu",), name="pd_k_no_track_in2", tracks=True, vias=False,
+                          copper=False)
     # LAYOUT: photodiode guard.  Nothing can change layer inside the grain opening (no vias), so
     # the LED lines, the photodiode's cathode net PD_K and its ground pad are ONE single-layer
     # puzzle on B.Cu.  The LED pads' inner ring (r 4.43 .. 5.06 from the opening centre) carries
@@ -1386,10 +1552,27 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     for gname, a0, a1 in PD_GUARD["arcs"]:
         d.add_keepout(arc_band(go["x"], go["y"], PD_GUARD["r_inner"], PD_GUARD["r_outer"], a0, a1),
                       layers=("B.Cu",), name=gname, tracks=True, vias=False, copper=False)
+    for wname, wx0, wy0, wx1, wy1 in (PD_WALLS or ()):
+        d.add_keepout(RoundedPolygon.rect((wx0 + wx1) / 2.0, (wy0 + wy1) / 2.0, wx1 - wx0, wy1 - wy0),
+                      layers=("B.Cu",), name=wname, tracks=True, vias=False, copper=False)
     ps = VIA_KO["pad_slot"]
     half = (ps["length"] - ps["width"]) / 2.0
     d.add_keepout(Slot(-half, ps["y"], half, ps["y"], ps["width"]), layers=ALL_LAYERS,
                   name="pad_slot_no_via", tracks=False, vias=True, copper=False)
+    if NO_VIA_MARGIN:
+        d.add_keepout(Slot(-half, ps["y"], half, ps["y"], ps["width"] + 2.0 * NO_VIA_MARGIN),
+                      layers=ALL_LAYERS, name="pad_slot_no_via_margin", tracks=False, vias=True,
+                      copper=False)
+    # ---- the crystal's territory (CRYSTAL_ZONE) -------------------------------------------------
+    if CRYSTAL_ZONE:
+        x0, y0, x1, y1 = CRYSTAL_ZONE["no_via"]
+        wx0, wy0, wx1, wy1 = CRYSTAL_ZONE["gnd_window"]
+        d.add_keepout(RoundedPolygon(((x0, y0), (wx0, y0), (wx0, wy1), (wx1, wy1), (wx1, y0), (x1, y0),
+                                      (x1, y1), (x0, y1))), layers=ALL_LAYERS, name="crystal_no_via",
+                      tracks=False, vias=True, copper=False)
+        for mname, mx0, my0, mx1, my1 in CRYSTAL_ZONE["moat"]:
+            d.add_keepout(RoundedPolygon.rect((mx0 + mx1) / 2.0, (my0 + my1) / 2.0, mx1 - mx0, my1 - my0),
+                          layers=("F.Cu",), name=mname, tracks=True, vias=False, copper=False)
     # ---- height limits --------------------------------------------------------------------------
     hood = KO["camera_hoods"]
     for ref, (cx, _cy) in (("U2", CAM_L), ("U3", CAM_R)):
@@ -1412,11 +1595,14 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
         d.add_body_keepout("U4")
         u4 = d.part("U4")
         bw, bh = (3.0, 2.5) if abs(u4.rotation % 180.0) < 1e-9 else (2.5, 3.0)     # LGA-14 body
-        d.add_keepout(RoundedPolygon.rect(u4.x, u4.y, bw, bh), layers=ALL_LAYERS,
+        # REVIEW FIX: the area is the body outline grown by U4_NO_VIA_MARGIN (a via stood 0.02 mm
+        # outside the outline, inside placement tolerance)
+        d.add_keepout(RoundedPolygon.rect(u4.x, u4.y, bw + 2.0 * U4_NO_VIA_MARGIN,
+                                          bh + 2.0 * U4_NO_VIA_MARGIN), layers=ALL_LAYERS,
                       name="under_U4_no_via", tracks=False, vias=True, copper=False)
     # ---- fine areas: the fine classes are fine only round the cameras --------------------------
-    d.add_fine_area("U2", margin=5.0)
-    d.add_fine_area("U3", margin=5.0)
+    d.add_fine_area("U2", margin=FINE_AREA_MARGIN)
+    d.add_fine_area("U3", margin=FINE_AREA_MARGIN)
     # ---- fiducials: three per side -------------------------------------------------------------
     for x, y in FIDUCIALS_TOP:
         d.add_fiducial(x, y)

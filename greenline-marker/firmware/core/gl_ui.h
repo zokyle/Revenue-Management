@@ -21,30 +21,54 @@
  *   double tap again        -> Survey (on the spin prompt, or on a Precision
  *                              result): the shown read becomes drop 1; move
  *                              the marker along the line, each placement
- *                              adds a drop (up to 4); double tap ends it.
- *                              The putt is the one from the drop FARTHEST
- *                              from the flagstick (the ball).  The aim line
- *                              is drawn only while the marker lies there:
- *                              COME BACK TO THE BALL for the last drop; at
- *                              any other drop the screen shows the numbers
- *                              and "PUT AT BALL".
+ *                              adds a drop (2 to 4 in all); double tap ends
+ *                              it.  DESIGN_SPEC E29: THE SURVEY FINISHES AT
+ *                              THE BALL.  The placement the marker stands on
+ *                              is always taken as the ball: every result,
+ *                              from the second placement on, is the putt
+ *                              from where the marker lies, with its line,
+ *                              fitted to all placements so far (for example
+ *                              1 m short of the hole, the midpoint, then the
+ *                              ball).  A fifth placement is a new plain
+ *                              read; picking the marker up without putting
+ *                              it down again for 60 s, or leaving a result
+ *                              for its 45 s, ends the Survey (the last
+ *                              result can still be recalled, see below).
+ *   single tap, later       -> Recall (E30): a marker that has NOT BEEN
+ *                              LIFTED since its last result went off the
+ *                              screen shows that result again for 45 s with
+ *                              its age ("3M AGO") when it is tapped; no
+ *                              camera read, nothing is logged.  The tap is
+ *                              what wakes the marker (wake-on-motion).  "Not
+ *                              lifted" is decided from the motion data: see
+ *                              gl_app.c, recall_watch_.
  *   what a result shows     -> distance, "PLAYS" distance (the flat putt
  *                              that needs the same stroke; "?" if the hole
  *                              height is only bounded), slope with the
  *                              fall-line arrow, break in cups with the side,
  *                              confidence boxes, and ONE plain message when
  *                              something is not as usual (gl_ui_note_t).
- *                              The line is SOLID for a solution of a putt
- *                              whose distance and direction were measured;
- *                              DASHED (tentative) for an aim that is not a
- *                              solution ("BREAK ?"), for an assumed
- *                              distance, and for the flag-out fallback.  An
+ *                              THREE DISPLAY STATES (E33, gl_ui_show_t):
+ *                              a SOLID line with the confidence bar = a
+ *                              normal solution; a DASHED line with the word
+ *                              APPROX where the bar would be = a fallback
+ *                              solution (the message says which: TOO STEEP,
+ *                              NO FLAG, NO RANGE, PACE LIMIT, ...); a
+ *                              MESSAGE WITHOUT A LINE = no solution.  An
  *                              aim more than 13.5 degrees off the marker's
  *                              axis is drawn parallel through the screen
  *                              centre, in the same style.
+ *   too steep               -> E31: where the fitted slope at the ball or at
+ *                              the hole is GL_UI_STEEP_RATIO of the slope a
+ *                              ball no longer stops on, or more, the result
+ *                              says "TOO STEEP" and its line is dashed.
  *   hold upright on edge    -> settings; roll like a knob to change the
  *                              value, double tap for the next item, lay
- *                              flat to confirm
+ *                              flat to confirm.  The last item, INFO, is the
+ *                              regulatory and information screen: model,
+ *                              "PRACTICE DEVICE", versions, serial number,
+ *                              and (rolled on) the pages of the regulatory
+ *                              text.
  *   no flagstick found      -> asks for the distance ("NO FLAG", the DIST
  *                              dial).  Putting the marker down again WITHOUT
  *                              dialling reads again (the flagstick may be in
@@ -82,7 +106,7 @@
  *                              tilt, so the surface need not be level.
  *                              Putting the marker in the cradle abandons it.
  *
- * RAM: gl_ui_t 44 bytes, gl_ui_view_t 52 bytes.  Stack: gl_ui_render() about 250 bytes.
+ * RAM and stack: README, "Memory" (the sizes are printed by tests/test_ui.c).
  */
 #ifndef GL_UI_H
 #define GL_UI_H
@@ -145,6 +169,15 @@ typedef enum {
     /* rev E, appended */
     GL_EV_TOO_HOT,           /**< a camera read was about to start with the cell above 60 C */
     GL_EV_USB_RESUME,        /**< asleep in the cradle: the host has resumed the bus */
+    /* phase 3, appended */
+    GL_EV_CAPTURE_SKIPPED,   /**< tilt-only mode (TILT LOG = ONLY): the cameras stay off and
+                                  the placement is solved as a flag-out read */
+    GL_EV_CAL_ARMED,         /**< a zeroing was armed by the factory (GL_CMD_LEVEL_ZERO) and
+                                  the marker now lies out of the cradle: run it */
+    GL_EV_FORCE_SLEEP,       /**< go to sleep now (the sleep-current test, GL_CMD_SLEEP_TEST) */
+    GL_EV_LIFTED,            /**< E30: the marker has been lifted, turned or tilted since its
+                                  last result (the application's recall watch): that result
+                                  must not be shown again; a new read follows */
     GL_EV_COUNT
 } gl_ui_event_t;
 
@@ -172,6 +205,8 @@ typedef enum {
                                                 show the single read for where the marker faces now */
 #define GL_ACT_CRADLE_SLEEP     (1u << 20) /**< E32: USB to standby or off, IMU and flash down, MCU
                                                 to Stop mode; the display STAYS ON with the symbol */
+#define GL_ACT_RECALL           (1u << 21) /**< E30: show the stored result again with its age; no
+                                                read, no camera, no log record */
 
 /** Guards of the transition table. */
 typedef enum {
@@ -185,7 +220,9 @@ typedef enum {
     GL_G_USB,                /**< VBUS present */
     GL_G_ITEM_ZERO_YES,      /**< dial is on the "ZERO" item with value YES */
     GL_G_DIST_PROMPT,        /**< the dial was opened to ask for the distance (no flagstick seen) */
-    GL_G_DIST_PROMPT_MOVED   /**< ... and the marker has been picked up since */
+    GL_G_DIST_PROMPT_MOVED,  /**< ... and the marker has been picked up since */
+    GL_G_RECALL              /**< E30: a result is stored and the marker has not been lifted
+                                  since it went off the screen (gl_ui_t.recall) */
 } gl_ui_guard_t;
 
 typedef struct {
@@ -199,7 +236,12 @@ typedef struct {
 /** The dial item after the settings items: "ZERO" (NO / YES), which starts
  *  the zeroing routine when the marker is then laid flat. */
 #define GL_UI_ITEM_ZERO ((uint8_t)GL_ITEM_COUNT)
-#define GL_UI_ITEM_COUNT ((uint8_t)GL_ITEM_COUNT + 1u)
+/** ... and the last one: "INFO", the regulatory and information screen.
+ *  Rolling turns its pages (page 0: model, versions, serial; then the text
+ *  block).  It sets nothing; laying the marker flat leaves the dial as from
+ *  any other item. */
+#define GL_UI_ITEM_INFO ((uint8_t)GL_ITEM_COUNT + 1u)
+#define GL_UI_ITEM_COUNT ((uint8_t)GL_ITEM_COUNT + 2u)
 
 typedef enum {
     GL_READ_QUICK = 0,       /**< tilt + capture */
@@ -215,6 +257,13 @@ typedef struct {
     bool moved;
     bool usb;
     bool dist_prompt;        /**< the dial was opened to ask for the distance */
+    bool recall;             /**< E30: the last result went off the screen by its time limit
+                                  and nothing has happened since that makes it untrue: a wake
+                                  by motion that ends at rest shows it again (GL_G_RECALL).
+                                  Owned by gl_ui_dispatch(); cleared by GL_EV_LIFTED and by
+                                  every transition that is not on the way to the recall */
+    uint8_t info_pages;      /**< pages of the INFO item (set by the application before the
+                                  dial is used; 0 is taken as 1) */
     uint16_t error_code;     /**< gl_status_t shown in GL_UI_ERROR */
     int32_t dial_value;
     uint32_t state_since_ms;
@@ -283,8 +332,93 @@ typedef enum {
     GL_UI_NOTE_NO_FLAG,      /**< "NO FLAG": tilt only, along the visor axis */
     GL_UI_NOTE_NOT_SOLVED,   /**< "NOT SOLVED": the estimator's best effort, not a solution */
     GL_UI_NOTE_NO_SOLUTION,  /**< "NO SOLUTION": straight at the hole for want of anything */
+    /* phase 3 (the value is logged: appended, whatever its rank) */
+    GL_UI_NOTE_TOO_STEEP,    /**< "TOO STEEP" (E31): the fitted slope is close to the slope a
+                                  ball no longer stops on; the solution is not determined */
     GL_UI_NOTE_COUNT
 } gl_ui_note_t;
+
+/* ---- the three display states of a result (DESIGN_SPEC E33) --------------------- */
+
+/** What a result looks like.  Exactly one of these applies to every estimate
+ *  (gl_ui_classify); tests/test_ui.c proves it over every aim source and
+ *  solve status, and that the three differ in the frame buffer. */
+typedef enum {
+    GL_UI_SHOW_NORMAL = 0,   /**< SOLID aim line and the confidence bar: a solution of the
+                                  putt on the fitted patch, at the pace set, of a putt whose
+                                  distance and direction the cameras measured */
+    GL_UI_SHOW_APPROX = 1,   /**< DASHED aim line, the word "APPROX" in place of the confidence
+                                  bar, and the reason as the message: a fallback solution */
+    GL_UI_SHOW_NONE = 2,     /**< the message, NO line, no bar, no break: no solution */
+    GL_UI_SHOW_COUNT
+} gl_ui_show_t;
+
+/**
+ * E31: at and above this ratio of the fitted slope to the critical slope
+ * (gl_ui_steep_ratio) a solved result is shown as "TOO STEEP", dashed.
+ * Chosen from a sweep against the Python reference (tools/steep_sweep.py,
+ * `make steep-sweep`; the table is in the README, "TOO STEEP"): with a
+ * one-microradian change of the tilt the aim flipped in none of 11185
+ * reference reads (and none of 56191 firmware reads) with a ratio below
+ * 0.90, in 0.1 % (0.4 %) at 0.90 to 0.95, 2 % (3 %) at 0.95 to 1.00 and a
+ * quarter to a half above 1.05.  0.80 leaves a margin of 0.10 below the
+ * first flip for the error of the fitted slope itself (the tilt reading: 2
+ * mrad on a critical slope of 56 to 131 mrad for green speeds 14 to 6).
+ */
+#define GL_UI_STEEP_RATIO 0.80f
+
+/** Standard gravity and the rolling factor of the reference (physics.py:
+ *  G, ROLL_FACTOR): the critical slope is a_r / ((5/7) g). */
+#define GL_UI_G_MPS2 9.80665f
+#define GL_UI_ROLL_FACTOR (5.0f / 7.0f)
+
+/**
+ * The steepness ratio of an estimate, from quantities the estimator
+ * returns (gl_estimate_t.patch[0..3], distance_m, a_r_mps2):
+ *
+ *     max(|(a, b)|, |(a + c D, b + d D)|) / (a_r / ((5/7) g))
+ *
+ * - the slope of the fitted patch at the ball and at the hole (it is linear
+ * along the straight line between them, so its largest magnitude on that
+ * line is at one of its ends) over the slope on which a ball no longer
+ * stops.  Returns +infinity if a_r is not positive, or if anything is not
+ * a number (such a result is then TOO STEEP, never normal).
+ */
+float gl_ui_steep_ratio(float a, float b, float c, float d, float distance_m, float a_r_mps2);
+
+/** What gl_ui_classify() looks at. */
+typedef struct {
+    uint8_t aim_source;      /**< gl_aim_source_t */
+    uint8_t solve_status;    /**< gl_solve_status_t */
+    bool flag_missing, range_missing, fit_converged, poor_horizon; /**< of gl_estimate_t */
+    bool distance_known;     /**< the distance was measured by the cameras, or dialled */
+    float steep_ratio;       /**< gl_ui_steep_ratio() */
+    bool one_camera;         /**< the flagstick was measured by the left camera only */
+    bool ambiguous;          /**< another line also passed as a flagstick */
+} gl_ui_class_in_t;
+
+/**
+ * The display state of an estimate and its ONE message.  First match wins:
+ *
+ *   NONE    aim source 3 (straight) or unknown, or solve status INVALID /
+ *           NOT_RUN / unknown: "NO SOLUTION"
+ *   NONE    aim source 2 (best effort): "TOO STEEP" if the ratio says so,
+ *           else "NOT SOLVED"
+ *   APPROX  flag missing: "NO FLAG";  range missing: "NO RANGE";  (any
+ *           other result whose distance is not known: "NO RANGE")
+ *   APPROX  ratio >= GL_UI_STEEP_RATIO: "TOO STEEP"
+ *   APPROX  aim source 1 (secant plane): "APPROX"
+ *   APPROX  aim source 0, status PACE_LIMITED: "PACE LIMIT"
+ *   APPROX  aim source 0, any status but OK (a kept near miss): "APPROX"
+ *   APPROX  fit not converged: "FIT NOT DONE";  poor horizon: "POOR HORIZON"
+ *   NORMAL  everything else (aim source 0, status OK): "1 CAMERA",
+ *           "2 LINES SEEN" or no message
+ *
+ * PACE_LIMITED and the kept near miss are the SAME state on purpose: on a
+ * knife-edge putt the single- and the double-precision build end in the one
+ * or the other (reference vectors, near-miss ids 1, 3, 4, 9, 16).
+ */
+gl_ui_show_t gl_ui_classify(const gl_ui_class_in_t *in, gl_ui_note_t *note);
 
 /** The text of a note ("" for GL_UI_NOTE_NONE and out-of-range values). */
 const char *gl_ui_note_text(gl_ui_note_t note);
@@ -294,11 +428,12 @@ typedef struct {
     /* result of the last read (GL_UI_SHOW_RESULT) */
     bool have_result;
     bool solved;             /**< true: the aim is a solution of the putt on the estimated
-                                  surface (solid line).  false: best effort or straight (the
-                                  line is drawn in dashes, the break is not quoted) */
-    bool line_here;          /**< true: the marker lies at the ball, the aim line applies to
-                                  where it lies.  false (a Survey drop along the line): no
-                                  line is drawn, the numbers are shown with "PUT AT BALL" */
+                                  surface (patch or secant plane).  false: best effort or
+                                  straight: NO line, the break is not quoted */
+    uint8_t show;            /**< gl_ui_show_t as classified (gl_ui_classify).  The renderer
+                                  draws gl_ui_view_show(), which can only be MORE cautious */
+    bool recalled;           /**< E30: this is the stored result shown again ... */
+    uint32_t age_s;          /**< ... this many seconds after it was made */
     bool flag_found;
     bool precision;          /**< result of a spin-and-reread */
     bool distance_assumed;   /**< the distance is the dialled or the default one (shown "?") */
@@ -308,6 +443,11 @@ typedef struct {
     uint8_t drop;            /**< Survey: number of the drop this result was taken at (1..4);
                                   0 = not a Survey */
     float aim_rad;           /**< aim line direction in the marker's CURRENT frame, CCW from forward */
+    float display_rot_rad;   /**< E12: the stored display rotation (gl_cal_device_t).  The
+                                  AIM LINE is drawn turned by it about the screen centre,
+                                  counter-clockwise for a viewer looking down on the display:
+                                  both its direction and the direction of the ball position
+                                  it passes through.  Text and symbols are not turned */
     float ball_az_rad;       /**< direction from the marker centre to the ball centre, CCW from
                                   forward: 0 normally; near pi after the 180-degree spin of a
                                   Precision Read (the marker then faces away from the hole).
@@ -335,16 +475,34 @@ typedef struct {
                                   (its own temperature window) */
     uint8_t cal_step;        /**< zeroing: 0 hold still (first read), 1 turn 180 degrees in
                                   place, 2 hold still (second read), 3 saved */
+    /* the INFO item of the dial (regulatory and information screen) */
+    char info_hw;            /**< hardware revision letter ('E') */
+    uint16_t info_fw;        /**< firmware version, major << 8 | minor */
+    char info_serial[8];     /**< serial number, 7 characters and a NUL ("" = none) */
+    const char *info_text;   /**< the regulatory text block (NUL-terminated, upper case and
+                                  the font's punctuation; '\n' = new line; NULL = none) */
 } gl_ui_view_t;
+
+/**
+ * The state the renderer draws for a view: view->show, made more cautious
+ * by what the view itself says - never NORMAL unless the aim is a solution
+ * of a putt with a known distance and a measured flagstick, never a line
+ * unless the aim is a solution.  (So a view that the application classified
+ * wrongly still cannot look like a normal result.)
+ */
+gl_ui_show_t gl_ui_view_show(const gl_ui_view_t *view);
 
 /** The strings of the result screen, as drawn ("" = not drawn). */
 typedef struct {
     char distance[12];       /**< "19.6FT", "6.0M?", "--" */
     char plays[16];          /**< "PLAYS 21.3FT", "PLAYS 21.3FT?" (hole height only bounded) */
-    char note[16];           /**< gl_ui_note_text(), or the Survey prompt */
+    char note[16];           /**< gl_ui_note_text() */
     char slope[8];           /**< "2.3%" */
     char brk[12];            /**< "<2.5 CUP", "2.5 CUP>", "STRAIGHT", "BREAK ?" */
     char mode[4];            /**< "D2", "2X" */
+    char state[8];           /**< "APPROX" in the APPROX state, "" otherwise (drawn where the
+                                  confidence bar is in the NORMAL state) */
+    char age[12];            /**< a recalled result: "45S AGO", "12M AGO", "5H AGO", "3D AGO" */
 } gl_ui_result_text_t;
 
 /** Format the strings of the result screen (pure; gl_ui_render() draws
@@ -353,6 +511,41 @@ void gl_ui_result_text(const gl_ui_t *ui, const gl_ui_view_t *view, gl_ui_result
 
 /** Boxes of the confidence bar that are filled (0..5) for a confidence. */
 int gl_ui_conf_boxes(float confidence);
+
+/* ---- the INFO item: regulatory and information screen ---------------------------- */
+
+/** Text lines of one page of the regulatory text and the widest of them. */
+#define GL_UI_INFO_LINES 10u
+#define GL_UI_INFO_LINE_MAX 20u
+/** Pages of text the screen will show at most (after the first page with
+ *  model, versions and serial number).  Text beyond them is NOT shown: the
+ *  build of the text must check gl_ui_info_fit(). */
+#define GL_UI_INFO_TEXT_PAGES 4u
+
+/** Characters that fit line `line` (0 .. GL_UI_INFO_LINES - 1) of a text
+ *  page inside the round aperture, and where the line starts.  0 for a line
+ *  that does not exist. */
+unsigned gl_ui_info_line_chars(unsigned line, int *x, int *y);
+
+/** Character cells of one text page (the sum over its lines). */
+unsigned gl_ui_info_page_chars(void);
+
+/**
+ * Lay `text` out (words are not broken unless one is longer than a line;
+ * '\n' starts a new line; a space at a line end is dropped).  Returns the
+ * number of text pages it needs and, if `shown` is not NULL, how many of
+ * its characters fall on the first GL_UI_INFO_TEXT_PAGES pages (equal to
+ * strlen(text) when it fits).
+ */
+unsigned gl_ui_info_fit(const char *text, size_t *shown);
+
+/** Pages of the INFO item for this text: 1 + the text pages, at most
+ *  1 + GL_UI_INFO_TEXT_PAGES. */
+unsigned gl_ui_info_pages(const char *text);
+
+/** Tell the UI that the stored result must not be recalled (E30); the same
+ *  as GL_EV_LIFTED without a transition.  For the application's start-up. */
+void gl_ui_recall_clear(gl_ui_t *ui);
 
 /**
  * Draw the screen of the current state into `g` (cleared first).  All ink

@@ -98,6 +98,9 @@ static struct {
     bool chg_stop_broken;
     uint8_t chg_state;           /* gl_sim_chg_state_t */
     bool chg_done;               /* terminated: waits for the recharge threshold */
+    bool chg_cycle_ended;        /* a charge has terminated since the input appeared or the
+                                    charger was last enabled: what follows is a RE-charge */
+    bool chg_stat_first_only;    /* variant of the model: CHG is low in the first cycle only */
     bool chg_timer_fault;
     uint64_t chg_timer_us;       /* its safety timer */
     double chg_out_ua;           /* current out of the charger during the last step */
@@ -353,6 +356,7 @@ static void charger_update_(void)
         /* input gone, or disabled through TS: both restart the charger's
          * cycle, its termination latch and its timer */
         S.chg_done = false;
+        S.chg_cycle_ended = false;
         S.chg_timer_fault = false;
         S.chg_timer_us = 0;
         st = (uint8_t)(input ? GL_SIM_CHG_DISABLED : GL_SIM_CHG_NO_INPUT);
@@ -372,6 +376,7 @@ static void charger_update_(void)
             /* fixed-voltage mode of the model (no cell dynamics): a cell AT
              * the regulation voltage is a finished charge */
             S.chg_done = true;
+            S.chg_cycle_ended = true;
             S.stats.chg_terminations++;
         }
         if (S.chg_done) {
@@ -388,8 +393,14 @@ static void charger_update_(void)
     if (!chg_charging_state_(st)) {
         S.chg_out_ua = 0.0;
     }
-    /* CHG: open drain, low while a charge runs; the board's pull-up otherwise */
-    sim_set_input(GL_PIN_CHG_STAT, !chg_charging_state_(st));
+    /* CHG: open drain, low while a charge runs; the board's pull-up otherwise.
+     * Variant (GL_PROV_BQ25101_CHG_LOW_ON_RECHARGE = 0, or the test's switch):
+     * low in the FIRST cycle only - a recharge after a termination runs with
+     * CHG released, until the input goes or the charger is disabled through
+     * TS.  In the test mode of an open TS nothing terminates, so the question
+     * does not arise there. */
+    sim_set_input(GL_PIN_CHG_STAT,
+                  !(chg_charging_state_(st) && !(S.chg_stat_first_only && S.chg_cycle_ended)));
 }
 
 /* One step of the charger and the cell: the conditions (state, load) held
@@ -434,6 +445,7 @@ static void charger_step_(uint64_t dt)
                 }
                 if (!ttdm && iout < (double)GL_PROV_BQ25101_TERM_FRACTION * (double)GL_PROV_BQ25101_ICHG_UA) {
                     S.chg_done = true; /* termination: it takes effect at the next update */
+                    S.chg_cycle_ended = true;
                     S.stats.chg_terminations++;
                 }
             }
@@ -909,6 +921,7 @@ void gl_sim_reset(bool erase_flash)
         S.pin[p].mode = (uint8_t)GL_PIN_MODE_ANALOG; /* MCU reset state */
     }
     S.pin[GL_PIN_CHG_STAT].ext = true; /* pulled up: not charging */
+    S.chg_stat_first_only = (GL_PROV_BQ25101_CHG_LOW_ON_RECHARGE == 0);
     S.vbus_sense_fall_at = SIM_NEVER;
     S.stats.grain_bias_short_us = UINT64_MAX;
     sim_lcd_reset();
@@ -1353,6 +1366,13 @@ void gl_sim_charger_stop_broken(bool broken)
     charger_update_();
 }
 
+void gl_sim_charger_stat_first_cycle_only(bool first_only)
+{
+    charger_account_();
+    S.chg_stat_first_only = first_only;
+    charger_update_();
+}
+
 void gl_sim_charger_input_low(bool low)
 {
     charger_account_();
@@ -1643,6 +1663,11 @@ void gl_hal_reboot(gl_reboot_t how)
     S.stats.reboots++;
     S.stats.last_reboot = (uint8_t)how;
     sim_trace(GL_SIM_TR_REBOOT, (unsigned)how, 0, 0, 0);
+}
+
+void gl_hal_boot_confirm(void)
+{
+    S.stats.boot_confirms++;
 }
 
 void gl_hal_watchdog_kick(void)

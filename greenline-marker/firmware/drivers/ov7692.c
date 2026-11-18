@@ -236,13 +236,11 @@ static gl_status_t cam_bring_up_(gl_ov7692_t *d, gl_cam_id_t cam)
     return st;
 }
 
-gl_status_t gl_ov7692_power_up(gl_ov7692_t *d)
+/* Steps 1 to 4 of the power-up: rail, both sensors held in power-down, the
+ * clock, the buses.  On an error the caller powers down. */
+static gl_status_t rail_up_(gl_ov7692_t *d)
 {
     gl_status_t st;
-
-    if (d->powered) {
-        return GL_OK;
-    }
     /* 1: the rail.  Every camera-facing pin is still parked. */
     gl_hal_gpio_write(GL_PIN_CAM_PWR_EN, true);
     gl_hal_gpio_mode(GL_PIN_CAM_PWR_EN, GL_PIN_MODE_OUTPUT_PP);
@@ -269,7 +267,20 @@ gl_status_t gl_ov7692_power_up(gl_ov7692_t *d)
         gl_hal_gpio_mode(dcmi_pins_[i], GL_PIN_MODE_ALTERNATE);
     }
     gl_hal_delay_ms(GL_PROV_CAM_CLOCK_SETTLE_MS);
+    return GL_OK;
+}
 
+gl_status_t gl_ov7692_power_up(gl_ov7692_t *d)
+{
+    gl_status_t st;
+
+    if (d->powered) {
+        return GL_OK;
+    }
+    st = rail_up_(d);
+    if (st != GL_OK) {
+        return st; /* (rail_up_ has powered down) */
+    }
     /* 5: one camera at a time, so that the one being reset is the only one
      * that can be driving the shared bus */
     st = cam_bring_up_(d, GL_CAM_LEFT);
@@ -284,6 +295,37 @@ gl_status_t gl_ov7692_power_up(gl_ov7692_t *d)
     d->active = -1;
     d->frames = 0;
     return GL_OK;
+}
+
+gl_status_t gl_ov7692_probe(gl_ov7692_t *d, gl_cam_id_t cam, uint16_t *pid)
+{
+    uint8_t hi = 0, lo = 0;
+    gl_status_t st;
+
+    *pid = 0;
+    if (d->powered || d->capturing || (unsigned)cam >= (unsigned)GL_CAM_COUNT) {
+        return GL_ERR_STATE;
+    }
+    st = rail_up_(d);
+    if (st != GL_OK) {
+        return st;
+    }
+    /* only THIS sensor leaves power-down; the first register write takes it
+     * off the shared bus (as in cam_bring_up_) */
+    pwdn_assert_(cam, false);
+    gl_hal_delay_ms(GL_PROV_CAM_CLOCK_SETTLE_MS);
+    st = wr_(cam, REG_0C, reg0c_(d, false));
+    if (st == GL_OK) {
+        st = rd_(cam, REG_PIDH, &hi);
+    }
+    if (st == GL_OK) {
+        st = rd_(cam, REG_PIDL, &lo);
+    }
+    gl_ov7692_power_down(d);
+    if (st == GL_OK) {
+        *pid = (uint16_t)(((uint16_t)hi << 8) | lo);
+    }
+    return st;
 }
 
 /* ---- bus ownership ------------------------------------------------------------ */

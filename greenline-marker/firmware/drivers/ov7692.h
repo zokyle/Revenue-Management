@@ -141,6 +141,18 @@ void gl_ov7692_init(gl_ov7692_t *d, const gl_ov7692_cfg_t *cfg);
  *  reset does not complete; in every error case the rail is off again. */
 gl_status_t gl_ov7692_power_up(gl_ov7692_t *d);
 
+/**
+ * FACTORY: read the product id of ONE camera whatever the state of the
+ * other (gl_ov7692_power_up() stops at the first camera that fails, so a
+ * board with a dead left camera could not show its right one).  Rail on,
+ * both sensors held in power-down, clock, buses; then only `cam` leaves
+ * power-down, is taken off the shared bus and asked for PIDH:PIDL; then the
+ * complete power-down sequence.  The id is returned as read: it is NOT
+ * compared with GL_PROV_OV7692_PID.  GL_ERR_STATE if the cameras are
+ * powered, GL_ERR_IO if the camera does not answer.
+ */
+gl_status_t gl_ov7692_probe(gl_ov7692_t *d, gl_cam_id_t cam, uint16_t *pid);
+
 /** Power-down sequence.  Always safe to call. */
 void gl_ov7692_power_down(gl_ov7692_t *d);
 

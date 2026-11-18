@@ -1,8 +1,8 @@
 {
  "counts": {
   "nets": 95,
-  "pads_on_nets": 399,
-  "parts": 120
+  "pads_on_nets": 400,
+  "parts": 121
  },
  "design": "gl1_main",
  "netclasses": {
@@ -1030,7 +1030,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 2,
    "width": null
   },
   "CP0_MCU": {
@@ -1082,7 +1082,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 2,
    "width": null
   },
   "CP1_MCU": {
@@ -1130,7 +1130,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 2,
    "width": null
   },
   "CP2_MCU": {
@@ -1178,7 +1178,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 2,
    "width": null
   },
   "CP3_MCU": {
@@ -1222,7 +1222,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 2,
    "width": null
   },
   "CP4_MCU": {
@@ -1423,7 +1423,9 @@
     "TP4.1"
    ],
    "planes": [
-    "In1.Cu"
+    "In1.Cu",
+    "F.Cu",
+    "B.Cu"
    ],
    "power_flag": false,
    "priority": 0,
@@ -1701,8 +1703,11 @@
    "width": null
   },
   "PD_K": {
-   "layers": null,
-   "max_vias": null,
+   "layers": [
+    "F.Cu",
+    "B.Cu"
+   ],
+   "max_vias": 1,
    "name": "PD_K",
    "netclass": "Default",
    "no_route": false,
@@ -1726,7 +1731,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 2,
+   "priority": 4,
    "width": null
   },
   "SPI1_MISO": {
@@ -2255,13 +2260,15 @@
     "U1.VDDUSB",
     "C9.1",
     "C23.1",
-    "U11.OUT"
+    "U11.OUT",
+    "TP5.1"
    ],
    "pads": [
     "U1.48",
     "C9.1",
     "C23.1",
-    "U11.5"
+    "U11.5",
+    "TP5.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -2484,7 +2491,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "camera",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "CL05A105KP5NNNC",
    "pins": {
     "1": {
      "net": "CAM_L_DVDD",
@@ -2556,7 +2563,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "camera",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "CL05A105KP5NNNC",
    "pins": {
     "1": {
      "net": "CAM_R_DVDD",
@@ -2604,7 +2611,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "CL05A105KP5NNNC",
    "pins": {
     "1": {
      "net": "VBAT",
@@ -2628,7 +2635,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "CL05A105KP5NNNC",
    "pins": {
     "1": {
      "net": "V2V8",
@@ -2652,7 +2659,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A225KE95D",
+   "mpn": "GRM155R61A225KE01D",
    "pins": {
     "1": {
      "net": "VBUS_D",
@@ -2676,7 +2683,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A225KE95D",
+   "mpn": "GRM155R61A225KE01D",
    "pins": {
     "1": {
      "net": "VDDUSB",
@@ -2700,7 +2707,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "CL05A105KP5NNNC",
    "pins": {
     "1": {
      "net": "VBAT",
@@ -2724,7 +2731,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "CL05A105KP5NNNC",
    "pins": {
     "1": {
      "net": "V2V8_CAM",
@@ -2748,7 +2755,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A225KE95D",
+   "mpn": "GRM155R61A225KE01D",
    "pins": {
     "1": {
      "net": "VBUS_D",
@@ -2772,7 +2779,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "power",
    "in_bom": true,
-   "mpn": "GRM155R61A225KE95D",
+   "mpn": "GRM155R61A225KE01D",
    "pins": {
     "1": {
      "net": "VBAT",
@@ -2916,7 +2923,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "display",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "CL05A105KP5NNNC",
    "pins": {
     "1": {
      "net": "V2V8",
@@ -3060,7 +3067,7 @@
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "group": "mcu",
    "in_bom": true,
-   "mpn": "GRM155R61A105KE15D",
+   "mpn": "CL05A105KP5NNNC",
    "pins": {
     "1": {
      "net": "VDDA",
@@ -5054,6 +5061,23 @@
     }
    },
    "value": "GND"
+  },
+  "TP5": {
+   "dnp": false,
+   "footprint": "gleda:TestPad_D1mm",
+   "group": "service",
+   "in_bom": false,
+   "mpn": "",
+   "pins": {
+    "1": {
+     "net": "VDDUSB",
+     "pads": [
+      "1"
+     ],
+     "type": "passive"
+    }
+   },
+   "value": "VDDUSB"
   },
   "U1": {
    "dnp": false,

@@ -127,8 +127,15 @@
 
 #include "gl_hal.h"
 #include "gl_hal_stm32u5_priv.h"
+#include "gl_boot.h"    /* the boot stub's retained registers (boot/, DESIGN_SPEC E34) */
 #include "gl_pins.h"
 #include "gl_provisional.h"
+#include "gl_usb_ids.h" /* a RELEASE build stops here while the USB ids are placeholders */
+
+/* the application and the boot stub agree on the update request */
+typedef char glh_boot_request_matches_the_stub_[(0x474C4446u == GL_BOOT_UPDATE_MAGIC &&
+                                                 GL_BOOT_BKP_REQUEST == 0u &&
+                                                 GL_BOOT_BKP_ATTEMPTS == 3u) ? 1 : -1];
 
 /* ======================================================================= */
 /* identifier map (see the file comment)                                    */
@@ -2135,14 +2142,30 @@ uint32_t gl_hal_reset_reason(void)
 
 void gl_hal_reboot(gl_reboot_t how)
 {
+    HAL_PWR_EnableBkUpAccess();
+    /* a reset made on purpose by an application that works: the boot stub
+     * must not count it as a failed start (boot/gl_boot.h, rule 4) */
+    TAMP->BKP3R = 0;
     if (how == GL_REBOOT_ROM_DFU) {
-        /* survive the reset in a backup register; dfu_check_() acts on it */
-        HAL_PWR_EnableBkUpAccess();
+        /* The request survives the reset in a backup register.  With the
+         * boot stub in place (DESIGN_SPEC E34) the STUB acts on it and
+         * clears it before this code runs again; dfu_check_() below is what
+         * acts on it in a build WITHOUT the stub (an image loaded at
+         * 0x08000000 for bring-up).  Same register, same value:
+         * GL_BOOT_BKP_REQUEST / GL_BOOT_UPDATE_MAGIC. */
         TAMP->BKP0R = GLH_DFU_MAGIC;
     }
     NVIC_SystemReset();
     for (;;) {
     }
+}
+
+void gl_hal_boot_confirm(void)
+{
+    /* the boot stub's count of unconfirmed starts (boot/gl_boot.h:
+     * GL_BOOT_BKP_ATTEMPTS = TAMP backup register 3) */
+    HAL_PWR_EnableBkUpAccess();
+    TAMP->BKP3R = 0;
 }
 
 void gl_hal_watchdog_kick(void)

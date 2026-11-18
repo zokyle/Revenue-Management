@@ -7,6 +7,8 @@
 #include <stdlib.h>
 
 #include "gl_grain.h"
+#include "gl_buf.h"
+#include "gl_crc.h"
 #include "gl_provisional.h"
 #include "gl_test.h"
 
@@ -172,6 +174,8 @@ GL_TEST(test_noise_floor_gate)
         GL_CHECK(c2.mod_threshold == cal.mod_threshold && c2.flags == cal.flags);
         /* a zero threshold in storage is refused */
         gl_put_f32(&blob[2 + 64], 0.0f);
+        GL_CHECK_EQ(gl_cal_grain_decode(blob, sizeof(blob), &c2), GL_ERR_CRC); /* (version 2) */
+        gl_put_u16(&blob[sizeof(blob) - 2u], gl_crc16(blob, sizeof(blob) - 2u));
         GL_CHECK_EQ(gl_cal_grain_decode(blob, sizeof(blob), &c2), GL_ERR_RANGE);
     }
 }

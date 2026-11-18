@@ -444,6 +444,6 @@
   },
   "sheets": [],
   "text_variables": {
-    "GLEDA_VIA_TENTING": "bottom"
+    "GLEDA_VIA_TENTING": "both"
   }
 }

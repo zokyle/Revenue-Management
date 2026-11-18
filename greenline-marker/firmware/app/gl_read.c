@@ -57,6 +57,7 @@ void gl_read_init(gl_read_t *r, gl_ov7692_t *cam)
     r->strip_fn = NULL;
     r->strip_ctx = NULL;
     r->time_correction = true;
+    r->bound_groups = true;
     r->phase = (uint8_t)GL_READ_IDLE;
     memset(&r->result, 0, sizeof(r->result));
     gl_cal_cam_defaults(&cl, 0);
@@ -312,6 +313,7 @@ static gl_status_t band_done_(gl_read_t *r)
     /* Several lines in the band: each gets one L R R L group of its own
      * before one is chosen (the strongest line is not always the flagstick). */
     r->probing = (r->band.n_cand > 1u);
+    r->result.follow_groups = r->repeats;
     return start_candidate_(r, 0);
 }
 
@@ -744,6 +746,31 @@ static gl_status_t probe_done_(gl_read_t *r)
         }
     }
     r->probing = false;
+    /* DESIGN_SPEC E15: the camera rail is on for 2.2 to 2.8 s.  Every probed
+     * candidate has cost one L R R L group (0.31 s by the timing model); the
+     * line that is followed gets what is left of the read's budget of
+     * `repeats` + GL_APP_PROBE_FREE_GROUPS groups, never fewer than
+     * GL_APP_MIN_FOLLOW_GROUPS.  Three lines probed: 3 + 5 groups where it
+     * was 3 + 8 (rail on 2.56 s where it was 3.36 s; one group more would
+     * be 2.82 s).  The frame-noise part of the disparity uncertainty grows
+     * by sqrt(8 / 5); the read reports it (result.disp.sigma_px) and
+     * result.follow_groups says what was done. */
+    if (r->bound_groups) {
+        const unsigned budget = (unsigned)r->repeats + GL_APP_PROBE_FREE_GROUPS;
+        const unsigned probed = (unsigned)r->band.n_cand;
+        unsigned follow = (budget > probed) ? (budget - probed) : 0u;
+        unsigned least = GL_APP_MIN_FOLLOW_GROUPS;
+        if (least > (unsigned)r->repeats) {
+            least = (unsigned)r->repeats;
+        }
+        if (follow < least) {
+            follow = least;
+        }
+        if (follow < (unsigned)r->repeats) {
+            r->repeats = (uint8_t)follow;
+        }
+    }
+    r->result.follow_groups = r->repeats;
     return start_candidate_(r, best);
 }
 

@@ -1204,6 +1204,89 @@ GL_TEST(test_record_codecs)
              h2.width == 96 && h2.height == 480 && h2.offset == 46000);
 }
 
+static gl_status_t unreadable_(void *ctx, uint32_t addr, uint8_t *buf, size_t len)
+{
+    (void)ctx;
+    (void)addr;
+    (void)buf;
+    (void)len;
+    return GL_ERR_IO;
+}
+
+/* Phase 3: gl_log_iter_seek() - the download that resumes.  For every
+ * record number of a log that has wrapped several times: the iterator lands
+ * on the sector that holds the record, so the records returned from there
+ * are in order, never skip a retained record at or after the one asked for,
+ * and begin at most one sector's worth of records before it. */
+GL_TEST(test_iter_seek_for_a_resumed_download)
+{
+    gl_log_iter_t it;
+    gl_log_rec_t rec;
+    static uint8_t buf[512];
+    static uint32_t seqs[4000];
+    unsigned n = 0, worst_before = 0, per_sector = 0;
+    uint32_t first, last;
+
+    fresh(1024, 12);
+    GL_CHECK_EQ(gl_log_mount(&lg, &fl, 0, 12), GL_OK);
+    /* nothing in the log: a seek is harmless and finds nothing */
+    GL_CHECK_EQ(gl_log_iter_seek(&lg, &it, 5), GL_OK);
+    GL_CHECK_EQ(gl_log_iter_next(&lg, &it, &rec, buf, sizeof(buf)), GL_ERR_EMPTY);
+    (void)run_appends(&lg, 1, 900); /* wraps the 12 sectors several times */
+    gl_log_iter_begin(&lg, &it);
+    while (gl_log_iter_next(&lg, &it, &rec, buf, sizeof(buf)) == GL_OK && n < 4000u) {
+        seqs[n++] = rec.seq;
+    }
+    GL_CHECK(n > 50u);
+    first = seqs[0];
+    last = seqs[n - 1u];
+    for (uint32_t want = first - 3u; want <= last + 3u; want++) {
+        unsigned got = 0, before = 0;
+        uint32_t prev = 0, first_at_or_after = 0;
+        GL_CHECK_EQ(gl_log_iter_seek(&lg, &it, want), GL_OK);
+        while (gl_log_iter_next(&lg, &it, &rec, buf, sizeof(buf)) == GL_OK) {
+            GL_CHECK(rec.seq > prev);
+            prev = rec.seq;
+            if (rec.seq < want) {
+                before++;
+            } else if (first_at_or_after == 0u) {
+                first_at_or_after = rec.seq;
+            }
+            got++;
+        }
+        if (want <= last) {
+            /* the first record at or after `want` is the one a full read finds */
+            uint32_t expect = 0;
+            for (unsigned i = 0; i < n; i++) {
+                if (seqs[i] >= want) {
+                    expect = seqs[i];
+                    break;
+                }
+            }
+            GL_CHECK_EQ(first_at_or_after, expect);
+            GL_CHECK_EQ(prev, last); /* ... and it runs to the newest record */
+        } else {
+            GL_CHECK_EQ(first_at_or_after, 0u); /* beyond the newest: nothing at or after it */
+        }
+        worst_before = (before > worst_before) ? before : worst_before;
+        (void)got;
+    }
+    /* how many records one sector holds here (payloads of about 20 to 70 bytes) */
+    per_sector = (unsigned)((n + 10u) / 11u);
+    printf("    seek to each of %u record numbers of a wrapped 12-sector log: always the right "
+           "first record; at most %u older records are returned in front of it (one sector holds "
+           "about %u)\n", (unsigned)(last - first + 7u), worst_before, per_sector);
+    GL_CHECK(worst_before <= 2u * per_sector);
+    /* a flash that cannot be read */
+    {
+        gl_flash_if_t bad = fl;
+        gl_log_t lg2 = lg;
+        bad.read = unreadable_;
+        lg2.fl = &bad;
+        GL_CHECK_EQ(gl_log_iter_seek(&lg2, &it, first + 5u), GL_ERR_IO);
+    }
+}
+
 int main(void)
 {
     GL_RUN(test_empty_and_basic_append);
@@ -1220,5 +1303,6 @@ int main(void)
     GL_RUN(test_store_refuses_a_set_that_does_not_fit_one_sector);
     GL_RUN(test_store_three_cuts_in_a_row);
     GL_RUN(test_record_codecs);
+    GL_RUN(test_iter_seek_for_a_resumed_download);
     return gl_test_summary();
 }

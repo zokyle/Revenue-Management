@@ -70,7 +70,7 @@
     4
    ],
    [
-    0.9,
+    0.8,
     7
    ]
   ]
@@ -82,19 +82,19 @@
    "sha256": "05b60c07e60f33dc8a404350c57df57068228b85e6a447447ea8751b46234ecf"
   },
   {
-   "bytes": 1329,
+   "bytes": 1319,
    "path": "assembly/gl1_cradle-bom.csv",
-   "sha256": "402f4c2aad8ef22701d8bc740ca4acd933e77272e30049420e16854b0fcee7db"
+   "sha256": "cd2ee4a9b1ca8b1e49a07bb07eb7c744238167eb8c8f08dea0ad922656ead6f2"
   },
   {
-   "bytes": 1008,
+   "bytes": 1005,
    "path": "assembly/gl1_cradle-pos.csv",
-   "sha256": "7dad2e6729f1eecb39ae2a178243e4b863b47a96f0cb17209b53b0ebdf0c6298"
+   "sha256": "eb674d413a5ff3042695577ae379698eeb6b3516dc6f1bba29c999577637686d"
   },
   {
-   "bytes": 4237,
+   "bytes": 4788,
    "path": "fab/README.txt",
-   "sha256": "4e18a8df895cfc65272abb066d5b7e338afabe3d1e0d0c0d5c65dde60dcc98eb"
+   "sha256": "903d30654977af2439a04e302f931ce5992967d4b3a539a8b406e9090704d5bf"
   },
   {
    "bytes": 8221,
@@ -114,7 +114,7 @@
   {
    "bytes": 24974,
    "path": "fab/gl1_cradle-B_Silkscreen.gbr",
-   "sha256": "ace58947082992333d406bc55fcb6888bf0c034fc7369058dbf43be5836b964c"
+   "sha256": "05cf647921be7346f64c60a34675c3593df53172731686f09e48156eb31b1dd6"
   },
   {
    "bytes": 635,
@@ -139,7 +139,7 @@
   {
    "bytes": 19883,
    "path": "fab/gl1_cradle-F_Silkscreen.gbr",
-   "sha256": "4541b406c2a4e4cec77bd29584676a9c2dcd89fe84432693649c9ac8ffde37d9"
+   "sha256": "eee19418c3a61b3e7a0e01c1557852c4368690b9290d26091f36e8e65508c83e"
   },
   {
    "bytes": 39357,
@@ -152,14 +152,14 @@
    "sha256": "a51512941136d8350f21f35e7788d07588cb5702a52abe84f040ce29cc0b75ef"
   },
   {
-   "bytes": 47752,
+   "bytes": 48280,
    "path": "fab/gl1_cradle-PTH-drl_map.gbr",
-   "sha256": "182f30d6eab71cd3a851bc395a33bcc501fdb0688e67b986105084432328c9bd"
+   "sha256": "aee1e32488cfdf6a06d6b7bb460a2856375ad79c18e9b15b1d7a595db160c176"
   },
   {
    "bytes": 686,
    "path": "fab/gl1_cradle-PTH.drl",
-   "sha256": "d4415609c303b891f28c94f5cb3e4e53040f05a277d5b31c8f902181d56a2e98"
+   "sha256": "df36a8ae86f33899b23196c13c73ef9c79626b69139eee06d25dbb5017b07e43"
   },
   {
    "bytes": 2622,
@@ -167,49 +167,49 @@
    "sha256": "dc1f4f4f4f956dcb8c96d58ef16c11ca5071bd7cb1a73a9a1c2eb0b63b52a442"
   },
   {
-   "bytes": 2271,
+   "bytes": 2284,
    "path": "gl1_cradle-assembly.zip",
-   "sha256": "268a99e12b52257f5b2eb7eec78e512122d7eb158b16fae864f8e04c459e8463"
+   "sha256": "55d669ff891187e17e15775b21e0659f2a5fcd7c5f680a8fabb2b28228a9efe6"
   },
   {
-   "bytes": 394956,
+   "bytes": 394892,
    "path": "gl1_cradle-board.step",
-   "sha256": "90e9f13bd6500438e2b0ba4e6176576d9c3b117c97487dca9eadd6fea5c2bf78"
+   "sha256": "ac4ecd4ae1722cfb83cc100c5fd9581845fa6125f8bbb8d8b19324046fc15f0b"
   },
   {
-   "bytes": 33971,
+   "bytes": 34299,
    "path": "gl1_cradle-fab.zip",
-   "sha256": "89fb733fa57b3e71762696b181c7b8d646e0cbf153c7da1eed29946762e5d4a2"
+   "sha256": "bea317ddc9b7cb66bab51ef5eebc79df9c55765ebb7ca1253e6554e780dec804"
   },
   {
-   "bytes": 26917,
+   "bytes": 26914,
    "path": "gl1_cradle-mechanical.json",
-   "sha256": "24ee27901447ba7b73a0dd562e5a8e32e6dc5c43761d0c686bdda2de60d4e130"
+   "sha256": "2243d83c07a563ae9ac7c99a4f8e05414d2608d6bee6286489c72a50196fc86d"
   },
   {
-   "bytes": 10895,
+   "bytes": 10892,
    "path": "gl1_cradle-netlist.json",
-   "sha256": "a655df695dd4083f3a89be037f1f1877adbf5098ee1a9df4e3529ab54e531a59"
+   "sha256": "a6be5135ce2fff6d418fec035b0112d0e8389750330674bbd06674b76ebeea71"
   },
   {
-   "bytes": 33343,
+   "bytes": 33322,
    "path": "renders/gl1_cradle-bottom.png",
-   "sha256": "a5b4dced3cb328beb5edf05a28069299916a5620193b91268cde3228ccb3c842"
+   "sha256": "d86a7beb940cec4684b0bf33dcb2d41bac9c3fa6fbf67651eef7cf44951c5d5a"
   },
   {
    "bytes": 71228,
    "path": "renders/gl1_cradle-bottom.svg",
-   "sha256": "e7b142929b08b4edd17cd50a22a087741b83f80d670744c8c624f6b97970e14d"
+   "sha256": "61815581dc9c23a1bc379f73b1d08063376d8735bcbd61df8f8fa3e92948b6c9"
   },
   {
-   "bytes": 31375,
+   "bytes": 31349,
    "path": "renders/gl1_cradle-top.png",
-   "sha256": "78121deb326150f9a7e9c1d36412e1b464f38a7ebd23a28c5cefbb3778ee77dd"
+   "sha256": "87161b406ef69f850247d0f47e1d360d733be74ab1c861d7a815135d9042602d"
   },
   {
    "bytes": 59278,
    "path": "renders/gl1_cradle-top.svg",
-   "sha256": "ce4d96055cf7beba209e5c7a2d8cedc9edd136ffbffd77daba41ec3da8f2ac4b"
+   "sha256": "87451f696b3e59cbe9442342ab4b143b782f965faa7437c4563b725944cbd512"
   },
   {
    "bytes": 708,

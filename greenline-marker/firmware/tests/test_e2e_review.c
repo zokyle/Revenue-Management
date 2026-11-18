@@ -509,7 +509,7 @@ GL_TEST(test_solved_aim_off_the_screen_keeps_its_style)
     run_until_ms_(now_ms_() + 100u);
     show_("3 m, rises LEFT 2 %, visor 9 deg right of the hole");
     gl_ui_result_text(&app.ui, &app.view, &t);
-    GL_CHECK(app.view.solved && app.view.line_here);
+    GL_CHECK(app.view.solved);
     GL_CHECK(app.view.aim_rad > 0.2365f); /* more than 13.55 degrees to the LEFT: off the screen */
     GL_CHECK(t.brk[0] == '<');
     /* the line: solid, through the screen centre, parallel to the aim */

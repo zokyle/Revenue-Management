@@ -27,9 +27,15 @@ recorded in ``out/build_summary.json``:
  9. ``mechanical``  ``mechanical/cad/board_import.py`` on ``out/gl1_main-mechanical.json``
 10. ``quality``     figures measured on the copper (``layout_quality.py``), review renders
 
-Exit status 0 only if every stage passed and: 0 check errors, 100 % routed with
-a clean audit, KiCad DRC 0 errors and 0 unconnected, outputs verified, round
-trip equal, mechanical import passed.  A stage that cannot run is a failure.
+Exit status:
+  0  every stage passed and: 0 check errors, 100 % routed with a clean audit, KiCad DRC
+     0 errors and 0 unconnected, outputs verified, round trip equal, mechanical import passed
+  2  the same, EXCEPT that ``mechanical/cad/board_import.py`` exits 1 on exactly one row, the
+     position of J1, which spec amendment E24 moved and ``design/master_params.yaml`` does not
+     have yet.  The stage is reported as FAIL (recorded departure E24).  It cannot turn into a
+     pass inside this package: the YAML and the checker's reference point (anchor against body
+     centre) both have to change (see electrical/README.md)
+  1  anything else failed.  A stage that cannot run is a failure.
 Fabrication data is never written for an incomplete board.
 """
 import argparse
@@ -51,6 +57,7 @@ import gl1_main_design as G                                               # noqa
 import check_netlist_rules                                                # noqa: E402
 import netlist_stage                                                      # noqa: E402
 import layout_quality                                                     # noqa: E402
+import layout_review                                                      # noqa: E402
 from gleda import board, checks, drc, outputs, router, routeplot, schematic   # noqa: E402
 
 ALL_STAGES = ("checks", "rules", "pinmap", "board", "route", "drc", "outputs", "schematic",
@@ -58,6 +65,7 @@ ALL_STAGES = ("checks", "rules", "pinmap", "board", "route", "drc", "outputs", "
 ITERATION_LINE = re.compile(r"iteration \d+:")
 STORED_ROUTING = os.path.join(HERE, "routing.json")
 MECH_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "mechanical"))
+ZONE_RULE_NAME = "gl1 zone clearance for every zone"
 
 
 def say(msg=""):
@@ -128,15 +136,41 @@ def stage_pinmap(design, out, ctx):
         say("  " + line)
     say("  exit status %d%s" % (proc.returncode, "" if pindata else
                                 "  (no --pindata: PARTIAL, alternate-function numbers not verified)"))
+    # the exported pin map belongs to the board's outputs: a copy next to the other exports
+    src = os.path.join(HERE, "pinmap.json")
+    copied = False
+    if proc.returncode == 0 and os.path.exists(src):
+        shutil.copyfile(src, os.path.join(out, "pinmap.json"))
+        copied = True
+        say("  pinmap.json exported and copied to %s" % os.path.relpath(os.path.join(out, "pinmap.json"), HERE))
     return proc.returncode == 0, {"exit_status": proc.returncode, "lines": tail,
-                                  "against_st_pin_data": bool(pindata)}
+                                  "against_st_pin_data": bool(pindata), "pinmap_json_in_out": copied}
 
 
 def stage_board(design, out, ctx):
     files = board.build_board(design, out)
     ctx["files"] = files
     say("  %s" % os.path.relpath(files.pcb, out))
-    return True, {"pcb": os.path.basename(files.pcb), "project": os.path.basename(files.pro)}
+    # WORKAROUND for a toolchain defect (reported in electrical/README.md): the generated rule
+    # "fine class ... outside the fine areas" carries "clearance min 0.127 mm", and KiCad's zone
+    # filler lets that rule override the zones' own 0.20 mm clearance for the camera-side nets
+    # outside the fine areas (measured on the first layout: 29 items at 0.1275 mm).  A rules file
+    # that the README says "only ADDS constraints" relaxed one.  One more rule, appended here and
+    # therefore of the highest priority, restores the zone clearance for every zone.  It only
+    # ADDS a constraint; nothing is relaxed, excluded or waived.
+    dru = os.path.splitext(files.pcb)[0] + ".kicad_dru"
+    zone_rule = False
+    if os.path.exists(dru):
+        with open(dru, "a", encoding="utf-8") as fh:
+            fh.write("# Added by build_gl1_main.py (not by gleda): the zone clearance of the rule set applies to\n"
+                     "# every zone, also against fine-class copper outside the fine areas.\n"
+                     '(rule "%s"\n  (condition "A.Type == \'Zone\' || B.Type == \'Zone\'")\n'
+                     "  (constraint clearance (min %smm)))\n" % (ZONE_RULE_NAME, design.rules.zone_clearance))
+        zone_rule = True
+        say("  appended rule %r (zone clearance %s mm) to %s"
+            % (ZONE_RULE_NAME, design.rules.zone_clearance, os.path.basename(dru)))
+    return True, {"pcb": os.path.basename(files.pcb), "project": os.path.basename(files.pro),
+                  "zone_clearance_rule_appended": zone_rule}
 
 
 def stage_route(design, out, ctx):
@@ -296,10 +330,45 @@ def stage_mechanical(design, out, ctx):
         fh.write("$ cd mechanical && %s\n" % " ".join(cmd))
         fh.write(proc.stdout)
         fh.write("exit status %d\n" % proc.returncode)
+    result = next((l for l in lines if l.startswith(("PASS", "FAIL"))), "")
+    # Spec amendment E24 moves J1 0.5 mm to the rear and OVERRIDES the YAML point.  board_import.py
+    # (check C) compares the footprint ANCHOR of J1 (0, -12.9) with the YAML point (0, -13.9), which
+    # is the centre of the YAML's body box; the body centre on the board is (0, -14.5).  The check
+    # therefore FAILS, and this stage reports FAIL.  When the failure is exactly that one row, with
+    # the anchor where E24 puts it, it is flagged as the recorded departure (exit status 2 of the
+    # build instead of 1); any other failure, a second failure or a different J1 position is an
+    # ordinary failure.  It will NOT pass by correcting the YAML point alone: the YAML needs the
+    # body centre (0, -14.5) with dy 5.6 AND check C must compare body centres (or the YAML must
+    # carry the anchor) - both outside this package.
+    e24 = "LCD connector J1: x, y: board (%s, %s), YAML (%s, %s)" % (
+        float(G.J1_XY[0]), float(G.J1_XY[1]), float(G.J1_YAML_XY[0]), float(G.J1_YAML_XY[1]))
+    only_e24 = (proc.returncode == 1 and result.startswith("FAIL FAILED (1):")
+                and result.split(":", 1)[1].strip() == e24)
+    if only_e24:
+        say("  FAIL - RECORDED DEPARTURE (spec E24 overrides the YAML point of J1): the import check exits 1 "
+            "on J1's position and on nothing else. Needed outside this package: YAML J1 = body centre "
+            "(0, -14.5), dy 5.6, and check C comparing body centres")
     return proc.returncode == 0 and not missing, {
-        "exit_status": proc.returncode, "keepouts_missing": missing,
-        "result": next((l for l in lines if l.startswith(("PASS", "FAIL"))), ""),
+        "exit_status": proc.returncode, "keepouts_missing": missing, "result": result,
+        "only_failure_is_j1_e24": only_e24,
         "warnings": [l.strip() for l in lines if l.strip().startswith("warning:")]}
+
+
+def crystal_guard_fill(pcb):
+    """Area and number of pieces KiCad filled of the GND pour on F.Cu (the crystal guard), read
+    from the DRC'd board file; None when the design has no such pour."""
+    if not G.CRYSTAL_GUARD:
+        return None
+    import pcbnew
+    brd = pcbnew.LoadBoard(pcb)
+    area, pieces = 0.0, 0
+    for z in brd.Zones():
+        if z.GetIsRuleArea() or z.GetNetname() != "GND" or not z.IsOnLayer(pcbnew.F_Cu):
+            continue
+        polys = z.GetFilledPolysList(pcbnew.F_Cu)
+        area += polys.Area() / 1e12
+        pieces += polys.OutlineCount()
+    return {"area_mm2": round(area, 2), "pieces": pieces}
 
 
 def stage_quality(design, out, ctx):
@@ -313,7 +382,20 @@ def stage_quality(design, out, ctx):
     with open(os.path.join(out, "layout_quality.json"), "w", encoding="utf-8") as fh:
         json.dump(q, fh, indent=1, sort_keys=True)
         fh.write("\n")
+    guard = crystal_guard_fill(pcb)
+    q["crystal_guard"] = guard
     text = layout_quality.markdown(q)
+    if guard is not None:
+        text += ("- Crystal ground guard (GND pour on F.Cu, box x %.1f..%.1f, y %.1f..%.1f): KiCad filled "
+                 "%.2f mm2 in %d piece(s) beside Y1 / C11 / C12; it is not a closed ring.\n"
+                 % (G.CRYSTAL_GUARD[0], G.CRYSTAL_GUARD[2], G.CRYSTAL_GUARD[1], G.CRYSTAL_GUARD[3],
+                    guard["area_mm2"], guard["pieces"]))
+    rv = layout_review.review(design, pcb, G)
+    q["review"] = rv
+    text += layout_review.markdown(rv)
+    with open(os.path.join(out, "layout_quality.json"), "w", encoding="utf-8") as fh:
+        json.dump(q, fh, indent=1, sort_keys=True)
+        fh.write("\n")
     with open(os.path.join(out, "layout_quality.md"), "w", encoding="utf-8") as fh:
         fh.write(text)
     for line in text.splitlines():
@@ -366,7 +448,8 @@ def criteria(stages):
     trip = get("schematic", "round_trip")
     out["schematic netlist round trip matches"] = None if trip is None else bool(trip.get("ok"))
     v = get("mechanical", "exit_status")
-    out["mechanical import check passes"] = None if v is None else (v == 0 and not get("mechanical", "keepouts_missing"))
+    out["mechanical import check passes"] = None if v is None else (
+        v == 0 and not get("mechanical", "keepouts_missing"))
     return out
 
 
@@ -405,7 +488,8 @@ def stage_line(name, info):
             len(info["sheets"]) + 1, info["pdf_pages"], "matches" if t["ok"] else "MISMATCH",
             t["nets_compared"], t["pads_compared"], t["components_compared"])
     if name == "mechanical":
-        return "exit %d: %s" % (info["exit_status"], info["result"][:150])
+        return "exit %d%s: %s" % (info["exit_status"], " (RECORDED DEPARTURE E24, J1 only)" if info.get(
+            "only_failure_is_j1_e24") else "", info["result"][:150])
     if name == "quality":
         return "layout_quality.json / .md, %d review pictures" % len(info["review_pictures"])
     return ""
@@ -490,6 +574,15 @@ def main(argv=None):
                        ("departure from the letter of the spec", rinfo.get("departures", []))):
         if ids:
             say("%s: %s" % (label, ", ".join(ids)))
+    failed_stages = [n for n, i in summary["stages"].items() if not i["passed"]]
+    failed_crit = [k for k, v in crit.items() if v is False]
+    only_mech_e24 = (complete and failed_stages == ["mechanical"]
+                     and bool(summary["stages"]["mechanical"].get("only_failure_is_j1_e24"))
+                     and failed_crit == ["mechanical import check passes"])
+    if only_mech_e24:
+        say("GL-1 MAIN BOARD BUILD: every stage passed EXCEPT mechanical - board_import.py exits 1 on the "
+            "recorded departure E24 (J1 only). Exit status 2. (%.0f s)" % run["seconds"]["total"])
+        return 2
     if passed and complete:
         say("GL-1 MAIN BOARD BUILD PASSED (%.0f s)%s" % (
             run["seconds"]["total"],

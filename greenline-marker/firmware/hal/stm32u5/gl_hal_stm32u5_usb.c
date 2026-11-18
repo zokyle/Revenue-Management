@@ -14,7 +14,10 @@
  * itself, and the board glue that STM32CubeMX normally generates -
  * usbd_conf.c (PCD low-level callbacks, HAL_PCD_MspInit, OTG_FS_IRQHandler)
  * and usbd_desc.c (device / string descriptors, here expected to export
- * GL_USBD_Desc).  The VID / PID must be assigned before any unit ships.
+ * GL_USBD_Desc).  The VID / PID are NOT ASSIGNED: usbd_desc.c must take them
+ * from app/gl_usb_ids.h (GL_USB_VID, GL_USB_PID: named placeholders), through
+ * gl_usb_vid / gl_usb_pid below, and a release build fails while they are
+ * placeholders (make RELEASE=1, `make release-gate`; DESIGN_SPEC E34).
  *
  * WHAT THE GLUE MUST DO ON THE REV E BOARD (pin map, firmware notes 6, 7):
  *   - VBUS SENSING OFF (hpcd.Init.vbus_sensing_enable = DISABLE): the USB
@@ -52,6 +55,7 @@
 #include <string.h>
 
 #include "gl_hal.h"
+#include "gl_usb_ids.h"
 #include "gl_hal_stm32u5_priv.h"
 #include "usbd_cdc.h"
 #include "usbd_core.h"
@@ -396,3 +400,8 @@ size_t gl_hal_usb_write(const uint8_t *buf, size_t len)
     gl_hal_irq_unlock();
     return n;
 }
+
+/* The ids for the device descriptor (usbd_desc.c).  Placeholders until a
+ * vendor id is assigned: app/gl_usb_ids.h. */
+const uint16_t gl_usb_vid = (uint16_t)GL_USB_VID;
+const uint16_t gl_usb_pid = (uint16_t)GL_USB_PID;

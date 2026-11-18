@@ -16,6 +16,9 @@
  *         changes.  The marker's draw there against the charger's
  *         termination current, and what the charge did before this change
  *   E32   the 6 h backstop, with a host that never stops talking
+ *   E1    the other reading of the charger's status line (low in the first
+ *         cycle only): what the firmware shows, and what the backstop then
+ *         does not see
  *   E14   the sleep current of the supply model, underside dark and lit
  *
  * EVERY CURRENT here is a figure of the simulator's supply model
@@ -48,7 +51,7 @@ static unsigned log_events_(uint16_t code, int32_t *last_arg)
 {
     gl_log_iter_t it;
     gl_log_rec_t rec;
-    uint8_t buf[128];
+    uint8_t buf[1024];
     unsigned n = 0;
     gl_log_iter_begin(&app.log, &it);
     while (gl_log_iter_next(&app.log, &it, &rec, buf, sizeof(buf)) == GL_OK) {
@@ -281,6 +284,19 @@ static uint8_t ship_cmd_(uint8_t seq_no, const char *word)
     uint8_t seq;
     const uint8_t *pl;
     int n;
+    /* phase 3: arming ship mode is a guarded command (the unlock rule of
+     * core/gl_proto.h); a locked unit refuses it and stays as it was */
+    if (!app.proto.unlocked && memcmp(word, "SHIP", 4) == 0) {
+        const bool armed = app.ship_armed;
+        host_send_(seq_no, GL_CMD_SHIP_MODE, word, 4);
+        n = host_get_(GL_CMD_SHIP_MODE | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+        GL_CHECK_EQ(n, 1);
+        GL_CHECK_EQ(pl[0], GL_ERR_STATE);
+        GL_CHECK_EQ(app.ship_armed, armed);
+        host_send_(seq_no, GL_CMD_UNLOCK, "GLFC", 4);
+        (void)host_get_(GL_CMD_UNLOCK | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+        GL_CHECK(app.proto.unlocked);
+    }
     host_send_(seq_no, GL_CMD_SHIP_MODE, word, 4);
     n = host_get_(GL_CMD_SHIP_MODE | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
     GL_CHECK_EQ(n, 2);
@@ -732,6 +748,112 @@ GL_TEST(test_awake_in_the_cradle_the_charge_never_ends_until_the_backstop)
     no_violation_();
 }
 
+/* THE OTHER READING OF THE CHARGER'S STATUS LINE.  gl_provisional.h assumes
+ * that CHG goes low again when the charger starts a RE-charge after a
+ * termination (GL_PROV_BQ25101_CHG_LOW_ON_RECHARGE = 1, from memory, NOT
+ * CONFIRMED).  The family may instead signal the FIRST cycle only.  This is
+ * what the firmware does on a charger of that kind (a variant of the MODEL;
+ * neither is proved):
+ *   - asleep in the cradle the first cycle ends as before: "FULL";
+ *   - a recharge is invisible: the symbol keeps saying FULL while current
+ *     flows (harmless), and nothing is called a fault while the cell stays
+ *     at or above the "done" voltage;
+ *   - NOT MET, pinned: the 6 h backstop of E32 counts the time CHG is low.
+ *     A recharge under a host that keeps the marker awake never terminates
+ *     (the marker's draw is above the termination current) and is not
+ *     counted: the charger holds the cell at its regulation voltage for as
+ *     long as the host talks.  The first cycle and every cycle after a stop
+ *     of the firmware's own ARE counted (a stop through TS restarts the
+ *     charger's cycle in the model). */
+GL_TEST(test_charger_whose_status_shows_the_first_cycle_only)
+{
+    const double i_term = (double)GL_PROV_BQ25101_TERM_FRACTION * (double)GL_PROV_BQ25101_ICHG_UA;
+    uint32_t t0, t_re = 0;
+    double hours = 0.0;
+
+    still_board_();
+    gl_sim_charger_stat_first_cycle_only(true);
+    gl_sim_cell_enable(0.95f);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    gl_sim_usb_host_open(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    host_rx_len_ = 0;
+    run_talking_until_ms_(now_ms_() + 20000u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    GL_CHECK(gl_sim_charger_on() && app.power.charging); /* first cycle: CHG low */
+    /* the PC goes to sleep; the marker follows, USB in standby; the first
+     * cycle ends there */
+    gl_sim_usb_host_bus(GL_USB_BUS_SUSPENDED);
+    GL_CHECK(run_until_state_(GL_UI_CRADLE_SLEEP, now_ms_() + 31000u));
+    while (gl_sim_charger_on() && hours < 6.0) {
+        run_until_ms_(now_ms_() + 60000u);
+        hours += 1.0 / 60.0;
+    }
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DONE);
+    GL_CHECK_EQ(gl_sim_stats()->chg_terminations, 1u);
+    run_until_ms_(now_ms_() + 6000u);
+    GL_CHECK_EQ(app.power.chg_status, GL_CHGST_DONE);
+    GL_CHECK(app.view.chg_full && !app.view.charging);
+    /* the PC wakes up and talks from now on: the marker is awake and runs
+     * the cell down behind the finished charger, until the recharge */
+    gl_sim_usb_host_bus(GL_USB_BUS_ACTIVE);
+    GL_CHECK(run_until_state_(GL_UI_CRADLE_USB, now_ms_() + 100u));
+    t0 = now_ms_();
+    while (now_ms_() - t0 < 6u * 3600u * 1000u) {
+        run_talking_until_ms_(now_ms_() + 60000u);
+        if (gl_sim_charger_on()) {
+            t_re = now_ms_();
+            break;
+        }
+    }
+    GL_CHECK(t_re != 0u);
+    /* the recharge runs with CHG released: the firmware cannot see it */
+    GL_CHECK(gl_sim_pin_level(GL_PIN_CHG_STAT));
+    run_talking_until_ms_(now_ms_() + 60000u);
+    GL_CHECK(gl_sim_charger_on());
+    GL_CHECK(!app.power.charging);
+    GL_CHECK_EQ(app.power.chg_status, GL_CHGST_DONE); /* the cell is above the "done" voltage */
+    GL_CHECK(app.view.chg_full && !app.view.charging);
+    GL_CHECK(app.power.batt_mv >= GL_PROV_CHARGE_DONE_MIN_MV);
+    printf("    VARIANT of the model (CHG low in the first cycle only): first cycle ended asleep "
+           "in the cradle; awake under a talking host the recharge started %.2f h later at %u mV "
+           "with CHG released - the firmware says FULL (status DONE) while %.1f mA flow\n",
+           (double)(t_re - t0) / 3.6e6, (unsigned)app.power.batt_mv, gl_sim_charger_out_ua() / 1000.0);
+    /* seven more hours of the talking host: no termination (the marker's
+     * draw), and the backstop does not count what the status line does not
+     * show.  PINNED as NOT MET for this variant */
+    t0 = now_ms_();
+    run_talking_until_ms_(t0 + 7u * 3600u * 1000u);
+    GL_CHECK(gl_sim_charger_on());
+    GL_CHECK(gl_sim_charger_out_ua() > i_term);
+    GL_CHECK_EQ(gl_sim_stats()->chg_terminations, 1u);
+    GL_CHECK(!app.power.time_limit);              /* NOT MET: see the comment above */
+    GL_CHECK_EQ(app.power.chg_run_ms, 0u);
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_ALLOWED);
+    GL_CHECK_EQ(app.power.chg_status, GL_CHGST_DONE);
+    GL_CHECK_EQ(log_events_((uint16_t)GL_APP_LOGEV_CHARGER, NULL), 1u); /* "done", once; no fault */
+    printf("    ... NOT MET for this variant: 7.0 h later the charger still delivers %.2f mA "
+           "(cell at %.1f %%), the 6 h backstop has counted %u ms: it only counts while CHG is low\n",
+           gl_sim_charger_out_ua() / 1000.0, 100.0 * (double)gl_sim_cell_soc(),
+           (unsigned)app.power.chg_run_ms);
+    /* what the firmware CAN still do there: its temperature gate.  A stop
+     * through TS also restarts the charger's cycle, and CHG is low again */
+    gl_sim_imu_set_temperature(50.0f);
+    run_talking_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 1000u);
+    GL_CHECK(!gl_sim_charger_on());
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TOO_HOT);
+    gl_sim_imu_set_temperature(22.0f);
+    run_talking_until_ms_(now_ms_() + 4u * GL_APP_CHG_TEMP_PERIOD_MS);
+    GL_CHECK(gl_sim_charger_on());
+    GL_CHECK(!gl_sim_pin_level(GL_PIN_CHG_STAT));
+    GL_CHECK(app.power.charging);
+    GL_CHECK_EQ(app.power.chg_status, GL_CHGST_CHARGING);
+    run_talking_until_ms_(now_ms_() + 60000u);
+    GL_CHECK(app.power.chg_run_ms >= 50000u); /* counted again */
+    no_violation_();
+}
+
 /* A PC.  While it talks: awake, USB running.  When it suspends the bus (it
  * has gone to sleep): 30 s later the marker sleeps in the cradle with USB in
  * standby, and the PC's resume wakes it.  When it leaves the bus running
@@ -976,6 +1098,7 @@ int main(void)
     GL_RUN(test_ship_mode_rules_of_the_simulator);
     GL_RUN(test_cradle_sleep_on_a_wall_charger_lets_the_charge_end);
     GL_RUN(test_awake_in_the_cradle_the_charge_never_ends_until_the_backstop);
+    GL_RUN(test_charger_whose_status_shows_the_first_cycle_only);
     GL_RUN(test_cradle_sleep_under_a_host_standby_resume_and_silence);
     GL_RUN(test_cradle_sleep_supervises_the_charge);
     GL_RUN(test_sleep_current_dark_and_lit_against_25_microamps);

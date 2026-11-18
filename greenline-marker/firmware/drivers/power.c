@@ -139,6 +139,7 @@ static gl_status_t ntc_(gl_power_t *p)
         p->ntc_fault = (uint8_t)GL_NTC_ADC;
         return (st != GL_OK) ? st : st_idle;
     }
+    p->ntc_counts = counts;
     t = gl_power_ntc_counts_to_c(counts, &fault);
     if (fault == (uint8_t)GL_NTC_OK &&
         (float)idle > GL_PROV_NTC_IDLE_MAX_FRACTION * (float)GL_HAL_ADC_FULL_SCALE) {
@@ -186,6 +187,7 @@ gl_status_t gl_power_measure(gl_power_t *p)
         return st;
     }
     const uint16_t vdda = gl_hal_adc_vdda_mv();
+    p->vdda_mv = vdda;
     st = gl_hal_adc_read(GL_ADC_CH_VBAT_DIV, BATT_ADC_AVG, BATT_ADC_SAMPLE_US, &counts);
     st_t = mcu_temp_(p, vdda);
     st_n = ntc_(p);

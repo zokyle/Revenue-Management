@@ -197,7 +197,8 @@ def rules(design):
     row("fuse", "a resettable fuse in VBUS (E6); E25: chosen for no more than 1.5 ohm after a trip "
         "(hold current 0.2 to 0.5 A)",
         "F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold %d mA, trip %d mA, %.1f ohm "
-        "at most after a trip (PROVISIONAL part %s, ratings from memory)"
+        "at most after a trip (PROVISIONAL part %s, ratings from the listing data in docs/SOURCING.md A5; "
+        "trip 0.75 A departs from E6's 'about 0.5 A')"
         % (G.PTC["hold_mA"], G.PTC["trip_mA"], G.PTC["r_max_ohm"], G.PTC["mpn"]),
         two("F1", "VBUS_IN", "VBUS") and only("VBUS", "F1.2", "SP1.1") and net("J1.VBUS") == "VBUS_IN"
         and tuple(j1.pins["VBUS"].pads) == ("A4", "A9")

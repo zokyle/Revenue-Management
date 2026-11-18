@@ -50,10 +50,10 @@ def add_silk_text(pcb_path, items):
             for it in list(group.GetItems()):
                 brd.Remove(it)
             brd.Remove(group)
-    group = pcbnew.PCB_GROUP(brd)
+    pcbnew.KIID.SeedGenerator(0x51CC)                    # the same identifiers on every run
+    group = pcbnew.PCB_GROUP(brd)                        # (seeded BEFORE the group is made: its id too)
     group.SetName(GROUP)
     brd.Add(group)
-    pcbnew.KIID.SeedGenerator(0x51CC)                    # the same identifiers on every run
     just = {"left": pcbnew.GR_TEXT_H_ALIGN_LEFT, "center": pcbnew.GR_TEXT_H_ALIGN_CENTER,
             "right": pcbnew.GR_TEXT_H_ALIGN_RIGHT}
     for it in items:

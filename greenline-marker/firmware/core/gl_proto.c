@@ -81,6 +81,136 @@ void gl_proto_power_encode(const gl_proto_power_t *pw, uint8_t out[GL_PROTO_POWE
     gl_wr_u16(&w, pw->charge_min);
 }
 
+void gl_proto_ident_encode(const gl_proto_ident_t *id, uint8_t out[GL_PROTO_IDENT_LEN])
+{
+    gl_wr_t w;
+    gl_wr_init(&w, out, GL_PROTO_IDENT_LEN);
+    gl_wr_u8(&w, id->proto_version);
+    gl_wr_u8(&w, id->agreed_version);
+    gl_wr_u8(&w, id->hw_rev);
+    gl_wr_u8(&w, (uint8_t)id->hw_letter);
+    gl_wr_bytes(&w, id->model, sizeof(id->model));
+    gl_wr_u16(&w, id->fw_version);
+    gl_wr_u8(&w, id->cal_version);
+    gl_wr_u8(&w, id->log_layout);
+    gl_wr_u32(&w, id->fw_build);
+    gl_wr_u32(&w, id->solver_version);
+    gl_wr_bytes(&w, id->unique_id, sizeof(id->unique_id));
+    gl_wr_u32(&w, id->serial);
+    gl_wr_u32(&w, id->serial_stored);
+    gl_wr_bytes(&w, id->cal_flags, sizeof(id->cal_flags));
+    gl_wr_u8(&w, id->flags);
+    gl_wr_bytes(&w, id->params_rev, sizeof(id->params_rev));
+    gl_wr_bytes(&w, id->commands, sizeof(id->commands));
+}
+
+void gl_proto_sensors_encode(const gl_proto_sensors_t *s, uint8_t out[GL_PROTO_SENSORS_LEN])
+{
+    gl_wr_t w;
+    gl_wr_init(&w, out, GL_PROTO_SENSORS_LEN);
+    gl_wr_u16(&w, s->battery_mv);
+    gl_wr_u16(&w, s->vdda_mv);
+    gl_wr_i16(&w, s->cell_temp_c_x10);
+    gl_wr_i16(&w, s->mcu_temp_c_x10);
+    gl_wr_i16(&w, s->imu_temp_c_x10);
+    gl_wr_u16(&w, s->ntc_counts);
+    gl_wr_u16(&w, s->ntc_full_scale);
+    gl_wr_u8(&w, s->ntc_fault);
+    gl_wr_u8(&w, s->flags);
+    gl_wr_u8(&w, s->sleep_wake);
+    gl_wr_u8(&w, s->sleep_mask);
+    gl_wr_u32(&w, s->sleep_ms);
+    gl_wr_u32(&w, s->uptime_ms);
+    gl_wr_u16(&w, 0);
+}
+
+void gl_proto_capture_encode(const gl_proto_capture_t *c, uint8_t out[GL_PROTO_CAPTURE_LEN])
+{
+    gl_wr_t w;
+    gl_wr_init(&w, out, GL_PROTO_CAPTURE_LEN);
+    gl_wr_u8(&w, c->camera);
+    gl_wr_u8(&w, c->kind);
+    gl_wr_u16(&w, c->x0);
+    gl_wr_u16(&w, c->y0);
+    gl_wr_u16(&w, c->width);
+    gl_wr_u16(&w, c->height);
+    gl_wr_u32(&w, c->bytes);
+    gl_wr_u8(&w, c->min);
+    gl_wr_u8(&w, c->max);
+    gl_wr_u16(&w, c->mean_x16);
+    gl_wr_u32(&w, c->bright);
+    gl_wr_u32(&w, c->crc32);
+}
+
+void gl_proto_field_encode(const gl_proto_field_t *f, uint8_t out[GL_PROTO_FIELD_LEN])
+{
+    gl_wr_t w;
+    gl_wr_init(&w, out, GL_PROTO_FIELD_LEN);
+    gl_wr_u8(&w, f->camera);
+    gl_wr_u8(&w, f->status);
+    gl_wr_u16(&w, f->row_upper);
+    gl_wr_u16(&w, f->row_lower);
+    gl_wr_u16(&w, f->mean_upper_x16);
+    gl_wr_u16(&w, f->mean_lower_x16);
+    gl_wr_u16(&w, f->mean_centre_x16);
+    gl_wr_u16(&w, f->ratio_x1000);
+    gl_wr_u8(&w, f->max_upper);
+    gl_wr_u8(&w, f->max_lower);
+    gl_wr_u32(&w, 0);
+}
+
+void gl_proto_grain_encode(const gl_proto_grain_t *g, uint8_t out[GL_PROTO_GRAIN_LEN])
+{
+    gl_wr_t w;
+    gl_wr_init(&w, out, GL_PROTO_GRAIN_LEN);
+    gl_wr_u8(&w, g->mode);
+    gl_wr_u8(&w, g->status);
+    gl_wr_u16(&w, g->dark_mean);
+    gl_wr_u16(&w, g->dark_min);
+    gl_wr_u16(&w, g->dark_max);
+    gl_wr_u16(&w, g->full_scale);
+    gl_wr_u16(&w, g->stored_dark);
+    for (int i = 0; i < 16; i++) {
+        for (int j = 0; j < 3; j++) {
+            gl_wr_u16(&w, g->led[i][j]);
+        }
+    }
+}
+
+void gl_proto_zero_encode(const gl_proto_zero_t *z, uint8_t out[GL_PROTO_ZERO_LEN])
+{
+    gl_wr_t w;
+    gl_wr_init(&w, out, GL_PROTO_ZERO_LEN);
+    gl_wr_u8(&w, z->state);
+    gl_wr_u8(&w, z->seat);
+    gl_wr_u8(&w, z->status);
+    gl_wr_u8(&w, z->attempts);
+    gl_wr_f32(&w, z->bias_x);
+    gl_wr_f32(&w, z->bias_y);
+    gl_wr_f32(&w, z->scatter);
+    gl_wr_f32(&w, z->turn_rad);
+    gl_wr_f32(&w, z->surface_x);
+    gl_wr_f32(&w, z->surface_y);
+    gl_wr_f32(&w, z->temp_c);
+    gl_wr_u32(&w, z->time_s);
+}
+
+void gl_proto_six_encode(const gl_proto_six_t *x, uint8_t out[GL_PROTO_SIX_LEN])
+{
+    gl_wr_t w;
+    gl_wr_init(&w, out, GL_PROTO_SIX_LEN);
+    gl_wr_u8(&w, x->done_mask);
+    gl_wr_u8(&w, x->active);
+    gl_wr_u8(&w, x->face);
+    gl_wr_u8(&w, x->cal_flags);
+    for (int i = 0; i < 6; i++) {
+        for (int j = 0; j < 3; j++) {
+            gl_wr_f32(&w, x->mean[i][j]);
+        }
+    }
+    gl_wr_f32(&w, x->temp_c);
+}
+
 /* ---- command handlers --------------------------------------------------- */
 /* Each handler reads the request payload (in, n) and appends response data
  * to `out` (positioned after the status byte).  It returns the status. */
@@ -387,6 +517,27 @@ static gl_status_t h_set_charge(gl_proto_t *p, const uint8_t *in, size_t n, gl_w
     return p->ops->set_charge(p->ops->ctx, in[0] != 0u);
 }
 
+static gl_status_t h_log_seek(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr_t *out)
+{
+    (void)n;
+    (void)out;
+    if (p->ops->log_seek == NULL) {
+        return GL_ERR_UNSUPPORTED;
+    }
+    return p->ops->log_seek(p->ops->ctx, gl_get_u32(in));
+}
+
+/* The factory and calibration commands: length and unlock were checked by
+ * the dispatcher, the application does the rest. */
+static gl_status_t h_factory(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr_t *out)
+{
+    (void)p;
+    (void)in;
+    (void)n;
+    (void)out;
+    return GL_ERR_UNSUPPORTED; /* never called: dispatch_() routes these itself */
+}
+
 typedef struct {
     uint8_t cmd;
     uint16_t min_len;
@@ -413,7 +564,101 @@ static const cmd_entry_t cmd_table_[] = {
     { GL_CMD_SHIP_MODE, 4, 4, h_ship_mode },
     { GL_CMD_GET_POWER, 0, 0, h_get_power },
     { GL_CMD_SET_CHARGE, 1, 1, h_set_charge },
+    /* phase 3 (payload lengths; the values are checked by the application) */
+    { GL_CMD_GET_IDENT, 0, 1, h_factory },
+    { GL_CMD_GET_SENSORS, 0, 0, h_factory },
+    { GL_CMD_CAM_ID, 1, 1, h_factory },
+    { GL_CMD_CAM_CAPTURE, 10, 10, h_factory },
+    { GL_CMD_CAM_DATA, 6, 6, h_factory },
+    { GL_CMD_CAM_FIELD, 1, 1, h_factory },
+    { GL_CMD_DISPLAY_TEST, 2, 2, h_factory },
+    { GL_CMD_GRAIN_TEST, 1, 1, h_factory },
+    { GL_CMD_LEVEL_ZERO, 2, 2, h_factory },
+    { GL_CMD_CAL_STATUS, 0, 0, h_factory },
+    { GL_CMD_TILT_TEMPCO, 5u + 16u * GL_PROTO_TEMPCO_MIN_POINTS,
+      5u + 16u * GL_PROTO_TEMPCO_MAX_POINTS, h_factory },
+    { GL_CMD_SET_CAM_HORIZON, 9, 9, h_factory },
+    { GL_CMD_SET_GRAIN_FLOOR, 1u + 4u * GL_PROTO_FLOOR_MIN_READINGS,
+      1u + 4u * GL_PROTO_FLOOR_MAX_READINGS, h_factory },
+    { GL_CMD_DISPLAY_ROT, 1, 5, h_factory },
+    { GL_CMD_SLEEP_TEST, 3, 3, h_factory },
+    { GL_CMD_LOG_SEEK, 4, 4, h_log_seek },
+    { GL_CMD_SERIAL, 0, 4, h_factory },
 };
+
+/* What each command needs to exist at all (the command bit map). */
+static bool has_callback_(const gl_proto_t *p, uint8_t cmd)
+{
+    const gl_proto_ops_t *o = p->ops;
+    switch (cmd) {
+    case GL_CMD_PING: return true;
+    case GL_CMD_GET_INFO: return o->get_info != NULL;
+    case GL_CMD_GET_STATUS: return o->get_status != NULL;
+    case GL_CMD_GET_SETTINGS: return o->get_settings != NULL;
+    case GL_CMD_SET_SETTINGS: return o->set_settings != NULL;
+    case GL_CMD_GET_CAL: return o->get_cal != NULL;
+    case GL_CMD_SET_CAL: return o->set_cal != NULL;
+    case GL_CMD_START_CAL: return o->start_cal != NULL;
+    case GL_CMD_LOG_INFO: return o->log_info != NULL;
+    case GL_CMD_LOG_READ: return o->log_read != NULL;
+    case GL_CMD_LOG_ERASE: return o->log_erase != NULL;
+    case GL_CMD_STREAM: return o->stream != NULL;
+    case GL_CMD_SET_TIME: return o->set_time != NULL;
+    case GL_CMD_UNLOCK: return true;
+    case GL_CMD_REBOOT: return o->reboot != NULL;
+    case GL_CMD_SHIP_MODE: return o->ship_mode != NULL;
+    case GL_CMD_GET_POWER: return o->get_power != NULL;
+    case GL_CMD_SET_CHARGE: return o->set_charge != NULL;
+    case GL_CMD_LOG_SEEK: return o->log_seek != NULL;
+    default:
+        return cmd >= (uint8_t)GL_PROTO_CMD_FACTORY_FIRST &&
+               cmd <= (uint8_t)GL_PROTO_CMD_FACTORY_LAST && o->factory != NULL;
+    }
+}
+
+void gl_proto_command_map(const gl_proto_t *p, uint8_t out[8])
+{
+    memset(out, 0, 8);
+    for (size_t i = 0; i < GL_ARRAY_LEN(cmd_table_); i++) {
+        const uint8_t c = cmd_table_[i].cmd;
+        if (c < 64u && has_callback_(p, c)) {
+            out[c >> 3] |= (uint8_t)(1u << (c & 7u));
+        }
+    }
+}
+
+bool gl_proto_needs_unlock(uint8_t cmd, const uint8_t *payload, size_t n)
+{
+    switch (cmd) {
+    case GL_CMD_SET_CAL:
+    case GL_CMD_LOG_ERASE:
+    case GL_CMD_SET_CHARGE:
+    case GL_CMD_TILT_TEMPCO:
+    case GL_CMD_SET_CAM_HORIZON:
+    case GL_CMD_SET_GRAIN_FLOOR:
+    case GL_CMD_SLEEP_TEST:
+        return true;
+    case GL_CMD_START_CAL:
+        /* ABORT only stops a procedure; ZERO is passed on so that the host
+         * gets the application's defined refusal */
+        return n >= 1u && payload[0] != (uint8_t)GL_CALPROC_ABORT &&
+               payload[0] != (uint8_t)GL_CALPROC_ZERO;
+    case GL_CMD_REBOOT:
+        return n == 4u && memcmp(payload, "DFU!", 4) == 0;
+    case GL_CMD_SHIP_MODE:
+        return n == 4u && memcmp(payload, "SHIP", 4) == 0;
+    case GL_CMD_LEVEL_ZERO:
+        return n >= 1u && payload[0] == (uint8_t)GL_ZERO_OP_ARM;
+    case GL_CMD_GRAIN_TEST:
+        return n >= 1u && payload[0] == (uint8_t)GL_GRAIN_MODE_STORE;
+    case GL_CMD_DISPLAY_ROT:
+        return n >= 1u && payload[0] != 0u;
+    case GL_CMD_SERIAL:
+        return n != 0u;
+    default:
+        return false;
+    }
+}
 
 static void dispatch_(gl_proto_t *p, uint8_t seq, uint8_t cmd, const uint8_t *payload, size_t n)
 {
@@ -435,8 +680,22 @@ static void dispatch_(gl_proto_t *p, uint8_t seq, uint8_t cmd, const uint8_t *pa
         }
     }
     if (e != NULL) {
-        if (n < e->min_len || n > e->max_len) {
+        if (!has_callback_(p, cmd)) {
+            st = GL_ERR_UNSUPPORTED;
+        } else if (n < e->min_len || n > e->max_len) {
             st = GL_ERR_PARAM;
+        } else if (!p->unlocked && gl_proto_needs_unlock(cmd, payload, n)) {
+            st = GL_ERR_STATE; /* the unlock rule (gl_proto.h) */
+        } else if (e->fn == h_factory) {
+            size_t len = 0;
+            st = p->ops->factory(p->ops->ctx, cmd, payload, n, w.p, w.cap, &len);
+            if (st == GL_OK) {
+                if (len > w.cap) {
+                    st = GL_ERR_FULL;
+                } else {
+                    w.len = len;
+                }
+            }
         } else {
             st = e->fn(p, payload, n, &w);
         }

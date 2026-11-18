@@ -148,7 +148,7 @@
     (property "Manufacturer" "Mill-Max")
     (property "Purpose" "pin 5: SWDIO (factory fixture only)")
     (property "Status" "PROVISIONAL")
-    (property "StatusNote" "series and stroke research-confirmed; tail, barrel and plunger diameters and the land pattern are not (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
+    (property "StatusNote" "series and stroke research-confirmed; tail 0.635 mm and minimum hole 0.737 mm from docs/SOURCING.md A6 (search extracts, not the drawing); TAIL LENGTH about 1.34 mm in a 1.6 mm board is OPEN (long-tail variant 0914-1-15-20-77-14-11-0 or a thinner board); barrel and plunger diameters assumed (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
     (attr through_hole exclude_from_pos_files)
     (fp_text reference "SP5" (at 0 -1.67) (layer "F.SilkS") hide
         (effects (font (size 0.8 0.8) (thickness 0.12)))
@@ -166,7 +166,7 @@
       (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd") (tstamp 1931bfe9-431d-40a3-8c62-05eef41048f7))
     (fp_rect (start -0.915 0.915) (end 0.915 -0.915)
       (stroke (width 0.1) (type solid)) (fill none) (layer "F.Fab") (tstamp 44d57545-3a58-4329-9850-d8c7c143d7b3))
-    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.9) (layers "*.Cu" "*.Mask")
+    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.8) (layers "*.Cu" "*.Mask")
       (net 8 "SWDIO") (pinfunction "1") (pintype "passive") (tstamp aa0ea91a-aa59-4ffd-bd0d-f5dccb32c156))
   )
 
@@ -211,7 +211,7 @@
     (property "Manufacturer" "Mill-Max")
     (property "Purpose" "pin 4: GND")
     (property "Status" "PROVISIONAL")
-    (property "StatusNote" "series and stroke research-confirmed; tail, barrel and plunger diameters and the land pattern are not (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
+    (property "StatusNote" "series and stroke research-confirmed; tail 0.635 mm and minimum hole 0.737 mm from docs/SOURCING.md A6 (search extracts, not the drawing); TAIL LENGTH about 1.34 mm in a 1.6 mm board is OPEN (long-tail variant 0914-1-15-20-77-14-11-0 or a thinner board); barrel and plunger diameters assumed (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
     (attr through_hole)
     (fp_text reference "SP4" (at 0 -1.67) (layer "F.SilkS") hide
         (effects (font (size 0.8 0.8) (thickness 0.12)))
@@ -229,7 +229,7 @@
       (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd") (tstamp 3adbb263-1a9d-4349-be88-31caacf4b1a3))
     (fp_rect (start -0.915 0.915) (end 0.915 -0.915)
       (stroke (width 0.1) (type solid)) (fill none) (layer "F.Fab") (tstamp a9b2a12b-c062-439f-8269-024fb0c4d706))
-    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.9) (layers "*.Cu" "*.Mask")
+    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.8) (layers "*.Cu" "*.Mask")
       (net 2 "GND") (pinfunction "1") (pintype "passive") (tstamp 2ed0ae91-eccd-488e-964b-eb00e12bce45))
   )
 
@@ -247,7 +247,7 @@
     (property "Manufacturer" "Mill-Max")
     (property "Purpose" "pin 7: NRST (factory fixture only)")
     (property "Status" "PROVISIONAL")
-    (property "StatusNote" "series and stroke research-confirmed; tail, barrel and plunger diameters and the land pattern are not (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
+    (property "StatusNote" "series and stroke research-confirmed; tail 0.635 mm and minimum hole 0.737 mm from docs/SOURCING.md A6 (search extracts, not the drawing); TAIL LENGTH about 1.34 mm in a 1.6 mm board is OPEN (long-tail variant 0914-1-15-20-77-14-11-0 or a thinner board); barrel and plunger diameters assumed (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
     (attr through_hole exclude_from_pos_files)
     (fp_text reference "SP7" (at 0 -1.67) (layer "F.SilkS") hide
         (effects (font (size 0.8 0.8) (thickness 0.12)))
@@ -265,7 +265,7 @@
       (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd") (tstamp 03419ee6-0a3c-4f64-80bb-18ed164be939))
     (fp_rect (start -0.915 0.915) (end 0.915 -0.915)
       (stroke (width 0.1) (type solid)) (fill none) (layer "F.Fab") (tstamp a61c14c1-8b91-410e-8bd8-7838315d9588))
-    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.9) (layers "*.Cu" "*.Mask")
+    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.8) (layers "*.Cu" "*.Mask")
       (net 10 "NRST") (pinfunction "1") (pintype "passive") (tstamp 7a6f8803-e7ea-46f6-9b2c-2c80b01290c7))
   )
 
@@ -335,7 +335,7 @@
     (property "Manufacturer" "Mill-Max")
     (property "Purpose" "pin 3: DP")
     (property "Status" "PROVISIONAL")
-    (property "StatusNote" "series and stroke research-confirmed; tail, barrel and plunger diameters and the land pattern are not (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
+    (property "StatusNote" "series and stroke research-confirmed; tail 0.635 mm and minimum hole 0.737 mm from docs/SOURCING.md A6 (search extracts, not the drawing); TAIL LENGTH about 1.34 mm in a 1.6 mm board is OPEN (long-tail variant 0914-1-15-20-77-14-11-0 or a thinner board); barrel and plunger diameters assumed (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
     (attr through_hole)
     (fp_text reference "SP3" (at 0 -1.67) (layer "F.SilkS") hide
         (effects (font (size 0.8 0.8) (thickness 0.12)))
@@ -353,7 +353,7 @@
       (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd") (tstamp 880962d4-3680-4136-9794-d51873d1b8af))
     (fp_rect (start -0.915 0.915) (end 0.915 -0.915)
       (stroke (width 0.1) (type solid)) (fill none) (layer "F.Fab") (tstamp a2248c70-dc56-4490-aa2c-af483438763f))
-    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.9) (layers "*.Cu" "*.Mask")
+    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.8) (layers "*.Cu" "*.Mask")
       (net 7 "USB_DP") (pinfunction "1") (pintype "passive") (tstamp 09406c0a-7261-4033-a5a5-d4340333aa31))
   )
 
@@ -370,7 +370,7 @@
     (property "Manufacturer" "Mill-Max")
     (property "Purpose" "pin 2: DM")
     (property "Status" "PROVISIONAL")
-    (property "StatusNote" "series and stroke research-confirmed; tail, barrel and plunger diameters and the land pattern are not (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
+    (property "StatusNote" "series and stroke research-confirmed; tail 0.635 mm and minimum hole 0.737 mm from docs/SOURCING.md A6 (search extracts, not the drawing); TAIL LENGTH about 1.34 mm in a 1.6 mm board is OPEN (long-tail variant 0914-1-15-20-77-14-11-0 or a thinner board); barrel and plunger diameters assumed (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
     (attr through_hole)
     (fp_text reference "SP2" (at 0 -1.67) (layer "F.SilkS") hide
         (effects (font (size 0.8 0.8) (thickness 0.12)))
@@ -388,7 +388,7 @@
       (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd") (tstamp 7dcb1736-885b-4976-bd6b-899d0ce6ba24))
     (fp_rect (start -0.915 0.915) (end 0.915 -0.915)
       (stroke (width 0.1) (type solid)) (fill none) (layer "F.Fab") (tstamp 71b302a6-4c63-43de-a0b6-141aa8b9a7fa))
-    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.9) (layers "*.Cu" "*.Mask")
+    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.8) (layers "*.Cu" "*.Mask")
       (net 6 "USB_DM") (pinfunction "1") (pintype "passive") (tstamp fd7c5a7b-9c0b-42c6-9b34-996c9023f55b))
   )
 
@@ -539,7 +539,7 @@
     (property "Manufacturer" "Mill-Max")
     (property "Purpose" "pin 1: VBUS")
     (property "Status" "PROVISIONAL")
-    (property "StatusNote" "series and stroke research-confirmed; tail, barrel and plunger diameters and the land pattern are not (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
+    (property "StatusNote" "series and stroke research-confirmed; tail 0.635 mm and minimum hole 0.737 mm from docs/SOURCING.md A6 (search extracts, not the drawing); TAIL LENGTH about 1.34 mm in a 1.6 mm board is OPEN (long-tail variant 0914-1-15-20-77-14-11-0 or a thinner board); barrel and plunger diameters assumed (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
     (attr through_hole)
     (fp_text reference "SP1" (at 0 -1.67) (layer "F.SilkS") hide
         (effects (font (size 0.8 0.8) (thickness 0.12)))
@@ -557,7 +557,7 @@
       (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd") (tstamp e85441ef-7bbe-4681-b848-eededf764e0c))
     (fp_rect (start -0.915 0.915) (end 0.915 -0.915)
       (stroke (width 0.1) (type solid)) (fill none) (layer "F.Fab") (tstamp 1b050d1e-6d21-48b3-ac64-4f562133c8b0))
-    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.9) (layers "*.Cu" "*.Mask")
+    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.8) (layers "*.Cu" "*.Mask")
       (net 5 "VBUS") (pinfunction "1") (pintype "passive") (tstamp 02218fa4-3cf0-42aa-a16e-21409cc56b9e))
   )
 
@@ -600,7 +600,7 @@
     (property "Manufacturer" "Mill-Max")
     (property "Purpose" "pin 6: SWCLK (factory fixture only)")
     (property "Status" "PROVISIONAL")
-    (property "StatusNote" "series and stroke research-confirmed; tail, barrel and plunger diameters and the land pattern are not (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
+    (property "StatusNote" "series and stroke research-confirmed; tail 0.635 mm and minimum hole 0.737 mm from docs/SOURCING.md A6 (search extracts, not the drawing); TAIL LENGTH about 1.34 mm in a 1.6 mm board is OPEN (long-tail variant 0914-1-15-20-77-14-11-0 or a thinner board); barrel and plunger diameters assumed (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv")
     (attr through_hole exclude_from_pos_files)
     (fp_text reference "SP6" (at 0 -1.67) (layer "F.SilkS") hide
         (effects (font (size 0.8 0.8) (thickness 0.12)))
@@ -618,7 +618,7 @@
       (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd") (tstamp f656ea87-8aaf-45fe-9d04-3fdbec53f73f))
     (fp_rect (start -0.915 0.915) (end 0.915 -0.915)
       (stroke (width 0.1) (type solid)) (fill none) (layer "F.Fab") (tstamp 2c5a7a63-98f0-4c33-b77a-b4c88df93276))
-    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.9) (layers "*.Cu" "*.Mask")
+    (pad "1" thru_hole circle (at 0 0) (size 1.6 1.6) (drill 0.8) (layers "*.Cu" "*.Mask")
       (net 9 "SWCLK") (pinfunction "1") (pintype "passive") (tstamp 19dd07c8-e81c-4dc6-a928-33eb815ce972))
   )
 
@@ -947,14 +947,14 @@
     (at 92 101.6)
     (descr "Resettable fuse, hold 350 mA, trip 750 mA, 6 V, 0603")
     (tags "fuse")
-    (property "Distributor" "any authorised distributor (order by MPN)")
-    (property "Distributor PN" "MF-FSMF035X-2")
+    (property "Distributor" "Digi-Key")
+    (property "Distributor PN" "F2903CT-ND (per one search extract)")
     (property "Group" "usb")
     (property "Height" "0.85 mm")
-    (property "MPN" "MF-FSMF035X-2")
-    (property "Manufacturer" "Bourns")
+    (property "MPN" "0603L035YR")
+    (property "Manufacturer" "Littelfuse")
     (property "Status" "PROVISIONAL")
-    (property "StatusNote" "ratings from DESIGN_SPEC E6 (PROPOSED); order code, voltage and resistance from memory: any 0603 PTC with hold 0.2 A, trip <= 0.5 A, >= 6 V, <= 5 ohm fits")
+    (property "StatusNote" "part per docs/SOURCING.md action A5 (listing data: 6 V, 1.0 ohm maximum after a trip; data sheet not read); trip 0.75 A departs from E6's 'about 0.5 A'; alternate: Bourns MF-FSMF035X-2 (1.4 ohm maximum after a trip, from memory); height from memory")
     (attr smd)
     (fp_text reference "F1" (at 0 1.43 180) (layer "B.SilkS") hide
         (effects (font (size 1 1) (thickness 0.15)) (justify mirror))

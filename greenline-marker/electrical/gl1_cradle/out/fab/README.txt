@@ -22,6 +22,8 @@ FAB NOTES
 - The TOP face lies against a plastic ceiling: only J1 and the spring pins stand on it.
 - Spring pins SP1-SP7 are soldered square to the board in a jig (mechanical/README).
 - Lead-free assembly (SAC305), RoHS-compliant parts (DESIGN_SPEC E5).
+- SP1-SP7: FINISHED plated hole 0.80 mm +-0.05 (Mill-Max minimum mounting hole for the 0.635 mm tail of the 0914 pin: 0.737 mm; PROVISIONAL until the Mill-Max drawing is read). OPEN: the standard pin's tail (about 1.34 mm) is shorter than this 1.6 mm board - do not order before the pin variant / board thickness is decided (electrical/README.md).
+- J1 land pattern: the four outer ground pads are 1.07 mm long (0.04 mm shorter than KiCad's USB4105 pattern) to keep 0.20 mm from the peg holes: confirm against the GCT USB4105 drawing before ordering.
 
 STACK-UP (top to bottom)
 ------------------------
@@ -72,7 +74,7 @@ gl1_cradle-NPTH.drl: 6 hole(s)
 gl1_cradle-PTH.drl: 20 hole(s)
      0.250 mm  x 9
      0.600 mm  x 4
-     0.900 mm  x 7
+     0.800 mm  x 7
 Non-plated hole MH1: 2.200 mm at (-12.500, -8.300)
 Non-plated hole MH2: 2.200 mm at (12.500, -8.300)
 Non-plated hole MH3: 2.200 mm at (-12.500, 8.700)

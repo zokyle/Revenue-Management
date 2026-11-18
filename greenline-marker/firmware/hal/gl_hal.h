@@ -8,8 +8,11 @@
  *   hal/host     simulator: records bus traffic and pin activity, serves
  *                synthetic frames and sensor data.  Used by the unit tests.
  *   hal/stm32u5  STM32U585RIT6 backend written against the STM32Cube HAL
- *                API.  NOT compiled in this repository's build (no vendor
- *                SDK is available here); see its header comments.
+ *                API.  Not part of `make test` or `make cross`: `make
+ *                cross-hal STM32_HEADERS=<dir>` COMPILES its main file
+ *                against the vendor's header files (which are not in this
+ *                repository); nothing of it has been linked or run, and its
+ *                USB file is compiled by no target.  See its header comments.
  *
  * Design rules
  *  - Plain C99 functions, no callbacks from interrupt context into the
@@ -107,6 +110,17 @@ typedef enum {
 /** Reset the MCU.  Does not return on target; the host backend records the
  *  request and returns so that tests can observe it. */
 void gl_hal_reboot(gl_reboot_t how);
+
+/**
+ * BOOT STUB (DESIGN_SPEC E34, firmware/boot): tell the stub that THIS image
+ * works.  The stub counts the starts of the application that ended in a
+ * watchdog reset without this call in between (a retained counter); at the
+ * third it stops starting the image and goes to the USB loader instead.
+ * The application calls it once per boot, after its main loop has run for
+ * GL_APP_BOOT_CONFIRM_MS.  STM32U585: clears the counter in backup register
+ * GL_BOOT_BKP_ATTEMPTS.  Host backend: counted (gl_sim_stats).
+ */
+void gl_hal_boot_confirm(void);
 
 /** Refresh the independent watchdog (period chosen by the backend, >= 4 s). */
 void gl_hal_watchdog_kick(void);
@@ -330,11 +344,13 @@ uint32_t gl_hal_sleep(gl_sleep_mode_t mode);
 /* ======================================================================= */
 
 /**
- * DESIGN_SPEC section 4 (rev C2): no high-speed crystal; the MCU runs from
- * its internal oscillators.  During a read the PLL raises the core clock to
- * 160 MHz (the vision needs 58 to 88 million instructions per read, the
- * costliest putt solve found 221 million), otherwise it runs slowly or sleeps
- * in Stop 2.
+ * DESIGN_SPEC section 4 (unchanged from rev C2 to rev E): no high-speed
+ * crystal; the MCU runs from its internal oscillators.  During a read the
+ * PLL raises the core clock to 160 MHz (the vision needs 45 to 79 million
+ * host instructions per read by the cost table of `make bench-vision`;
+ * the putt solve is limited to 300,000 integration steps, 105 million by
+ * the cost table, where the costliest one found without the limit needs
+ * 202 million), otherwise it runs slowly or sleeps in Stop 2.
  */
 typedef enum {
     GL_CLOCK_SLOW = 0, /**< the base clock of the backend (STM32: MSIS, no PLL) */

@@ -258,7 +258,7 @@ GL_TEST(test_complete_quick_read)
         gl_log_iter_t it;
         gl_log_rec_t rec;
         gl_log_read_t rd;
-        uint8_t buf[128];
+        uint8_t buf[1024]; /* (the replay records of phase 3 are up to 684 bytes) */
         unsigned reads = 0, events = 0, est_events = 0;
         gl_log_iter_begin(&app.log, &it);
         while (gl_log_iter_next(&app.log, &it, &rec, buf, sizeof(buf)) == GL_OK) {
@@ -688,7 +688,9 @@ GL_TEST(test_raw_strip_logging)
     GL_CHECK_EQ(chunks[0], 48u);
     GL_CHECK_EQ(chunks[1], 48u);
     GL_CHECK_EQ(reads, 1u);
-    GL_CHECK_EQ(other, 2u); /* the boot event and the estimator's flags of the read */
+    /* the boot event and the estimator's flags of the read; phase 3: and the
+     * two replay records of the read (the placement, context + estimate) */
+    GL_CHECK_EQ(other, 4u);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 
     /* level ALL: the band and all 32 strips; the read outlasts the 8 s
@@ -939,59 +941,66 @@ GL_TEST(test_survey_second_drop)
     GL_CHECK_NEAR(app.survey.drop[1].slope.y, -0.015, 0.0005);
     GL_CHECK_NEAR(app.meas[1].tilt_x, -0.015, 0.0005); /* device +x = marker +y */
     GL_CHECK_NEAR(app.meas[0].tilt_x, -0.020, 0.0005);
-    GL_CHECK_EQ(gl_survey_farthest(&app.survey), 0);   /* drop 1 is the ball end */
-    /* ... and the estimator was told so: the putt starts at drop 1, and the
-     * marker, which now lies 3 m short of the hole, is NOT at the ball: the
-     * numbers are shown, no aim line (the full Survey flows, with the line
-     * measured from the pixels, are in tests/test_e2e_putt.c) */
-    GL_CHECK_EQ(app.solve_drops, 2);
+    GL_CHECK_EQ(gl_survey_farthest(&app.survey), 0);   /* placement 1 is the farther one */
+    /* DESIGN_SPEC E29: the placement the marker STANDS ON is the ball,
+     * wherever the others lie.  The marker now lies 3 m from the hole: the
+     * result is the 3 m putt from there, WITH ITS LINE.  (Until phase 3 the
+     * farthest placement was the ball, and here the screen said "PUT AT
+     * BALL" with no line: the dead end E29 removes.)
+     * This test walks the OLD way round - the ball first, then toward the
+     * hole - so the first placement lies 3 m BEHIND the present ball.  The
+     * estimator has no station for such a placement (it clamps stations to
+     * the line from the ball to the hole; the estimator is frozen), so it is
+     * NOT handed over: the result here is made of this placement alone.
+     * With it handed over the fit gave a curvature of -0.011 /m from two
+     * tilts 0.5 % apart - which is how the gate was found.  The Survey the
+     * E29 way round (toward the ball), with every placement used, the line
+     * measured from the pixels and the same placements in the old and the
+     * new order, is in tests/test_e2e_putt.c. */
+    GL_CHECK(app.solve_survey);
+    GL_CHECK_EQ(app.solve_drops, 1);
     GL_CHECK_EQ(app.solve_ball, 0);
-    GL_CHECK(!app.line_here && !app.view.line_here);
+    GL_CHECK_EQ(app.solve_src[0], 1);
+    GL_CHECK(app.line_here);
+    GL_CHECK(gl_ui_view_show(&app.view) != GL_UI_SHOW_NONE);
     GL_CHECK_EQ(app.view.drop, 2);
     GL_CHECK_NEAR(app.view.distance_m, app.est.distance_m, 1e-6);
-    GL_CHECK_NEAR(app.est.distance_m, 6.0, 0.15); /* from the BALL, not from where it lies */
-    /* the Survey estimate: both drops located on the line, the second one
-     * about 3 m along it; the slope toward the hole eases from -2.0 % to
-     * -1.5 % (curvature c > 0) and the cross slope changes sign (twist) */
+    GL_CHECK_NEAR(app.est.distance_m, 3.0, 0.08); /* from where it lies */
+    {
+        gl_ui_result_text_t t;
+        gl_ui_result_text(&app.ui, &app.view, &t);
+        GL_CHECK(strstr(t.note, "PUT") == NULL);
+        GL_CHECK(strcmp(t.mode, "D2") == 0);
+    }
     GL_CHECK_EQ(app.solver_status, GL_OK);
     GL_CHECK(app.view.have_result && app.view.solved);
-    GL_CHECK_EQ(app.solver_work.fit.n_drops, 2);
-    GL_CHECK_NEAR(app.solver_work.fit.stations_m[0], 0.0, 0.0);
-    GL_CHECK_NEAR(app.solver_work.fit.stations_m[1], 3.0, 0.15);
+    GL_CHECK_EQ(app.solver_work.fit.n_drops, 1);
     GL_CHECK(app.est.fit_converged && !app.est.flag_missing && !app.est.range_missing);
-    /* The curvature term needs the base of the stick (the height of the
-     * hole) at the second drop.  There, 3 m from the hole, the stick ends
-     * 1.24 rows below the turf horizon: INSIDE the 1.5-row margin of
+    /* the slopes of the result are this placement's: -1.5 % toward the hole */
+    GL_CHECK_NEAR(app.est.patch[0], -0.015, 0.002);
+    GL_CHECK(fabsf(app.est.patch[2]) < 0.003f && fabsf(app.est.patch[3]) < 1e-6f);
+    /* The base of the stick at this placement, 3 m from the hole, ends 1.24
+     * rows below the turf horizon: INSIDE the 1.5-row margin of
      * GL_VIS_BASE_VISIBLE, and the class the read reports flips with the
      * noise of the frames - VISIBLE in 51 of 80 runs of this scenario with
-     * the read shifted in time (compute factor 0 .. 3.95 in steps of 0.05).
-     * While the simulator charged no computation this test happened to be
-     * one of the 51 and asserted the curvature.  At the nominal factor in
-     * phase 2 it was one of the 29 (pinned then: AT THE HORIZON, no
-     * curvature, c = 0.00001).  In phase 3 the read is shifted again (the
-     * cell temperature is measured before the cameras start, E13) and THIS
-     * run is one of the VISIBLE ones: c = 0.0008, which is what the two
-     * tilts imply (0.5 % of slope over 3 m, halved).  NOTHING ABOUT THE
-     * MARGIN HAS CHANGED: the class of this scene still depends on the noise
-     * of the frames, and the requirement "curvature from two drops at 3 m"
-     * is still NOT MET as a property - only this run happens to show it.
-     * Both branches are checked; the last line pins which one this run is,
-     * so that the next shift of the timing is noticed. */
-    if (app.meas[1].flag_base_visible) {
-        GL_CHECK(app.est.patch[2] > 0.0005f && app.est.patch[2] < 0.003f);
-        printf("    the base of the stick at the second drop was classed VISIBLE in this run (it "
-               "ends 1.24 rows below the horizon, the margin is 1.5: the class flips with the "
-               "frame noise, 51 of 80 runs in phase 2): curvature %.5f\n", (double)app.est.patch[2]);
-    } else {
-        GL_CHECK(fabsf(app.est.patch[2]) < 0.0002f);
-        printf("    NOT MET: the base of the stick at the second drop was classed AT THE HORIZON "
-               "(it ends 1.24 rows below it, the margin is 1.5): no curvature in the fit\n");
-    }
-    GL_CHECK(app.meas[1].flag_base_visible); /* the pin: what this run gives (see above) */
-    GL_CHECK(app.est.patch[3] > 0.001f);
-    printf("    Survey estimate from 2 drops: patch a %.4f b %.4f c %.5f d %.5f, aim %.1f mrad, "
-           "status %u, aim source %u\n", (double)app.est.patch[0], (double)app.est.patch[1],
-           (double)app.est.patch[2], (double)app.est.patch[3], 1000.0 * (double)app.est.phi_rad,
+     * the read shifted in time (phase 2: compute factor 0 .. 3.95 in steps
+     * of 0.05).  NOTHING ABOUT THE MARGIN HAS CHANGED in phase 3; "the base
+     * class of a stick 3 m away" is still NOT MET as a property.  Since E29
+     * this placement is the BALL, so its base class decides whether the
+     * hole height is measured or only bounded (base_hidden, "PLAYS n?").
+     * The last line pins which side the present timing falls on, so that
+     * the next shift is noticed. */
+    GL_CHECK_EQ(app.est.base_hidden, !app.meas[1].flag_base_visible);
+    printf("    %s: the base of the stick at the ball (3 m) was classed %s in this run (it ends 1.24 "
+           "rows below the horizon, the margin is 1.5: the class flips with the frame noise)\n",
+           app.meas[1].flag_base_visible ? "this run" : "NOT MET",
+           app.meas[1].flag_base_visible ? "VISIBLE" : "AT THE HORIZON");
+    /* THE PIN: what this run gives (phase 3, builder 3) */
+    GL_CHECK(!app.meas[1].flag_base_visible);
+    printf("    result at the second placement (3 m; the first, 6 m, lies behind it and is not used): "
+           "patch a %.4f b %.4f c %.5f d %.5f, aim %.1f mrad, status %u, aim source %u\n",
+           (double)app.est.patch[0], (double)app.est.patch[1], (double)app.est.patch[2],
+           (double)app.est.patch[3], 1000.0 * (double)app.est.phi_rad,
            (unsigned)app.est.solve_status, (unsigned)app.est.aim_source);
     GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 2u);
     GL_CHECK_EQ(seen.rail_outside_capture, 0u);
@@ -1231,27 +1240,43 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
     }
     /* LOG_READ from the start: the boot event and the read record */
     {
-        const uint8_t restart = 1;
-        size_t pos = 2;
-        unsigned reads = 0, events = 0;
-        host_send_(8, GL_CMD_LOG_READ, &restart, 1);
-        n = host_get_(GL_CMD_LOG_READ | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
-        GL_CHECK(n > 2);
-        GL_CHECK_EQ(pl[0], GL_OK);
-        GL_CHECK_EQ(pl[1], 0); /* no more */
-        while (n > 0 && pos + 8u <= (size_t)n) {
-            const unsigned len = gl_get_u16(&pl[pos + 2u]);
-            if (pl[pos] == GL_LOG_REC_READ) {
-                gl_log_read_t rd;
-                reads++;
-                GL_CHECK_EQ(len, GL_LOG_READ_LEN);
-                GL_CHECK_EQ(gl_log_read_decode(&pl[pos + 8u], len, &rd), GL_OK);
-                GL_CHECK_NEAR(rd.range_m, app.est.distance_m, 1e-6);
-            } else if (pl[pos] == GL_LOG_REC_EVENT) {
-                events++;
+        /* (phase 3: with the replay records of the read the log no longer
+         * fits ONE response of 1022 bytes: read until "no more") */
+        uint8_t restart = 1;
+        unsigned reads = 0, events = 0, meas = 0, read2 = 0, responses = 0;
+        bool more = true;
+        while (more && responses < 8u) {
+            size_t pos = 2;
+            host_send_(8, GL_CMD_LOG_READ, &restart, 1);
+            n = host_get_(GL_CMD_LOG_READ | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+            GL_CHECK(n > 2);
+            GL_CHECK_EQ(pl[0], GL_OK);
+            more = (n > 1 && pl[1] != 0u);
+            restart = 0;
+            responses++;
+            while (n > 0 && pos + 8u <= (size_t)n) {
+                const unsigned len = gl_get_u16(&pl[pos + 2u]);
+                if (pl[pos] == GL_LOG_REC_READ) {
+                    gl_log_read_t rd;
+                    reads++;
+                    GL_CHECK_EQ(len, GL_LOG_READ_LEN);
+                    GL_CHECK_EQ(gl_log_read_decode(&pl[pos + 8u], len, &rd), GL_OK);
+                    GL_CHECK_NEAR(rd.range_m, app.est.distance_m, 1e-6);
+                } else if (pl[pos] == GL_LOG_REC_EVENT) {
+                    events++;
+                } else if (pl[pos] == GL_LOG_REC_MEAS) {
+                    meas++;
+                } else if (pl[pos] == GL_LOG_REC_READ2) {
+                    read2++;
+                    GL_CHECK_EQ(len, GL_FIELDLOG_READ_LEN);
+                }
+                pos += 8u + len;
             }
-            pos += 8u + len;
         }
+        GL_CHECK(!more);
+        GL_CHECK_EQ(responses, 2u);
+        GL_CHECK_EQ(meas, 1u);
+        GL_CHECK_EQ(read2, 1u);
         GL_CHECK_EQ(reads, 1u);
         /* boot, the estimator's flags of the read, and the charge gate
          * changing its mind when the marker met the cradle */

@@ -10,6 +10,8 @@
 #include "gl_event.h"
 #include "gl_fmt.h"
 #include "gl_hal.h"
+#include "gl_buf.h"
+#include "gl_crc.h"
 #include "gl_provisional.h"
 #include "gl_settings.h"
 #include "gl_sim.h"
@@ -265,7 +267,7 @@ GL_TEST(test_settings)
     s.method = GL_METHOD_B2;
     s.manual_distance_cm = 731;
     gl_settings_encode(&s, blob);
-    GL_CHECK_EQ(blob[0], 2); /* the version of THIS layout */
+    GL_CHECK_EQ(blob[0], 3); /* the version of THIS layout (phase 3) */
     GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_OK);
     GL_CHECK(t.stimp_x2 == s.stimp_x2 && t.units == s.units && t.past_cm == s.past_cm &&
              t.grass == s.grass && t.grain_enable == s.grain_enable &&
@@ -277,7 +279,7 @@ GL_TEST(test_settings)
     GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_ERR_UNSUPPORTED);
     blob[0] = 0;
     GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_ERR_UNSUPPORTED);
-    blob[0] = 3;
+    blob[0] = 4;
     GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_ERR_UNSUPPORTED);
     blob[0] = GL_SETTINGS_VERSION;
     for (int field = 1; field <= 7; field++) {
@@ -293,6 +295,65 @@ GL_TEST(test_settings)
     blob[7] = (uint8_t)GL_METHOD_B2;
     gl_put_u16(&blob[8], 3001);
     GL_CHECK_EQ(gl_settings_decode(blob, sizeof(blob), &t), GL_ERR_RANGE);
+}
+
+/* Phase 3: the settings record is version 3 (SURFACE, TILT LOG in the two
+ * bytes that were reserved).  A version-2 record, byte for byte as phase 2
+ * wrote it, is converted: surface TURF (E11: the base-face zero is the
+ * default), tilt logger off. */
+GL_TEST(test_settings_version_3_and_the_version_2_record)
+{
+    uint8_t v2[GL_SETTINGS_BLOB_LEN] = { 2, 23, GL_UNITS_METRES, 45, GL_GRASS_POA, 1,
+                                         GL_RAWLOG_FIRST, GL_METHOD_B2, 0x67, 0x02, 0, 0 };
+    uint8_t v3[GL_SETTINGS_BLOB_LEN];
+    gl_settings_t s, t;
+    char b[12];
+
+    gl_settings_defaults(&s);
+    GL_CHECK_EQ(s.surface, GL_SURFACE_TURF);
+    GL_CHECK_EQ(s.tilt_log, GL_TILTLOG_OFF);
+    GL_CHECK_EQ(GL_SURFACE_TURF, GL_CAL_SEAT_BASE); /* the setting's values are the seats */
+    GL_CHECK_EQ(GL_SURFACE_HARD, GL_CAL_SEAT_BALL);
+    GL_CHECK_EQ(gl_settings_decode(v2, sizeof(v2), &t), GL_OK);
+    GL_CHECK(t.stimp_x2 == 23 && t.units == GL_UNITS_METRES && t.past_cm == 45 &&
+             t.grass == GL_GRASS_POA && t.grain_enable == 1 && t.raw_log_level == GL_RAWLOG_FIRST &&
+             t.method == GL_METHOD_B2 && t.manual_distance_cm == 615);
+    GL_CHECK_EQ(t.surface, GL_SURFACE_TURF);
+    GL_CHECK_EQ(t.tilt_log, GL_TILTLOG_OFF);
+    /* a "version 2" record with its reserved bytes used is not one */
+    v2[10] = 1;
+    GL_CHECK_EQ(gl_settings_decode(v2, sizeof(v2), &t), GL_ERR_RANGE);
+    v2[10] = 0;
+    v2[11] = 1;
+    GL_CHECK_EQ(gl_settings_decode(v2, sizeof(v2), &t), GL_ERR_RANGE);
+    /* the new fields: round trip, ranges, the dial */
+    s.surface = GL_SURFACE_HARD;
+    s.tilt_log = GL_TILTLOG_ONLY;
+    gl_settings_encode(&s, v3);
+    GL_CHECK_EQ(v3[0], 3);
+    GL_CHECK_EQ(v3[10], GL_SURFACE_HARD);
+    GL_CHECK_EQ(v3[11], GL_TILTLOG_ONLY);
+    GL_CHECK_EQ(gl_settings_decode(v3, sizeof(v3), &t), GL_OK);
+    GL_CHECK(t.surface == GL_SURFACE_HARD && t.tilt_log == GL_TILTLOG_ONLY);
+    v3[10] = 2;
+    GL_CHECK_EQ(gl_settings_decode(v3, sizeof(v3), &t), GL_ERR_RANGE);
+    v3[10] = 0;
+    v3[11] = 3;
+    GL_CHECK_EQ(gl_settings_decode(v3, sizeof(v3), &t), GL_ERR_RANGE);
+    GL_CHECK(strcmp(gl_settings_item_name(GL_ITEM_SURFACE), "SURFACE") == 0);
+    GL_CHECK(strcmp(gl_settings_item_name(GL_ITEM_TILTLOG), "TILT LOG") == 0);
+    gl_settings_defaults(&s);
+    gl_settings_item_format(&s, GL_ITEM_SURFACE, b, sizeof(b));
+    GL_CHECK(strcmp(b, "TURF") == 0);
+    gl_settings_item_set(&s, GL_ITEM_SURFACE, 7); /* clamped */
+    GL_CHECK_EQ(s.surface, GL_SURFACE_HARD);
+    gl_settings_item_format(&s, GL_ITEM_SURFACE, b, sizeof(b));
+    GL_CHECK(strcmp(b, "HARD") == 0);
+    gl_settings_item_set(&s, GL_ITEM_TILTLOG, 2);
+    GL_CHECK_EQ(gl_settings_item_get(&s, GL_ITEM_TILTLOG), 2);
+    gl_settings_item_format(&s, GL_ITEM_TILTLOG, b, sizeof(b));
+    GL_CHECK(strcmp(b, "ONLY") == 0);
+    GL_CHECK_EQ(gl_settings_validate(&s), GL_OK);
 }
 
 /* The record of the PREVIOUS layout (phase 1, version 1) must not be misread:
@@ -362,6 +423,13 @@ GL_TEST(test_settings_record_of_the_previous_layout)
     GL_CHECK_EQ(t.stimp_x2, GL_STIMP_X2_DEFAULT);
 }
 
+/* Make the CRC of a version-2 calibration blob right again after a field
+ * was changed on purpose (the range checks behind the CRC are tested too). */
+static void reseal_(uint8_t *blob, size_t len)
+{
+    gl_put_u16(&blob[len - 2u], gl_crc16(blob, len - 2u));
+}
+
 GL_TEST(test_calibration_records)
 {
     /* tilt */
@@ -384,13 +452,21 @@ GL_TEST(test_calibration_records)
                  d.flip_bias_y == c.flip_bias_y && d.flip_time_s == c.flip_time_s &&
                  d.flags == c.flags && d.tempco1_g_per_k[2] == c.tempco1_g_per_k[2]);
         GL_CHECK_EQ(gl_cal_tilt_decode(blob, sizeof(blob) - 1, &d), GL_ERR_PARAM);
-        /* a NaN or an absurd matrix is refused */
+        /* a NaN or an absurd matrix is refused: first by the CRC of the
+         * version-2 record (a changed byte), and with the CRC made right
+         * again (a record that was WRITTEN with such a value) by the range
+         * check behind it */
         gl_put_f32(&blob[2], (float)NAN);
+        GL_CHECK_EQ(gl_cal_tilt_decode(blob, sizeof(blob), &d), GL_ERR_CRC);
+        reseal_(blob, sizeof(blob));
         GL_CHECK_EQ(gl_cal_tilt_decode(blob, sizeof(blob), &d), GL_ERR_RANGE);
         gl_cal_tilt_encode(&c, blob);
         gl_put_f32(&blob[2 + 36 + 4], 3.0f); /* m[0][0] */
+        reseal_(blob, sizeof(blob));
         GL_CHECK_EQ(gl_cal_tilt_decode(blob, sizeof(blob), &d), GL_ERR_RANGE);
-        blob[0] = 2;
+        blob[0] = 3; /* a version this firmware does not know */
+        GL_CHECK_EQ(gl_cal_tilt_decode(blob, sizeof(blob), &d), GL_ERR_UNSUPPORTED);
+        blob[0] = 0;
         GL_CHECK_EQ(gl_cal_tilt_decode(blob, sizeof(blob), &d), GL_ERR_UNSUPPORTED);
     }
     /* camera */
@@ -407,6 +483,8 @@ GL_TEST(test_calibration_records)
         GL_CHECK(d.k1 == c.k1 && d.roll_rad == c.roll_rad && d.pos_mm[0] == c.pos_mm[0] &&
                  d.fx_px == c.fx_px && d.flags == c.flags);
         gl_put_f32(&blob[2], 5000.0f); /* fx */
+        GL_CHECK_EQ(gl_cal_cam_decode(blob, sizeof(blob), &d), GL_ERR_CRC);
+        reseal_(blob, sizeof(blob));
         GL_CHECK_EQ(gl_cal_cam_decode(blob, sizeof(blob), &d), GL_ERR_RANGE);
     }
     /* grain: covered in test_grain.c; lengths agree with what is written */
@@ -438,10 +516,65 @@ GL_TEST(test_calibration_records)
     }
 }
 
+/* The parameter revision the generator read: the first top-level "rev:" of
+ * design/master_params.yaml, scanned here a second time (not through the
+ * Python generator).  The string itself is NOT written in this file: the
+ * YAML's revision letter changes without the firmware ("D-EVT1" becomes
+ * "E-EVT1"), and then `make config` regenerates core/gl_config.h and this
+ * test must pass unchanged.  Returns false if the file or the key is not
+ * found.  The test runs from the firmware directory (make test). */
+static bool yaml_params_rev_(char *out, size_t cap)
+{
+    static const char *const paths[] = { "../design/master_params.yaml",
+                                         "../../design/master_params.yaml",
+                                         "design/master_params.yaml" };
+    char line[512];
+    size_t i;
+    for (i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
+        FILE *f = fopen(paths[i], "r");
+        if (f == NULL) {
+            continue;
+        }
+        while (fgets(line, (int)sizeof(line), f) != NULL) {
+            if (strncmp(line, "rev:", 4) == 0) {
+                const char *p = line + 4;
+                size_t n = 0;
+                while (*p == ' ' || *p == '\t' || *p == '"' || *p == '\'') {
+                    ++p;
+                }
+                while (p[n] != '\0' && p[n] != ' ' && p[n] != '\t' && p[n] != '#' && p[n] != '"' &&
+                       p[n] != '\'' && p[n] != '\r' && p[n] != '\n') {
+                    ++n;
+                }
+                (void)fclose(f);
+                if (n == 0 || n >= cap) {
+                    return false;
+                }
+                memcpy(out, p, n);
+                out[n] = '\0';
+                return true;
+            }
+        }
+        (void)fclose(f);
+    }
+    return false;
+}
+
 GL_TEST(test_generated_config)
 {
-    /* values that must agree with design/master_params.yaml rev C */
-    GL_CHECK(strcmp(GL_CFG_PARAMS_REV, "D-EVT1") == 0);
+    /* the revision string is the one of the generator's input, whatever it
+     * is: read from design/master_params.yaml, not written here */
+    {
+        char rev[32];
+        const bool found = yaml_params_rev_(rev, sizeof(rev));
+        GL_CHECK(found);
+        if (found) {
+            GL_CHECK(strcmp(GL_CFG_PARAMS_REV, rev) == 0);
+            printf("    parameter revision: core/gl_config.h \"%s\", design/master_params.yaml \"%s\"\n",
+                   GL_CFG_PARAMS_REV, rev);
+        }
+    }
+    /* values that must agree with design/master_params.yaml */
     GL_CHECK_NEAR(GL_CFG_CAM_F_PX, 657.0, 1e-6);
     GL_CHECK_NEAR(GL_CFG_CAM_BASELINE_MM, 20.0, 1e-5);
     GL_CHECK_NEAR(GL_CFG_CAM_AXIS_HEIGHT_MM, 5.61, 1e-5);
@@ -614,6 +747,7 @@ int main(void)
     GL_RUN(test_event_queue);
     GL_RUN(test_settings);
     GL_RUN(test_settings_record_of_the_previous_layout);
+    GL_RUN(test_settings_version_3_and_the_version_2_record);
     GL_RUN(test_calibration_records);
     GL_RUN(test_generated_config);
     GL_RUN(test_solver_is_the_port);

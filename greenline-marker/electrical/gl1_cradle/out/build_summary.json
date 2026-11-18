@@ -128,13 +128,13 @@
       4
      ],
      [
-      0.9,
+      0.8,
       7
      ]
     ]
    },
    "fab_zip": "gl1_cradle-fab.zip",
-   "fab_zip_bytes": 33971,
+   "fab_zip_bytes": 34299,
    "files": 28,
    "passed": true,
    "position_rows": 10,

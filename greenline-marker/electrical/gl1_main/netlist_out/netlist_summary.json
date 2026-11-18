@@ -1,6 +1,6 @@
 {
  "counts": {
-  "bare_copper_parts": 10,
+  "bare_copper_parts": 11,
   "bottom_side": 24,
   "fiducials": 6,
   "net_classes": {
@@ -11,12 +11,12 @@
   },
   "nets": 95,
   "no_connect_pins": 20,
-  "pads_on_nets": 399,
+  "pads_on_nets": 400,
   "parts_dnp": 1,
   "parts_fitted": 103,
   "parts_on_the_bom": 104,
-  "parts_total": 120,
-  "top_side": 96
+  "parts_total": 121,
+  "top_side": 97
  },
  "design": "gl1_main",
  "open_items": [],
@@ -27,8 +27,10 @@
    "errors": 0,
    "errors_by_code": {},
    "passed": true,
-   "warnings": 0,
-   "warnings_by_code": {}
+   "warnings": 2,
+   "warnings_by_code": {
+    "plane_partial": 2
+   }
   },
   "exports": {
    "bom_lines": 37,
@@ -69,10 +71,10 @@
    ]
   },
   "schematic": {
-   "components_compared": 111,
+   "components_compared": 112,
    "error": null,
    "nets_compared": 95,
-   "pads_compared": 399,
+   "pads_compared": 400,
    "passed": true,
    "pdf_pages": 8,
    "problems": [],
@@ -87,7 +89,8 @@
    "unconnected": 305,
    "warnings_by_type": {
     "isolated_copper": 2,
-    "silk_over_copper": 1
+    "silk_over_copper": 1,
+    "silk_overlap": 1
    }
   }
  }

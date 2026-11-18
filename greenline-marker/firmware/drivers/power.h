@@ -154,6 +154,9 @@ typedef struct {
     bool cell_temp_valid; /**< cell_temp_c is from the last measurement and passed its checks */
     uint8_t ntc_fault;    /**< gl_ntc_fault_t of the last measurement */
     float cell_temp_c;    /**< cell temperature from NTC2, degrees C */
+    uint16_t ntc_counts;  /**< raw NTC2 conversion of the last measurement (bias on), counts
+                               of GL_HAL_ADC_FULL_SCALE; for the factory (GL_CMD_GET_SENSORS) */
+    uint16_t vdda_mv;     /**< VDDA (the 2.8 V rail) at the last gl_power_measure(), 0 = none */
     /* the firmware's own limits on a charge */
     bool time_limit;      /**< the E32 backstop has fired and still holds */
     bool limit_cell_was_up; /**< ... and the cell has been seen at or above

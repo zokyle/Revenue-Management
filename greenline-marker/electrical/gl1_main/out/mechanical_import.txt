@@ -1,0 +1,4 @@
+$ cd mechanical && python3 -B cad/board_import.py ../electrical/gl1_main/out/gl1_main-mechanical.json
+FAIL FAILED (1): LCD connector J1: x, y: board (0.0, -12.9), YAML (0.0, -13.9)
+  warning: keep-out battery_body of the board file: battery body: DIFFERS from the YAML
+exit status 1

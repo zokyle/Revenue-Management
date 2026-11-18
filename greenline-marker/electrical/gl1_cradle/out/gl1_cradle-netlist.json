@@ -276,7 +276,7 @@
    "footprint": "Fuse:Fuse_0603_1608Metric",
    "group": "usb",
    "in_bom": true,
-   "mpn": "MF-FSMF035X-2",
+   "mpn": "0603L035YR",
    "pins": {
     "1": {
      "net": "VBUS_IN",

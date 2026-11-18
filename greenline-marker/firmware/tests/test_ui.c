@@ -5,6 +5,8 @@
 #include <stdlib.h>
 
 #include "gl_config.h"
+#include "gl_regulatory.h"
+#include "gl_solver.h"
 #include "gl_test.h"
 #include "gl_ui.h"
 
@@ -63,7 +65,7 @@ GL_TEST(test_table_is_well_formed)
         GL_CHECK(t[i].state < GL_UI_STATE_COUNT || t[i].state == GL_UI_ANY);
         GL_CHECK(t[i].event > GL_EV_NONE && t[i].event < GL_EV_COUNT);
         GL_CHECK(t[i].next < GL_UI_STATE_COUNT);
-        GL_CHECK(t[i].guard <= GL_G_DIST_PROMPT_MOVED);
+        GL_CHECK(t[i].guard <= GL_G_RECALL);
         /* no two rows with the same (state, event, guard): the table is
          * deterministic by construction, not by row order alone */
         for (size_t j = i + 1; j < n; j++) {
@@ -85,7 +87,10 @@ GL_TEST(test_table_is_well_formed)
          * aborts the read (camera rail off) */
         if ((t[i].state == GL_UI_READ_TILT || t[i].state == GL_UI_CAPTURE) &&
             t[i].event != GL_EV_TILT_DONE && t[i].event != GL_EV_CAPTURE_DONE &&
-            t[i].event != GL_EV_CAPTURE_NO_STICK) {
+            t[i].event != GL_EV_CAPTURE_NO_STICK &&
+            /* phase 3: tilt-only mode - the capture "completes" without the
+             * cameras ever having been switched on */
+            t[i].event != GL_EV_CAPTURE_SKIPPED) {
             GL_CHECK(t[i].actions & GL_ACT_ABORT_READ);
         }
         /* the wildcard rows that can interrupt a read abort it too */
@@ -474,7 +479,10 @@ GL_TEST(test_settings_dial)
     /* double tap steps through the items, wrapping round */
     {
         const uint8_t order[] = { GL_ITEM_UNITS, GL_ITEM_PACE, GL_ITEM_GRASS, GL_ITEM_GRAIN,
-                                  GL_ITEM_DISTANCE, GL_ITEM_RAWLOG, GL_ITEM_METHOD, GL_UI_ITEM_ZERO,
+                                  GL_ITEM_DISTANCE, GL_ITEM_RAWLOG, GL_ITEM_METHOD,
+                                  GL_ITEM_SURFACE, GL_ITEM_TILTLOG, /* phase 3: E11, tilt logger */
+                                  GL_UI_ITEM_ZERO,
+                                  GL_UI_ITEM_INFO, /* phase 3: regulatory and information screen */
                                   GL_ITEM_STIMP, GL_ITEM_UNITS, GL_ITEM_PACE, GL_ITEM_GRASS };
         for (size_t i = 0; i < sizeof(order); i++) {
             a = ev(GL_EV_DOUBLE_TAP, 0);
@@ -699,16 +707,26 @@ GL_TEST(test_zeroing_is_never_done_in_the_cradle)
     uint32_t a;
     unsigned ways_in = 0;
 
-    /* structure: the only row that starts the zeroing leaves the settings
-     * dial; no row leads from the cradle state to it; no row lets it finish
-     * into the cradle state */
+    /* structure: the rows that start the zeroing leave the settings dial
+     * (the user's zeroing) or the state in which a read would start (phase
+     * 3: the factory's ARMED zeroing, which runs on the seat plate with
+     * nothing on the pads - mechanical/README step 19); no row leads from a
+     * cradle state to it; no row lets it finish into the cradle state */
     for (size_t i = 0; i < n; i++) {
         if (t[i].actions & GL_ACT_CAL_ZERO_START) {
             ways_in++;
-            GL_CHECK_EQ(t[i].state, GL_UI_SETTINGS_DIAL);
-            GL_CHECK_EQ(t[i].event, GL_EV_FLAT);
-            GL_CHECK_EQ(t[i].guard, GL_G_ITEM_ZERO_YES);
+            if (t[i].event == GL_EV_CAL_ARMED) {
+                GL_CHECK_EQ(t[i].state, GL_UI_WAIT_STILL);
+            } else {
+                GL_CHECK_EQ(t[i].state, GL_UI_SETTINGS_DIAL);
+                GL_CHECK_EQ(t[i].event, GL_EV_FLAT);
+                GL_CHECK_EQ(t[i].guard, GL_G_ITEM_ZERO_YES);
+            }
             GL_CHECK_EQ(t[i].next, GL_UI_CAL_ZERO);
+        }
+        if (t[i].state == GL_UI_CRADLE_SLEEP) {
+            GL_CHECK(t[i].next != GL_UI_CAL_ZERO);
+            GL_CHECK(!(t[i].actions & GL_ACT_CAL_ZERO_START));
         }
         if (t[i].next == GL_UI_CAL_ZERO && t[i].state != GL_UI_CAL_ZERO) {
             GL_CHECK(t[i].actions & GL_ACT_CAL_ZERO_START);
@@ -726,7 +744,15 @@ GL_TEST(test_zeroing_is_never_done_in_the_cradle)
             GL_CHECK(t[i].guard != GL_G_USB);
         }
     }
-    GL_CHECK_EQ(ways_in, 1);
+    GL_CHECK_EQ(ways_in, 2);
+
+    /* the armed zeroing does not start in the cradle either: the event
+     * changes nothing there */
+    fresh();
+    ev(GL_EV_USB_ATTACH, 0);
+    STATE_IS(GL_UI_CRADLE_USB);
+    GL_CHECK_EQ(ev(GL_EV_CAL_ARMED, 0), 0);
+    STATE_IS(GL_UI_CRADLE_USB);
 
     /* the settings dial cannot be opened in the cradle, so the zeroing
      * cannot be started there */
@@ -1043,7 +1069,6 @@ static void view_default(gl_ui_view_t *v)
     memset(v, 0, sizeof(*v));
     v->have_result = true;
     v->solved = true;
-    v->line_here = true;
     v->flag_found = true;
     v->aim_rad = 0.03f;
     v->distance_m = 4.4f;
@@ -1086,7 +1111,9 @@ GL_TEST(test_every_screen_stays_in_the_aperture)
         v.fall_line_rad = 0.31f * (float)i;
         v.slope_pct = (float)(i % 9);
         v.plays_like_m = (float)(i % 13) - 2.0f;
-        v.line_here = (i % 5) != 0;
+        v.show = (uint8_t)(i % 4); /* the three states and a value that does not exist */
+        v.recalled = (i % 7) == 3;
+        v.age_s = 977u * (uint32_t)i * (uint32_t)i;
         v.note = (uint8_t)(i % ((int)GL_UI_NOTE_COUNT + 2));
         v.drop = (uint8_t)((i / 3) % 6);
         v.distance_assumed = (i % 4) == 1;
@@ -1106,11 +1133,21 @@ GL_TEST(test_every_screen_stays_in_the_aperture)
     /* every settings item, every value */
     fresh();
     ui.state = GL_UI_SETTINGS_DIAL;
+    v.info_hw = 'E';
+    v.info_fw = 0x0003u;
+    memcpy(v.info_serial, "1A2B3C4", 8);
+    v.info_text = "THIS TEXT STANDS FOR THE REGULATORY TEXT. IT IS LONG ENOUGH TO NEED A SECOND PAGE: "
+                  "0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 "
+                  "0123456789 0123456789 0123456789 0123456789 0123456789 0123456789.";
+    ui.info_pages = (uint8_t)gl_ui_info_pages(v.info_text);
+    GL_CHECK_EQ(ui.info_pages, 3);
     for (uint8_t item = 0; item < GL_UI_ITEM_COUNT; item++) {
         int lo = 0, hi = 1;
         ui.item = item;
         if (item < GL_UI_ITEM_ZERO) {
             gl_settings_item_range((gl_item_t)item, &lo, &hi);
+        } else if (item == GL_UI_ITEM_INFO) {
+            hi = (int)ui.info_pages; /* one beyond the last page as well */
         }
         for (int val = lo; val <= hi; val++) {
             unsigned ink;
@@ -1300,6 +1337,9 @@ GL_TEST(test_result_screen_shows_the_aim_line)
         gl_ui_render(&ui, &v, &gfx);
         GL_CHECK_EQ(gl_gfx_changed_rows(&gfx, first, rows), 0);
         /* a changed confidence only touches the rows of the bar */
+        v.solved = true;
+        gl_ui_render(&ui, &v, &gfx);
+        memcpy(first, gfx.px, sizeof(first));
         v.confidence = 0.2f;
         gl_ui_render(&ui, &v, &gfx);
         {
@@ -1364,15 +1404,27 @@ GL_TEST(test_result_screen_messages_and_tentative_line)
     GL_CHECK(gl_ui_note_text(GL_UI_NOTE_NONE)[0] == '\0');
     GL_CHECK(gl_ui_note_text((gl_ui_note_t)200)[0] == '\0');
     v.note = GL_UI_NOTE_NONE;
-    /* an aim that is not a solution: long dashes, no break, no plays-like */
+    /* a fallback solution (E33, APPROX): long dashes, the numbers stay */
+    v.show = GL_UI_SHOW_APPROX;
+    v.note = GL_UI_NOTE_PACE;
+    gl_ui_render(&ui, &v, &gfx);
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.brk, "<2.5 CUP") == 0);
+    GL_CHECK(strcmp(t.plays, "PLAYS 16.1FT") == 0);
+    GL_CHECK(strcmp(t.state, "APPROX") == 0);
+    GL_CHECK(black_in_rows_(46, 88) < solid_mid - 60u); /* the line lost its gaps' worth of ink */
+    GL_CHECK(black_in_rows_(46, 88) > solid_mid / 3u);  /* but it is there */
+    v.show = GL_UI_SHOW_NORMAL;
+    /* an aim that is not a solution (E33, NONE): the message, no line, no
+     * break, no plays-like */
     v.solved = false;
     v.note = GL_UI_NOTE_NOT_SOLVED;
     gl_ui_render(&ui, &v, &gfx);
     gl_ui_result_text(&ui, &v, &t);
-    GL_CHECK(strcmp(t.brk, "BREAK ?") == 0);
+    GL_CHECK(t.brk[0] == '\0');
     GL_CHECK(t.plays[0] == '\0');
-    GL_CHECK(black_in_rows_(46, 88) < solid_mid - 60u); /* the line lost its gaps' worth of ink */
-    GL_CHECK(black_in_rows_(46, 88) > solid_mid / 3u);  /* but it is there */
+    GL_CHECK(t.state[0] == '\0');
+    GL_CHECK(strcmp(t.note, "NOT SOLVED") == 0);
     v.solved = true;
     v.note = GL_UI_NOTE_NONE;
     /* a distance that was dialled or assumed is marked; an unknown one is
@@ -1399,30 +1451,18 @@ GL_TEST(test_result_screen_messages_and_tentative_line)
     GL_CHECK(strcmp(t.brk, "STRAIGHT") == 0);
     ui.edit.units = GL_UNITS_FEET;
     view_default(&v);
-    /* Survey: the drop number; not at the ball = no line, the prompt */
+    /* Survey (E29): the drop number - and the line, at EVERY drop: the
+     * placement the marker stands on is the ball.  The mark only touches
+     * its own corner of the screen */
     v.drop = 3;
     gl_ui_result_text(&ui, &v, &t);
     GL_CHECK(strcmp(t.mode, "D3") == 0);
-    v.line_here = false;
-    v.note = GL_UI_NOTE_APPROX; /* the prompt takes the message line */
+    GL_CHECK(t.note[0] == '\0');
     gl_ui_render(&ui, &v, &gfx);
-    gl_ui_result_text(&ui, &v, &t);
-    GL_CHECK(strcmp(t.note, "PUT AT BALL") == 0);
-    {
-        /* no column of the middle band carries a line: the tallest run of
-         * black in any column is a glyph, 7 px */
-        int tallest = 0;
-        for (int x = 0; x < 128; x++) {
-            int run = 0;
-            for (int y = 46; y <= 88; y++) {
-                run = gl_gfx_get(&gfx, x, y) ? 0 : run + 1;
-                if (run > tallest) {
-                    tallest = run;
-                }
-            }
-        }
-        GL_CHECK(tallest <= GL_FONT_H);
-    }
+    GL_CHECK_EQ(black_in_rows_(46, 88), solid_mid);
+    n = gl_gfx_changed_rows(&gfx, plain.px, rows);
+    GL_CHECK(n >= 7 && n <= 11);
+    GL_CHECK(rows[0] >= 102 && rows[n - 1] <= 112);
     view_default(&v);
     v.precision = true;
     gl_ui_result_text(&ui, &v, &t);
@@ -1491,7 +1531,6 @@ GL_TEST(test_render_with_hostile_view_values)
                 v.solved = true;
                 v.confidence = v.aim_rad = v.ball_az_rad = v.distance_m = v.slope_pct = bad[k];
                 v.fall_line_rad = v.plays_like_m = v.break_cups = bad[k];
-                v.line_here = true;
                 v.battery_pct = 255;
                 v.cal_step = 255;
                 gl_ui_render(&ui, &v, &gfx);
@@ -1635,7 +1674,6 @@ GL_TEST(test_result_screen_is_turned_round_with_the_marker)
     memset(&v, 0, sizeof(v));
     v.have_result = true;
     v.solved = true;
-    v.line_here = true;
     v.flag_found = true;
     v.precision = true;
     v.distance_m = 6.0f;
@@ -1713,7 +1751,6 @@ GL_TEST(test_notes_of_the_review)
     memset(&v, 0, sizeof(v));
     v.have_result = true;
     v.solved = true;
-    v.line_here = true;
     v.flag_found = true;
     v.distance_m = 29.87f; /* the longest dial distance, in feet: 98.0FT */
     v.plays_like_m = 31.0f;
@@ -1727,6 +1764,837 @@ GL_TEST(test_notes_of_the_review)
     gl_ui_result_text(&ui, &v, &t);
     GL_CHECK(strcmp(t.note, "POOR HORIZON") == 0);
 }
+
+/* ======================================================================= */
+/* phase 3: E29 Survey, E30 Recall, E31 TOO STEEP, E33 three states, INFO   */
+/* ======================================================================= */
+
+/* The pixels an aim line of the given kind puts on an otherwise empty
+ * screen, and of those the ones that lie in rows 46 .. 88 within 20 px of
+ * the screen centre: there the result screen draws nothing over the line
+ * when the fall-line rose is on a side (it is, for these aims). */
+static gl_gfx_t line_solid_, line_dashed_;
+
+static void line_ink_(const gl_ui_view_t *v, double *dash_ink, double *gap_ink)
+{
+    unsigned n_dash = 0, n_gap = 0, k_dash = 0, k_gap = 0;
+    gl_gfx_init(&line_solid_);
+    gl_gfx_init(&line_dashed_);
+    gl_gfx_set_clip(&line_solid_, true);
+    gl_gfx_set_clip(&line_dashed_, true);
+    gl_gfx_aim_line_styled(&line_solid_, v->aim_rad + v->display_rot_rad,
+                           v->ball_az_rad + v->display_rot_rad, 3.0f, false, NULL);
+    gl_gfx_aim_line_styled(&line_dashed_, v->aim_rad + v->display_rot_rad,
+                           v->ball_az_rad + v->display_rot_rad, 3.0f, true, NULL);
+    for (int y = 46; y <= 88; y++) {
+        for (int x = 44; x <= 84; x++) {
+            const bool solid = !gl_gfx_get(&line_solid_, x, y);
+            const bool dash = !gl_gfx_get(&line_dashed_, x, y);
+            const bool here = !gl_gfx_get(&gfx, x, y);
+            if (dash) {
+                n_dash++;
+                k_dash += here ? 1u : 0u;
+            } else if (solid) {
+                n_gap++;
+                k_gap += here ? 1u : 0u;
+            }
+        }
+    }
+    *dash_ink = (n_dash > 0u) ? (double)k_dash / (double)n_dash : -1.0;
+    *gap_ink = (n_gap > 0u) ? (double)k_gap / (double)n_gap : -1.0;
+}
+
+/* What stands where the confidence bar is: 'B' the five boxes (with this
+ * many filled), 'A' the word APPROX, 'N' nothing, '?' anything else. */
+static char bar_place_(int *filled)
+{
+    static gl_gfx_t ref;
+    bool match;
+    *filled = -1;
+    for (int f = 0; f <= 5; f++) {
+        gl_gfx_init(&ref);
+        gl_gfx_conf_bar(&ref, 64 - 16, 105, f, 5);
+        match = true;
+        for (int y = 102; y <= 112 && match; y++) {
+            for (int x = 44; x <= 84; x++) {
+                if (gl_gfx_get(&ref, x, y) != gl_gfx_get(&gfx, x, y)) {
+                    match = false;
+                    break;
+                }
+            }
+        }
+        if (match) {
+            *filled = f;
+            return 'B';
+        }
+    }
+    for (int pass = 0; pass < 2; pass++) {
+        gl_gfx_init(&ref);
+        if (pass == 0) {
+            gl_gfx_text_centred(&ref, 64, 104, "APPROX", 1, GL_INK_BLACK);
+        }
+        match = true;
+        for (int y = 102; y <= 112 && match; y++) {
+            for (int x = 44; x <= 84; x++) {
+                if (gl_gfx_get(&ref, x, y) != gl_gfx_get(&gfx, x, y)) {
+                    match = false;
+                    break;
+                }
+            }
+        }
+        if (match) {
+            return (pass == 0) ? 'A' : 'N';
+        }
+    }
+    return '?';
+}
+
+/* The state of the result screen, READ FROM THE FRAME BUFFER ALONE:
+ *   NORMAL  ink in the dashes AND in the gaps of the line, the five boxes
+ *   APPROX  ink in the dashes, none in the gaps, the word APPROX
+ *   NONE    no ink where the line would be dashed (but for the letters of
+ *           the message), nothing where the bar would be, AND the picture
+ *           does not change when the aim does
+ * Returns -1 if the screen is none of the three. */
+static int state_from_pixels_(const gl_ui_view_t *v)
+{
+    static uint8_t first[GL_GFX_BYTES];
+    double dash, gap;
+    int filled;
+    char bar;
+    gl_ui_view_t w = *v;
+    bool aim_matters;
+
+    gl_ui_render(&ui, v, &gfx);
+    memcpy(first, gfx.px, sizeof(first));
+    w.aim_rad = v->aim_rad + 0.09f;
+    gl_ui_render(&ui, &w, &gfx);
+    aim_matters = memcmp(first, gfx.px, sizeof(first)) != 0;
+    gl_ui_render(&ui, v, &gfx);
+    line_ink_(v, &dash, &gap);
+    bar = bar_place_(&filled);
+    if (aim_matters && dash > 0.97 && gap > 0.97 && bar == 'B') {
+        return GL_UI_SHOW_NORMAL;
+    }
+    if (aim_matters && dash > 0.97 && gap < 0.03 && bar == 'A') {
+        return GL_UI_SHOW_APPROX;
+    }
+    if (!aim_matters && bar == 'N') {
+        return GL_UI_SHOW_NONE;
+    }
+    return -1;
+}
+
+GL_TEST(test_three_display_states_are_unmistakable)
+{
+    static const float aims[] = { -0.05f, -0.02f, 0.0f, 0.013f, 0.05f };
+    static const float rots[] = { 0.0f, 0.0209f, -0.0209f }; /* E12: up to 1.2 degrees */
+    gl_ui_view_t v;
+    unsigned n[3] = { 0, 0, 0 }, wrong = 0;
+    double least_solid_gap = 1.0, most_dashed_gap = 0.0;
+
+    gl_gfx_init(&gfx);
+    fresh();
+    ui.state = GL_UI_SHOW_RESULT;
+    for (unsigned ai = 0; ai < sizeof(aims) / sizeof(aims[0]); ai++) {
+        for (unsigned ri = 0; ri < sizeof(rots) / sizeof(rots[0]); ri++) {
+            for (int show = 0; show < (int)GL_UI_SHOW_COUNT; show++) {
+                for (int note = 0; note < (int)GL_UI_NOTE_COUNT; note++) {
+                    for (int extra = 0; extra < 8; extra++) {
+                        double dash, gap;
+                        int got;
+                        view_default(&v);
+                        v.aim_rad = aims[ai];
+                        v.display_rot_rad = rots[ri];
+                        v.show = (uint8_t)show;
+                        v.note = (uint8_t)note;
+                        v.confidence = 0.2f * (float)(extra % 6);
+                        v.drop = (extra & 1) ? 3u : 0u;
+                        v.precision = (extra & 2) != 0;
+                        v.recalled = (extra & 4) != 0;
+                        v.age_s = 754u;
+                        if (show == (int)GL_UI_SHOW_NONE) {
+                            v.solved = false; /* (as the application composes it) */
+                        }
+                        got = state_from_pixels_(&v);
+                        if (got != show) {
+                            wrong++;
+                        }
+                        n[show]++;
+                        line_ink_(&v, &dash, &gap);
+                        if (show == (int)GL_UI_SHOW_NORMAL && gap < least_solid_gap) {
+                            least_solid_gap = gap;
+                        }
+                        if (show == (int)GL_UI_SHOW_APPROX && gap > most_dashed_gap) {
+                            most_dashed_gap = gap;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    GL_CHECK_EQ(wrong, 0u);
+    printf("    %u NORMAL, %u APPROX and %u NONE result screens (5 aims, 3 display rotations, every "
+           "message, with and without the Survey / Precision / recall marks): the state read from the "
+           "frame buffer alone is the state rendered in every one\n", n[0], n[1], n[2]);
+    printf("    ink in the gaps of the dash pattern: at least %.0f %% on a NORMAL screen, at most "
+           "%.0f %% on an APPROX one\n", 100.0 * least_solid_gap, 100.0 * most_dashed_gap);
+    GL_CHECK(least_solid_gap > 0.97 && most_dashed_gap < 0.03);
+
+    /* THE RENDERER CAN ONLY BE MORE CAUTIOUS than the view says: a view
+     * marked NORMAL is not drawn as one unless the aim is a solution of a
+     * putt with a known distance and a measured flagstick */
+    view_default(&v);
+    GL_CHECK_EQ(gl_ui_view_show(&v), GL_UI_SHOW_NORMAL);
+    v.flag_found = false;
+    GL_CHECK_EQ(gl_ui_view_show(&v), GL_UI_SHOW_APPROX);
+    GL_CHECK_EQ(state_from_pixels_(&v), GL_UI_SHOW_APPROX);
+    view_default(&v);
+    v.distance_assumed = true;
+    GL_CHECK_EQ(gl_ui_view_show(&v), GL_UI_SHOW_APPROX);
+    GL_CHECK_EQ(state_from_pixels_(&v), GL_UI_SHOW_APPROX);
+    view_default(&v);
+    v.distance_m = 0.0f;
+    GL_CHECK_EQ(gl_ui_view_show(&v), GL_UI_SHOW_APPROX);
+    v.distance_m = (float)NAN;
+    GL_CHECK_EQ(gl_ui_view_show(&v), GL_UI_SHOW_APPROX);
+    view_default(&v);
+    v.solved = false;
+    GL_CHECK_EQ(gl_ui_view_show(&v), GL_UI_SHOW_NONE);
+    GL_CHECK_EQ(state_from_pixels_(&v), GL_UI_SHOW_NONE);
+    view_default(&v);
+    v.show = 7; /* a state that does not exist */
+    GL_CHECK_EQ(gl_ui_view_show(&v), GL_UI_SHOW_NONE);
+    GL_CHECK_EQ(state_from_pixels_(&v), GL_UI_SHOW_NONE);
+    /* NONE never has an empty message */
+    {
+        gl_ui_result_text_t t;
+        v.note = GL_UI_NOTE_NONE;
+        gl_ui_result_text(&ui, &v, &t);
+        GL_CHECK(strcmp(t.note, "NO SOLUTION") == 0);
+        v.note = GL_UI_NOTE_ONE_CAMERA;
+        gl_ui_result_text(&ui, &v, &t);
+        GL_CHECK(strcmp(t.note, "NO SOLUTION") == 0);
+        v.note = GL_UI_NOTE_TOO_STEEP;
+        gl_ui_result_text(&ui, &v, &t);
+        GL_CHECK(strcmp(t.note, "TOO STEEP") == 0);
+    }
+}
+
+/* E33: every (aim source, solve status, flags) maps to exactly one state,
+ * and no fallback maps to NORMAL.  The rule is written out here a second
+ * time, as a list of what a NORMAL result must be. */
+GL_TEST(test_every_estimate_maps_to_one_state)
+{
+    static const uint8_t sources[] = { 0, 1, 2, 3, 4, 77, 255 };
+    static const uint8_t statuses[] = { 0, 1, 2, 3, 4, 5, 6, 100, 255 };
+    static const float ratios[] = { 0.0f, 0.5f, 0.7999f, 0.80f, 0.95f, 3.0f, (float)INFINITY, (float)NAN };
+    unsigned total = 0, by_state[3] = { 0, 0, 0 };
+    unsigned by_cell[7][9][3];
+    gl_ui_view_t v;
+
+    memset(by_cell, 0, sizeof(by_cell));
+    gl_gfx_init(&gfx);
+    fresh();
+    ui.state = GL_UI_SHOW_RESULT;
+    for (unsigned si = 0; si < sizeof(sources); si++) {
+        for (unsigned ti = 0; ti < sizeof(statuses); ti++) {
+            for (unsigned flags = 0; flags < 128u; flags++) {
+                for (unsigned ri = 0; ri < sizeof(ratios) / sizeof(ratios[0]); ri++) {
+                    gl_ui_class_in_t in;
+                    gl_ui_note_t note = GL_UI_NOTE_COUNT;
+                    gl_ui_show_t show;
+                    bool normal_allowed;
+
+                    memset(&in, 0, sizeof(in));
+                    in.aim_source = sources[si];
+                    in.solve_status = statuses[ti];
+                    in.flag_missing = (flags & 1u) != 0u;
+                    in.range_missing = (flags & 2u) != 0u;
+                    in.fit_converged = (flags & 4u) == 0u;
+                    in.poor_horizon = (flags & 8u) != 0u;
+                    in.distance_known = (flags & 16u) == 0u;
+                    in.one_camera = (flags & 32u) != 0u;
+                    in.ambiguous = (flags & 64u) != 0u;
+                    in.steep_ratio = ratios[ri];
+                    show = gl_ui_classify(&in, &note);
+                    total++;
+                    /* exactly one of the three, with a message that exists */
+                    GL_CHECK((unsigned)show < (unsigned)GL_UI_SHOW_COUNT);
+                    GL_CHECK((unsigned)note < (unsigned)GL_UI_NOTE_COUNT);
+                    by_state[show]++;
+                    by_cell[si][ti][show]++;
+                    /* WHAT A NORMAL RESULT IS: solved on the fitted patch, at
+                     * the pace set, flag and range measured, distance known,
+                     * the fit converged, the horizon (if used) fitted, and
+                     * not near the critical slope.  Nothing else. */
+                    normal_allowed = in.aim_source == GL_AIM_FROM_PATCH &&
+                                     in.solve_status == GL_SOLVE_OK && !in.flag_missing &&
+                                     !in.range_missing && in.fit_converged && !in.poor_horizon &&
+                                     in.distance_known && in.steep_ratio < GL_UI_STEEP_RATIO;
+                    GL_CHECK_EQ(show == GL_UI_SHOW_NORMAL, normal_allowed);
+                    /* a line only for a solution: aim source 0 or 1 with a
+                     * status a solve can end with */
+                    GL_CHECK_EQ(show != GL_UI_SHOW_NONE,
+                                in.aim_source <= GL_AIM_FROM_PLANE && in.solve_status <= GL_SOLVE_NO_CONVERGENCE);
+                    /* the message says why it is not normal */
+                    if (show == GL_UI_SHOW_NORMAL) {
+                        GL_CHECK(note == GL_UI_NOTE_NONE || note == GL_UI_NOTE_ONE_CAMERA ||
+                                 note == GL_UI_NOTE_AMBIGUOUS);
+                    } else {
+                        GL_CHECK(note != GL_UI_NOTE_NONE && note != GL_UI_NOTE_ONE_CAMERA &&
+                                 note != GL_UI_NOTE_AMBIGUOUS);
+                    }
+                    /* ... and the frame buffer shows that state (one ratio
+                     * and one camera flag per cell: the screen does not
+                     * depend on more) */
+                    if (ri == 1u && (flags & 96u) == 0u) {
+                        view_default(&v);
+                        v.solved = (in.aim_source == GL_AIM_FROM_PATCH || in.aim_source == GL_AIM_FROM_PLANE);
+                        v.show = (uint8_t)show;
+                        v.note = (uint8_t)note;
+                        v.flag_found = !in.flag_missing;
+                        v.distance_assumed = in.flag_missing || in.range_missing;
+                        v.distance_m = in.distance_known ? 4.4f : 0.0f;
+                        GL_CHECK_EQ(state_from_pixels_(&v), (int)show);
+                    }
+                }
+            }
+        }
+    }
+    printf("    %u combinations of aim source (0-3 and 3 values that do not exist), solve status (0-5, "
+           "NOT_RUN and 2 others), 7 flags and 8 steepness ratios: each maps to exactly one state - "
+           "%u NORMAL, %u APPROX, %u NONE; NORMAL only for patch + OK with nothing missing\n",
+           total, by_state[0], by_state[1], by_state[2]);
+    printf("      aim source x solve status -> states reached (N normal, A approx, - none):\n");
+    for (unsigned si = 0; si < 4u; si++) {
+        printf("        source %u:", (unsigned)sources[si]);
+        for (unsigned ti = 0; ti < 6u; ti++) {
+            printf("  status %u %s%s%s", (unsigned)statuses[ti], by_cell[si][ti][0] ? "N" : "",
+                   by_cell[si][ti][1] ? "A" : "", by_cell[si][ti][2] ? "-" : "");
+        }
+        printf("\n");
+    }
+    /* the knife-edge pair of the phase-2 final check: a kept near miss
+     * (NO_CONVERGENCE) and PACE_LIMITED are the same state */
+    {
+        gl_ui_class_in_t in;
+        gl_ui_note_t n1, n2;
+        memset(&in, 0, sizeof(in));
+        in.fit_converged = true;
+        in.distance_known = true;
+        in.steep_ratio = 0.5f;
+        in.solve_status = GL_SOLVE_NO_CONVERGENCE;
+        GL_CHECK_EQ(gl_ui_classify(&in, &n1), GL_UI_SHOW_APPROX);
+        in.solve_status = GL_SOLVE_PACE_LIMITED;
+        GL_CHECK_EQ(gl_ui_classify(&in, &n2), GL_UI_SHOW_APPROX);
+        GL_CHECK_EQ(n1, GL_UI_NOTE_APPROX);
+        GL_CHECK_EQ(n2, GL_UI_NOTE_PACE);
+    }
+}
+
+/* E31: the ratio is the larger of the patch's slope at the ball and at the
+ * hole over the critical slope a_r / ((5/7) g). */
+GL_TEST(test_steep_ratio)
+{
+    const float a_r = 0.549f; /* Stimp 10 */
+    const float s_crit = a_r / ((5.0f / 7.0f) * 9.80665f);
+    GL_CHECK_NEAR(s_crit, 0.07838, 1e-4);
+    GL_CHECK_NEAR(gl_ui_steep_ratio(0.03f, 0.04f, 0.0f, 0.0f, 5.0f, a_r), 0.05 / 0.07838, 1e-3);
+    /* steeper at the hole: (0.03 + 0.004 * 5, 0.04) */
+    GL_CHECK_NEAR(gl_ui_steep_ratio(0.03f, 0.04f, 0.004f, 0.0f, 5.0f, a_r),
+                  sqrt(0.05 * 0.05 + 0.04 * 0.04) / 0.07838, 1e-3);
+    /* flatter at the hole: the ball's slope counts */
+    GL_CHECK_NEAR(gl_ui_steep_ratio(0.03f, 0.04f, -0.004f, 0.0f, 5.0f, a_r), 0.05 / 0.07838, 1e-3);
+    GL_CHECK_NEAR(gl_ui_steep_ratio(0.0f, 0.02f, 0.0f, 0.008f, 5.0f, a_r), 0.06 / 0.07838, 1e-3);
+    /* a faster green has a lower critical slope */
+    GL_CHECK(gl_ui_steep_ratio(0.05f, 0.0f, 0.0f, 0.0f, 3.0f, 0.39f) >
+             gl_ui_steep_ratio(0.05f, 0.0f, 0.0f, 0.0f, 3.0f, 0.92f));
+    /* anything that is not a number, or no deceleration: steep */
+    GL_CHECK(isinf(gl_ui_steep_ratio(0.01f, 0.0f, 0.0f, 0.0f, 3.0f, 0.0f)));
+    GL_CHECK(isinf(gl_ui_steep_ratio(0.01f, 0.0f, 0.0f, 0.0f, 3.0f, -1.0f)));
+    GL_CHECK(isinf(gl_ui_steep_ratio((float)NAN, 0.0f, 0.0f, 0.0f, 3.0f, a_r)));
+    GL_CHECK(isinf(gl_ui_steep_ratio(0.01f, 0.0f, (float)NAN, 0.0f, 3.0f, a_r)));
+    GL_CHECK(isinf(gl_ui_steep_ratio(0.01f, 0.0f, 0.0f, 0.0f, (float)NAN, a_r)));
+    GL_CHECK(isinf(gl_ui_steep_ratio(0.01f, 0.0f, 0.0f, 0.0f, 3.0f, (float)NAN)));
+    GL_CHECK(isinf(gl_ui_steep_ratio(1e30f, 1e30f, 0.0f, 0.0f, 3.0f, a_r)));
+    /* the threshold in slope terms, for the record */
+    printf("    TOO STEEP from %.2f of the critical slope: %.1f %% at Stimp 8, %.1f %% at Stimp 10, "
+           "%.1f %% at Stimp 13\n", (double)GL_UI_STEEP_RATIO,
+           100.0 * 0.80 * (1.83 * 1.83 / (2.0 * 8.0 * 0.3048)) / 7.00475,
+           100.0 * 0.80 * (1.83 * 1.83 / (2.0 * 10.0 * 0.3048)) / 7.00475,
+           100.0 * 0.80 * (1.83 * 1.83 / (2.0 * 13.0 * 0.3048)) / 7.00475);
+}
+
+/* E29: the Survey on the table - 2 to 4 placements, a fifth is a new read,
+ * a lift without a placement and a result left alone both end it. */
+GL_TEST(test_survey_e29_flow)
+{
+    uint32_t a;
+    fresh();
+    wake_up();
+    quick_read();
+    ev(GL_EV_DOUBLE_TAP, 0);
+    a = ev(GL_EV_DOUBLE_TAP, 0); /* Survey: the shown read is placement 1 */
+    GL_CHECK(a & GL_ACT_SURVEY_STORE);
+    STATE_IS(GL_UI_SURVEY_NEXT_DROP);
+    GL_CHECK_EQ(ui.survey_count, 1);
+    for (int k = 2; k <= 4; k++) {
+        ev(GL_EV_MOTION, 0);
+        a = ev(GL_EV_STILL, 0);
+        GL_CHECK(a & GL_ACT_START_TILT);
+        GL_CHECK_EQ(ui.read_kind, GL_READ_SURVEY);
+        ev(GL_EV_TILT_DONE, 0);
+        a = ev(GL_EV_CAPTURE_DONE, 0);
+        GL_CHECK((a & GL_ACT_SURVEY_STORE) && (a & GL_ACT_START_SOLVE));
+        GL_CHECK_EQ(ui.survey_count, k);
+        ev(GL_EV_SOLVE_DONE, 0);
+        STATE_IS(GL_UI_SHOW_RESULT); /* a result - with its line - after every placement */
+        if (k < 4) {
+            a = ev(GL_EV_MOTION, 0); /* picked up: on to the next */
+            STATE_IS(GL_UI_SURVEY_NEXT_DROP);
+            GL_CHECK(!(a & GL_ACT_NEW_READ));
+        }
+    }
+    /* a FIFTH placement: the Survey is over, a new plain read */
+    a = ev(GL_EV_MOTION, 0);
+    STATE_IS(GL_UI_WAIT_STILL);
+    GL_CHECK((a & GL_ACT_SURVEY_RESET) && (a & GL_ACT_NEW_READ));
+    GL_CHECK_EQ(ui.survey_count, 0);
+    GL_CHECK_EQ(ui.read_kind, GL_READ_QUICK);
+    /* a lift without a new placement: 60 s, then asleep, the Survey gone,
+     * and nothing to recall (it was lifted) */
+    fresh();
+    wake_up();
+    quick_read();
+    ev(GL_EV_DOUBLE_TAP, 0);
+    ev(GL_EV_DOUBLE_TAP, 0);
+    ev(GL_EV_MOTION, 0);
+    now += 59000;
+    GL_CHECK_EQ(gl_ui_tick(&ui, now), 0);
+    now += 1100;
+    a = gl_ui_tick(&ui, now);
+    GL_CHECK((a & GL_ACT_SURVEY_RESET) && (a & GL_ACT_ENTER_SLEEP));
+    STATE_IS(GL_UI_SLEEP);
+    GL_CHECK(!ui.recall);
+    /* a Survey result left for its 45 s: asleep, the Survey over; that
+     * result can be recalled */
+    fresh();
+    wake_up();
+    quick_read();
+    ev(GL_EV_DOUBLE_TAP, 0);
+    ev(GL_EV_DOUBLE_TAP, 0);
+    ev(GL_EV_MOTION, 0);
+    ev(GL_EV_STILL, 0);
+    ev(GL_EV_TILT_DONE, 0);
+    ev(GL_EV_CAPTURE_DONE, 0);
+    ev(GL_EV_SOLVE_DONE, 0);
+    now += 45100;
+    a = gl_ui_tick(&ui, now);
+    GL_CHECK((a & GL_ACT_SURVEY_RESET) && (a & GL_ACT_ENTER_SLEEP));
+    GL_CHECK_EQ(ui.survey_count, 0);
+    GL_CHECK(ui.recall);
+    /* double tap on a Survey result ends the Survey and keeps the result */
+    fresh();
+    wake_up();
+    quick_read();
+    ev(GL_EV_DOUBLE_TAP, 0);
+    ev(GL_EV_DOUBLE_TAP, 0);
+    ev(GL_EV_MOTION, 0);
+    ev(GL_EV_STILL, 0);
+    ev(GL_EV_TILT_DONE, 0);
+    ev(GL_EV_CAPTURE_DONE, 0);
+    ev(GL_EV_SOLVE_DONE, 0);
+    a = ev(GL_EV_DOUBLE_TAP, 0);
+    GL_CHECK(a & GL_ACT_SURVEY_RESET);
+    STATE_IS(GL_UI_SHOW_RESULT);
+    /* the prompt no longer sends the golfer back: no "PUT AT BALL" anywhere */
+    {
+        gl_ui_view_t v;
+        gl_ui_result_text_t t;
+        view_default(&v);
+        for (int d = 0; d <= 4; d++) {
+            v.drop = (uint8_t)d;
+            gl_ui_result_text(&ui, &v, &t);
+            GL_CHECK(strstr(t.note, "PUT") == NULL);
+        }
+    }
+}
+
+/* E30 on the table: which paths keep the stored result recallable. */
+GL_TEST(test_recall_table)
+{
+    uint32_t a;
+    /* result -> 45 s -> sleep -> tap (wake-on-motion) -> at rest: recall */
+    fresh();
+    wake_up();
+    quick_read();
+    GL_CHECK(!ui.recall);
+    now += 45100;
+    a = gl_ui_tick(&ui, now);
+    GL_CHECK(a & GL_ACT_ENTER_SLEEP);
+    STATE_IS(GL_UI_SLEEP);
+    GL_CHECK(ui.recall);
+    a = ev(GL_EV_MOTION, 0);
+    STATE_IS(GL_UI_WAKE);
+    GL_CHECK(a & GL_ACT_DISPLAY_ON);
+    GL_CHECK(ui.recall);
+    now += 900;
+    a = gl_ui_tick(&ui, now);
+    STATE_IS(GL_UI_WAIT_STILL);
+    GL_CHECK((a & GL_ACT_WATCH_STILL) && !(a & GL_ACT_NEW_READ)); /* the result is kept */
+    a = ev(GL_EV_STILL, 0);
+    STATE_IS(GL_UI_SHOW_RESULT);
+    GL_CHECK(a & GL_ACT_RECALL);
+    /* no read of any kind was started */
+    GL_CHECK(!(a & (GL_ACT_START_TILT | GL_ACT_START_CAPTURE | GL_ACT_START_SOLVE)));
+    /* shown for 45 s, then asleep again - and it can be recalled again */
+    now += 44000;
+    GL_CHECK_EQ(gl_ui_tick(&ui, now), 0);
+    now += 1100;
+    a = gl_ui_tick(&ui, now);
+    GL_CHECK(a & GL_ACT_ENTER_SLEEP);
+    GL_CHECK(ui.recall);
+
+    /* LIFTED during the splash, or while waiting for stillness: a new read */
+    for (int where = 0; where < 2; where++) {
+        ev(GL_EV_MOTION, 0);
+        if (where == 1) {
+            now += 900;
+            (void)gl_ui_tick(&ui, now);
+        }
+        a = ev(GL_EV_LIFTED, 0);
+        GL_CHECK(a & GL_ACT_NEW_READ);
+        GL_CHECK(!ui.recall);
+        if (where == 0) {
+            now += 900;
+            a = gl_ui_tick(&ui, now);
+            GL_CHECK(a & GL_ACT_NEW_READ);
+        }
+        STATE_IS(GL_UI_WAIT_STILL);
+        a = ev(GL_EV_STILL, 0);
+        GL_CHECK(a & GL_ACT_START_TILT);
+        GL_CHECK(!(a & GL_ACT_RECALL));
+        STATE_IS(GL_UI_READ_TILT);
+        GL_CHECK_EQ(ui.read_kind, GL_READ_QUICK);
+        ev(GL_EV_TILT_DONE, 0);
+        ev(GL_EV_CAPTURE_DONE, 0);
+        ev(GL_EV_SOLVE_DONE, 0);
+        now += 45100;
+        (void)gl_ui_tick(&ui, now);
+        STATE_IS(GL_UI_SLEEP);
+        GL_CHECK(ui.recall);
+    }
+    /* LIFTED is honoured in every state, also where it has no row */
+    for (int s = 0; s < GL_UI_STATE_COUNT; s++) {
+        fresh();
+        ui.state = (uint8_t)s;
+        ui.recall = true;
+        (void)ev(GL_EV_LIFTED, 0);
+        GL_CHECK(!ui.recall);
+    }
+    /* everything else that happens between the result and the tap ends it:
+     * a result that left the screen any other way, the cradle, the dial,
+     * low battery, a fault, too hot, the time limit of the wait */
+    {
+        static const gl_ui_event_t killers[] = { GL_EV_USB_ATTACH, GL_EV_BATT_LOW, GL_EV_FAULT,
+                                                 GL_EV_UPRIGHT, GL_EV_TOO_HOT, GL_EV_FORCE_SLEEP };
+        for (unsigned k = 0; k < sizeof(killers) / sizeof(killers[0]); k++) {
+            for (int where = 0; where < 3; where++) { /* asleep, splash, waiting */
+                fresh();
+                wake_up();
+                quick_read();
+                now += 45100;
+                (void)gl_ui_tick(&ui, now);
+                GL_CHECK(ui.recall);
+                if (where >= 1) {
+                    ev(GL_EV_MOTION, 0);
+                }
+                if (where >= 2) {
+                    now += 900;
+                    (void)gl_ui_tick(&ui, now);
+                }
+                if (where == 0 && (killers[k] == GL_EV_UPRIGHT || killers[k] == GL_EV_BATT_LOW ||
+                                   killers[k] == GL_EV_TOO_HOT || killers[k] == GL_EV_FORCE_SLEEP)) {
+                    continue; /* (ignored while asleep: nothing has changed) */
+                }
+                (void)ev(killers[k], GL_ERR_IO);
+                GL_CHECK(!ui.recall);
+            }
+        }
+        /* the marker never came to rest (20 s) */
+        fresh();
+        wake_up();
+        quick_read();
+        now += 45100;
+        (void)gl_ui_tick(&ui, now);
+        ev(GL_EV_MOTION, 0);
+        now += 900;
+        (void)gl_ui_tick(&ui, now);
+        now += 20100;
+        (void)gl_ui_tick(&ui, now);
+        STATE_IS(GL_UI_SLEEP);
+        GL_CHECK(!ui.recall);
+        /* picked up while the result was shown: a new read, no recall */
+        fresh();
+        wake_up();
+        quick_read();
+        ev(GL_EV_MOTION, 0);
+        STATE_IS(GL_UI_WAIT_STILL);
+        GL_CHECK(!ui.recall);
+        now += 20100;
+        (void)gl_ui_tick(&ui, now);
+        STATE_IS(GL_UI_SLEEP);
+        GL_CHECK(!ui.recall);
+        ev(GL_EV_MOTION, 0);
+        now += 900;
+        a = gl_ui_tick(&ui, now);
+        GL_CHECK(a & GL_ACT_NEW_READ);
+    }
+    /* the age on the screen */
+    {
+        gl_ui_view_t v;
+        gl_ui_result_text_t t;
+        static const struct { uint32_t s; const char *text; } ages[] = {
+            { 0u, "0S AGO" }, { 59u, "59S AGO" }, { 60u, "1M AGO" }, { 754u, "12M AGO" },
+            { 3599u, "59M AGO" }, { 3600u, "1H AGO" }, { 172799u, "47H AGO" }, { 172800u, "2D AGO" },
+            { 8640000u, "99D AGO" }, { 0xFFFFFFFFu, "99D AGO" },
+        };
+        view_default(&v);
+        gl_ui_result_text(&ui, &v, &t);
+        GL_CHECK(t.age[0] == '\0');
+        v.recalled = true;
+        gl_gfx_init(&gfx);
+        ui.state = GL_UI_SHOW_RESULT;
+        for (unsigned i = 0; i < sizeof(ages) / sizeof(ages[0]); i++) {
+            static gl_gfx_t plain;
+            uint8_t rows[GL_GFX_H];
+            unsigned n;
+            v.age_s = ages[i].s;
+            gl_ui_result_text(&ui, &v, &t);
+            GL_CHECK(strcmp(t.age, ages[i].text) == 0);
+            GL_CHECK(strlen(t.age) <= 7u);
+            /* drawn whole (nothing of it is cut by the round aperture), and
+             * it only touches its own rows */
+            v.recalled = false;
+            gl_ui_render(&ui, &v, &plain);
+            v.recalled = true;
+            gl_ui_render(&ui, &v, &gfx);
+            GL_CHECK_EQ(ink_outside(), 0);
+            n = gl_gfx_changed_rows(&gfx, plain.px, rows);
+            GL_CHECK(n >= 7u && n <= 11u);
+            GL_CHECK(rows[0] >= 112 && rows[n - 1u] <= 122);
+            {
+                static gl_gfx_t ref;
+                unsigned differ = 0;
+                gl_gfx_init(&ref);
+                gl_gfx_set_clip(&ref, false);
+                gl_gfx_text_centred(&ref, 64, 114, t.age, 1, GL_INK_BLACK);
+                for (int y = 114; y < 114 + GL_FONT_H; y++) {
+                    for (int x = 64 - 22; x <= 64 + 22; x++) {
+                        differ += (gl_gfx_get(&ref, x, y) != gl_gfx_get(&gfx, x, y)) ? 1u : 0u;
+                    }
+                }
+                GL_CHECK_EQ(differ, 0u);
+            }
+        }
+    }
+}
+
+/* The regulatory and information screen (the INFO item of the dial). */
+GL_TEST(test_info_screen)
+{
+    static const unsigned want[GL_UI_INFO_LINES] = { 12, 15, 17, 19, 19, 20, 19, 18, 17, 15 };
+    gl_ui_view_t v;
+    unsigned cells = 0;
+    uint32_t a;
+
+    /* ---- how many characters fit: every line holds what the table says,
+     *      whole, and one character more would be cut by the aperture ---- */
+    for (unsigned line = 0; line < GL_UI_INFO_LINES; line++) {
+        static gl_gfx_t clipped, open_;
+        char buf[GL_UI_INFO_LINE_MAX + 3u];
+        int x = 0, y = 0;
+        const unsigned n = gl_ui_info_line_chars(line, &x, &y);
+        GL_CHECK_EQ(n, want[line]);
+        GL_CHECK(n <= GL_UI_INFO_LINE_MAX);
+        cells += n;
+        for (unsigned extra = 0; extra <= 2u; extra += 2u) {
+            memset(buf, '#', n + extra);
+            buf[n + extra] = '\0';
+            gl_gfx_init(&clipped);
+            gl_gfx_init(&open_);
+            gl_gfx_set_clip(&clipped, true);
+            gl_gfx_set_clip(&open_, false);
+            (void)gl_gfx_text(&clipped, x - (int)extra * GL_FONT_ADVANCE / 2, y, buf, 1, GL_INK_BLACK);
+            (void)gl_gfx_text(&open_, x - (int)extra * GL_FONT_ADVANCE / 2, y, buf, 1, GL_INK_BLACK);
+            if (extra == 0u) {
+                GL_CHECK_EQ(gl_gfx_count_black(&clipped), gl_gfx_count_black(&open_));
+            } else {
+                /* one more on each side: no longer whole */
+                GL_CHECK(gl_gfx_count_black(&clipped) < gl_gfx_count_black(&open_));
+            }
+        }
+    }
+    GL_CHECK_EQ(gl_ui_info_line_chars(GL_UI_INFO_LINES, NULL, NULL), 0u);
+    GL_CHECK_EQ(cells, 171u);
+    GL_CHECK_EQ(gl_ui_info_page_chars(), 171u);
+    printf("    regulatory text: 10 lines of 12/15/17/19/19/20/19/18/17/15 characters = %u cells per "
+           "page, %u text pages = %u cells (words are not broken, so a text needs a little less)\n",
+           cells, (unsigned)GL_UI_INFO_TEXT_PAGES, cells * (unsigned)GL_UI_INFO_TEXT_PAGES);
+
+    /* ---- layout: counting ---- */
+    {
+        static char text[1200];
+        size_t shown = 0;
+        GL_CHECK_EQ(gl_ui_info_fit(NULL, &shown), 0u);
+        GL_CHECK_EQ(shown, 0u);
+        GL_CHECK_EQ(gl_ui_info_fit("", &shown), 0u);
+        GL_CHECK_EQ(gl_ui_info_pages(NULL), 1u);
+        /* one unbroken run of 171 characters is exactly one page; 172 need two */
+        memset(text, 'X', 171);
+        text[171] = '\0';
+        GL_CHECK_EQ(gl_ui_info_fit(text, &shown), 1u);
+        GL_CHECK_EQ(shown, 171u);
+        text[171] = 'X';
+        text[172] = '\0';
+        GL_CHECK_EQ(gl_ui_info_fit(text, &shown), 2u);
+        GL_CHECK_EQ(gl_ui_info_pages(text), 3u);
+        /* 684 fit the four pages; of 700 only 684 are shown and the caller is told */
+        memset(text, 'X', 700);
+        text[684] = '\0';
+        GL_CHECK_EQ(gl_ui_info_fit(text, &shown), 4u);
+        GL_CHECK_EQ(shown, 684u);
+        text[684] = 'X';
+        text[700] = '\0';
+        GL_CHECK_EQ(gl_ui_info_fit(text, &shown), 5u);
+        GL_CHECK_EQ(shown, 684u);
+        GL_CHECK_EQ(gl_ui_info_pages(text), 1u + GL_UI_INFO_TEXT_PAGES);
+        /* words are kept whole; a new line is honoured */
+        GL_CHECK_EQ(gl_ui_info_fit("AB\nCD\nEF", &shown), 1u);
+        GL_CHECK_EQ(shown, 8u);
+        /* the placeholder that ships fits, whole, on one page */
+        GL_CHECK_EQ(gl_ui_info_fit(GL_REGULATORY_TEXT, &shown), 1u);
+        GL_CHECK_EQ(shown, strlen(GL_REGULATORY_TEXT));
+        GL_CHECK_EQ(GL_REGULATORY_TEXT_IS_PLACEHOLDER, 1);
+        /* a statement of the length DESIGN_SPEC E18 gives a legend block
+         * (88 characters) four times over, as ordinary words */
+        text[0] = '\0';
+        for (int k = 0; k < 4; k++) {
+            strcat(text, "THIS IS A STATEMENT OF EIGHTY-EIGHT CHARACTERS, SPACES COUNTED, AS A "
+                         "LEGEND BLOCK HOLDS. ");
+        }
+        GL_CHECK_EQ(strlen(text), 4u * 89u);
+        GL_CHECK(gl_ui_info_fit(text, &shown) <= 3u);
+        GL_CHECK_EQ(shown, strlen(text));
+        printf("    four statements of 88 characters (DESIGN_SPEC E18's legend block) need %u of the %u "
+               "text pages\n", gl_ui_info_fit(text, NULL), (unsigned)GL_UI_INFO_TEXT_PAGES);
+    }
+
+    /* ---- the dial reaches it, rolling turns its pages, nothing is set ---- */
+    fresh();
+    wake_up();
+    ev(GL_EV_UPRIGHT, 0);
+    for (int i = 0; i < (int)GL_UI_ITEM_INFO; i++) {
+        a = ev(GL_EV_DOUBLE_TAP, 0);
+        GL_CHECK(a & GL_ACT_DIAL_BEGIN);
+    }
+    GL_CHECK_EQ(ui.item, GL_UI_ITEM_INFO);
+    GL_CHECK_EQ(ui.dial_value, 0);
+    view_default(&v);
+    v.info_hw = 'E';
+    v.info_fw = 0x0003u;
+    memcpy(v.info_serial, "1A2B3C4", 8);
+    v.info_text = "FIRST PAGE OF TEXT.";
+    ui.info_pages = (uint8_t)gl_ui_info_pages(v.info_text);
+    GL_CHECK_EQ(ui.info_pages, 2);
+    {
+        static gl_gfx_t ref;
+        static const struct { int y, scale; const char *s; } lines[] = {
+            { 6, 1, "1/2" }, { 18, 1, "GREENLINE" }, { 30, 2, "GL-1" }, { 50, 1, "PRACTICE DEVICE" },
+            { 62, 1, "HW E  FW 0.3" }, { 74, 1, "SN 1A2B3C4" }, { 90, 1, "ROLL: MORE" },
+        };
+        gl_gfx_init(&gfx);
+        gl_ui_render(&ui, &v, &gfx);
+        GL_CHECK_EQ(ink_outside(), 0);
+        /* page 1: every line is on the screen, glyph for glyph, uncut */
+        for (unsigned i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
+            unsigned differ = 0;
+            gl_gfx_init(&ref);
+            gl_gfx_set_clip(&ref, false);
+            gl_gfx_text_centred(&ref, 64, lines[i].y, lines[i].s, lines[i].scale, GL_INK_BLACK);
+            for (int y = lines[i].y; y < lines[i].y + GL_FONT_H * lines[i].scale; y++) {
+                for (int x = 0; x < 128; x++) {
+                    differ += (gl_gfx_get(&ref, x, y) != gl_gfx_get(&gfx, x, y)) ? 1u : 0u;
+                }
+            }
+            GL_CHECK_EQ(differ, 0u);
+        }
+        /* rolled on: the text page */
+        a = ev(GL_EV_DIAL_STEP, 1);
+        GL_CHECK(a & GL_ACT_REDRAW);
+        GL_CHECK_EQ(ui.dial_value, 1);
+        gl_ui_render(&ui, &v, &gfx);
+        GL_CHECK_EQ(ink_outside(), 0);
+        {
+            int x = 0, y = 0;
+            unsigned differ = 0;
+            (void)gl_ui_info_line_chars(0, &x, &y);
+            gl_gfx_init(&ref);
+            gl_gfx_set_clip(&ref, false);
+            (void)gl_gfx_text(&ref, x, y, "FIRST PAGE", 1, GL_INK_BLACK);
+            (void)gl_ui_info_line_chars(1, &x, &y);
+            (void)gl_gfx_text(&ref, x, y, "OF TEXT.", 1, GL_INK_BLACK);
+            for (int yy = 16; yy < 16 + 18; yy++) {
+                for (int xx = 0; xx < 128; xx++) {
+                    differ += (gl_gfx_get(&ref, xx, yy) != gl_gfx_get(&gfx, xx, yy)) ? 1u : 0u;
+                }
+            }
+            GL_CHECK_EQ(differ, 0u);
+        }
+        /* the dial stops at the last page */
+        ev(GL_EV_DIAL_STEP, 9);
+        GL_CHECK_EQ(ui.dial_value, 1);
+        ev(GL_EV_DIAL_STEP, -3);
+        GL_CHECK_EQ(ui.dial_value, 0);
+    }
+    /* no serial known: dashes, not garbage; a hardware letter that is none: '?' */
+    {
+        static gl_gfx_t ref;
+        unsigned differ = 0;
+        v.info_serial[0] = '\0';
+        v.info_hw = 0;
+        gl_ui_render(&ui, &v, &gfx);
+        gl_gfx_init(&ref);
+        gl_gfx_set_clip(&ref, false);
+        gl_gfx_text_centred(&ref, 64, 62, "HW ?  FW 0.3", 1, GL_INK_BLACK);
+        gl_gfx_text_centred(&ref, 64, 74, "SN -------", 1, GL_INK_BLACK);
+        for (int y = 62; y < 81; y++) {
+            for (int x = 0; x < 128; x++) {
+                differ += (gl_gfx_get(&ref, x, y) != gl_gfx_get(&gfx, x, y)) ? 1u : 0u;
+            }
+        }
+        GL_CHECK_EQ(differ, 0u);
+    }
+    /* laid flat: out of the dial as from any item; settings unchanged */
+    {
+        const gl_settings_t before = ui.saved;
+        a = ev(GL_EV_FLAT, 0);
+        STATE_IS(GL_UI_WAIT_STILL);
+        GL_CHECK(!(a & GL_ACT_CAL_ZERO_START));
+        GL_CHECK(memcmp(&before, &ui.edit, sizeof(before)) == 0);
+    }
+    /* double tap on INFO wraps round to the first item */
+    ev(GL_EV_UPRIGHT, 0);
+    for (int i = 0; i < (int)GL_UI_ITEM_COUNT; i++) {
+        ev(GL_EV_DOUBLE_TAP, 0);
+    }
+    GL_CHECK_EQ(ui.item, GL_ITEM_STIMP);
+    /* the sizes the README quotes */
+    printf("    sizeof(gl_ui_t) %u, sizeof(gl_ui_view_t) %u\n", (unsigned)sizeof(gl_ui_t),
+           (unsigned)sizeof(gl_ui_view_t));
+}
+
 
 int main(void)
 {
@@ -1754,5 +2622,11 @@ int main(void)
     GL_RUN(test_distance_prompt_is_left_by_re_placing);
     GL_RUN(test_result_screen_is_turned_round_with_the_marker);
     GL_RUN(test_notes_of_the_review);
+    GL_RUN(test_three_display_states_are_unmistakable);
+    GL_RUN(test_every_estimate_maps_to_one_state);
+    GL_RUN(test_steep_ratio);
+    GL_RUN(test_survey_e29_flow);
+    GL_RUN(test_recall_table);
+    GL_RUN(test_info_screen);
     return gl_test_summary();
 }
