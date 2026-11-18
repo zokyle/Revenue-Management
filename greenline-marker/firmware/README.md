@@ -1,12 +1,32 @@
-# GreenLine GL-1 firmware (phase 2)
+# GreenLine GL-1 firmware (phase 3 in progress: the rev E board is in)
 
-Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.md` and
-`../design/master_params.yaml` rev D-EVT1). The board changes this file calls **rev C2** are the
-ones of section 4 of that specification (charger inhibit, cell NTC, EXTCOMIN divider, core
-clock, chip-select pulls, PWDN pins); the specification's own header reads "rev D, EVT1".
+Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.md`, rev D
+EVT1 with amendments E1 to E34, and `../design/master_params.yaml`). **The firmware targets
+the rev E board only** (hardware revision 5, shown as "E"): the charger is a TI BQ25101 with
+a thermistor of its own, and the pin map is the netlist's
+(`../electrical/gl1_main/pinmap.json`). The board this file used to call **rev C2** (another
+charger, `CHG_INHIBIT` of the opposite polarity) is not supported any more; where the name
+still appears below it is history.
 
 ## Status - read this first
 
+* **Phase 3, builder 1: the rev E board and its power behaviour.** In: the pin map generated
+  from the netlist by one command (`make pins`; 20 signals moved, three of the four interrupt
+  lines); the BQ25101 (`CHG_INHIBIT` push-pull, HIGH = stop; the firmware can only stop the
+  charge) with the firmware's own supervision on the MCU's thermistor, a 6 h backstop and a
+  status inferred for every case the one status line can show; no camera read above 60 C
+  (E13); ship mode (E13); the cradle sleep (E32); the supply model for the rev E parts; the
+  STM32 backend brought in line BY INSPECTION (it compiles; nothing of it has run). The
+  sections "Charger and cell temperature (rev E)", "Cradle, ship mode and the hot cell",
+  "Sleep and the supply model (rev E)" and "Pins of the rev E board" are new; they carry the
+  figures of this phase. **NOT MET, each pinned by a test:** ship mode draws 12.9 uA in the
+  supply model against the 5 uA required (the board's always-on parts alone are 9.6 uA);
+  a host that leaves the USB bus running but says nothing for 30 s loses the marker until it
+  is re-docked; without firmware (ROM loader, a hung firmware) the charger keeps its OWN
+  window, 0 to 60 C, not the firmware's 0 to 45 C. **Every statement about the charger with
+  no firmware running is a statement about the simulator's MODEL of the chip** (thresholds
+  PROVISIONAL, no data sheet read). The amendments E11, E12, E29 to E31, E33 and E34 are the
+  later builders' work and are NOT in yet.
 * **Nothing here has run on hardware.** No board exists and no vendor SDK is available in the
   build environment. What exists is portable C99 that is built and unit-tested on the host
   against a simulator of the board, and cross-compiled (compile only, not linked) for the
@@ -42,14 +62,13 @@ clock, chip-select pulls, PWDN pins); the specification's own header reads "rev 
   the simulator against the reference, with the direction of the drawn line measured from the
   panel's pixels ("Putt on the display"), and `make appdiff` repeats the comparison with the
   Python reference itself. Charger inhibit, cell NTC, EXTCOMIN divider, core-clock switching,
-  chip-select states and the moved pins are implemented and tested on the simulator ("Charger
-  and cell temperature", "Board changes of rev C2"). **Two requirements are NOT MET and are
-  pinned as such by tests: nothing supervises the charger while the ROM bootloader runs
-  (in the test: charging at 50 C for the 600 s the test lasts), and a hung firmware leaves it
-  unsupervised until the watchdog resets it (measured: 33 s).** DESIGN_SPEC has since answered
-  both in hardware (amendment E1: a charger with its own temperature input). **This firmware
-  is still written for the rev C2 charger**, as its brief said; the difference is pinned by a
-  test as NOT MET and listed under "DESIGN_SPEC amendments E1 to E16".
+  chip-select states and the moved pins were implemented and tested on the simulator for the
+  rev C2 board. Phase 2 pinned two requirements as NOT MET for that board: nothing supervised
+  the charger while the ROM bootloader ran (600 s at 50 C in the test), and a hung firmware
+  left it unsupervised until the watchdog reset it (33 s). **Phase 3 runs both tests again
+  against the model of the rev E charger** ("Charger and cell temperature (rev E)"): the
+  model's charger enforces its own 0 to 60 C window with its own thermistor whatever the MCU
+  does; what remains NOT MET is the firmware's narrower 45 C limit in those two states.
 * **A second review has been applied** (phase 2; three reviewers: numerical, safety, product;
   34 findings). Every finding that was fixed was first reproduced on the unchanged tree and
   has a regression test that failed there. The critical one: a second double tap on a Precision
@@ -162,7 +181,7 @@ is not here, or a decision that is the owner's.
 | 24 | The confidence bar does not separate weak results from clean ones; several fallbacks look like a normal result (major) | **Fixed in part**: flag-out is tentative (23), a poor horizon and a kept near miss have messages, `PLAYS n?` marks a hidden base, and the table under "Result on the display" now says which results look normal. **Not done**: an indicator relative to what a clean read achieves at that distance | open issue 21 |
 | 25 | Time to a line and camera-rail time exceed the specification's figures in a third of the reads between 2.25 and 4.5 m (major) | **Fixed for that cause, not in general.** The second "line" was the shoulder of the stick in the widest template: dropped. And a lone line that is not a flagstick is given up after its first group | 65 reads at 1.5-4.5 m: 23 with two candidates, rail up to 3.12 s, result up to 5.07 s -> 0, 2.42-2.46 s, at most 4.40 s. 88 stick-free reads: mean rail 1.65 s -> 1.02 s. `test_near_stick_is_one_candidate`, `test_no_flagstick`. Still slow: a person behind the stick, two real lines; the high compute factor; open issue 1 |
 | 26 | The distance prompt after "no flagstick seen" is a dead end for 30 s (major) | **Fixed**: picking the marker up and putting it down again reads again; the prompt says so | `test_distance_prompt_re_placing_reads_again`, `test_ui.c` |
-| 27 | DESIGN_SPEC has been amended (E1 to E16) since the builders' brief (major) | **Not fixed, by the brief's decision** (this firmware is rev C2). The generator now reads the charger sentence of the spec and a test pins the difference as NOT MET; the README's statements are corrected | `test_charger_of_the_specification_is_not_the_firmwares`; "DESIGN_SPEC amendments E1 to E16"; open issue 2 |
+| 27 | DESIGN_SPEC has been amended (E1 to E16) since the builders' brief (major) | **Phase 2: not fixed, by the brief's decision. Phase 3: the firmware targets the rev E board ("DESIGN_SPEC amendments").** What follows is the phase-2 text. The generator now reads the charger sentence of the spec and a test pins the difference as NOT MET; the README's statements are corrected | `test_charger_of_the_specification_is_not_the_firmwares`; "DESIGN_SPEC amendments E1 to E16"; open issue 2 |
 | 28 | Survey in the order the specification gives never shows a line until a fourth placement back at the ball (minor) | **Not fixed** (product decision). The wrong sentence of this file is corrected | open issue 18 |
 | 29 | A solved aim more than 13.5 degrees off the visor axis is drawn like a tentative one, with an arrow pointing away from the aim (minor) | **Fixed**: the parallel substitute is drawn in the style of the result (solid if solved) and the arrow is gone | aim +258.8 mrad: 0.46 of the solid core inked and 63 pixels of arrow -> 0.73 and 0. `test_solved_aim_off_the_screen_keeps_its_style`, `test_gfx.c` |
 | 30 | `PLAYS` is the roll-out distance including the PAST setting (minor) | **Fixed**: `PLAYS` is the estimator's plays-like distance minus PAST | 6 m, dead flat, PAST 0 / 30 / 90 cm: `PLAYS 6.0M` each (estimator 5.98 / 6.28 / 6.88 m). `test_plays_like_is_the_flat_putt` |
@@ -171,23 +190,26 @@ is not here, or a decision that is the owner's.
 | 33 | A result cannot be recalled (minor) | **Not fixed** (product decision) | open issue 31 |
 | 34 | README statements that the code or the tests contradict (minor) | **Corrected**, all nine, from the final run; the stale comment in `gl_app.c` too. The band-only bearing is not logged: the claim is dropped | this file |
 
-## DESIGN_SPEC amendments E1 to E16
+## DESIGN_SPEC amendments: where the firmware stands
 
-`../design/DESIGN_SPEC.md` now reads "rev D, EVT1, with amendments E1 to E16". The builders'
-brief and this firmware are older than the amendments ("rev C2"). Which document rules for the
-next phase is the owner's decision; this is where the firmware stands against each amendment
-that touches it (the others are mechanical or assembly matters):
+`../design/DESIGN_SPEC.md` reads "rev D, EVT1, with amendments E1 to E34". Phase 3 implements
+them; this table is the state after builder 1 (the rev E board and its power behaviour). The
+amendments that are not listed are mechanical or assembly matters.
 
-| # | Specification now | Firmware | Status |
+| # | Specification | Firmware | Status |
 |---|---|---|---|
-| E1 | Charger BQ25101 with its own temperature input; `CHG_INHIBIT` is a push-pull output, HIGH = stop (an N-MOSFET pulls the charger's TS pin low) | written for the MCP73831 of rev C2: `CHG_INHIBIT` open drain, LOW = stop, released = charge; the simulator counts a push-pull drive of that pin as a violation | **NOT MET, pinned** (`test_charger_of_the_specification_is_not_the_firmwares`: `GL_PINS_SPEC_CHG_INHIBIT_ACTIVE_HIGH` 1 against `GL_POWER_CHG_INHIBIT_ACTIVE_HIGH` 0). On an E1 board this firmware's "stop" stops nothing; the charger's own input protects the cell, and the two NOT MET rows of the charger table become hardware-covered. `tools/gen_pins.py` reads the sentence, so a further change is seen |
-| E2 | Two cell thermistors (one for the charger, one for the MCU), Murata NCU15XH103F60RC | one NTC, 10 kohm, B 3380 as specified in rev C2 | the MCU's thermistor keeps its role; the part's B value and R-T table are **not verified** (open issue 5) |
-| E3 | Grain LED parts and real drive currents (about 6 and 10 mA) | the driver's note said the same; nothing depends on the part | no change needed |
-| E11 | Factory level calibration on two seats (base face, ball feet) | one zeroing bias | **not implemented** (open issue 32) |
-| E12 | Display rotation measured at the factory and stored; the firmware rotates the drawn line by it (up to about 1 degree = 17 mrad) | no such calibration field; the largest drawn-line error measured here is 3.9 mrad | **not implemented** (open issue 32) |
-| E13 | No read above 60 C cell temperature; ship mode | neither exists | **not implemented** (open issue 32) |
-| E14 | Sleep current and rail limits | the supply model draws 20.6 uA asleep; every current is provisional | not verified |
-| E15 | Read time restated from this firmware's timing model: 4.1 to 4.8 s, camera rail 2.2 to 2.8 s | the same model; the figures of this file | agrees for the nominal read. It is a model, not a measurement, and it is exceeded by a read with a person behind the stick or two real lines ("Run time") |
+| E1 | Charger BQ25101 with its own temperature input; `CHG_INHIBIT` push-pull, HIGH = stop | `drivers/power.c`: latch high, then push-pull, to stop; latch low, then ANALOG, to release. The simulator's charger is a model of the BQ25101 that follows its own thermistor whatever the MCU does | **in** (phase 3, builder 1). The model's thresholds are PROVISIONAL; the release gate "thresholds against the NTC curve" stands |
+| E2 | Two cell thermistors, Murata NCU15XH103F60RC: NTC1 for the charger, NTC2 for the MCU | NTC2 through `NTC_BIAS` / `NTC_SENSE`, B equation with R25 = 10 kohm and B = 3380 K; error budget computed by a test | **in**. Every R-T number is derived from the B equation and from nothing else: the part's own table has not been read |
+| E3 | Grain LED parts and real drive currents | nothing depends on the part | no change needed |
+| E11, E12 | Two stored level zeros; stored display rotation | one zeroing bias; no rotation | **not in yet** (later builders of phase 3) |
+| E13 | No read above 60 C cell temperature; ship mode | `gl_power_read_allowed()`: refused above 60.0 C on NTC2, allowed again below 57.0 C; "TOO HOT" for 4 s, then sleep. `GL_CMD_SHIP_MODE` arms; entered 1 s after the marker leaves the cradle: MCU in Shutdown, wake-up on VBUS | **in**. Ship-mode current NOT MET by the supply model: 12.9 uA against 5 uA |
+| E14 | Sleep current no more than 25 uA at 3.8 V | supply model: 20.7 uA at the cell-lead pads with the underside dark (23.7 uA at the cell, protection circuit included) | met BY THE MODEL; nothing measured. 25.9 uA with a lit underside (E27 excludes that case) |
+| E15 | Read time 4.1 to 4.8 s, camera rail 2.2 to 2.8 s | the same model; measured again in this phase: 4.13 / 4.43 / 4.82 s and 2.16 / 2.42 / 2.76 s | agrees for the nominal read; a model, not a measurement |
+| E26 | The USB supply pin is powered only with VBUS AND the 2.8 V rail | `gl_hal_usb_supply_ok()`: VBUS_SENSE high AND the MCU's own monitor of that pin; USB is started only then and stopped when it is false | **in** on the simulator; the backend by inspection. The enable pin of the new regulator is assumed to draw 2.8 uA from the 2.8 V rail for ever (NOT CONFIRMED) |
+| E27 | VBUS divider 100 k : 100 k on the pad; wake pull-up 150 kohm | the simulator's VBUS_SENSE lags the pad by up to 22 ms on removal; 5.2 uA more asleep with a lit underside | **in** |
+| E29, E30, E31, E33 | Survey ends at the ball; recall; TOO STEEP; three display states | - | **not in yet** (later builders) |
+| E32 | Asleep in the cradle 30 s after the host fell silent or with no host; 6 h backstop | UI states `CRADLE_USB` (30 s without host activity) and `CRADLE_SLEEP`; `GL_PROV_CHARGE_MAX_MS` | **in**. A silent host on a running bus loses the marker until it is re-docked (NOT MET, pinned) |
+| E34 | Boot stub; USB IDs as named placeholders | - | **not in yet** (later builders) |
 
 ## Architecture
 
@@ -267,7 +289,7 @@ IMU INT1 (wake-on-motion) -> GL_EV_MOTION -> WAKE: display on, IMU 240 Hz
 | `hal/host/gl_sim_cost.h` | The instruction counts of the vision stages, the estimate and a rendering (measured with callgrind, `make profile`) from which the simulator charges computation its time. |
 | `hal/stm32u5/` | STM32U585 backend (`gl_hal_stm32u5.c`: **compiled against the vendor's headers by `make cross-hal`, never linked or run**; `gl_hal_stm32u5_usb.c`: **never compiled**), the project's own HAL configuration `stm32u5xx_hal_conf.h` and the generated pin map `gl_pins.h`. No vendor file. |
 | `app/` | Main loop and glue: `gl_app`, `gl_motion`, `gl_read`, `gl_usb`, `gl_app_cfg.h` (tuning constants, flash layout), `gl_main.c` (`main()`). |
-| `tests/` | Host unit tests, one executable per `test_*.c` (27), with the tiny runner `gl_test.h`; `test_drv_*.c` check bus traffic, `test_e2e.c` and `test_e2e_faults.c` run the whole firmware on the simulator (the second one with faults injected), `test_e2e_putt.c` runs whole reads on rendered scenes and compares the line on the panel and the numbers shown with the reference, `test_e2e_review.c` holds the regression tests of the phase-2 review that need the whole firmware (product behaviour, charger supervision with lost VBUS edges, 300 random VBUS-bounce scenarios), `test_app_handover.c` calls the application's hand-over to the solver directly, `test_board.c` checks the rev C2 board rules (chip selects through reset, core-clock calls, EXTCOMIN) and, as a check of the source text, the order of the backend's start-up, `test_read.c` runs the camera part of a read on hard scenes, `test_vision_equiv.c` compares the vision bit for bit with the frozen phase-1 version, `test_solver.c` runs the solver against the reference vectors in both precisions. |
+| `tests/` | Host unit tests, one executable per `test_*.c` (28; `test_e2e_power.c` is new in phase 3: the hot cell, ship mode, the cradle, the sleep current), with the tiny runner `gl_test.h`; `test_drv_*.c` check bus traffic, `test_e2e.c` and `test_e2e_faults.c` run the whole firmware on the simulator (the second one with faults injected), `test_e2e_putt.c` runs whole reads on rendered scenes and compares the line on the panel and the numbers shown with the reference, `test_e2e_review.c` holds the regression tests of the phase-2 review that need the whole firmware (product behaviour, charger supervision with lost VBUS edges, 300 random VBUS-bounce scenarios), `test_app_handover.c` calls the application's hand-over to the solver directly, `test_board.c` checks the rev C2 board rules (chip selects through reset, core-clock calls, EXTCOMIN) and, as a check of the source text, the order of the backend's start-up, `test_read.c` runs the camera part of a read on hard scenes, `test_vision_equiv.c` compares the vision bit for bit with the frozen phase-1 version, `test_solver.c` runs the solver against the reference vectors in both precisions. |
 | `tests/vision_ref/` | The vision of phase 1, frozen (`gl_vision_p1_body.inc`, verbatim; built with its symbols renamed `glp1_*`): the oracle of `test_vision_equiv.c`. Host only. |
 | `tests/solver/` | `gl_solver_vectors.c` (**generated** from `../sim/results/reference_vectors.json`, 1.06 MB of C data, host only), its hand-written header, `gl_solver_run.c`, the harness that is compiled once per precision, and `gl_solver_ref.c`, the double-precision build of the solver behind a plain-C interface (`gl_ref_estimate`), which the end-to-end putt test uses as its reference. |
 | `tests/synth/` | Synthetic strip renderer (`gl_synth`), the reviewers' independent, physically consistent scene generator (`gl_scene`, used by `test_read.c`) and simulated NOR flash with power cuts (`gl_simflash`). |
@@ -277,7 +299,7 @@ IMU INT1 (wake-on-motion) -> GL_EV_MOTION -> WAKE: display on, IMU 240 Hz
 
 ```
 make test     # gcc -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror, builds
-              #   core + drivers + app + simulator and runs all 27 test executables
+              #   core + drivers + app + simulator and runs all 28 test executables
               #   (several minutes, most of them the 984 reads of tests/test_read.c)
 make asan     # the same under -fsanitize=address,undefined,float-cast-overflow
               #   (test_read.c with 3 instead of 8 reads per scene: its yield and accuracy
@@ -295,7 +317,14 @@ make cross-hal STM32_HEADERS=<dir>
               #   frames, forbidden-symbol check, the HAL functions a link would need.
               #   Without STM32_HEADERS, or if the headers are not there: SKIPPED with a
               #   message, exit 0 - the backend has then NOT been compiled
-make config   # regenerate core/gl_config.h, core/gl_font_data.c, hal/stm32u5/gl_pins.h and
+make pins     # regenerate hal/stm32u5/gl_pins.h from ../electrical/gl1_main/pinmap.json, its
+              #   SINGLE input.  The layout may still exchange pins: this one command (and
+              #   `make test`) follows it.  Nothing in the firmware names a pad by hand
+make pins-check
+              # fails if gl_pins.h is stale against pinmap.json, and if the generator has
+              #   stopped refusing the 31 defects its self-test seeds into a copy of the pin
+              #   map.  Part of config-check, and with it of every test and cross build
+make config   # `make pins`, then regenerate core/gl_config.h, core/gl_font_data.c and
               #   tests/solver/gl_solver_vectors.c
 make bench-vision
               # NOT part of make test: whole reads of 8 scenes on the simulator with the
@@ -451,14 +480,16 @@ structure, and is tested against the simulator for its exact bus traffic.
 | `lsm6dsv16x` | IMU on SPI2, mode 3: WHO_AM_I probe, software reset, BDU + IF_INC; MEASURE mode (accel +-2 g high-performance and gyro +-1000 dps at 240 Hz, data-ready on INT2, LATCHED: CTRL4 is written explicitly); WAKE mode (accel low-power 15 Hz, gyro off, wake-up on INT1); samples mapped into marker axes; temperature only from a sensor that proves it is alive (WHO_AM_I, accelerometer running, raw value not 0x0000 / 0xFFFF); a burst of twelve 0xFF or 0x00 bytes is refused as "no device"; `gl_imu_verify()`. | The exact bytes of init; register values of both modes; scale factors; every axis mapping; 240 data-ready interrupts per second; wake-on-motion latency; absent device; the driver's samples through `gl_tilt` to a slope. |
 | `mx25r` | SPI NOR: JEDEC id, read, page program split at 256-byte boundaries with WREN and status polling, 4 kB sector erase, deep power-down with automatic wake; `gl_flash_if_t` for `gl_log` / `gl_store`. | The exact command bytes; page splitting; WREN before every program and erase; deep power-down; the ring log and the blob store running on the driver (3237 page programs, 19 erases, no non-blank byte programmed). |
 | `grain_frontend` | 16 LEDs charlieplexed on 5 pins (anode push-pull high, cathode push-pull low, the other three analog; all analog = off; break before make), OPAMP1 + ADC power sequence, dark / on / dark per LED, scan order alternating red / NIR and reversed on odd cycles. | **The pin states of all 16 LEDs** against a table written out independently in the test, the 9 pin operations of each switch in order, that exactly one LED of the model's netlist lights; a sneak-path analysis of the proposed wiring (30 two-LED paths, none NIR-only beside a lit red LED); the ADC sequence with the lit-LED mask of every conversion; values through `gl_grain` (modulation 0.400, azimuth -30.0 deg recovered); drift, motion, threshold from the calibration record. |
-| `power` | Battery through the 2 x 1 Mohm divider (VDDA from VREFINT), percent, low / critical / storage; VBUS and charger STAT. **Cell temperature** from the NTC divider (`NTC_BIAS` - 10.0 kohm - `NTC_SENSE` - NTC 10 kohm, B 3380 - ground): one conversion with the bias released (must read near ground, else `STUCK`), bias driven push-pull high, 500 us to settle, 8 conversions, bias back to analog; ratiometric B-parameter conversion; open above 98 % and short below 2 % of full scale. **Charge gate** (`gl_power_charge_gate`): with VBUS, `CHG_INHIBIT` is pulled low (open drain) unless the NTC reading is fresh and passed its checks, at least one live die sensor (IMU, MCU) is within 10 K of it, and it is inside 0..45 C narrowed by a 1.5 K guard band, with 2 K of hysteresis; without VBUS the pin is released. `gl_power_init()` does not touch `CHG_INHIBIT` or `NTC_BIAS`. | That init leaves both pins as reset left them; conversion of battery counts; **the B-parameter conversion against a table computed in the test in double precision** (-40..85 C in 0.5 C steps: worst error 0.011 K; the simulator's NTC model agrees with the same table to 2e-12 counts); the tolerance budget (NTC 1 %, B 1 %, resistor 1 %, ADC 0.2 % of full scale: 0.90 K at 0 C, 1.09 K at 45 C, inside the 1.5 K guard); the exact pin and ADC sequence of a measurement (`NTC_BIAS` driven for 684 us); open, short and stuck-high detection; the gate over a sweep of -10..60 C and back (allowed 3.5..43.5 C rising, 1.5..41.5 C falling); unknown, stale, faulty and implausible temperatures; the simulator's charger model and its rules; status pins and interrupts. |
+| `power` | Rev E. Battery through the 2 x 1 Mohm divider (VDDA from VREFINT), percent, low / critical / storage; VBUS and the charger's CHG line (inputs WITHOUT an internal pull). **Cell temperature from the MCU's thermistor NTC2** (`NTC_BIAS` - 10.0 kohm - `NTC_SENSE` - NTC 10 kohm, B 3380 K - ground): one conversion with the bias released (must read near ground, else `STUCK`), bias driven push-pull high, 500 us to settle, 8 conversions, bias back to analog; ratiometric B-equation conversion; open above 98 % and short below 2 % of full scale. **The firmware's charge gate** (`gl_power_charge_gate`): the BQ25101 charges by itself; `CHG_INHIBIT` is driven push-pull HIGH (stop) unless the NTC2 reading is fresh and passed its checks, at least one live die sensor (IMU, MCU) is within 10 K of it, and it is inside 0..45 C narrowed by a 1.5 K guard band, with 2 K of hysteresis; also after 6 h of continuous charging (E32) and by command; without VBUS the pin is released (analog). **Charger status** (`gl_power_charger_status`): one of seven states inferred from CHG, VBUS, the firmware's own stop, the cell voltage and NTC2. **Read gate** (`gl_power_read_allowed`, E13): no camera read above 60 C, 3 K of hysteresis. `gl_power_init()` does not touch `CHG_INHIBIT` or `NTC_BIAS`. | That init leaves both pins as reset left them; the B-equation conversion against a table computed in the test in double precision (-40..85 C in 0.5 C steps: worst error 0.011 K; the simulator's NTC model agrees with the same table to 2e-12 counts); the tolerance budget; the exact pin and ADC sequence of a measurement (`NTC_BIAS` driven for 684 us); open, short and stuck-high detection; the gate over a sweep of -10..60 C and back (not stopped 3.5..43.5 C rising, 1.5..41.5 C falling); unknown, stale, faulty and implausible temperatures; the 6 h limit, its release and its latch for a cell that never came up; the stop by command; the status inference; the read gate; the simulator's charger rules; the hardware model alone over temperature and at the end of a charge. |
+| `grain_frontend` (rev E addition) | The amplifier's mid-rail bias is a divider fed from `LCD_DISP` (from the always-on rail it would draw 14 uA for ever). `gl_grain_fe_power(true)` returns `GL_ERR_STATE` with the display off and waits 35 ms (was 25) otherwise. | Refused, with nothing powered and no LED lit, while DISP is low; with the display switched on at the last moment the first conversion comes 35.7 ms after DISP went high. |
 
 Notes for the hardware review that came out of writing the drivers:
 
 * **Grain LED current.** With the 2.8 V rail and two 68 ohm resistors in the path the LED
   current is about (2.8 - 2.0) / 136 = 6 mA for red and about 10 mA for NIR, not the 20 mA that
   `docs/research/grain-sensing.md` assumes.
-* **Charlieplex wiring is a proposal** (no netlist exists): pair k on the pin pairs (0,1) (0,2)
+* **Charlieplex wiring** (the firmware's proposal, which the rev E netlist has adopted:
+  `tests/test_pins.c` compares the driver's table with the pin map's 16 LEDs): pair k on the pin pairs (0,1) (0,2)
   (0,3) (0,4) (1,2) (1,3) (1,4) (2,3), red anode on the lower-numbered pin, NIR antiparallel.
   With that orientation rule no two-LED sneak path beside a lit red LED consists of NIR LEDs
   only (checked by the test), so the low-voltage NIR LEDs cannot ghost.
@@ -515,13 +546,27 @@ times, deep power-down), the IMU (register map, sample generator driven by a mot
 the test, wake-up and data-ready interrupts, mounting, noise, bias, temperature), two cameras on
 the shared bus (registers, reset, sleep, output enables, windows, free-running frame timing with
 a phase offset between the sensors, frames from a scene callback), the battery divider, the
-photodiode stage driven by the charlieplex pin states, a USB host, and from rev C2: the cell
-NTC and its divider (cell temperature set by the test, part tolerances, open / short / stuck
-faults, a conversion sees the divider only while `NTC_BIAS` is driven and settled), the charger
-(running whenever VBUS is present and `CHG_INHIBIT` is not pulled low, whatever the MCU does),
-the board's pull resistors on the chip selects, DISP and the rail enable, an MCU reset
-(`gl_sim_mcu_reset`: every pin back to analog, the charger back to its default), and the core
-clock as a recorded state.
+photodiode stage driven by the charlieplex pin states (its bias divider fed from `LCD_DISP`,
+as on the rev E board), a USB host (absent, active, suspended; the USB supply of the MCU and a
+VBUS_SENSE pin that lags the pad on removal), the MCU's thermistor NTC2 and its divider (cell
+temperature set by the test, part tolerances, open / short / stuck faults, a conversion sees
+the divider only while `NTC_BIAS` is driven and settled), and for rev E:
+
+* **the charger: a model of the BQ25101 with its OWN thermistor NTC1 on the cell.** It charges
+  whenever VBUS is present, its own temperature window allows it and `CHG_INHIBIT` is not
+  DRIVEN high - with the MCU in reset, in the ROM loader, hung or in ship mode exactly as with
+  firmware running. JEITA zones (no charge below 0 C and above 60 C, half current below 10 C,
+  4.06 V above 45 C), termination at 10 % of 19.8 mA of OUTPUT current, recharge 100 mV below
+  the regulation voltage, a 10 h safety timer, CHG as an open-drain status, TS low = disabled,
+  TS open (NTC1 broken off) = no window, no timer, no termination. **Every one of these is
+  PROVISIONAL** (`GL_PROV_BQ25101_*`: the specification's text, web-search extracts quoted in
+  the netlist notes, or memory of the family); the model proves nothing about the chip;
+* an optional **cell** (43 mAh, an open-circuit curve and 1.5 ohm, both guesses), so that a
+  charge tapers and the charger can, or cannot, see its termination current;
+* the board's resistors from the generated pin map (`GL_PINS_RESET_TABLE`), an MCU reset
+  (`gl_sim_mcu_reset`: every pin back to analog), the **ROM loader** (`gl_sim_mcu_enter_rom`)
+  and **Shutdown = ship mode** (every pin released, nothing runs, only VBUS on its wake-up
+  pin restarts the MCU), and the core clock as a recorded state.
 
 It **checks**, and counts as violations (all tests require zero):
 
@@ -537,21 +582,28 @@ It **checks**, and counts as violations (all tests require zero):
   not refreshed for 32 s; a sleep that nothing could ever end;
 * power rules: USB started without VBUS when the MCU goes to sleep; EXTCOMIN outside 1-60 Hz
   (547..606 LSE ticks accepted);
-* charger rules (rev C2; the phase-1 rule "charger enabled at Stop entry" is gone, because the
-  charger is now ON by default and must stay able to start by itself): Stop mode with
-  `CHG_INHIBIT` held low and no VBUS (a sleeping marker would then refuse the next cradle);
-  Stop mode in the cradle with no wake-up source due within 10 s (nobody would be watching the
-  cell); the charger running for more than 10 s outside 0..45 C while the firmware runs;
-  `CHG_INHIBIT` driven push-pull; an internal pull enabled against a board pull;
+* charger rules (rev E): Stop mode, or ship mode, with `CHG_INHIBIT` driven high and no VBUS
+  (a stop left behind by a sleeping MCU); Stop mode in the cradle with no wake-up source due
+  within 10 s (nobody would be watching the cell); the charger running for more than 10 s
+  outside the FIRMWARE's 0..45 C while the firmware runs; `CHG_INHIBIT` in a mode that stops
+  nothing or half opens the MOSFET (open drain, an internal pull); `CHG_STAT` as anything but
+  an input without a pull (it is a USB Type-C CC pad); USB started or left on without its
+  supply; a reboot to the ROM loader with an IMU interrupt still routed (the two lines are the
+  loader's SPI inputs); ship mode entered with the display, the camera rail, USB, the ADC,
+  the op-amp, a chip select or `NTC_BIAS` still on; a grain conversion with `LCD_DISP` low or
+  high for less than 35 ms (its bias divider hangs on that line); an internal pull enabled
+  against a board pull;
 * NTC rules: a conversion of the NTC channel less than 300 us after the bias was driven;
   `NTC_BIAS` still driven at Stop entry;
 * clock rules: Stop mode with the core clock fast; and it counts vision and solver trace points
   that ran at the slow clock (`heavy_while_slow`, asserted to be 0 by the end-to-end tests).
 
 It also MEASURES what it cannot forbid: the time both cameras' pads are enabled during power-up
-(`cam_powerup_overlap_us`), how long the charger ran in all, outside the temperature window
-(total and longest stretch) and during reset, how long `CHG_INHIBIT` was held and `NTC_BIAS`
-driven, the number of clock switches and the time at the fast clock, the computation charged per stage
+(`cam_powerup_overlap_us`), how long the charger ran in all, outside the firmware's window
+(total and longest stretch), with no firmware (reset, ROM loader, ship mode), outside its OWN
+window (0 unless NTC1 is open), in its WARM and COOL zones, how many charges it terminated,
+what the board drew from the charger's node while docked, the time in ship mode, how long
+`CHG_INHIBIT` was held and `NTC_BIAS` driven, the number of clock switches and the time at the fast clock, the computation charged per stage
 and the charge drawn; and it can charge a FIXED time at a trace point instead of the model's
 (`gl_sim_set_compute_us()`), drop interrupt latches (also the one of a VBUS edge), fail SPI
 transfers, glitch the IMU's supply and let the switch back to the slow clock fail
@@ -567,9 +619,9 @@ analog nor driven low while the rail is off, and bus accesses with the rail off.
 
 | File | Content |
 |---|---|
-| `gl_pins.h` | **Generated** by `tools/gen_pins.py`: logical pin -> port, pin, LQFP-64 pad, function, AF number, source. 19 rows are SPEC (DESIGN_SPEC section 4: the eleven DCMI pins, MCO, SPI1 MISO, USB D-/D+, LPTIM1_CH1, the three OPAMP1 pins); the generator parses the spec text and refuses to generate if a SPEC row disagrees. **28 rows are PROPOSED** by this firmware because no netlist exists: SPI1 SCK / MOSI (PA5 / PA7), SPI2 (PB13 / PB14 / PB15), chip selects, IMU INT1 on PC13 (WKUP2) and INT2 on PC5, the camera rail enable, PWDN and SCCB lines, the five charlieplex pins, VBAT sense on PA2, VBUS and charger STAT, and the three rev C2 signals `CHG_INHIBIT` (PH1), `NTC_BIAS` (PH3-BOOT0) and `NTC_SENSE` (PC4, ADC1_IN13). Pads outside the verified list come from the LQFP-64 pinout as remembered; AF5 for the SPI pins, ADC1_IN7 for PA2 and ADC1_IN13 for PC4 are from memory. The generator carries the pins the ROM bootloader drives or samples (22 pins, **from memory of AN2606**, 6 of them driven) and refuses a PROPOSED camera-facing, charger or NTC pin on any of them; it reads the pins rev C2 forbids for PWDN (PA9, PA2, PC10) from the spec and refuses a PWDN row on them (PWDN is on PH0 and PC12); it reads the EXTCOMIN divider (547) from the spec and emits `GL_PINS_EXTCOMIN_LSE_TICKS`; it emits the levels the board's pulls give the chip selects, DISP and the rail enable during reset (`GL_PINS_RESET_TABLE`), which the simulator and `tests/test_board.c` use. **Pin budget:** the package has 46 usable I/O pads and rev C2 needs 47 signals, so one signal had to go on PH3-BOOT0: the generator checks the count, and `NTC_BIAS` was chosen because both its loads pull the pin low at reset (see "Board changes of rev C2"). The fourth charlieplex pin moved from PC4 to PC10 to free an ADC input for the NTC. Two SPEC rows remain on bootloader pins (PB9 = D7, PA6 = PIXCLK): a release gate for the netlist, see open issue 4. |
-| `gl_hal_stm32u5.c` | Clocks (MSIS 48 MHz trimmed against LSE; **rev C2: `gl_hal_clock_set()` switches SYSCLK to PLL1 at 160 MHz and back** - PLL1 from MSIS / 3 x 20 / 2; up: voltage range 1 with the EPOD booster, PLL locked, then SYSCLK with flash latency 4; down: SYSCLK back to MSIS, PLL off, then the lower voltage range; a PLL that does not lock leaves the slow clock and is not an error; SPI1, SPI2 and the ADC take their kernel clock from MSIK so that their timing does not move; `gl_hal_delay_us()` scales with the clock; Stop mode is refused (idle sleep instead) while the clock is fast; XVCLK = MSI / 4 on MCO), tick on LPTIM3 from LSE (runs through Stop 2), RTC seconds and RTC wake-up timer, GPIO from the pin table, EXTI sources, Stop 2 / sleep that returns only for an enabled source and cannot lose a wake-up, SPI1 / SPI2, **bit-banged SCCB** (two clock lines for two sensors at one address: no I2C peripheral can do that), DCMI snapshot with crop + byte select through GPDMA, ADC1 14-bit, OPAMP1 standalone, LPTIM1 PWM for EXTCOMIN, independent watchdog (32 s), unique id, reboot, jump to the ROM DFU bootloader through a backup-register flag (taken only if VBUS is present, so a marker in a pocket cannot be parked in the ROM). After the review: the interrupt latch is updated with interrupts masked (a lost IMU data-ready used to be possible), `gl_hal_extcomin_stop()` and the op-amp stop are safe before their start, the DCMI frame-end time is latched in the interrupt, the die temperature sensor is read, ICACHE is enabled. Rev C2: the NTC channel (ADC1_IN13), `CHG_INHIBIT` and `NTC_BIAS` left analog by `gl_hal_init()`, the chip selects taken over at the level of their pulls (output latch written before the mode). **Phase-2 review, by inspection** (it compiles; a test checks the order in the source text; none of it has run): the independent watchdog is the FIRST thing `gl_hal_init()` starts, the function has ONE return, and a failure of a later step is remembered and returned at the end with the watchdog running (it used to return before the watchdog was started, and the application's error loop then ran for ever with the charger on); a crystal that does not start is survived on LSI (tick, RTC and EXTCOMIN about 2.4 % off and untrimmed MSIS: reported as `GL_ERR_TIMEOUT`); the way back from the fast clock returns a status (`GL_ERR_IO`, still fast, if SYSCLK will not switch); `gl_hal_delay_ms()` / `_us()` are bounded loops; the HAL tick is resumed BEFORE the clocks are re-initialised after Stop 2 (the HAL's time-outs need it); the comment about DFU and the charger says what the code does. The PLL / booster / latency sequence in particular is written from memory of the reference manual. |
-| `gl_hal_stm32u5_usb.c` | CDC-ACM on ST's USB device library: HSI48 + clock recovery, VDDUSB supply-valid only after VBUS was seen, byte rings, flow control by NAK. |
+| `gl_pins.h` | **Generated** by `tools/gen_pins.py` from `../electrical/gl1_main/pinmap.json`, its single input (`make pins`; "Pins of the rev E board" below has the table and the rules). The file holds no pin of its own. One X-macro row per signal of `gl_pin_t`: port, pin, LQFP-64 pad, function kind, AF number, internal pull, board circuit, EXTI line, state with the camera rail off, state asleep, source; then the ROM-loader pins, the USB Type-C CC pads, the interrupt and wake-up lines, the ADC channels, the reset levels, the lines that float in reset, the grain LED wiring, and the 17 firmware notes of the pin map with the place in the firmware that acts on each. |
+| `gl_hal_stm32u5.c` | Clocks (MSIS 48 MHz trimmed against LSE; **rev C2: `gl_hal_clock_set()` switches SYSCLK to PLL1 at 160 MHz and back** - PLL1 from MSIS / 3 x 20 / 2; up: voltage range 1 with the EPOD booster, PLL locked, then SYSCLK with flash latency 4; down: SYSCLK back to MSIS, PLL off, then the lower voltage range; a PLL that does not lock leaves the slow clock and is not an error; SPI1, SPI2 and the ADC take their kernel clock from MSIK so that their timing does not move; `gl_hal_delay_us()` scales with the clock; Stop mode is refused (idle sleep instead) while the clock is fast; XVCLK = MSI / 4 on MCO), tick on LPTIM3 from LSE (runs through Stop 2), RTC seconds and RTC wake-up timer, GPIO from the pin table, EXTI sources, Stop 2 / sleep that returns only for an enabled source and cannot lose a wake-up, SPI1 / SPI2, **bit-banged SCCB** (two clock lines for two sensors at one address: no I2C peripheral can do that), DCMI snapshot with crop + byte select through GPDMA, ADC1 14-bit, OPAMP1 standalone, LPTIM1 PWM for EXTCOMIN, independent watchdog (32 s), unique id, reboot, jump to the ROM DFU bootloader through a backup-register flag (taken only if VBUS is present, so a marker in a pocket cannot be parked in the ROM). After the review: the interrupt latch is updated with interrupts masked (a lost IMU data-ready used to be possible), `gl_hal_extcomin_stop()` and the op-amp stop are safe before their start, the DCMI frame-end time is latched in the interrupt, the die temperature sensor is read, ICACHE is enabled. Rev C2: the NTC channel (ADC1_IN13), `CHG_INHIBIT` and `NTC_BIAS` left analog by `gl_hal_init()`, the chip selects taken over at the level of their pulls (output latch written before the mode). **Phase-2 review, by inspection** (it compiles; a test checks the order in the source text; none of it has run): the independent watchdog is the FIRST thing `gl_hal_init()` starts, the function has ONE return, and a failure of a later step is remembered and returned at the end with the watchdog running (it used to return before the watchdog was started, and the application's error loop then ran for ever with the charger on); a crystal that does not start is survived on LSI (tick, RTC and EXTCOMIN about 2.4 % off and untrimmed MSIS: reported as `GL_ERR_TIMEOUT`); the way back from the fast clock returns a status (`GL_ERR_IO`, still fast, if SYSCLK will not switch); `gl_hal_delay_ms()` / `_us()` are bounded loops; the HAL tick is resumed BEFORE the clocks are re-initialised after Stop 2 (the HAL's time-outs need it); the comment about DFU and the charger says what the code does. The PLL / booster / latency sequence in particular is written from memory of the reference manual. **Phase 3, rev E, by inspection** (it compiles warning-free; `tests/test_board.c` checks the order in the source text; NONE of it has run): `UCPD_DBDIS` is the first statement of `gl_hal_init()` (PA15 and PB15 are USB Type-C CC pads of the MCU); the pins in the order floating lines LOW / lines a resistor holds taken over at their level / everything else analog / inputs without an internal pull (`CHG_STAT` had a pull-up); SCK and MOSI of both buses stay GPIO LOW until `gl_hal_spi_configure()` has enabled the peripheral that holds them; the MISO pull-downs come from the pin map; the four EXTI vectors, NVIC lines and pin masks are BUILT from the generated `GL_PINS_EXTI_*` (7, 5, 13, 15), with compile-time checks that they agree with the table and are distinct; `gl_hal_usb_supply_ok()` = VBUS_SENSE AND the VDDUSB monitor, whose interrupt and the VBUS_SENSE falling edge both clear the supply-valid bit in the handler; `gl_hal_ship_mode_enter()` = Shutdown with the wake-up pin of VBUS_SENSE, a marker in a backup register, Shutdown pull-downs on the lines without a board pull, LSE and RTC off, and `gl_hal_init()` going straight back when a reset finds the marker without VBUS; Stop 1 instead of Stop 2 while the USB device is in standby; LSE drive medium-low. |
+| `gl_hal_stm32u5_usb.c` | CDC-ACM on ST's USB device library: HSI48 + clock recovery, byte rings, flow control by NAK. Rev E, **never compiled**: the supply-valid bit only while `gl_hal_usb_supply_ok()`; the core's VBUS sensing off and the session declared valid by the override bits (its VBUS pad carries a grain LED line); `gl_hal_usb_bus()` (none / suspended / active) and `gl_hal_usb_standby()` for the cradle sleep, which need two calls from the project's `usbd_conf.c` (the file's header says which). |
 
 **What was done (builder 3).** `gl_hal_stm32u5.c` is compiled - `arm-none-eabi-gcc -c`, nothing
 linked, nothing run - against the header files of three public repositories, fetched from
@@ -665,14 +717,25 @@ package v1.4.1, CMSIS 5.9.0):
   3.0 V, with this file's formula identical to ST's macro. One inconsistency **inside ST's
   header** was seen and not resolved: the comment of `TEMPSENSOR_CAL2_ADDR` says 110 C, the
   constant `TEMPSENSOR_CAL2_TEMP` is 130 (the firmware uses the constant).
-* The EXTI vectors and the ADC channels are now tied to the generated pin table at compile
-  time: moving one of the four interrupt pins in `tools/gen_pins.py` stops the compile
-  (checked with a scratch copy: "size of array 'glh_imu_int1_is_exti13_' is negative").
-* The object needs 71 HAL functions (listed by `make cross-hal`; `HAL_GetTick` is new, for
-  the bounded delay) and `SystemCoreClockUpdate` of the system file, and defines the handlers
-  `DCMI_PSSI_IRQHandler`, `EXTI0/5/9/13_IRQHandler`, `GPDMA1_Channel0_IRQHandler`,
-  `LPTIM3_IRQHandler`, `RTC_IRQHandler`, `SysTick_Handler` - names taken from memory that a
-  link against the start-up file's vector table would confirm or refute. **Not confirmed.**
+* The EXTI vectors and the ADC channels follow the generated pin table (phase 3): a moved
+  interrupt pin is followed by `make pins` alone - the handler names, NVIC lines and pin
+  masks are built from `GL_PINS_EXTI_*`. One identifier still names a pad, and the compiler
+  guards it: the HAL's name for the ship-mode wake-up pin (`PWR_WAKEUP_PIN2_HIGH_1`, whose
+  comment in ST's header reads "PC13 : Wakeup pin 2 (high polarity)").
+* Phase 3 (run in this phase with the phase-2 header set): the object is 7634 bytes of text,
+  needs 84 HAL functions (listed by `make cross-hal`) and `SystemCoreClockUpdate` of the
+  system file plus `glh_usb_in_standby` of the uncompiled USB file, and defines the handlers
+  `DCMI_PSSI_IRQHandler`, `EXTI5/7/13/15_IRQHandler`, `GPDMA1_Channel0_IRQHandler`,
+  `LPTIM3_IRQHandler`, `PVD_PVM_IRQHandler`, `RTC_IRQHandler`, `SysTick_Handler` - names
+  that a link against the start-up file's vector table would confirm or refute. **Not
+  confirmed.**
+* **What phase 3 could not exercise** (everything it added to this file): the effect of
+  `UCPD_DBDIS`; Shutdown, its wake-up pin, what survives it, whether the watchdog runs in
+  it, the Shutdown pull-downs; the VDDUSB monitor (its flag, its start-up time, its
+  interrupt, whether it wakes the core from Stop); Stop 1 and the USB resume; the LSE drive
+  setting; that an SPI pin switched to its alternate function after `HAL_SPI_Init` does not
+  glitch. `gl_hal_stm32u5_usb.c` (bus state, standby, session override) is not even
+  compiled.
 
 **`gl_hal_stm32u5_usb.c` was NOT compiled**: it includes `usbd_core.h` and `usbd_cdc.h` of ST's
 USB device library, which is in none of the three repositories. It is as unverified as before.
@@ -916,25 +979,36 @@ downloaded):
 * **Power.** Battery measured at wake-up and every 30 s (not during a read); below the LOW
   threshold the battery symbol shows it, below CRITICAL the warning screen is shown and the
   device sleeps (no camera read from a cell that the camera rail could brown out). **Charge
-  supervision** (rev C2; rules in `drivers/power.h`, state table under "Charger and cell
-  temperature"): the charger starts by itself whenever VBUS appears; the firmware measures the
-  cell NTC and both die sensors at once on the VBUS edge (also when that edge is what woke it,
-  and at boot in the cradle), then every 5 s while VBUS is present, awake or asleep (a timed
-  wake-up; one measurement is 1.1 ms of simulated bus and conversion time, `NTC_BIAS` driven
-  for 0.68 ms of it), and pulls `CHG_INHIBIT` low when the gate says stop. **The LEVEL of
-  VBUS decides, not its edge** (review): every loop pass compares the pin with the level the
-  firmware last acted on (`vbus_acted`), and so does the last step before every sleep, which
-  is abandoned if they differ. An edge whose interrupt latch is lost is therefore acted on at
-  the next wake-up of any kind, at the latest the 16 s housekeeping wake-up: asleep and put
-  into a cradle at 50 C with the edge lost, the charger ran unsupervised for 15.5 s at worst
-  (for the whole 600 s of the test before the fix); lifted out with the falling edge lost,
-  the marker is asleep a second later (it used to stay awake with USB started, 1.58 mAh per
-  hour in the supply model against 0.021 asleep). The supervision runs whatever the UI state
-  (it used to be inside the "awake" branch), and a cell temperature older than 12 s counts as
-  unknown and stops the charge, also when it is the supervision itself that stalled. `CHG_INHIBIT` is released when VBUS goes and
-  before every sleep without VBUS. The cradle screen says `TOO COLD`, `TOO HOT` or `TEMP
-  SENSOR` when charging is stopped. The jump to the ROM bootloader is refused unless VBUS is
-  present and the gate is satisfied at that moment. **IMU supervision:** a bus error or a stall (no sample for 100 ms) starts a
+  supervision** (rev E; rules in `drivers/power.h`, state table under "Charger and cell
+  temperature (rev E)"): the BQ25101 starts by itself whenever VBUS appears and its own
+  thermistor allows it; the firmware measures NTC2 and both die sensors at once on the VBUS
+  edge (also when that edge is what woke it, and at boot in the cradle), then every 5 s while
+  VBUS is present, awake or asleep in the cradle (a timed wake-up; one measurement is 1.1 ms
+  of simulated bus and conversion time, `NTC_BIAS` driven for 0.68 ms of it), and drives
+  `CHG_INHIBIT` HIGH when its gate says stop. It then looks at what the charger does: a
+  charge that ended by itself (`DONE`), and a charger that does not do what the firmware
+  expects for 30 s (`NOT_CHARGING`: input too low, its timer, NTC1 shorted, the part dead;
+  `STOP_FAILED`: charging although the firmware holds the stop), are shown on the cradle
+  screens and logged. **The LEVEL of VBUS decides, not its edge** (phase-2 review): every loop
+  pass compares the pin with the level the firmware last acted on (`vbus_acted`), and so does
+  the last step before every sleep, which is abandoned if they differ; phase 3 adds a last
+  check there that releases a stop when VBUS has gone meanwhile (the bounce stress found one
+  sleep entered with the pin high and VBUS gone). An edge whose interrupt latch is lost is
+  acted on at the next wake-up of any kind, at the latest the 16 s housekeeping wake-up:
+  asleep and put into a cradle at 50 C with the edge lost, the charger ran for 15.5 s at
+  worst before the firmware stopped it (in the model it runs in its WARM zone there); lifted
+  out with the falling edge lost, the marker is asleep a second later. A cell temperature
+  older than 12 s counts as unknown and stops the charge, also when it is the supervision
+  itself that stalled (the stop pulls the charger's status line, that edge starts a fresh
+  measurement, and the charge goes on from it). `CHG_INHIBIT` is released when VBUS goes,
+  before every sleep without VBUS and before ship mode. The cradle screens say `TOO COLD`,
+  `TOO HOT`, `TEMP SENSOR`, `TIME LIMIT`, `CHARGE OFF` (by command), `NOT CHARGING` or
+  `CHARGER WAITS` (the charger's own window holds it) when no charge runs, and `FULL` when
+  it has ended. The jump to the ROM bootloader is refused unless VBUS is present and the gate
+  is satisfied at that moment; before the jump the IMU is powered down (its two interrupt
+  lines are the loader's SPI inputs on the rev E board). **The cradle (E32), ship mode and
+  the read's temperature gate (E13)** are described with their figures under "Cradle, ship
+  mode and the hot cell". **IMU supervision:** a bus error or a stall (no sample for 100 ms) starts a
   recovery (re-probe, re-configure) with a back-off of 1..64 s; a lost data-ready latch is
   bridged by polling after 10 ms; after 8 failed recoveries in a row (and no USB session) the
   watchdog is deliberately left to expire. **Storage mode:** below `GL_PROV_BATT_STORAGE_MV` (3250 mV) the IMU is switched
@@ -1000,23 +1074,26 @@ are all PROVISIONAL:
 
 **Battery life under the supply model** (ESTIMATE: every current is provisional - 86 mA for
 the two cameras from an unverified 120 mW each, 9.5 mA for the MCU at 160 MHz, 9 uA in Stop 2,
-5 uA for the IMU's wake-on-motion mode, 6.5 uA for regulator, battery divider and protection
-circuit; the cell's 43 mAh is the listed figure, unverified; self-discharge, the usable part of
-the capacity above the cut-off voltage and the cell's low-temperature behaviour are not
-modelled):
+5 uA for the IMU's wake-on-motion mode, 9.6 uA for the always-on parts of the rev E board;
+the cell's 43 mAh is the listed figure, unverified; self-discharge, the usable part of the
+capacity above the cut-off voltage and the cell's low-temperature behaviour are not
+modelled). Run again in phase 3 (`tests/test_e2e.c`, `test_quick_read_time_and_charge_with_computation`):
 
 | | For nothing (before) | Low | Nominal | High | PLL not locked |
 |---|---|---|---|---|---|
-| Charge per read cycle | 0.049 mAh | 0.065 mAh | 0.072 mAh | 0.081 mAh | 0.104 mAh |
-| Read cycles per 43 mAh | 885 | 665 | 600 | 533 | 414 |
-| Read cycles per 43 mAh, in % of "for nothing" | 100 | 75 | 68 | 60 | 47 |
+| Result after the marker came to rest | 3.45 s | 4.13 s | 4.43 s | 4.82 s | 6.00 s |
+| Camera rail on | 1.56 s | 2.16 s | 2.42 s | 2.76 s | 3.82 s |
+| Charge per read cycle (the test's mAs / 3600) | 0.049 mAh | 0.065 mAh | 0.072 mAh | 0.081 mAh | 0.105 mAh |
+| Read cycles per 43 mAh (the test's own line) | - | 659 | 595 | 528 | - |
 
-Asleep, the model draws 20.6 uA (Stop 2 with RTC 9, IMU 5, always-on parts 6.5, flash 0.1):
-0.49 mAh per day, 87 days from a full cell with no read at all; a round of 40 read cycles is
-2.9 mAh at the nominal factor, the equivalent of 6 days asleep. A read with several lines in
-the band keeps the rail on longer (about 3.4 s with a person behind the stick, "Run time"):
-by the same arithmetic about 0.09 mAh per cycle. The 3 m scene below, which used to be such a
-read (2.96 s), is not one any more (2.43 s).
+The mean current of a read, wake-up to result, is 226.5 mAs over about 5 s; with the cameras
+on it is about 96 mA (86 for the cameras, 9.5 for the MCU). Asleep, the model now draws
+**23.7 uA at the cell** (20.6 before: the rev E board has 3.1 uA more of always-on parts,
+"Sleep and the supply model (rev E)"): 0.57 mAh per day, 76 days from a full cell with no
+read at all; a round of 40 read cycles is 2.9 mAh at the nominal factor, the equivalent of 5
+days asleep. A read with several lines in the band keeps the rail on longer (about 3.4 s
+with a person behind the stick, "Run time"): by the same arithmetic about 0.09 mAh per
+cycle.
 
 What the L R R L timing correction is worth (stick drifting steadily at 6 px/s = 0.2 px per
 frame, 8 groups):
@@ -1099,10 +1176,12 @@ Other end-to-end scenarios, all with zero simulator violations:
   (3.490, -2.519) mrad against (3.500, -2.500) true, present after a power cycle; a 120 degree
   turn is refused; being put into the cradle abandons it; it cannot be started in the cradle.
 * **Cradle:** protocol over the simulated CDC port (ping, info, status, settings, calibration,
-  log dump, streams), charging at 22 C, stopped at 47 C (the charger ran for 4.30 s of the 5 s
-  supervision period before the firmware stopped it), released again at 30 C, never Stop mode
-  on USB, reboot to ROM DFU requested (after `UNLOCK`) and refused while the cell is too hot,
-  asleep after removal with `CHG_INHIBIT` released.
+  log dump, streams; GET_INFO reports hardware revision 5 = "E"), charging at 22 C, stopped
+  by the firmware at 47 C (`CHG_INHIBIT` high; the charger ran for 4.30 s of the 5 s
+  supervision period first), released again at 30 C, never Stop mode while the host talks
+  (the test's host sends a PING every 10 s; a silent one would send the marker to sleep
+  after 30 s), reboot to ROM DFU requested (after `UNLOCK`) and refused while the cell is too
+  hot, asleep after removal with `CHG_INHIBIT` released (analog).
 * **Missing IMU / missing camera:** shown as an error, not fatal; rail off.
 * **Battery:** at 3.45 V (low) the read runs; at 3.30 V (critical) the warning is shown and the
   device sleeps without ever powering the cameras; in the cradle it charges.
@@ -1110,7 +1189,7 @@ Other end-to-end scenarios, all with zero simulator violations:
 
 Fault scenarios (`tests/test_e2e_faults.c`, 18 tests; the IMU, Precision, USB, calibration and
 storage ones each reproduce a review finding and failed before its fix; the charger ones were
-rewritten for rev C2):
+rewritten for rev C2 and again, in phase 3, for the model of the rev E charger):
 
 * **Charge gate.** One SPI error earlier, then 5 minutes in the cradle at a true 60 C: the
   charger ran for 1.1 ms before the firmware stopped it, and stayed stopped. IMU silent: the
@@ -1236,66 +1315,97 @@ and several Survey drops (their rows have no question mark after `PLAYS`) and at
 from 4.5 m on (`base_hidden` true). An earlier version of this paragraph said that only
 `tests/test_solver.c` reached the visible-base branch; the dumped records show otherwise.
 
-### Charger and cell temperature (rev C2; `tests/test_drv_power.c`, `tests/test_e2e_faults.c`)
+### Charger and cell temperature (rev E; `tests/test_drv_power.c`, `tests/test_e2e_faults.c`, `tests/test_e2e_power.c`)
 
-**Which hardware this is.** The hardware of the builders' brief ("rev C2"): the MCP73831
-charges whenever VBUS is present; the MCU can only STOP it, by pulling `CHG_INHIBIT` low (open
-drain). **DESIGN_SPEC as it stands now (amendment E1) describes another charger**: a BQ25101
-with its own thermistor input, and `CHG_INHIBIT` as a push-pull output that is driven HIGH to
-stop. This section, the driver and the simulator's charger model are the rev C2 circuit; on an
-E1 board this firmware's "stop" would stop nothing, and the cradle screen's `TOO COLD` / `TOO
-HOT` / `TEMP SENSOR` would not describe what the charger does. The difference is pinned as NOT
-MET (`tests/test_pins.c`, `test_charger_of_the_specification_is_not_the_firmwares`:
-`tools/gen_pins.py` reads the charger sentence of the specification into
-`GL_PINS_SPEC_CHG_INHIBIT_ACTIVE_HIGH` = 1 and `GL_PINS_SPEC_CHARGER_HAS_NTC_INPUT` = 1;
-`drivers/power.h` says 0 and 0). Porting is a driver, a simulator model and this table; it was
-not done because the brief fixes rev C2 (open issue 2).
+**Which hardware this is.** The rev E board (DESIGN_SPEC E1, E2; `../electrical/gl1_main`):
+a TI BQ25101 that charges on its own whenever VBUS is present, enforces the cell's
+temperature window ITSELF through its own thermistor (NTC1 on its TS pin) and terminates at
+10 % of 19.8 mA. **The firmware can only STOP it**: `CHG_INHIBIT` is a push-pull output on
+the gate of an N-MOSFET that pulls TS to ground; HIGH = stop; analog (the reset state), low
+or unpowered = the charger is free. `CHG_STAT` is the charger's open-drain status (low while
+a charge runs) with a 100 kohm pull-up. The MCU has a thermistor of its own (NTC2) on
+`NTC_BIAS` / `NTC_SENSE`.
 
-The firmware's rules: pull low only as the outcome of a temperature evaluation made with VBUS
-present; release whenever it stops supervising.
+**No data sheet of the BQ25101 was read.** What the driver and the simulator's model assume
+about it is in ONE place, `core/gl_provisional.h` (`GL_PROV_BQ25101_*`), each constant with
+its source: the specification's text, the web-search extracts quoted in the netlist notes,
+or memory of the family. **Every row below in which no firmware runs is a statement about
+that MODEL.** It shows what this project believes the hardware does; it proves nothing about
+the chip.
 
-| State | `CHG_INHIBIT` | `NTC_BIAS` | Charger with VBUS | Who watches the cell | Measured on the simulator |
-|---|---|---|---|---|---|
-| MCU unpowered (cell at its cut-off) | high-Z (no supply) | high-Z | **on** | nobody (the case the default exists for) | by construction of the model; the FT-pin requirement is **not verified** (below) |
-| Reset held, or start-up before `gl_app_init()` has measured | analog (reset state; `gl_hal_init()` and `gl_power_init()` do not touch it) | analog | **on** | nobody, until the first measurement early in `gl_app_init()` | boot in the cradle at -5 C: the charger ran for 1.1 ms after `gl_hal_init()` before the firmware stopped it (`gl_app_init()` takes 88.2 ms in all; the simulator charges no time for computation or for the start-up code before `main()`) |
-| Awake, VBUS present, temperature permitted | released | driven high for 0.68 ms per measurement, analog otherwise | on | firmware: NTC + die sensors every 5 s | allowed 3.5..43.5 C rising, 1.5..41.5 C falling |
-| Awake, VBUS present, too cold / too hot / NTC fault / implausible / unknown | **low** | as above | **off** | firmware, every 5 s (releases when permitted again) | cradle at 47 C: stopped within the 5 s period (4.30 s); every NTC fault stops |
-| In the cradle between loop passes (idle sleep with USB, Stop 2 without) | as last evaluated (low or released) | analog | on or off accordingly | firmware: timed wake-up every 5 s | asleep, put into the cradle at 50 C: charger ran 1.13 ms before it was stopped; simulator rule: Stop in the cradle with no wake-up due within 10 s is a violation |
-| Asleep (Stop 2), no VBUS | **released** before the sleep | analog | nothing to charge; starts by itself at the next cradle, and the VBUS edge wakes the firmware | firmware from the VBUS edge on | simulator rule: Stop with the pin low and no VBUS is a violation (none in any scenario; a test of the rule itself makes it fire) |
-| The same, **the VBUS edge's interrupt latch lost** (review) | released | analog | **on** | **nobody until the next wake-up of any kind**, at the latest the 16 s housekeeping wake-up; then the firmware, which acts on the level | cradle at 50 C, edge lost 0.5 / 4.5 / 8.5 / 12.5 s after a housekeeping wake-up: charger ran 15.5 / 11.5 / 7.5 / 3.5 s before it was stopped (before the fix: all 600 s of the test) |
-| VBUS removed while awake | released in the same loop pass | analog | - | - | |
-| The same, the edge lost (review) | released in the next loop pass: the level is compared in every pass | analog | - | - | lifted out of the cradle with the edge lost: `SLEEP` one second later, USB stopped; the hour after: Stop mode 3600.0 s, 0.0206 mAh (before the fix: awake with USB started for good, 1.58 mAh in that hour; supply model) |
-| Supervision stalled (no measurement for more than 12 s while VBUS is present) | **low** | analog | **off** | the staleness limit: a reading older than 12 s is "unknown" | cradle at 22 C, measurements withheld: charge stopped when the last reading was 12.0 s old (before the fix: not stopped) |
-| Watchdog reset (also the deliberate one after a dead IMU) | analog again from the reset | analog | **on** until the firmware has measured again | firmware, from its first measurement after the restart | reset while inhibited at -5 C: charger on for 3.0 ms of reset + 1.1 ms of boot, then stopped |
-| Firmware hung (no reset yet) | whatever it was: low stays low, released stays released | analog, or stuck high if hung inside a measurement | on if it was released | **nobody, for up to one watchdog period** | hung at 50 C: charger ran unsupervised for 33 s (watchdog 32 s). **NOT MET** |
-| ROM bootloader (DFU) | analog (the ROM does not drive PH1; table from memory of AN2606) | analog | **on** | **nobody, for as long as the bootloader runs** | charging at 50 C for all of the 600 s the test lasts. **NOT MET** |
+Why the firmware stops a charge (`gl_chg_reason_t`), in the order in which a reason is named:
 
-What is done about the two NOT MET rows, and what is not:
+| Reason | When | Released |
+|---|---|---|
+| `TEMP_UNKNOWN`, `NTC_FAULT`, `IMPLAUSIBLE` | NTC2 not measured for 12 s; open, shorted or stuck; contradicted by every die sensor that is alive (more than 10 K), or no die sensor to check it against | when a fresh, plausible reading is inside the window |
+| `TOO_COLD`, `TOO_HOT` | NTC2 reads below 1.5 C or above 43.5 C (0..45 C narrowed by the 1.5 K guard band) | above 3.5 C / below 41.5 C (2 K of hysteresis) |
+| `FORCED` | `GL_CMD_SET_CHARGE` 1 (factory: assembly step 13 proves NTC1 and the MOSFET with it) | the command with 0, VBUS removed, a reset |
+| `TIME_LIMIT` | E32: 6 h of continuous charging (CHG low at every gate call) | VBUS removed; or the cell, having been at or above 4.00 V with the limit in force, has fallen below it. A cell that is still under 4.00 V after 6 h of charging gets no second 6 h: stopped until the marker is lifted out |
 
-* **ROM bootloader.** The firmware refuses the jump (`GL_ERR_STATE`) unless VBUS is present
-  and the gate is satisfied at that moment, so DFU starts from a permitted temperature. It
-  cannot stop a cell from warming past 45 C during a long session in the bootloader, and it
-  cannot prevent entry by other means (BOOT0 strap, empty flash). Only hardware can (a
-  charger with its own NTC input, or a comparator on the NTC).
-* **Hung firmware.** Bounded by the independent watchdog (32 s), after which the reset row
-  applies. Shortening the watchdog period costs more wake-ups from Stop mode (open issue 12).
-  The bound holds only if the watchdog runs: the backend now starts it before anything that
-  can fail (by inspection; "STM32U5 backend"), and the longest computation between two
-  refreshes, the putt solve, is refreshed before and bounded by its step budget ("Solver").
-  A hang BEFORE `gl_hal_init()` (start-up code, a clock that never comes) is covered only by
-  the hardware-watchdog option bit, which is a production setting and not set here (open
-  issue 12).
-* **Both rows are answered in hardware by amendment E1** (a charger with its own temperature
-  input), for a board this firmware does not drive yet.
+The firmware's window (0..45 C) is NARROWER than the charger's own (0..60 C, with 4.06 V
+above 45 C): with firmware running a charge stops at 43.5 C; without it the charger's window
+alone decides. Whether the cell may be charged at 4.06 V between 45 and 60 C is the cell data
+sheet's answer (release gate).
+
+**What the charger does, as far as the firmware can tell** (`gl_chg_status_t`, from CHG, VBUS,
+the firmware's own stop, the cell voltage and NTC2; the charger has one status line and
+everything beyond "a charge is running" is an inference):
+
+| Status | Inferred from | Firmware's reaction |
+|---|---|---|
+| `NO_INPUT` | no VBUS | stop released |
+| `CHARGING` | CHG low | supervise; count toward the 6 h limit |
+| `DONE` | CHG released, nothing holding the charger, cell at or above 4.04 V | symbol "FULL"; logged once |
+| `INHIBITED` | CHG released and the firmware holds the stop | the reason on the cradle screen |
+| `TEMP_HOLD` | CHG released, not stopped, NTC2 outside 0..60 C | "CHARGER WAITS" |
+| `NOT_CHARGING` | CHG released although nothing known holds the charger and the cell is not full (input too low for it, its safety timer, NTC1 shorted, the part dead; also the moment after docking) | a fault when it has lasted 30 s: "NOT CHARGING", logged |
+| `STOP_FAILED` | CHG LOW although the firmware holds the stop (the MOSFET or its gate) | a fault after 30 s, logged |
+
+One more inference, a flag (`ntc1_suspect`, GET_POWER bit 6, logged): a charge was running
+with NTC2, believed by a die sensor, more than 3 K outside the charger's OWN window. The
+charger's thermistor is then not doing its job - by the search extract quoted in the netlist
+notes an OPEN NTC1 puts the part into a mode with no temperature monitoring, no timer and no
+termination. The firmware's gate stops that charge while it runs; with no firmware nothing
+does (last row of the table).
+
+**State table.** Who holds `CHG_INHIBIT`, whether the charger runs, who watches the cell.
+"MODEL" = the simulator's BQ25101; figures are from this phase's runs.
+
+| State | `CHG_INHIBIT` | Charger with VBUS (MODEL) | Who enforces a temperature window | Measured on the simulator |
+|---|---|---|---|---|
+| MCU unpowered, held in reset, or start-up before the first measurement | analog; the 100 kohm on the gate keeps the stop off | follows its own thermistor: off below 0 C and above 60 C, half current below 10 C, 4.06 V above 45 C | the charger, 0..60 C | in reset in the cradle: no charge at -5 C, charging at 22 C, no charge again at -5 C. Alone over temperature: COLD at -20 and -0.5 C, COOL at 0.5 and 9.5 C, FAST at 10.5, 25 and 44.5 C, WARM at 45.5 and 59.5 C, HOT at 60.5 and 85 C |
+| Boot in the cradle | driven HIGH by the first gate evaluation if the firmware has a reason | as the firmware and its own window allow | both | boot at -5 C: `CHG_INHIBIT` high 88.3 ms after `gl_hal_init()`; the charger had not run (its own window) |
+| Awake or asleep in the cradle, temperature permitted | analog | on, until it terminates | the firmware (NTC2 + die sensors every 5 s, 0..45 C) and the charger | not stopped 3.5..43.5 C rising, 1.5..41.5 C falling |
+| The same, firmware has a reason | **HIGH** | **off** (TS at ground) | the firmware | cradle at 47 C, awake: stopped 4.30 s after the cell got there (5 s period); asleep in the cradle, to 50 C: 4.80 s; every NTC2 fault stops |
+| Asleep (Stop 2), no VBUS; ship mode | **analog** before the sleep | nothing to charge; starts by itself at the next cradle | the charger; the firmware from the VBUS edge on | simulator rule: Stop or ship mode with the pin high and no VBUS is a violation (none; a test of the rule makes it fire). Asleep, into a cradle at 50 C: the charger ran 1.22 ms in its WARM zone before the firmware stopped it |
+| The same, the VBUS edge's interrupt latch lost | analog | on by its own rules | the charger; the firmware from the next wake-up of any kind (16 s at the latest) | cradle at 50 C, edge lost 0.5 / 4.5 / 8.5 / 12.5 s after a housekeeping wake-up: 15.5 / 11.5 / 7.5 / 3.5 s in the WARM zone before the firmware stopped it |
+| VBUS removed | analog in the loop pass that sees it, and at the latest before the next sleep | - | - | the bounce stress: 300 scenarios, 0 violations (below) |
+| Supervision stalled | HIGH when the last reading is 12 s old | off | "unknown is stop" | stopped with the reading 12.0 s old; with the charger's status edge alive that stop itself starts a fresh measurement (3 in 40 s of a stalled supervision), and the charge never ran on a reading older than 12.00 s |
+| Watchdog reset | analog again from the reset | on by its own rules until the firmware has measured again | the charger, then both | reset while the firmware held the stop at -5 C: the charger stayed off (its own window). At 50 C: 3.0 ms of reset and 1.2 ms of boot in its WARM zone, then stopped by the firmware again |
+| **Firmware hung** (phase 2, old charger: "unsupervised for 33 s", NOT MET) | whatever it was | **MODEL: on by its own rules** | **the charger, 0..60 C. The firmware's 45 C limit: nobody, for up to one watchdog period** | hung at 50 C: the charger went on in its WARM zone (to 4060 mV) for 33 s, until the watchdog. **NOT MET for the firmware's 45 C limit.** Hung at 65 C: stopped by its own thermistor, charged for 0.0 ms of 33 s |
+| **ROM loader** (phase 2: "600 s at 50 C, nothing could stop it", NOT MET) | analog (PH1 is no ROM-loader pin: pin list PROVISIONAL) | **MODEL: on by its own rules** | **the charger, 0..60 C. The firmware's 45 C limit, its 6 h limit and a termination: nobody** | cell at 50 C: 600 s of 600 s in the WARM zone (**NOT MET for the 45 C limit**). At 65 C: 0.0 ms of 600 s. At -5 C: 0.0 ms of 600 s. Time charged outside the charger's 0..60 C in the whole test: 0 ms |
+| The charger's thermistor NTC1 OPEN, no firmware | analog | **MODEL: charges with NO window, no timer, no termination** (extract: "floating TS ... puts part in TTDM") | **nobody** | cell at 70 C, MCU in reset: charged for 60 of 60 s. **NOT MET in hardware alone.** With firmware running its gate on NTC2 stops it and sets `ntc1_suspect`. Board test must prove NTC1 (the SET_CHARGE command is for that) |
+
+**The end of a charge** (the reason for E32). The charger terminates when its OUTPUT current
+falls below 1.98 mA, and the board hangs on the same node as the cell. MODEL, cell from 90 %
+(the cell's curve and resistance are guesses: good for "does it end", not for a time):
+
+| Who is on the node | Load | Result |
+|---|---|---|
+| MCU held in reset | 17.7 uA (+28 uA of CHG's pull-up while charging) | terminates after 0.32 h at 99.7 % |
+| Asleep in the cradle (E32), wall charger | 98.6 uA | terminates 0.31 h after docking; the status edge wakes the marker, symbol "FULL" |
+| Awake in the cradle, a host that keeps talking - **and every docked marker before phase 3** | 3.35 mA | **never terminates**: after 3 h the cell is at 100.0 % and the charger still delivers 3.34 mA. The firmware's backstop stops it 6.000 h after docking; 2.62 h later the awake marker has run the cell down to 4.0 V (80 %) and the charge starts again |
+| ROM loader | 4.0 mA (a guess) | **never terminates**; after 10 h the charger's own safety timer ends it - IF it has one (from memory of the family, PROVISIONAL). NOT MET in hardware alone |
 
 **Random plugging and unplugging** (`test_vbus_bounce_stress`; no fault is injected): 300
 scenarios of VBUS edges singly and in bursts, temperature jumps between -8 and 55 C, MCU
 resets and reads in progress - 4857 edges, 105 resets, 55 completed reads. 0 simulator
 violations, 0 inconsistent end states (UI state, USB, `CHG_INHIBIT` and the VBUS level all
 agree), 0 left with the fast clock; the longest stretch of charging outside 0..45 C was
-5.00 s (the supervision period; the rule allows 10 s). On the tree as the review found it,
-211 of the 300 scenarios violated a rule (422 violations): the firmware could go to sleep on
-a VBUS level it had not acted on.
+4.96 s (the supervision period; the rule allows 10 s). During this phase the stress found
+one scenario in which the firmware entered Stop mode with `CHG_INHIBIT` high and VBUS just
+gone (VBUS fell during the millisecond the measurement before the gate takes); fixed in
+`sleep_()`, which now releases the stop as its last act.
 
 Cell temperature, as built and as tested:
 
@@ -1304,8 +1414,9 @@ Cell temperature, as built and as tested:
   in the test in double precision, -40..85 C in 0.5 C steps: worst error 0.011 K (at -39.5 C;
   one ADC count is 0.006 K at 25 C and 0.025 K at -40 C).
 * **Tolerances and the guard band.** NTC 1 %, B 1 %, series resistor 1 % in their worst
-  combination: 0.67 K at 0 C, 0.81 K at 45 C; with an ADC error of 0.2 % of full scale 0.90 K
-  and 1.09 K. The window is therefore narrowed by `GL_PROV_CHARGE_TEMP_GUARD_C` = 1.5 K on
+  combination: 0.67 K at 0 C, 0.81 K at 45 C, 1.05 K at 60 C; with an ADC error of 0.2 % of
+  full scale 0.90 K, 1.09 K and 1.43 K (computed by the test; the output resistance of the
+  bias pin adds 0.11 to 0.16 K by the netlist notes, not in the test). The window is therefore narrowed by `GL_PROV_CHARGE_TEMP_GUARD_C` = 1.5 K on
   both sides, with 2 K of hysteresis: charging stops below 1.5 C and above 43.5 C and
   resumes above 3.5 C and below 41.5 C. **Not covered by the guard band:** a temperature
   difference between the cell and the NTC beside it, and the difference between the
@@ -1325,30 +1436,260 @@ Cell temperature, as built and as tested:
   bias in 60 s in the cradle (measured), about 0.02 % duty. The simulator counts a conversion
   before the settling time and a driven bias at Stop entry as violations.
 
-### Board changes of rev C2 (`tests/test_board.c`, `tests/test_pins.c`)
+### Cradle, ship mode and the hot cell (`tests/test_e2e_power.c`, `tests/test_ui.c`)
 
-| Change | Firmware | How it is checked |
+**The cradle (DESIGN_SPEC E32).** Two UI states. `CRADLE_USB`: awake, display on with the USB
+screen, USB started. Its time limit is 30 s WITHOUT HOST ACTIVITY: the application restarts
+it whenever a host has sent something, is being sent a stream it asked for, or a log erase or
+six-face calibration it started is running. When it runs out - on a wall charger at once, 30 s
+after docking - the marker goes to `CRADLE_SLEEP`: MCU in Stop mode, IMU and flash powered
+down, the display ON with a STATIC picture (a battery with a bolt = charging, with a tick and
+"FULL", or a warning sign and the reason no charge runs; the memory LCD keeps the picture
+and its polarity signal EXTCOMIN keeps running from the low-power timer). It is drawn when
+the state is entered and again only when what it says changes.
+
+| Out of `CRADLE_SLEEP` by | What happens | Measured |
 |---|---|---|
-| `CHG_INHIBIT` polarity and safe states (rev C2: open drain, low = stop) | `drivers/power.c`, table above | simulator rules and the measured table above. **The specification's present circuit (amendment E1) is the opposite polarity with another charger: NOT MET, pinned** (`test_charger_of_the_specification_is_not_the_firmwares`) |
-| Cell NTC | `GL_ADC_CH_CELL_NTC`, `GL_PIN_NTC_BIAS`, `GL_PIN_NTC_SENSE`, `drivers/power.c` | above |
-| EXTCOMIN divider 547 | the generator reads the divider from the spec into `GL_PINS_EXTCOMIN_LSE_TICKS`; `GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS` must equal it (`test_pins.c`) | simulator: the LCD driver starts LPTIM1 with 547 ticks, 32768 / 547 = 59.905 Hz |
-| Core clock slow / 160 MHz around the read | `gl_hal_clock_set()`, `clock_()` in `app/gl_app.c` | simulator: calls recorded, paired, compute only while fast, never Stop while fast. **STM32: by inspection only** |
-| Chip-select states during reset | pulls on the board (LCD SCS and DISP low, flash and IMU chip selects high, rail enable low: `GL_PINS_RESET_TABLE`); `gl_hal_init()` takes each over at that level | simulator: 0 of the 22 trace records of reset + `gl_hal_init()` leave one of the five pins away from its pull level; an internal pull against a board pull is a violation |
-| PWDN off PA9 / PA2 / PC10 | `tools/gen_pins.py`: PWDN on PH0 and PC12; the forbidden pins are parsed from the spec | generator refuses; `test_pins.c` |
-| New signals | `NTC_BIAS` PH3-BOOT0 (pad 60), `NTC_SENSE` PC4 (pad 24, ADC1_IN13), `CHG_INHIBIT` PH1 (pad 6): PROPOSED rows | `test_pins.c`: 47 signals, 46 on the 46 I/O pads and one on BOOT0; none of the three on a ROM-bootloader pin |
+| the host resumes the bus (it had SUSPENDED it: the USB device stayed attached, in standby) | back to `CRADLE_USB`, USB running again, no new enumeration | 21 ms after the resume |
+| VBUS goes (lifted out) | the ordinary sleep: display off, IMU in wake-on-motion, `CHG_INHIBIT` released - or ship mode if armed | asleep 0.5 s later; reads when put down |
+| the charger's status changes | awake for one loop pass: measure, gate, draw the new picture, asleep again | charge ended -> "FULL" on the panel |
+| the 5 s supervision timer | NTC2, die sensor, cell voltage, the gate; nothing drawn unless something changed | 110 to 130 conversions in 600 s (asserted), no frame sent to the panel; the firmware's stop at 50 C came 4.80 s after the cell got there |
+| NOT by motion, taps, a low cell or a bouncing VBUS | | the cradle knocked about for 3 s: nothing |
 
-Three things about those pins need the schematic owner, and none is verifiable here:
+What USB does when the 30 s run out: under a host that has suspended the bus, standby (wake
+on resume); under a host that keeps the bus running but says nothing, and with no host at
+all, the device detaches (a device may not sleep under a running bus). **Pinned as NOT MET
+("the host can always reach the marker"): after that detach nothing the host does wakes the
+marker - a command sent then is not answered - and only taking the marker out and putting
+it back brings it back.** A host that wants a docked marker has to talk at least every 30 s
+(any command) or suspend the bus instead of going silent. Whether real hosts suspend an idle
+CDC device was not tested: there is no hardware.
 
-* **`CHG_INHIBIT` must be an FT pin** (no protection diode to VDD). With the MCU unpowered, a
-  diode would clamp the MOSFET gate to one diode drop and switch the charger off: the very
-  case the default-on circuit exists for. PH1 is an FT pin as remembered; check the pin
-  definition table of the datasheet.
-* **`NTC_BIAS` on PH3-BOOT0.** With all 46 other pads taken, one signal had to go there. The
-  bias was chosen because its loads pull the pin LOW at every reset (the divider to ground,
-  and the BOOT0 pull-down), so it cannot select the bootloader by accident, and because it is
-  driven for 0.7 ms at a time. If the board straps BOOT0 differently, or another signal can be
-  dropped, `tools/gen_pins.py` is the one place to change.
-* **ADC1_IN13 on PC4** is from memory of the datasheet.
+The marker's draw in the cradle (supply model; "the node the charger feeds" = the cell's
+node, the charger has no power path), against the charger's termination threshold of
+1.98 mA:
+
+| State | Draw | |
+|---|---|---|
+| Awake in `CRADLE_USB` (what a docked marker ALWAYS was before phase 3) | **3.35 mA** | above the threshold: the charge cannot end (table "The end of a charge" above) |
+| `CRADLE_SLEEP`, USB off (wall charger, silent host) | **98.6 uA** while charging | 5 % of the threshold; Stop 2 for 99.98 % of the time. Parts: MCU 9, IMU off 3, flash 0.1, display 6, DISP pull-down 28, grain bias divider on DISP 14, CHG pull-up 28 (while the charger holds it low), always-on parts 9.5, the 5 s measurement about 1 |
+| `CRADLE_SLEEP`, USB in standby (suspended host) | **179.4 uA** | Stop 1 instead of Stop 2 (70 uA, from memory, low confidence) and 20 uA for the USB core (a guess), because it is not known that the U585 wakes on USB from Stop 2 (`GL_PROV_USB_WAKE_FROM_STOP2` = 0) |
+
+**Ship mode (E13).** `GL_CMD_SHIP_MODE` with "SHIP" arms it (no UNLOCK needed: docking undoes
+it); "STAY" disarms; a reset disarms. Armed, the marker behaves as usual while docked - also
+asleep in the cradle. When it is lifted out it does not go to wake-on-motion (lifting IS
+motion): IMU and flash powered down, display off, USB off, ADC and op-amp off,
+`CHG_INHIBIT` and `NTC_BIAS` analog, and `GL_APP_SHIP_SETTLE_MS` = 1 s after VBUS went
+(spring-pin bounce must be over: the way back is a rising edge of VBUS) the last log record
+of this life is written and the MCU enters its lowest-power state.
+
+* **Which mode.** STM32U585 **Shutdown**, with the PWR wake-up pin of VBUS_SENSE (PC13 =
+  WKUP2, rising edge). The netlist chose PC13 for this.
+* **What is retained.** Nothing but the backup domain: one backup register carries the
+  "in ship mode" marker. No RAM, no peripheral register, no pin state: every pin is
+  high-impedance; the board's resistors hold the chip selects, DISP, the camera rail enable
+  and the gate of the charger's stop (charger ON), and the backend applies the MCU's
+  Shutdown pull-downs to the six lines that have no resistor and to the two MISO lines. The
+  low-speed oscillator and the RTC are stopped: the clock reads "not set" afterwards. No
+  watchdog runs.
+* **The way out is a reset** through the wake-up pin: `gl_hal_init()` runs, the boot record
+  in the log carries `GL_RESET_SHIP_WAKE`. A reset from any other cause with VBUS absent
+  goes straight back to Shutdown inside `gl_hal_init()`.
+* **Tested on the simulator:** not entered 0.3 s after the lift, entered 1.2 s after it; the pin and device
+  states above; a minute of handling and a level forced onto the IMU's interrupt line do not
+  wake it and no firmware runs (no watchdog refresh, no watchdog expiry); a reset without
+  VBUS goes back; VBUS wakes it, and the charger of the model has started by then without
+  any firmware; afterwards an ordinary sleep with wake-on-motion and a read; "STAY"; a lift
+  of 0.3 s does not enter; armed and left to sleep in the cradle for an hour it is entered
+  from there; a stop the firmware held (cell at 50 C) is released on the way in.
+* **Expected current, and the requirement.** Data-sheet figures FROM MEMORY, all
+  PROVISIONAL: Shutdown without RTC 0.11 to 0.21 uA (0.2 in the model); IMU powered down
+  3.0 uA; flash in deep power-down 0.1 uA; the board's always-on parts 9.6 uA at 3.9 V
+  (2.8 V regulator 1.6, battery divider 1.95, cell protection circuit 3.0, charger leakage
+  0.075, camera regulator disabled 0.2, the enable pin of the E26 USB regulator 2.8).
+  **Model: 12.93 uA at the cell. The requirement of DESIGN_SPEC section 6 is 5 uA and three
+  months from a 30 % charge: NOT MET, pinned** - 30 % of the cell (12.9 mAh) lasts 42 days
+  there. The firmware controls 3.3 uA of the 12.9; the rest is the board. What would have to
+  change is hardware (the 2 Mohm battery divider alone is 1.95 uA and the regulator 1.6; the
+  2.8 uA of the regulator's enable pin is this file's own assumption and NOT CONFIRMED - if
+  that part has no pull-down there, every sleep figure here is 2.8 uA lower) or the
+  requirement.
+
+**No camera read from a hot cell (E13).** `gl_power_read_allowed()`: a read is refused while
+NTC2 READS above `GL_PROV_READ_TEMP_MAX_C` = 60.0 C, and until it has fallen
+`GL_PROV_READ_TEMP_HYST_C` = 3.0 K below (our choice: about twice the reading's worst-case
+error of 1.43 K at 60 C, so that a cell at the limit does not flicker). The limit is applied
+to the reading, as the specification words it. If NTC2 has no valid reading the hotter of
+the die sensors that are alive stands in; with no temperature at all the read is allowed.
+The cell is measured when the marker wakes (a hot marker says so 58 ms after the wake-up,
+before the tilt read) and again where the cameras would start if the last reading is older
+than 5 s. The UI shows `TOO_HOT` (a thermometer, "TOO HOT / NO READ / LET IT COOL") for 4 s
+and sleeps; the event is logged with the temperature. A result that is already on the
+screen, the settings dial, the zeroing and the cradle are left alone.
+
+| Scenario (simulator) | Result |
+|---|---|
+| board at 61.5 C, marker put down | `TOO_HOT`, no camera powered, no frame; asleep 3.98 s later |
+| cooled to 58.5 C (inside the hysteresis) | still refused |
+| cooled to 56.5 C | the read runs |
+| 59.5 C coming from below; 60.5 C | the read runs; refused |
+| NTC2 broken off, board at 66 C; at 30 C | refused on the die sensors; the read runs |
+| woken at 22 C, carried for 9 s while the cell goes to 63 C | measured again at the camera start (one conversion, `NTC_BIAS` driven 0.68 ms): refused |
+| the same jump inside the 5 s the last reading is accepted for | NOT seen: the read ran on the 22 C reading (pinned; no cell heats by 40 K in 5 s) |
+
+### Sleep and the supply model (rev E) (`tests/test_e2e_power.c`, `hal/host/gl_sim.h`)
+
+**Every current is a data-sheet figure FROM MEMORY, a figure of `docs/research` (unverified
+there), a PROVISIONAL figure of the netlist notes, or a plain guess - each line of
+`hal/host/gl_sim.h` (`GL_SIM_I_*`) says which. None is a measurement: no board exists.**
+
+Asleep out of the cradle (Stop 2, IMU in wake-on-motion, flash in deep power-down, display
+off), cell at 3.8 V, 1 h of simulated time:
+
+| Part | uA | Source |
+|---|---|---|
+| MCU, Stop 2 with RAM, RTC, LSE, LPTIM | 9.0 | `docs/research`, reviewer's recollection |
+| IMU, accelerometer low-power, wake-on-motion | 5.0 | memory |
+| flash, deep power-down | 0.1 | memory |
+| 2.8 V regulator (MCP1700), quiescent | 1.6 | `docs/research` |
+| battery divider, 2 x 1 Mohm | 1.90 | computed at 3.8 V |
+| cell protection circuit | 3.0 | `docs/research/power.md`; NOT in the path of a bench supply on the cell-lead pads |
+| charger, leakage out of the cell with no input | 0.075 | netlist notes 4.12 (the title of a data-sheet copy seen in a search) |
+| camera regulator (LP5907), disabled | 0.2 | memory (1 uA at most) |
+| USB regulator of E26 (LP5907), enable pin held at 2.8 V: its internal 1 Mohm pull-down | 2.8 | memory of the part's data sheet, **NOT CONFIRMED**, not in the netlist notes |
+| NTC1 (charger's thermistor) | 0 | biased by the charger, from VBUS only |
+| NTC2 (MCU's thermistor) | 0 | `NTC_BIAS` analog; driven 0.68 ms every 11 minutes for the housekeeping's cell measurement (3.42 ms in the hour) |
+| 150 kohm wake pull-up on the op-amp output, underside DARK | 0 | netlist notes 4.10 |
+| housekeeping (a wake-up every 16 s) | 0.01 | model |
+| **Sum at the cell, dark** | **23.68** | measured on the simulator |
+| ... through the cell-lead pads (without the protection circuit), dark | **20.68** | **E14 limit 25 uA: MET by the model** |
+| 150 kohm wake pull-up, underside LIT (the photodiode conducts, op-amp off) | +5.2 | netlist notes 4.10: 4.5 to 5.2 |
+| **Sum at the cell, lit** | **28.88** | 25.88 at the pads: above 25 uA. E27 defines the limit for a dark underside; a marker asleep face-up on a sunny bench is not that case |
+
+Phase 2 stated 20.6 uA at the cell (9 + 5 + 0.1 + 6.5 for "regulator, divider and protection
+circuit"). The difference of 3.1 uA is the rev E board: charger leakage, the disabled camera
+regulator, and the enable pin of the new USB regulator (2.8 of it, NOT CONFIRMED).
+
+| State | At the cell (model) | Lasts |
+|---|---|---|
+| Read (wake-up to result, nominal factor) | 226.5 mAs = 0.063 mAh; about 96 mA while the camera rail is on (2.42 s) | 595 read cycles per 43 mAh (cycle = read + 45 s of result + falling asleep, 260.4 mAs) |
+| Asleep, dark / lit | 23.7 / 28.9 uA | 76 days from a full cell; 23 days from 30 % |
+| Asleep in the cradle, charging (the charger supplies it) | 98.6 uA; 179.4 uA with USB in standby | - |
+| Ship mode | 12.9 uA (requirement 5: **NOT MET**) | 42 days from 30 % (requirement: 3 months) |
+| Storage mode (cell below 3.25 V: IMU off) | not measured again in this phase | - |
+
+### Pins of the rev E board (`tools/gen_pins.py`, `tests/test_pins.c`, `tests/test_board.c`)
+
+**The pin map is the netlist's.** `../electrical/gl1_main/pinmap.json` is exported by the
+netlist (which proves every row against ST's open pin data) and is the ONLY place where a
+pin is assigned. `make pins` generates `hal/stm32u5/gl_pins.h` from it; `make pins-check`
+(part of every test and cross build) fails when the header is stale. **The board layout is
+still being routed and may exchange pins: the procedure is then `make pins` and `make
+test`, nothing else** - no file of the firmware names a port, a pin number, a pad or an
+alternate function by hand (the one identifier of the STM32 backend that names a pad, the
+HAL's name of the ship-mode wake-up pin, is guarded by a compile-time check). It happened
+once during this phase: the pin map changed under the build (a firmware note was reworded
+for E25, no pin moved), `pins-check` stopped the build, `make pins` followed.
+
+What the generator holds is not a pin assignment: the signals of `gl_pin_t` in their order
+(the simulator's trace format), how the pin map's words become table columns, and one rule
+per FIRMWARE NOTE of the pin map. A note it does not know stops the generation: somebody
+has to read it, act on it and add it. The 17 notes of the present map and where the
+firmware acts on each are listed at the end of the generated header.
+
+The generator REFUSES (and `tests/test_pins.c` checks the same on the generated table, after
+reading `pinmap.json` again with a scanner of its own): a signal of `gl_pin_t` missing from
+the map or a map signal the firmware does not know (the old `CHG_PROG_EN` is one of the 31
+defects its self-test seeds); two signals on one pin or pad (one declared exception: the
+BOOT0 strap shares its pad with ONE output that rests low or analog - `CAM_R_PWDN`); two
+interrupt signals on one EXTI line; a camera PWDN line on a pin the ROM loader drives;
+`CHG_INHIBIT`, `NTC_BIAS`, `NTC_SENSE` or `CAM_PWR_EN` on ANY ROM-loader pin; a camera-facing
+signal that is not SPEC on a pin the loader drives; anything but an input or an
+alternate-function output on a USB Type-C CC pad; an AF row without its AF number, an ADC
+signal without its channel, `IMU_INT1` or `VBUS_SENSE` off a PWR wake-up pin; a pin map whose
+own verification did not pass.
+
+The table as generated (pin map sha256 37c034526369...; printed by
+`build/host/tests/test_pins`; **a snapshot - `make pins` is the truth**):
+
+```
+signal        pin   pad mode     AF  pull  board         EXTI  rail off  asleep     source
+CAM_PWR_EN    PH0   5   OUT_PP   -   -     to GND        -     -         low        CHANGED
+CAM_L_PWDN    PC2   10  OUT_PP   -   -     series        -     parked    analog/low CHANGED
+CAM_R_PWDN    PH3   60  OUT_PP   -   -     to GND        -     parked    analog/low CHANGED
+CAM_SCCB_SDA  PC1   9   SCCB_OD  -   -     to V2V8_CAM   -     parked    analog/low CHANGED
+CAM_L_SCL     PC3   11  SCCB_OD  -   -     to V2V8_CAM   -     parked    analog/low CHANGED
+CAM_R_SCL     PC0   8   SCCB_OD  -   -     to V2V8_CAM   -     parked    analog/low CHANGED
+CAM_XVCLK     PA8   41  AF       0   -     -             -     parked    analog/low SPEC
+CAM_D0        PC6   37  AF       10  -     -             -     parked    analog/low SPEC
+CAM_D1        PC7   38  AF       10  -     -             -     parked    analog/low SPEC
+CAM_D2        PC8   39  AF       10  -     -             -     parked    analog/low SPEC
+CAM_D3        PC9   40  AF       4   -     -             -     parked    analog/low SPEC
+CAM_D4        PC11  52  AF       10  -     -             -     parked    analog/low SPEC
+CAM_D5        PB6   58  AF       10  -     -             -     parked    analog/low SPEC
+CAM_D6        PB8   61  AF       10  -     -             -     parked    analog/low SPEC
+CAM_D7        PB9   62  AF       10  -     -             -     parked    analog/low SPEC
+CAM_PIXCLK    PA6   22  AF       4   -     -             -     parked    analog/low SPEC
+CAM_HREF      PA4   20  AF       10  -     -             -     parked    analog/low SPEC
+CAM_VSYNC     PB7   59  AF       10  -     -             -     parked    analog/low SPEC
+LCD_SCS       PB10  29  OUT_PP   -   -     to GND        -     -         low        PROPOSED
+LCD_DISP      PB12  33  OUT_PP   -   -     to GND        -     -         low        CHANGED
+LCD_EXTCOMIN  PB2   28  AF       1   -     -             -     -         low        SPEC
+SPI1_SCK      PB3   55  AF       5   -     -             -     -         low        CHANGED
+SPI1_MOSI     PB5   57  AF       5   -     -             -     -         low        CHANGED
+SPI1_MISO     PB4   56  AF       5   down  -             -     -         input      SPEC
+SPI2_SCK      PB13  34  AF       5   -     -             -     -         low        PROPOSED
+SPI2_MOSI     PB15  36  AF       5   -     -             -     -         low        PROPOSED
+SPI2_MISO     PB14  35  AF       5   down  -             -     -         input      PROPOSED
+FLASH_CS      PA10  43  OUT_PP   -   -     to V2V8       -     -         high       CHANGED
+IMU_CS        PB1   27  OUT_PP   -   -     to V2V8       -     -         high       CHANGED
+IMU_INT1      PA7   23  EXTI     -   -     -             7     -         input      CHANGED
+IMU_INT2      PA5   21  EXTI     -   -     -             5     -         input      CHANGED
+GRAIN_CP0     PA9   42  OUT_PP   -   -     series        -     -         analog     CHANGED
+GRAIN_CP1     PB0   26  OUT_PP   -   -     series        -     -         analog     CHANGED
+GRAIN_CP2     PC12  53  OUT_PP   -   -     series        -     -         analog     CHANGED
+GRAIN_CP3     PD2   54  OUT_PP   -   -     series        -     -         analog     CHANGED
+GRAIN_CP4     PC10  51  OUT_PP   -   -     series        -     -         analog     PROPOSED
+OPAMP_VINP    PA0   14  ANALOG   -   -     -             -     -         analog     SPEC
+OPAMP_VINM    PA1   15  ANALOG   -   -     -             -     -         analog     SPEC
+OPAMP_VOUT    PA3   17  ANALOG   -   -     to V2V8       -     -         analog     SPEC
+VBAT_SENSE    PA2   16  ANALOG   -   -     -             -     -         analog     PROPOSED
+CHG_STAT      PA15  50  EXTI     -   -     to V2V8       15    -         input      CHANGED
+CHG_INHIBIT   PH1   6   OUT_PP   -   -     to GND        -     -         analog/low PROPOSED
+VBUS_SENSE    PC13  2   EXTI     -   -     VBUS divider  13    -         input      CHANGED
+USB_DM        PA11  44  AF       10  -     -             -     -         analog     SPEC
+USB_DP        PA12  45  AF       10  -     -             -     -         analog     SPEC
+NTC_BIAS      PC5   25  OUT_PP   -   -     -             -     -         analog     CHANGED
+NTC_SENSE     PC4   24  ANALOG   -   -     -             -     -         analog     PROPOSED
+```
+
+Against the rev C2 header 20 signals moved (the pin map lists each with its reason); gone:
+nothing but the old meaning of two pins; new meaning: `CHG_INHIBIT` push-pull HIGH = stop,
+`CHG_STAT` = the BQ25101's open-drain CHG on PA15. Interrupt lines: IMU_INT1 PA7 = EXTI7
+(WKUP8), IMU_INT2 PA5 = EXTI5, VBUS_SENSE PC13 = EXTI13 (WKUP2), CHG_STAT PA15 = EXTI15 -
+three of the four moved. ADC1: grain 8, battery 7, NTC2 13.
+
+What the firmware does about the pin map's notes (each is tested on the simulator, or is in
+the STM32 backend by inspection only, as marked):
+
+| Note | Firmware | Checked |
+|---|---|---|
+| PA15 and PB15 are USB Type-C CC pads of the MCU; PB5 and PB14 their dead-battery control pads (what they do: PROVISIONAL) | `UCPD_DBDIS` is the first statement of `gl_hal_init()`, before any pin is configured and before the ROM hand-over; a CC pad carries an input (`CHG_STAT`, never driven, no internal pull) or an alternate-function output (`SPI2_MOSI`) | generator and `test_pins.c` for the pads; backend BY INSPECTION (`test_board.c` checks the order in its text) |
+| PH3 is BOOT0 and `CAM_R_PWDN` (10 kohm to ground) | the PWDN line rests low or analog, so the strap reads 0 at every reset; 0.28 mA while it is driven high, in the supply model | generator rule; simulator's rail rule |
+| USB-supply-valid bit: VBUS_SENSE AND the MCU's own monitor of the supply pin; cleared on the falling edge of either | `gl_hal_usb_supply_ok()`; the application starts USB only when it is true, checks it at every loop pass and stops USB when it is false; `GL_IRQ_VBUS_CHANGE` also for the supply | simulator: VBUS_SENSE lags the pad by up to 22 ms on removal, USB left on without its supply is a violation; backend BY INSPECTION |
+| PA9 is the USB core's VBUS pad and carries a grain LED line | VBUS sensing off, session valid by override | uncompiled USB file only |
+| Lines without a board pull float in reset: EXTCOMIN, SCK and MOSI of both buses, `CAM_L_PWDN` | driven LOW first in `gl_hal_init()`; internal pull-downs on the two MISO lines | simulator: the first 12 pin records of `gl_hal_init()` are these 6 lines, written low and then made outputs; backend BY INSPECTION |
+| Chip selects, DISP, rail enable, gate of the charger's stop: held by board resistors | taken over at that level (latch before mode); `CHG_INHIBIT` not touched | simulator: no record of reset + init leaves one of them away from its level; an internal pull against a board pull is a violation |
+| Before a jump to the ROM loader the IMU's INT lines must be static (the loader's SPI inputs) | the IMU is powered down before `gl_hal_reboot(GL_REBOOT_ROM_DFU)` | simulator rule, made to fire by a test |
+| The grain bias divider hangs on `LCD_DISP`: 35 ms of display-on time before a measurement | `gl_grain_fe_power()` refuses with the display off and waits 35 ms | simulator rule; 35.7 ms measured |
+| PA3 (op-amp output) is held high by 150 kohm: leave it analog while the op-amp is off | analog; 19 uA in the model if driven low, 5.2 uA with light on the photodiode | supply model |
+| PA15, PB3, PB4 away from JTAG; LSE drive medium-low | the mode write of each pin; `__HAL_RCC_LSEDRIVE_CONFIG` | backend BY INSPECTION |
+| EXTCOMIN divider 547 | `GL_PINS_EXTCOMIN_LSE_TICKS` from the pin map; `GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS` must equal it | simulator: 32768 / 547 = 59.905 Hz |
+
+Still PROVISIONAL about the pins, and stated so by the pin map itself: the list of pins the
+ROM loader drives or listens on (memory of AN2606), what the UCPD pads do, and the
+electrical limits of the pins. Two SPEC rows remain on pins the loader drives (PB9 = D7,
+PA6 = PIXCLK, behind their 220 ohm resistors): a release gate.
 
 ### Solver (`tests/test_solver.c`; `make diff`; `make bench`)
 
@@ -2182,12 +2523,15 @@ check. Changing one is the whole firmware change if the fact turns out different
 | OVM7692 window | `GL_PROV_OV7692_SENSOR_WINDOWING`, `_HSTART_FULL`, `_VSTART_FULL`, `_H_UNIT_PX`, `_V_UNIT_LINES`, `_H_BORDER_PX`, `_V_BORDER_LINES` | meaning of the start / size registers; set `_SENSOR_WINDOWING` to 0 to use the DCMI crop instead |
 | OVM7692 timing | `GL_PROV_CAM_XVCLK_HZ`, `_RAIL_SETTLE_MS`, `_CLOCK_SETTLE_MS`, `_FRAME_PERIOD_MS`, `_SETTLE_FRAMES`, `GL_PROV_OV7692_RESET_TIMEOUT_MS` | power-up delays, frame rate at 12 MHz with reset clock settings, frames to settle |
 | LCD | `GL_PROV_LCD_FPC_PIN_*` (10), `GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS`, `GL_PROV_LCD_ROW0_AT_FRONT`, `_COL0_AT_LEFT`, `_ACTIVE_CENTRE_Y_MM`, `_SPI_MAX_HZ`, `_VDD_MIN_MV`, `_SCS_SETUP_US`, `_SCS_HOLD_US`, `_SCS_LOW_US` | FPC pin order and pin-1 side (DESIGN_SPEC PROVISIONAL), EXTCOMIN period (547 ticks = 59.905 Hz, the divider rev C2 specifies; the generator reads it from the spec and a test compares the two), panel orientation, active-area offset, timing |
-| MCU | `GL_PROV_LPTIM_PWM_RUNS_IN_STOP2`, `GL_PROV_USB_CRYSTALLESS_HSI48_CRS`, the 28 PROPOSED rows of `hal/stm32u5/gl_pins.h` | EXTCOMIN in Stop 2 (if 0 the application stays in idle sleep while the display is on), crystal-less USB, pin assignment |
+| MCU | `GL_PROV_LPTIM_PWM_RUNS_IN_STOP2`, `GL_PROV_USB_CRYSTALLESS_HSI48_CRS`, `GL_PROV_SHIP_MODE_IS_SHUTDOWN`, `GL_PROV_USB_WAKE_FROM_STOP2` (0) | EXTCOMIN in Stop 2 (if 0 the application stays in idle sleep while the display is on - also in the cradle sleep, which then draws about 1 mA: still under the termination threshold, not measured); crystal-less USB; what survives Shutdown and what wakes from it; whether a USB resume wakes the core from Stop 2 (0: Stop 1 while USB is in standby). The pin assignment is no longer the firmware's: it is the netlist's pin map, whose own PROVISIONAL statements (ROM-loader pin list, UCPD pads, electrical limits) travel in the generated header |
 | IMU | `GL_PROV_IMU_MARKER_{X,Y,Z}_AXIS`, `_SIGN`, `GL_PROV_IMU_WAKE_THRESHOLD_MG`, `GL_PROV_IMU_DRDY_PULSED` | mounting orientation on the PCB (identity is a placeholder), wake threshold, data-ready mode |
 | Flash | `GL_PROV_MX25R_PROG_TIMEOUT_MS`, `_ERASE_TIMEOUT_MS`, `_DP_DELAY_US`, `_SPI_HZ` | timing |
 | Grain | `GL_PROV_GRAIN_RED_ANODE_ON_LOW_PIN`, `_SETTLE_US`, `_ADC_AVG`, `_ADC_SAMPLE_US`, `_POWER_SETTLE_MS`, `_MOD_THRESHOLD_DEFAULT`, `_MAX_EQUIV_SLOPE`, `_HARMONIC_SIGN`, `_KAPPA_BENT`, `_KAPPA_POA`, `_KAPPA_BERMUDA` | charlieplex wiring (proposal), settling, and the unproven physics; the acceptance threshold used is always the one in the calibration record |
-| Power | `GL_PROV_BATT_LOW_MV`, `_CRITICAL_MV`, `_FULL_MV`, `_EMPTY_MV`, `_DIVIDER_RATIO`, `GL_PROV_BATT_STORAGE_MV`, `GL_PROV_CHARGE_TEMP_MIN_C`, `_MAX_C`, `_HYST_C` (2 K), `_GUARD_C` (1.5 K), `_MAX_DISAGREE_C` (10 K) | cell thresholds (no cell datasheet), hysteresis, the guard band (from the tolerance budget computed in `test_drv_power.c`; it does not cover a cell-to-NTC gradient), how far the NTC may be from a die sensor |
-| Cell NTC | `GL_PROV_NTC_R25_OHM` (10 k), `_B_K` (3380), `_SERIES_OHM` (10.0 k), `_SETTLE_US` (500), `_ADC_AVG` (8), `_ADC_SAMPLE_US` (20), `_OPEN_FRACTION` (0.98), `_SHORT_FRACTION` (0.02), `_IDLE_MAX_FRACTION` (0.05) | part values as specified in rev C2; settling time for the node (source impedance up to 10 kohm into the ADC's sampling capacitor and whatever capacitance the layout adds: the 500 us is a guess with margin, to be checked on the board); the detection thresholds |
+| Power | `GL_PROV_BATT_LOW_MV`, `_CRITICAL_MV`, `_FULL_MV`, `_EMPTY_MV`, `_DIVIDER_RATIO`, `GL_PROV_BATT_STORAGE_MV` | cell thresholds (no cell data sheet) |
+| Charger BQ25101 (E1) | `GL_PROV_BQ25101_ICHG_UA` (19820), `_TERM_FRACTION` (0.10), `_VREG_MV` (4200), `_VREG_WARM_MV` (4060), `_RECHARGE_DROP_MV` (100), `_T_COLD_C` / `_T_COOL_C` / `_T_WARM_C` / `_T_HOT_C` (0 / 10 / 45 / 60), `_TS_LOW_DISABLES` (1), `_TS_OPEN_IS_TTDM` (1), `_SAFETY_TIMER_H` (10), `_CHG_LOW_ON_RECHARGE` (1), `_VIN_MIN_MV` (4450) | **no data sheet was read**: the specification's text (current, termination, JEITA behaviour), the search extracts quoted in the netlist notes (TS low disables, TS open = test mode), memory of the family (recharge threshold, safety timer, CHG on a recharge). The simulator's charger model and the status inference use these and nothing else. The temperature corners are the usual JEITA degrees; the part's real thresholds are voltages on TS and depend on its bias current against this NTC: release gate |
+| The firmware's charge supervision | `GL_PROV_CHARGE_TEMP_MIN_C`, `_MAX_C` (0, 45), `_GUARD_C` (1.5 K), `_HYST_C` (2 K), `_MAX_DISAGREE_C` (10 K), `GL_PROV_CHARGE_MAX_MS` (6 h, E32), `_RESTART_MV` (4000), `_DONE_MIN_MV` (4040) | the window the specification gave the cell; the guard band (from the tolerance budget computed in `test_drv_power.c`; it does not cover a cell-to-NTC gradient or the part's real R-T curve); our choices for hysteresis, restart and "done" |
+| E13 | `GL_PROV_READ_TEMP_MAX_C` (60), `_HYST_C` (3 K) | the specification's limit, applied to the reading; our hysteresis |
+| Cell NTC2 (E2) | `GL_PROV_NTC_R25_OHM` (10 k), `_B_K` (3380), `_SERIES_OHM` (10.0 k), `_SETTLE_US` (500), `_ADC_AVG` (8), `_ADC_SAMPLE_US` (20), `_OPEN_FRACTION` (0.98), `_SHORT_FRACTION` (0.02), `_IDLE_MAX_FRACTION` (0.05) | Murata NCU15XH103F60RC, nominal R25 and B(25/50), both taken as 1 %: **every R-T number in the firmware and in its tests is derived from the one-B equation with these two constants; no R-T table of the part has been read**. The netlist puts no capacitor on the node; the 500 us are margin. The detection thresholds are ours |
 | Estimates | `GL_PROV_SEATING_SIGMA_RAD`, `GL_PROV_STICK_TOTAL_HEIGHT_M`, `_IN_CUP_M`, `_HEIGHT_REL_SIGMA`, `_DIA_MIN_M`, `_DIA_MAX_M` (now used: the width a flagstick may have at its disparity), `GL_PROV_STEREO_CAL_SIGMA_PX` (0.05 px, added to every disparity sigma), `GL_PROV_LENS_BLUR_SIGMA_MIN_PX` / `_MAX_PX` (0.45-0.80 px) | not measurements; the blur range decides which posts are rejected as "too wide for their disparity" and must be replaced by the measured blur at EVT |
 
 Tuning constants that are our own choices rather than hardware facts (gesture timing, repeat
@@ -2221,13 +2565,18 @@ stated in the rev C YAML).
   Cortex-M33 is an estimate (see "Solver"), and newlib's single-precision libm has not been
   compared with the host's (open issue 26). The link probe of `make cross` shows which
   library functions a link against the installed newlib would bring in, not what they compute.
-* **The specification's amendments E1, E11, E12, E13** (charger with its own temperature
-  input and the opposite `CHG_INHIBIT` polarity; two level zeros; stored display rotation; no
-  read above 60 C and a ship mode): not implemented ("DESIGN_SPEC amendments E1 to E16").
+* **The specification's amendments E11, E12, E29 to E31, E33, E34** (two level zeros; stored
+  display rotation; Survey ending at the ball; recall; TOO STEEP; three display states; the
+  boot stub and the USB ID placeholders): not implemented yet - the later builders of
+  phase 3. E1, E2, E13, E26, E27 and E32 are in ("DESIGN_SPEC amendments").
+* **Nothing of the rev E power behaviour has run on a board or against a data sheet.** The
+  charger is a model; every current is provisional; Shutdown, the wake-up pin, the VDDUSB
+  monitor, UCPD_DBDIS, Stop 1 with a suspended USB bus and the session override exist in
+  the STM32 backend by inspection only, and the USB file is not even compiled.
 * **Nine findings of the phase-2 review are not fixed** (2, 9, 10, 19, 20, 27, 28, 32, 33:
   "Phase-2 review: what was fixed" and the open issues it names), and four only in part.
-* **The rev C2 changes on the target.** Everything in "Charger and cell temperature" and "Board
-  changes of rev C2" was run on the simulator, whose NTC, charger and clock models encode this
+* **The board changes on the target.** Everything in "Charger and cell temperature (rev E)",
+  "Cradle, ship mode and the hot cell" and "Pins of the rev E board" was run on the simulator, whose NTC, charger and clock models encode this
   project's reading of the specification. Not verified: the clock switch (PLL, voltage range,
   booster, flash latency: it compiles against the vendor's headers and has never run), that PH1 is an FT pin, ADC1_IN13 on PC4, the NTC
   settling time, the real part's R-T curve against the B-parameter equation, and the thermal
@@ -2314,23 +2663,20 @@ Hardware and system decisions first: none of them can be closed in firmware.
    were dropped - and to 0 at the high factor; with the allowance at 0 the compute time made
    no difference in builder 3's scratch build). To decide: a fixed allowance, one that follows
    the measured sway, or analysing the band while the first strips are already being taken.
-2. **Charger when the MCU is not in control.** Answered for the unpowered MCU by rev C2 (the
-   charger runs by default). What remains is the other side of that default, and it is NOT MET
-   in firmware: **in the ROM bootloader nothing can stop the charger** (the firmware only
-   refuses to enter DFU outside the temperature window), and **a hung firmware is not
-   supervised until the watchdog fires (32 s)**. If either matters for the cell's approval,
-   it needs hardware: a charger with an NTC input, or a comparator on the NTC node that pulls
-   `CHG_INHIBIT` by itself. Also for the schematic: `CHG_INHIBIT` must be on an FT pin (PH1 as
-   remembered: verify), or the unpowered MCU clamps the gate and defeats the default.
-   **The specification has since chosen the hardware answer (amendment E1: BQ25101 with its
-   own thermistor input; `CHG_INHIBIT` push-pull, HIGH = stop).** This firmware still drives
-   the rev C2 circuit (open drain, LOW = stop) because its brief says so; on an E1 board its
-   stop does nothing. **To decide: which document rules for the next phase.** If E1: a new
-   charger driver and simulator model, the cradle messages (the charger, not the firmware,
-   then decides), and the two NOT MET rows become hardware-covered. Pinned meanwhile as NOT
-   MET (`tests/test_pins.c`). Related, from the same review: with the start-up order fixed
-   the watchdog bounds a hang AFTER `gl_hal_init()`; a hang before it (start-up code, RAM
-   initialisation) is covered only by the hardware-watchdog option bit (issue 12).
+2. **Charger when the MCU is not in control.** ANSWERED IN HARDWARE by amendment E1, and the
+   firmware now drives that hardware (phase 3): the BQ25101 enforces its own temperature
+   window with its own thermistor, whatever the MCU does. What is left, each pinned by a test
+   against the MODEL of the charger ("Charger and cell temperature (rev E)"):
+   (a) **the firmware's window is 0..45 C, the charger's own 0..60 C** (4.06 V above 45 C).
+   In the ROM loader and with a hung firmware a cell between 45 and 60 C is charged, to
+   4.06 V: 600 s of 600 s and 33 s in the tests. Whether the cell allows that is its data
+   sheet's answer; if not, the charger's thresholds have to move (its TS network), not the
+   firmware. (b) **An open NTC1 removes the hardware window silently** (search extract: the
+   part's test mode); the firmware notices and stops only while it runs. Board test must
+   prove NTC1; `GL_CMD_SET_CHARGE` exists for the station that does it. (c) **In the ROM
+   loader the charge never terminates** (the loader draws more than 2 mA): what ends it is
+   the charger's own safety timer, if it has one (from memory). (d) Every threshold of the
+   model is PROVISIONAL: the release gate "BQ25101 thresholds against the NTC curve" stands.
 3. **Both cameras on the shared bus at power-up.** Unless PWDN tri-states the OVM7692 pads
    (unconfirmed, `GL_PROV_OV7692_PWDN_TRISTATES_OUTPUTS` = 0), both sensors drive the eight data
    lines and the three sync lines against each other for 14.4 ms of every power-up (6.4 ms of it
@@ -2505,17 +2851,11 @@ From the phase-2 review (the findings that were not, or not wholly, fixed):
 27. **Method B2 with untidy horizons** (finding 10): nominal reads fall back, jump and differ
     between the precisions. Not changed; B2 is off by default and a poor horizon is now
     shown. Decide whether B2 stays selectable before it has been made robust.
-28. **Charge termination, charge time, and the cradle state** (finding 19). The firmware has
-    no charge timer and no "full" decision; the charger's STAT input is only displayed. In
-    the cradle the MCU never enters Stop mode (USB is started on VBUS whether or not a host
-    is there), with the IMU at 240 Hz and the display on, and that load sits on the cell's
-    node. NOT VERIFIED (no data sheet here; the reviewer's recollection): the MCP73831 ends a
-    charge only when the current falls to a few percent of the programmed 20 mA and has no
-    safety timer, so with that load the charge may never terminate and the cell would float
-    at 4.2 V for as long as the marker is docked. The E1 charger may behave differently.
-    Firmware has the means (`CHG_INHIBIT`, STAT, the battery ADC: a maximum charge time, a
-    "full, stop" state, Stop 2 between the 5 s checks when no host is connected); what the
-    cell and the charger need is the hardware and product owners' call.
+28. **Charge termination, charge time, and the cradle state** (finding 19). ANSWERED by
+    amendment E32 and implemented (phase 3): asleep in the cradle 30 s after the host fell
+    silent or with none, where the model's charge terminates; a 6 h backstop for a host that
+    never stops talking; "FULL" from the charger's status and the cell voltage. Left open:
+    issue 34.
 29. **Turning the marker back after a Precision spin** discards the `2X` result: it is a new
     placement and a new Quick Read (finding 22). The result screen is now upright for the
     golfer WITHOUT turning back, which removes the reason to do it; if the golfer is still
@@ -2530,15 +2870,49 @@ From the phase-2 review (the findings that were not, or not wholly, fixed):
     new camera read shows a line again. Decide whether the last result should be shown again
     on wake-up while the marker has not been moved (the IMU can tell), at the price of a
     stale line if it has.
-32. **The specification's amendments that this firmware does not implement** ("DESIGN_SPEC
-    amendments E1 to E16"): E1 (charger and `CHG_INHIBIT` polarity; issue 2), E11 (two stored
-    level zeros, base face and ball feet: one in firmware), E12 (the display's rotation in
-    its pocket, up to about 1 degree = 17 mrad, measured at the factory and applied to the
-    drawn line: not stored, not applied; the largest drawn-line error measured here is 3.8
-    mrad, a quarter of that), E13 (no read above 60 C cell temperature; a ship mode: neither
-    exists). Each is a calibration field, a few lines in `compose_view_()` or the read
-    start, a protocol command and tests; none was in this phase's brief. To decide first:
-    whether the specification file or the brief is the authority.
+32. **The specification's amendments that this firmware does not implement yet**
+    ("DESIGN_SPEC amendments"): E11 (two stored level zeros), E12 (display rotation), E29
+    to E31, E33 (Survey at the ball, recall, TOO STEEP, three display states), E34 (boot
+    stub, USB ID placeholders): the later builders of phase 3. E1, E2, E13, E26, E27, E32
+    are in.
+33. **Ship mode draws 12.9 uA in the supply model; the requirement is 5 uA** (and three
+    months from a 30 % charge: 42 days). The firmware has switched off everything it can
+    (MCU in Shutdown 0.2, IMU powered down 3.0, flash 0.1); the board's always-on parts are
+    9.6 uA: the 2.8 V regulator 1.6, the battery divider 1.95, the cell's protection
+    circuit 3.0, the enable pin of the E26 regulator 2.8 (NOT CONFIRMED), the rest 0.3. To
+    decide, for the hardware and the specification owners: a load switch in front of the
+    divider and the regulator, an IMU supply the MCU can switch, or a requirement that
+    matches the board. And to measure first: every one of these figures is from memory.
+34. **A silent host on a running USB bus loses the marker** (E32 as specified: "idle or
+    absent for 30 s"). The marker detaches and sleeps; nothing the host does afterwards
+    reaches it; only re-docking does. A PC program that talks at least every 30 s, or a
+    host that suspends an idle device, never sees this. Alternatives, none implemented
+    because the brief names the wake-up sources (USB resume, VBUS removal, charger status):
+    stay awake while the bus runs and rely on the 6 h backstop (the charge then does not
+    terminate under any PC that does not suspend); a tap on the docked marker as a fourth
+    wake-up source (the IMU in wake-on-motion costs 2 uA more); a re-attach every few
+    minutes. Whether Windows, macOS and Linux suspend an idle CDC device by default is NOT
+    VERIFIED here.
+35. **The 2.8 uA of the E26 regulator's enable pin** is this firmware's assumption (an
+    LP5907 with its enable at the 2.8 V rail: an internal 1 Mohm pull-down, from memory of
+    the data sheet), not a figure of the netlist notes, which still describe the old
+    regulator. If it is wrong the sleep figure is 20.9 uA at the cell instead of 23.7 and
+    ship mode 10.1 instead of 12.9. To be read in the data sheet, or measured.
+36. **Rev E facts the STM32 backend takes from memory**: what survives Shutdown, that the
+    wake-up pin leaves it through a reset, that no watchdog runs in it, the Shutdown
+    pull-downs, the VDDUSB monitor and its start-up time, UCPD_DBDIS, the USB resume from
+    Stop 1 ("STM32U5 backend"). None can be exercised without a board; each is a line in
+    the bring-up plan.
+37. **`GL_CMD_SHIP_MODE` needs no UNLOCK.** Any host can arm it; the marker then has no
+    wake-on-motion after it is next lifted out, until it is docked again. Chosen because
+    docking undoes it and the packing station should not need the factory key; say if a
+    consumer host must not be able to do it.
+38. **The read's temperature gate accepts a reading up to 5 s old** (and the wake-up
+    measurement usually is that reading). A cell cannot heat by kelvins in 5 s, so this is
+    a choice, not a gap; it is pinned by a test so that it is not forgotten. The limit is
+    applied to the READING (60.0 C), whose worst-case error at 60 C is 1.43 K by the
+    tolerance budget, plus what the one-B equation and the cell-to-thermistor gradient add
+    (not quantified).
 
 ## The solver: decisions and open points
 

@@ -4,3 +4,4 @@
 - Smallest solder-mask web, bottom: 0.350 mm (U1.1 / U1.2); 0 touching openings of different nets.
 - Smallest solder-mask web, top: 0.200 mm (J1.A9 / J1.A12); 0 touching openings of different nets.
 - Copper to edge: routed copper 0.348 mm (track GND F.Cu), pads 0.236 mm (pad J1.A1).
+- USB pair: D- 18.0 mm, D+ 16.4 mm, vias 1 / 1, largest distance between the two lines 2.54 mm.

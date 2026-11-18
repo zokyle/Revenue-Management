@@ -2175,9 +2175,17 @@ static void sleep_(gl_app_t *app)
     /* Never sleep over a VBUS level that has not been dealt with: if it
      * changed during this pass (spring-pin bounce, a marker lifted out while
      * the loop was busy), the next pass handles it first - USB is not left
-     * started and CHG_INHIBIT is not left low into a sleep, not even one
-     * that the pending edge would end at once. */
+     * started and CHG_INHIBIT is not left asserted into a sleep, not even
+     * one that the pending edge would end at once. */
     gl_power_poll_pins(&app->power);
+    if (!app->power.vbus && app->power.inhibit) {
+        /* Rule (B) of drivers/power.h, at the last place it can be applied:
+         * VBUS went away between the reading the gate decided on and now
+         * (the measurement before the gate takes a millisecond; found by the
+         * bounce stress of tests/test_e2e_review.c).  The stop is released
+         * here, whatever else is pending. */
+        charge_gate_(app, now);
+    }
     if (app->power.vbus != app->vbus_acted) {
         return;
     }

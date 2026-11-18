@@ -84,12 +84,12 @@
   {
    "bytes": 1329,
    "path": "assembly/gl1_cradle-bom.csv",
-   "sha256": "c26ec1a634c02b21fa04f94bdbe1e181e1badce5f6e3fd69970abe4c1197b248"
+   "sha256": "402f4c2aad8ef22701d8bc740ca4acd933e77272e30049420e16854b0fcee7db"
   },
   {
    "bytes": 1008,
    "path": "assembly/gl1_cradle-pos.csv",
-   "sha256": "ce85c0b0bae4f07366ccccfd644064825df56508f29582d98c4fb63e7c19e0bc"
+   "sha256": "7dad2e6729f1eecb39ae2a178243e4b863b47a96f0cb17209b53b0ebdf0c6298"
   },
   {
    "bytes": 4237,
@@ -169,7 +169,7 @@
   {
    "bytes": 2271,
    "path": "gl1_cradle-assembly.zip",
-   "sha256": "bb0cc67c238b1861c7b9a524bb398e2c3891cb74585b0c5ee3b8687a7326e1fb"
+   "sha256": "268a99e12b52257f5b2eb7eec78e512122d7eb158b16fae864f8e04c459e8463"
   },
   {
    "bytes": 394956,
@@ -184,12 +184,12 @@
   {
    "bytes": 26917,
    "path": "gl1_cradle-mechanical.json",
-   "sha256": "1e1eb7cecdc454faa55b11e0fbeef4afe8168ed1d8900869f50fcea78a897a12"
+   "sha256": "24ee27901447ba7b73a0dd562e5a8e32e6dc5c43761d0c686bdda2de60d4e130"
   },
   {
    "bytes": 10895,
    "path": "gl1_cradle-netlist.json",
-   "sha256": "74051da78aee97267e0645b851ae6a5d516f3aaf1d9fe8cd6944a6113a3d0eff"
+   "sha256": "a655df695dd4083f3a89be037f1f1877adbf5098ee1a9df4e3529ab54e531a59"
   },
   {
    "bytes": 33343,

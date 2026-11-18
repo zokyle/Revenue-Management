@@ -10,8 +10,8 @@ positions, the USB-C mouth) come from the ``cradle`` block of
 
 What the board is (DESIGN_SPEC section 4, "Cradle board (E6)"): a USB-C
 receptacle (USB 2.0 only), 5.1 kohm from CC1 and from CC2 to ground so that a
-USB-C source turns VBUS on, a resettable fuse in VBUS (hold 0.2 A, trip
-0.5 A), a USBLC6-2SC6 on VBUS / D+ / D-, and seven spring-pin positions that
+USB-C source turns VBUS on, a resettable fuse in VBUS (E25: hold 0.2 to 0.5 A,
+no more than 1.5 ohm after a trip), a USBLC6-2SC6 on VBUS / D+ / D-, and seven spring-pin positions that
 meet the seven pads under the marker:
 
     pin 1 VBUS, 2 D-, 3 D+, 4 GND        fitted in the consumer cradle
@@ -83,21 +83,20 @@ MILLMAX_0914 = {
 }
 
 #: PROVISIONAL part - resettable fuse in VBUS.  Ratings: DESIGN_SPEC E6 ("hold
-#: about 0.2 A, trip about 0.5 A, PROPOSED").  CRADLE_NOTES.md has the sizing:
-#: the marker draws about 30 mA at most (19.8 mA charge + charger supply +
-#: VDDUSB regulator + divider), so 0.2 A leaves a factor of four at 60 C;
-#: 0.5 A is what every USB 2.0 port must be able to deliver, so a hard short
-#: across the pins trips on the weakest standard source.  The order code and
-#: its resistance are from memory; any 0603 PTC with these ratings fits.
-#: The resistance matters: at 30 mA it costs 0.06 V (2 ohm, the typical value
-#: ASSUMED here) to 0.15 V (5 ohm), and with the marker's series Schottky the
-#: charger's input is then below the 4.45 V the research records as its minimum
-#: at the low end of a USB source (gl1_main NETLIST_NOTES 4.1; SUPPLY_CHAIN in
-#: gl1_main_design.py uses the same two numbers).  Choose the lowest guaranteed
-#: resistance on offer.
-PTC = {"mpn": "MF-FSMF020X-2", "manufacturer": "Bourns", "hold_mA": 200, "trip_mA": 500,
-       "v_max": 9, "r_typ_ohm": 2.0, "r_max_ohm": 5.0, "footprint": "Fuse:Fuse_0603_1608Metric",
-       "height": 0.85}
+#: about 0.2 A, trip about 0.5 A, PROPOSED") as amended by E25: "The cradle fuse
+#: is chosen for no more than 1.5 ohm after a trip (hold current 0.2 to 0.5 A)".
+#: CRADLE_NOTES.md has the sizing: the marker draws about 30 mA at most, so any
+#: hold current in that window leaves a factor of four or more at 60 C.  The
+#: resistance is what E25 is about: at 30 mA, 1.5 ohm costs 0.045 V (gl1_main
+#: NETLIST_NOTES 4.1; SUPPLY_CHAIN in gl1_main_design.py uses 0.8 ohm typical,
+#: 1.5 ohm worst).  ``r1max_limit_ohm`` and the hold window are the REQUIREMENT
+#: (E25); the example part, its hold / trip currents and its resistances are
+#: from memory of the Bourns MF-FSMF series table and must be read from the
+#: data sheet: if its post-trip resistance (R1max) is above the limit, the next
+#: part of the series up to 0.5 A hold is fitted on the same 0603 footprint.
+PTC = {"mpn": "MF-FSMF035X-2", "manufacturer": "Bourns", "hold_mA": 350, "trip_mA": 750,
+       "v_max": 6, "r_typ_ohm": 0.8, "r_max_ohm": 1.4, "r1max_limit_ohm": 1.5,
+       "hold_window_mA": (200, 500), "footprint": "Fuse:Fuse_0603_1608Metric", "height": 0.85}
 
 #: PROVISIONAL - clearance hole for an M2 thread-forming screw; the YAML gives
 #: the four positions only, 2.2 mm is what mechanical/cad/parts.py drills.
@@ -243,15 +242,15 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
         d.add(p)
         d.net(cc, "J1.%s" % cc, "%s.1" % ref)
         d.net("GND", "%s.2" % ref)
-    # ---- spec E6: "a resettable fuse in VBUS (hold about 0.2 A, trip about 0.5 A, PROPOSED)" ----
+    # ---- spec E6 / E25: "a resettable fuse in VBUS", hold 0.2 to 0.5 A, no more than 1.5 ohm after a trip ----
     f1 = Part("F1", "PTC %.1fA" % (PTC["hold_mA"] / 1000.0), PTC["footprint"], pins=two_pin(),
               mpn=PTC["mpn"], manufacturer=PTC["manufacturer"], distributor=BY_MPN,
               distributor_pn=PTC["mpn"], side=BOTTOM, height_mm=PTC["height"], group="usb",
               description="Resettable fuse, hold %d mA, trip %d mA, %d V, 0603"
                           % (PTC["hold_mA"], PTC["trip_mA"], PTC["v_max"]),
               fields=_status(PROV, "ratings from DESIGN_SPEC E6 (PROPOSED); order code, voltage and "
-                                   "resistance from memory: any 0603 PTC with hold 0.2 A, trip <= 0.5 A, "
-                                   ">= 6 V, <= 5 ohm fits"))
+                                   "resistance from memory: any 0603 PTC with hold 0.2 to 0.5 A, "
+                                   ">= 6 V, <= 1.5 ohm after a trip fits (E25)"))
     f1.place(*place["F1"][:2], place["F1"][2])
     d.add(f1)
     d.net("VBUS_IN", "J1.VBUS", "F1.1", netclass="Power", power_flag=True)   # from the USB host

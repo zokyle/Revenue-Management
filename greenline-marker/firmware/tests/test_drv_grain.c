@@ -10,14 +10,27 @@
 
 #include "gl_test.h"
 
+#include "gl_pins.h"
 #include "gl_provisional.h"
 #include "gl_trace_util.h"
 #include "grain_frontend.h"
+#include "ls013b7dh03.h"
 
 static void fresh_(void)
 {
     gl_sim_reset(true);
     (void)gl_hal_init();
+}
+
+/* Rev E: the amplifier's mid-rail bias is a divider fed from LCD_DISP.  The
+ * display is switched on (by its driver)
+ * at the very moment the measurement is asked for - the worst case for the
+ * 35 ms the bias needs. */
+static void disp_on_(void)
+{
+    static gl_lcd_t lcd;
+    gl_lcd_init(&lcd, NULL);
+    (void)gl_lcd_on(&lcd); /* EXTCOMIN first, then DISP */
 }
 
 static gl_pin_t cp_(unsigned n)
@@ -26,8 +39,9 @@ static gl_pin_t cp_(unsigned n)
 }
 
 /*
- * The wiring this firmware PROPOSES (no netlist exists), written out
- * independently of the driver's table: for LED 0..15 the charlieplex pin
+ * The wiring of the LED ring (the netlist has adopted the firmware's
+ * proposal: tests/test_pins.c compares the driver's table with the pin
+ * map's), written out independently of the driver's table: for LED 0..15 the charlieplex pin
  * that must be driven HIGH (anode) and the one driven LOW (cathode).
  * LEDs 0..7 are red (anode on the lower-numbered pin of the pair),
  * 8..15 the antiparallel near-infrared ones.
@@ -185,6 +199,7 @@ GL_TEST(test_measure_sequence_on_the_adc)
     fresh_();
     set_response_(&g, 0.2f, 60.0f);
     gl_sim_grain_set(&g);
+    disp_on_();
     gl_sim_trace_clear();
     const uint64_t t0 = gl_sim_now_us();
     GL_CHECK_EQ(gl_grain_fe_measure(&raw, 2), GL_OK);
@@ -261,7 +276,46 @@ GL_TEST(test_measure_sequence_on_the_adc)
     printf("    2 cycles (96 conversions of 16 averaged samples): %.1f ms including %u ms power settle\n",
            (double)dt / 1000.0, (unsigned)GL_PROV_GRAIN_POWER_SETTLE_MS);
     GL_CHECK(dt < 120000u);
+    /* firmware note 12 of the pin map: DISP high for 35 ms before the first
+     * conversion, here with the display switched on at the last moment */
+    GL_CHECK(gl_sim_stats()->grain_bias_short_us >= (uint64_t)GL_PINS_GRAIN_BIAS_DISP_MS * 1000u);
+    GL_CHECK(GL_PROV_GRAIN_POWER_SETTLE_MS >= (unsigned)GL_PINS_GRAIN_BIAS_DISP_MS);
+    printf("    first grain conversion %.1f ms after LCD_DISP went high (the bias divider needs %d ms)\n",
+           (double)gl_sim_stats()->grain_bias_short_us / 1000.0, GL_PINS_GRAIN_BIAS_DISP_MS);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* Rev E: with the display off the bias divider is not fed.  The driver
+ * refuses, powers nothing and lights nothing; the simulator would count a
+ * conversion made anyway as a violation (checked at the end). */
+GL_TEST(test_no_measurement_without_the_display)
+{
+    static gl_grain_raw_t raw;
+    fresh_();
+    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_LCD_DISP));
+    gl_sim_trace_clear();
+    GL_CHECK_EQ(gl_grain_fe_power(true), GL_ERR_STATE);
+    GL_CHECK_EQ(gl_grain_fe_measure(&raw, 1), GL_ERR_STATE);
+    GL_CHECK_EQ(raw.cycles, 0);
+    GL_CHECK(tr_find(0, GL_SIM_TR_ADC_POWER, 1) < 0);
+    GL_CHECK(tr_find(0, GL_SIM_TR_OPAMP, 1) < 0);
+    GL_CHECK(tr_find(0, GL_SIM_TR_ADC_READ, -1) < 0);
+    GL_CHECK_EQ(gl_sim_grain_lit_mask(), 0u);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+    GL_CHECK_EQ(gl_sim_stats()->grain_bias_short_us, UINT64_MAX);
+    /* display on: it works */
+    disp_on_();
+    GL_CHECK_EQ(gl_grain_fe_measure(&raw, 1), GL_OK);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+    /* the model's own check: a conversion with DISP low is a violation */
+    gl_hal_gpio_write(GL_PIN_LCD_DISP, false);
+    (void)gl_hal_adc_power(true);
+    (void)gl_hal_opamp_enable(true);
+    {
+        uint16_t c = 0;
+        (void)gl_hal_adc_read(GL_ADC_CH_GRAIN_TIA, 1, 5, &c);
+    }
+    GL_CHECK(gl_sim_violations()->analog >= 1u);
 }
 
 GL_TEST(test_driver_data_through_core_processing)
@@ -275,6 +329,7 @@ GL_TEST(test_driver_data_through_core_processing)
     fresh_();
     set_response_(&g, 0.4f, 60.0f);
     gl_sim_grain_set(&g);
+    disp_on_();
     gl_cal_grain_defaults(&cal);
     cal.flags = GL_CAL_GRAIN_FLAG_WHITE_REF | GL_CAL_GRAIN_FLAG_NOISE_FLOOR;
     cal.mod_threshold = 0.25f; /* from the calibration record, as always */
@@ -354,6 +409,7 @@ int main(void)
     GL_RUN(test_charlieplex_pin_states_for_each_led);
     GL_RUN(test_wiring_has_no_low_voltage_sneak_path);
     GL_RUN(test_measure_sequence_on_the_adc);
+    GL_RUN(test_no_measurement_without_the_display);
     GL_RUN(test_driver_data_through_core_processing);
     GL_RUN(test_parameter_errors_and_model_checks);
     return gl_test_summary();

@@ -696,12 +696,24 @@ GL_TEST(test_charge_time_limit_of_6_hours)
         }
         GL_CHECK_EQ(pw_.chg_reason, GL_CHG_ALLOWED);
     }
-    /* VBUS removed: everything about the limit is forgotten */
+    /* A cell that is STILL below the restart voltage after six hours of
+     * charging gets no second six hours: the limit fires and holds, however
+     * low the cell reads, until the marker is lifted out. */
+    pw_.batt_mv = (uint16_t)(GL_PROV_CHARGE_RESTART_MV - 100u);
     for (uint32_t t1 = t; t - t1 < 120000u; t += step) {
         gl_power_poll_pins(&pw_);
         (void)gl_power_charge_gate(&pw_, t, true, 25.0f, true, true);
     }
     GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TIME_LIMIT);
+    GL_CHECK(pw_.time_limit && !pw_.limit_cell_was_up);
+    for (int k = 0; k < 5000; k++) { /* 7 h more */
+        t += step;
+        gl_power_poll_pins(&pw_);
+        GL_CHECK(!gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+    }
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TIME_LIMIT);
+    expect_gate_(false);
+    /* VBUS removed: everything about the limit is forgotten */
     gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
     gl_power_poll_pins(&pw_);
     GL_CHECK(!gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
@@ -1166,7 +1178,10 @@ GL_TEST(test_hardware_model_termination_needs_a_small_load)
     gl_sim_set_cell_temperature(25.0f);
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_FAST);
-    GL_CHECK(gl_sim_load_ua() < 20.0);
+    /* the always-on parts, the flash and the IMU as the reset left them, and
+     * the 28 uA of CHG's pull-up while the charger holds its status low */
+    GL_CHECK(gl_sim_load_ua() < 20.0 + GL_SIM_I_CHG_STAT_PULLUP_UA);
+    GL_CHECK(gl_sim_load_ua() > GL_SIM_I_CHG_STAT_PULLUP_UA);
     for (int k = 0; k < 6 * 60 && gl_sim_charger_on(); k++) {
         gl_sim_advance_ms(60000);
         hours += 1.0 / 60.0;
@@ -1175,8 +1190,8 @@ GL_TEST(test_hardware_model_termination_needs_a_small_load)
     GL_CHECK_EQ(gl_sim_stats()->chg_terminations, 1u);
     GL_CHECK(gl_sim_pin_level(GL_PIN_CHG_STAT));
     printf("    model, MCU in reset (load %.1f uA): from 90 %% the charge terminates after %.2f h at "
-           "%.1f %%, cell %.0f mV; termination threshold %.2f mA\n", gl_sim_load_ua(), hours,
-           100.0 * (double)gl_sim_cell_soc(), 4200.0 - 0.0, i_term / 1000.0);
+           "%.1f %%; termination threshold %.2f mA\n", gl_sim_load_ua(), hours,
+           100.0 * (double)gl_sim_cell_soc(), i_term / 1000.0);
     GL_CHECK(hours > 0.1 && hours < 3.0);
     GL_CHECK(gl_sim_cell_soc() > 0.97f);
 

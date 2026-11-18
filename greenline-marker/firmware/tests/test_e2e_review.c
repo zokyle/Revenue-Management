@@ -687,7 +687,10 @@ static void vbus_down_and_lose_edge_(void *arg)
 
 /* Review finding (major): the firmware learned about VBUS only from the edge
  * interrupt.  Asleep, put into a cradle at 50 C with that one latch lost:
- * the charger ran unsupervised for good (600 s of 600 s).  Now the LEVEL is
+ * the charger ran unsupervised for good (600 s of 600 s).  (Rev E: at 50 C
+ * the BQ25101 of the model charges by itself, in its WARM zone; stopping it
+ * there is the firmware's job, and this test is about the firmware finding
+ * out that it is in a cradle at all.)  Now the LEVEL is
  * acted on at every loop pass, so the 16 s housekeeping wake-up finds it.
  * The edge is placed at four phases of the housekeeping period. */
 GL_TEST(test_vbus_rising_edge_lost_while_asleep)
@@ -720,12 +723,16 @@ GL_TEST(test_vbus_rising_edge_lost_while_asleep)
                "latch lost: charger ran %6.2f s of 600 s outside 0..45 C; then UI %s, awake %d, "
                "CHG_INHIBIT %s, charger %s\n",
                (double)phase_ms[k] / 1000.0, ran_s, gl_ui_state_name((gl_ui_state_t)app.ui.state),
-               (int)app.awake, gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT) ? "LOW" : "released",
+               (int)app.awake, gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT) ? "HIGH (stop)" : "released",
                gl_sim_charger_on() ? "RUNNING" : "stopped");
         GL_CHECK(!gl_sim_charger_on());
-        GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
-        GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
-        GL_CHECK(app.awake && app.power.vbus);
+        GL_CHECK(gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+        GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TOO_HOT);
+        /* rev E: ten minutes in a cradle with no host - found, taken to the
+         * cradle state, and from there (30 s) to the cradle's own sleep, in
+         * which the supervision goes on */
+        GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_SLEEP);
+        GL_CHECK(app.cradle_sleep && app.power.vbus);
         /* found by the next housekeeping wake-up at the latest */
         GL_CHECK(ran_s <= 0.001 * (double)GL_APP_SLEEP_HOUSEKEEP_MS + 0.1);
         /* nothing else is wrong; the simulator's own "10 s" reaction rule can
@@ -764,7 +771,8 @@ GL_TEST(test_vbus_falling_edge_lost_in_the_cradle)
            (int)app.awake, (int)app.usb_on, (int)app.power.vbus);
     GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP);
     GL_CHECK(!app.awake && !app.usb_on && !app.power.vbus);
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
     stop0 = gl_sim_stats()->stop_us;
     idle0 = gl_sim_stats()->idle_us;
     q0 = gl_sim_stats()->charge_uas;
@@ -792,18 +800,35 @@ GL_TEST(test_stalled_supervision_stops_the_charge)
     W.t_place_s = 1.0e9;
     board_up_(true);
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    gl_sim_usb_host_open(true);
     (void)gl_app_init(&app);
     watch_reset_();
-    run_until_ms_(20000u);
+    run_talking_until_ms_(20000u);
     GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
     GL_CHECK(gl_sim_charger_on());
+    /* (a) the supervision never comes round, and the one other thing that
+     * starts a measurement - the edge on the charger's status line that the
+     * stop itself causes - is lost as well: the charge is stopped when the
+     * reading is too old, and stays stopped */
     t0 = now_ms_();
-    while (now_ms_() < t0 + 30000u) {
-        app.next_chg_ms = now_ms_() + 3600000u; /* the supervision never comes round */
-        app.next_batt_ms = now_ms_() + 3600000u;
-        run_until_ms_(now_ms_() + 20u);
-        if (t_stop == 0u && !gl_sim_charger_on()) {
-            t_stop = now_ms_();
+    {
+        uint32_t next_ping = t0;
+        while (now_ms_() < t0 + 30000u) {
+            app.next_chg_ms = now_ms_() + 3600000u;
+            app.next_batt_ms = now_ms_() + 3600000u;
+            if ((int32_t)(now_ms_() - next_ping) >= 0) {
+                /* a host that keeps talking: the marker stays AWAKE in the
+                 * cradle (asleep there the supervision has its own wake-up) */
+                next_ping += 5000u;
+                host_send_(0xF1, GL_CMD_PING, NULL, 0);
+                host_rx_len_ = 0;
+                (void)gl_sim_usb_host_recv(host_rx_, sizeof(host_rx_));
+            }
+            gl_app_run_once(&app);
+            gl_sim_irq_drop(GL_IRQ_CHG_STAT);
+            if (t_stop == 0u && !gl_sim_charger_on()) {
+                t_stop = now_ms_();
+            }
         }
     }
     printf("    supervision stalled in the cradle at 22 C: the charger was %s; last cell reading %.1f s "
@@ -813,17 +838,58 @@ GL_TEST(test_stalled_supervision_stops_the_charge)
     GL_CHECK(t_stop != 0u);
     GL_CHECK(t_stop != 0u && (t_stop - t0) <= GL_APP_CELL_TEMP_MAX_AGE_MS + 1000u);
     GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TEMP_UNKNOWN);
-    /* and it comes back by itself when the supervision does */
+    GL_CHECK(!gl_sim_charger_on());
+    GL_CHECK(gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB); /* awake all the while */
+    /* (b) the same stall with the status edge NOT lost: the stop pulls the
+     * charger's status line, that edge starts a measurement, and the charge
+     * goes on from a fresh reading.  It never runs on a stale one: sampled
+     * every 20 ms, the reading behind a running charge is at most the limit
+     * old */
+    {
+        uint32_t worst_age = 0, t1;
+        unsigned stops = 0;
+        bool was_on = true;
+        app.next_chg_ms = now_ms_();
+        run_talking_until_ms_(now_ms_() + 500u);
+        GL_CHECK(gl_sim_charger_on());
+        t1 = now_ms_();
+        while (now_ms_() < t1 + 40000u) {
+            app.next_chg_ms = now_ms_() + 3600000u;
+            app.next_batt_ms = now_ms_() + 3600000u;
+            if ((now_ms_() - t1) % 5000u < 20u) {
+                host_send_(0xF1, GL_CMD_PING, NULL, 0);
+                host_rx_len_ = 0;
+                (void)gl_sim_usb_host_recv(host_rx_, sizeof(host_rx_));
+            }
+            run_until_ms_(now_ms_() + 20u);
+            if (gl_sim_charger_on()) {
+                const uint32_t age = now_ms_() - app.cell_temp_ms;
+                worst_age = (age > worst_age) ? age : worst_age;
+            }
+            if (was_on && app.cell_temp_ms + 100u > now_ms_() && now_ms_() - t1 > 1000u) {
+                stops++; /* a fresh measurement has just been made */
+            }
+            was_on = !(app.cell_temp_ms + 100u > now_ms_());
+        }
+        printf("    ... with the status edge alive: %u fresh measurements in 40 s although the "
+               "supervision never came round; oldest reading behind a running charge %.2f s "
+               "(limit %.0f s)\n", stops, (double)worst_age / 1000.0,
+               (double)GL_APP_CELL_TEMP_MAX_AGE_MS / 1000.0);
+        GL_CHECK(stops >= 2u);
+        GL_CHECK(worst_age <= GL_APP_CELL_TEMP_MAX_AGE_MS + 50u);
+    }
+    /* and it comes back for good when the supervision does */
     app.next_chg_ms = now_ms_();
     app.next_batt_ms = now_ms_();
-    run_until_ms_(now_ms_() + 6000u);
+    run_talking_until_ms_(now_ms_() + 6000u);
     GL_CHECK(gl_sim_charger_on());
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }
 
 /* Review finding (minor): the simulator's power rules fired in about two
  * thirds of random VBUS-bounce scenarios (USB still started, or CHG_INHIBIT
- * still low, at a sleep entry while the edge that would have dealt with it
+ * still asserted, at a sleep entry while the edge that would have dealt with it
  * was still pending).  The level is now dealt with before every sleep.
  * Random scenarios: VBUS edges singly and in bursts, temperature jumps, MCU
  * resets, reads in progress.  No fault is injected. */
@@ -924,8 +990,13 @@ GL_TEST(test_vbus_bounce_stress)
             fast_left++;
         }
         violations += gl_sim_violation_total();
-        if ((st_vbus_ && app.ui.state != (uint8_t)GL_UI_CRADLE_USB) || (!st_vbus_ && app.usb_on) ||
-            (st_vbus_ != app.power.vbus) || (!st_vbus_ && gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT))) {
+        /* docked: the cradle state or (30 s without a host) the cradle's sleep;
+         * out of it: no USB and CHG_INHIBIT not left driven (rev E: HIGH = stop) */
+        if ((st_vbus_ && app.ui.state != (uint8_t)GL_UI_CRADLE_USB &&
+             app.ui.state != (uint8_t)GL_UI_CRADLE_SLEEP) ||
+            (!st_vbus_ && (app.usb_on || app.usb_standby)) || (st_vbus_ != app.power.vbus) ||
+            (!st_vbus_ && (gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT) ||
+                           gl_sim_pin_mode(GL_PIN_CHG_INHIBIT) != GL_PIN_MODE_ANALOG))) {
             bad_end++;
         }
         if (gl_sim_violation_total() != 0u) {

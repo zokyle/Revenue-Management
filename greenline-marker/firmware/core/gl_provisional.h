@@ -492,12 +492,12 @@
 /** No camera read is started when NTC2 READS above this (DESIGN_SPEC section
  *  6, E13; 60 C is the cell family's discharge limit, bom-verification-opto
  *  3.4, and a read draws about 96 mA).  The limit is applied to the READING,
- *  as the specification words it: the reading's error at 60 C is about 1.3 K
+ *  as the specification words it: the reading's error at 60 C is 1.43 K
  *  worst case (computed by tests/test_drv_power.c), so the true cell may be
  *  that much hotter when the gate still lets a read through. */
 #define GL_PROV_READ_TEMP_MAX_C 60.0f
 /** ... and reads are allowed again when it has fallen this far below the
- *  limit (our choice: 3 K, twice the reading's error, so that a cell sitting
+ *  limit (our choice: 3 K, about twice the reading's error, so that a cell sitting
  *  at the limit does not flicker between the two answers). */
 #define GL_PROV_READ_TEMP_HYST_C 3.0f
 

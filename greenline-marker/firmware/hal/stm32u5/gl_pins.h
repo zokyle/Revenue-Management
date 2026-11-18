@@ -3,7 +3,7 @@
  * pin map and run `make pins`.
  *
  *   source   electrical/gl1_main/pinmap.json
- *   sha256   20300089ef2a5f5c73becd2f4015ba6821ddcf528a1428914396da9d3e91bac7
+ *   sha256   37c034526369b4414efee9939714328d8aee391d31614ef7457d06a1f4d41f08
  *   design   gl1_main, STM32U585RIT6 (LQFP-64), DESIGN_SPEC rev D with amendments E1 to E16
  *   status   NETLIST STAGE - nothing built; the layout step may still move
  *            PROPOSED / CHANGED pins
@@ -24,7 +24,7 @@
 #ifndef GL_PINS_H
 #define GL_PINS_H
 
-#define GL_PINS_SOURCE_SHA256 "20300089ef2a5f5c73becd2f4015ba6821ddcf528a1428914396da9d3e91bac7"
+#define GL_PINS_SOURCE_SHA256 "37c034526369b4414efee9939714328d8aee391d31614ef7457d06a1f4d41f08"
 
 /* Function kind (the pin map's "mode"): what GL_PIN_MODE_ALTERNATE means. */
 #define GL_PINFN_GPIO   0 /* OUT_PP: no alternate function, a push-pull output */
@@ -330,8 +330,8 @@
  *     load while PC13 still reads high for up to about 22 ms.
  *     -> gl_hal_usb_supply_ok(); the application stops USB when it is false
  *  8. VBUS_SENSE: divider 100 kohm : 100 kohm on the VBUS pad (not behind the
- *     Schottky). High is guaranteed above 3.92 V at the pad, low below 1.68 V;
- *     removal from the cradle is seen within about 22 ms.
+ *     series switch U12). High is guaranteed above 3.92 V at the pad, low below
+ *     1.68 V; removal from the cradle is seen within about 22 ms.
  *     -> GL_PINS_VBUS_REMOVAL_SEEN_MS; the simulator's VBUS_SENSE lag
  *  9. CAM_R_PWDN is on PH3, the BOOT0 pad (10 kohm to ground): it reads low at
  *     every reset; 0.28 mA flows into the pull-down while it is driven high.

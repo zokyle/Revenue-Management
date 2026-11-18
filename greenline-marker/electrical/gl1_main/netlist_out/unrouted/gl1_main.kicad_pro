@@ -339,19 +339,7 @@
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_L_D0"
-      },
-      {
-        "netclass": "Fine",
-        "pattern": "CAM_L_D1"
-      },
-      {
-        "netclass": "Fine",
         "pattern": "CAM_L_D2"
-      },
-      {
-        "netclass": "Fine",
-        "pattern": "CAM_L_D3"
       },
       {
         "netclass": "Fine",
@@ -359,11 +347,7 @@
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_L_D5"
-      },
-      {
-        "netclass": "Fine",
-        "pattern": "CAM_L_D6"
+        "pattern": "CAM_L_VSYNC"
       },
       {
         "netclass": "Fine",
@@ -371,7 +355,7 @@
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_L_PCLK"
+        "pattern": "CAM_L_D6"
       },
       {
         "netclass": "Fine",
@@ -379,19 +363,23 @@
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_L_VSYNC"
+        "pattern": "CAM_L_D5"
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_R_D0"
+        "pattern": "CAM_L_D3"
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_R_D1"
+        "pattern": "CAM_L_PCLK"
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_R_D2"
+        "pattern": "CAM_L_D1"
+      },
+      {
+        "netclass": "Fine",
+        "pattern": "CAM_L_D0"
       },
       {
         "netclass": "Fine",
@@ -399,15 +387,15 @@
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_R_D4"
+        "pattern": "CAM_R_PCLK"
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_R_D5"
+        "pattern": "CAM_R_D1"
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_R_D6"
+        "pattern": "CAM_R_D0"
       },
       {
         "netclass": "Fine",
@@ -415,11 +403,23 @@
       },
       {
         "netclass": "Fine",
-        "pattern": "CAM_R_PCLK"
+        "pattern": "CAM_R_D6"
       },
       {
         "netclass": "Fine",
         "pattern": "CAM_R_HREF"
+      },
+      {
+        "netclass": "Fine",
+        "pattern": "CAM_R_D5"
+      },
+      {
+        "netclass": "Fine",
+        "pattern": "CAM_R_D2"
+      },
+      {
+        "netclass": "Fine",
+        "pattern": "CAM_R_D4"
       },
       {
         "netclass": "Fine",

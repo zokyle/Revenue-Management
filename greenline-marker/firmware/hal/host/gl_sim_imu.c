@@ -125,7 +125,9 @@ void gl_sim_imu_set_errors(float accel_noise_g, float gyro_noise_rad_s,
 
 void gl_sim_imu_set_temperature(float temp_c)
 {
+    sim_cell_temp_change(true);
     I.temp_c = temp_c;
+    sim_cell_temp_change(false);
 }
 
 void gl_sim_imu_set_present(bool present)
@@ -254,6 +256,13 @@ static void odr_changed_(void)
     I.k_read = 0;
     I.cache_valid = false;
     I.have_prev = false;
+}
+
+bool sim_imu_ints_routed(void)
+{
+    /* an interrupt source is routed to INT1 or INT2: data-ready, or the
+     * wake-up event; a line then moves whenever the part measures */
+    return I.reg[REG_INT1_CTRL] != 0u || I.reg[REG_INT2_CTRL] != 0u || I.reg[REG_MD1_CFG] != 0u;
 }
 
 double sim_imu_supply_ua(void)

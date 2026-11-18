@@ -10,8 +10,8 @@
    "Power": 6
   },
   "nets": 95,
-  "no_connect_pins": 17,
-  "pads_on_nets": 396,
+  "no_connect_pins": 20,
+  "pads_on_nets": 399,
   "parts_dnp": 1,
   "parts_fitted": 103,
   "parts_on_the_bom": 104,
@@ -19,9 +19,7 @@
   "top_side": 96
  },
  "design": "gl1_main",
- "open_items": [
-  "PCB k2"
- ],
+ "open_items": [],
  "passed": true,
  "stage": "netlist (no copper)",
  "stages": {
@@ -35,8 +33,8 @@
   "exports": {
    "bom_lines": 37,
    "bom_lines_by_status": {
-    "PROVISIONAL": 30,
-    "RESEARCH": 7
+    "PROVISIONAL": 31,
+    "RESEARCH": 6
    },
    "passed": true
   },
@@ -44,7 +42,7 @@
    "exit_status": 0,
    "lines": [
     "data: ST STM32_open_pin_data (STM32U585RITx, package LQFP64, STM32U575/585)",
-    "RESULT: PASS - 211 checks passed, 0 failed; 5 PROVISIONAL statements above",
+    "RESULT: PASS - 264 checks passed, 0 failed; 5 PROVISIONAL statements above",
     "SELF-TEST: 20 seeded defects, 20 caught, 0 missed"
    ],
    "passed": true
@@ -57,15 +55,14 @@
     "grain c",
     "grain d",
     "E1 b",
-    "PCB c"
-   ],
-   "failed": [],
-   "open_not_met": [
+    "PCB c",
     "PCB k2"
    ],
+   "failed": [],
+   "open_not_met": [],
    "passed": true,
    "rows": 66,
-   "selftest_defects": 37,
+   "selftest_defects": 43,
    "selftest_missed": 0,
    "workarounds": [
     "bare copper"
@@ -75,7 +72,7 @@
    "components_compared": 111,
    "error": null,
    "nets_compared": 95,
-   "pads_compared": 396,
+   "pads_compared": 399,
    "passed": true,
    "pdf_pages": 8,
    "problems": [],
@@ -87,9 +84,10 @@
    "errors_by_type": {},
    "passed": true,
    "tampered": [],
-   "unconnected": 302,
+   "unconnected": 305,
    "warnings_by_type": {
-    "isolated_copper": 2
+    "isolated_copper": 2,
+    "silk_over_copper": 1
    }
   }
  }

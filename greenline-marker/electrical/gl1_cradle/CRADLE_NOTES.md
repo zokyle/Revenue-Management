@@ -55,7 +55,7 @@ differently from the letter of its source; section 6) or **FAIL**.
 | USB-C | USB-C receptacle (USB 2.0; YAML: GCT USB4105, rear exit), the USB mouth at the YAML edge (usb_mouth_y -35.5) | J1 USB4105-GF-A, top side, body front at marker y -35.50 (1.3 mm beyond the board edge); SBU1 / SBU2 not connected | pass |
 | USB-C land | (KiCad DRC, rule set) 0.20 mm between a hole wall and foreign copper | J1 uses the project copy of KiCad's USB4105 land pattern: the four outer ground pads are 0.04 mm shorter; smallest distance from a locating-peg hole to a pad of J1 0.236 mm (library footprint: 0.194); one pad object per wide land instead of two coincident ones (B1 on A12, B12 on A1, B4 on A9, B9 on A4); the stored file equals the library file with exactly these changes *(DEVIATION from the maker's land pattern, PROVISIONAL; no design rule is relaxed. The merged pad objects are a workaround for the toolchain's router, which cannot join coincident pads; the copper is unchanged)* | **departure** |
 | CC | 5.1 kohm from CC1 and from CC2 to ground | R1: CC1 (A5) - GND, R2: CC2 (B5) - GND, one resistor each | pass |
-| fuse | a resettable fuse in VBUS (hold about 0.2 A, trip about 0.5 A, PROPOSED) | F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold 200 mA, trip 500 mA (PROVISIONAL part MF-FSMF020X-2) | pass |
+| fuse | a resettable fuse in VBUS (E6); E25: chosen for no more than 1.5 ohm after a trip (hold current 0.2 to 0.5 A) | F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold 350 mA, trip 750 mA, 1.4 ohm at most after a trip (PROVISIONAL part MF-FSMF035X-2, ratings from memory) | pass |
 | ESD | USBLC6-2SC6 on VBUS / D+ / D- | U1: D- through pins 1 + 6, D+ through pins 3 + 4, pin 5 on VBUS_IN (C1 100n), pin 2 GND *(ADDED: C1 100 nF at the VBUS pin of U1; the clamp sits on the connector side of the fuse)* | pass |
 | top side | nothing on the top side may reach the pocket ceiling (YAML note) | height limit 0.0 mm on the whole top side, J1 and SP1-SP7 exempt; every other part is on the bottom | pass |
 | pin tables | (task) the pin -> pad table of every library-backed part agrees with a second source | U1 against the installed KiCad symbol USBLC6-2SC6, J1 against USB_C_Receptacle_USB2.0_16P (pad numbers and pin names): all agree *(the spring pins and the fuse have one or two interchangeable pads)* | pass |
@@ -65,7 +65,7 @@ differently from the letter of its source; section 6) or **FAIL**.
 
 ## 3. The circuit
 
-    J1 USB-C  VBUS (A4/B9 A9/B4) --+-- F1 (PTC 0.2 A) ---- VBUS ---- SP1   pin 1  x = -7.62
+    J1 USB-C  VBUS (A4/B9 A9/B4) --+-- F1 (PTC 0.35 A) ---- VBUS ---- SP1   pin 1  x = -7.62
                                    +-- U1 pin 5, C1 100 nF
               D- (A7 B7) ---------- U1 pins 1 + 6 -------- USB_DM -- SP2   pin 2
               D+ (A6 B6) ---------- U1 pins 3 + 4 -------- USB_DP -- SP3   pin 3
@@ -86,7 +86,7 @@ receptacle and the spring pins are the only parts on it, everything else is on t
 | Item | Value | Calculation |
 |---|---|---|
 | R1, R2 | 5.1 kohm 1 %, one on each CC pin | spec E6. A USB-C source applies VBUS only when it sees Rd (5.1 kohm) on one CC line; the cable connects only one of the two, so each pin needs its own resistor (CC1 tied to CC2 with one shared resistor fails with electronically marked cables, whose 1 kohm on the second line then lies in parallel). The sink never asks for more than the default 5 V |
-| F1 | PTC, hold 0.2 A, trip 0.5 A | spec E6 (PROPOSED there). See below |
+| F1 | PTC, hold 0.35 A, no more than 1.5 ohm after a trip | spec E6 as amended by E25. See below |
 | U1 | USBLC6-2SC6 | spec E6: VBUS, D+, D-. On the connector side of the fuse, so that a discharge from the cable does not pass through the PTC; the marker has its own array at its pads |
 | C1 | 100 nF | **added**: at the VBUS pin of U1 |
 | SP1-SP7 | Mill-Max 0914 spring pin, through hole | YAML. SP1-SP4 fitted (VBUS, D-, D+, GND); SP5-SP7 are the same footprint, fitted only in the factory fixture |
@@ -102,18 +102,18 @@ output to 19.8 mA whatever the system draws).
 
 | Question | Answer |
 |---|---|
-| hold current | 0.2 A at 23 C. A polymer PTC holds about 60 % of that at 60 C (PROVISIONAL): 0.12 A, four times the load. It never trips in normal use, also not with a marker that has a fault drawing 100 mA |
-| trip current | 0.5 A. That is what every USB 2.0 port must be able to deliver and what a USB-C source offers at least, so a hard short across the pins (a coin, a key) trips the fuse on the weakest standard source; on a 1.5 A or 3 A charger it trips within a second or so (PROVISIONAL), where the pins and the tracks would otherwise carry 3 A |
-| why not smaller (0.1 A / 0.3 A) | its resistance. A 0603 part with 0.1 A hold has up to about 6.5 ohm, the 0.2 A part about 5 ohm or less (PROVISIONAL): 0.20 V against 0.15 V at 30 mA |
-| **what its resistance costs** | at 30 mA the fuse drops 0.06 V (2 ohm, assumed typical) to 0.15 V (5 ohm). Together with the marker's series Schottky that puts the charger's input at 4.23 to 4.37 V from a 4.75 V source, **below the 4.45 V minimum operating input the research records for the charger** (unverified; main-board notes, 4.1), and only 0.03 to 0.17 V above it from a 5.0 V source. The fuse cannot repair this alone (4.75 V less the diode's 0.35 V is already 4.40 V), but every ohm counts: when the part is chosen, take the lowest guaranteed resistance that still has hold 0.2 A / trip 0.5 A, and give the spec owner the figure. A part with about 1 ohm needs a higher hold current, which is a change of the spec's (PROPOSED) rating |
+| hold current | E25: 0.2 to 0.5 A. The example part holds 0.35 A at 23 C; a polymer PTC holds about 60 % of that at 60 C (PROVISIONAL): 0.21 A, seven times the load. It never trips in normal use |
+| trip current | 0.75 A for the example part (E6 proposed "about 0.5 A"; E25 widened the hold window to get the resistance down). A hard short across the pins (a coin, a key) trips it on any source that delivers more than that; a USB 2.0 port limited to 0.5 A is protected by its own limiter instead. On a 1.5 A or 3 A charger it trips within a second or so (PROVISIONAL) |
+| **resistance (E25)** | no more than 1.5 ohm after a trip. At 30 mA that is 0.045 V. With the marker's ideal-diode switch (E25, in place of the Schottky) the charger's input is 4.68 to 4.71 V from a 4.75 V source, 0.23 to 0.26 V above the 4.45 V minimum the research records (main-board notes, 4.1; every number PROVISIONAL) |
 | voltage | 6 V or more. A sink with Rd only never sees more than 5.5 V |
 | what it does not do | protect against a wet slot: water between the pins draws milliamperes and corrodes; no fuse sees that (spec). The marker must be dry before docking |
 
-Part: Bourns MF-FSMF020X-2 (0603) is named as an example, **PROVISIONAL**: order code,
-voltage (9 V) and resistance are from memory. Any 0603 PTC with hold 0.2 A, trip 0.5 A or
-less, 6 V or more and 5 ohm or less fits the footprint; the lower its resistance the better
-(table above). The ratings sit
-in the table `PTC` of the design file.
+Part: Bourns MF-FSMF035X-2 (0603) is named as an example, **PROVISIONAL**: order code, hold
+and trip current, voltage (6 V) and the resistance after a trip (1.4 ohm) are from memory
+and must be read from the data sheet. The REQUIREMENT is E25's: any 0603 PTC with a hold
+current of 0.2 to 0.5 A, 6 V or more and no more than 1.5 ohm after a trip fits the
+footprint. The ratings sit in the table `PTC` of the design file (the earlier example,
+MF-FSMF020X-2, was remembered with up to 5 ohm and is why E25 was written).
 
 ## 5. PROVISIONAL items
 
@@ -153,7 +153,7 @@ Nothing was relaxed, excluded or waived.
 
 ## 7. Observations
 
-- **Charger headroom is a system matter** (the fuse row of section 4 and the main-board notes, 4.1 and 8.1): the fuse of this board and the Schottky of the marker together take more than a compliant USB source at its low limit leaves. Raised with the spec owner; nothing in this netlist was changed for it.
+- **Charger headroom is a system matter** (the fuse row of section 4 and the main-board notes, 4.1 and 8.1): the first fuse of this board and the Schottky the marker then had together took more than a compliant USB source at its low limit leaves; amendment E25 (ideal-diode switch on the marker, fuse of no more than 1.5 ohm) answers it. Raised with the spec owner; nothing in this netlist was changed for it.
 - **No reference voltage for a debug probe.** The marker's 2.8 V rail is not on the seven pads, so the factory fixture's probe gets no VTref from J2; it has to be set to 2.8 V levels by itself.
 - **The pins are live.** VBUS is on SP1 whenever a cable is plugged in (the spec decided against gating it); the fuse limits a short, nothing limits a slow leak.
 - **Shield to ground.** The receptacle shell is tied straight to ground; a resistor-capacitor pair would be the alternative if the emissions test asks for it.

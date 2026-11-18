@@ -203,12 +203,13 @@ uint8_t gl_power_percent(uint16_t batt_mv);
  * receives GL_NTC_OPEN / GL_NTC_SHORT when the reading is outside the
  * detection thresholds; the returned temperature is then not-a-number.
  *
- * ERROR BUDGET of a reading (tests/test_drv_power.c computes it again):
+ * ERROR BUDGET of a reading (tests/test_drv_power.c computes and prints
+ * it again; the figures below are its output):
  *   arithmetic, single precision          0.011 K at worst (-40..85 C)
- *   NTC 1 %, B 1 %, series resistor 1 %   0.67 K at 0 C, 0.81 K at 45 C,
- *     worst corner                        0.91 K at 60 C
- *   ADC, 0.2 % of full scale              +0.23 K at 0 C, +0.28 K at 45 C,
- *                                         +0.38 K at 60 C
+ *   NTC 1 %, B 1 %, series resistor 1 %,  0.67 K at 0 C, 0.81 K at 45 C,
+ *     worst of the eight corners          1.05 K at 60 C
+ *   ... with an ADC error of 0.2 % of     0.90 K at 0 C, 1.09 K at 45 C,
+ *     full scale                          1.43 K at 60 C
  *   bias pin's output resistance (50 ohm  0.11 K at 0 C, 0.16 K at 60 C
  *     at most, PROVISIONAL)               (NETLIST_NOTES 4.5; not in the test)
  * NOT in it: the part's R-T curve against the one-B equation, and the

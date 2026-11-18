@@ -30,8 +30,9 @@ import gl1_cradle_design as G                  # noqa: E402
 from gleda import geometry                     # noqa: E402
 from gleda.model import BOTTOM, TOP            # noqa: E402
 
-#: DESIGN_SPEC E6: "hold about 0.2 A, trip about 0.5 A"
-SPEC_HOLD_MA, SPEC_TRIP_MA = 200, 500
+#: DESIGN_SPEC E6 as amended by E25: "The cradle fuse is chosen for no more than
+#: 1.5 ohm after a trip (hold current 0.2 to 0.5 A)"
+SPEC_HOLD_WINDOW_MA, SPEC_R1MAX_OHM = (200, 500), 1.5
 
 KICAD_SYMBOL_DIR = "/usr/share/kicad/symbols"
 #: second source for the pin -> pad tables typed into gl1_cradle_design.py:
@@ -193,12 +194,16 @@ def rules(design):
         two("R1", "CC1", "GND") and two("R2", "CC2", "GND") and P["R1"].value == P["R2"].value == "5k1"
         and only("CC1", "J1.CC1", "R1.1") and only("CC2", "J1.CC2", "R2.1")
         and tuple(j1.pins["CC1"].pads) == ("A5",) and tuple(j1.pins["CC2"].pads) == ("B5",))
-    row("fuse", "a resettable fuse in VBUS (hold about 0.2 A, trip about 0.5 A, PROPOSED)",
-        "F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold %d mA, trip %d mA (PROVISIONAL part %s)"
-        % (G.PTC["hold_mA"], G.PTC["trip_mA"], G.PTC["mpn"]),
+    row("fuse", "a resettable fuse in VBUS (E6); E25: chosen for no more than 1.5 ohm after a trip "
+        "(hold current 0.2 to 0.5 A)",
+        "F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold %d mA, trip %d mA, %.1f ohm "
+        "at most after a trip (PROVISIONAL part %s, ratings from memory)"
+        % (G.PTC["hold_mA"], G.PTC["trip_mA"], G.PTC["r_max_ohm"], G.PTC["mpn"]),
         two("F1", "VBUS_IN", "VBUS") and only("VBUS", "F1.2", "SP1.1") and net("J1.VBUS") == "VBUS_IN"
         and tuple(j1.pins["VBUS"].pads) == ("A4", "A9")
-        and G.PTC["hold_mA"] == SPEC_HOLD_MA and G.PTC["trip_mA"] == SPEC_TRIP_MA
+        and SPEC_HOLD_WINDOW_MA[0] <= G.PTC["hold_mA"] <= SPEC_HOLD_WINDOW_MA[1]
+        and G.PTC["r_max_ohm"] <= SPEC_R1MAX_OHM and G.PTC["r1max_limit_ohm"] == SPEC_R1MAX_OHM
+        and G.PTC["trip_mA"] <= 2.5 * G.PTC["hold_mA"]
         and "F1" in P and P["F1"].mpn == G.PTC["mpn"])
     row("ESD", "USBLC6-2SC6 on VBUS / D+ / D-",
         "U1: D- through pins 1 + 6, D+ through pins 3 + 4, pin 5 on VBUS_IN (C1 100n), pin 2 GND",

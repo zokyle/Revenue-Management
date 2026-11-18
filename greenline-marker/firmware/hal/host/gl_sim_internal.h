@@ -29,6 +29,13 @@ void sim_set_input(gl_pin_t pin, bool level);
 bool sim_pin_out_high(gl_pin_t pin);
 bool sim_pin_out_low(gl_pin_t pin);
 bool sim_pin_is_alt(gl_pin_t pin);
+/** The cell temperature of the board is about to change (true) / has changed
+ *  (false) through another model (it follows the IMU's by default): the
+ *  charger model accounts the time up to now at the old temperature, then
+ *  looks at the new one.  Without this a change took effect only when the
+ *  clock next moved, and that stretch was accounted at the new temperature
+ *  in the old charger state. */
+void sim_cell_temp_change(bool before);
 /** Deterministic pseudo-random numbers (reseeded by gl_sim_reset). */
 uint32_t sim_rand_u32(void);
 float sim_rand_normal(void);
@@ -64,6 +71,8 @@ uint64_t sim_imu_next_event(void);
 void sim_imu_fire(uint64_t t);
 /** Die temperature of the IMU model, degrees C. */
 float sim_imu_temperature(void);
+/** True while an interrupt source is routed to one of the IMU's two lines. */
+bool sim_imu_ints_routed(void);
 /** Supply current of the IMU in its present mode, microamperes. */
 double sim_imu_supply_ua(void);
 

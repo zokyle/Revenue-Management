@@ -157,6 +157,18 @@
      "routed_item": "track GND F.Cu"
     },
     "router_warnings": [],
+    "sensitive_nets": {
+     "usb_pair": {
+      "USB_DM_mm": 18.028,
+      "USB_DP_mm": 16.372,
+      "largest_separation_mm": 2.54,
+      "note": "full-speed USB (12 Mbit/s): the router has no differential-pair mode; the two nets are ordinary tracks",
+      "vias": {
+       "USB_DM": 1,
+       "USB_DP": 1
+      }
+     }
+    },
     "solder_mask": {
      "bottom": {
       "between": [

@@ -98,7 +98,8 @@ GL_TEST(test_table_is_well_formed)
         }
     }
     /* every state with a time limit has a TIMEOUT row; the two without a
-     * limit are SLEEP and CRADLE_USB */
+     * limit are the two in which the MCU sleeps: SLEEP and CRADLE_SLEEP
+     * (rev E: CRADLE_USB has the 30 s of DESIGN_SPEC E32) */
     for (int s = 0; s < GL_UI_STATE_COUNT; s++) {
         bool has = false;
         for (size_t i = 0; i < n; i++) {
@@ -106,7 +107,7 @@ GL_TEST(test_table_is_well_formed)
                 has = true;
             }
         }
-        if (s == GL_UI_SLEEP || s == GL_UI_CRADLE_USB) {
+        if (s == GL_UI_SLEEP || s == GL_UI_CRADLE_SLEEP) {
             GL_CHECK_EQ(gl_ui_timeout_ms((gl_ui_state_t)s), 0);
             GL_CHECK(!has);
         } else {
@@ -568,9 +569,56 @@ GL_TEST(test_usb_cradle)
     GL_CHECK_EQ(ev(GL_EV_UPRIGHT, 0), 0);
     GL_CHECK_EQ(ev(GL_EV_FLAT, 0), 0);
     GL_CHECK_EQ(ev(GL_EV_CAL_DONE, 0), 0);
-    GL_CHECK_EQ(gl_ui_tick(&ui, now + 10000000u), 0);
+    GL_CHECK_EQ(ev(GL_EV_TOO_HOT, 0), 0);
+    /* DESIGN_SPEC E32: the state lasts 30 s without host activity ... */
+    GL_CHECK_EQ(gl_ui_timeout_ms(GL_UI_CRADLE_USB), 30000);
+    now += 29900;
+    GL_CHECK_EQ(gl_ui_tick(&ui, now), 0);
     STATE_IS(GL_UI_CRADLE_USB);
-    /* lifted out of the cradle */
+    /* ... counted again from every sign of a host (the application calls
+     * gl_ui_keepalive when one has sent something) */
+    gl_ui_keepalive(&ui, now);
+    now += 29900;
+    GL_CHECK_EQ(gl_ui_tick(&ui, now), 0);
+    STATE_IS(GL_UI_CRADLE_USB);
+    /* then: asleep in the cradle.  Not the ordinary sleep (the display
+     * stays on with the symbol), and what happens to USB is the
+     * application's decision (standby under a suspended bus, else off) */
+    now += 200;
+    a = gl_ui_tick(&ui, now);
+    STATE_IS(GL_UI_CRADLE_SLEEP);
+    GL_CHECK((a & GL_ACT_CRADLE_SLEEP) && (a & GL_ACT_REDRAW));
+    GL_CHECK(!(a & GL_ACT_ENTER_SLEEP) && !(a & GL_ACT_USB_STOP));
+    /* nothing but the host and the cradle ends it: no time limit, and
+     * motion, taps, a low cell, a hot cell and a bouncing VBUS change nothing */
+    GL_CHECK_EQ(gl_ui_timeout_ms(GL_UI_CRADLE_SLEEP), 0);
+    GL_CHECK_EQ(gl_ui_tick(&ui, now + 100000000u), 0);
+    GL_CHECK_EQ(ev(GL_EV_MOTION, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_DOUBLE_TAP, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_BATT_LOW, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_TOO_HOT, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_USB_ATTACH, 0), 0);
+    GL_CHECK_EQ(ev(GL_EV_TIMEOUT, 0), 0);
+    STATE_IS(GL_UI_CRADLE_SLEEP);
+    /* the host resumes the bus: awake again, USB started, 30 s more */
+    a = ev(GL_EV_USB_RESUME, 0);
+    STATE_IS(GL_UI_CRADLE_USB);
+    GL_CHECK((a & GL_ACT_DISPLAY_ON) && (a & GL_ACT_USB_START) && (a & GL_ACT_REDRAW));
+    GL_CHECK_EQ(gl_ui_time_left_ms(&ui, now), 30000u);
+    /* a resume means nothing anywhere else */
+    GL_CHECK_EQ(ev(GL_EV_USB_RESUME, 0), 0);
+    STATE_IS(GL_UI_CRADLE_USB);
+    /* lifted out of the cradle while asleep in it: the ordinary sleep */
+    now += 30100;
+    (void)gl_ui_tick(&ui, now);
+    STATE_IS(GL_UI_CRADLE_SLEEP);
+    a = ev(GL_EV_USB_DETACH, 0);
+    GL_CHECK((a & GL_ACT_USB_STOP) && (a & GL_ACT_ENTER_SLEEP));
+    STATE_IS(GL_UI_SLEEP);
+    GL_CHECK(!ui.usb);
+    /* lifted out of the cradle while awake in it */
+    a = ev(GL_EV_USB_ATTACH, 0);
+    STATE_IS(GL_UI_CRADLE_USB);
     a = ev(GL_EV_USB_DETACH, 0);
     GL_CHECK((a & GL_ACT_USB_STOP) && (a & GL_ACT_ENTER_SLEEP));
     STATE_IS(GL_UI_SLEEP);
@@ -760,6 +808,8 @@ GL_TEST(test_low_battery_and_faults_from_every_state)
         /* CAL_ZERO */ { GL_EV_NONE }, /* reached through enter_zeroing() */
         /* ERROR */ { GL_EV_MOTION, GL_EV_FAULT, GL_EV_NONE },
         /* LOW_BATT */ { GL_EV_MOTION, GL_EV_BATT_LOW, GL_EV_NONE },
+        /* TOO_HOT */ { GL_EV_MOTION, GL_EV_TOO_HOT, GL_EV_NONE },
+        /* CRADLE_SLEEP */ { GL_EV_USB_ATTACH, GL_EV_NONE }, /* and 30 s, below */
     };
     for (int s = 0; s < GL_UI_STATE_COUNT; s++) {
         for (int hit = 0; hit < 3; hit++) {
@@ -776,10 +826,15 @@ GL_TEST(test_low_battery_and_faults_from_every_state)
                     ev(paths[s][i], GL_ERR_IO);
                 }
             }
+            if (s == GL_UI_CRADLE_SLEEP) {
+                now += 30100; /* 30 s without a host */
+                gl_ui_tick(&ui, now);
+            }
             STATE_IS(s);
             if (hit == 0) {
                 a = ev(GL_EV_BATT_LOW, 0);
-                if (s == GL_UI_SLEEP || s == GL_UI_CRADLE_USB || s == GL_UI_CAL_ZERO) {
+                if (s == GL_UI_SLEEP || s == GL_UI_CRADLE_USB || s == GL_UI_CRADLE_SLEEP ||
+                    s == GL_UI_CAL_ZERO) {
                     STATE_IS(s); /* asleep, or powered / calibrating: no warning */
                 } else {
                     STATE_IS(GL_UI_LOW_BATT);
@@ -800,12 +855,15 @@ GL_TEST(test_low_battery_and_faults_from_every_state)
                 }
             } else {
                 a = ev(GL_EV_USB_ATTACH, 0);
-                /* from every state, also from the zeroing (which is abandoned) */
-                STATE_IS(GL_UI_CRADLE_USB);
+                /* from every state, also from the zeroing (which is abandoned);
+                 * asleep in the cradle it is VBUS bouncing and changes nothing */
+                STATE_IS(s == GL_UI_CRADLE_SLEEP ? GL_UI_CRADLE_SLEEP : GL_UI_CRADLE_USB);
                 if (s == GL_UI_CAL_ZERO) {
                     GL_CHECK(a & GL_ACT_CAL_ABORT);
                 }
-                if (s != GL_UI_CRADLE_USB) {
+                if (s == GL_UI_CRADLE_SLEEP) {
+                    GL_CHECK_EQ(a, 0);
+                } else if (s != GL_UI_CRADLE_USB) {
                     GL_CHECK(a & GL_ACT_USB_START);
                 }
             }
@@ -1068,6 +1126,114 @@ GL_TEST(test_every_screen_stays_in_the_aperture)
     }
     GL_CHECK_EQ(outside, 0);
 }
+
+/* Rev E screens.  E32: the static picture of the cradle sleep says what the
+ * charge is doing - charging, full, or why it is stopped - and each of those
+ * is a different picture; so does the awake cradle screen.  E13: "TOO HOT".
+ * All of them stay inside the round aperture. */
+GL_TEST(test_cradle_and_too_hot_screens)
+{
+    static uint8_t pic[2][12][GL_GFX_BYTES];
+    gl_ui_view_t v;
+    int n = 0;
+    gl_gfx_init(&gfx);
+    for (int st = 0; st < 2; st++) {
+        n = 0;
+        fresh();
+        ui.state = (uint8_t)(st == 0 ? GL_UI_CRADLE_SLEEP : GL_UI_CRADLE_USB);
+        /* charging, full, idle, then every reason a charge is stopped for */
+        for (int k = 0; k < 3 + 7; k++) {
+            view_default(&v);
+            v.have_result = false;
+            v.charging = (k == 0);
+            v.chg_full = (k == 1);
+            v.chg_blocked = (uint8_t)(k >= 3 ? k - 2 : 0);
+            gl_ui_render(&ui, &v, &gfx);
+            GL_CHECK_EQ(ink_outside(), 0);
+            GL_CHECK(gl_gfx_count_black(&gfx) > 150);
+            memcpy(pic[st][n], gfx.px, GL_GFX_BYTES);
+            for (int j = 0; j < n; j++) {
+                GL_CHECK(memcmp(pic[st][j], pic[st][n], GL_GFX_BYTES) != 0);
+            }
+            n++;
+        }
+        /* a value of chg_blocked nobody defined still draws something sane */
+        view_default(&v);
+        v.chg_blocked = 200;
+        gl_ui_render(&ui, &v, &gfx);
+        GL_CHECK_EQ(ink_outside(), 0);
+    }
+    /* the sleep picture is not the awake one */
+    GL_CHECK(memcmp(pic[0][0], pic[1][0], GL_GFX_BYTES) != 0);
+    /* TOO HOT: one picture, whatever the view holds */
+    fresh();
+    ui.state = (uint8_t)GL_UI_TOO_HOT;
+    view_default(&v);
+    gl_ui_render(&ui, &v, &gfx);
+    GL_CHECK_EQ(ink_outside(), 0);
+    GL_CHECK(gl_gfx_count_black(&gfx) > 400);
+    memcpy(pic[0][0], gfx.px, GL_GFX_BYTES);
+    v.have_result = false;
+    v.charging = true;
+    gl_ui_render(&ui, &v, &gfx);
+    GL_CHECK(memcmp(pic[0][0], gfx.px, GL_GFX_BYTES) == 0);
+}
+
+/* E13 in the state machine: the event stops a read that is on its way to the
+ * cameras, the screen shows for 4 s, then the marker sleeps; a result that
+ * is already shown, the dial and the zeroing are left alone. */
+GL_TEST(test_too_hot_stops_a_read_and_sleeps)
+{
+    uint32_t a;
+    static const gl_ui_state_t untouched[] = { GL_UI_SLEEP, GL_UI_SHOW_RESULT,
+                                               GL_UI_PRECISION_WAIT_SPIN, GL_UI_SETTINGS_DIAL,
+                                               GL_UI_ERROR, GL_UI_LOW_BATT, GL_UI_CRADLE_USB,
+                                               GL_UI_CRADLE_SLEEP, GL_UI_CAL_ZERO };
+    /* the tilt read is done, the cameras would start now */
+    fresh();
+    wake_up();
+    ev(GL_EV_STILL, 0);
+    STATE_IS(GL_UI_READ_TILT);
+    a = ev(GL_EV_TOO_HOT, 0);
+    STATE_IS(GL_UI_TOO_HOT);
+    GL_CHECK((a & GL_ACT_ABORT_READ) && (a & GL_ACT_REDRAW) && (a & GL_ACT_DISPLAY_ON));
+    GL_CHECK(!(a & GL_ACT_START_CAPTURE));
+    /* nothing starts a read from here */
+    GL_CHECK_EQ(ev(GL_EV_STILL, 0) & (GL_ACT_START_TILT | GL_ACT_START_CAPTURE), 0);
+    GL_CHECK_EQ(ev(GL_EV_TILT_DONE, 0) & GL_ACT_START_CAPTURE, 0);
+    GL_CHECK_EQ(ev(GL_EV_DOUBLE_TAP, 0) & (GL_ACT_START_TILT | GL_ACT_START_CAPTURE), 0);
+    STATE_IS(GL_UI_TOO_HOT);
+    GL_CHECK_EQ(gl_ui_timeout_ms(GL_UI_TOO_HOT), 4000);
+    now += 3900;
+    GL_CHECK_EQ(gl_ui_tick(&ui, now), 0);
+    now += 200;
+    a = gl_ui_tick(&ui, now);
+    GL_CHECK(a & GL_ACT_ENTER_SLEEP);
+    STATE_IS(GL_UI_SLEEP);
+    /* from the capture itself (a read in a group of several) and while waking */
+    fresh();
+    wake_up();
+    ev(GL_EV_STILL, 0);
+    ev(GL_EV_TILT_DONE, 0);
+    STATE_IS(GL_UI_CAPTURE);
+    GL_CHECK(ev(GL_EV_TOO_HOT, 0) & GL_ACT_ABORT_READ);
+    STATE_IS(GL_UI_TOO_HOT);
+    fresh();
+    wake_up();
+    GL_CHECK(ev(GL_EV_TOO_HOT, 0) & GL_ACT_ABORT_READ);
+    STATE_IS(GL_UI_TOO_HOT);
+    /* the cradle takes it from there as from anywhere */
+    a = ev(GL_EV_USB_ATTACH, 0);
+    STATE_IS(GL_UI_CRADLE_USB);
+    /* states the event leaves alone */
+    for (size_t i = 0; i < sizeof(untouched) / sizeof(untouched[0]); i++) {
+        fresh();
+        ui.state = (uint8_t)untouched[i];
+        GL_CHECK_EQ(ev(GL_EV_TOO_HOT, 0), 0);
+        STATE_IS(untouched[i]);
+    }
+}
+
 
 /* Fit the direction of the aim line from the rendered result screen, using
  * only pixels of the band 44..86 rows that belong to the long line. */
@@ -1579,6 +1745,8 @@ int main(void)
     GL_RUN(test_timeouts_and_tick_wraparound);
     GL_RUN(test_random_event_fuzz);
     GL_RUN(test_every_screen_stays_in_the_aperture);
+    GL_RUN(test_cradle_and_too_hot_screens);
+    GL_RUN(test_too_hot_stops_a_read_and_sleeps);
     GL_RUN(test_result_screen_shows_the_aim_line);
     GL_RUN(test_result_screen_messages_and_tentative_line);
     GL_RUN(test_render_with_hostile_view_values);

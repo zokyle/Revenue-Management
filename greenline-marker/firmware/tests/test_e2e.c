@@ -966,19 +966,28 @@ GL_TEST(test_survey_second_drop)
      * noise of the frames - VISIBLE in 51 of 80 runs of this scenario with
      * the read shifted in time (compute factor 0 .. 3.95 in steps of 0.05).
      * While the simulator charged no computation this test happened to be
-     * one of the 51 and asserted the curvature.  At the nominal factor it is
-     * one of the 29.  NOT MET in this run, pinned: the base is reported AT
-     * THE HORIZON and the fit has no curvature (c = 0.00001; 0.0008 with the
-     * base seen, which is what the two tilts imply: 0.5 % of slope over 3 m,
-     * halved). */
+     * one of the 51 and asserted the curvature.  At the nominal factor in
+     * phase 2 it was one of the 29 (pinned then: AT THE HORIZON, no
+     * curvature, c = 0.00001).  In phase 3 the read is shifted again (the
+     * cell temperature is measured before the cameras start, E13) and THIS
+     * run is one of the VISIBLE ones: c = 0.0008, which is what the two
+     * tilts imply (0.5 % of slope over 3 m, halved).  NOTHING ABOUT THE
+     * MARGIN HAS CHANGED: the class of this scene still depends on the noise
+     * of the frames, and the requirement "curvature from two drops at 3 m"
+     * is still NOT MET as a property - only this run happens to show it.
+     * Both branches are checked; the last line pins which one this run is,
+     * so that the next shift of the timing is noticed. */
     if (app.meas[1].flag_base_visible) {
         GL_CHECK(app.est.patch[2] > 0.0005f && app.est.patch[2] < 0.003f);
+        printf("    the base of the stick at the second drop was classed VISIBLE in this run (it "
+               "ends 1.24 rows below the horizon, the margin is 1.5: the class flips with the "
+               "frame noise, 51 of 80 runs in phase 2): curvature %.5f\n", (double)app.est.patch[2]);
     } else {
         GL_CHECK(fabsf(app.est.patch[2]) < 0.0002f);
         printf("    NOT MET: the base of the stick at the second drop was classed AT THE HORIZON "
                "(it ends 1.24 rows below it, the margin is 1.5): no curvature in the fit\n");
     }
-    GL_CHECK(!app.meas[1].flag_base_visible); /* the pin: what this run gives */
+    GL_CHECK(app.meas[1].flag_base_visible); /* the pin: what this run gives (see above) */
     GL_CHECK(app.est.patch[3] > 0.001f);
     printf("    Survey estimate from 2 drops: patch a %.4f b %.4f c %.5f d %.5f, aim %.1f mrad, "
            "status %u, aim source %u\n", (double)app.est.patch[0], (double)app.est.patch[1],
@@ -1136,10 +1145,13 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
     GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
     GL_CHECK(app.usb_on && gl_hal_usb_connected());
     /* charging allowed: the cell NTC reads 22 C, inside the window, and the
-     * die sensors vouch for it -> CHG_INHIBIT stays released (the charger of
-     * rev C2 runs by default; the firmware can only stop it) */
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+     * die sensors vouch for it -> CHG_INHIBIT stays released, ANALOG (rev E:
+     * the BQ25101 runs by itself; the firmware can only stop it, by driving
+     * the pin HIGH) */
+    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
     GL_CHECK(gl_sim_charger_on());
+    GL_CHECK_EQ(gl_app_cradle_state(&app), GL_CRADLE_LINK);
     GL_CHECK(app.power.charge_enabled && !app.power.inhibit);
     GL_CHECK_EQ(app.power.chg_reason, GL_CHG_ALLOWED);
     GL_CHECK(app.power.cell_temp_valid);
@@ -1151,12 +1163,15 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
     GL_CHECK_EQ(n, 6);
     GL_CHECK_EQ(seq, 1);
     GL_CHECK(pl[0] == GL_OK && memcmp(&pl[1], "hello", 5) == 0);
-    /* GET_INFO: protocol 1, hardware rev C, the version of the ported solver */
+    /* GET_INFO: the protocol version, hardware revision 5 = "E", the version
+     * of the ported solver */
     host_send_(2, GL_CMD_GET_INFO, NULL, 0);
     n = host_get_(GL_CMD_GET_INFO | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
     GL_CHECK_EQ(n, 1 + (int)GL_PROTO_INFO_LEN);
     GL_CHECK_EQ(pl[1], GL_PROTO_VERSION);
     GL_CHECK_EQ(pl[2], GL_APP_HW_REV);
+    GL_CHECK_EQ(pl[2], 5);
+    GL_CHECK_EQ(GL_APP_HW_REV_LETTER, 'E');
     GL_CHECK_EQ(gl_get_u32(&pl[9]), GL_SOLVER_VERSION);
     GL_CHECK(GL_SOLVER_VERSION != 0u);
     /* GET_STATUS */
@@ -1260,16 +1275,22 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
         host_send_(10, GL_CMD_STREAM, off, 4);
         (void)host_get_(GL_CMD_STREAM | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
     }
-    /* too hot to charge: the board (cell, IMU, MCU) goes to 47 C; the gate
-     * pulls CHG_INHIBIT low at its next check, within the supervision period */
+    /* too hot to charge: the board (cell, IMU, MCU) goes to 47 C.  The
+     * charger's own window lets it go on (its WARM zone, to 4.06 V); the
+     * FIRMWARE's narrower window stops it: CHG_INHIBIT is driven HIGH at the
+     * next check, within the supervision period.  The host keeps talking all
+     * the while (a silent one would send the marker to sleep after 30 s:
+     * tests/test_e2e_power.c) */
     {
         const uint64_t out0 = gl_sim_stats()->chg_outside_us;
         gl_sim_imu_set_temperature(47.0f);
-        run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_CHG_TEMP_PERIOD_MS + 200u);
-        GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+        run_talking_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_CHG_TEMP_PERIOD_MS + 200u);
+        GL_CHECK(gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
         GL_CHECK(!gl_sim_charger_on());
+        GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DISABLED);
         GL_CHECK(!app.power.charge_enabled && app.power.inhibit);
         GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TOO_HOT);
+        GL_CHECK_EQ(app.power.chg_status, GL_CHGST_INHIBITED);
         GL_CHECK_EQ(app.view.chg_blocked, 2);
         printf("    cradle at 47 C: the charger ran for %.2f s before the firmware stopped it "
                "(supervision period %.0f s)\n",
@@ -1277,20 +1298,25 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
                (double)GL_APP_CHG_TEMP_PERIOD_MS / 1000.0);
         GL_CHECK(gl_sim_stats()->chg_outside_us - out0 <= (uint64_t)GL_APP_CHG_TEMP_PERIOD_MS * 1000u + 50000u);
         /* and it stays stopped for as long as it is hot */
-        run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 60000u);
-        GL_CHECK(gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+        run_talking_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 60000u);
+        GL_CHECK(gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
         GL_CHECK(gl_sim_stats()->chg_outside_us - out0 <= (uint64_t)GL_APP_CHG_TEMP_PERIOD_MS * 1000u + 50000u);
-        /* back to 30 C: released again */
+        /* back to 30 C: released again (ANALOG), the charger starts by itself */
         gl_sim_imu_set_temperature(30.0f);
-        run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_CHG_TEMP_PERIOD_MS + 200u);
-        GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+        run_talking_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + GL_APP_CHG_TEMP_PERIOD_MS + 200u);
+        GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+        GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
         GL_CHECK(gl_sim_charger_on());
         GL_CHECK_EQ(app.power.chg_reason, GL_CHG_ALLOWED);
     }
 
-    /* on USB the MCU never enters Stop mode (the simulator would count it) */
+    /* under a host that talks the MCU never enters Stop mode (the simulator
+     * would count Stop with USB running as a violation) and stays in the
+     * cradle state */
     GL_CHECK_EQ(gl_sim_violations()->stop_mode, 0u);
     GL_CHECK(gl_sim_stats()->idle_us > 60000000u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
+    GL_CHECK_EQ(gl_app_cradle_state(&app), GL_CRADLE_LINK);
 
     /* REBOOT to the ROM DFU bootloader: refused from a locked session (the
      * ROM bootloader has no time-out and the consumer cradle no reset
@@ -1318,7 +1344,7 @@ GL_TEST(test_cradle_usb_charging_and_dfu)
     run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 300u);
     GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP);
     GL_CHECK(!app.usb_on && !gl_hal_usb_connected());
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
     GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
     GL_CHECK(!gl_sim_lcd()->disp);
     if (gl_sim_violation_total() != 0u) {
@@ -1348,12 +1374,12 @@ GL_TEST(test_missing_devices_are_reported_not_fatal)
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 200u);
     GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
-    /* The IMU is missing, but since rev C2 the IMU's die sensor is only a
+    /* The IMU is missing, but since rev C2 (and on rev E) the IMU's die sensor is only a
      * plausibility check: the cell NTC reads 22 C and the MCU's own sensor
      * vouches for it, so the charger keeps running (phase 1, whose gate
      * needed the IMU, stopped the charge here) */
     run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 2000u);
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
     GL_CHECK(gl_sim_charger_on());
     GL_CHECK_EQ(app.power.chg_reason, GL_CHG_ALLOWED);
     GL_CHECK(!app.temp_valid && app.power.mcu_temp_valid && app.power.cell_temp_valid);
@@ -1404,7 +1430,7 @@ GL_TEST(test_low_and_critical_battery)
     gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
     run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 500u);
     GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_USB);
-    GL_CHECK(!gl_sim_pin_drives_low(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
     GL_CHECK(gl_sim_charger_on() && app.power.charge_enabled);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }

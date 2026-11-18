@@ -1,7 +1,7 @@
 {
  "counts": {
   "nets": 95,
-  "pads_on_nets": 396,
+  "pads_on_nets": 399,
   "parts": 120
  },
  "design": "gl1_main",
@@ -52,13 +52,13 @@
    "no_route": false,
    "nodes": [
     "U1.PC6",
-    "RN1.B1",
-    "RN4.B1"
+    "RN3.B4",
+    "RN4.B4"
    ],
    "pads": [
     "U1.37",
-    "RN1.8",
-    "RN4.8"
+    "RN3.5",
+    "RN4.5"
    ],
    "planes": [],
    "power_flag": false,
@@ -73,13 +73,13 @@
    "no_route": false,
    "nodes": [
     "U1.PC7",
-    "RN1.B2",
-    "RN4.B2"
+    "RN3.B3",
+    "RN4.B3"
    ],
    "pads": [
     "U1.38",
-    "RN1.7",
-    "RN4.7"
+    "RN3.6",
+    "RN4.6"
    ],
    "planes": [],
    "power_flag": false,
@@ -94,13 +94,13 @@
    "no_route": false,
    "nodes": [
     "U1.PC8",
-    "RN1.B3",
-    "RN4.B3"
+    "RN1.B1",
+    "RN6.B2"
    ],
    "pads": [
     "U1.39",
-    "RN1.6",
-    "RN4.6"
+    "RN1.8",
+    "RN6.7"
    ],
    "planes": [],
    "power_flag": false,
@@ -115,13 +115,13 @@
    "no_route": false,
    "nodes": [
     "U1.PC9",
-    "RN1.B4",
-    "RN4.B4"
+    "RN3.B1",
+    "RN4.B1"
    ],
    "pads": [
     "U1.40",
-    "RN1.5",
-    "RN4.5"
+    "RN3.8",
+    "RN4.8"
    ],
    "planes": [],
    "power_flag": false,
@@ -136,13 +136,13 @@
    "no_route": false,
    "nodes": [
     "U1.PC11",
-    "RN2.B1",
-    "RN5.B1"
+    "RN1.B2",
+    "RN6.B3"
    ],
    "pads": [
     "U1.52",
-    "RN2.8",
-    "RN5.8"
+    "RN1.7",
+    "RN6.6"
    ],
    "planes": [],
    "power_flag": false,
@@ -157,13 +157,13 @@
    "no_route": false,
    "nodes": [
     "U1.PB6",
-    "RN2.B2",
-    "RN5.B2"
+    "RN2.B3",
+    "RN5.B4"
    ],
    "pads": [
     "U1.58",
-    "RN2.7",
-    "RN5.7"
+    "RN2.6",
+    "RN5.5"
    ],
    "planes": [],
    "power_flag": false,
@@ -178,13 +178,13 @@
    "no_route": false,
    "nodes": [
     "U1.PB8",
-    "RN2.B3",
-    "RN5.B3"
+    "RN2.B1",
+    "RN5.B2"
    ],
    "pads": [
     "U1.61",
-    "RN2.6",
-    "RN5.6"
+    "RN2.8",
+    "RN5.7"
    ],
    "planes": [],
    "power_flag": false,
@@ -199,13 +199,13 @@
    "no_route": false,
    "nodes": [
     "U1.PB9",
-    "RN2.B4",
-    "RN5.B4"
+    "RN1.B4",
+    "RN5.B1"
    ],
    "pads": [
     "U1.62",
-    "RN2.5",
-    "RN5.5"
+    "RN1.5",
+    "RN5.8"
    ],
    "planes": [],
    "power_flag": false,
@@ -241,13 +241,13 @@
    "no_route": false,
    "nodes": [
     "U1.PA4",
-    "RN3.B2",
-    "RN6.B2"
+    "RN2.B2",
+    "RN5.B3"
    ],
    "pads": [
     "U1.20",
-    "RN3.7",
-    "RN6.7"
+    "RN2.7",
+    "RN5.6"
    ],
    "planes": [],
    "power_flag": false,
@@ -262,11 +262,11 @@
    "no_route": false,
    "nodes": [
     "U2.D0",
-    "RN1.A1"
+    "RN3.A4"
    ],
    "pads": [
     "U2.B2",
-    "RN1.1"
+    "RN3.4"
    ],
    "planes": [],
    "power_flag": false,
@@ -281,11 +281,11 @@
    "no_route": false,
    "nodes": [
     "U2.D1",
-    "RN1.A2"
+    "RN3.A3"
    ],
    "pads": [
     "U2.B3",
-    "RN1.2"
+    "RN3.3"
    ],
    "planes": [],
    "power_flag": false,
@@ -300,11 +300,11 @@
    "no_route": false,
    "nodes": [
     "U2.D2",
-    "RN1.A3"
+    "RN1.A1"
    ],
    "pads": [
     "U2.B4",
-    "RN1.3"
+    "RN1.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -319,11 +319,11 @@
    "no_route": false,
    "nodes": [
     "U2.D3",
-    "RN1.A4"
+    "RN3.A1"
    ],
    "pads": [
     "U2.C2",
-    "RN1.4"
+    "RN3.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -338,11 +338,11 @@
    "no_route": false,
    "nodes": [
     "U2.D4",
-    "RN2.A1"
+    "RN1.A2"
    ],
    "pads": [
     "U2.C4",
-    "RN2.1"
+    "RN1.2"
    ],
    "planes": [],
    "power_flag": false,
@@ -357,11 +357,11 @@
    "no_route": false,
    "nodes": [
     "U2.D5",
-    "RN2.A2"
+    "RN2.A3"
    ],
    "pads": [
     "U2.D2",
-    "RN2.2"
+    "RN2.3"
    ],
    "planes": [],
    "power_flag": false,
@@ -376,11 +376,11 @@
    "no_route": false,
    "nodes": [
     "U2.D6",
-    "RN2.A3"
+    "RN2.A1"
    ],
    "pads": [
     "U2.D3",
-    "RN2.3"
+    "RN2.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -395,11 +395,11 @@
    "no_route": false,
    "nodes": [
     "U2.D7",
-    "RN2.A4"
+    "RN1.A4"
    ],
    "pads": [
     "U2.D4",
-    "RN2.4"
+    "RN1.4"
    ],
    "planes": [],
    "power_flag": false,
@@ -433,11 +433,11 @@
    "no_route": false,
    "nodes": [
     "U2.HREF",
-    "RN3.A2"
+    "RN2.A2"
    ],
    "pads": [
     "U2.E2",
-    "RN3.2"
+    "RN2.2"
    ],
    "planes": [],
    "power_flag": false,
@@ -452,11 +452,11 @@
    "no_route": false,
    "nodes": [
     "U2.PCLK",
-    "RN3.A1"
+    "RN3.A2"
    ],
    "pads": [
     "U2.C1",
-    "RN3.1"
+    "RN3.2"
    ],
    "planes": [],
    "power_flag": false,
@@ -509,11 +509,11 @@
    "no_route": false,
    "nodes": [
     "U2.VSYNC",
-    "RN3.A3"
+    "RN1.A3"
    ],
    "pads": [
     "U2.C5",
-    "RN3.3"
+    "RN1.3"
    ],
    "planes": [],
    "power_flag": false,
@@ -528,13 +528,13 @@
    "no_route": false,
    "nodes": [
     "U1.PA6",
-    "RN3.B1",
-    "RN6.B1"
+    "RN3.B2",
+    "RN4.B2"
    ],
    "pads": [
     "U1.22",
-    "RN3.8",
-    "RN6.8"
+    "RN3.7",
+    "RN4.7"
    ],
    "planes": [],
    "power_flag": false,
@@ -549,11 +549,11 @@
    "no_route": false,
    "nodes": [
     "U3.D0",
-    "RN4.A1"
+    "RN4.A4"
    ],
    "pads": [
     "U3.B2",
-    "RN4.1"
+    "RN4.4"
    ],
    "planes": [],
    "power_flag": false,
@@ -568,11 +568,11 @@
    "no_route": false,
    "nodes": [
     "U3.D1",
-    "RN4.A2"
+    "RN4.A3"
    ],
    "pads": [
     "U3.B3",
-    "RN4.2"
+    "RN4.3"
    ],
    "planes": [],
    "power_flag": false,
@@ -587,11 +587,11 @@
    "no_route": false,
    "nodes": [
     "U3.D2",
-    "RN4.A3"
+    "RN6.A2"
    ],
    "pads": [
     "U3.B4",
-    "RN4.3"
+    "RN6.2"
    ],
    "planes": [],
    "power_flag": false,
@@ -606,11 +606,11 @@
    "no_route": false,
    "nodes": [
     "U3.D3",
-    "RN4.A4"
+    "RN4.A1"
    ],
    "pads": [
     "U3.C2",
-    "RN4.4"
+    "RN4.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -625,11 +625,11 @@
    "no_route": false,
    "nodes": [
     "U3.D4",
-    "RN5.A1"
+    "RN6.A3"
    ],
    "pads": [
     "U3.C4",
-    "RN5.1"
+    "RN6.3"
    ],
    "planes": [],
    "power_flag": false,
@@ -644,11 +644,11 @@
    "no_route": false,
    "nodes": [
     "U3.D5",
-    "RN5.A2"
+    "RN5.A4"
    ],
    "pads": [
     "U3.D2",
-    "RN5.2"
+    "RN5.4"
    ],
    "planes": [],
    "power_flag": false,
@@ -663,11 +663,11 @@
    "no_route": false,
    "nodes": [
     "U3.D6",
-    "RN5.A3"
+    "RN5.A2"
    ],
    "pads": [
     "U3.D3",
-    "RN5.3"
+    "RN5.2"
    ],
    "planes": [],
    "power_flag": false,
@@ -682,11 +682,11 @@
    "no_route": false,
    "nodes": [
     "U3.D7",
-    "RN5.A4"
+    "RN5.A1"
    ],
    "pads": [
     "U3.D4",
-    "RN5.4"
+    "RN5.1"
    ],
    "planes": [],
    "power_flag": false,
@@ -720,11 +720,11 @@
    "no_route": false,
    "nodes": [
     "U3.HREF",
-    "RN6.A2"
+    "RN5.A3"
    ],
    "pads": [
     "U3.E2",
-    "RN6.2"
+    "RN5.3"
    ],
    "planes": [],
    "power_flag": false,
@@ -739,11 +739,11 @@
    "no_route": false,
    "nodes": [
     "U3.PCLK",
-    "RN6.A1"
+    "RN4.A2"
    ],
    "pads": [
     "U3.C1",
-    "RN6.1"
+    "RN4.2"
    ],
    "planes": [],
    "power_flag": false,
@@ -798,11 +798,11 @@
    "no_route": false,
    "nodes": [
     "U3.VSYNC",
-    "RN6.A3"
+    "RN6.A4"
    ],
    "pads": [
     "U3.C5",
-    "RN6.3"
+    "RN6.4"
    ],
    "planes": [],
    "power_flag": false,
@@ -882,13 +882,13 @@
    "no_route": false,
    "nodes": [
     "U1.PB7",
-    "RN3.B3",
-    "RN6.B3"
+    "RN1.B3",
+    "RN6.B4"
    ],
    "pads": [
     "U1.59",
-    "RN3.6",
-    "RN6.6"
+    "RN1.6",
+    "RN6.5"
    ],
    "planes": [],
    "power_flag": false,
@@ -1332,6 +1332,7 @@
     "Q1.S",
     "RT1.2",
     "RT2.2",
+    "U12.GND",
     "U10.GND",
     "BT2.1",
     "U4.GND1",
@@ -1401,12 +1402,13 @@
     "U3.E1",
     "U3.E5",
     "U7.1",
-    "U11.1",
+    "U11.2",
     "U8.2",
     "U9.C2",
     "Q1.2",
     "RT1.2",
     "RT2.2",
+    "U12.2",
     "U10.2",
     "BT2.1",
     "U4.6",
@@ -1653,8 +1655,10 @@
    "width": null
   },
   "OSC32_IN": {
-   "layers": null,
-   "max_vias": null,
+   "layers": [
+    "F.Cu"
+   ],
+   "max_vias": 0,
    "name": "OSC32_IN",
    "netclass": "Default",
    "no_route": false,
@@ -1670,12 +1674,14 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 3,
    "width": null
   },
   "OSC32_OUT": {
-   "layers": null,
-   "max_vias": null,
+   "layers": [
+    "F.Cu"
+   ],
+   "max_vias": 0,
    "name": "OSC32_OUT",
    "netclass": "Default",
    "no_route": false,
@@ -1691,7 +1697,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 3,
    "width": null
   },
   "PD_K": {
@@ -1720,7 +1726,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 2,
    "width": null
   },
   "SPI1_MISO": {
@@ -1899,7 +1905,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 1,
    "width": null
   },
   "USB_DP": {
@@ -1922,7 +1928,7 @@
    ],
    "planes": [],
    "power_flag": false,
-   "priority": 0,
+   "priority": 1,
    "width": null
   },
   "V2V8": {
@@ -1955,6 +1961,7 @@
     "U6.WP",
     "U6.HOLD",
     "U7.VOUT",
+    "U11.EN",
     "U4.VDD",
     "U4.VDDIO",
     "J1.VDDA",
@@ -1986,6 +1993,7 @@
     "U6.3",
     "U6.7",
     "U7.2",
+    "U11.3",
     "U4.8",
     "U4.5",
     "J1.5",
@@ -2131,14 +2139,14 @@
    "nodes": [
     "C28.1",
     "R15.1",
-    "D17.A",
+    "U12.VIN",
     "U10.VBUS",
     "J2.VBUS"
    ],
    "pads": [
     "C28.1",
     "R15.1",
-    "D17.2",
+    "U12.1",
     "U10.5",
     "J2.1"
    ],
@@ -2156,19 +2164,21 @@
    "nodes": [
     "C22.1",
     "C26.1",
-    "U11.VIN",
+    "U11.IN",
     "U9.IN",
-    "D17.K"
+    "U12.VOUT",
+    "U12.CE"
    ],
    "pads": [
     "C22.1",
     "C26.1",
-    "U11.3",
+    "U11.1",
     "U9.A2",
-    "D17.1"
+    "U12.6",
+    "U12.3"
    ],
    "planes": [],
-   "power_flag": true,
+   "power_flag": false,
    "priority": 0,
    "width": null
   },
@@ -2245,13 +2255,13 @@
     "U1.VDDUSB",
     "C9.1",
     "C23.1",
-    "U11.VOUT"
+    "U11.OUT"
    ],
    "pads": [
     "U1.48",
     "C9.1",
     "C23.1",
-    "U11.2"
+    "U11.5"
    ],
    "planes": [],
    "power_flag": false,
@@ -2260,10 +2270,11 @@
   }
  },
  "no_connects": [
-  "RN3.A4",
-  "RN3.B4",
-  "RN6.A4",
-  "RN6.B4"
+  "RN2.A4",
+  "RN2.B4",
+  "RN6.A1",
+  "RN6.B1",
+  "U12.ST"
  ],
  "parts": {
   "BT1": {
@@ -3307,30 +3318,6 @@
     }
    },
    "value": "LED NIR"
-  },
-  "D17": {
-   "dnp": false,
-   "footprint": "Diode_SMD:D_SOD-323",
-   "group": "power",
-   "in_bom": true,
-   "mpn": "B0530WS-7-F",
-   "pins": {
-    "A": {
-     "net": "VBUS",
-     "pads": [
-      "2"
-     ],
-     "type": "passive"
-    },
-    "K": {
-     "net": "VBUS_D",
-     "pads": [
-      "1"
-     ],
-     "type": "passive"
-    }
-   },
-   "value": "B0530WS"
   },
   "D2": {
    "dnp": false,
@@ -4564,56 +4551,56 @@
    "mpn": "EXB-28V221JX",
    "pins": {
     "A1": {
-     "net": "CAM_L_D0",
+     "net": "CAM_L_D2",
      "pads": [
       "1"
      ],
      "type": "passive"
     },
     "A2": {
-     "net": "CAM_L_D1",
+     "net": "CAM_L_D4",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "A3": {
-     "net": "CAM_L_D2",
+     "net": "CAM_L_VSYNC",
      "pads": [
       "3"
      ],
      "type": "passive"
     },
     "A4": {
-     "net": "CAM_L_D3",
+     "net": "CAM_L_D7",
      "pads": [
       "4"
      ],
      "type": "passive"
     },
     "B1": {
-     "net": "CAM_D0",
+     "net": "CAM_D2",
      "pads": [
       "8"
      ],
      "type": "passive"
     },
     "B2": {
-     "net": "CAM_D1",
+     "net": "CAM_D4",
      "pads": [
       "7"
      ],
      "type": "passive"
     },
     "B3": {
-     "net": "CAM_D2",
+     "net": "CAM_VSYNC",
      "pads": [
       "6"
      ],
      "type": "passive"
     },
     "B4": {
-     "net": "CAM_D3",
+     "net": "CAM_D7",
      "pads": [
       "5"
      ],
@@ -4630,56 +4617,56 @@
    "mpn": "EXB-28V221JX",
    "pins": {
     "A1": {
-     "net": "CAM_L_D4",
+     "net": "CAM_L_D6",
      "pads": [
       "1"
      ],
      "type": "passive"
     },
     "A2": {
-     "net": "CAM_L_D5",
+     "net": "CAM_L_HREF",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "A3": {
-     "net": "CAM_L_D6",
+     "net": "CAM_L_D5",
      "pads": [
       "3"
      ],
      "type": "passive"
     },
     "A4": {
-     "net": "CAM_L_D7",
+     "net": null,
      "pads": [
       "4"
      ],
      "type": "passive"
     },
     "B1": {
-     "net": "CAM_D4",
+     "net": "CAM_D6",
      "pads": [
       "8"
      ],
      "type": "passive"
     },
     "B2": {
-     "net": "CAM_D5",
+     "net": "CAM_HREF",
      "pads": [
       "7"
      ],
      "type": "passive"
     },
     "B3": {
-     "net": "CAM_D6",
+     "net": "CAM_D5",
      "pads": [
       "6"
      ],
      "type": "passive"
     },
     "B4": {
-     "net": "CAM_D7",
+     "net": null,
      "pads": [
       "5"
      ],
@@ -4696,56 +4683,56 @@
    "mpn": "EXB-28V221JX",
    "pins": {
     "A1": {
-     "net": "CAM_L_PCLK",
+     "net": "CAM_L_D3",
      "pads": [
       "1"
      ],
      "type": "passive"
     },
     "A2": {
-     "net": "CAM_L_HREF",
+     "net": "CAM_L_PCLK",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "A3": {
-     "net": "CAM_L_VSYNC",
+     "net": "CAM_L_D1",
      "pads": [
       "3"
      ],
      "type": "passive"
     },
     "A4": {
-     "net": null,
+     "net": "CAM_L_D0",
      "pads": [
       "4"
      ],
      "type": "passive"
     },
     "B1": {
-     "net": "CAM_PCLK",
+     "net": "CAM_D3",
      "pads": [
       "8"
      ],
      "type": "passive"
     },
     "B2": {
-     "net": "CAM_HREF",
+     "net": "CAM_PCLK",
      "pads": [
       "7"
      ],
      "type": "passive"
     },
     "B3": {
-     "net": "CAM_VSYNC",
+     "net": "CAM_D1",
      "pads": [
       "6"
      ],
      "type": "passive"
     },
     "B4": {
-     "net": null,
+     "net": "CAM_D0",
      "pads": [
       "5"
      ],
@@ -4762,56 +4749,56 @@
    "mpn": "EXB-28V221JX",
    "pins": {
     "A1": {
-     "net": "CAM_R_D0",
+     "net": "CAM_R_D3",
      "pads": [
       "1"
      ],
      "type": "passive"
     },
     "A2": {
-     "net": "CAM_R_D1",
+     "net": "CAM_R_PCLK",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "A3": {
-     "net": "CAM_R_D2",
+     "net": "CAM_R_D1",
      "pads": [
       "3"
      ],
      "type": "passive"
     },
     "A4": {
-     "net": "CAM_R_D3",
+     "net": "CAM_R_D0",
      "pads": [
       "4"
      ],
      "type": "passive"
     },
     "B1": {
-     "net": "CAM_D0",
+     "net": "CAM_D3",
      "pads": [
       "8"
      ],
      "type": "passive"
     },
     "B2": {
-     "net": "CAM_D1",
+     "net": "CAM_PCLK",
      "pads": [
       "7"
      ],
      "type": "passive"
     },
     "B3": {
-     "net": "CAM_D2",
+     "net": "CAM_D1",
      "pads": [
       "6"
      ],
      "type": "passive"
     },
     "B4": {
-     "net": "CAM_D3",
+     "net": "CAM_D0",
      "pads": [
       "5"
      ],
@@ -4828,56 +4815,56 @@
    "mpn": "EXB-28V221JX",
    "pins": {
     "A1": {
-     "net": "CAM_R_D4",
+     "net": "CAM_R_D7",
      "pads": [
       "1"
      ],
      "type": "passive"
     },
     "A2": {
-     "net": "CAM_R_D5",
+     "net": "CAM_R_D6",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "A3": {
-     "net": "CAM_R_D6",
+     "net": "CAM_R_HREF",
      "pads": [
       "3"
      ],
      "type": "passive"
     },
     "A4": {
-     "net": "CAM_R_D7",
+     "net": "CAM_R_D5",
      "pads": [
       "4"
      ],
      "type": "passive"
     },
     "B1": {
-     "net": "CAM_D4",
+     "net": "CAM_D7",
      "pads": [
       "8"
      ],
      "type": "passive"
     },
     "B2": {
-     "net": "CAM_D5",
+     "net": "CAM_D6",
      "pads": [
       "7"
      ],
      "type": "passive"
     },
     "B3": {
-     "net": "CAM_D6",
+     "net": "CAM_HREF",
      "pads": [
       "6"
      ],
      "type": "passive"
     },
     "B4": {
-     "net": "CAM_D7",
+     "net": "CAM_D5",
      "pads": [
       "5"
      ],
@@ -4894,56 +4881,56 @@
    "mpn": "EXB-28V221JX",
    "pins": {
     "A1": {
-     "net": "CAM_R_PCLK",
+     "net": null,
      "pads": [
       "1"
      ],
      "type": "passive"
     },
     "A2": {
-     "net": "CAM_R_HREF",
+     "net": "CAM_R_D2",
      "pads": [
       "2"
      ],
      "type": "passive"
     },
     "A3": {
-     "net": "CAM_R_VSYNC",
+     "net": "CAM_R_D4",
      "pads": [
       "3"
      ],
      "type": "passive"
     },
     "A4": {
-     "net": null,
+     "net": "CAM_R_VSYNC",
      "pads": [
       "4"
      ],
      "type": "passive"
     },
     "B1": {
-     "net": "CAM_PCLK",
+     "net": null,
      "pads": [
       "8"
      ],
      "type": "passive"
     },
     "B2": {
-     "net": "CAM_HREF",
+     "net": "CAM_D2",
      "pads": [
       "7"
      ],
      "type": "passive"
     },
     "B3": {
-     "net": "CAM_VSYNC",
+     "net": "CAM_D4",
      "pads": [
       "6"
      ],
      "type": "passive"
     },
     "B4": {
-     "net": null,
+     "net": "CAM_VSYNC",
      "pads": [
       "5"
      ],
@@ -5580,34 +5567,100 @@
   },
   "U11": {
    "dnp": false,
-   "footprint": "Package_TO_SOT_SMD:SOT-23",
+   "footprint": "Package_TO_SOT_SMD:SOT-23-5",
    "group": "power",
    "in_bom": true,
-   "mpn": "MCP1700T-3302E/TT",
+   "mpn": "LP5907MFX-3.3/NOPB",
    "pins": {
+    "EN": {
+     "net": "V2V8",
+     "pads": [
+      "3"
+     ],
+     "type": "input"
+    },
     "GND": {
      "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "power_in"
+    },
+    "IN": {
+     "net": "VBUS_D",
      "pads": [
       "1"
      ],
      "type": "power_in"
     },
-    "VIN": {
-     "net": "VBUS_D",
+    "NC": {
+     "net": null,
      "pads": [
-      "3"
+      "4"
      ],
-     "type": "power_in"
+     "type": "nc"
     },
-    "VOUT": {
+    "OUT": {
      "net": "VDDUSB",
      "pads": [
-      "2"
+      "5"
      ],
      "type": "power_out"
     }
    },
-   "value": "MCP1700-3.3"
+   "value": "LP5907-3.3"
+  },
+  "U12": {
+   "dnp": false,
+   "footprint": "Package_TO_SOT_SMD:SOT-363_SC-70-6",
+   "group": "power",
+   "in_bom": true,
+   "mpn": "LM66100DCKR",
+   "pins": {
+    "CE": {
+     "net": "VBUS_D",
+     "pads": [
+      "3"
+     ],
+     "type": "input"
+    },
+    "GND": {
+     "net": "GND",
+     "pads": [
+      "2"
+     ],
+     "type": "power_in"
+    },
+    "NC": {
+     "net": null,
+     "pads": [
+      "4"
+     ],
+     "type": "nc"
+    },
+    "ST": {
+     "net": null,
+     "pads": [
+      "5"
+     ],
+     "type": "open_drain"
+    },
+    "VIN": {
+     "net": "VBUS",
+     "pads": [
+      "1"
+     ],
+     "type": "power_in"
+    },
+    "VOUT": {
+     "net": "VBUS_D",
+     "pads": [
+      "6"
+     ],
+     "type": "power_out"
+    }
+   },
+   "value": "LM66100"
   },
   "U2": {
    "dnp": false,

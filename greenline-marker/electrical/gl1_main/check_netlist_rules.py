@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""DESIGN_SPEC section 4 (rev D with amendments E1 to E16), rule by rule,
+"""DESIGN_SPEC section 4 (rev D with amendments E1 to E28), rule by rule,
 against the GL-1 main-board netlist.
 
     /usr/bin/python3 -B electrical/gl1_main/check_netlist_rules.py [--markdown FILE] [--selftest]
@@ -56,6 +56,8 @@ from gleda.model import BOTTOM, TOP            # noqa: E402
 
 #: parts and nets of the circuit before E1 / E2 that must be gone
 OLD_MPNS = ("MCP73831", "NCP15XH103F03RC", "1N4148", "SFH 4053")
+#: parts replaced by E25 / E26 that must be gone
+REPLACED_MPNS = ("B0530WS", "MCP1700T-3302")
 OLD_NETS = ("CHG_PROG", "CHG_PROG_SW", "CHG_PROG_EN", "CHG_STAT_RAW")
 #: "keep it away from the charger and regulators" has no number in the spec;
 #: this is the floor the placement is tested against (body to body)
@@ -82,7 +84,8 @@ _RN = {"A1": "R1.1", "A2": "R2.1", "A3": "R3.1", "A4": "R4.1",
        "B4": "R4.2", "B3": "R3.2", "B2": "R2.2", "B1": "R1.2"}
 LIBRARY_SYMBOLS = {
     "U7": ("Regulator_Linear", "MCP1700x-280xxTT", _SOT23_LDO),
-    "U11": ("Regulator_Linear", "MCP1700x-330xxTT", _SOT23_LDO),
+    "U11": ("Regulator_Linear", "LP5907MFX-3.3",
+            {"IN": "IN", "GND": "GND", "EN": "EN", "NC": "NC", "OUT": "OUT"}),
     "U8": ("Regulator_Linear", "LP5907MFX-2.8",
            {"IN": "IN", "GND": "GND", "EN": "EN", "NC": "NC", "OUT": "OUT"}),
     "U10": ("Power_Protection", "USBLC6-2SC6",
@@ -97,7 +100,6 @@ LIBRARY_SYMBOLS = {
            {"SDO": "SDO/SA0", "SDX": "SDX", "SCX": "SCX", "INT1": "INT1", "VDDIO": "VDDIO",
             "GND1+GND2": "GND", "VDD": "VDD", "INT2": "INT2", "OCS_AUX": "OCS_Aux",
             "SDO_AUX": "SDO_Aux", "CS": "CS", "SCL": "SCL", "SDA": "SDA"}),
-    "D17": ("Device", "D_Schottky", _TWO),
 }
 LIBRARY_SYMBOLS.update({"D%d" % i: ("Device", "LED", _TWO) for i in range(1, 17)})
 LIBRARY_SYMBOLS.update({"RN%d" % i: ("Device", "R_Pack04", _RN) for i in range(1, 7)})
@@ -242,23 +244,33 @@ def rules(design):
 
     # ------------------------------------------------------------------ rail table
     row("rail VBUS a", "VBUS: cradle pad, 5 V; USBLC6-2SC6 clamps VBUS, D+, D-",
-        "net VBUS = J2.VBUS (pad 1), U10.VBUS, D17.A, C28, R15; USB_DM / USB_DP through U10 pins 1+6 / 3+4",
+        "net VBUS = J2.VBUS (pad 1), U10.VBUS, U12.VIN, C28, R15; USB_DM / USB_DP through U10 pins 1+6 / 3+4",
         on("VBUS", "J2.VBUS", "U10.VBUS") and mpn("U10") == "USBLC6-2SC6"
         and on("USB_DM", "U10.IO1A", "U10.IO1B", "J2.DM", "U1.PA11")
         and on("USB_DP", "U10.IO2A", "U10.IO2B", "J2.DP", "U1.PA12") and on("GND", "U10.GND")
-        and only("VBUS", "J2.VBUS", "U10.VBUS", "D17.A", "C28.1", "R15.1"),
+        and only("VBUS", "J2.VBUS", "U10.VBUS", "U12.VIN", "C28.1", "R15.1"),
         "ADDED: C28 100 nF at the VBUS pin of U10")
-    row("rail VBUS b", "Series Schottky from pad to charger; E6: a 30 V 0.5 A SOD-323 class part "
-        "(Diodes B0530WS-7-F)",
-        "D17 (B0530WS-7-F, SOD-323): anode VBUS, cathode VBUS_D; U9.IN on VBUS_D",
-        diode("D17", "VBUS", "VBUS_D") and on("VBUS_D", "U9.IN") and mpn("D17") == "B0530WS-7-F"
-        and "SOD-323" in P["D17"].footprint_name)
+    u12 = P.get("U12")
+    u12_table = u12 is not None and {pin.pads[0]: (name, pin.etype) for name, pin in u12.pins.items()} == G.LM66100_PINS
+    no_replaced = not any(any(o in (p.mpn or "") for o in REPLACED_MPNS) for p in design.parts) and "D17" not in P
+    row("rail VBUS b", "E25 (replaces 'Series Schottky from pad to charger'): an ideal-diode switch (TI "
+        "LM66100DCKR, SC-70-6, enable pin tied to its output so that it blocks reverse current; wiring "
+        "PROVISIONAL until the data sheet is read)",
+        "U12 (LM66100DCKR, SC-70-6): VIN on VBUS (the pad side), VOUT and CE on VBUS_D, GND to GND, ST open; "
+        "U9.IN on VBUS_D; no Schottky (D17) and no B0530WS left; every pin of U12 comes from the table "
+        "LM66100_PINS (VIN 1, GND 2, CE 3, NC 4, ST 5, VOUT 6)",
+        u12 is not None and mpn("U12") == "LM66100DCKR" and "SC-70-6" in u12.footprint_name
+        and on("VBUS", "U12.VIN") and on("VBUS_D", "U12.VOUT", "U12.CE", "U9.IN") and on("GND", "U12.GND")
+        and net("U12.ST") is None and u12_table and no_replaced
+        and sorted(n for n, _t in G.LM66100_PINS.values()) == ["CE", "GND", "NC", "ST", "VIN", "VOUT"],
+        "the pin table of U12 is PROVISIONAL (from memory, no second source in the KiCad library): a wrong "
+        "table mis-wires the switch; that the switch is on while CE is below VIN is from memory too")
     row("rail VBUS c", "VBUS loads: BQ25101 IN, VBUS-sense divider",
         "R15 / R16 (100k : 100k) from VBUS (the pad net) to VBUS_SENSE (%s, WKUP2); U9.IN behind the "
-        "Schottky: net VBUS_D = D17.K, U9.IN, C26, U11.VIN, C22" % pin_of("VBUS_SENSE"),
+        "ideal-diode switch: net VBUS_D = U12.VOUT, U12.CE, U9.IN, C26, U11.IN, C22" % pin_of("VBUS_SENSE"),
         two("R15", "VBUS", "VBUS_SENSE", "100k") and two("R16", "VBUS_SENSE", "GND", "100k")
         and only("VBUS_SENSE", "U1.%s" % pin_of("VBUS_SENSE"), "R15.2", "R16.1")
-        and only("VBUS_D", "D17.K", "U9.IN", "C26.1", "U11.VIN", "C22.1"),
+        and only("VBUS_D", "U12.VOUT", "U12.CE", "U9.IN", "C26.1", "U11.IN", "C22.1"),
         "the divider values are this netlist's choice (the spec gives none)")
     row("rail VBAT a", "VBAT: cell + PCM; loads MCP1700-2.8 in, LP5907 in, battery divider",
         "net VBAT = BT1, U9.OUT, U7.VIN, U8.IN, R17, C20, C24, C27, TP1",
@@ -294,15 +306,19 @@ def rules(design):
         two("R1", "V2V8", "VDDA", "10R") and caps("VDDA") == ["C7", "C8"]
         and P["C7"].value == "1u" and P["C8"].value == "10n" and on("VDDA", "U1.VDDA")
         and on("GND", "U1.VSSA"))
-    row("rail VDDUSB", "MCP1700T-3302E/TT fed from VBUS (after the Schottky); MCU VDDUSB pin only; "
-        "1 uF in, 1 uF out",
-        "U11: VIN VBUS_D (C22 2u2), VOUT VDDUSB (C23 2u2); net VDDUSB = U1 pad 48, U11.VOUT, C9, C23",
-        mpn("U11") == "MCP1700T-3302E/TT" and on("VBUS_D", "U11.VIN")
-        and only("VDDUSB", "U1.VDDUSB", "U11.VOUT", "C9.1", "C23.1")
+    row("rail VDDUSB", "E26 (replaces the MCP1700T-3302E/TT of the rail table): TI LP5907MFX-3.3/NOPB, "
+        "enabled by the 2.8 V rail; fed from VBUS behind the series switch; MCU VDDUSB pin only; 1 uF in, "
+        "1 uF out",
+        "U11 (LP5907MFX-3.3/NOPB, SOT-23-5): IN VBUS_D (C22 2u2), OUT VDDUSB (C23 2u2), EN on V2V8, pad 4 "
+        "open; net VDDUSB = U1 pad 48, U11.OUT, C9, C23",
+        mpn("U11") == "LP5907MFX-3.3/NOPB" and "SOT-23-5" in P["U11"].footprint_name
+        and on("VBUS_D", "U11.IN") and on("V2V8", "U11.EN") and on("GND", "U11.GND")
+        and only("VDDUSB", "U1.VDDUSB", "U11.OUT", "C9.1", "C23.1")
         and "C22" in caps("VBUS_D", "2u2") and "C23" in caps("VDDUSB", "2u2"),
-        "DEVIATION: 2.2 uF nominal where the spec says 1 uF, so that about 1 uF is left under the DC bias "
-        "of 5 V / 3.3 V (PROVISIONAL: no bias curve read). U11 has no enable: VDDUSB rises before VDD when "
-        "a marker with a cell at its cut-off is docked - spec-inherited, NETLIST_NOTES section 8")
+        "DEVIATION: 2.2 uF nominal where the rail table says 1 uF (accepted by E27). With EN on V2V8 the "
+        "USB supply pin cannot rise before the main supply (E26). PROVISIONAL, from memory: the enable pin "
+        "of the LP5907 has an internal pull-down of about 1 Mohm, which draws about 2.8 uA from the "
+        "always-on rail - it counts against the 25 uA sleep limit of E14 (NETLIST_NOTES 11)")
     row("rail V2V8_CAM a", "LP5907MFX-2.8/NOPB, EN from MCU with 100k pull-down; 1 uF in, 1 uF out",
         "U8: IN VBAT (C24), OUT V2V8_CAM (C25), EN = CAM_EN (PH0) with R10 100k to GND",
         mpn("U8") == "LP5907MFX-2.8/NOPB" and on("VBAT", "U8.IN") and on("V2V8_CAM", "U8.OUT")
@@ -525,13 +541,13 @@ def rules(design):
         and len(ys) == 3 and abs(xs[1] - xs[0] - 0.4) < 1e-9 and abs(ys[1] - ys[0] - 0.4) < 1e-9
         and {n: tuple(p.pads) for n, p in u9.pins.items()} == {n: (b,) for n, b in balls.items()}
         and sorted(balls) == ["CHG", "IN", "ISET", "OUT", "TS", "VSS"] and "PROVISIONAL" in fp.name)
-    row("E1 b", "IN from VBUS after the Schottky with 1 uF; OUT to the cell with 1 uF",
+    row("E1 b", "IN from VBUS after the series element (E25: the ideal-diode switch) with 1 uF; OUT to the "
+        "cell with 1 uF",
         "U9.IN on VBUS_D with C26 2u2; U9.OUT on VBAT (BT1) with C27 2u2; U9.VSS to GND",
         on("VBUS_D", "U9.IN") and "C26" in caps("VBUS_D", "2u2") and on("VBAT", "U9.OUT", "BT1.1")
         and "C27" in caps("VBAT", "2u2") and on("GND", "U9.VSS"),
-        "DEVIATION: 2.2 uF nominal where the spec says 1 uF (DC bias, see rail VDDUSB; PROVISIONAL). The "
-        "charger's input has NEGATIVE headroom at the low end of a compliant USB source if its minimum "
-        "operating input is 4.45 V (research, unverified) - spec-inherited, NETLIST_NOTES 4.1")
+        "DEVIATION: 2.2 uF nominal where the spec says 1 uF (accepted by E27; DC bias, PROVISIONAL). "
+        "Headroom of the charger input with the switch of E25: NETLIST_NOTES 4.1 / 11 (all numbers PROVISIONAL)")
     row("E1 c", "ISET resistor 6.81 kohm 1 % to ground (K = 135 A-ohm, so 19.8 mA)",
         "R11 6k81 from CHG_ISET (U9.ISET) to GND: 135 / 6810 = %.2f mA" % (135.0 / ohms("6k81") * 1e3),
         two("R11", "CHG_ISET", "GND", "6k81") and only("CHG_ISET", "U9.ISET", "R11.1")
@@ -731,42 +747,53 @@ def rules(design):
         geometry.part_body_polygon(P[ref]).bounds,
         (xy[0] - G.CAM_BODY[0] / 2, xy[1] - G.CAM_BODY[1] / 2, xy[0] + G.CAM_BODY[0] / 2, xy[1] + G.CAM_BODY[1] / 2)))
         < 1e-6 for ref, xy in (("U2", G.CAM_L), ("U3", G.CAM_R)))
-    row("PCB k", "The cameras, the LCD connector and the battery are fixed mechanical interfaces",
-        "U2, U3: body boxes equal the YAML boxes; battery_body placement keep-out from the YAML; J1: the "
-        "footprint ANCHOR is on the YAML point (its body is row PCB k2)",
-        (P["U2"].x, P["U2"].y) == G.CAM_L and (P["U3"].x, P["U3"].y) == G.CAM_R and cam_box
-        and (P["J1"].x, P["J1"].y) == G.J1_XY and P["J1"].rotation == G.J1_ROTATION and "battery_body" in kos)
-    # ---- J1 by its BODY against the box the mechanical model draws (YAML x, y, dx, dy) ----------
     from shapely.geometry import box as _box
     jb = geometry.part_body_polygon(P["J1"]).bounds
     jc = geometry.part_courtyard(P["J1"]).bounds
     sig = [q for q in pads("J1") if q.number != "MP"]
     pad_y0, pad_y1 = min(q.polygon.bounds[1] for q in sig), max(q.polygon.bounds[3] for q in sig)
+    cell_y0 = bat["y"] - bat["dy"] / 2
+    e24 = (abs(jb[1] - G.J1_MOUTH_Y) < 0.005 and abs(pad_y1 - G.J1_SIGNAL_PAD_END_Y) < 0.005
+           and abs(jb[3] - (-11.70)) < 0.005 and abs(G.J1_MOUTH_Y - (-17.30)) < 1e-9
+           and abs(G.J1_SIGNAL_PAD_END_Y - (-10.40)) < 1e-9 and abs(cell_y0 - pad_y1 - 0.20) < 0.005
+           and abs(P["J1"].x) < 1e-9 and P["J1"].rotation == G.J1_ROTATION)
+    row("PCB k", "The cameras, the LCD connector and the battery are fixed mechanical interfaces",
+        "U2, U3: body boxes equal the YAML boxes; battery_body placement keep-out from the YAML; J1: at the "
+        "position E24 gives (row PCB k2)",
+        (P["U2"].x, P["U2"].y) == G.CAM_L and (P["U3"].x, P["U3"].y) == G.CAM_R and cam_box
+        and (P["J1"].x, P["J1"].y) == G.J1_XY and P["J1"].rotation == G.J1_ROTATION and "battery_body" in kos
+        and e24)
+    # ---- J1 by its BODY: spec E24 against the placed land pattern and against the (older) YAML ----
     tz = Y["tub_keepouts"]["lcd_tail"]
     tail_zone = _box(-tz["half_w"], tz["y"][0], tz["half_w"], tz["y"][1])
     over = tail_zone.intersection(geometry.part_body_polygon(P["J1"])).area
-    cell_y0 = bat["y"] - bat["dy"] / 2
-    need = pad_y1 - jb[1]                               # mouth face to the far end of the signal pads
-    have = cell_y0 - G.J1_BOX[1]                        # YAML mouth to the cell
-    met = max(abs(a - b) for a, b in zip(jb, G.J1_BOX)) <= 0.15 and over < 1e-6
-    documented = (abs(jb[1] - (-18.3)) < 0.01 and abs(pad_y1 - (-11.4)) < 0.01 and abs(G.J1_BOX[1] - (-16.8)) < 1e-9
-                  and abs(cell_y0 - (-10.2)) < 1e-9 and jc[3] < cell_y0)
-    row("PCB k2", "(YAML top_side_parts J1, fixed; tub_keepouts.lcd_tail) the mechanical model has J1 as a "
-        "box %.1f x %.1f CENTRED on (%.1f, %.1f): mouth at y = %.1f, where the LCD-tail keep-out (y %.1f to "
-        "%.1f, parts to %.1f mm) ends" % (G.J1_BOX[2] - G.J1_BOX[0], G.J1_BOX[3] - G.J1_BOX[1], G.J1_XY[0],
-                                           G.J1_XY[1], G.J1_BOX[1], tz["y"][0], tz["y"][1], tz["max_part_height"]),
-        "measured on the placed land pattern: body y %.2f to %.2f (the model: %.2f to %.2f), rear face %.2f mm "
-        "behind the modelled mouth, %.2f mm2 of the 2.0 mm body inside the tail keep-out; signal pads y %.2f "
-        "to %.2f, courtyard to %.2f, cell edge %.2f. The land pattern needs %.2f mm from its rear face to the "
-        "pad ends; the YAML leaves %.2f mm between the mouth and the cell"
-        % (jb[1], jb[3], G.J1_BOX[1], G.J1_BOX[3], G.J1_BOX[1] - jb[1], over, pad_y0, pad_y1, jc[3], cell_y0,
-           need, have),
-        met or documented,
-        "" if met else
-        "OPEN: NOT MET and not meetable with this land pattern: with the rear face on the YAML mouth the "
-        "signal pads would end %.2f mm inside the cell. The anchor stays on the YAML point (the only "
-        "comparison mechanical/cad/board_import.py makes, and it passes); the LCD cannot be plugged in as "
-        "modelled. Needs the YAML / mechanical owner (NETLIST_NOTES 5.1)" % (need - have))
+    bat_ko = next(k for k in design.keepouts if k.name == "battery_body")
+    bat_box = _box(bat["x"] - bat["dx"] / 2, cell_y0, bat["x"] + bat["dx"] / 2, bat["y"] + bat["dy"] / 2)
+    ko_poly = geometry.keepout_polygon(bat_ko)
+    notch = bat_box.difference(ko_poly)
+    nb = notch.bounds if notch.area > 1e-9 else (0, 0, 0, 0)
+    notch_ok = (abs(notch.area - 2 * G.J1_COURTYARD_NOTCH["half_w"] * G.J1_COURTYARD_NOTCH["depth"]) < 1e-6
+                and ko_poly.difference(bat_box).area < 1e-9 and abs(nb[0] - jc[0]) < 0.005 and abs(nb[2] - jc[2]) < 0.005
+                and abs(nb[3] - jc[3]) < 0.005 and G.J1_COURTYARD_NOTCH["depth"] <= 0.30 + 1e-9
+                and bat_box.intersection(geometry.part_body_polygon(P["J1"])).area < 1e-9
+                and all(bat_box.distance(q.polygon) >= 0.195 for q in pads("J1")))
+    row("PCB k2", "E24: J1 moves 0.5 mm toward the rear: mouth at y = -17.30, body to y = -11.70, signal pads "
+        "end at y = -10.40 (0.20 mm clear of the cell at y = -10.20). This OVERRIDES the YAML (top_side_parts "
+        "J1: box %.1f x %.1f centred on (%.1f, %.1f), mouth at y = %.1f), which is corrected at the next "
+        "revision letter" % (G.J1_BOX[2] - G.J1_BOX[0], G.J1_BOX[3] - G.J1_BOX[1], G.J1_YAML_XY[0],
+                             G.J1_YAML_XY[1], G.J1_BOX[1]),
+        "measured on the placed land pattern: anchor (%.2f, %.2f), body y %.2f to %.2f (rear face = mouth), "
+        "signal pads y %.2f to %.2f, cell edge %.2f, courtyard to %.2f; %.2f mm2 of the body inside the YAML's "
+        "LCD-tail zone (y %.1f to %.1f; J1 is exempt there). Battery keep-out: the YAML box of the cell less a "
+        "notch %.2f x %.2f mm for J1's courtyard"
+        % (P["J1"].x, P["J1"].y, jb[1], jb[3], pad_y0, pad_y1, cell_y0, jc[3], over, tz["y"][0], tz["y"][1],
+           nb[2] - nb[0], nb[3] - nb[1]),
+        e24 and notch_ok,
+        "DEVIATION: from the YAML, as E24 decides: the anchor is %.2f mm in front of the YAML point, so "
+        "mechanical/cad/board_import.py (check C, anchor against the YAML point) reports J1 until the YAML is "
+        "corrected. The courtyard of the land pattern (0.5 mm beyond the pad ends) reaches %.2f mm into the "
+        "YAML box of the cell: the placement keep-out has a notch of exactly that size; body and pads are "
+        "outside the cell (NETLIST_NOTES 5.1 / 11)" % (P["J1"].y - G.J1_YAML_XY[1], jc[3] - cell_y0))
     board_poly = geometry.outline_polygon(design.outline)
     margins = sorted((board_poly.exterior.distance(geometry.part_body_polygon(p))
                       if board_poly.contains(geometry.part_body_polygon(p)) else -1.0, p.ref)
@@ -779,11 +806,11 @@ def rules(design):
     pin_bad = pin_table_problems(design)
     row("pin tables", "(task) the pin -> pad table of every library-backed part agrees with a second source",
         "U7, U11, U8, U10, Q1, U6, U4 against the installed KiCad symbols (pad numbers, pin names, "
-        "footprint); D17, D1-D16 against KiCad's pad 1 = cathode; RN1-RN6 against element n = pads n and "
+        "footprint); D1-D16 against KiCad's pad 1 = cathode; RN1-RN6 against element n = pads n and "
         "9 - n: %s" % ("; ".join(pin_bad) if pin_bad else "all agree"),
         not pin_bad,
         "U6 is compared with the MX25R3235F of the same family and package, U4 with the LSM6DSM (spec: "
-        "pin-compatible); U1 is proven by check_pinmap.py; U2 / U3, U9, PD1 and J1 have no second source: "
+        "pin-compatible); U1 is proven by check_pinmap.py; U2 / U3, U9, U12, PD1 and J1 have no second source: "
         "their tables are the PROVISIONAL ones")
     bare = sorted(p.ref for p in design.parts if p.dnp and not p.in_bom)
     want_bare = sorted(G.BARE_BOTTOM_COPPER_REFS) if G.BARE_BOTTOM_COPPER_NOT_FITTED else []
@@ -886,11 +913,19 @@ SEEDED = [
     # ---- the four defects the circuit review found no checker for, and their relatives ----------
     ("U7 on another SOT-23 pin order (VIN and VOUT pads exchanged)",
      lambda d: _repad(d, "U7", {"VOUT": 3, "VIN": 2}), "pin tables"),
-    ("U11 on another SOT-23 pin order (GND and VOUT pads exchanged)",
-     lambda d: _repad(d, "U11", {"GND": 2, "VOUT": 1}), "pin tables"),
+    ("U11 on another SOT-23-5 pin order (GND and EN pads exchanged)",
+     lambda d: _repad(d, "U11", {"GND": 3, "EN": 2}), "pin tables"),
+    ("U11 left as the MCP1700 without enable", lambda d: setattr(d.part("U11"), "mpn", "MCP1700T-3302E/TT"), "rail VDDUSB"),
+    ("U11 enable on VBUS_D instead of V2V8 (always on in the cradle: E26 undone)",
+     lambda d: _move(d, "U11.EN", "VBUS_D"), "rail VDDUSB"),
+    ("U12 enable (CE) tied to GND instead of its output (no reverse blocking)",
+     lambda d: _move(d, "U12.CE", "GND"), "rail VBUS b"),
+    ("U12 turned round (VIN and VOUT exchanged)", lambda d: _swap_nets(d, "U12.VIN", "U12.VOUT"), "rail VBUS"),
+    ("U12 pin table bypassed (CE on pad 5, ST on pad 3)",
+     lambda d: _repad(d, "U12", {"CE": 5, "ST": 3}), "rail VBUS b"),
+    ("the Schottky left in (U12 still a B0530WS)", lambda d: setattr(d.part("U12"), "mpn", "B0530WS-7-F"), "rail VBUS b"),
     ("Q1 gate and source pads exchanged", lambda d: _repad(d, "Q1", {"G": 2, "S": 1}), "pin tables"),
     ("flash SO and SI pads exchanged in the pin table", lambda d: _repad(d, "U6", {"SO": 5, "SI": 2}), "pin tables"),
-    ("Schottky D17 drawn with pad 1 = anode", lambda d: _repad(d, "D17", {"K": 2, "A": 1}), "pin tables"),
     ("R31 to GND instead of V2V8", lambda d: _move(d, "R31.2", "GND"), "grain d"),
     ("R31 left at 1 Mohm", lambda d: setattr(d.part("R31"), "value", "1M"), "grain d"),
     ("J1 pad table not mirrored (tail pin n on pad n)", _mirror_j1, "lcd c"),
@@ -900,9 +935,11 @@ SEEDED = [
     ("LCD SCLK and VSSA pads exchanged at J1",
      lambda d: _repad(d, "J1", {"SCLK": d.part("J1").pins["VSSA"].pads[0],
                                 "VSSA": d.part("J1").pins["SCLK"].pads[0]}), "lcd c"),
-    ("VBUS sense divider back behind the Schottky", lambda d: _move(d, "R15.1", "VBUS_D"), "rail VBUS"),
+    ("VBUS sense divider back behind the series switch", lambda d: _move(d, "R15.1", "VBUS_D"), "rail VBUS"),
     ("VBUS_D capacitor C22 back at 1 uF", lambda d: setattr(d.part("C22"), "value", "1u"), "rail VDDUSB"),
     ("J1 moved 0.7 mm toward the cell", lambda d: d.part("J1").place(G.J1_XY[0], G.J1_XY[1] + 0.7, 0.0), "PCB k"),
+    ("J1 left on the YAML point (E24 not applied)",
+     lambda d: d.part("J1").place(G.J1_YAML_XY[0], G.J1_YAML_XY[1], 0.0), "PCB k"),
     ("a real bottom-side part (D3) marked not fitted", lambda d: _dnp(d, "D3"), "E1 g"),
     ("test pad TP4 marked not fitted (would hide it from the mechanical check)", lambda d: _dnp(d, "TP4"), "bare copper"),
     ("C13 placed 0.1 mm from the board edge", lambda d: d.part("C13").place(20.80, 0.0, 90.0), "PCB l"),

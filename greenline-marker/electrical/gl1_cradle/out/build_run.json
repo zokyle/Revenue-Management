@@ -1,14 +1,14 @@
 {
  "seconds": {
-  "board": 0.2,
-  "checks": 0.3,
-  "drc": 0.9,
-  "outputs": 3.5,
-  "quality": 1.9,
-  "route": 3.9,
-  "rules": 0.2,
-  "schematic": 2.0,
-  "total": 13.0
+  "board": 0.1,
+  "checks": 0.1,
+  "drc": 0.5,
+  "outputs": 2.2,
+  "quality": 1.2,
+  "route": 2.1,
+  "rules": 0.1,
+  "schematic": 0.8,
+  "total": 7.3
  },
  "stages_run": [
   "checks",

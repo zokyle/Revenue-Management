@@ -15,6 +15,24 @@
  * #  on hardware.  `make cross` does NOT compile it.                       #
  * ##########################################################################
  *
+ * BOARD: revision E only (DESIGN_SPEC rev D with amendments E1 to E34).  The
+ * pins are the netlist's: hal/stm32u5/gl_pins.h is GENERATED from
+ * electrical/gl1_main/pinmap.json (`make pins`) and this file holds no port,
+ * no pin number and no alternate function of its own - with ONE exception
+ * that the compiler guards: the HAL's identifier of the ship-mode wake-up
+ * pin (GLH_WKUP_VBUS_HIGH) names a pad.  Rev E changes that were made BY
+ * INSPECTION in phase 3, none of them exercised:
+ *   - UCPD_DBDIS first in gl_hal_init(); the pin order of note 15; no
+ *     internal pull on CHG_STAT; MISO pull-downs from the pin map;
+ *   - the four EXTI vectors built from the generated line numbers;
+ *   - gl_hal_usb_supply_ok(): VBUS_SENSE and the VDDUSB monitor, with the
+ *     supply-valid bit cleared in the handlers of both;
+ *   - gl_hal_ship_mode_enter(): Shutdown, wake-up pin of VBUS_SENSE, the
+ *     marker in a backup register, Shutdown pull-downs on the lines without
+ *     a board pull;
+ *   - Stop 1 instead of Stop 2 while the USB device is in standby;
+ *   - the LSE drive level; SCK / MOSI as GPIO LOW until their SPI is enabled.
+ *
  * What it needs around it (not in this repository): the CMSIS device files
  * and startup code (startup_stm32u585xx.s, system_stm32u5xx.c), a linker
  * script, the HAL sources of the modules ADC, CORTEX, DCMI, DMA, EXTI,
@@ -78,17 +96,26 @@
  * map's entries was then compared with the comments of the headers (MSI
  * range 0 = 48 MHz, the PLL input range, the DCMI byte-select constants,
  * the ADC sampling times, the RTC wake-up clock, the calibration values at
- * 14 bits and 3.0 V).  STILL FROM MEMORY, because no header says it: the
- * ADC channel numbers of PA2 and PC4 (data sheet, table of pin functions),
- * the system-memory address of the ROM bootloader (AN2606), the order of
- * the PLL / booster / flash-latency steps (RM0456), and everything listed
- * next.
+ * 14 bits and 3.0 V).  The ADC channel numbers of PA2, PA3 and PC4 come
+ * from the pin map, which the netlist proved against ST's open pin data.
+ * STILL FROM MEMORY, because no header says it: the system-memory address
+ * of the ROM bootloader (AN2606), the order of the PLL / booster / flash-
+ * latency steps (RM0456), what the UCPD dead-battery bit does, what
+ * survives Shutdown and what wakes from it, and everything listed next.
  *
  * BEHAVIOUR TO CONFIRM ON HARDWARE (the application depends on it):
  *   - LPTIM1 keeps toggling its PWM pin in Stop 2 (GL_PROV_LPTIM_PWM_RUNS_IN_STOP2)
  *   - LPTIM3 keeps counting in Stop 2 (the tick), the RTC wake-up timer and
  *     the four EXTI lines wake the core from Stop 2, and the wake-up from
  *     Stop 2 is fast enough for a 240 Hz data-ready interrupt
+ *   - ship mode: a rising edge on the wake-up pin of VBUS_SENSE leaves
+ *     Shutdown, the backup register survives it, the pull-downs of the PWR
+ *     registers hold in it, no watchdog runs in it
+ *   - the VDDUSB monitor: its ready flag, its start-up time, that its
+ *     interrupt wakes the core from Stop 1 / Stop 2
+ *   - UCPD_DBDIS removes the dead-battery pull-downs of PA15 / PB15, and
+ *     the bit survives the jump to the ROM loader
+ *   - the USB resume wakes the core from Stop 1 (cradle sleep, E32)
  *   - the DCMI crop / byte-select order and the meaning of the sync
  *     polarity bits (comments at gl_hal_dcmi_start)
  *   - the independent watchdog keeps running in Stop 2 (the application
@@ -121,9 +148,10 @@
 #define GLH_ADC_SMP_MEDIUM       ADC_SAMPLETIME_68CYCLES     /*   5.7 us */
 #define GLH_ADC_SMP_LONG         ADC_SAMPLETIME_391CYCLES    /*  32.6 us (the _5 name is a legacy alias) */
 #define GLH_ADC_SMP_LONGEST      ADC_SAMPLETIME_814CYCLES    /*  67.8 us */
-/* ADC channels: the NUMBERS are in the generated gl_pins.h (tools/gen_pins.py),
- * nowhere else: PA3 = OPAMP1_VOUT = ADC1_IN8 (verified), PA2 = ADC1_IN7 and
- * PC4 = ADC1_IN13 (both from memory) */
+/* ADC channels: the NUMBERS are in the generated gl_pins.h (tools/gen_pins.py
+ * reads them from the pin map, where the netlist checked them against ST's
+ * open pin data), nowhere else: PA3 = OPAMP1_VOUT = ADC1_IN8, PA2 = ADC1_IN7,
+ * PC4 = ADC1_IN13 */
 #define GLH_ADC_CHANNEL__(n)     ADC_CHANNEL_##n
 #define GLH_ADC_CHANNEL_(n)      GLH_ADC_CHANNEL__(n)
 #define GLH_ADC_CH_GRAIN         GLH_ADC_CHANNEL_(GL_PINS_ADC_CH_GRAIN_TIA)
@@ -140,6 +168,10 @@
 #define GLH_MSIK_RANGE_48MHZ     RCC_MSIKRANGE_0         /* MSIK 48 MHz: SPI and ADC kernel clock */
 #define GLH_ROM_BOOTLOADER_ADDR  0x0BF90000u             /* AN2606, STM32U575/585 (from memory) */
 #define GLH_DFU_MAGIC            0x474C4446u             /* "GLDF" in TAMP backup register 0 */
+#define GLH_SHIP_MAGIC           0x474C5348u             /* "GLSH" in TAMP backup register 2: ship mode */
+/* time from enabling the VDDUSB monitor to a valid ready flag (from memory:
+ * tens of microseconds; PROVISIONAL) */
+#define GLH_UVM_STARTUP_US       200u
 #define GLH_RTC_SET_MAGIC        0x474C5254u             /* "GLRT" in backup register 1: RTC has been set */
 
 #define GLH_LSE_HZ 32768u
@@ -154,25 +186,67 @@
 typedef struct {
     GPIO_TypeDef *port;
     uint16_t mask;
-    uint8_t fn; /* GL_PINFN_* */
+    uint8_t fn;       /* GL_PINFN_* */
     uint8_t af;
+    uint8_t pull;     /* GL_PINPULL_*: internal pull in every mode but ANALOG */
+    uint8_t pwr_port; /* PWR_GPIO_x: the port's index in the PWR pull registers */
 } glh_pin_t;
 
-#define GLH_ROW(logical, port_letter, pin_no, pad, fn_kind, af_no, src) \
-    [logical] = { GPIO##port_letter, (uint16_t)(1u << (pin_no)), (uint8_t)(fn_kind), (uint8_t)(af_no) },
+#define GLH_ROW(logical, port_letter, pin_no, pad, fn_kind, af_no, pull, board, exti, rail, sleep, src) \
+    [logical] = { GPIO##port_letter, (uint16_t)(1u << (pin_no)), (uint8_t)(fn_kind), (uint8_t)(af_no), \
+                  (uint8_t)(pull), (uint8_t)PWR_GPIO_##port_letter },
 static const glh_pin_t pin_[GL_PIN_COUNT] = { GL_PINS_TABLE(GLH_ROW) };
 
-/* The interrupt vectors (EXTI13 / 5 / 9 / 0), their NVIC lines and the EXTI
- * callback further down name four pins by their line NUMBER.  The numbers
- * come from the generated pin table: if tools/gen_pins.py moves one of the
- * four pins, this stops compiling instead of silently listening on the old
- * line. */
-#define GLH_LINE(logical, port_letter, pin_no, pad, fn_kind, af_no, src) GLH_LINE_##logical = (pin_no),
+/* INTERRUPT LINES.  The U5 has one vector per EXTI line and the line of a
+ * pin is its pin number.  The four interrupt pins are named by the generated
+ * GL_PINS_EXTI_* numbers (rev E: 7, 5, 13, 15); the vectors, their NVIC
+ * lines and the pin masks of the callback are BUILT from those numbers, so
+ * a pin that the layout moves is followed by `make pins` alone.  What is
+ * checked at compile time: the numbers agree with the table rows, and no
+ * two of the four share a line (they would share a vector). */
+/* (two levels: the outer one expands the GL_PINS_EXTI_* number, the inner
+ * one pastes - with EXTI next to ## so that the device header's own macro
+ * of that name is not expanded) */
+#define GLH_EXTI_HANDLER_(n) EXTI##n##_IRQHandler
+#define GLH_EXTI_HANDLER(n) GLH_EXTI_HANDLER_(n)
+#define GLH_EXTI_IRQN_(n) EXTI##n##_IRQn
+#define GLH_EXTI_IRQN(n) GLH_EXTI_IRQN_(n)
+#define GLH_GPIO_PIN_(n) GPIO_PIN_##n
+#define GLH_GPIO_PIN(n) GLH_GPIO_PIN_(n)
+
+enum { GLH_PORTID_A, GLH_PORTID_B, GLH_PORTID_C, GLH_PORTID_D, GLH_PORTID_E, GLH_PORTID_F,
+       GLH_PORTID_G, GLH_PORTID_H };
+#define GLH_LINE(logical, port_letter, pin_no, pad, fn_kind, af_no, pull, board, exti, rail, sleep, src) \
+    GLH_LINE_##logical = (pin_no), GLH_EXTI_##logical = (exti), GLH_PORT_##logical = GLH_PORTID_##port_letter,
 enum { GL_PINS_TABLE(GLH_LINE) GLH_LINE_COUNT_ };
-typedef char glh_imu_int1_is_exti13_[(GLH_LINE_GL_PIN_IMU_INT1 == 13) ? 1 : -1];
-typedef char glh_imu_int2_is_exti5_[(GLH_LINE_GL_PIN_IMU_INT2 == 5) ? 1 : -1];
-typedef char glh_vbus_sense_is_exti9_[(GLH_LINE_GL_PIN_VBUS_SENSE == 9) ? 1 : -1];
-typedef char glh_chg_stat_is_exti0_[(GLH_LINE_GL_PIN_CHG_STAT == 0) ? 1 : -1];
+typedef char glh_imu_int1_line_[(GLH_LINE_GL_PIN_IMU_INT1 == GL_PINS_EXTI_IMU_INT1 &&
+                                 GLH_EXTI_GL_PIN_IMU_INT1 == GL_PINS_EXTI_IMU_INT1) ? 1 : -1];
+typedef char glh_imu_int2_line_[(GLH_LINE_GL_PIN_IMU_INT2 == GL_PINS_EXTI_IMU_INT2 &&
+                                 GLH_EXTI_GL_PIN_IMU_INT2 == GL_PINS_EXTI_IMU_INT2) ? 1 : -1];
+typedef char glh_vbus_sense_line_[(GLH_LINE_GL_PIN_VBUS_SENSE == GL_PINS_EXTI_VBUS_SENSE &&
+                                   GLH_EXTI_GL_PIN_VBUS_SENSE == GL_PINS_EXTI_VBUS_SENSE) ? 1 : -1];
+typedef char glh_chg_stat_line_[(GLH_LINE_GL_PIN_CHG_STAT == GL_PINS_EXTI_CHG_STAT &&
+                                 GLH_EXTI_GL_PIN_CHG_STAT == GL_PINS_EXTI_CHG_STAT) ? 1 : -1];
+typedef char glh_exti_lines_distinct_[(GL_PINS_EXTI_IMU_INT1 != GL_PINS_EXTI_IMU_INT2 &&
+                                       GL_PINS_EXTI_IMU_INT1 != GL_PINS_EXTI_VBUS_SENSE &&
+                                       GL_PINS_EXTI_IMU_INT1 != GL_PINS_EXTI_CHG_STAT &&
+                                       GL_PINS_EXTI_IMU_INT2 != GL_PINS_EXTI_VBUS_SENSE &&
+                                       GL_PINS_EXTI_IMU_INT2 != GL_PINS_EXTI_CHG_STAT &&
+                                       GL_PINS_EXTI_VBUS_SENSE != GL_PINS_EXTI_CHG_STAT) ? 1 : -1];
+/* SHIP MODE wakes on the PWR wake-up pin of VBUS_SENSE.  The HAL names a
+ * wake-up pin by its line AND by which of the line's inputs is used; the
+ * header's own comment on PWR_WAKEUP_PIN2_HIGH_1 reads "PC13 : Wakeup pin 2
+ * (high polarity)".  This one identifier is therefore tied to the pad: if
+ * the layout moves VBUS_SENSE, the build stops here and somebody picks the
+ * identifier of the new pad from stm32u5xx_hal_pwr.h. */
+#define GLH_WKUP_VBUS_HIGH PWR_WAKEUP_PIN2_HIGH_1
+#define GLH_WKUP_VBUS_FLAG PWR_WAKEUP_FLAG2
+typedef char glh_vbus_sense_is_wkup2_on_pc13_[(GL_PINS_WKUP_VBUS_SENSE == 2 &&
+                                               (int)GLH_PORT_GL_PIN_VBUS_SENSE == (int)GLH_PORTID_C &&
+                                               GLH_LINE_GL_PIN_VBUS_SENSE == 13) ? 1 : -1];
+/* the generated header states what the board is; this backend is written for that */
+typedef char glh_rev_e_charger_[(GL_PINS_CHG_INHIBIT_ACTIVE_HIGH == 1 && GL_PINS_UCPD_DBDIS_FIRST == 1 &&
+                                 GL_PINS_USB_VBUS_SENSING_OFF == 1) ? 1 : -1];
 
 static bool latch_[GL_PIN_COUNT];
 static uint8_t mode_[GL_PIN_COUNT];
@@ -255,7 +329,18 @@ static bool lse_ok_ = true;
 static HAL_StatusTypeDef clocks_osc_(bool with_lse)
 {
     RCC_OscInitTypeDef osc;
-    /* LSE (32.768 kHz, 6 pF crystal: low drive) and MSIS 48 MHz locked to it */
+    /* LSE (32.768 kHz, 6 pF crystal) and MSIS 48 MHz locked to it.  Drive:
+     * MEDIUM-LOW or higher (firmware note 17 of the pin map, NETLIST_NOTES
+     * 4.9; GL_PINS_LSE_DRIVE_MEDIUM_LOW).  Set only while the oscillator is
+     * not running (the first start after a power-up or after ship mode):
+     * this function runs again after every Stop. */
+    if (with_lse && !__HAL_RCC_GET_FLAG(RCC_FLAG_LSERDY)) {
+#if GL_PINS_LSE_DRIVE_MEDIUM_LOW
+        __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_MEDIUMLOW);
+#else
+        __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
+#endif
+    }
     memset(&osc, 0, sizeof(osc));
     osc.OscillatorType = RCC_OSCILLATORTYPE_LSE | RCC_OSCILLATORTYPE_MSI | RCC_OSCILLATORTYPE_LSI |
                          RCC_OSCILLATORTYPE_MSIK;
@@ -438,8 +523,24 @@ gl_clock_t gl_hal_clock_get(void)
 
 static void gpio_clocks_(void);
 
-/* Called first thing after reset, before any clock or peripheral set-up:
- * if the previous run asked for the ROM DFU bootloader, jump to it. */
+/* VBUS_SENSE read as a plain input, before anything else is configured
+ * (the divider on the VBUS pad drives the pin: no pull). */
+static bool vbus_now_(void)
+{
+    const glh_pin_t *vb = &pin_[GL_PIN_VBUS_SENSE];
+    GPIO_InitTypeDef g;
+    gpio_clocks_();
+    memset(&g, 0, sizeof(g));
+    g.Pin = vb->mask;
+    g.Mode = GPIO_MODE_INPUT;
+    g.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(vb->port, &g);
+    return HAL_GPIO_ReadPin(vb->port, vb->mask) == GPIO_PIN_SET;
+}
+
+/* Called first thing after reset (after UCPD_DBDIS), before any clock or
+ * peripheral set-up: if the previous run asked for the ROM DFU bootloader,
+ * jump to it. */
 static void dfu_check_(void)
 {
     __HAL_RCC_PWR_CLK_ENABLE();
@@ -452,29 +553,25 @@ static void dfu_check_(void)
         /* The ROM bootloader has no time-out and the consumer cradle has no
          * reset contact.  Enter it only with VBUS present (in the cradle);
          * with VBUS gone there is no USB host to talk to and the device
-         * would sit in the bootloader until the cell is flat.  The pin is
-         * read as a plain input: nothing else is configured yet.
+         * would sit in the bootloader until the cell is flat.
          * LIMIT: a marker left in a powered cradle whose host never issues
          * a DFU "leave" stays in the bootloader until it is lifted out and
-         * put back (a power cycle of VBUS alone does not reset the MCU) -
-         * and it KEEPS CHARGING there: with the rev C2 circuit the charger
-         * runs whenever VBUS is present, and in the ROM bootloader nobody
-         * watches the cell temperature (CHG_INHIBIT is high-Z after the
-         * reset).  The firmware only refuses to come here outside the
-         * charging window (gl_usb.c).  README, charger state table: NOT MET
-         * without hardware. */
-        {
-            const glh_pin_t *vb = &pin_[GL_PIN_VBUS_SENSE];
-            GPIO_InitTypeDef g;
-            gpio_clocks_();
-            memset(&g, 0, sizeof(g));
-            g.Pin = vb->mask;
-            g.Mode = GPIO_MODE_INPUT;
-            g.Pull = GPIO_NOPULL;
-            HAL_GPIO_Init(vb->port, &g);
-            if (HAL_GPIO_ReadPin(vb->port, vb->mask) != GPIO_PIN_SET) {
-                return; /* not in the cradle: boot the application */
-            }
+         * put back (a power cycle of VBUS alone does not reset the MCU).
+         * Rev E: it CHARGES there by the charger's own rules - the BQ25101
+         * enforces its temperature window with its own thermistor
+         * (DESIGN_SPEC E1); CHG_INHIBIT is high-Z after the reset and the
+         * gate resistor keeps the stop off.  What does NOT exist in the ROM
+         * loader: the firmware's narrower 45 C limit, its 6 h limit, and a
+         * termination of the charge (the loader draws more than the
+         * termination current).  README, charger state table.
+         * Board rules for this state (pin map, firmware notes 5 and 11):
+         * UCPD_DBDIS has been set by gl_hal_init() and survives the jump
+         * (no reset in between), so the ROM's SPI activity cannot switch a
+         * pull-down onto PA15 / PB15; the application has powered the IMU
+         * down before the reset, so PA5 / PA7 (the ROM's SPI1 inputs) are
+         * static. */
+        if (!vbus_now_()) {
+            return; /* not in the cradle: boot the application */
         }
         entry = (void (*)(void))vectors[1];
         __set_MSP(vectors[0]);
@@ -482,6 +579,72 @@ static void dfu_check_(void)
         for (;;) {
         }
     }
+}
+
+/* ---- ship mode (DESIGN_SPEC E13): Shutdown, wake-up pin of VBUS_SENSE ---------------
+ * BY INSPECTION ONLY, and with these facts FROM MEMORY of RM0456 / DS13086
+ * (GL_PROV_SHIP_MODE_IS_SHUTDOWN): the TAMP backup registers survive
+ * Shutdown; a rising edge on an enabled wake-up pin leaves Shutdown through
+ * a reset; the pull-downs of the PWR_PDCRx registers are applied in Shutdown
+ * while APC is set; the low-speed oscillator and the RTC can be switched off
+ * before the entry (the data sheet's lowest Shutdown figure is without RTC);
+ * the independent watchdog does not run in Shutdown (LSI is off there).  If
+ * the last is wrong, the watchdog resets the MCU about 32 s after the entry
+ * and gl_hal_init() goes straight back to Shutdown BEFORE it starts the
+ * watchdog again: one extra reset, then quiet. */
+
+/* Go to Shutdown with the wake-up armed.  Does not return: if the entry
+ * falls through (a wake-up event already pending), a reset follows and
+ * gl_hal_init() decides again. */
+static void ship_shutdown_(void)
+{
+    gpio_clocks_();
+    /* Every pin is high-impedance in Shutdown.  The lines that have a board
+     * resistor rest on it (GL_PINS_RESET_TABLE: chip selects, DISP, the
+     * camera rail enable, the gate of the charger's stop: charger ON).  The
+     * lines that have none (GL_PINS_FLOATING_TABLE) and the two bus inputs
+     * get the MCU's Shutdown pull-down, so that no CMOS input of an
+     * always-powered part floats for months. */
+#define GLH_PD(logical) \
+    (void)HAL_PWREx_EnableGPIOPullDown(pin_[logical].pwr_port, pin_[logical].mask);
+    GL_PINS_FLOATING_TABLE(GLH_PD)
+#undef GLH_PD
+    for (int p = 0; p < (int)GL_PIN_COUNT; p++) {
+        if (pin_[p].pull == (uint8_t)GL_PINPULL_DOWN) {
+            (void)HAL_PWREx_EnableGPIOPullDown(pin_[p].pwr_port, pin_[p].mask);
+        }
+    }
+    HAL_PWREx_EnablePullUpPullDownConfig();
+    /* the low-speed oscillator and the RTC off: the lowest Shutdown current */
+    __HAL_RCC_RTC_DISABLE();
+    __HAL_RCC_LSE_CONFIG(RCC_LSE_OFF);
+    /* the wake-up: a rising edge of VBUS_SENSE (the divider on the VBUS pad) */
+    __disable_irq();
+    HAL_PWR_EnableWakeUpPin(GLH_WKUP_VBUS_HIGH);
+    __HAL_PWR_CLEAR_FLAG(GLH_WKUP_VBUS_FLAG);
+    HAL_PWREx_EnterSHUTDOWNMode();
+    NVIC_SystemReset();
+    for (;;) {
+    }
+}
+
+/* After dfu_check_() (backup access is enabled): did the previous run enter
+ * ship mode?  With VBUS present the marker has left it (returns
+ * GL_RESET_SHIP_WAKE); without - a reset from any other cause - it goes
+ * straight back and does not return. */
+static uint32_t ship_check_(void)
+{
+    if (TAMP->BKP2R != GLH_SHIP_MAGIC) {
+        return 0;
+    }
+    if (!vbus_now_()) {
+        ship_shutdown_();
+    }
+    TAMP->BKP2R = 0;
+    HAL_PWR_DisableWakeUpPin(GLH_WKUP_VBUS_HIGH);
+    __HAL_PWR_CLEAR_FLAG(GLH_WKUP_VBUS_FLAG);
+    HAL_PWREx_DisablePullUpPullDownConfig();
+    return GL_RESET_SHIP_WAKE;
 }
 
 static uint32_t read_reset_flags_(void)
@@ -813,6 +976,9 @@ void gl_hal_gpio_mode(gl_pin_t pin, gl_pin_mode_t mode)
         g.Pull = (mode == GL_PIN_MODE_INPUT_PULLUP)
                      ? GPIO_PULLUP
                      : ((mode == GL_PIN_MODE_INPUT_PULLDOWN) ? GPIO_PULLDOWN : GPIO_NOPULL);
+        /* (rev E: CHG_STAT and VBUS_SENSE are asked for WITHOUT a pull by the
+         * drivers - the board has the pull-up and the divider; CHG_STAT sits
+         * on a USB Type-C CC pad and is never driven) */
         break;
     case GL_PIN_MODE_OUTPUT_PP:
         g.Mode = GPIO_MODE_OUTPUT_PP;
@@ -827,6 +993,11 @@ void gl_hal_gpio_mode(gl_pin_t pin, gl_pin_mode_t mode)
             g.Alternate = p->af;
             /* camera bus, SPI and MCO edges: up to 24 MHz */
             g.Speed = GPIO_SPEED_FREQ_HIGH;
+            /* the pull column of the pin map: the two MISO lines float
+             * between transfers and keep an internal pull-down (note 15) */
+            g.Pull = (p->pull == (uint8_t)GL_PINPULL_DOWN)
+                         ? GPIO_PULLDOWN
+                         : ((p->pull == (uint8_t)GL_PINPULL_UP) ? GPIO_PULLUP : GPIO_NOPULL);
         } else if (p->fn == GL_PINFN_ANALOG) {
             g.Mode = GPIO_MODE_ANALOG;
         } else if (p->fn == GL_PINFN_SCCB) {
@@ -867,32 +1038,103 @@ bool gl_hal_gpio_read(gl_pin_t pin)
 /* interrupts and sleep                                                     */
 /* ======================================================================= */
 
-/* EXTI lines: IMU_INT1 = PC13, IMU_INT2 = PC5, VBUS = PA9, CHG_STAT = PB0
- * (hal/stm32u5/gl_pins.h).  The U5 has one vector per line. */
-void EXTI0_IRQHandler(void);
-void EXTI5_IRQHandler(void);
-void EXTI9_IRQHandler(void);
-void EXTI13_IRQHandler(void);
-void EXTI0_IRQHandler(void) { HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0); }
-void EXTI5_IRQHandler(void) { HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_5); }
-void EXTI9_IRQHandler(void) { HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_9); }
-void EXTI13_IRQHandler(void) { HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13); }
+/* EXTI vectors of the four interrupt pins, built from the generated line
+ * numbers (rev E: IMU_INT1 PA7 = EXTI7, IMU_INT2 PA5 = EXTI5, VBUS_SENSE PC13
+ * = EXTI13, CHG_STAT PA15 = EXTI15; see the pin table above). */
+void GLH_EXTI_HANDLER(GL_PINS_EXTI_IMU_INT1)(void);
+void GLH_EXTI_HANDLER(GL_PINS_EXTI_IMU_INT2)(void);
+void GLH_EXTI_HANDLER(GL_PINS_EXTI_VBUS_SENSE)(void);
+void GLH_EXTI_HANDLER(GL_PINS_EXTI_CHG_STAT)(void);
+void GLH_EXTI_HANDLER(GL_PINS_EXTI_IMU_INT1)(void)
+{
+    HAL_GPIO_EXTI_IRQHandler(GLH_GPIO_PIN(GL_PINS_EXTI_IMU_INT1));
+}
+void GLH_EXTI_HANDLER(GL_PINS_EXTI_IMU_INT2)(void)
+{
+    HAL_GPIO_EXTI_IRQHandler(GLH_GPIO_PIN(GL_PINS_EXTI_IMU_INT2));
+}
+void GLH_EXTI_HANDLER(GL_PINS_EXTI_VBUS_SENSE)(void)
+{
+    HAL_GPIO_EXTI_IRQHandler(GLH_GPIO_PIN(GL_PINS_EXTI_VBUS_SENSE));
+}
+void GLH_EXTI_HANDLER(GL_PINS_EXTI_CHG_STAT)(void)
+{
+    HAL_GPIO_EXTI_IRQHandler(GLH_GPIO_PIN(GL_PINS_EXTI_CHG_STAT));
+}
 
 static void exti_event_(uint16_t gpio_pin, bool rising)
 {
-    if (gpio_pin == GPIO_PIN_13) {
+    if (gpio_pin == GLH_GPIO_PIN(GL_PINS_EXTI_IMU_INT1)) {
         if (rising) {
             raise_(GL_IRQ_IMU_INT1);
         }
-    } else if (gpio_pin == GPIO_PIN_5) {
+    } else if (gpio_pin == GLH_GPIO_PIN(GL_PINS_EXTI_IMU_INT2)) {
         if (rising) {
             raise_(GL_IRQ_IMU_INT2);
         }
-    } else if (gpio_pin == GPIO_PIN_9) {
+    } else if (gpio_pin == GLH_GPIO_PIN(GL_PINS_EXTI_VBUS_SENSE)) {
+        if (!rising) {
+            /* firmware note 7: the USB-supply-valid bit is cleared on the
+             * falling edge of EITHER of its two conditions, here, not when
+             * the main loop gets round to it */
+            HAL_PWREx_DisableVddUSB();
+        }
         raise_(GL_IRQ_VBUS_CHANGE);
-    } else if (gpio_pin == GPIO_PIN_0) {
+    } else if (gpio_pin == GLH_GPIO_PIN(GL_PINS_EXTI_CHG_STAT)) {
         raise_(GL_IRQ_CHG_STAT);
     }
+}
+
+/* ---- the MCU's USB supply (VDDUSB), firmware note 7 / DESIGN_SPEC E26 -----------------
+ * VBUS_SENSE alone does not say that the USB supply pin is powered: on
+ * undocking VDDUSB is gone within about a millisecond while the pin still
+ * reads high for up to GL_PINS_VBUS_REMOVAL_SEEN_MS.  The MCU's own monitor
+ * of that pin (UVM: VDDUSB against 1.2 V) is the second condition.  It is
+ * switched on only while VBUS_SENSE reads high (its supply current is not
+ * in the simulator's model: from memory a fraction of a microampere), with
+ * its interrupt on both edges: the falling edge clears the supply-valid bit
+ * in the handler and both edges raise GL_IRQ_VBUS_CHANGE.
+ * BY INSPECTION ONLY; that the monitor's EXTI line wakes the core from
+ * Stop 1 / Stop 2 is from memory. */
+static bool uvm_on_;
+
+void PVD_PVM_IRQHandler(void);
+void PVD_PVM_IRQHandler(void)
+{
+    HAL_PWREx_PVD_PVM_IRQHandler();
+}
+
+void HAL_PWREx_UVMCallback(void)
+{
+    if (!__HAL_PWR_GET_FLAG(PWR_FLAG_VDDUSBRDY)) {
+        HAL_PWREx_DisableVddUSB();
+    }
+    raise_(GL_IRQ_VBUS_CHANGE);
+}
+
+bool gl_hal_usb_supply_ok(void)
+{
+    if (!gl_hal_gpio_read(GL_PIN_VBUS_SENSE)) {
+        if (uvm_on_) {
+            HAL_NVIC_DisableIRQ(PVD_PVM_IRQn);
+            HAL_PWREx_DisableUVM();
+            uvm_on_ = false;
+        }
+        return false;
+    }
+    if (!uvm_on_) {
+        PWR_PVMTypeDef pvm;
+        memset(&pvm, 0, sizeof(pvm));
+        pvm.PVMType = PWR_UVM;
+        pvm.Mode = PWR_PVM_MODE_IT_RISING_FALLING;
+        (void)HAL_PWREx_ConfigPVM(&pvm);
+        HAL_PWREx_EnableUVM();
+        HAL_NVIC_SetPriority(PVD_PVM_IRQn, 2, 0);
+        HAL_NVIC_EnableIRQ(PVD_PVM_IRQn);
+        uvm_on_ = true;
+        gl_hal_delay_us(GLH_UVM_STARTUP_US);
+    }
+    return __HAL_PWR_GET_FLAG(PWR_FLAG_VDDUSBRDY) != 0u;
 }
 
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t gpio_pin)
@@ -929,19 +1171,20 @@ void gl_hal_irq_enable(uint32_t mask, bool enable)
         __enable_irq();
     }
     if ((mask & GL_IRQ_IMU_INT1) != 0u) {
-        nvic_(EXTI13_IRQn, enable);
+        nvic_(GLH_EXTI_IRQN(GL_PINS_EXTI_IMU_INT1), enable);
     }
     if ((mask & GL_IRQ_IMU_INT2) != 0u) {
-        nvic_(EXTI5_IRQn, enable);
+        nvic_(GLH_EXTI_IRQN(GL_PINS_EXTI_IMU_INT2), enable);
     }
     if ((mask & GL_IRQ_VBUS_CHANGE) != 0u) {
-        nvic_(EXTI9_IRQn, enable);
+        nvic_(GLH_EXTI_IRQN(GL_PINS_EXTI_VBUS_SENSE), enable);
     }
     if ((mask & GL_IRQ_CHG_STAT) != 0u) {
-        nvic_(EXTI0_IRQn, enable);
+        nvic_(GLH_EXTI_IRQN(GL_PINS_EXTI_CHG_STAT), enable);
     }
-    /* WAKE_TIMER (RTC), DCMI_DONE and USB_RX vectors stay enabled; the mask
-     * decides whether their events are latched */
+    /* WAKE_TIMER (RTC), DCMI_DONE, USB_RX, USB_WAKE and the USB supply
+     * monitor's vectors stay enabled; the mask decides whether their events
+     * are latched */
 }
 
 uint32_t gl_hal_irq_take(void)
@@ -988,7 +1231,15 @@ uint32_t gl_hal_sleep(gl_sleep_mode_t mode)
             break;
         }
         if (mode == GL_SLEEP_STOP && clock_ != GL_CLOCK_FAST) {
-            HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+            /* E32, asleep in the cradle under a suspended host: the USB
+             * device stays attached and the host's resume must wake the
+             * core.  Whether the U585 does that from Stop 2 is not known
+             * here (GL_PROV_USB_WAKE_FROM_STOP2): Stop 1 until it is. */
+            if (GL_PROV_USB_WAKE_FROM_STOP2 == 0 && glh_usb_in_standby()) {
+                HAL_PWREx_EnterSTOP1Mode(PWR_STOPENTRY_WFI);
+            } else {
+                HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+            }
             stopped = true;
         } else {
             /* idle sleep; also what Stop becomes while the PLL runs (the
@@ -1034,6 +1285,14 @@ static uint32_t spi_prescaler_(uint32_t max_hz)
     return code[i]; /* 48 MHz / 256 = 187.5 kHz is the slowest */
 }
 
+static void spi_pins_low_(gl_pin_t sck, gl_pin_t mosi)
+{
+    gl_hal_gpio_write(sck, false);
+    gl_hal_gpio_mode(sck, GL_PIN_MODE_OUTPUT_PP);
+    gl_hal_gpio_write(mosi, false);
+    gl_hal_gpio_mode(mosi, GL_PIN_MODE_OUTPUT_PP);
+}
+
 gl_status_t gl_hal_spi_configure(gl_spi_bus_t bus, const gl_spi_cfg_t *cfg)
 {
     SPI_HandleTypeDef *h;
@@ -1047,6 +1306,13 @@ gl_status_t gl_hal_spi_configure(gl_spi_bus_t bus, const gl_spi_cfg_t *cfg)
     }
     h = &hspi_[bus];
     if (spi_ready_[bus]) {
+        /* a change of mode or rate: the pins back to GPIO LOW while the
+         * peripheral is down */
+        if (bus == GL_SPI_BUS_1) {
+            spi_pins_low_(GL_PIN_SPI1_SCK, GL_PIN_SPI1_MOSI);
+        } else {
+            spi_pins_low_(GL_PIN_SPI2_SCK, GL_PIN_SPI2_MOSI);
+        }
         (void)HAL_SPI_DeInit(h);
     }
     memset(h, 0, sizeof(*h));
@@ -1085,6 +1351,18 @@ gl_status_t gl_hal_spi_configure(gl_spi_bus_t bus, const gl_spi_cfg_t *cfg)
     }
     spi_cfg_[bus] = *cfg;
     spi_ready_[bus] = true;
+    /* The clock and data-out pins go to the peripheral only NOW, when it is
+     * enabled and holds them (MasterKeepIOState): until the first
+     * configuration they are GPIO outputs at LOW, as gl_hal_init() left
+     * them (firmware note 15: these lines have no board pull, and an
+     * alternate-function pin of a disabled SPI is high-impedance). */
+    if (bus == GL_SPI_BUS_1) {
+        gl_hal_gpio_mode(GL_PIN_SPI1_SCK, GL_PIN_MODE_ALTERNATE);
+        gl_hal_gpio_mode(GL_PIN_SPI1_MOSI, GL_PIN_MODE_ALTERNATE);
+    } else {
+        gl_hal_gpio_mode(GL_PIN_SPI2_SCK, GL_PIN_MODE_ALTERNATE);
+        gl_hal_gpio_mode(GL_PIN_SPI2_MOSI, GL_PIN_MODE_ALTERNATE);
+    }
     return GL_OK;
 }
 
@@ -1686,17 +1964,41 @@ void gl_hal_extcomin_stop(void)
  * runs"): so whatever fails, there must be a watchdog, pins in their safe
  * states, a cycle counter and a tick.
  *
- *   1. the independent watchdog FIRST.  It needs only LSI, which the
- *      hardware starts with it.  From here on a hang anywhere - in the clock
- *      set-up below, in the application's start-up - ends in a reset after
- *      32 s at the latest.  (It used to be started LAST, and a clock error
- *      returned before it: the first delay of the application then waited
- *      for ever on a counter that was never enabled, with no watchdog, and
- *      in a cradle the default-on charger ran with nobody supervising.)
+ *   0. UCPD_DBDIS (rev E, firmware note 5 of the pin map): PA15 and PB15 are
+ *      USB Type-C CC pads of the MCU, PB5 and PB14 their "dead battery"
+ *      control pads.  Until the bit is set, a high level on PB5 (SPI1_MOSI)
+ *      or PB14 (SPI2_MISO) switches a 5.1 kohm pull-down onto PA15
+ *      (CHG_STAT) or PB15 (SPI2_MOSI).  It is the FIRST statement, before
+ *      any pin is configured, and it runs again after every reset (the exit
+ *      from ship mode is one).  What the pads do is PROVISIONAL in the pin
+ *      map; the HAL function exists in the header this file compiles
+ *      against.
+ *      Then the two things that may not return: the ROM loader hand-over
+ *      and ship mode (a reset without VBUS goes straight back to Shutdown).
+ *   1. the independent watchdog.  It needs only LSI, which the hardware
+ *      starts with it.  From here on a hang anywhere - in the clock set-up
+ *      below, in the application's start-up - ends in a reset after 32 s at
+ *      the latest.  (Rev E: with a hung firmware the charger goes on by its
+ *      own rules, inside its own temperature window.)
  *   2. clocks.  A crystal that does not start is survived on LSI
  *      (clocks_init_); an error of the internal oscillators leaves the core
  *      on whatever clock it has (SystemCoreClock says which).
- *   3. cycle counter, pins, RTC, tick - always.
+ *   3. cycle counter, pins, RTC, tick - always.  The pins in the order
+ *      gl_hal.h states (rev E, firmware notes 13 to 15):
+ *        a. the lines WITHOUT a board pull (GL_PINS_FLOATING_TABLE) driven
+ *           LOW, before any other pin is touched;
+ *        b. the lines a board resistor holds, taken over AT THAT LEVEL
+ *           (GL_PINS_RESET_TABLE, hand-over 1), latch before mode;
+ *        c. every other pin ANALOG - the camera-facing pins, the analog
+ *           inputs, the grain lines, USB, and CHG_INHIBIT and NTC_BIAS
+ *           (the charger keeps its hardware default; the gate of its stop
+ *           is held low by the board);
+ *        d. the four interrupt inputs WITHOUT an internal pull, and the two
+ *           MISO lines to their peripherals with their pull-down.  SCK and
+ *           MOSI of both buses stay GPIO LOW until gl_hal_spi_configure()
+ *           has enabled the peripheral that will hold them.
+ *      Writing the mode of PA15, PB3 and PB4 is what takes them away from
+ *      JTAG (note 13; SWD on PA13 / PA14 is not touched).
  * Returns the FIRST error; GL_ERR_TIMEOUT for "running without the crystal".
  * A hang BEFORE step 1 (dfu_check_, HAL_Init) is not covered by the software
  * start; the IWDG_SW option bit (hardware watchdog) would cover it and is a
@@ -1705,8 +2007,14 @@ void gl_hal_extcomin_stop(void)
 gl_status_t gl_hal_init(void)
 {
     gl_status_t st, first = GL_OK;
+    uint32_t ship;
+    static bool touched[GL_PIN_COUNT];
 
-    dfu_check_(); /* may not return */
+    /* 0. */
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWREx_DisableUCPDDeadBattery();
+    dfu_check_();         /* may not return */
+    ship = ship_check_(); /* may not return */
     if (HAL_Init() != HAL_OK) {
         first = GL_ERR_IO; /* (the tick could not be set up; carry on) */
     }
@@ -1723,7 +2031,7 @@ gl_status_t gl_hal_init(void)
     if (HAL_IWDG_Init(&hiwdg_) != HAL_OK && first == GL_OK) {
         first = GL_ERR_IO;
     }
-    reset_flags_ = read_reset_flags_();
+    reset_flags_ = read_reset_flags_() | ship;
     /* 2. clocks */
     st = clocks_init_();
     if (st != GL_OK) {
@@ -1747,44 +2055,50 @@ gl_status_t gl_hal_init(void)
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
     gpio_clocks_();
-    /* every signal pin analog (lowest leakage; also the camera rail rule) */
     for (int p = 0; p < (int)GL_PIN_COUNT; p++) {
         latch_[p] = false;
-        HAL_GPIO_WritePin(pin_[p].port, pin_[p].mask, GPIO_PIN_RESET);
-        gl_hal_gpio_mode((gl_pin_t)p, GL_PIN_MODE_ANALOG);
+        mode_[p] = (uint8_t)GL_PIN_MODE_ANALOG; /* what the reset left */
+        touched[p] = false;
     }
-    /* the states gl_hal.h promises after init */
-    gl_hal_gpio_write(GL_PIN_CAM_PWR_EN, false);
-    gl_hal_gpio_mode(GL_PIN_CAM_PWR_EN, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_LCD_SCS, false);
-    gl_hal_gpio_mode(GL_PIN_LCD_SCS, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_LCD_DISP, false);
-    gl_hal_gpio_mode(GL_PIN_LCD_DISP, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_LCD_EXTCOMIN, false);
-    gl_hal_gpio_mode(GL_PIN_LCD_EXTCOMIN, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_FLASH_CS, true);
-    gl_hal_gpio_mode(GL_PIN_FLASH_CS, GL_PIN_MODE_OUTPUT_PP);
-    gl_hal_gpio_write(GL_PIN_IMU_CS, true);
-    gl_hal_gpio_mode(GL_PIN_IMU_CS, GL_PIN_MODE_OUTPUT_PP);
-    /* CHG_INHIBIT (rev C2: the charger is on by default in hardware, the pin
-     * can only stop it) and NTC_BIAS are left ANALOG, as the loop above and
-     * the reset before it put them: drivers/power pulls CHG_INHIBIT low only
-     * as the result of a temperature measurement, and drives NTC_BIAS only
-     * while a conversion runs.  NOTE for the pin choice: CHG_INHIBIT must be
-     * a pin without a protection diode to VDD (an FT pin), or the unpowered
-     * MCU clamps the MOSFET gate and defeats the default (gl_pins.h). */
+    /* a. lines without a board pull: LOW, first */
+#define GLH_FLOATING(logical)                                   \
+    gl_hal_gpio_write(logical, false);                          \
+    gl_hal_gpio_mode(logical, GL_PIN_MODE_OUTPUT_PP);           \
+    touched[logical] = true;
+    GL_PINS_FLOATING_TABLE(GLH_FLOATING)
+#undef GLH_FLOATING
+    /* b. lines a board resistor holds: taken over at that level */
+#define GLH_RESET(logical, level, handover)                     \
+    if ((handover) != 0) {                                      \
+        gl_hal_gpio_write(logical, (level) != 0);               \
+        gl_hal_gpio_mode(logical, GL_PIN_MODE_OUTPUT_PP);       \
+        touched[logical] = true;                                \
+    }
+    GL_PINS_RESET_TABLE(GLH_RESET)
+#undef GLH_RESET
+    /* c. everything else analog (lowest leakage; the camera rail rule;
+     * CHG_INHIBIT and NTC_BIAS: only drivers/power drives them, CHG_INHIBIT
+     * push-pull HIGH to stop the charger, NTC_BIAS high for a conversion) */
+    for (int p = 0; p < (int)GL_PIN_COUNT; p++) {
+        if (!touched[p]) {
+            HAL_GPIO_WritePin(pin_[p].port, pin_[p].mask, GPIO_PIN_RESET);
+            gl_hal_gpio_mode((gl_pin_t)p, GL_PIN_MODE_ANALOG);
+        }
+    }
     extcomin_on_ = false;
     opamp_on_ = false;
-    gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT_PULLUP);
+    uvm_on_ = false;
+    /* d. interrupt inputs, no internal pull (CHG_STAT: the board's 100 kohm
+     * pull-up, and a CC pad that is never driven; VBUS_SENSE: the divider;
+     * the IMU drives its two lines); the MISO lines with their pull-down */
+    gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT);
     gl_hal_gpio_mode(GL_PIN_VBUS_SENSE, GL_PIN_MODE_INPUT);
     gl_hal_gpio_mode(GL_PIN_IMU_INT1, GL_PIN_MODE_INPUT);
     gl_hal_gpio_mode(GL_PIN_IMU_INT2, GL_PIN_MODE_INPUT);
-    gl_hal_gpio_mode(GL_PIN_SPI1_SCK, GL_PIN_MODE_ALTERNATE);
-    gl_hal_gpio_mode(GL_PIN_SPI1_MOSI, GL_PIN_MODE_ALTERNATE);
     gl_hal_gpio_mode(GL_PIN_SPI1_MISO, GL_PIN_MODE_ALTERNATE);
-    gl_hal_gpio_mode(GL_PIN_SPI2_SCK, GL_PIN_MODE_ALTERNATE);
-    gl_hal_gpio_mode(GL_PIN_SPI2_MOSI, GL_PIN_MODE_ALTERNATE);
     gl_hal_gpio_mode(GL_PIN_SPI2_MISO, GL_PIN_MODE_ALTERNATE);
+    spi_ready_[GL_SPI_BUS_1] = false;
+    spi_ready_[GL_SPI_BUS_2] = false;
 
     irq_enabled_ = 0;
     irq_pending_ = 0;
@@ -1798,6 +2112,18 @@ gl_status_t gl_hal_init(void)
         first = st;
     }
     return first;
+}
+
+void gl_hal_ship_mode_enter(void)
+{
+    /* the wake-up is an edge: with VBUS present there would be none */
+    if (gl_hal_gpio_read(GL_PIN_VBUS_SENSE)) {
+        return;
+    }
+    HAL_PWR_EnableBkUpAccess();
+    HAL_RTCEx_BKUPWrite(&hrtc_, RTC_BKP_DR1, 0); /* the clock stops: "not set" afterwards */
+    TAMP->BKP2R = GLH_SHIP_MAGIC;
+    ship_shutdown_(); /* does not return */
 }
 
 uint32_t gl_hal_reset_reason(void)

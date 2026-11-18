@@ -489,6 +489,105 @@ GL_TEST(test_backend_starts_the_watchdog_first)
              after_(p, "HAL_GetTick()") < after_(p, "\n}\n"));
 }
 
+/* The same kind of check for what the rev E board asks of the backend
+ * (electrical/gl1_main, firmware notes 4, 5, 7, 13, 15): the ORDER of
+ * gl_hal_init() and the absence of things that were right for the old board.
+ * A check of the TEXT of a file that has been compiled and never run. */
+GL_TEST(test_backend_follows_the_rev_e_notes_in_text)
+{
+    FILE *f = fopen("hal/stm32u5/gl_hal_stm32u5.c", "rb");
+    size_t n = 0;
+    const char *body, *end, *ucpd, *dfu, *ship, *floating, *reset, *analog, *inputs;
+
+    GL_CHECK(f != NULL);
+    if (f == NULL) {
+        return;
+    }
+    n = fread(backend_src_, 1, sizeof(backend_src_) - 1u, f);
+    fclose(f);
+    backend_src_[n] = '\0';
+    body = after_(backend_src_, "\ngl_status_t gl_hal_init(void)\n{");
+    end = after_(body, "\n}\n");
+    GL_CHECK(body != NULL && end != NULL);
+    if (body == NULL || end == NULL) {
+        return;
+    }
+    /* note 5: UCPD_DBDIS before anything else, the ROM hand-over included */
+    ucpd = after_(body, "HAL_PWREx_DisableUCPDDeadBattery();");
+    dfu = after_(body, "dfu_check_();");
+    ship = after_(body, "ship_check_();");
+    GL_CHECK(ucpd != NULL && dfu != NULL && ship != NULL);
+    GL_CHECK(ucpd < dfu && dfu < ship && ship < after_(body, "HAL_Init()"));
+    GL_CHECK(after_(body, "gl_hal_gpio_mode(") > ucpd && after_(body, "HAL_GPIO_") > ucpd);
+    /* note 15 and the order of gl_hal.h: floating lines, then the lines a
+     * resistor holds, then everything else analog, then the inputs */
+    floating = after_(body, "GL_PINS_FLOATING_TABLE(");
+    reset = after_(body, "GL_PINS_RESET_TABLE(");
+    analog = after_(body, "GL_PIN_MODE_ANALOG);");
+    inputs = after_(body, "gl_hal_gpio_mode(GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT);");
+    GL_CHECK(floating != NULL && reset != NULL && analog != NULL && inputs != NULL);
+    GL_CHECK(floating < reset && reset < analog && analog < inputs && inputs < end);
+    /* note 3: no internal pull on CHG_STAT, anywhere in the file */
+    GL_CHECK(after_(backend_src_, "GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT_PULLUP") == NULL);
+    GL_CHECK(after_(backend_src_, "GL_PIN_CHG_STAT, GL_PIN_MODE_INPUT_PULLDOWN") == NULL);
+    /* nothing in gl_hal_init() drives CHG_INHIBIT or NTC_BIAS */
+    {
+        const char *p1 = after_(body, "GL_PIN_CHG_INHIBIT,"), *p2 = after_(body, "GL_PIN_NTC_BIAS,");
+        GL_CHECK(p1 == NULL || p1 > end);
+        GL_CHECK(p2 == NULL || p2 > end);
+    }
+    /* note 4: no interrupt line named by a number - vectors, NVIC lines and
+     * pin masks are built from the generated GL_PINS_EXTI_* */
+    {
+        static const char *const banned[] = { "EXTI0_IRQ", "EXTI5_IRQ", "EXTI7_IRQ", "EXTI9_IRQ",
+                                              "EXTI13_IRQ", "EXTI15_IRQ", "GPIO_PIN_13", "GPIO_PIN_15",
+                                              "GPIO_PIN_5)", "GPIO_PIN_7)", "GPIO_PIN_9", "GPIO_PIN_0)" };
+        for (size_t i = 0; i < sizeof(banned) / sizeof(banned[0]); i++) {
+            GL_CHECK(after_(backend_src_, banned[i]) == NULL);
+        }
+        GL_CHECK(after_(backend_src_, "GLH_EXTI_HANDLER(GL_PINS_EXTI_IMU_INT1)") != NULL);
+        GL_CHECK(after_(backend_src_, "GLH_EXTI_HANDLER(GL_PINS_EXTI_IMU_INT2)") != NULL);
+        GL_CHECK(after_(backend_src_, "GLH_EXTI_HANDLER(GL_PINS_EXTI_VBUS_SENSE)") != NULL);
+        GL_CHECK(after_(backend_src_, "GLH_EXTI_HANDLER(GL_PINS_EXTI_CHG_STAT)") != NULL);
+    }
+    /* note 7: the supply-valid condition is VBUS_SENSE AND the monitor of
+     * the supply pin, and the valid bit is cleared in both handlers */
+    {
+        const char *fn = after_(backend_src_, "\nbool gl_hal_usb_supply_ok(void)\n{");
+        const char *fe = after_(fn, "\n}\n");
+        GL_CHECK(fn != NULL && fe != NULL);
+        if (fn != NULL && fe != NULL) {
+            const char *a = after_(fn, "gl_hal_gpio_read(GL_PIN_VBUS_SENSE)");
+            const char *b = after_(fn, "PWR_FLAG_VDDUSBRDY");
+            GL_CHECK(a != NULL && a < fe && b != NULL && b < fe);
+        }
+        fn = after_(backend_src_, "\nvoid HAL_PWREx_UVMCallback(void)\n{");
+        GL_CHECK(fn != NULL && after_(fn, "HAL_PWREx_DisableVddUSB();") < after_(fn, "\n}\n"));
+        fn = after_(backend_src_, "\nstatic void exti_event_(uint16_t gpio_pin, bool rising)\n{");
+        GL_CHECK(fn != NULL && after_(fn, "HAL_PWREx_DisableVddUSB();") < after_(fn, "\n}\n"));
+    }
+    /* ship mode: Shutdown through the wake-up pin, the marker written first */
+    {
+        const char *fn = after_(backend_src_, "\nvoid gl_hal_ship_mode_enter(void)\n{");
+        const char *fe = after_(fn, "\n}\n");
+        GL_CHECK(fn != NULL && fe != NULL);
+        if (fn != NULL && fe != NULL) {
+            const char *vb = after_(fn, "gl_hal_gpio_read(GL_PIN_VBUS_SENSE)");
+            const char *mk = after_(fn, "TAMP->BKP2R = GLH_SHIP_MAGIC;");
+            const char *sd = after_(fn, "ship_shutdown_();");
+            GL_CHECK(vb != NULL && mk != NULL && sd != NULL && vb < mk && mk < sd && sd < fe);
+        }
+        fn = after_(backend_src_, "\nstatic void ship_shutdown_(void)\n{");
+        GL_CHECK(fn != NULL && after_(fn, "HAL_PWR_EnableWakeUpPin(GLH_WKUP_VBUS_HIGH);") != NULL &&
+                 after_(fn, "HAL_PWR_EnableWakeUpPin(GLH_WKUP_VBUS_HIGH);") <
+                     after_(fn, "HAL_PWREx_EnterSHUTDOWNMode();"));
+    }
+    printf("    hal/stm32u5/gl_hal_stm32u5.c: UCPD_DBDIS is the first call of gl_hal_init(), %ld "
+           "characters before the first pin is configured; pin order floating / held / analog / "
+           "inputs as written (TEXT only: compiled, never run)\n",
+           (long)(after_(body, "gl_hal_gpio_mode(") - ucpd));
+}
+
 int main(void)
 {
     GL_RUN(test_chip_selects_are_inactive_through_reset_and_init);
@@ -497,5 +596,6 @@ int main(void)
     GL_RUN(test_core_clock_calls_are_recorded_and_checked);
     GL_RUN(test_extcomin_divides_32768_by_547);
     GL_RUN(test_backend_starts_the_watchdog_first);
+    GL_RUN(test_backend_follows_the_rev_e_notes_in_text);
     return gl_test_summary();
 }

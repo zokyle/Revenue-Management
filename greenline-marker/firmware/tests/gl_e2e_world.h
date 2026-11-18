@@ -270,6 +270,11 @@ static inline void watch_reset_(void)
 static inline void run_until_ms_(uint32_t t_ms)
 {
     while (gl_sim_now_us() < (uint64_t)t_ms * 1000u) {
+        if (app.halted) {
+            /* ship mode (host build): no firmware runs, only time passes */
+            gl_sim_advance_ms(t_ms - (uint32_t)(gl_sim_now_us() / 1000u));
+            break;
+        }
         gl_app_run_once(&app);
         if (seen.n < MAX_SEEN && app.ui.state != seen.state[seen.n - 1u]) {
             seen.state[seen.n] = app.ui.state;
@@ -465,6 +470,22 @@ static inline int host_get_(uint8_t want_cmd, uint8_t *seq, const uint8_t **payl
         pos += n + 8u;
     }
     return -1;
+}
+
+/* Run to simulated time t_ms with a HOST THAT KEEPS TALKING: a PING every
+ * 10 s (its answers are thrown away).  Rev E (DESIGN_SPEC E32): without a
+ * word from a host for 30 s the marker goes to sleep in the cradle; a test
+ * that wants it awake there for longer has to behave like a host. */
+static inline void run_talking_until_ms_(uint32_t t_ms)
+{
+    while ((uint32_t)(gl_sim_now_us() / 1000u) < t_ms) {
+        const uint32_t now = (uint32_t)(gl_sim_now_us() / 1000u);
+        const uint32_t step = (t_ms - now > 10000u) ? 10000u : (t_ms - now);
+        host_send_(0xF0, GL_CMD_PING, NULL, 0);
+        run_until_ms_(now + step);
+        host_rx_len_ = 0;
+        (void)gl_sim_usb_host_recv(host_rx_, sizeof(host_rx_));
+    }
 }
 
 #endif /* GL_E2E_WORLD_H */

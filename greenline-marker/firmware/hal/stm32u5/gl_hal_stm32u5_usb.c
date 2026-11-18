@@ -16,6 +16,20 @@
  * and usbd_desc.c (device / string descriptors, here expected to export
  * GL_USBD_Desc).  The VID / PID must be assigned before any unit ships.
  *
+ * WHAT THE GLUE MUST DO ON THE REV E BOARD (pin map, firmware notes 6, 7):
+ *   - VBUS SENSING OFF (hpcd.Init.vbus_sensing_enable = DISABLE): the USB
+ *     core's own VBUS pad, PA9, carries a grain LED line.  The core is told
+ *     that the session is valid by the B-session override bits, set in
+ *     gl_hal_usb_start() below (register details PROVISIONAL);
+ *   - HAL_PCD_SuspendCallback() must call glh_usb_bus_event(false) and
+ *     HAL_PCD_ResumeCallback() / HAL_PCD_ResetCallback() glh_usb_bus_event(true)
+ *     (after the library's own USBD_LL_* calls): the cradle sleep of
+ *     DESIGN_SPEC E32 hangs on them;
+ *   - the OTG_FS wake-up interrupt (EXTI line of the core) enabled, so that
+ *     a resume wakes the MCU from Stop 1.
+ * The supply-valid bit follows gl_hal_usb_supply_ok() (gl_hal_stm32u5.c):
+ * VBUS_SENSE high AND the MCU's own monitor of the USB supply pin.
+ *
  * Data path: two byte rings between the USB interrupt context and the main
  * loop (single producer, single consumer each, so no lock is needed on a
  * single core).  Received bytes raise GL_IRQ_USB_RX.
@@ -23,8 +37,13 @@
  * Clock: HSI48 with the clock-recovery system locked to the USB start-of-
  * frame (crystal-less USB: PROVISIONAL in DESIGN_SPEC,
  * GL_PROV_USB_CRYSTALLESS_HSI48_CRS).  The USB supply-valid switch is set
- * only here, i.e. only after the application has seen VBUS: VDDUSB comes
- * from its own 3.3 V regulator fed from VBUS (DESIGN_SPEC section 4).
+ * only here and only while gl_hal_usb_supply_ok(): VDDUSB comes from its
+ * own 3.3 V regulator, fed from VBUS and enabled by the 2.8 V rail
+ * (DESIGN_SPEC section 4, E26).
+ *
+ * Standby (DESIGN_SPEC E32): under a host that has SUSPENDED the bus the
+ * device stays attached with its clocks stopped (gl_hal_usb_standby), the
+ * MCU sleeps in Stop 1 and the host's resume raises GL_IRQ_USB_WAKE.
  *
  * RAM: 2 x 1024-byte rings + one 64-byte packet buffer.
  */
@@ -53,6 +72,9 @@ static ring_t rx_, tx_;
 static uint8_t rx_packet_[CDC_DATA_FS_MAX_PACKET_SIZE];
 static uint8_t tx_packet_[CDC_DATA_FS_MAX_PACKET_SIZE];
 static volatile bool started_, dtr_, tx_busy_, rx_stalled_;
+static volatile bool standby_;    /* attached to a suspended bus, clocks stopped */
+static volatile bool configured_; /* a host has configured the device since the start */
+static volatile bool suspended_;  /* the bus is suspended (the glue's callbacks) */
 static USBD_CDC_LineCodingTypeDef line_coding_ = { 115200, 0, 0, 8 };
 
 static uint32_t ring_used_(const ring_t *r)
@@ -69,6 +91,7 @@ static uint32_t ring_free_(const ring_t *r)
 
 static int8_t cdc_init_(void)
 {
+    configured_ = true; /* SET_CONFIGURATION: a host is there */
     (void)USBD_CDC_SetRxBuffer(&usbd_, rx_packet_);
     (void)USBD_CDC_ReceivePacket(&usbd_);
     return (int8_t)USBD_OK;
@@ -157,32 +180,120 @@ static USBD_CDC_ItfTypeDef cdc_itf_ = { cdc_init_, cdc_deinit_, cdc_control_, cd
 
 /* ---- gl_hal.h ------------------------------------------------------------------ */
 
+/* The 48 MHz oscillator with clock recovery, and the kernel clock of the
+ * USB core (also after a Stop mode, which stops the oscillator). */
+static gl_status_t usb_clock_(void);
+
+/* For usbd_conf.c: the bus was suspended (false) or resumed / reset (true). */
+void glh_usb_bus_event(bool active);
+void glh_usb_bus_event(bool active)
+{
+    suspended_ = !active;
+    if (active && standby_) {
+        glh_irq_raise(GL_IRQ_USB_WAKE); /* the application calls gl_hal_usb_start() */
+    }
+}
+
+bool glh_usb_in_standby(void)
+{
+    return started_ && standby_;
+}
+
+gl_usb_bus_t gl_hal_usb_bus(void)
+{
+    if (!started_ || !configured_) {
+        return GL_USB_BUS_NONE; /* nobody has configured the device: a wall charger */
+    }
+    return suspended_ ? GL_USB_BUS_SUSPENDED : GL_USB_BUS_ACTIVE;
+}
+
+gl_status_t gl_hal_usb_standby(void)
+{
+    if (!started_ || standby_) {
+        return started_ ? GL_OK : GL_ERR_STATE;
+    }
+    if (gl_hal_usb_bus() != GL_USB_BUS_SUSPENDED) {
+        return GL_ERR_STATE; /* a device may not sleep under a running bus */
+    }
+    /* The core stays attached (the pull-up on D+ stays); its PHY clock is
+     * gated by the suspend handling of the PCD driver (low_power_enable in
+     * the glue), and Stop 1 stops the 48 MHz oscillator.  Nothing is
+     * received or sent until the host resumes.  NEVER COMPILED, NEVER RUN. */
+    standby_ = true;
+    dtr_ = false;
+    return GL_OK;
+}
+
 gl_status_t gl_hal_usb_start(void)
 {
-    RCC_OscInitTypeDef osc;
-    RCC_PeriphCLKInitTypeDef pclk;
-    RCC_CRSInitTypeDef crs;
-
+    if (started_ && standby_) {
+        /* back from standby after the host's resume: the clocks again, no
+         * new enumeration */
+        const gl_status_t st = gl_hal_usb_supply_ok() ? usb_clock_() : GL_ERR_STATE;
+        if (st == GL_OK) {
+            standby_ = false;
+        }
+        return st;
+    }
     if (started_) {
         return GL_OK;
     }
-    /* The application has seen VBUS, so the 3.3 V VDDUSB regulator should
-     * be up.  It is not taken on trust: the USB voltage monitor must report
-     * the supply ready before the supply-valid bit is set (spring pins
-     * bounce; a pin that is not powered must not be declared valid).  The
-     * monitor API (HAL_PWREx_EnableUVM, PWR_FLAG_VDDUSBRDY) is from memory. */
-    HAL_PWREx_EnableUVM();
+    /* VBUS_SENSE high AND the MCU's monitor of the USB supply pin says
+     * "ready" (gl_hal_usb_supply_ok, firmware note 7): only then may the
+     * supply-valid bit be set.  The regulator of that pin needs a
+     * millisecond after docking; a few tries, then the application tries
+     * again with its next supervision period. */
     {
         uint32_t tries = 0;
-        while (!__HAL_PWR_GET_FLAG(PWR_FLAG_VDDUSBRDY)) {
+        while (!gl_hal_usb_supply_ok()) {
             if (++tries > 10u) {
-                HAL_PWREx_DisableUVM();
-                return GL_ERR_STATE; /* VDDUSB not present: the application retries on the next VBUS edge */
+                return GL_ERR_STATE;
             }
             gl_hal_delay_ms(1);
         }
     }
     HAL_PWREx_EnableVddUSB();
+    if (usb_clock_() != GL_OK) {
+        HAL_PWREx_DisableVddUSB();
+        return GL_ERR_IO;
+    }
+
+    gl_hal_gpio_mode(GL_PIN_USB_DM, GL_PIN_MODE_ALTERNATE);
+    gl_hal_gpio_mode(GL_PIN_USB_DP, GL_PIN_MODE_ALTERNATE);
+
+    rx_.head = rx_.tail = 0;
+    tx_.head = tx_.tail = 0;
+    dtr_ = false;
+    tx_busy_ = false;
+    rx_stalled_ = false;
+    standby_ = false;
+    configured_ = false;
+    suspended_ = false;
+    if (USBD_Init(&usbd_, &GL_USBD_Desc, 0) != USBD_OK ||
+        USBD_RegisterClass(&usbd_, &USBD_CDC) != USBD_OK ||
+        USBD_CDC_RegisterInterface(&usbd_, &cdc_itf_) != USBD_OK) {
+        HAL_PWREx_DisableVddUSB();
+        return GL_ERR_IO;
+    }
+    /* firmware note 6: no VBUS sensing by the core (its pad carries a grain
+     * LED line); the session is declared valid here, where VBUS_SENSE and
+     * the supply monitor have said so.  The two bit names exist in the
+     * device header (stm32u585xx.h); that this is all the core needs is
+     * PROVISIONAL, like everything in this file. */
+    USB_OTG_FS->GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
+    if (USBD_Start(&usbd_) != USBD_OK) {
+        HAL_PWREx_DisableVddUSB();
+        return GL_ERR_IO;
+    }
+    started_ = true;
+    return GL_OK;
+}
+
+static gl_status_t usb_clock_(void)
+{
+    RCC_OscInitTypeDef osc;
+    RCC_PeriphCLKInitTypeDef pclk;
+    RCC_CRSInitTypeDef crs;
 
     memset(&osc, 0, sizeof(osc));
     osc.OscillatorType = RCC_OSCILLATORTYPE_HSI48;
@@ -207,21 +318,6 @@ gl_status_t gl_hal_usb_start(void)
     crs.ErrorLimitValue = RCC_CRS_ERRORLIMIT_DEFAULT;
     crs.HSI48CalibrationValue = RCC_CRS_HSI48CALIBRATION_DEFAULT;
     HAL_RCCEx_CRSConfig(&crs);
-
-    gl_hal_gpio_mode(GL_PIN_USB_DM, GL_PIN_MODE_ALTERNATE);
-    gl_hal_gpio_mode(GL_PIN_USB_DP, GL_PIN_MODE_ALTERNATE);
-
-    rx_.head = rx_.tail = 0;
-    tx_.head = tx_.tail = 0;
-    dtr_ = false;
-    tx_busy_ = false;
-    rx_stalled_ = false;
-    if (USBD_Init(&usbd_, &GL_USBD_Desc, 0) != USBD_OK ||
-        USBD_RegisterClass(&usbd_, &USBD_CDC) != USBD_OK ||
-        USBD_CDC_RegisterInterface(&usbd_, &cdc_itf_) != USBD_OK || USBD_Start(&usbd_) != USBD_OK) {
-        return GL_ERR_IO;
-    }
-    started_ = true;
     return GL_OK;
 }
 
@@ -234,6 +330,9 @@ void gl_hal_usb_stop(void)
     (void)USBD_Stop(&usbd_);
     (void)USBD_DeInit(&usbd_);
     started_ = false;
+    standby_ = false;
+    configured_ = false;
+    suspended_ = false;
     dtr_ = false;
     /* D+ / D- high impedance, 48 MHz oscillator and USB supply switch off */
     gl_hal_gpio_mode(GL_PIN_USB_DM, GL_PIN_MODE_ANALOG);
@@ -244,19 +343,21 @@ void gl_hal_usb_stop(void)
     osc.HSI48State = RCC_HSI48_OFF;
     osc.PLL.PLLState = RCC_PLL_NONE;
     (void)HAL_RCC_OscConfig(&osc);
+    /* the supply-valid bit off (the interrupt handlers of gl_hal_stm32u5.c
+     * have cleared it already if the supply went first); the supply monitor
+     * is managed by gl_hal_usb_supply_ok() */
     HAL_PWREx_DisableVddUSB();
-    HAL_PWREx_DisableUVM();
 }
 
 bool gl_hal_usb_connected(void)
 {
-    return started_ && dtr_ && usbd_.dev_state == USBD_STATE_CONFIGURED;
+    return started_ && !standby_ && dtr_ && usbd_.dev_state == USBD_STATE_CONFIGURED;
 }
 
 size_t gl_hal_usb_read(uint8_t *buf, size_t max)
 {
     uint32_t n = ring_used_(&rx_);
-    if (!started_ || buf == NULL) {
+    if (!started_ || standby_ || buf == NULL) {
         return 0;
     }
     if (n > max) {

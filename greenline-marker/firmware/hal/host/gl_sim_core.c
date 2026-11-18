@@ -1300,6 +1300,15 @@ void gl_sim_set_mcu_temperature(float temp_c)
     S.mcu_temp_c = temp_c;
 }
 
+void sim_cell_temp_change(bool before)
+{
+    if (before) {
+        charger_account_();
+    } else {
+        charger_update_();
+    }
+}
+
 void gl_sim_set_cell_temperature(float temp_c)
 {
     charger_account_();
@@ -1621,6 +1630,16 @@ uint32_t gl_hal_reset_reason(void)
 
 void gl_hal_reboot(gl_reboot_t how)
 {
+    if (how == GL_REBOOT_ROM_DFU) {
+        /* rev E board (firmware note 11 of the pin map): the IMU's INT1 and
+         * INT2 are the ROM loader's SPI1 data and clock inputs.  They must be
+         * STATIC when the ROM starts: no interrupt routed, and the display
+         * off (its pull-down takes DISP low at the reset anyway) */
+        if (sim_imu_ints_routed()) {
+            sim_violation(&S.viol.imu, "reboot to the ROM loader with an IMU interrupt still "
+                                       "routed: INT1 / INT2 are the ROM's SPI1 inputs");
+        }
+    }
     S.stats.reboots++;
     S.stats.last_reboot = (uint8_t)how;
     sim_trace(GL_SIM_TR_REBOOT, (unsigned)how, 0, 0, 0);

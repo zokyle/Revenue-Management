@@ -194,7 +194,7 @@ FIRMWARE_NOTES = [
     "VDDUSB monitor reports the supply ready; clear it on the falling edge of either. PC13 alone does "
     "not measure VDDUSB: on undocking VDDUSB can fall below 3.0 V within about a millisecond under USB "
     "load while PC13 still reads high for up to about 22 ms.",
-    "VBUS_SENSE: divider 100 kohm : 100 kohm on the VBUS pad (not behind the Schottky). High is "
+    "VBUS_SENSE: divider 100 kohm : 100 kohm on the VBUS pad (not behind the series switch U12). High is "
     "guaranteed above 3.92 V at the pad, low below 1.68 V; removal from the cradle is seen within about "
     "22 ms.",
     "CAM_R_PWDN is on PH3, the BOOT0 pad (10 kohm to ground): it reads low at every reset; 0.28 mA flows "
@@ -318,17 +318,23 @@ class PinData:
 
 
 def read_gl_pins(path=GL_PINS_H):
-    """(rows, bootloader rows) of the firmware header: rows = {signal: (pin, pad, source)}."""
+    """(rows, bootloader rows, sha256 the header states for its source) of the firmware header.
+
+    Since 2026-11-13 the header is GENERATED from pinmap.json by firmware/tools/gen_pins.py:
+    rows = {signal: (pin, pad, source)} from ``X(GL_PIN_<signal>, port, pin, pad, GL_PINFN_...,
+    ..., GL_PINSRC_<source>)``; bootloader rows = {pin: (function, drive / listen)} from
+    ``X(GL_PIN_<signal>, port, pin, function, 0 | 1)``."""
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
     rows = {}
-    for m in re.finditer(r"X\(GL_PIN_(\w+),\s*([A-H]),\s*(\d+),\s*(\d+),\s*GL_PINFN_\w+,\s*\d+,\s*"
+    for m in re.finditer(r"X\(GL_PIN_(\w+),\s*([A-H]),\s*(\d+),\s*(\d+),\s*GL_PINFN_\w+,[^()]*?"
                          r"GL_PINSRC_(\w+)\)", text):
         rows[m.group(1)] = ("P%s%s" % (m.group(2), m.group(3)), int(m.group(4)), m.group(5))
     boot = {}
-    for m in re.finditer(r"X\(([A-H]),\s*(\d+),\s*(\w+),\s*([01])\)", text):
+    for m in re.finditer(r"X\(GL_PIN_\w+,\s*([A-H]),\s*(\d+),\s*(\w+),\s*([01])\)", text):
         boot["P%s%s" % (m.group(1), m.group(2))] = (m.group(3), "drive" if m.group(4) == "1" else "listen")
-    return rows, boot
+    sha = re.search(r'GL_PINS_SOURCE_SHA256\s+"([0-9a-f]{64})"', text)
+    return rows, boot, (sha.group(1) if sha else None)
 
 
 def read_spec_dcmi(path=SPEC_MD):
@@ -653,37 +659,50 @@ def run(pindata, design, rep):
               "rails %s, outputs %s" % ([(t[0], t[2]) for t in b0_rails], b0_out))
 
     # ---- F: against the firmware header ----------------------------------------------------------
-    rep.section("F  difference to firmware/hal/stm32u5/gl_pins.h")
-    changed = []
+    rep.section("F  firmware/hal/stm32u5/gl_pins.h (generated from pinmap.json) against this pin map")
+    # The header was the firmware's PROPOSAL when the netlist was written; it has since been
+    # regenerated from pinmap.json (firmware/tools/gen_pins.py).  What is checked now: every row
+    # of the header has the pin, pad and source of PINMAP.  The history against the first
+    # proposal stays in PINMAP ("was", "reason") and is exported unchanged.
     try:
-        gl_rows, gl_boot = read_gl_pins()
+        gl_rows, gl_boot, gl_sha = read_gl_pins()
     except OSError as exc:
-        gl_rows, gl_boot = {}, {}
+        gl_rows, gl_boot, gl_sha = {}, {}, None
         rep.fail("cannot read gl_pins.h: %s" % exc)
+    rep.check(len(gl_rows) >= 40, "gl_pins.h parsed: %d signal rows" % len(gl_rows), "header format not understood")
     for sig, (pin, pad, src) in sorted(gl_rows.items()):
         r = by_sig.get(sig)
         if r is None:
             rep.fail("%s of gl_pins.h has no PINMAP row" % sig)
             continue
-        if r["pin"] == pin:
-            want_src = "SPEC" if src == "SPEC" else "PROPOSED"
-            rep.check(r["source"] == want_src and r["was"] is None,
-                      "%-13s %-5s unchanged (%s)" % (sig, pin, want_src), "PINMAP source %s" % r["source"])
+        rep.check(r["pin"] == pin and r["pad"] == pad and r["source"] == src,
+                  "%-13s %-5s pad %2d %s: the header agrees" % (sig, r["pin"], r["pad"], r["source"]),
+                  "gl_pins.h has %s pad %d %s" % (pin, pad, src))
+    for r in rows:
+        if r["source"] == "CHANGED":
+            rep.check(bool(r["was"]) and r["was"] != r["pin"] and bool(r["reason"]),
+                      "%-13s %s -> %s CHANGED from the firmware's first proposal, reason given"
+                      % (r["signal"], r["was"], r["pin"]), "was %r, reason %r" % (r["was"], r["reason"]))
         else:
-            good = r["source"] == "CHANGED" and r["was"] == pin and bool(r["reason"]) and src != "SPEC"
-            rep.check(good, "%-13s %s -> %s CHANGED, reason given" % (sig, pin, r["pin"]),
-                      "PINMAP says source %s, was %s; gl_pins.h source %s" % (r["source"], r["was"], src))
-            changed.append((sig, pin, r["pin"], r["reason"]))
+            rep.check(r["was"] is None, "%-13s %-5s %s: no earlier pin recorded" % (r["signal"], r["pin"], r["source"]),
+                      "was %r" % (r["was"],))
+    changed = [(r["signal"], r["was"], r["pin"], r["reason"])
+               for r in sorted(rows, key=lambda q: q["signal"]) if r["source"] == "CHANGED"]
     extra = sorted(s for s in by_sig if s not in gl_rows)
-    rep.note("rows of PINMAP that gl_pins.h does not list (service pins): %s" % ", ".join(extra))
-    rep.note("new meaning with DESIGN_SPEC E1 (gl_pins.h not yet regenerated): CHG_INHIBIT (same pin) is a "
-             "push-pull output, HIGH = stop; CHG_STAT (moved) is the BQ25101's open-drain CHG output")
-    stale = [r["signal"] for r in rows if r["source"] == "CHANGED" and r["signal"] not in gl_rows]
-    rep.check(not stale, "every CHANGED row has a row in gl_pins.h to differ from", ", ".join(stale))
+    rep.note("rows of PINMAP that gl_pins.h does not list as signals (service pins): %s" % ", ".join(extra))
+    stale = [r["signal"] for r in rows if r["source"] in ("CHANGED", "PROPOSED") and r["signal"] not in gl_rows]
+    rep.check(not stale, "every CHANGED / PROPOSED row has a row in gl_pins.h", ", ".join(stale))
+    if gl_sha:
+        rep.note("gl_pins.h states it was generated from a pinmap.json with SHA-256 %s; after every export of "
+                 "pinmap.json the firmware side runs `make pins` (the build log compares the two)" % gl_sha)
     if gl_boot:
-        mine = {p: v for p, v in BOOTLOADER_PINS.items() if p not in ("PA11", "PA12")}   # USB: not in the header
-        rep.check(mine == gl_boot, "the bootloader table here equals GL_PINS_BOOTLOADER_TABLE of gl_pins.h "
-                  "(both from memory of AN2606)", "differences: %s" % sorted(set(mine.items()) ^ set(gl_boot.items())))
+        bad_boot = sorted((p, v, BOOTLOADER_PINS.get(p)) for p, v in gl_boot.items() if BOOTLOADER_PINS.get(p) != v)
+        used = {r["pin"] for r in rows}
+        missing = sorted(p for p in BOOTLOADER_PINS if p in used and p not in gl_boot)
+        rep.check(not bad_boot and not missing,
+                  "GL_PINS_BOOTLOADER_TABLE of gl_pins.h (%d rows) equals the bootloader table here for every "
+                  "pin that carries a signal (both from memory of AN2606)" % len(gl_boot),
+                  "differences: %s; missing: %s" % (bad_boot, missing))
 
     # ---- G: ROM bootloader pins ---------------------------------------------------------------------
     rep.section("G  pins the ROM bootloader drives or listens on")

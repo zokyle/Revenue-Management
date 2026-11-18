@@ -69,7 +69,10 @@ extern "C" {
  *  3. the interrupt inputs become inputs WITHOUT an internal pull (CHG_STAT
  *     has the board's pull-up, VBUS_SENSE its divider, the IMU drives its two
  *     lines), and the bus pins go to their peripherals (the two MISO pins
- *     with an internal pull-down: they float between transfers).
+ *     with an internal pull-down: they float between transfers).  A target
+ *     backend may keep a bus's clock and data-out pins as outputs at LOW
+ *     until gl_hal_spi_configure() has enabled the peripheral that then
+ *     holds them (an alternate-function pin of a disabled SPI floats).
  *
  * Every other pin stays ANALOG: every camera-facing pin but the one of step
  * 1, the analog inputs, the grain lines, the USB pins, and CHG_INHIBIT and
