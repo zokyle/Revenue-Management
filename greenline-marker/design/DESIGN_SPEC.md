@@ -1,4 +1,4 @@
-# GreenLine GL-1 — master design specification (rev D, EVT1, with amendments E1 to E34)
+# GreenLine GL-1 — master design specification (rev D, EVT1, with amendments E1 to E36)
 
 This file records every architecture decision. `master_params.yaml` holds the numbers that the
 mechanical CAD and the PCB layout must share; `check_layout.py` verifies them. Where this file
@@ -47,12 +47,16 @@ Amendments after rev D (each is worked into the text below and marked with its n
 | E32 | In the cradle the marker goes to sleep (static charging symbol) once the USB host has been idle or absent for 30 s, and firmware stops the charge after 6 hours of continuous charging as a backstop | The charger ends a charge when the current falls to 2 mA; an awake marker draws more than that from the same node, so the charge would never end |
 | E33 | Three display states: solid line with confidence bar = normal solution; dashed line marked APPROX = a fallback solution; message without a line = no solution. The putt solve is limited to 300,000 integration steps (about 1 to 2 s by the model) | Several fallbacks looked identical to a clean result |
 | E34 | Firmware update cannot strand a unit: a small write-protected boot stub at the start of flash checks the application image (length and CRC) and starts ST's built-in USB loader when the image is invalid or an update was requested. Factory recovery is by SWD on the cradle's three service pins. USB vendor and product IDs are a release gate (none assigned) | The cell is sealed in and there is no reset button, so a half-written application could not be recovered by the user |
+| E35 | The 0.100 / 0.100 mm fine class may be used on F.Cu, In2.Cu and B.Cu inside two rule areas that extend 5 mm beyond each camera ball field (about 13 % of the board; 218 mm of fine track on 28 nets). Everywhere else the 0.15 / 0.127 mm rules of section 4 stand. The quote request must name all three layers | The routed board could not escape the two camera arrays on the top layer alone; this widens the E7 fabricator-acceptance gate from one layer to three |
+| E36 | Cradle board thickness 1.0 mm instead of 1.6 mm, so the Mill-Max 0914 spring-pin tail (about 1.34 mm, PROVISIONAL until the Mill-Max drawing is read) comes through the board and can be soldered. The board top face, which sets the pin height, does not move | The 1.6 mm board left the tail inside the hole |
 
 E17 to E22 come from the enclosure review of 2026-11-13. They are decided here and enter `master_params.yaml` and the CAD together at the next revision letter, so that the mechanical checks, which assert the YAML values, never run against a half-changed file. Until then the YAML still carries 14.5 degrees, [0.76, 0.90] / [0.83, 0.92], the plate + 0.02 ring rule and 0.05 mm, and the enclosure package records the same changes as proposals P1 to P9 (`mechanical/PROPOSED_PARAM_CHANGES.md`, part C). P6 (U11 0.2 mm inboard) is settled by the board placement.
 
 E24 to E28 come from the netlist review of 2026-11-13 (`electrical/gl1_main/NETLIST_NOTES.md`, sections 5 and 8). E27 and E28 are already in the netlist. E24, E25 and E26 are decided here and are worked into the netlist, the board and the parameters at the next revision letter; until then the netlist still carries the Schottky (D17), the three-pin 3.3 V regulator (U11) and J1 on its first position, and the text of sections 4 and 5 below still describes those.
 
 E29 to E34 are product and firmware decisions taken after the firmware review of 2026-11-13 (`firmware/README.md`, open issues 17, 18, 21, 28, 31); firmware phase 3 implements them.
+
+E35 and E36 follow the final check of the routed boards (`electrical/README.md`); both enter the YAML and the board files at revision letter E.
 
 
 ## 1. What the product is
