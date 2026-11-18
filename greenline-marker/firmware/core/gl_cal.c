@@ -374,6 +374,14 @@ gl_status_t gl_cal_grain_decode(const uint8_t *blob, size_t len, gl_cal_grain_t 
     t.max_dark_drift_counts = gl_rd_u16(&r);
     /* A threshold of zero would accept noise as grain: refuse it. */
     ok = ok && finite_in(t.mod_threshold, 0.01f, 2.0f) && finite_in(t.noise_floor_mod, 0.0f, 2.0f);
+    /* The two integer limits are limits too: a minimum signal of 0 counts
+     * accepts a dead photodiode, a dark drift of 65535 counts accepts any
+     * drift (phase-3 review, factory finding 11: SET_CAL took both).  The
+     * windows are wide (defaults 200 and 40 counts of a 14-bit reading) */
+    ok = ok && t.min_signal_counts >= GL_CAL_GRAIN_MIN_SIGNAL_LO &&
+         t.min_signal_counts <= GL_CAL_GRAIN_MIN_SIGNAL_HI &&
+         t.max_dark_drift_counts >= GL_CAL_GRAIN_DARK_DRIFT_LO &&
+         t.max_dark_drift_counts <= GL_CAL_GRAIN_DARK_DRIFT_HI;
     if (v1) {
         t.flags &= (uint8_t)(GL_CAL_GRAIN_FLAG_WHITE_REF | GL_CAL_GRAIN_FLAG_NOISE_FLOOR);
     } else {

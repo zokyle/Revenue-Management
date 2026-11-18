@@ -1221,6 +1221,171 @@ static unsigned estimate_bits_differ_(const gl_estimate_t *a, const gl_estimate_
     return n;
 }
 
+/* Phase-3 review, application finding 1: a Survey ended by a double tap and
+ * started again on the SAME result.  Before the fix the restarted Survey
+ * held no placement ("app count 0 and ui count 1"), the next placement
+ * showed "D1" fitted to one placement, the one after "D2" made of 2 of 3,
+ * and the UI ended the Survey at 4 while the application held 3.  The same
+ * after ending a Survey on a Survey result. */
+GL_TEST(test_survey_cancelled_and_started_again)
+{
+    world_defaults_();
+    scene_(3.0, -0.02, -0.006, -0.014);
+    power_on_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 12000));
+    double_tap_();
+    double_tap_(); /* a Survey: the read on the screen is its first placement */
+    GL_CHECK_EQ(app.ui.state, GL_UI_SURVEY_NEXT_DROP);
+    GL_CHECK_EQ(app.survey.count, 1);
+    GL_CHECK_EQ(app.ui.survey_count, 1);
+    double_tap_(); /* ... cancelled */
+    GL_CHECK_EQ(app.survey.count, 0);
+    GL_CHECK_EQ(app.ui.survey_count, 0);
+    double_tap_();
+    double_tap_(); /* ... and started again on the same result */
+    GL_CHECK_EQ(app.ui.state, GL_UI_SURVEY_NEXT_DROP);
+    GL_CHECK_EQ(app.survey.count, 1); /* (0 before the fix) */
+    GL_CHECK_EQ(app.ui.survey_count, 1);
+    replace_marker_(6.0, 0.03, 0.010, -0.020);
+    GL_CHECK_EQ(app.survey.count, 2);
+    GL_CHECK_EQ(app.ui.survey_count, 2);
+    GL_CHECK_EQ(app.solve_drops, 2);
+    GL_CHECK_EQ(app.solver_work.fit.n_drops, 2);
+    {
+        gl_ui_result_text_t txt;
+        gl_ui_result_text(&app.ui, &app.view, &txt);
+        GL_CHECK(strcmp(txt.mode, "D2") == 0); /* ("D1" before the fix) */
+        printf("    Survey started, cancelled, started again on the same result, next placement: "
+               "application holds %u placements, UI counts %u, fit of %u placements, mark %s "
+               "(before the fix: 1, 2, 1, D1)\n", (unsigned)app.survey.count,
+               (unsigned)app.ui.survey_count, (unsigned)app.solver_work.fit.n_drops, txt.mode);
+    }
+    /* ended on a Survey result, started again on it: the result on the
+     * screen is the first placement of the new Survey */
+    double_tap_(); /* on a Survey result with a Survey active: ends it */
+    GL_CHECK_EQ(app.survey.count, 0);
+    GL_CHECK_EQ(app.ui.survey_count, 0);
+    if (app.ui.state != (uint8_t)GL_UI_SURVEY_NEXT_DROP) {
+        double_tap_();
+        if (app.ui.state != (uint8_t)GL_UI_SURVEY_NEXT_DROP) {
+            double_tap_();
+        }
+    }
+    GL_CHECK_EQ(app.ui.state, GL_UI_SURVEY_NEXT_DROP);
+    GL_CHECK_EQ(app.survey.count, 1);
+    GL_CHECK_EQ(app.ui.survey_count, 1);
+    replace_marker_(8.0, 0.01, 0.012, -0.016);
+    GL_CHECK_EQ(app.survey.count, 2);
+    GL_CHECK_EQ(app.ui.survey_count, app.survey.count);
+    GL_CHECK_EQ(app.solver_work.fit.n_drops, 2);
+    /* and the two counts agree to the end: two more placements, the fourth
+     * ends the Survey for both */
+    replace_marker_(9.0, 0.02, 0.012, -0.016);
+    GL_CHECK_EQ(app.ui.survey_count, app.survey.count);
+    GL_CHECK_EQ(app.survey.count, 3);
+    GL_CHECK_EQ(app.solver_work.fit.n_drops, 3);
+    replace_marker_(10.0, 0.02, 0.012, -0.016);
+    GL_CHECK_EQ(app.solver_work.fit.n_drops, 4);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* Phase-3 review, application finding 7, seed S23: GL_APP_SURVEY_AT_BALL_
+ * FRACTION moved from 0.85 to 0.60 passed every test (only a 6 m / 3 m pair
+ * was tested).  The gate from both sides: an earlier placement 5.0 m from
+ * the hole, then the ball at 0.80 of that range (4.0 m: the earlier one lies
+ * behind this ball - not used) and at 0.90 of it (4.5 m: another reading at
+ * the ball - used). */
+GL_TEST(test_survey_placement_behind_the_ball_gate)
+{
+    static const struct {
+        double ball_m;
+        unsigned used;
+    } c[2] = { { 4.0, 1u }, { 4.5, 2u } };
+    GL_CHECK_NEAR(GL_APP_SURVEY_AT_BALL_FRACTION, 0.85, 1e-6);
+    for (int i = 0; i < 2; i++) {
+        gl_ui_result_text_t txt;
+        world_defaults_();
+        scene_(5.0, 0.02, 0.008, -0.016);
+        power_on_();
+        GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 12000));
+        double_tap_();
+        double_tap_();
+        GL_CHECK_EQ(app.survey.count, 1);
+        replace_marker_(c[i].ball_m, 0.02, 0.008, -0.016);
+        GL_CHECK_EQ(app.survey.count, 2);
+        GL_CHECK(app.solve_survey);
+        GL_CHECK_EQ(app.solve_drops, c[i].used);
+        GL_CHECK_EQ(app.solver_work.fit.n_drops, c[i].used);
+        gl_ui_result_text(&app.ui, &app.view, &txt);
+        GL_CHECK(strcmp(txt.mode, (c[i].used == 2u) ? "D2" : "D2/1") == 0);
+        printf("    earlier placement at 5.0 m, ball at %.1f m (%.2f of its range; the gate is "
+               "%.2f): %u placement%s used, mark %s\n", c[i].ball_m, c[i].ball_m / 5.0,
+               (double)GL_APP_SURVEY_AT_BALL_FRACTION, c[i].used, (c[i].used == 1u) ? "" : "s",
+               txt.mode);
+    }
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* Phase-3 review, application finding 4: a unit WITHOUT the level zero of the
+ * seat it is read on.  The reviewer's table: 4 m, slope (1.2, -2.0) %, the
+ * base-face zero 1.6 mrad from the ball-seat zero (E11's figure); SURFACE =
+ * TURF.  With both zeros stored the base-face zero is removed; with the
+ * ball-seat zero only, or none, the result was shown NORMAL all the same -
+ * 10.9 mrad of aim (44 mm at 4 m) from the result of the calibrated unit,
+ * "with no mark on the screen".  It now carries "Z?". */
+GL_TEST(test_result_without_the_zero_of_its_seat_is_marked)
+{
+    static const float bias_base[3] = { 0.0036f, -0.0020f, 0.0f }; /* what the IMU reads wrong on turf */
+    static const float gyro_bias[3] = { 0.004f, -0.002f, 0.001f };
+    static const char *const name[3] = { "both zeros stored", "ball-seat zero only", "no zero" };
+    double aim[3] = { 0.0, 0.0, 0.0 };
+
+    for (int k = 0; k < 3; k++) {
+        gl_ui_result_text_t txt;
+        world_defaults_();
+        W.t_pick_s = 4.0; /* the calibration below is in place before the first read */
+        W.t_place_s = 4.6;
+        scene_(4.0, 0.0, 0.012, -0.020);
+        board_up_(true);
+        gl_sim_imu_set_errors(0.0008f, 0.002f, bias_base, gyro_bias);
+        GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+        watch_reset_();
+        if (k <= 1) {
+            app.cal_tilt.flags |= GL_CAL_TILT_FLAG_FLIP;
+            app.cal_tilt.flip_bias_x = bias_base[0] + 0.0016f; /* the ball seat: 1.6 mrad from the base */
+            app.cal_tilt.flip_bias_y = bias_base[1];
+        }
+        if (k == 0) {
+            app.cal_tilt.flags |= GL_CAL_TILT_FLAG_BASE;
+            app.cal_tilt.base_bias_x = bias_base[0];
+            app.cal_tilt.base_bias_y = bias_base[1];
+        }
+        GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 16000));
+        run_until_ms_(now_ms_() + 30u);
+        GL_CHECK_EQ(app.settings.surface, GL_SURFACE_TURF);
+        GL_CHECK_EQ(gl_ui_view_show(&app.view), GL_UI_SHOW_NORMAL);
+        gl_ui_result_text(&app.ui, &app.view, &txt);
+        aim[k] = 1000.0 * (double)app.est.aim_azimuth_device_rad;
+        if (k == 0) {
+            GL_CHECK_EQ(app.seat_used, GL_CAL_SEAT_BASE);
+            GL_CHECK(!app.view.zero_missing && txt.zero[0] == '\0');
+        } else {
+            GL_CHECK_EQ(app.seat_used, (k == 1) ? GL_CAL_SEAT_BALL : GL_CAL_SEAT_NONE);
+            GL_CHECK(app.view.zero_missing);
+            GL_CHECK(strcmp(txt.zero, "Z?") == 0);
+        }
+        GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
+        printf("    TURF, %-20s: seat used %3u, aim %+8.2f mrad, NORMAL, mark \"%s\"\n", name[k],
+               (unsigned)app.seat_used, aim[k], txt.zero);
+    }
+    /* what the mark is worth: the other seat's zero is 1.6 mrad off */
+    GL_CHECK(fabs(aim[1] - aim[0]) > 5.0);
+    printf("    the result with the other seat's zero is %.1f mrad of aim (%.0f mm at 4 m) from "
+           "the calibrated unit's; without any zero %.1f mrad.  Shown NORMAL, now with \"Z?\"\n",
+           fabs(aim[1] - aim[0]), 4.0 * fabs(aim[1] - aim[0]), fabs(aim[2] - aim[0]));
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
 /*
  * DESIGN_SPEC E29: the Survey finishes at the ball.  The placement the
  * marker stands on is always the ball; a line is drawn after every
@@ -1284,7 +1449,10 @@ GL_TEST(test_survey_two_three_and_four_drops)
     GL_CHECK_EQ(app.solver_work.fit.n_drops, 1);
     GL_CHECK_NEAR(app.est.distance_m, 3.0, 0.08); /* from where it lies */
     check_result_("Survey, old order: 6 m, then 3 m (the putt from 3 m, alone)", &x, truth_);
-    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.mode, "D2") == 0);
+    /* the second stop of the Survey, a result made of ONE placement: the
+     * screen says so ("D2" until the phase-3 review, as if two had been used) */
+    GL_CHECK(strcmp(rows_[n_rows_ - 1u].text.mode, "D2/1") == 0);
+    GL_CHECK_EQ(app.view.drops_used, 1);
     replace_marker_(6.0, 0.03, 0.012, -0.020); /* back at 6 m, a little differently placed */
     GL_CHECK_EQ(app.survey.count, 3);
     survey_truth_();
@@ -1947,6 +2115,9 @@ int main(int argc, char **argv)
     GL_RUN(test_quick_read_scenes_line_and_numbers);
     GL_RUN(test_core_clock_is_fast_for_capture_and_solve_only);
     GL_RUN(test_precision_read_line_and_numbers);
+    GL_RUN(test_survey_cancelled_and_started_again);
+    GL_RUN(test_survey_placement_behind_the_ball_gate);
+    GL_RUN(test_result_without_the_zero_of_its_seat_is_marked);
     GL_RUN(test_survey_two_three_and_four_drops);
     GL_RUN(test_flag_out_fallback_on_the_display);
     GL_RUN(test_left_camera_only_read_keeps_the_bearing);

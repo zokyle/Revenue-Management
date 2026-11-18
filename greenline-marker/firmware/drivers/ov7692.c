@@ -426,6 +426,24 @@ gl_status_t gl_ov7692_set_window(gl_ov7692_t *d, gl_cam_id_t cam, uint16_t x0, u
     }
     x -= x % hu;
     y -= y % vu;
+    /* The start registers are 8 bits wide: the largest start column they can
+     * hold is (255 - HSTART_FULL) * 4 = 600.  A window of 36 pixels or less
+     * at the right edge would start beyond it; the value used to be cut to
+     * 8 bits, the sensor's window registers then disagreed with each other
+     * and the capture failed with GL_ERR_IO after a rail cycle (phase-3
+     * review, factory finding 9; a read's 96-pixel strips stop at 544 and
+     * never came here).  Such a window is moved inward like one that
+     * overhangs the edge; the caller reads where it lies from the strip. */
+    {
+        const unsigned x_max = (255u - (unsigned)GL_PROV_OV7692_HSTART_FULL) * hu;
+        const unsigned y_max = (255u - (unsigned)GL_PROV_OV7692_VSTART_FULL) * vu;
+        if (x > x_max) {
+            x = x_max;
+        }
+        if (y > y_max) {
+            y = y_max;
+        }
+    }
 
     gl_ov7692_cam_t *c = &d->cam[cam];
     if (c->w == w && c->h == h && c->x0 == x && c->y0 == y) {

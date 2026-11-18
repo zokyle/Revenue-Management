@@ -312,16 +312,24 @@
 
 /* ---- LSM6DSV16X: mounting ------------------------------------------------- */
 
-/** How the sensor axes map onto the marker axes (marker = sign * sensor
- *  axis).  The IMU's orientation on the PCB is not fixed by DESIGN_SPEC or
- *  master_params.yaml; identity is a placeholder for the layout to confirm.
- *  Axis index 0 = sensor X, 1 = Y, 2 = Z. */
-#define GL_PROV_IMU_MARKER_X_AXIS 0
-#define GL_PROV_IMU_MARKER_X_SIGN (+1)
-#define GL_PROV_IMU_MARKER_Y_AXIS 1
-#define GL_PROV_IMU_MARKER_Y_SIGN (+1)
-#define GL_PROV_IMU_MARKER_Z_AXIS 2
-#define GL_PROV_IMU_MARKER_Z_SIGN (+1)
+/* How the sensor axes map onto the marker axes is NOT a constant of this
+ * file any more: the netlist's pin map states it (imu_mounting) and
+ * tools/gen_pins.py writes it into hal/stm32u5/gl_pins.h as
+ * GL_PINS_IMU_MARKER_{X,Y,Z}_{AXIS,SIGN} (marker = sign * sensor axis;
+ * index 0 = sensor X, 1 = Y, 2 = Z).  The identity placeholder that stood
+ * here exchanged the two in-plane tilt axes on the rev E board and inverted
+ * one.  The pin map's statement is itself PROVISIONAL (ST's axis drawing of
+ * the LSM6DSV16X was not read). */
+
+/** The temperature terms of the tilt calibration are applied only inside
+ *  this window of IMU temperature; outside it the correction of the nearer
+ *  end is used (a quadratic is not extrapolated without limit: a fit of
+ *  three points over 16 K was 3 mg off at 0 and 45 C - phase-3 review,
+ *  factory finding 7).  The window is the product's operating range with
+ *  margin, NOT the range the unit's own fit covered: the record does not
+ *  store that range (README open issues: a record version 3 would). */
+#define GL_PROV_TILT_TEMPCO_T_MIN_C (-10.0f)
+#define GL_PROV_TILT_TEMPCO_T_MAX_C 60.0f
 
 /** Wake-on-motion threshold and the motion that ends a wait, in mg.
  *  Engineering guesses to be tuned on turf (pocket, cart vibration). */
@@ -475,8 +483,10 @@
 /** ... and resumes only this far inside the guarded window (hysteresis,
  *  our choice). */
 #define GL_PROV_CHARGE_TEMP_HYST_C 2.0f
-/** E32 backstop: after this much CONTINUOUS charging (CHG low the whole
- *  time) the firmware stops the charge.  6 h is the specification's figure.
+/** E32 backstop: after this much time in which the firmware has not held
+ *  the charger stopped (VBUS present, CHG_INHIBIT released - whatever the
+ *  charger's status output said in it: drivers/power.c) the firmware stops
+ *  the charge.  6 h is the specification's figure.
  *  A full charge of the 43 mAh cell at 19.8 mA is about 2.2 h of constant
  *  current plus the taper; in the charger's COOL zone (half current) it is
  *  about 4.4 h plus the taper, so a charge from empty below 10 C may be cut
@@ -487,7 +497,14 @@
  *  below it (our choice: otherwise a marker left docked for weeks under a
  *  host that keeps it awake would run its cell down behind a charger that
  *  is held off).  A cell that never reached it in 6 h stays stopped until
- *  VBUS goes (drivers/power.c). */
+ *  VBUS goes (drivers/power.c).
+ *  OWNER DECISION (README open issues): since the backstop counts docked
+ *  time whatever the status line says, it also holds the charger off on a
+ *  marker that sleeps in its cradle with a finished charge; that marker then
+ *  runs from its cell down to this voltage before the charge restarts.
+ *  Measured on the model over 30 docked days (tests/test_e2e_power.c): the
+ *  lowest state of charge is 79.3 % with 4000 mV here, and was 90.4 % in a
+ *  scratch build with 4100 mV (the charger's own recharge threshold). */
 #define GL_PROV_CHARGE_RESTART_MV 4000u
 /** "Done": CHG released with the cell at or above this voltage.  Below it,
  *  with nothing the firmware knows of holding the charger, the charger is

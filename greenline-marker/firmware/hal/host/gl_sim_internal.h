@@ -79,6 +79,7 @@ double sim_imu_supply_ua(void);
 /* ---- camera models (gl_sim_cam.c) -------------------------------------------------- */
 
 void sim_cam_reset(void);
+void sim_cam_mcu_reset(void);
 /** A camera-related pin or the clock changed: re-evaluate power, PWDN,
  *  streaming and bus contention. */
 void sim_cam_update(void);

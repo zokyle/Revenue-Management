@@ -1,6 +1,8 @@
 /* gl_tilt.c - see gl_tilt.h. */
 #include "gl_tilt.h"
 
+#include "gl_provisional.h"
+
 #include <math.h>
 #include <string.h>
 
@@ -148,7 +150,12 @@ gl_status_t gl_tilt_avg_result(const gl_tilt_avg_t *a, gl_tilt_mean_t *out)
 
 gl_vec3_t gl_tilt_apply_cal(const gl_cal_tilt_t *cal, gl_vec3_t accel_g, float temp_c)
 {
-    const float dt = temp_c - cal->t0_c;
+    /* the temperature terms are not extrapolated beyond the window of
+     * gl_provisional.h (GL_PROV_TILT_TEMPCO_T_*) */
+    const float t = (temp_c < GL_PROV_TILT_TEMPCO_T_MIN_C)   ? GL_PROV_TILT_TEMPCO_T_MIN_C
+                    : (temp_c > GL_PROV_TILT_TEMPCO_T_MAX_C) ? GL_PROV_TILT_TEMPCO_T_MAX_C
+                                                             : temp_c;
+    const float dt = t - cal->t0_c;
     gl_vec3_t v;
     v.x = accel_g.x - (cal->offset_g[0] + dt * (cal->tempco1_g_per_k[0] +
                                                 dt * cal->tempco2_g_per_k2[0]));

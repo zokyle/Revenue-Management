@@ -703,11 +703,26 @@ gl_status_t gl_store_put(gl_store_t *st, uint8_t id, const uint8_t *data, size_t
             return GL_ERR_FULL;
         }
     }
-    slot->id = id;
-    slot->len = (uint8_t)len;
-    memcpy(slot->data, data, len);
-    slot->in_head = false;
-    return store_write_(st, slot);
+    {
+        /* A value whose write FAILS must not stay behind in RAM: gl_store_get
+         * would return it, and the next sector change-over would write it to
+         * flash after its caller had been told "refused" (phase-3 review,
+         * factory lens, "not checked").  The slot is put back as it was. */
+        const gl_store_item_t old = *slot;
+        gl_status_t s;
+        slot->id = id;
+        slot->len = (uint8_t)len;
+        memcpy(slot->data, data, len);
+        slot->in_head = false;
+        s = store_write_(st, slot);
+        if (s != GL_OK) {
+            *slot = old;
+            if (old.id != 0u) {
+                slot->in_head = false; /* wherever its newest copy is, write it again at a change-over */
+            }
+        }
+        return s;
+    }
 }
 
 /* ---- record formats ----------------------------------------------------- */

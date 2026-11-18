@@ -5,6 +5,7 @@
 
 #include "gl_hal.h"
 #include "gl_provisional.h"
+#include "stm32u5/gl_pins.h" /* generated from the netlist: the IMU mounting */
 
 #define IMU_SPI_HZ 5000000u /* device limit 10 MHz (from memory) */
 
@@ -60,14 +61,19 @@ static gl_status_t write_list_(const uint8_t (*list)[2], size_t n)
     return st;
 }
 
+/* The mounting is the BOARD's: the netlist's pin map states how U4 lies
+ * (imu_mounting), tools/gen_pins.py checks it (a rotation, said once) and
+ * writes it into the generated hal/stm32u5/gl_pins.h.  Nothing is typed here:
+ * if the layout turns the part, `make pins` follows it.  (The pin map marks
+ * its own statement PROVISIONAL: ST's axis drawing was not read - README.) */
 void gl_imu_mount_defaults(gl_imu_mount_t *m)
 {
-    m->axis[0] = (uint8_t)GL_PROV_IMU_MARKER_X_AXIS;
-    m->sign[0] = (int8_t)GL_PROV_IMU_MARKER_X_SIGN;
-    m->axis[1] = (uint8_t)GL_PROV_IMU_MARKER_Y_AXIS;
-    m->sign[1] = (int8_t)GL_PROV_IMU_MARKER_Y_SIGN;
-    m->axis[2] = (uint8_t)GL_PROV_IMU_MARKER_Z_AXIS;
-    m->sign[2] = (int8_t)GL_PROV_IMU_MARKER_Z_SIGN;
+    m->axis[0] = (uint8_t)GL_PINS_IMU_MARKER_X_AXIS;
+    m->sign[0] = (int8_t)GL_PINS_IMU_MARKER_X_SIGN;
+    m->axis[1] = (uint8_t)GL_PINS_IMU_MARKER_Y_AXIS;
+    m->sign[1] = (int8_t)GL_PINS_IMU_MARKER_Y_SIGN;
+    m->axis[2] = (uint8_t)GL_PINS_IMU_MARKER_Z_AXIS;
+    m->sign[2] = (int8_t)GL_PINS_IMU_MARKER_Z_SIGN;
 }
 
 static bool mount_valid_(const gl_imu_mount_t *m)

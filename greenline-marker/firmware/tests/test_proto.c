@@ -1084,6 +1084,13 @@ GL_TEST(test_factory_routing_unlock_rule_and_bit_map)
         GL_CHECK(!gl_proto_needs_unlock(GL_CMD_LOG_SEEK, big, 4));
         GL_CHECK(!gl_proto_needs_unlock(GL_CMD_LOG_READ, big, 1));
         GL_CHECK(!gl_proto_needs_unlock(GL_CMD_SET_SETTINGS, big, 12)); /* the user's own */
+        /* a display test in the cradle changes nothing and needs no unlock;
+         * armed for the seat plate it holds the unit awake out of the cradle */
+        GL_CHECK(!gl_proto_needs_unlock(GL_CMD_DISPLAY_TEST, (const uint8_t *)"\x08\x1E", 2));
+        GL_CHECK(!gl_proto_needs_unlock(GL_CMD_DISPLAY_TEST, (const uint8_t *)"\x08\x1E\x00", 3));
+        GL_CHECK(gl_proto_needs_unlock(GL_CMD_DISPLAY_TEST, (const uint8_t *)"\x08\x1E\x01", 3));
+        GL_CHECK(gl_proto_needs_unlock(GL_CMD_LEVEL_ZERO, (const uint8_t *)"\x01\x00\x1E", 3));
+        GL_CHECK(!gl_proto_needs_unlock(GL_CMD_LEVEL_ZERO, (const uint8_t *)"\x00\x00", 2));
         request(60, GL_CMD_UNLOCK, "GLFC", 4);
         idx++;
         for (size_t i = 0; i < GL_ARRAY_LEN(rule); i++) {
@@ -1173,7 +1180,7 @@ GL_TEST(test_factory_record_layouts)
     GL_CHECK_EQ(GL_PROTO_CAPTURE_LEN, 26);
     GL_CHECK_EQ(GL_PROTO_FIELD_LEN, 20);
     GL_CHECK_EQ(GL_PROTO_GRAIN_LEN, 108);
-    GL_CHECK_EQ(GL_PROTO_ZERO_LEN, 36);
+    GL_CHECK_EQ(GL_PROTO_ZERO_LEN, 40); /* 36 until NTC2 and the rest were added (phase-3 review) */
     GL_CHECK_EQ(GL_PROTO_SIX_LEN, 80);
     /* every response of a factory command fits a frame with its status byte */
     GL_CHECK(GL_PROTO_CAM_DATA_MAX + 5u <= GL_PROTO_MAX_PAYLOAD);
@@ -1198,11 +1205,15 @@ GL_TEST(test_factory_record_layouts)
     z.bias_x = 0.0035f;
     z.turn_rad = 3.1f;
     z.time_s = 0x11223344u;
+    z.ntc2_x10 = -53;
+    z.rest_min = 30;
+    z.rested_min = 31;
     memset(b, 0xEE, sizeof(b));
     gl_proto_zero_encode(&z, b);
     GL_CHECK_EQ(b[GL_PROTO_ZERO_LEN], 0xEE);
     GL_CHECK(b[0] == GL_ZERO_STATE_DONE && b[1] == 1 && b[3] == 2 && gl_get_f32(&b[4]) == 0.0035f &&
              gl_get_f32(&b[16]) == 3.1f && gl_get_u32(&b[32]) == 0x11223344u);
+    GL_CHECK((int16_t)gl_get_u16(&b[36]) == -53 && b[38] == 30 && b[39] == 31);
     memset(&s, 0, sizeof(s));
     s.battery_mv = 3987;
     s.cell_temp_c_x10 = -53;

@@ -10,6 +10,23 @@ still appears below it is history.
 
 ## Status - read this first
 
+* **Phase-3 review (three reviewers: hardware and power, factory and tools, application; 34
+  findings; no critical one).** Every finding was reproduced first, then fixed with a
+  regression test, or pinned with a test that states the measured number and listed as open,
+  or rejected with the evidence. **The section "Phase-3 review: what was done with the 34
+  findings" has the table.** What changed for the product: the IMU's mounting now comes from
+  the netlist's pin map (the firmware had an identity placeholder: on the rev E board every
+  slope would have come out turned by 90 degrees); the 6 h charge backstop no longer depends
+  on the charger's status line; a charge held stopped by a factory command ends with its
+  session; the temperature fit no longer wipes the six-face offsets; the level zero can be
+  armed across the 30-minute rest and the reference line shown on the seat plate, as assembly
+  step 19 needs; Recall no longer shows a stale solid line after the marker was reseated; a
+  Survey that is cancelled and started again keeps its first placement; the boot stub
+  cannot loop on a flash word it cannot read and does not count ship-mode resets as failed
+  starts. **New or newly stated NOT MET / open:** once in ST's loader only a DFU host gets a
+  unit out (issue 59); the backstop holds the charger off on a marker left in its cradle,
+  whose cell then cycles down to 79 % (issue 60); E14 is met only if the display draws less
+  than 4.3 uA with DISP low, which nobody knows (issue 61).
 * **Phase 3, builder 3: what the golfer sees.** In: the three display states of E33 (a solid
   line with the confidence bar = a normal solution; a dashed line with the word APPROX in the
   bar's place = a fallback solution; a message without a line = no solution), proved over
@@ -43,7 +60,7 @@ still appears below it is history.
   bad argument; a field log that holds everything the estimator was handed and returned, so
   that a read can be replayed, plus tilt-only records and a download that resumes; the PC
   tool `tools/glctl` with a transport to the HOST SIMULATOR build of the firmware
-  (`make tooltest`: every command, 504 checks) and the replay through the Python reference;
+  (`make tooltest`: every command, 1185 checks) and the replay through the Python reference;
   the boot stub of E34 (`boot/`: portable decision logic with host tests, the STM32U585 part
   by inspection - it links, it has never run) with an image header, a stamping tool and USB
   ids as named placeholders that make a release build fail. **All of it is in the section
@@ -63,10 +80,10 @@ still appears below it is history.
   supply model against the 5 uA required (the board's always-on parts alone are 9.6 uA);
   a host that leaves the USB bus running but says nothing for 30 s loses the marker until it
   is re-docked; without firmware (ROM loader, a hung firmware) the charger keeps its OWN
-  window, 0 to 60 C, not the firmware's 0 to 45 C; and IF the charger's status line shows the
-  first charge cycle only (not known: the model assumes it shows every cycle, a variant of
-  the model shows the other reading) the 6 h backstop does not see a recharge that an awake
-  marker keeps from ending. **Every statement about the charger with
+  window, 0 to 60 C, not the firmware's 0 to 45 C. (Builder 1 also pinned as NOT MET that the
+  6 h backstop does not see a recharge if the charger's status line shows the first charge
+  cycle only: the phase-3 review made the backstop independent of that line, and the same
+  test now asserts the stop - "Phase-3 review".) **Every statement about the charger with
   no firmware running is a statement about the simulator's MODEL of the chip** (thresholds
   PROVISIONAL, no data sheet read). (E11, E12 and E34 came with builder 2, E29 to E31 and E33
   with builder 3, above.)
@@ -162,6 +179,90 @@ still appears below it is history.
   can be entered only from the settings dial, being put into the cradle abandons it, and the
   USB command that asks for it is answered with `GL_ERR_STATE`.
 
+## Phase-3 review: what was done with the 34 findings
+
+Three independent reviewers examined phase 3 on copies of the tree. Each finding below was
+reproduced on the unchanged tree first (the reviewer's own reproduction, repeated as a test
+that failed there, or the reviewer's seeded defect applied). **Fixed** = changed, with a test
+that fails without the change. **Pinned** = real, cannot or should not be fixed here; a test
+states the measured number and an open issue names the decision. Nothing ran on hardware;
+every number is from the host simulator, the cross compiler or the Python reference, in the
+logs of the final build (`make readme-logs`).
+
+### Hardware, power, safety (13)
+
+| # | Finding | Disposition | Evidence |
+|---|---|---|---|
+| H1 | major: the IMU mounting stated by the pin map is ignored (identity placeholder; on the board the two in-plane tilt axes are exchanged and one inverted) | **Fixed.** `tools/gen_pins.py` checks `imu_mounting` (a rotation, said once) and writes `GL_PINS_IMU_MARKER_*`; `drivers/lsm6dsv16x.c` uses them; `GL_PROV_IMU_MARKER_*` is gone; the simulator's board is mounted as the pin map says. `open_items_for_firmware` is treated like the firmware notes: an unknown item stops generation | `tests/test_pins.c` `test_imu_mounting_is_the_pin_maps` (header and driver against the JSON read by the test's own scanner; a 50 / -20 mg tilt reads right through the default and on the wrong axis with the old identity); self-test "36 defects seeded ... 36 refused" (5 new: unknown open item, axis used twice, mirror image, two statements, no mounting). The pin map's own statement stays PROVISIONAL: open issue 62 |
+| H2 | major: the 6 h backstop counts only while CHG reads low; one high sample resets it | **Fixed.** Counts the time the firmware has not held the charger stopped, whatever CHG says | `test_backstop_does_not_depend_on_the_status_line` (the reviewer's 48 h case: 6.0000 h; CHG never low: 6.0000 h); builder 1's NOT MET 5 is now MET on the model variant (`test_charger_whose_status_shows_the_first_cycle_only`). **Consequence, pinned:** open issue 60 |
+| H3 | major: `SET_CHARGE 1` outlives the session; a docked unit drains | **Fixed.** The stop is released when the unit is locked again | `test_forced_charge_stop_ends_with_the_session` |
+| H4 | major: any fault inside the boot stub resets unconditionally; an unreadable flash word loops for ever | **Fixed by inspection** (never run): NMI of the flash's uncorrectable word is noted and returns; other faults are counted, the third pass stops reading the image | `tests/test_boot.c` `test_fault_inside_the_stub_reaches_the_decision` (the pure functions the stub calls, in a model of its sequence); text checks in `tests/test_board.c`; release gate 4a |
+| H5 | major: the sleep and ship-mode model has no term for the display, yet reports E14 as MET | **Fixed in the claim; the figure NEEDS A DATA SHEET.** The term exists (`GL_SIM_I_LCD_OFF_UA`, 0: not known); E14 is stated as "met only if the panel draws less than 4.32 uA", exercised on both sides of that | `test_sleep_current_dark_and_lit_against_25_microamps`; open issue 61. No worst-case column: no maximum values were read |
+| H6 | major: the application's half of the E34 contract is not tested | **Fixed.** The simulator runs the stub's decision at every MCU reset; text checks for the BKP3R and reset-flag lines | `test_application_confirms_its_start_to_the_boot_stub`; `test_stm32_only_lines_of_the_review_in_text`. Found on the way: the 10 s were counted from tick 0, not from `gl_app_init()` |
+| H7 | minor: STM32-only code is covered by a few text checks; a VBUS edge between the check and the arming of the wake-up pin is lost | **Fixed** (text checks for the Shutdown pull-downs, the loader path without a watchdog, VBUS read from the pin; VBUS read again after the arming in both programs). A text check proves a line is there, not that it works | `test_stm32_only_lines_of_the_review_in_text` |
+| H8 | minor: resets without VBUS in ship mode are counted as failed starts | **Fixed** (rule 6 of the stub; `ship_check_()` clears the reset flags; the backend's comment corrected) | `test_ship_mode_resets_are_not_counted` |
+| H9 | minor: once in ST's loader only a DFU host or a flat cell gets the unit out; the comment says otherwise | **Comment corrected; NOT MET stated**, an owner decision | open issue 59 |
+| H10 | minor: the read gate believes an NTC2 reading the charge gate would call implausible | **Fixed** (the hottest reading decides when every die sensor contradicts NTC2) | `test_read_gate_does_not_believe_an_implausible_ntc`; one phase-2 check that pinned the old behaviour (NTC2 30 C believed beside two dies at 90 C) was turned round, and says so |
+| H11 | minor: E13 is thinly exercised by any random test | **Fixed** | `test_read_gate_under_random_temperatures` |
+| H12 | minor: a seeded hole in defence in depth is invisible to the tests | **Accepted and documented** (open issue 66); the one layer that could be tested alone now is (`test_critical_cell_found_after_the_wake_up_stops_the_cameras`) | - |
+| H13 | minor: an MCU reset does not stop the simulator's capture model | **Fixed** (`sim_cam_mcu_reset()`) | `test_reset_at_every_25_ms_of_a_read` |
+
+### Factory, calibration, log, tool (11)
+
+| # | Finding | Disposition | Evidence |
+|---|---|---|---|
+| F1 | major: TILT_TEMPCO silently replaces the six-face offsets and does not match the plans' procedure | **Fixed.** Only the temperature terms are stored, about the record's own t0; offsets kept; refused without a six-face calibration, with a t0 that is not the record's, or when a stored zero lies where the new terms change the correction by more than 0.5 mg | `test_six_face_tempco_horizon_floor_serial` (the reviewer's five drift points: offsets still (0.0120, -0.0070, 0.0200) g; a sensor with that drift corrected to level within 0.25 mg at five temperatures); glctl help and `gl_proto.h` state the convention |
+| F2 | major: step 19's display rotation cannot be run as written (the pattern ends when the marker leaves the cradle) | **Fixed.** An unlocked DISPLAY_TEST can ARM the pattern for the seat plate | `test_reference_line_on_the_seat_plate` (the frame of the cradle, CRC and line angle equal, held 60 s with no camera read, then asleep) |
+| F3 | major: the armed level zero expires after 10 minutes; step 19 rests 30 | **Fixed.** 60 minutes plus an optional rest the unit itself waits out; NTC2 and the minutes rested in the result (40 bytes) | `test_level_zero_after_the_30_minute_rest` |
+| F4 | major: station tests, gates and validation measurements that still cannot be run | **Partly fixed** (`glctl stream`, `lock`, `grain white`, NTC2 in the zero result, the two items above); **the rest listed below** | "Station tests that still cannot be run" |
+| F5 | major: Survey log records are untested; four seeded defects pass | **Fixed** | `test_survey_in_the_field_log`; `make tooltest` and `make replay-demo` decode and replay Surveys of 2 and 3 placements |
+| F6 | minor: log capacity overstated by 15 % (7214 claimed, 6130 measured); the test pins a formula | **Fixed**: the test fills the log; this file states 6129 | `test_log_capacity_and_wear` |
+| F7 | minor: TILT_TEMPCO accepts an ill-conditioned fit and reports a zero residual | **Fixed** (at least 5 points over 30 K; the largest residual returned; the terms applied only inside -10 to 60 C). **Not done:** storing the fitted range (open issue 64) | `test_bad_arguments`, `test_six_face_tempco_horizon_floor_serial` |
+| F8 | minor: glctl loses the whole download when the link drops; log-decode dies on a cut file; a stale seek position persists | **Fixed** (all three) | `make tooltest`: the link broken at the 4th LOG_READ and resumed; a dump cut at 3000 bytes; LOG_READ "continue" in a new session |
+| F9 | minor: CAM_CAPTURE of a narrow window at the right edge writes inconsistent registers and answers IO | **Fixed**: such a window is moved inward (start column at most 600) and reported so | `test_narrow_window_at_the_right_edge` (55 windows, 0 violations) |
+| F10 | minor: six-face solve and white reference keep their result in RAM when the store refuses; the six-face result is not checked against the record's limits | **Fixed** (solved into a copy, encoded and decoded, stored, then adopted; the faces are kept on failure). Also: `gl_store_put()` no longer leaves a refused value in its RAM copy | `test_a_refused_store_changes_nothing` (the simulator's flash can now refuse to program) |
+| F11 | minor: three further missed seeds (S09, S12, S15); the grain record's integer fields are not range-checked | **Fixed**: S09 and S12 in the test above; S15 in the self-test (every option of the call against the firmware's); the two integer limits have ranges | `test_a_refused_store_changes_nothing`, `make tooltest`, `core/gl_cal.c` |
+
+### Application, regression (10)
+
+| # | Finding | Disposition | Evidence |
+|---|---|---|---|
+| A1 | major: a Survey ended by a double tap and started again on the same result loses its first placement and shows "D1" | **Fixed** (the "stored" mark is cleared with the Survey) | `test_survey_cancelled_and_started_again` |
+| A2 | major: Recall shows a stale solid line after a reseat of less than 4 mrad: up to 30 mrad wrong | **Fixed for what the marker can measure** (reseat check at 0.6 mg); **the rest pinned**: a reseat of 0.2 mrad is recalled 1.5 mrad stale | `test_recall_of_a_reseated_marker`; the row "2 mrad differently: RECALL" of the builders' table was turned to "a new read"; open issue 65 |
+| A3 | minor: in the old walking order a Survey result is made of one placement but marked D2 / D3 / D4 | **Fixed in what the golfer sees** (`D3/1`); the estimator's limit itself is unchanged (frozen; open issue 18) | `test_survey_two_three_and_four_drops`, `test_survey_placement_behind_the_ball_gate`, `test_result_screen_marks_of_the_review` |
+| A4 | minor: a unit without a base-face zero reads on turf with the other zero, or none, as a NORMAL result | **Fixed with a mark** (`Z?`); the state stays NORMAL (open issue 49) | `test_result_without_the_zero_of_its_seat_is_marked` (11.3 mrad of aim, 45 mm at 4 m) |
+| A5 | minor: a 60 ms tap wakes the marker in 36 of 40 timings; shorter taps mostly do not | **Pinned** (model only): 13 / 23 / 35 / 40 / 40 of 40 for 20 / 40 / 60 / 100 / 200 ms | `test_tap_length_and_start_time` |
+| A6 | minor: on a hot marker Recall is refused and lost, and a Survey is lost; the tables did not say | **Recall fixed** (it uses no camera); **the Survey pinned and documented** | `test_recall_and_survey_on_a_hot_marker` |
+| A7 | minor: five seeded defects pass all 16 application tests | **Four have tests now** (S23 the Survey gate from both sides, S25 superseded by the reseat check, S29 the second low-battery layer, S30 the steep threshold at 0.79 / 0.81); **S06 is a redundant layer** ("at rest" itself needs the flat posture: no input in the model tells them apart; open issue 66) | the tests named in A1 to A9 |
+| A8 | minor: the phase-2 assertions on the twist and curvature of a two-placement Survey were removed without an equivalent | **Fixed** | `test_survey_two_placements_fit_twist_and_curvature` |
+| A9 | minor: just below the TOO STEEP threshold a NORMAL result moves by up to 7 mrad for 0.2 mrad of tilt; above the critical slope a dashed line is still drawn | **Reproduced and pinned; owner decision** (E31 as written is met). `python3 tools/steep_sweep.py --ref 0 --fw 20000 --delta 2e-4` in this session: the largest move of a result that kept its class is 3.1 mrad below a ratio of 0.60, 4.84 mrad at 0.70 to 0.75 and 5.68 mrad at 0.75 to 0.80 | `test_result_screen_marks_of_the_review`; open issue 63 |
+| A10 | minor: the PLAYS label runs into the aim line at the edge of the aperture | **Rejected as stated, pinned as measured**: in the reviewer's picture (8 m, +200 mrad, "PLAYS 26.3FT") the line passes 3 white pixels from the label's text in all 7 of its rows. Legibility on the real panel is not verified by anyone | `test_result_screen_marks_of_the_review` |
+
+### Station tests that still cannot be run
+
+Against `docs/MANUFACTURING_PLAN.md` (4.5, 6, 7), `mechanical/README.md` section 7 and
+`docs/VALIDATION_PLAN.md` (2, 3.3, 6), after this review:
+
+* **No way at all:** the four-position zero (6.2 B); reading NTC1 (gate 1: it is wired to the
+  charger only - inferred from `SET_CHARGE` and the meter); the IMU's self-test (gate 1,
+  4.5 #12); the flash's identity read-out (4.5 #11); the camera rail held on for a meter
+  (4.5 #13: it is on about 0.2 s per capture); setting a state of charge for shipping
+  (7.1 #10, 7.4, validation 6.6: the PC watches the voltage and stops the charge); the
+  firmware update tests P3 and P4 and 4.5 #4 (no linked image, no PC-side updater: glctl only
+  enters the loader); the stereo calibration (6.3, validation C2 / C3: only `SET_CAL` and
+  `SET_CAM_HORIZON` exist, no procedure and no fit).
+* **Only partly:** the soak rule "cell thermistor within 1 K of the room" off the pads (NTC2
+  is in the zero's result and in the tilt records, afterwards); the tilt logger "on demand or
+  at intervals" (validation 6.1: per placement only; a chamber stop is logged only if the
+  turntable's motion wakes the marker); the dark-frame light-leak test (step 18, 7.1 #6: no
+  fixed exposure, no limit); step 11a's dark offset (no limit; bare-board operation without a
+  display is provisional).
+* **Now possible, were not:** step 19's display rotation on the seat plate; step 19's zeros
+  after the 30-minute rest; the temperature calibration with the data the chamber procedure
+  yields; the total acceleration and the live grain stream from glctl; the explicit lock.
+* **A conflict between two documents, not firmware:** gate 2 is +-13.5 degrees in the step
+  table of `mechanical/README.md` and +-13.0 in E17 and in `CAM_FIELD`.
+
 ## Phase 3, builder 2: factory commands, calibration data, field log, PC tool, boot stub
 
 Everything in this section was built and run on the host and against the host simulator.
@@ -244,8 +345,13 @@ carries the unit's version, the version both speak and a 64-bit map of the comma
 unit has. A unit of version 1 or 2 answers `GL_ERR_UNSUPPORTED` and the host falls back to
 `GET_INFO` (glctl does this).
 
-**Unlock - the rule.** `UNLOCK "GLFC"` unlocks, anything else locks. The unit locks itself
+**Unlock - the rule.** `UNLOCK "GLFC"` unlocks, anything else locks (`UNLOCK "LOCK"` locks
+and answers OK: the station's explicit lock of final test 7.1 #9, `glctl lock`; added by the
+phase-3 review). The unit locks itself
 when USB goes (lifted out; cradle sleep after 30 s of host silence) and at every reset.
+**What an unlocked session switched on ends with it:** a charge held stopped by `SET_CHARGE 1`
+is released when the unit is locked again, by whatever way (phase-3 review: it used to outlive
+the session, and a docked unit ran its cell down behind a charger held off).
 Locked, it refuses with `GL_ERR_STATE` every command marked U below. The four bytes guard
 against accidents and stray bytes; **they are not a secret.** `SHIP_MODE "SHIP"` now needs
 unlock (it did not after builder 1; open issue 37 is closed).
@@ -268,11 +374,11 @@ its defined status, nothing stored, no camera powered", `test_bad_arguments`).
 | 0x16 | CAM_CAPTURE | | camera, kind (0 picture, 1 dark frame), x0, y0, w, h -> 26: window, bytes, min, max, mean x16, pixels above 32, CRC-32 | one exposure, at most 640 x 288 |
 | 0x17 | CAM_DATA | | offset (4), length (2, <= 1000) -> offset + pixels | download, any order: resume at an offset |
 | 0x18 | CAM_FIELD | | camera -> 20: rows of +13.0 / -13.0 deg, mean of 7 rows x 320 columns at each and at the centre, upper / lower x 1000 | test gate 2 |
-| 0x19 | DISPLAY_TEST | | pattern, hold s (1..120) -> pattern, CRC-32 of the frame buffer, black pixels | white, black, 1- and 8-pixel chequer, rows, columns, orientation, reference line raw / corrected |
+| 0x19 | DISPLAY_TEST | "seat plate" | pattern, hold s (1..120) [, where: 0 cradle, 1 also on the seat plate] -> pattern, CRC-32 of the frame buffer, black pixels | white, black, 1- and 8-pixel chequer, rows, columns, orientation, reference line raw / corrected. With `where` = 1 (U) the pattern is ARMED: shown again, instead of a read and with nothing on the pads, when the marker is next put down out of the cradle (step 19) |
 | 0x1A | GRAIN_TEST | STORE | mode (0 dark, 1 cycle, 2 store) -> 108: dark mean / min / max of 16 readings, full scale, stored offset, 16 x (dark, on, dark) | LEDs and photodiode; dark offset of step 11a |
-| 0x1B | LEVEL_ZERO | ARM | op (0 status, 1 arm, 2 cancel), seat (0 base, 1 ball) -> 36: state, seat, status, attempts, bias x y, scatter, turn, plate slope x y, temperature, time | zero armed over USB, run on the plate |
+| 0x1B | LEVEL_ZERO | ARM | op (0 status, 1 arm, 2 cancel), seat (0 base, 1 ball) [, rest minutes 0..120] -> 40: state, seat, status, attempts, bias x y, scatter, turn, plate slope x y, IMU temperature, time, NTC2 (0.1 C), rest asked for, minutes rested | zero armed over USB, run on the plate, not before the marker has rested off VBUS for the minutes asked |
 | 0x1C | CAL_STATUS | | -> 80: faces captured, face being averaged, six raw means, temperature | six-face progress (steps: START_CAL SIX_FACE 0..5, 6) |
-| 0x1D | TILT_TEMPCO | U | n (3..16), t0, n x (T, offset x y z) -> b0[3], b1[3], b2[3], RMS residual | fit and store the temperature terms |
+| 0x1D | TILT_TEMPCO | U | n (5..16, over at least 30 K), t0, n x (T, offset x y z) -> b0[3] (not stored), b1[3], b2[3], RMS residual, largest residual | fit and store ONLY the temperature terms b1, b2 about the record's own t0; the six-face offsets are kept |
 | 0x1E | SET_CAM_HORIZON | U | camera, row, roll -> pitch_up_rad | CAM_HORIZON |
 | 0x1F | SET_GRAIN_FLOOR | U | n (20..64), n x modulation -> floor, threshold | GRAIN_FLOOR |
 | 0x20 | DISPLAY_ROT | write | 0 -> rotation, measured flag; 1 + rotation -> the same | E12 |
@@ -296,8 +402,13 @@ Notes that decide whether a station works:
 * **E13 holds for the factory**: no camera command above 60 C (`GL_ERR_STATE`).
 * **LEVEL_ZERO ARM** survives the lift out of the fixture (RAM only: not a reset), runs where
   a read would start - the marker lying still out of the cradle - and takes the place of that
-  read: read, "TURN 180", read, store, "SAVED". Three attempts (a wrong turn, a bump), ten
-  minutes, then it gives up; nothing is stored unless the store acknowledged it. On the
+  read: read, "TURN 180", read, store, "SAVED". Three attempts (a wrong turn, a bump), 60
+  minutes plus the rest asked for, then it gives up; nothing is stored unless the store
+  acknowledged it. (Ten minutes until the phase-3 review: step 19 rests the marker 30 minutes
+  off the pads before the zeros, and every armed zeroing then ended in TIMEOUT. `zero arm base
+  --rest 30` makes the unit itself wait: a placement before the rest is over is an ordinary
+  placement. The result carries NTC2 and the minutes rested:
+  `test_level_zero_after_the_30_minute_rest`.) On the
   simulator, with the IMU reading (3.5, -2.5) mrad wrong on the base face and (4.7, -3.3) on
   the ball feet, on a plate sloped (4, -7) mrad: "BASE-FACE zero ... (3.481, -2.514) mrad ...
   scatter 0.144 mrad; turn 179.9 deg; plate slope found (4.03, -6.95)", "BALL-seat zero:
@@ -335,13 +446,13 @@ From `docs/MANUFACTURING_PLAN.md` (4.5 electrical test list, 6 calibration, 7.1 
 | Gate 2: bars at +13.0 / -13.0 degrees | CAM_FIELD (`cam-field`) | yes | the README of the enclosure still names 13.5 |
 | Gate 2 and step 18: dark frames under side light | CAM_CAPTURE kind 1 (`capture --dark`) | partly | no fixed exposure; no limit |
 | Gate 2: LCD | DISPLAY_TEST (`display PATTERN`) | yes | judged by eye or a camera |
-| Step 19: soak until the cell thermistor is within 1 K of the room | GET_SENSORS | yes | only in the cradle (USB) |
+| Step 19: soak until the cell thermistor is within 1 K of the room | GET_SENSORS; NTC2 in the LEVEL_ZERO result | partly | GET_SENSORS only in the cradle (USB); off the pads NTC2 is known afterwards: in the zero's result and in the log's tilt records |
 | Step 19 / 6.2 A: six-face | START_CAL SIX_FACE + CAL_STATUS (`six-face N`, `six-face solve`) | yes | the fixture; a limit on the offsets |
-| Step 19 / 6.2 B: level zero on two seats, nothing on the pads | LEVEL_ZERO arm / status (`zero arm base`, `zero status`) | yes | four-position zero; the result is fetched at the next docking |
-| Step 19: display rotation | DISPLAY_TEST ref-raw, DISPLAY_ROT (`display ref-raw`, `display-rot --measured`, `display ref-corrected`) | yes | the camera fixture |
-| 6.2 C: temperature compensation | TILT_TEMPCO (`tempco FILE`); data from STREAM IMU or tilt records | yes | the chamber fixture; judging on a second run is the PC's |
+| Step 19 / 6.2 B: level zero on two seats, nothing on the pads, after 30 min of rest | LEVEL_ZERO arm / status (`zero arm base --rest 30`, `zero status`) | yes (since the phase-3 review: the arming used to end after 10 min) | four-position zero; the result is fetched at the next docking |
+| Step 19: display rotation, on the seat plate with no contacts | DISPLAY_TEST ref-raw armed for the plate, DISPLAY_ROT (`display ref-raw 60 --plate`, `display-rot --measured`, `display ref-corrected 60 --plate`) | yes (since the phase-3 review: a pattern used to end the moment the marker left the cradle) | the camera fixture; the hold is at most 120 s per placement |
+| 6.2 C: temperature compensation | TILT_TEMPCO (`tempco FILE`); data from STREAM IMU or tilt records | yes: the command takes what the plan's procedure yields (drift of x and y from a 0 / 180 degree pair per chamber stop; 0 for z), at least 5 stops over 30 K | the chamber fixture; judging on a second run is the PC's; tilt records are written per placement only (the turntable's motion must wake the marker) |
 | 6.3: stereo calibration | `frame` / `capture`, SET_CAL, SET_CAM_HORIZON | partly | the procedure and the PC program that fits intrinsics and extrinsics from the pictures: not written |
-| 6.4: grain white reference | START_CAL GRAIN_WHITE | yes (phase 1) | no glctl subcommand of its own (`Device.start_cal`) |
+| 6.4: grain white reference | START_CAL GRAIN_WHITE (`grain white`) | yes | - |
 | 6.4: grain noise floor | SET_GRAIN_FLOOR (`grain-floor FILE`) | yes | the turf readings (grain values are in the read log) |
 | 6.6: file every record | GET_CAL (`cal-get`), restore `cal-set` | yes | - |
 | 4.5 #2, #5, #13: rails | GET_SENSORS: 2.8 V rail (VDDA), USB supply valid, camera rail on / off | partly | V2V8_CAM and VBUS have no ADC channel: a meter. The camera rail is on only during an exposure (0.2 s): a "hold the rail on" command is missing (it would hold the camera-facing pins un-parked; a decision) |
@@ -349,12 +460,12 @@ From `docs/MANUFACTURING_PLAN.md` (4.5 electrical test list, 6 calibration, 7.1 
 | 4.5 #8: charger stops when told | SET_CHARGE | yes | - |
 | 4.5 #9, #10: USB link, battery reading | PING, GET_IDENT, GET_SENSORS | yes | - |
 | 4.5 #11: flash memory | SET_SETTINGS, REBOOT, GET_SETTINGS | partly | the chip's identity bytes are not reported |
-| 4.5 #12: IMU flat and still | STREAM IMU | yes | self-test (above) |
-| 4.5 #14 .. #17 | GRAIN_TEST, CAM_ID, `frame`, DISPLAY_TEST | yes | - |
+| 4.5 #12: IMU flat and still, total acceleration close to 1 g | STREAM IMU (`stream imu`: acceleration in g and its total) | yes | self-test (above) |
+| 4.5 #14 .. #17 | GRAIN_TEST and the live grain stream (`stream grain`), CAM_ID, `frame`, DISPLAY_TEST | yes | - |
 | 4.5 #18, #19: sleep current, wake on motion | SLEEP_TEST (`sleep-test --motion`, `--timer N`) + GET_SENSORS | yes | the current is the bench supply's reading |
 | 7.1 #3, #4: versions, all calibration flags | GET_IDENT (`ident`: `cal_flags`, `calibration_complete`) | yes | - |
 | 7.1 #5: a complete read at a target | the read itself, then LOG_READ (`log-download`, `log-decode`) | yes | limits |
-| 7.1 #9: clock, erase the log, defaults, lock | SET_TIME, LOG_ERASE, SET_SETTINGS, UNLOCK | yes | - |
+| 7.1 #9: clock, erase the log, defaults, lock | SET_TIME, LOG_ERASE, SET_SETTINGS, UNLOCK "LOCK" (`lock`) | yes | - |
 | 7.1 #10: battery state for shipping; ship mode | GET_POWER, SET_CHARGE, SHIP_MODE (`ship`) | partly | setting a chosen state of charge is the PC watching the voltage and stopping the charge; no automatic command |
 
 ### Field log - `core/gl_fieldlog`, `core/gl_log`
@@ -372,15 +483,27 @@ event of phase 2 are kept as they were):
 
 * **Sizes, measured:** "one Quick Read in the log: placement record 324 bytes (32 horizon
   samples), summary 72, read record 684 ... the log grew by 1156 bytes, the estimator's event
-  included" (`test_field_log_records_and_resume`). A Survey of four placements: 2176 bytes.
-* **Capacity** (`test_log_capacity_and_wear`, arithmetic on the sizes above): the log region
-  is 2044 sectors of 4096 bytes (8.37 MB): **7214 Quick Reads**, or 85 848 tilt records,
-  before the oldest sector is dropped (phase 2: tens of thousands of the 72-byte summary).
-  Raw strips, if switched on, cost what they did: 94 kB per read at level FIRST.
-* **Wear:** the ring erases each sector once per 7214 reads. At 200 reads a day it turns once
-  in 36 days; 100 000 erase cycles (PROVISIONAL: the endurance class of the flash family, no
+  included" (`test_field_log_records_and_resume`). The last read of a Survey of four
+  placements: 2176 bytes; the whole Survey session (E29 solves after every placement from the
+  second on: reads of 1, 2, 3 and 4 placements): 6664 bytes.
+* **Capacity, measured** (`test_log_capacity_and_wear`): the log region is 2044 sectors of
+  4096 bytes (8.37 MB). The log of the booted application is FILLED with the record pattern of
+  a Quick Read until the oldest sector is dropped for the first time: 6133 patterns written,
+  **6129 Quick Reads retained**. Records are not split across sectors: three reads fit a
+  sector and 612 bytes of each stay empty. (Until the phase-3 review this file stated 7214,
+  from arithmetic that splits records - 15 % too many - and the test pinned that formula.)
+  Or 85 848 tilt records. Raw strips, if switched on, cost what they did: 94 kB per read at
+  level FIRST.
+* **Wear:** the ring erases each sector once per 6129 reads. At 200 reads a day it turns once
+  in 30.6 days; 100 000 erase cycles (PROVISIONAL: the endurance class of the flash family, no
   data sheet read) would last thousands of years. Wear is not a limit; retention of the
-  oldest data is: 36 days at that rate.
+  oldest data is: 30.6 days at that rate.
+* **A Survey in the log** (`test_survey_in_the_field_log`; the phase-3 review seeded four
+  defects into these records and every test passed): each solve writes one placement record
+  per placement handed to the estimator, in the estimator's order, the ball flag on the
+  ball's record only, and a read record with the count, the ball's index (the LAST placement
+  in the E29 order) and the zero that was removed. `make replay-demo` now replays Surveys of
+  2 and 3 placements (the simulator host has a `doubletap` world command).
 * **Stage times** are milliseconds after the tilt average started: "tilt done 1075, camera
   rail on 1075, capture done 3569, solve 3614 .. 3620; rail on for 2424 ms" (the simulator's
   own rail-on time for that read: 2423.7 ms). The read record also carries milliseconds since
@@ -397,8 +520,14 @@ event of phase 2 are kept as they were):
 * **Download with resume.** `LOG_READ` as before (restart flag; "more" flag). New:
   `LOG_SEEK seq` puts the iterator on the sector that holds record `seq` (one 16-byte header
   read per sector, as at the mount) and the following `LOG_READ`s return the records from
-  that number on. glctl keeps the dump on disk, finds its last complete record and continues
-  after it. "log of 6 records downloaded twice, identical; resumed at record 3: the remaining
+  that number on. glctl writes the dump to disk AS THE RESPONSES ARRIVE (each holds whole
+  records), so a link that drops leaves a file that `log-download --resume` continues after
+  its last complete record (phase-3 review: the file was written only after a complete
+  download, and a broken one left nothing to resume; the self-test now breaks the link at the
+  4th `LOG_READ`). A download position belongs to its USB session: after an undock and dock,
+  `LOG_READ` "continue" without a new `LOG_SEEK` starts at the oldest record. `log-decode` of
+  a dump that was cut decodes up to its last complete record and says how many bytes it left
+  out (exit 0); a record of an unknown layout is exit 2 with a sentence, not a traceback. "log of 6 records downloaded twice, identical; resumed at record 3: the remaining
   4 records, byte for byte"; in `core`: "seek to each of 158 record numbers of a wrapped
   12-sector log: always the right first record".
 * What the validation plan listed as missing, now: grain values - in; the two tilt readings
@@ -409,7 +538,9 @@ event of phase 2 are kept as they were):
 ### PC tool - `tools/glctl`
 
 Python 3, standard library only. `python3 tools/glctl --help` lists the subcommands (one per
-factory command, plus `log-download [--resume]`, `log-decode`, `replay`). Transports:
+factory command, plus `log-download [--resume]`, `log-decode`, `replay`, and since the
+phase-3 review `stream SOURCES` (live IMU with the total acceleration, tilt, grain, power),
+`lock`, `grain white`, `zero arm SEAT --rest MINUTES` and `display PATTERN SECONDS --plate`). Transports:
 `--port DEVICE` (pyserial; without it: "the serial transport needs the 'pyserial' package,
 which is not installed ...", exit 3; **pyserial is not installed in this environment, so the
 serial transport has never been exercised**) and `--sim` (the host simulator build,
@@ -418,15 +549,18 @@ its USB port on stdin / stdout and a few "world" commands to dock, place and tur
 
 `make tooltest` runs `tools/glctl/selftest.py`: every protocol command through glctl against
 the simulator, the log download whole and resumed, the decoder against the values the firmware
-held at each result (largest relative difference 4.3e-09: nine printed digits), the replay,
-the image stamping tool against the boot stub's own check, the release gate. 504 checks.
+held at each result (nine printed digits; since the phase-3 review also every option of the
+call and the ball flag of every placement record), the replay, a download whose link breaks
+and is resumed, a dump that was cut, the image stamping tool against the boot stub's own
+check, the release gate. The number of checks is in the generated block below (504 before
+the phase-3 review).
 
 **The replay path** (validation plan 3.3, check 1). `tools/glctl/logdec.py` joins each read
 record with its placement records into the dictionary form of
 `greenline_sim.measurements.Measurements`; `sim/greenline_sim/replay.py` (new, additive; 7
 tests in `sim/tests/test_replay.py`) runs the reference estimator on it and compares with the
 logged estimate under the rule of `make appdiff` (aim within 0.5 mrad, speed 0.1 %, break
-0.01 cup, confidence 1e-4, flags and codes exact). On four reads made by the simulator, two of
+0.01 cup, confidence 1e-4, flags and codes exact). On seven reads made by the simulator (four until the phase-3 review; Surveys of two and of three placements are among them now), two of
 them fallbacks (`make replay-demo` of the final build of phase 3; generated block):
 
 <!-- readme-check:begin replay-demo -->
@@ -434,17 +568,20 @@ them fallbacks (`make replay-demo` of the final build of phase 3; generated bloc
 read    kind      source      |     fw aim    ref aim     diff |  fw dist ref dist | verdict
                               |     [mrad]     [mrad]   [mrad] |      [m]      [m] |
 1       quick     patch       |    -28.539    -28.527    0.012 |    5.982    5.982 | agrees
-2       quick     patch       |     -7.118     -7.114    0.004 |    3.983    3.983 | agrees
-3       quick     patch*      |    -11.483    -11.479    0.003 |    3.000    3.000 | agrees  (fallback: range_missing)
-4       tilt-only patch*      |    +65.686    +65.689    0.003 |    3.000    3.000 | agrees  (fallback: flag_missing)
-4 reads replayed through the Python reference: 4 agree with the estimate the firmware logged, 0 do not; largest |firmware - reference| aim 0.012 mrad (limit 0.5)
+2       quick     patch       |     -7.172     -7.168    0.004 |    3.983    3.983 | agrees
+3       quick     patch*      |    -11.495    -11.492    0.003 |    3.000    3.000 | agrees  (fallback: range_missing)
+4       quick     patch       |    +12.785    +12.762    0.023 |    2.985    2.985 | agrees
+5       survey    patch       |    +54.699    +54.706    0.007 |    5.975    5.975 | agrees
+6       survey    patch       |     +6.564     +6.547    0.017 |    7.984    7.984 | agrees
+7       tilt-only patch*      |    +65.950    +65.953    0.003 |    3.000    3.000 | agrees  (fallback: flag_missing)
+7 reads replayed through the Python reference: 7 agree with the estimate the firmware logged, 0 do not; largest |firmware - reference| aim 0.023 mrad (limit 0.5)
 ```
 <!-- readme-check:end replay-demo -->
 
 A logged aim turned by 2 mrad on purpose is reported. Limits of the replay: the reference has
 no step budget, so a read the firmware cut at 300 000 steps shows as a difference of class;
-Survey reads were not among the four (the simulator host has no double-tap command; the
-decoder joins several placements and `sim/tests/test_replay.py` covers the order).
+Since the phase-3 review the demonstration has seven reads, Surveys of two and of three
+placements among them (the simulator host has a `doubletap` world command now).
 
 The final build of phase 3, `make tooltest` (generated block; the release gate refuses for
 two placeholders since builder 3: the USB ids and the regulatory text of the INFO screen):
@@ -453,8 +590,8 @@ two placeholders since builder 3: the USB ids and the regulatory text of the INF
 ```
     release-gate: REFUSED - the USB vendor and product ids are placeholders
     release-gate: REFUSED - the regulatory text of the INFO screen is the placeholder
-4 reads replayed through the Python reference: 4 agree with the estimate the firmware logged, 0 do not; largest |firmware - reference| aim 0.012 mrad (limit 0.5)
-== glctl selftest: 504 checks, 0 failed -> PASS
+7 reads replayed through the Python reference: 7 agree with the estimate the firmware logged, 0 do not; largest |firmware - reference| aim 0.023 mrad (limit 0.5)
+== glctl selftest: 1185 checks, 0 failed -> PASS
 ```
 <!-- readme-check:end tooltest -->
 
@@ -464,12 +601,42 @@ two placeholders since builder 3: the USB ids and the regulatory text of the INF
 application from 0x08002000 with a 32-byte image header at +0x400), the header (magic "GLIM",
 header version, board revision, length, CRC-32 of the image, firmware version and build, a CRC
 of the header itself), the rule, and what is retained across resets (backup register 0: the
-update request; 3: the count of unconfirmed starts; 4: what the stub found, for the factory).
+update request; 2: the application's ship-mode mark; 3: the count of unconfirmed starts; 4:
+what the stub found, for the factory; 5: faults inside the stub).
 
 * **The rule** (`gl_boot_decide()`, 160 input combinations tested): update requested and VBUS
   present -> loader; image not valid -> loader if VBUS is present, else wait for VBUS in
   Shutdown (a loader without a host only empties the cell) and go to the loader then; valid
   image -> start the independent watchdog, count the start, jump.
+* **Added by the phase-3 review** (`boot/gl_boot.h`, rules 0 and 6; `tests/test_boot.c`,
+  text checks in `tests/test_board.c`; NONE OF IT HAS RUN):
+  - **Ship mode.** A reset without VBUS while the application's ship-mode mark is set (a
+    stray reset; a watchdog that counts in Shutdown after all) is not counted and does not
+    start the watchdog: the stub jumps to the valid image, whose first act is to go back to
+    Shutdown. Before: every such pass was counted with the watchdog restarted - "ship mode,
+    good image: 40 resets without VBUS ... each back to Shutdown ... count unchanged; then
+    docked -> START_APP (before the rule: the fourth was WAIT_VBUS and the docking the
+    loader)".
+  - **A fault inside the stub.** The stub reads every byte of the image; a flash word that
+    cannot be read (programming cut short: the half-written image E34 exists for) used to
+    end in an unconditional reset, for ever, without reaching the decision. Now the NMI of
+    the flash's "uncorrectable word" (FLASH_ECCR.ECCD - PROVISIONAL, RM0456 not read) is
+    noted in backup register 5 and returns, and the image is invalid; any other fault is
+    counted there, and after three such passes the stub no longer reads the image and
+    treats it as invalid: "an image that faults on every read: 3 passes end in a reset, pass
+    4 does not read it and enters the USB loader".
+  - **The wake-up edge.** Both programs looked at VBUS and then armed the wake-up pin; an
+    edge in between was lost. They read VBUS again after the arming and reset if it is there.
+  - **The simulator runs the stub's decision at every MCU reset** on a model of backup
+    register 3, so the application's half of the contract is tested with it
+    (`test_application_confirms_its_start_to_the_boot_stub`: one confirmation 10 s after
+    `gl_app_init()`, 20 watchdog resets after confirmed runs give 20 starts, three resets
+    before the confirmation end in the loader, `REBOOT` clears the count). The 10 s are
+    counted from `gl_app_init()` now, not from tick 0.
+  - **Once in ST's loader, only a DFU host or a flat cell gets the unit out** (the MCU runs
+    from the sealed cell, the cradle has no reset contact, the loader has no time-out). For
+    a user with a wall-charger cradle E34's "cannot strand a unit" is **NOT MET**: open
+    issue 59.
 * **A watchdog loop cannot hide a bad image.** The application clears the count when its main
   loop has run for 10 s (`gl_hal_boot_confirm()`, `GL_APP_BOOT_CONFIRM_MS`) and before every
   reset it makes on purpose. A start that was not confirmed and ended in a watchdog or
@@ -487,8 +654,9 @@ update request; 3: the count of unconfirmed starts; 4: what the stub found, for 
   memory at 0x0BF90000, or Shutdown with wake-up pin 2. It reads the write protection and
   records whether page 0 is protected; it does not write option bytes (the file lists them:
   WRP1A pages 0..0, nSWBOOT0 = 0 / nBOOT0 = 1, IWDG_SW = 1, RDP 0 at EVT, TZEN = 0).
-  `make boot-cross STM32_HEADERS=<dir>` compiles and LINKS it with no library: "image: 1184
-  bytes of 8192 (page 0); vector table: 20001000 08000089"; largest stack frame 56 bytes.
+  `make boot-cross STM32_HEADERS=<dir>` compiles and LINKS it with no library (the generated
+  block below has its size: 1184 bytes before the phase-3 review, 1536 with the fault and
+  ship-mode handling); largest stack frame 56 bytes.
   **Linked is not run.**
 * **USB ids.** `app/gl_usb_ids.h`: `GL_USB_VID_PLACEHOLDER` 0xFFFF, `GL_USB_PID_PLACEHOLDER`
   0x0000. `make RELEASE=1 ...` defines `GL_RELEASE_BUILD` for every compile and stops at an
@@ -504,6 +672,8 @@ update request; 3: the count of unconfirmed starts; 4: what the stub found, for 
   relocation: the application's start-up must set VTOR to 0x08002000 and be linked there with
   the header slot - **no linked application exists**, so no image has ever been stamped from
   real code; (4) backup registers and the watchdog across Shutdown and across the loader;
+  (4a) that an uncorrectable flash word raises NMI with ECCD set, that the handler may clear
+  it and return, and that the read then completes (rule 0);
   (5) the time the CRC of a full image takes at 4 MHz (estimate: about 1.2 s for 400 kB, added
   to every start; not measured); (6) what a host sees: ST's DFU device with ST's ids, not the
   product's.
@@ -513,8 +683,8 @@ block):
 
 <!-- readme-check:begin boot-cross -->
 ```
-   1184	      0	      0	   1184	    4a0	build/boot/gl_boot.elf
-image: 1184 bytes of 8192 (page 0); vector table: 20001000 08000089; Reset_Handler at 0x08000088
+   1536	      0	      0	   1536	    600	build/boot/gl_boot.elf
+image: 1536 bytes of 8192 (page 0); vector table: 20001000 08000101; Reset_Handler at 0x08000100
 largest stack frame of the stub: 56 bytes (its stack: 4096)
 OK: the boot stub links without any library and fits its page.  LINKED IS NOT RUN: no hardware.
 ```
@@ -548,8 +718,8 @@ Where it is: `core/gl_ui.h` / `gl_ui.c` (the display states, the steepness ratio
 the transition table), `app/gl_app.c` (`classify_`, `survey_select_`, `recall_watch_` and its
 neighbours, `info_view_`), `app/gl_read.c` (`probe_done_`: the group budget),
 `app/gl_regulatory.h` (the text block), `app/gl_app_cfg.h` (the constants, each with its
-reason). Tests: `tests/test_ui.c` (1541894 checks: every screen, the rule, the table),
-`tests/test_e2e_recall.c` (344 checks: Recall and the INFO screen through the whole firmware),
+reason). Tests: `tests/test_ui.c` (1541924 checks: every screen, the rule, the table),
+`tests/test_e2e_recall.c` (663 checks: Recall, the reseat check and the tap timings of the phase-3 review, and the INFO screen through the whole firmware),
 `tests/test_e2e_putt.c` and `tests/test_e2e.c` (the Survey), `tests/test_solver.c` (the two
 builds), `tests/test_read.c` (the rail time). Nothing here has run on hardware.
 
@@ -771,7 +941,9 @@ exist any more.
 
 | What the golfer does | What happens |
 |---|---|
-| second, third, fourth placement | a result with its line each time; `D2`, `D3`, `D4` beside the bar |
+| second, third, fourth placement | a result with its line each time; `D2`, `D3`, `D4` beside the bar - or `D3/1` when the result is made of fewer placements than were stopped at (here: of one; see below) |
+| a double tap ends the Survey, two more start it again on the same result | that result is the first placement of the new Survey (phase-3 review: the restarted Survey used to hold no placement and showed `D1` at the next one) |
+| a placement refused as too hot (E13) | `TOO HOT`, no camera; the Survey is over, the next placement is a plain read (pinned: `test_recall_and_survey_on_a_hot_marker`) |
 | a FIFTH placement | the Survey is over; it is a new plain read (no `D` mark) |
 | picks the marker up and does not put it down for 60 s | asleep; the Survey is gone; nothing to recall (it was lifted) |
 | leaves a result alone for its 45 s | asleep; the Survey is over; that result can be recalled by a tap |
@@ -790,8 +962,15 @@ unless it is clearly behind the ball (the ball's range below 0.85 of its own); o
 far as the ball is another reading at the ball (station 0). **Consequence, NOT MET as far as
 "fitted to all placements" goes:** a golfer who walks the old way - from the ball toward the
 hole - gets at each stop the putt from that stop, made of the placements from there to the
-hole only; `Dn` still counts the stops. Walking toward the ball, as E29 describes, every
-placement is used.
+hole only. `Dn` counts the stops, and since the phase-3 review the mark says when the result
+is made of fewer: `D2/1`, `D3/1` (the reviewer walked 24 orders of four placements: 26 of 72
+results were made of the ball's placement alone and all were marked D2, D3 or D4). Walking
+toward the ball, as E29 describes, every placement is used. The gate itself is tested from
+both sides (`test_survey_placement_behind_the_ball_gate`: an earlier placement at 5.0 m, the
+ball at 4.0 m - 0.80 of its range - uses 1 placement, at 4.5 m - 0.90 - uses 2), and the fit
+of two real reads in the E29 order has its twist and curvature asserted again
+(`test_survey_two_placements_fit_twist_and_curvature`: curvature 0.00082 /m where the tilts
+imply 0.0008, twist 0.0041 /m).
 
 **The same placements in the old and the new order give the same estimate.** After the third
 placement of E29's example (2 m, 6 m, then the ball at 9 m) the test hands the same three
@@ -831,6 +1010,13 @@ seen from the moment it came onto the screen:
 * a still 133 ms block whose mean gravity direction differs from the one the marker rested in
   at its read by more than 4 mg on an axis (4 mrad of tilt: a tenth of what a read calls
   motion while a result is shown);
+* **RESEATED (phase-3 review):** after the wake-up, the mean of the first three still blocks
+  (0.4 s; the result is not shown before the fourth) differs from the gravity direction of
+  the read by more than 0.6 mg on an axis (`GL_APP_RECALL_RESEAT_G`). The aim moves by about
+  7 mrad for every mrad the marker lies differently in cross slope, and under the 4 mg above
+  a marker that was nudged and had seated itself anew by 1.0 to 3.9 mrad was recalled with a
+  SOLID line 6.5 to 30 mrad stale - up to 241 mm at the hole. 0.6 mg is about four standard
+  deviations of that comparison with the simulator's sensor noise: PROVISIONAL;
 * after the wake-up, a posture other than flat, or more than 3 moving blocks before the
   marker is at rest (a disturbance that lasts d leaves ceil(d / 133 ms) + 1 of them: a tap 2,
   a nudge of 0.2 s 3; picking the marker up and putting it down takes longer);
@@ -850,7 +1036,7 @@ age shown: "2M AGO" (the result was made 142 s before)
 what happens to the sleeping marker          | outcome        | rail cycles |
 a tap (60 ms)                                | RECALL         |           1 | 2 moving blocks after the wake-up (limit 3)
 a nudge of 0.2 s                             | RECALL         |           1 | 3 moving blocks after the wake-up (limit 3)
-a nudge, then lying 2 mrad differently       | RECALL         |           1 | 3 moving blocks after the wake-up (limit 3)
+a nudge, then lying 2 mrad differently       | a new read     |           2 |
 a tap and a twist of 1 degree                | RECALL         |           1 | 2 moving blocks after the wake-up (limit 3)
 a shove of 0.6 s                             | a new read     |           2 |
 a nudge, then lying 6 mrad differently       | a new read     |           2 |
@@ -867,13 +1053,49 @@ tapped 25 h after the result: a new read
 ```
 <!-- readme-check:end recall -->
 
+**The reseat check, measured** (`test_recall_of_a_reseated_marker`: read, sleep, a 0.2 s nudge
+after which the marker lies differently in cross slope; the stale error is against a fresh
+read of a marker that lies that way from the start; default green, 6 m):
+
+| Reseated by | Outcome | The line shown is off the fresh read's by |
+|---|---|---|
+| 0.2 mrad | RECALLED | 1.47 mrad = 9 mm at the hole - **stale by this much, shown solid** |
+| 1.0, 2.0, 3.0, 3.9 mrad | a new read | 0.5 to 0.7 mrad (two reads of the same marker) |
+| -1.0 mrad | a new read | 0.35 mrad |
+| -0.2 mrad | RECALLED | 1.48 mrad = 9 mm |
+
+**What is left:** a reseat under the limit is recalled, and its line is stale by what that
+reseat is worth (about 7 mrad of aim per mrad). **The tap, by its length and its moment**
+(`test_tap_length_and_start_time`; the builders' tap model, 0.15 g at 9 Hz, 40 start times
+7 ms apart; MODEL ONLY):
+
+| Tap length | Woke the marker | Of those: recalled |
+|---|---|---|
+| 20 ms | 13 of 40 | 13 |
+| 40 ms | 23 of 40 | 23 |
+| 60 ms | 35 of 40 | 35 |
+| 100 ms | 40 of 40 | 40 |
+| 200 ms | 40 of 40 | 40 |
+
+The wake-up compares consecutive low-rate samples with 62 mg: a short tap can fall between
+two of them (the builders' tests used one start time per case and reported "a tap (60 ms):
+RECALL"). No marker that was only tapped made a new read instead of recalling (0 of 151
+wake-ups): the reseat check gave no false alarm in the model.
+
+**A hot marker** (`test_recall_and_survey_on_a_hot_marker`): a recall uses no camera, and E13
+is about camera reads - a marker whose cell is at 64 C and is tapped RECALLS its result (until
+the phase-3 review it showed TOO HOT, and the stored result was lost). If it was lifted, the
+new read is refused where its cameras would start.
+
 **NOT VERIFIED (no hardware):** that a tap trips the IMU's wake-on-motion at its provisional
-threshold (`GL_PROV_IMU_WAKE_THRESHOLD_MG`, 62 mg); how long the IMU takes from that interrupt
+threshold (`GL_PROV_IMU_WAKE_THRESHOLD_MG`, 62 mg) - in the MODEL a 60 ms tap wakes it in 35
+of 40 timings, shorter ones mostly do not; how long the IMU takes from that interrupt
 to its first sample - in the simulator the samples start at once, on a board a turn or a
-slide that is over before the first sample is not seen; the accelerometer's offset drift over
-temperature against the 4 mg limit (data sheet figure from memory: PROVISIONAL); whether turf
-lets a marker settle by more than 4 mrad in the minutes after a read (then a tap makes a new
-read, which is the safe side).
+slide that is over before the first sample is not seen; the accelerometer's noise and its
+offset drift over temperature against the 0.6 mg limit of the reseat check (a marker that
+warmed by a few kelvin since its read will read again instead of recalling: the safe side);
+whether turf lets a marker settle by more than that in the minutes after a read (then a tap
+makes a new read, which is the safe side).
 
 ### Read time: the rail-time bound (E15)
 
@@ -986,15 +1208,17 @@ every `RELEASE=1` build fail while it is the placeholder, as they do for the USB
   vectors are `TOO STEEP` with a dashed line in the firmware and without a line by the
   reference at 1e-9 m; the class of the stick's base 3 m from the hole still flips with the
   frame noise (open issue 22, unchanged).
-* **PROVISIONAL**: every constant of the recall rule (2 degrees, 4 mg, 3 blocks, 24 h); the
+* **PROVISIONAL**: every constant of the recall rule (2 degrees, 4 mg, the 0.6 mg of the
+  reseat check added by the phase-3 review, 3 blocks, 24 h); the
   0.80 of TOO STEEP (chosen from a simulation of the estimator, not from greens); the 0.85 of
   "behind the ball"; the regulatory text.
 * **Not verified**: anything on hardware. The tap as a wake-up source and the IMU's start-up
   time. The legibility of any of these screens on the real panel. The rail times (a model).
   Survey fits in the TOO STEEP sweep.
-* **Not done**: an on-unit sign of a missing calibration (open issue 49); a Survey that
-  survives the 45 s of a result or a sleep; a display of how many placements a Survey result
-  used (`Dn` counts the stops); note names in `tools/glctl/logdec.py` (the read record
+* **Not done**: an on-unit sign of a missing calibration (open issue 49; since the phase-3
+  review a missing level zero shows as `Z?`); a Survey that
+  survives the 45 s of a result or a sleep; (a display of how many placements a Survey result
+  used exists since the phase-3 review: `D3/1`); note names in `tools/glctl/logdec.py` (the read record
   carries the note as a number: 11 = TOO STEEP is new; the SOLID_LINE flag of the record is
   now exactly "the NORMAL state").
 
@@ -1105,10 +1329,10 @@ hardware.
 | E8 | Ball feet of stainless steel or silicon nitride | - | **unaffected** |
 | E9 | Quarter-wave film under the glass (trial) | - | **unaffected** |
 | E10 | Printed legend on the base plate | the INFO screen is the firmware's place for the same statements (builder 3) | **unaffected**; which statements go where is `docs/COMPLIANCE.md`'s decision |
-| E11 | Level zero on two seats; the base face is the default for a read | tilt record version 2 holds both, each with temperature, time and scatter; `gl_cal_tilt_zero()` picks by the SURFACE setting (TURF default, HARD = ball seat); `GL_CMD_LEVEL_ZERO` arms a zeroing for a named seat | **implemented** (builder 2). Missing: only the 0 / 180 degree reversal exists, not a four-position zero |
+| E11 | Level zero on two seats; the base face is the default for a read | tilt record version 2 holds both, each with temperature, time and scatter; `gl_cal_tilt_zero()` picks by the SURFACE setting (TURF default, HARD = ball seat); `GL_CMD_LEVEL_ZERO` arms a zeroing for a named seat | **implemented** (builder 2). Missing: only the 0 / 180 degree reversal exists, not a four-position zero. Phase-3 review: the arming lasts across step 19's 30-minute rest; a result whose seat has no zero carries `Z?` |
 | E12 | Display rotation measured at the factory, stored, applied to the line | device record `display_rot_rad`; `core/gl_ui.c` turns the aim line by it about the screen centre, in every state that has a line; `GL_CMD_DISPLAY_TEST`, `GL_CMD_DISPLAY_ROT` | **implemented** (builder 2); the measuring fixture is the station's |
 | E13 | No read above 60 C cell temperature; ship mode | refused above 60.0 C on NTC2, allowed again below 57.0 C; "TOO HOT" for 4 s, then sleep; the factory's camera commands obey it too. `GL_CMD_SHIP_MODE` arms; entered 1 s after the marker leaves the cradle: MCU in Shutdown, wake-up on VBUS | **implemented** (builder 1). **NOT MET** by the supply model: ship mode 12.9 uA against 5 uA |
-| E14 | Sleep current no more than 25 uA at 3.8 V | supply model: 20.7 uA at the cell-lead pads with the underside dark | **met by the model only**; 25.9 uA with a lit underside (E27 excludes that case) |
+| E14 | Sleep current no more than 25 uA at 3.8 V | supply model: 20.7 uA at the cell-lead pads with the underside dark, WITHOUT the display (no figure is known for the panel with DISP low) | **met only if the panel draws less than 4.3 uA with DISP low** (phase-3 review; open issue 61); 25.9 uA with a lit underside (E27 excludes that case) |
 | E15 | Read time 4.1 to 4.8 s, camera rail 2.2 to 2.8 s | the timing model; since builder 3 a read with several lines in view has eight groups in all | **agrees by the model** for the nominal read and for reads with several lines ("Read time: the rail-time bound"). Missing: a near stick at the high compute factor (2.99 s by the phase-2 review, not repeated); any measurement |
 | E16 | Baffle-ring tape thickness | - | **unaffected** |
 | E17 | Guaranteed upward field 14.0 degrees; test gate 2 bars at +13.0 and -13.0 degrees | `GL_CMD_CAM_FIELD` measures at +-13.0 degrees (`GL_PROTO_FIELD_ELEV_DEG`). No firmware constant holds the field itself | **implemented** for the gate (builder 2). `mechanical/README.md` step 16 still says 13.5 (open issue 48) |
@@ -1124,11 +1348,11 @@ hardware.
 | E27 | VBUS divider 100 k : 100 k on the pad side; wake pull-up 150 kohm | the simulator's VBUS_SENSE lags the pad by up to 22 ms on removal; 5.2 uA more asleep with a lit underside | **implemented** in the model (builder 1) |
 | E28 | LCD connector pin order mirrored by the fold of the tail | the pin map names signals, not connector pads | **unaffected**; a wrong guess in hardware would mirror all ten pins (PROVISIONAL there) |
 | E29 | Survey finishes at the ball; a line after every placement from the second on | the placement the marker stands on is the ball; `survey_select_()` hands over the placements that are not behind it; "PUT AT BALL" removed | **implemented** (builder 3). **NOT MET in one respect:** a placement farther from the hole than the ball is not used (the frozen estimator has no station for it) |
-| E30 | Recall: a single tap on a marker that has not been lifted shows the last result for 45 s with its age; no camera read | the tap is the IMU's wake-up; "not lifted" from the gyro, the gravity direction and the moving blocks after the wake-up; 24 h limit | **implemented** (builder 3). NOT VERIFIED: that a tap wakes the real IMU, and its start-up time |
+| E30 | Recall: a single tap on a marker that has not been lifted shows the last result for 45 s with its age; no camera read | the tap is the IMU's wake-up; "not lifted" from the gyro, the gravity direction and the moving blocks after the wake-up; 24 h limit | **implemented** (builder 3). Phase-3 review: a marker that has seated itself anew makes a new read (it was recalled up to 30 mrad stale); a hot marker recalls (no camera). NOT VERIFIED: that a tap wakes the real IMU (model: a 60 ms tap in 35 of 40 timings), and its start-up time |
 | E31 | "TOO STEEP" and a dashed line when the fitted slope is close to the critical one | `gl_ui_steep_ratio()` from the patch, the distance and the deceleration the estimator returns; 0.80 from a sweep against the reference | **implemented** (builder 3). The estimator is unchanged. Survey fits were not swept |
-| E32 | Asleep in the cradle 30 s after the host fell silent or with no host; 6 h backstop | UI states `CRADLE_USB` (30 s without host activity) and `CRADLE_SLEEP`; `GL_PROV_CHARGE_MAX_MS` | **implemented** (builder 1). **NOT MET, pinned:** a silent host on a running bus loses the marker until it is re-docked; the backstop does not see a recharge if the charger's status line shows the first cycle only (open issue 39) |
+| E32 | Asleep in the cradle 30 s after the host fell silent or with no host; 6 h backstop | UI states `CRADLE_USB` (30 s without host activity) and `CRADLE_SLEEP`; `GL_PROV_CHARGE_MAX_MS` | **implemented** (builder 1). **NOT MET, pinned:** a silent host on a running bus loses the marker until it is re-docked. Phase-3 review: the backstop counts docked, un-inhibited time whatever the status line says (it did not see a recharge on a charger that shows the first cycle only); what that costs a marker left in its cradle is open issue 60 |
 | E33 | Three display states; the solve limited to 300,000 integration steps | `gl_ui_classify()` / `gl_ui_view_show()`; `GL_APP_SOLVE_MAX_STEPS` | **implemented** (builder 3; the step budget since the phase-2 review). NOT MET against the reference at 1e-9 m in 1 of 340 vectors (pinned) |
-| E34 | Boot stub; SWD recovery; USB ids a release gate | `boot/`: image header, `gl_boot_decide()`, `tools/stamp_image.py`; `app/gl_usb_ids.h` placeholders, `make RELEASE=1` / `make release-gate` fail | **implemented as far as a host can take it** (builder 2): the logic is tested, the STM32 part links and has NEVER RUN; six release gates in "Boot stub" |
+| E34 | Boot stub; SWD recovery; USB ids a release gate | `boot/`: image header, `gl_boot_decide()`, `tools/stamp_image.py`; `app/gl_usb_ids.h` placeholders, `make RELEASE=1` / `make release-gate` fail | **implemented as far as a host can take it** (builder 2): the logic is tested, the STM32 part links and has NEVER RUN; release gates in "Boot stub". Phase-3 review: a fault inside the stub reaches the decision; ship-mode resets are not counted. **NOT MET for a user without a PC:** once in ST's loader only a DFU host gets the unit out (open issue 59) |
 
 ## Architecture
 
@@ -1274,7 +1498,7 @@ make pins     # regenerate hal/stm32u5/gl_pins.h from ../electrical/gl1_main/pin
               #   `make test`) follows it.  Nothing in the firmware names a pad by hand
 make pins-check
               # fails if gl_pins.h is stale against pinmap.json, and if the generator has
-              #   stopped refusing the 31 defects its self-test seeds into a copy of the pin
+              #   stopped refusing the 36 defects its self-test seeds into a copy of the pin
               #   map.  Part of config-check, and with it of every test and cross build
 make config   # `make pins`, then regenerate core/gl_config.h, core/gl_font_data.c and
               #   tests/solver/gl_solver_vectors.c
@@ -1304,8 +1528,8 @@ make V=1 ...  # show full compiler command lines
 |---|---|---|---|---|---|
 | `tests/test_app_handover.c` | 2 | 522 | 0 | 522 | 0 |
 | `tests/test_basics.c` | 11 | 7135 | 0 | 7135 | 0 |
-| `tests/test_board.c` | 7 | 303 | 0 | 303 | 0 |
-| `tests/test_boot.c` | 3 | 959 | 0 | 959 | 0 |
+| `tests/test_board.c` | 8 | 344 | 0 | 344 | 0 |
+| `tests/test_boot.c` | 5 | 1299 | 0 | 1299 | 0 |
 | `tests/test_cal.c` | 5 | 130 | 0 | 130 | 0 |
 | `tests/test_cam.c` | 5 | 789 | 0 | 789 | 0 |
 | `tests/test_drv_cam.c` | 11 | 375 | 0 | 375 | 0 |
@@ -1313,29 +1537,29 @@ make V=1 ...  # show full compiler command lines
 | `tests/test_drv_grain.c` | 7 | 1188 | 0 | 1188 | 0 |
 | `tests/test_drv_imu.c` | 10 | 166 | 0 | 166 | 0 |
 | `tests/test_drv_lcd.c` | 10 | 115 | 0 | 115 | 0 |
-| `tests/test_drv_power.c` | 16 | 39319 | 0 | 39319 | 0 |
-| `tests/test_e2e.c` | 14 | 3103 | 0 | 3103 | 0 |
-| `tests/test_e2e_faults.c` | 18 | 1992 | 0 | 1992 | 0 |
-| `tests/test_e2e_power.c` | 11 | 412 | 0 | 412 | 0 |
-| `tests/test_e2e_putt.c` | 10 | 1927 | 0 | 1927 | 0 |
-| `tests/test_e2e_recall.c` | 5 | 344 | 0 | 344 | 0 |
+| `tests/test_drv_power.c` | 18 | 46568 | 0 | 46568 | 0 |
+| `tests/test_e2e.c` | 16 | 3133 | 0 | 3133 | 0 |
+| `tests/test_e2e_faults.c` | 19 | 2079 | 0 | 2079 | 0 |
+| `tests/test_e2e_power.c` | 17 | 6898 | 0 | 6898 | 0 |
+| `tests/test_e2e_putt.c` | 13 | 2005 | 0 | 2005 | 0 |
+| `tests/test_e2e_recall.c` | 8 | 663 | 0 | 663 | 0 |
 | `tests/test_e2e_review.c` | 14 | 366 | 0 | 366 | 0 |
-| `tests/test_factory.c` | 13 | 1453 | 0 | 1453 | 0 |
+| `tests/test_factory.c` | 18 | 32934 | 0 | 32934 | 0 |
 | `tests/test_fieldlog.c` | 4 | 181 | 0 | 181 | 0 |
 | `tests/test_gesture.c` | 4 | 82 | 0 | 82 | 0 |
 | `tests/test_gfx.c` | 13 | 50697 | 0 | 50697 | 0 |
 | `tests/test_grain.c` | 8 | 946 | 0 | 946 | 0 |
 | `tests/test_log.c` | 15 | 15716 | 0 | 15716 | 0 |
-| `tests/test_pins.c` | 12 | 4673 | 0 | 4673 | 0 |
-| `tests/test_proto.c` | 14 | 813 | 0 | 813 | 0 |
+| `tests/test_pins.c` | 13 | 4708 | 0 | 4708 | 0 |
+| `tests/test_proto.c` | 14 | 819 | 0 | 819 | 0 |
 | `tests/test_range.c` | 12 | 287 | 0 | 287 | 0 |
 | `tests/test_read.c` | 9 | 4858 | 0 | 2021 | 0 |
 | `tests/test_solver.c` | 17 | 2860 | 0 | 2860 | 0 |
 | `tests/test_tilt.c` | 10 | 3549 | 0 | 3549 | 0 |
-| `tests/test_ui.c` | 30 | 1541894 | 0 | 1541894 | 0 |
+| `tests/test_ui.c` | 31 | 1541924 | 0 | 1541924 | 0 |
 | `tests/test_vision.c` | 14 | 2080 | 0 | 2080 | 0 |
 | `tests/test_vision_equiv.c` | 3 | 12 | 0 | 12 | 0 |
-| **33 executables** | **344** | **1689353** | **0** | **1686516** | **0** |
+| **33 executables** | **371** | **1735535** | **0** | **1732698** | **0** |
 
 `make test`: "33 test executables, 0 failed". `make asan`: "33 test executables, 0 failed" (fewer checks: `test_read.c` runs 3 reads per scene there instead of 8).
 <!-- readme-check:end test-summary -->
@@ -1378,8 +1602,8 @@ round, add and round - as written -, is in the block below.
 brings into an image). `tools/cross_link_check.py` links the cross-compiled objects against
 the installed toolchain's libm and libc - a probe, not an image: no start-up code, no linker
 script, every `gl_hal_*` symbol unresolved, nothing run -, builds the graph of direct calls
-and takes EVERY firmware function as a starting point. The final build: probe text 130412
-bytes, 568 functions of which 483 are the firmware's; the firmware reaches 45 library
+and takes EVERY firmware function as a starting point. The final build: probe text 132048
+bytes, 569 functions of which 484 are the firmware's; the firmware reaches 45 library
 functions by direct calls (single-precision libm and its kernels, `memcpy` and friends,
 `__aeabi_ldivmod`, `__errno`); **17 double-precision helpers are PRESENT in the probe and
 none is reachable from firmware code** (newlib's `erff` shares an object with `erfcf`, and
@@ -1395,8 +1619,8 @@ The checks of `make cross`, as the final build printed them:
 <!-- readme-check:begin cross-checks -->
 ```
 OK: no double-precision helpers, no double libm calls, no heap, no stdio
-OK: no fused instruction; 354 vmla / vmls (multiply, round, add, round - as written)
-probe linked (no start-up code, no HAL, never run): text 130412 bytes; 568 functions, 483 of them the firmware's
+OK: no fused instruction; 358 vmla / vmls (multiply, round, add, round - as written)
+probe linked (no start-up code, no HAL, never run): text 132048 bytes; 569 functions, 484 of them the firmware's
 library functions the firmware's code can reach by direct calls (45):
 PRESENT in the image but NOT reachable from firmware code: 17 forbidden functions the linker kept (dead code):
 OK: nothing double-precision, no heap and no stdio is reachable from firmware code in the linked probe
@@ -1536,6 +1760,15 @@ A model of the board as seen from the MCU pins, with **simulated time**: time pa
 delays, in sleep, for the duration of bus transfers and conversions, and - from builder 3 -
 **for computation**. Every pin change, bus transfer, register access and sleep is recorded in
 a trace (up to 262144 records, with the SPI bytes) that tests inspect.
+
+**Added by the phase-3 review:** the board's IMU is mounted as the netlist's pin map says
+(generated `gl_pins.h`), not at rotation 0; an MCU reset stops a running camera capture (the
+capture model stayed busy and reported a false violation); every `gl_sim_mcu_reset()` runs
+the boot stub's own decision on a model of its backup register and records what the stub
+would do (`gl_sim_stats()->boot_*`, `gl_sim_boot_attempts_reg()`); the flash can be made to
+accept page programs without programming (`gl_sim_flash_fail_programs()`: for "a refused
+store changes nothing"); the supply model has a term for the memory LCD with DISP low
+(`gl_sim_set_lcd_off_ua()`, default 0 = not known).
 
 **Compute-time model.** The firmware reports the end of each heavy stage to the HAL with what
 it did (`gl_hal_trace(point, work)`: the band with its pixel count; a strip with which
@@ -1747,7 +1980,7 @@ package v1.4.1, CMSIS 5.9.0):
 <!-- readme-check:begin cross-hal -->
 ```
    text    data     bss  object
-   7662       5    1059  build/cross-hal/gl_hal_stm32u5.o
+   7682       5    1059  build/cross-hal/gl_hal_stm32u5.o
 OK: no double-precision helpers, no double libm calls, no heap, no stdio
 ```
 <!-- readme-check:end cross-hal -->
@@ -1789,7 +2022,7 @@ downloaded):
    `SystemCoreClock`) from the CMSIS device package.
 3. **A linker script** for the STM32U585RIT6: 2 MB flash at 0x08000000; SRAM1 192 kB at
    0x20000000, SRAM2 64 kB at 0x20030000, SRAM3 512 kB at 0x20040000 (sizes and addresses as
-   the device header states them). The firmware's static data is 0.33 MB (`gl_app_t` is 322984
+   the device header states them). The firmware's static data is 0.33 MB (`gl_app_t` is 323016
    bytes; the generated table is under "Memory"): it does NOT fit SRAM1 + SRAM2, so `.bss` must reach into SRAM3 (the three
    regions are contiguous). That SRAM3 is clocked after reset and retained in Stop 2 without
    further action is how the part is remembered - **not verified**, and the backend touches
@@ -2031,7 +2264,9 @@ downloaded):
   itself that stalled (the stop pulls the charger's status line, that edge starts a fresh
   measurement, and the charge goes on from it). `CHG_INHIBIT` is released when VBUS goes,
   before every sleep without VBUS and before ship mode. The cradle screens say `TOO COLD`,
-  `TOO HOT`, `TEMP SENSOR`, `TIME LIMIT`, `CHARGE OFF` (by command), `NOT CHARGING` or
+  `TOO HOT`, `TEMP SENSOR`, `TIME LIMIT` (only for a cell that six hours did not bring up:
+  with the cell seen above the restart voltage the backstop's stop shows as `FULL`),
+  `CHARGE OFF` (by command; it ends when the unit is locked again), `NOT CHARGING` or
   `CHARGER WAITS` (the charger's own window holds it) when no charge runs, and `FULL` when
   it has ended. The jump to the ROM bootloader is refused unless VBUS is present and the gate
   is satisfied at that moment; before the jump the IMU is powered down (its two interrupt
@@ -2068,12 +2303,12 @@ this file that occur in no log.
 ```
     states: SLEEP@0.00s WAKE@1.02s WAIT_STILL@1.82s READ_TILT@2.37s CAPTURE@3.45s SHOW_RESULT@5.99s
     marker at rest at 1.60 s; result on the screen at 6.05 s (4.45 s after coming to rest); camera part 2.60 s
-    camera rail: on once for 2424 ms; 87 SCCB writes, 33 captures; independent replay of 19266 trace records: 0 pin-rule violations, 0 bus accesses with the rail off
+    camera rail: on once for 2424 ms; 87 SCCB writes, 33 captures; independent replay of 19267 trace records: 0 pin-rule violations, 0 bus accesses with the rail off
     tilt: slope (1.202, -1.997) %, true (1.200, -2.000) %
     stereo: disparity 2.2036 px (true 2.1985, claimed sigma 0.0532) with the stick swaying +-0.3 px at 1.5 Hz and a 9 ms sensor phase offset
     range 5.972 m +- 0.136 (true 5.984; stereo 5.970, by angular height 5.987), bearing 48.48 mrad (true from the left camera 48.46)
     estimate: aim -78.90 mrad from the line to the hole (-4.37 cups), launch 2.277 m/s, distance 5.970 m, hole -122.3 mm above the ball, confidence 0.16; 6 trial rolls, 1267 RK4 steps, 2 fit iterations
-    LCD: 6 frames, 258 lines written in 5027 ms of display-on time
+    LCD: 6 frames, 259 lines written in 5028 ms of display-on time
     result shown: MCU in Stop mode 99.5 % of the time (IMU at 240 Hz)
   [ ok ] test_complete_quick_read
     Quick Read, flagstick at 6 m (60.4 million instructions by the cost table); clock 160 MHz during the read unless stated:
@@ -2117,6 +2352,9 @@ this file that occur in no log.
     NOT MET: the base of the stick at the ball (3 m) was classed AT THE HORIZON in this run (it ends 1.24 rows below the horizon, the margin is 1.5: the class flips with the frame noise)
     result at the second placement (3 m; the first, 6 m, lies behind it and is not used): patch a -0.0151 b 0.0037 c -0.00038 d 0.00000, aim 21.7 mrad, status 0, aim source 0
   [ ok ] test_survey_second_drop
+    stick base classed VISIBLE at the 3 m placement and AT THE HORIZON at the ball (6 m) in this run
+    Survey of two real reads in the E29 order (3 m, then the ball at 6 m): stations 0.00 and 2.99 m, patch a -0.0226 b -0.0098, curvature c 0.00082 /m (the tilts imply 0.0008), twist d 0.00409 /m
+  [ ok ] test_survey_two_placements_fit_twist_and_curvature
     states: SLEEP@0.00s WAKE@1.02s WAIT_STILL@1.82s CAL_ZERO@1.83s WAIT_STILL@8.62s
     zeroing on a table sloped (0.6, -1.1) %, turn of -171 deg: stored bias (3.487, -2.519) mrad, true (3.500, -2.500)
   [ ok ] test_zeroing_on_a_table_top
@@ -2124,10 +2362,11 @@ this file that occur in no log.
   [ ok ] test_cradle_usb_charging_and_dfu
     states: SLEEP@0.00s WAKE@1.02s WAIT_STILL@1.82s READ_TILT@2.37s ERROR@3.45s
   [ ok ] test_missing_devices_are_reported_not_fatal
+  [ ok ] test_critical_cell_found_after_the_wake_up_stops_the_cameras
     states: SLEEP@0.00s WAKE@1.02s LOW_BATT@1.03s SLEEP@5.04s
   [ ok ] test_low_and_critical_battery
   [ ok ] test_spurious_wake_right_after_sleep_is_ignored
-tests/test_e2e.c: 14 tests, 3103 checks, 0 failed checks -> PASS
+tests/test_e2e.c: 16 tests, 3133 checks, 0 failed checks -> PASS
 ```
 <!-- readme-check:end out-e2e -->
 
@@ -2163,6 +2402,8 @@ tests/test_e2e.c: 14 tests, 3103 checks, 0 failed checks -> PASS
   [ ok ] test_imu_reset_while_asleep_is_repaired
     IMU dead while asleep: 12 failed recoveries, then the watchdog is left to expire: simulator reports 2 watchdog expiry (a reset on the target)
   [ ok ] test_dead_imu_ends_in_a_watchdog_reset
+    the application confirms its start once, 10000 ms after gl_app_init(); 20 watchdog resets after confirmed runs: 20 starts; reset before the confirmation: 3 starts, then the stub's verdict is the USB loader
+  [ ok ] test_application_confirms_its_start_to_the_boot_stub
     20 data-ready latches dropped during a read: longest time without a sample 19 ms, 20 samples fetched by polling, state SHOW_RESULT
   [ ok ] test_a_lost_data_ready_interrupt_does_not_stall
     states: SLEEP@0.00s WAKE@1.02s WAIT_STILL@1.82s READ_TILT@2.37s CAPTURE@3.45s SHOW_RESULT@5.99s PRECISION_WAIT_SPIN@6.05s READ_TILT@8.59s PRECISION_WAIT_SPIN@9.00s SHOW_RESULT@29.00s
@@ -2188,13 +2429,13 @@ tests/test_e2e.c: 14 tests, 3103 checks, 0 failed checks -> PASS
     free        0.0071                  0.0812                     1.50 s       1.56 s
     cost model  0.0041                  0.0814                     2.45 s       2.42 s
      30 ms      0.0054                  -                          2.80 s       2.72 s
-     60 ms      0.0047                  -                          4.09 s       3.89 s
+     60 ms      0.0047                  -                          4.08 s       3.89 s
     100 ms      0.0062                  0.0221                     5.51 s       5.16 s
     200 ms      0.0106                  -                          9.51 s       8.76 s
     300 ms      0.0062                  -                         13.51 s       12.36 s
     model, turn 0.0387                  0.0671                     2.45 s       2.42 s
   [ ok ] test_lrrl_timing_with_vision_run_time
-tests/test_e2e_faults.c: 18 tests, 1992 checks, 0 failed checks -> PASS
+tests/test_e2e_faults.c: 19 tests, 2079 checks, 0 failed checks -> PASS
 ```
 <!-- readme-check:end out-e2e-faults -->
 
@@ -2209,6 +2450,10 @@ tests/test_e2e_faults.c: 18 tests, 1992 checks, 0 failed checks -> PASS
     (a) cell at 63 C when the tilt read ended, last reading 22 C from the wake-up 10.9 s before: measured again at the camera start (1 conversion, NTC_BIAS driven 0.68 ms), read refused
     (b) the same jump during the tilt read of a marker put straight down: NOT seen, the read ran on the wake-up reading of 22.0 C (the gate accepts a reading up to 5 s old)
   [ ok ] test_read_gate_measures_before_the_cameras
+    60 scenarios, 47 placements at 61 C or more: the camera rail came on in 0; 178 at 55 C or less: 178 completed reads; 15 at 58 C (either); 74 watchdog resets between placements; 0 simulator rule violations
+  [ ok ] test_read_gate_under_random_temperatures
+    watchdog reset at each of 200 instants 25 ms apart (100 in CAPTURE, 97 with the camera rail on): rail on right after the reset in 0, simulator rule violations 0, the next placement read in 200 of 200
+  [ ok ] test_reset_at_every_25_ms_of_a_read
     ship mode, supply model at 3.9 V: 12.93 uA at the cell = MCU in Shutdown 0.20 + IMU powered down 3.0 + flash 0.1 + the board's always-on parts 9.62 (regulator 1.6, battery divider 1.95, protection circuit 3.0, charger leakage 0.075, camera regulator off 0.2, USB regulator's enable pin 2.8)
     NOT MET: the requirement is 5 uA; the model gives 12.9 uA, of which the firmware controls 3.3 (MCU, IMU, flash).  30 % of the cell (12.9 mAh) lasts 42 days there, not 3 months (every figure PROVISIONAL, nothing measured)
   [ ok ] test_ship_mode_entry_and_wake_on_vbus
@@ -2219,11 +2464,18 @@ tests/test_e2e_faults.c: 18 tests, 1992 checks, 0 failed checks -> PASS
   [ ok ] test_cradle_sleep_on_a_wall_charger_lets_the_charge_end
     a host that keeps talking (the marker awake, as it always was before phase 3): mean draw 3.35 mA; after 3 h the cell is at 100.0 % and the charger still delivers 3.34 mA (threshold 1.98 mA): no termination, the symbol says CHARGING
     ... stopped by the firmware 6.000 h after docking (CHG_INHIBIT high, reason TIME LIMIT)
-    ... and released 2.62 h later, when the awake marker had run the cell down to 4031 mV (80.0 %): charging again
+    ... and released 2.62 h later, when the awake marker had run the cell down to 4031 mV (80.1 %): charging again
   [ ok ] test_awake_in_the_cradle_the_charge_never_ends_until_the_backstop
-    VARIANT of the model (CHG low in the first cycle only): first cycle ended asleep in the cradle; awake under a talking host the recharge started 1.17 h later at 4136 mV with CHG released - the firmware says FULL (status DONE) while 19.8 mA flow
-    ... NOT MET for this variant: 7.0 h later the charger still delivers 5.21 mA (cell at 100.0 %), the 6 h backstop has counted 0 ms: it only counts while CHG is low
+    VARIANT of the model (CHG low in the first cycle only): first cycle ended asleep in the cradle; awake under a talking host the recharge started 1.38 h after docking at 4136 mV with CHG released - the firmware says FULL (status DONE) while 19.8 mA flow
+    ... MET for this variant (was NOT MET: "the 6 h backstop has counted 0 ms"): the recharge ran 4.62 h with CHG released and without terminating, and the firmware stopped it 6.000 h after docking (CHG_INHIBIT high, reason TIME LIMIT, charger DISABLED; the count does not look at CHG)
   [ ok ] test_charger_whose_status_shows_the_first_cycle_only
+  [ ok ] test_first_cycle_only_charger_and_the_temperature_gate
+    a charger that cannot charge (input low), cell at 2992 mV: the firmware stops after 6.000 h and shows TIME LIMIT; three hours later still stopped
+  [ ok ] test_backstop_on_a_cell_that_does_not_come_up
+    SET_CHARGE 1, then the host gone, docked 24 h: ui CRADLE_SLEEP, unlocked 0, forced 0, cell 49.9 % -> 94.8 % (before the fix: forced 1, charger DISABLED, 50.0 % -> 44.5 %)
+  [ ok ] test_forced_charge_stop_ends_with_the_session
+    30 days asleep in the cradle on a wall charger: lowest state of charge 79.3 % (lowest cell reading 4000 mV; restart voltage 4000 mV), the charge restarted 4 times, the screen showed FULL or CHARGING in 720 of 720 hourly looks
+  [ ok ] test_left_in_the_cradle_for_a_month
     host suspended: asleep in the cradle with USB in standby, 179.4 uA (the MCU in Stop 1 there, GL_PROV_USB_WAKE_FROM_STOP2 = 0: 70 uA + 20 uA for the USB core, both from memory / guessed); threshold 1982 uA
     host resumed the bus: back in the cradle state 21 ms later
     host silent on a running bus: detached and asleep after 30 s; a command sent then is NOT answered (the marker is off the bus) - NOT MET: reachable again only by re-docking
@@ -2236,10 +2488,11 @@ tests/test_e2e_faults.c: 18 tests, 1992 checks, 0 failed checks -> PASS
       camera regulator (off) 0.2, USB regulator's enable pin 2.8 (E26, NOT CONFIRMED), housekeeping 0.01;
       both thermistors 0 (NTC1 is biased by the charger from VBUS only; NTC_BIAS analog but for 3.42 ms in the hour), wake pull-up 150 kohm 0 in the dark
     underside LIT: 28.88 uA at the cell (+5.20 through the 150 kohm wake pull-up)
-    E14 limit 25 uA, measured through the cell-lead pads (the protection circuit is not in that path): model 20.68 uA dark -> MET (model); 25.88 uA lit -> NOT MET (E27: the limit is for a dark underside).  Every figure PROVISIONAL, nothing measured
+    E14 limit 25 uA, measured through the cell-lead pads (the protection circuit is not in that path): model 20.68 uA dark WITHOUT THE DISPLAY -> met only if the panel draws less than the margin below; 25.88 uA lit -> NOT MET (E27: the limit is for a dark underside).  Every figure PROVISIONAL and typical, nothing measured
+    E14 is MET ONLY IF the memory LCD draws less than 4.32 uA with DISP low (it stays on the always-on 2.8 V rail; NO FIGURE IS KNOWN, the model counts 0.0): with 4.22 uA the pads carry 24.90 uA, with 4.42 uA 25.10 uA.  NEEDS A DATA SHEET; typical values only, no maximum and no temperature case
     standby from a full cell (43 mAh) at 23.7 uA: 76 days to empty; from 30 %: 23 days (ship mode exists for that)
   [ ok ] test_sleep_current_dark_and_lit_against_25_microamps
-tests/test_e2e_power.c: 11 tests, 412 checks, 0 failed checks -> PASS
+tests/test_e2e_power.c: 17 tests, 6898 checks, 0 failed checks -> PASS
 ```
 <!-- readme-check:end out-e2e-power -->
 
@@ -2252,7 +2505,7 @@ tests/test_e2e_power.c: 11 tests, 412 checks, 0 failed checks -> PASS
     second tap-tap on the "2X" result: state SURVEY_NEXT_DROP, drops stored 1
     after the 2nd tap-tap and the turn back  SHOW_RESULT        [6.0M | PLAYS 6.0M? | - | 2.0% | <6.1 CUP | 1/5 D2] phi +109.23 mrad, aim +139.47 mrad, slope used (-0.0200, -0.0007)
   [ ok ] test_double_tap_after_precision_starts_a_survey
-    Precision result on a marker turned by -179.9 degrees: 0 of 16384 panel pixels differ from the upright picture turned round (1000 black pixels in it)
+    Precision result on a marker turned by -179.9 degrees: 0 of 16384 panel pixels differ from the upright picture turned round (1024 black pixels in it)
   [ ok ] test_precision_result_is_upright_for_the_golfer
     no flagstick seen, nothing dialled: at 7.0 s the UI is in SETTINGS_DIAL (distance prompt 1)
     picked up at 8.0 s, down again at 9.5 s: at 14.0 s the UI is in SHOW_RESULT, camera rail cycles 2
@@ -2332,12 +2585,12 @@ corrected where they differed):
 ```
 states: SLEEP@0.00s WAKE@1.02s WAIT_STILL@1.82s READ_TILT@2.37s CAPTURE@3.45s SHOW_RESULT@5.99s
 marker at rest at 1.60 s; result on the screen at 6.05 s (4.45 s after coming to rest); camera part 2.60 s
-camera rail: on once for 2424 ms; 87 SCCB writes, 33 captures; independent replay of 19266 trace records: 0 pin-rule violations, 0 bus accesses with the rail off
+camera rail: on once for 2424 ms; 87 SCCB writes, 33 captures; independent replay of 19267 trace records: 0 pin-rule violations, 0 bus accesses with the rail off
 tilt: slope (1.202, -1.997) %, true (1.200, -2.000) %
 stereo: disparity 2.2036 px (true 2.1985, claimed sigma 0.0532) with the stick swaying +-0.3 px at 1.5 Hz and a 9 ms sensor phase offset
 range 5.972 m +- 0.136 (true 5.984; stereo 5.970, by angular height 5.987), bearing 48.48 mrad (true from the left camera 48.46)
 estimate: aim -78.90 mrad from the line to the hole (-4.37 cups), launch 2.277 m/s, distance 5.970 m, hole -122.3 mm above the ball, confidence 0.16; 6 trial rolls, 1267 RK4 steps, 2 fit iterations
-LCD: 6 frames, 258 lines written in 5027 ms of display-on time
+LCD: 6 frames, 259 lines written in 5028 ms of display-on time
 result shown: MCU in Stop mode 99.5 % of the time (IMU at 240 Hz)
 Quick Read, flagstick at 6 m (60.4 million instructions by the cost table); clock 160 MHz during the read unless stated:
 computation                          |   rest->  capture     rail | compute   band strips  solve render |   charge  cameras      MCU |    cycle
@@ -2560,7 +2813,7 @@ NORMAL result or the word `APPROX`, then the Survey or Precision mark):
 scene                                                        |   ref aim  ref true |  firmware |     drawn |  dr-ref | shown (distance, plays-like, break, slope, note, boxes)
                                                              |    [mrad]    [mrad] |    [mrad] |    [mrad] |  [mrad] |
 Quick 3 m, rises LEFT 2 %, level                             |   +129.22   +127.58 |   +129.28 |   +129.08 |   -0.13 | 9.8FT, PLAYS 9.7FT, <2.7 CUP, 2.0%, 3/5
-Quick 3 m, rises RIGHT 2 %, uphill 1.5 %                     |   -103.47   -102.27 |   -103.46 |   -102.97 |   +0.50 | 9.8FT, PLAYS 11.6FT, 2.3 CUP>, 2.5%, 3/5
+Quick 3 m, rises RIGHT 2 %, uphill 1.5 %                     |   -103.47   -102.27 |   -103.46 |   -102.65 |   +0.82 | 9.8FT, PLAYS 11.6FT, 2.3 CUP>, 2.5%, 3/5
 Quick 6 m, rises RIGHT 1.2 %, downhill 2 %                   |    -28.65    -28.71 |    -28.66 |    -27.97 |   +0.68 | 19.6FT, PLAYS 14.5FT?, 4.4 CUP>, 2.3%, 1/5
 Quick 6 m, rises LEFT 1 %, uphill 1.5 %                      |     +8.43     +8.56 |     +8.43 |     +8.37 |   -0.06 | 19.6FT, PLAYS 23.3FT?, <2.7 CUP, 1.8%, 1/5
 Quick 9 m, rises LEFT 0.8 %, downhill 1 %                    |    +72.74    +72.80 |    +72.74 |    +72.95 |   +0.20 | 29.5FT, PLAYS 25.8FT?, <4.4 CUP, 1.3%, 0/5
@@ -2569,7 +2822,7 @@ Quick 12 m, rises RIGHT 0.6 %, uphill 1 %                    |    -59.40    -59.
 Quick 4.5 m, level green                                     |    +10.02    +10.10 |    +10.02 |     +9.52 |   -0.51 | 14.7FT, PLAYS 14.7FT?, STRAIGHT, 0.0%, 1/5
 Precision 6 m, rises LEFT 1.2 %, uphill 1.6 %, spun 176 deg  |   +103.02   +101.00 |   +103.02 |   +102.98 |   -0.04 | 19.6FT, PLAYS 23.0FT?, <2.9 CUP, 2.0%, 1/5, 2X
 Survey 2: 3 m short of the hole, then the ball at 6 m        |    +54.13    +54.03 |    +54.12 |    +53.90 |   -0.23 | 19.6FT, PLAYS 14.6FT?, <1.3 CUP, 2.2%, 1/5, D2
-Survey, old order: 6 m, then 3 m (the putt from 3 m, alone)  |     +1.41     +1.25 |     +1.42 |     +2.33 |   +0.92 | 9.8FT, PLAYS 7.8FT?, <0.6 CUP, 1.6%, 2/5, D2
+Survey, old order: 6 m, then 3 m (the putt from 3 m, alone)  |     +1.41     +1.25 |     +1.42 |     +2.33 |   +0.92 | 9.8FT, PLAYS 7.8FT?, <0.6 CUP, 1.6%, 2/5, D2/1
 Survey 3: 6 m, 3 m, 6 m again                                |    +39.73    +39.64 |    +39.74 |    +39.49 |   -0.24 | 19.6FT, PLAYS 14.4FT?, <0.5 CUP, 2.3%, 1/5, D3
 Survey, E29 order, placement 1 (2 m): a Quick Read           |    +62.04         - |    +62.05 |    +61.07 |   -0.98 | 6.5FT, PLAYS 8.1FT, <0.2 CUP, 2.0%, 4/5
 Survey, E29 order, placement 2 (6 m)                         |    +20.89    +20.90 |    +20.89 |    +20.89 |   +0.00 | 19.7FT, PLAYS 23.6FT?, <1.2 CUP, 1.8%, 1/5, D2
@@ -2662,7 +2915,7 @@ Why the firmware stops a charge (`gl_chg_reason_t`), in the order in which a rea
 | `TEMP_UNKNOWN`, `NTC_FAULT`, `IMPLAUSIBLE` | NTC2 not measured for 12 s; open, shorted or stuck; contradicted by every die sensor that is alive (more than 10 K), or no die sensor to check it against | when a fresh, plausible reading is inside the window |
 | `TOO_COLD`, `TOO_HOT` | NTC2 reads below 1.5 C or above 43.5 C (0..45 C narrowed by the 1.5 K guard band) | above 3.5 C / below 41.5 C (2 K of hysteresis) |
 | `FORCED` | `GL_CMD_SET_CHARGE` 1 (factory: assembly step 13 proves NTC1 and the MOSFET with it) | the command with 0, VBUS removed, a reset |
-| `TIME_LIMIT` | E32: 6 h of continuous charging (CHG low at every gate call) | VBUS removed; or the cell, having been at or above 4.00 V with the limit in force, has fallen below it. A cell that is still under 4.00 V after 6 h of charging gets no second 6 h: stopped until the marker is lifted out |
+| `TIME_LIMIT` | E32: 6 h in which the firmware has not held the charger stopped (VBUS present, `CHG_INHIBIT` released), WHATEVER the status line said in them (since the phase-3 review; before: 6 h of CHG low at every gate call, which one released sample restarted) | VBUS removed; or the cell, having been at or above 4.00 V with the limit in force, has fallen below it. A cell that is still under 4.00 V after 6 h of charging gets no second 6 h: stopped until the marker is lifted out |
 
 The firmware's window (0..45 C) is NARROWER than the charger's own (0..60 C, with 4.06 V
 above 45 C): with firmware running a charge stops at 43.5 C; without it the charger's window
@@ -2716,7 +2969,7 @@ falls below 1.98 mA, and the board hangs on the same node as the cell. MODEL, ce
 |---|---|---|
 | MCU held in reset | 17.7 uA (+28 uA of CHG's pull-up while charging) | terminates after 0.32 h at 99.7 % |
 | Asleep in the cradle (E32), wall charger | 98.6 uA | terminates 0.31 h after docking; the status edge wakes the marker, symbol "FULL" |
-| Awake in the cradle, a host that keeps talking - **and every docked marker before phase 3** | 3.35 mA | **never terminates**: after 3 h the cell is at 100.0 % and the charger still delivers 3.34 mA. The firmware's backstop stops it 6.000 h after docking; 2.62 h later the awake marker has run the cell down to 4.0 V (80 %) and the charge starts again |
+| Awake in the cradle, a host that keeps talking - **and every docked marker before phase 3** | 3.35 mA | **never terminates**: after 3 h the cell is at 100.0 % and the charger still delivers 3.34 mA. The firmware's backstop stops it 6.000 h after docking; 2.62 h later the awake marker has run the cell down to 4.0 V (80 %) and the charge starts again. On the screen: FULL (the cell was seen above the restart voltage; "TIME LIMIT" is shown for a cell that six hours did not bring up) |
 | ROM loader | 4.0 mA (a guess) | **never terminates**; after 10 h the charger's own safety timer ends it - IF it has one (from memory of the family, PROVISIONAL). NOT MET in hardware alone |
 
 **If the status line shows the first cycle only** (`test_charger_whose_status_shows_the_first_cycle_only`).
@@ -2725,12 +2978,49 @@ starts a recharge after a termination. That is from memory and NOT CONFIRMED; th
 signal the first charge cycle only. The simulator's model has that reading as a variant
 (`gl_sim_charger_stat_first_cycle_only()`), and on it: the first cycle ends asleep in the
 cradle as before ("FULL"); awake under a talking host the cell runs down to the recharge
-threshold in 1.17 h and the recharge runs with CHG released - **the firmware says FULL
-(status `DONE`) while 19.8 mA flow**, and nothing is called a fault; **NOT MET, pinned: 7 h
-later the charger is still on and the 6 h backstop has counted 0 ms**, because it counts the
-time CHG is low. The first cycle, and every cycle after a stop of the firmware's own (a stop
-through TS restarts the charger's cycle in the model), are counted; the temperature gate works
-whatever the status line shows. Open issue 39.
+threshold and the recharge runs with CHG released - **the firmware says FULL (status `DONE`)
+while 19.8 mA flow**, and nothing is called a fault. Builder 1 pinned the rest as NOT MET
+("7.0 h later ... the 6 h backstop has counted 0 ms: it only counts while CHG is low").
+**Since the phase-3 review the backstop does not look at CHG** (NETLIST_NOTES section 7: the
+firmware "must not rely on CHG_STAT going high"): it counts the time in which the firmware has
+not held the charger stopped, and the same scenario now ends "MET for this variant: the
+recharge ran 4.62 h with CHG released and without terminating, and the firmware stopped it
+6.000 h after docking". `test_backstop_does_not_depend_on_the_status_line` is the reviewer's
+own case - the status output read as "not charging" for one 5 s sample every 5 h, 48 h long:
+"time limit NEVER reached" before, stopped after 6.0000 h now - and the case of a status
+output that is never low. The temperature gate works whatever the status line shows. Open
+issue 39 is reduced to what the screen says during an invisible recharge.
+
+**What the backstop costs a marker that is simply left in its cradle - OWNER DECISION, open
+issue 60** (`test_left_in_the_cradle_for_a_month`). Counting docked time whatever the status
+line says, the backstop also comes round on a marker whose charge ended by itself hours ago.
+After six docked hours the firmware holds the charger off, the sleeping marker runs from its
+cell (98.6 uA plus 28 uA through the gate resistor of the stop), and the charge starts again
+when the cell has fallen below `GL_PROV_CHARGE_RESTART_MV` (4.00 V). Over 30 docked days on
+the model: **the lowest state of charge a user can find is 79.3 %**, the charge restarted 4
+times, and the screen showed FULL or CHARGING at every one of 720 hourly looks. With the
+restart voltage at 4.10 V (the charger's own recharge threshold) a scratch build of this
+session gave 90.4 % and one restart; the constant was left at builder 1's value because a
+test of theirs requires it to lie under the "done" voltage (4.04 V).
+
+**A charge held stopped by command ends with its session** (`test_forced_charge_stop_ends_
+with_the_session`; the reviewer's case): `SET_CHARGE 1`, then the host gone, docked 24 h -
+before: "forced 1, CHG_INHIBIT high, charger DISABLED, cell 50.0 % -> 44.5 %"; now the stop is
+released when the unit locks (cradle sleep, USB gone, `UNLOCK "LOCK"`, a wrong word, a reset)
+and the cell is at 94.8 % after the 24 h (charged, then the backstop above).
+
+**The read gate believes NTC2 as the charge gate does** (`test_read_gate_does_not_believe_an_
+implausible_ntc`): NTC2 at 25 C beside two die sensors at 75 C was "read ALLOWED" while the
+charge gate called the same reading IMPLAUSIBLE. If every live die sensor is more than 10 K
+from NTC2, the hottest of the readings decides; a hot NTC2 that the dies contradict still
+refuses. E13 was thinly exercised by random tests (none went above 55 C):
+`test_read_gate_under_random_temperatures` places the marker at twelve temperatures from -8
+to 72 C after 6.5 s at each - 60 scenarios, 47 placements at 61 C or more: the camera rail
+came on in 0; 178 at 55 C or less: 178 completed reads; 74 watchdog resets in between.
+`test_reset_at_every_25_ms_of_a_read` resets the MCU at 200 instants 25 ms apart through a
+read (97 with the camera rail on): the rail is off right after the reset in all 200, the next
+placement reads in all 200, 0 simulator violations (the simulator's capture model used to stay
+busy through an MCU reset and reported a false "driving camera changed" at 4 of the 200).
 
 **Random plugging and unplugging** (`test_vbus_bounce_stress`; no fault is injected): 300
 scenarios of VBUS edges singly and in bursts, temperature jumps between -8 and 55 C, MCU
@@ -2897,7 +3187,8 @@ off), cell at 3.8 V, 1 h of simulated time:
 | 150 kohm wake pull-up on the op-amp output, underside DARK | 0 | netlist notes 4.10 |
 | housekeeping (a wake-up every 16 s) | 0.01 | model |
 | **Sum at the cell, dark** | **23.68** | measured on the simulator |
-| ... through the cell-lead pads (without the protection circuit), dark | **20.68** | **E14 limit 25 uA: MET by the model** |
+| the memory LCD with DISP LOW (its VDD and VDDA are on the always-on 2.8 V rail: it is powered asleep and in ship mode) | **0 counted - NO FIGURE IS KNOWN** | `GL_SIM_I_LCD_OFF_UA`; the Sharp data sheet was not read (phase-3 review) |
+| ... through the cell-lead pads (without the protection circuit), dark | **20.68 + the panel** | **E14 limit 25 uA: MET ONLY IF the panel draws less than 4.32 uA with DISP low** - exercised: with 4.22 uA in the term the pads carry 24.90 uA, with 4.42 uA 25.10 uA. NEEDS A DATA SHEET. All terms are typical values; there is no maximum and no temperature case |
 | 150 kohm wake pull-up, underside LIT (the photodiode conducts, op-amp off) | +5.2 | netlist notes 4.10: 4.5 to 5.2 |
 | **Sum at the cell, lit** | **28.88** | 25.88 at the pads: above 25 uA. E27 defines the limit for a dark underside; a marker asleep face-up on a sunny bench is not that case |
 
@@ -2910,7 +3201,7 @@ regulator, and the enable pin of the new USB regulator (2.8 of it, NOT CONFIRMED
 | Read (wake-up to result, nominal factor) | 226.7 mAs = 0.063 mAh; about 96 mA while the camera rail is on (2.42 s) | 594 read cycles per 43 mAh (cycle = read + 45 s of result + falling asleep, 260.4 mAs) |
 | Asleep, dark / lit | 23.7 / 28.9 uA | 76 days from a full cell; 23 days from 30 % |
 | Asleep in the cradle, charging (the charger supplies it) | 98.6 uA; 179.4 uA with USB in standby | - |
-| Ship mode | 12.9 uA (requirement 5: **NOT MET**) | 42 days from 30 % (requirement: 3 months) |
+| Ship mode | 12.9 uA plus the panel with DISP low (requirement 5: **NOT MET**) | 42 days from 30 % (requirement: 3 months) |
 | Storage mode (cell below 3.25 V: IMU off) | not measured again in this phase | - |
 
 ### Pins of the rev E board (`tools/gen_pins.py`, `tests/test_pins.c`, `tests/test_board.c`)
@@ -2932,9 +3223,24 @@ per FIRMWARE NOTE of the pin map. A note it does not know stops the generation: 
 has to read it, act on it and add it. The 17 notes of the present map and where the
 firmware acts on each are listed at the end of the generated header.
 
+**Two more keys of the pin map are read since the phase-3 review.** `imu_mounting`: how U4
+lies on the board (90 degrees counter-clockwise: marker x = -sensor Y, marker y = +sensor X).
+The generator checks that it is a rotation and is said once, and writes
+`GL_PINS_IMU_MARKER_{X,Y,Z}_{AXIS,SIGN}`, which `drivers/lsm6dsv16x.c` uses as its default
+mounting and the simulator as its board. Until the review the firmware had an identity
+placeholder in `gl_provisional.h` and the generator read neither key: with all tests passing,
+every slope on the real board would have come out turned by 90 degrees. `open_items_for_
+firmware`: the four items of the present map are listed in the header with what the firmware
+does about each (the IMU axes: this; the UCPD pads in Shutdown: the pull-downs of
+`ship_shutdown_()`, by inspection; first programming by SWD and the unclamped service pads:
+nothing in firmware); an item the generator does not know stops the generation, as a
+firmware note does. `tests/test_pins.c` proves header and driver against the JSON with its
+own scanner and shows on the simulator that the default mounting reads the pin map's board
+right and the old identity reads it wrong.
+
 The generator REFUSES (and `tests/test_pins.c` checks the same on the generated table, after
 reading `pinmap.json` again with a scanner of its own): a signal of `gl_pin_t` missing from
-the map or a map signal the firmware does not know (the old `CHG_PROG_EN` is one of the 31
+the map or a map signal the firmware does not know (the old `CHG_PROG_EN` is one of the 36
 defects its self-test seeds); two signals on one pin or pad (one declared exception: the
 BOOT0 strap shares its pad with ONE output that rests low or analog - `CAM_R_PWDN`); two
 interrupt signals on one EXTI line; a camera PWDN line on a pin the ROM loader drives;
@@ -3715,15 +4021,15 @@ and the USB library - is not included; generated from the final build's size tab
 | Group | Module | text | data | bss |
 |---|---|---|---|---|
 | core | gl_vision | 19640 | 0 | 0 |
-| core | gl_ui | 7556 | 0 | 0 |
+| core | gl_ui | 7624 | 0 | 0 |
 | core | gl_solver_fit | 6942 | 0 | 0 |
 | core | gl_gfx | 4762 | 0 | 0 |
-| core | gl_log | 4258 | 0 | 0 |
+| core | gl_log | 4304 | 0 | 0 |
+| core | gl_proto | 4285 | 0 | 0 |
 | core | gl_solver_roll | 4242 | 0 | 0 |
-| core | gl_proto | 4220 | 0 | 0 |
 | core | gl_solver_aim | 4028 | 0 | 0 |
-| core | gl_cal | 3565 | 0 | 0 |
-| core | gl_tilt | 3264 | 0 | 0 |
+| core | gl_cal | 3589 | 0 | 0 |
+| core | gl_tilt | 3330 | 0 | 0 |
 | core | gl_solver | 2623 | 0 | 0 |
 | core | gl_fieldlog | 2342 | 0 | 0 |
 | core | gl_range | 2276 | 0 | 0 |
@@ -3736,22 +4042,22 @@ and the USB library - is not included; generated from the final build's size tab
 | core | gl_fmt | 477 | 0 | 0 |
 | core | gl_crc | 226 | 0 | 0 |
 | core | gl_event | 148 | 0 | 0 |
-| core | **total** | **78994** | **0** | **0** |
-| drivers | ov7692 | 2123 | 0 | 0 |
-| drivers | power | 1890 | 0 | 0 |
-| drivers | lsm6dsv16x | 1254 | 0 | 0 |
+| core | **total** | **79263** | **0** | **0** |
+| drivers | ov7692 | 2135 | 0 | 0 |
+| drivers | power | 1962 | 0 | 0 |
+| drivers | lsm6dsv16x | 1256 | 0 | 0 |
 | drivers | mx25r | 870 | 0 | 0 |
 | drivers | ls013b7dh03 | 674 | 0 | 0 |
 | drivers | grain_frontend | 648 | 0 | 0 |
-| drivers | **total** | **7459** | **0** | **0** |
-| app | gl_app | 15958 | 0 | 2050 |
-| app | gl_factory | 5503 | 0 | 1156 |
+| drivers | **total** | **7545** | **0** | **0** |
+| app | gl_app | 16426 | 0 | 2050 |
+| app | gl_factory | 6319 | 0 | 1156 |
 | app | gl_read | 5241 | 0 | 0 |
 | app | gl_usb | 2928 | 0 | 388 |
 | app | gl_motion | 868 | 0 | 0 |
-| app | gl_main | 24 | 0 | 322984 |
-| app | **total** | **30522** | **0** | **326578** |
-| all | **total** | **116975** | **0** | **326578** |
+| app | gl_main | 24 | 0 | 323016 |
+| app | **total** | **31806** | **0** | **326610** |
+| all | **total** | **118614** | **0** | **326610** |
 <!-- readme-check:end flash-table -->
 
 **Phase 3, builder 3 added 2698 bytes of code and 1688 bytes of RAM** (114277 -> 116975 text,
@@ -3768,7 +4074,10 @@ zeroing; +684 bss: one log record being assembled), `gl_fieldlog` 2342 (new), `g
 `gl_cal` +1405 (version 2, migration, CRC), `gl_usb` +370, `gl_settings` +216, `ov7692` +182,
 `gl_log` +156, `gl_crc` +126 (CRC-32), `grain_frontend` +114, `gl_ui` +98, `power` +26;
 `gl_app_t` grew by 328 bytes (320968 -> 321296). The boot stub is a program of its own and
-is not in this table: 1184 bytes linked (`make boot-cross`).
+is not in this table: 1536 bytes linked (`make boot-cross`; 1184 before the phase-3 review
+added the fault and ship-mode handling). **The phase-3 review** added 1639 bytes of code to
+the firmware itself (116975 -> 118614: the factory commands' new forms, the reseat check, the
+checked six-face and white-reference store, the backstop) and 32 bytes of `.bss`.
 
 Builder 1 of phase 3 (rev E) had added 3817 bytes of code: `gl_app` +1776 (cradle sleep, ship mode, the read's
 temperature gate, charger status and its log events), `gl_ui` +633 (two states, the cradle
@@ -3785,7 +4094,7 @@ to 1.5 kB more than the object they were said to be inside.)
 <!-- readme-check:begin ram-table -->
 | Object | Bytes | Note |
 |---|---|---|
-| **`gl_app_t`** (bss of `gl_main`) | **322984** | the sum of the rows down to "everything else" |
+| **`gl_app_t`** (bss of `gl_main`) | **323016** | the sum of the rows down to "everything else" |
 | - camera pipeline `gl_read_t` | 303348 | the next four rows |
 | - - strip buffers `img` | 184320 | FOUR 96 x 480 strips, one L R R L group; the 640 x 96 band uses the same memory |
 | - - `gl_vis_band_work_t` | 47360 | band analysis |
@@ -3796,10 +4105,10 @@ to 1.5 kB more than the object they were said to be inside.)
 | - solver inputs `gl_measurements_t` x 9 | 3600 | the read shown (400), 4 stored Survey placements (1600), the up to 4 handed to the estimator (1600; phase 3: placements behind the ball are left out) |
 | - `gl_solver_work_t` | 6160 | work area of the patch fit and its record (`gl_patch_fit_t`, 224); the aim solve needs none |
 | - `gl_store_t` | 1092 | settings and calibration blobs |
-| - `gl_motion_t`, `gl_ui_t`, `gl_ui_view_t`, `gl_estimate_t`, `gl_factory_t`, `gl_log_t` | 344 + 48 + 76 + 112 + 112 + 44 | |
-| - everything else | 1587 | drivers' state, calibration records, settings, survey, tilt, zeroing, recall, field-log bookkeeping, padding: `gl_app_t` less the rows above |
+| - `gl_motion_t`, `gl_ui_t`, `gl_ui_view_t`, `gl_estimate_t`, `gl_factory_t`, `gl_log_t` | 344 + 48 + 76 + 112 + 132 + 44 | |
+| - everything else | 1599 | drivers' state, calibration records, settings, survey, tilt, zeroing, recall, field-log bookkeeping, padding: `gl_app_t` less the rows above |
 | static scratch in `gl_app.c` + `gl_factory.c` + `gl_usb.c` | 2050 + 1156 + 388 = 3594 | one raw-strip log record, one field-log record being assembled; the factory's buffers; two raw grain measurements |
-| **all `.bss` of core, drivers and app** | **326578** | = `gl_app_t` + static scratch (the size table of `make cross`); core and drivers have none |
+| **all `.bss` of core, drivers and app** | **326610** | = `gl_app_t` + static scratch (the size table of `make cross`); core and drivers have none |
 <!-- readme-check:end ram-table -->
 
 Not in that table: the STM32 backend (`gl_hal_stm32u5.o` as compiled by `make cross-hal`: the
@@ -3813,8 +4122,9 @@ The largest stack frames of the final build (`-fstack-usage`, `-Os`, bytes; gene
 <!-- readme-check:begin stack-frames -->
 ```
 672  gl_vis_band_analyse                static
+560  tempco_.constprop                  static
+560  gl_app_start_cal                   static
 464  gls_fit_patch                      static
-432  tempco_.constprop                  static
 376  gl_factory_cmd                     static
 336  gl_app_run_once                    static
 328  centroid_row_                      static
@@ -3835,25 +4145,27 @@ The largest stack frames of the final build (`-fstack-usage`, `-Os`, bytes; gene
 200  gl_store_mount                     static
 200  gl_solver_roll                     static
 200  gl_lcd_update                      static
-192  gl_tilt_tempco_fit                 static
 ```
 <!-- readme-check:end stack-frames -->
 
 The frames the chains below are made of (from the block, and from the `.su` files of the
 same build for the ones that are not among its 24): `gl_vis_band_analyse` 672, `gls_fit_patch`
-464, `tempco_` 432, `gl_factory_cmd` 376, `gl_app_run_once` 336, `centroid_row_` 328,
+464, `tempco_` 560, `gl_app_start_cal` 560, `gl_factory_cmd` 376, `gl_app_run_once` 336, `centroid_row_` 328,
 `gls_roll` 304, `fieldlog_read_` 304, `gl_vis_stick_refine` 296, `gls_solve_kernel` 272,
 `measure_all_` 248, `gl_read_step` 240, `fit_lm_` 240, `estimate_` 224, `do_actions_` 224,
-`gl_usb_service` 216, `gl_tilt_tempco_fit` 192, `screen_result_` 152, `gl_ui_render` 128.
+`gl_usb_service` 216, `gl_tilt_tempco_fit` 192, `gl_store_put` 168, `screen_result_` 152,
+`gl_ui_render` 128, `gl_app_cal_store` 128, `gl_log_append` 88, the protocol's `process_` 88.
 Phase 3 moved `gl_app_run_once` from 312 to 336, `do_actions_` from 216 to 224 and the result
 screen from 128 to 152 (three layouts); the temperature fit of the factory commands is a new
 deep chain. Worst chains (sums made by hand from those frames; libm and the HAL not included):
 
 | Chain | Bytes |
 |---|---|
-| run_once -> actions -> estimate (Survey entry) -> estimate -> aim solve on the patch -> kernel -> pace solve -> trial -> roll -> acceleration (336 + 224 + 40 + 224 + 80 + 272 + 104 + 112 + 304 + 40) | **1736** (the deepest; 1704 at the end of phase 2) |
+| run_once -> actions -> estimate (Survey entry) -> estimate -> aim solve on the patch -> kernel -> pace solve -> trial -> roll -> acceleration (336 + 224 + 40 + 224 + 80 + 272 + 104 + 112 + 304 + 40) | **1736** (the deepest of a read; 1704 at the end of phase 2) |
 | run_once -> actions -> estimate -> patch fit -> Levenberg-Marquardt -> residuals (336 + 224 + 40 + 224 + 464 + 240 + 112) | 1640 |
-| run_once -> USB service -> protocol -> factory command -> temperature fit -> least squares (336 + 216 + 88 + 376 + 432 + 192) | 1640 (in the cradle only) |
+| run_once -> USB service -> protocol -> factory command -> temperature fit -> least squares (336 + 216 + 88 + 376 + 560 + 192) | 1768 (in the cradle only; 1640 before the phase-3 review, whose fit keeps the stored record beside the fitted one) |
+| run_once -> USB service -> protocol -> factory command -> temperature fit -> calibration store -> store put -> log append -> flash driver (336 + 216 + 88 + 376 + 560 + 128 + 8 + 168 + 40 + 88 + 40 + 40) | **2088** (in the cradle only: **the deepest chain of the firmware**. This table did not list the way from a factory command into the store before the phase-3 review; the review added 128 bytes to the fit and about 130 to `gl_store_put()`, which now keeps the old value of an item until the write has succeeded) |
+| run_once -> USB service -> protocol -> START_CAL (six-face solve, white reference: solved into a copy, checked, stored, then adopted) -> calibration store -> ... -> flash driver (336 + 216 + 88 + 560 + 128 + 8 + 168 + 40 + 88 + 40 + 40) | 1712 (in the cradle only) |
 | run_once -> read step -> stick refinement -> measure_all_ -> centroid_row_ (336 + 240 + 296 + 248 + 328) | 1448 |
 | run_once -> read step -> band analysis -> selection (336 + 240 + 672 + 24 + 28) | 1300 |
 | run_once -> actions -> solve -> replay record -> encode -> log append -> flash driver (336 + 224 + 304 + 56 + 88 + 40) | 1048 |
@@ -3866,7 +4178,9 @@ Add the HAL's own frames below the drivers (not measured: the HAL's sources were
 (104 bytes each with FPU state, handlers are short; the backend's own frames, as compiled:
 `clocks_init_` 248 and below it `clocks_osc_` 112, at start-up and after every Stop 2;
 `gl_hal_clock_set` 144; everything else 64 or less). A 4 kB main stack leaves a factor of 2.4
-over the deepest chain (1736 bytes, the solver's), before libm and the HAL.
+over the deepest chain (1736 bytes, the solver's) of a read, and a factor of 2.0 over the
+deepest chain of all (2088 bytes: the factory's temperature fit on its way into the flash, in
+the cradle only), before libm and the HAL.
 No function recurses.
 
 ### Run time
@@ -4009,7 +4323,7 @@ What it means, with the tables under "End to end":
   took 137 trial rolls and 55,471 RK4 steps: 19.5 million instructions by the cost table,
   0.24 s.
 
-The firmware's own code is 116975 bytes of the 2 MB flash before libraries, and 326578 bytes of `.bss`, of which `gl_app_t` is 322984 bytes ("Memory"; 94.8 kB of code at the end of phase 2, 98.6 kB after builder 1 of phase 3, 114.3 kB after builder 2). In phase 2, builder 2 added 2.2 kB: result screen, charge gate and NTC, settings, hand-over; builder 3 added 3.5 kB: the faster vision is 3.0 kB larger, the selection 0.3 kB; the phase-2 review added 1.5 kB: 0.7 kB in the solver, 0.4 kB in the UI and graphics, 0.5 kB in the application), plus 6.7 kB for the STM32 backend as compiled by `make cross-hal` and the vendor's HAL and USB library, which were not compiled. The link probe of `make cross` (firmware objects + newlib's libm and libc, no HAL, no start-up code) has 107,244 bytes of text.
+The firmware's own code is 118614 bytes of the 2 MB flash before libraries (116975 before the phase-3 review), and 326610 bytes of `.bss`, of which `gl_app_t` is 323016 bytes ("Memory"; 94.8 kB of code at the end of phase 2, 98.6 kB after builder 1 of phase 3, 114.3 kB after builder 2). In phase 2, builder 2 added 2.2 kB: result screen, charge gate and NTC, settings, hand-over; builder 3 added 3.5 kB: the faster vision is 3.0 kB larger, the selection 0.3 kB; the phase-2 review added 1.5 kB: 0.7 kB in the solver, 0.4 kB in the UI and graphics, 0.5 kB in the application), plus 6.7 kB for the STM32 backend as compiled by `make cross-hal` and the vendor's HAL and USB library, which were not compiled. The link probe of `make cross` (firmware objects + newlib's libm and libc, no HAL, no start-up code) has 107,244 bytes of text.
 
 ## Device registers and commands: "from memory - verify against datasheet"
 
@@ -4088,7 +4402,7 @@ check. Changing one is the whole firmware change if the fact turns out different
 | OVM7692 timing | `GL_PROV_CAM_XVCLK_HZ`, `_RAIL_SETTLE_MS`, `_CLOCK_SETTLE_MS`, `_FRAME_PERIOD_MS`, `_SETTLE_FRAMES`, `GL_PROV_OV7692_RESET_TIMEOUT_MS` | power-up delays, frame rate at 12 MHz with reset clock settings, frames to settle |
 | LCD | `GL_PROV_LCD_FPC_PIN_*` (10), `GL_PROV_LCD_EXTCOMIN_PERIOD_LSE_TICKS`, `GL_PROV_LCD_ROW0_AT_FRONT`, `_COL0_AT_LEFT`, `_ACTIVE_CENTRE_Y_MM`, `_SPI_MAX_HZ`, `_VDD_MIN_MV`, `_SCS_SETUP_US`, `_SCS_HOLD_US`, `_SCS_LOW_US` | FPC pin order and pin-1 side (DESIGN_SPEC PROVISIONAL), EXTCOMIN period (547 ticks = 59.905 Hz, the divider rev C2 specifies; the generator reads it from the spec and a test compares the two), panel orientation, active-area offset, timing |
 | MCU | `GL_PROV_LPTIM_PWM_RUNS_IN_STOP2`, `GL_PROV_USB_CRYSTALLESS_HSI48_CRS`, `GL_PROV_SHIP_MODE_IS_SHUTDOWN`, `GL_PROV_USB_WAKE_FROM_STOP2` (0) | EXTCOMIN in Stop 2 (if 0 the application stays in idle sleep while the display is on - also in the cradle sleep, which then draws about 1 mA: still under the termination threshold, not measured); crystal-less USB; what survives Shutdown and what wakes from it; whether a USB resume wakes the core from Stop 2 (0: Stop 1 while USB is in standby). The pin assignment is no longer the firmware's: it is the netlist's pin map, whose own PROVISIONAL statements (ROM-loader pin list, UCPD pads, electrical limits) travel in the generated header |
-| IMU | `GL_PROV_IMU_MARKER_{X,Y,Z}_AXIS`, `_SIGN`, `GL_PROV_IMU_WAKE_THRESHOLD_MG`, `GL_PROV_IMU_DRDY_PULSED` | mounting orientation on the PCB (identity is a placeholder), wake threshold, data-ready mode |
+| IMU | `GL_PROV_IMU_WAKE_THRESHOLD_MG`, `GL_PROV_IMU_DRDY_PULSED`, `GL_PROV_TILT_TEMPCO_T_MIN_C` / `_MAX_C` | wake threshold, data-ready mode, the temperature window inside which the tilt record's temperature terms are applied (-10 to 60 C). **The mounting orientation is no longer a constant here:** the netlist's pin map states it (`imu_mounting`: U4 turned 90 degrees) and `make pins` writes it into the generated `gl_pins.h` as `GL_PINS_IMU_MARKER_*`; the identity placeholder that stood here exchanged the two in-plane tilt axes and inverted one. The pin map's statement is itself PROVISIONAL (ST's axis drawing was not read) |
 | Flash | `GL_PROV_MX25R_PROG_TIMEOUT_MS`, `_ERASE_TIMEOUT_MS`, `_DP_DELAY_US`, `_SPI_HZ` | timing |
 | Grain | `GL_PROV_GRAIN_RED_ANODE_ON_LOW_PIN`, `_SETTLE_US`, `_ADC_AVG`, `_ADC_SAMPLE_US`, `_POWER_SETTLE_MS`, `_MOD_THRESHOLD_DEFAULT`, `_MAX_EQUIV_SLOPE`, `_HARMONIC_SIGN`, `_KAPPA_BENT`, `_KAPPA_POA`, `_KAPPA_BERMUDA` | charlieplex wiring (proposal), settling, and the unproven physics; the acceptance threshold used is always the one in the calibration record |
 | Power | `GL_PROV_BATT_LOW_MV`, `_CRITICAL_MV`, `_FULL_MV`, `_EMPTY_MV`, `_DIVIDER_RATIO`, `GL_PROV_BATT_STORAGE_MV` | cell thresholds (no cell data sheet) |
@@ -4149,8 +4463,8 @@ does not exist or has not been shown.
   and the watchdog across Shutdown and the loader, CRC time, what the host sees.
 * **[NEEDS HARDWARE] Recall's wake-up.** That a tap trips the IMU's wake-on-motion at the
   provisional threshold; how long the IMU takes from that interrupt to its first sample (a
-  movement that is over before it is not seen by the recall rule); the accelerometer's offset
-  drift against the 4 mg limit.
+  movement that is over before it is not seen by the recall rule); the accelerometer's noise
+  and offset drift against the 0.6 mg limit of the reseat check (open issue 65).
 * **[NEEDS HARDWARE] Gestures.** Thresholds are guesses; taps are detected in software from
   the 240 Hz stream. The gesture maths is unit-tested, the thresholds are not field-tested.
 * **[NEEDS HARDWARE] Fuel gauging:** the percentage is a straight line between two
@@ -4164,8 +4478,14 @@ does not exist or has not been shown.
 * **[NOT MET] The firmware's 45 C charge limit when no firmware runs** (ROM loader, a hung
   firmware): the model's charger keeps its own 0 to 60 C window (open issue 2); with NTC1
   open and no firmware there is no window at all.
-* **[NOT MET] The 6 h backstop does not see a recharge** if the charger's status line shows
-  the first cycle only (a variant of the model; open issue 39).
+* **[CLOSED by the phase-3 review] The 6 h backstop did not see a recharge** if the charger's
+  status line shows the first cycle only: the backstop no longer looks at that line (MET on
+  the model variant). What it costs a marker left in its cradle is open issue 60.
+* **[NOT MET] E34 for a user without a PC:** once in ST's loader, only a DFU host or a flat
+  cell gets the unit out (open issue 59).
+* **[NOT VERIFIED - NEEDS A DATA SHEET] E14 with the display counted:** the sleep figure has no
+  term for the memory LCD with DISP low; the limit is met only if the panel draws less than
+  4.32 uA there (open issue 61).
 * **[NOT MET] Sleep current with a lit underside:** 25.9 uA at the pads (E27 defines the limit
   with the underside dark).
 * **[NOT MET] Survey: a placement behind the ball is not used** for the result at the ball
@@ -4200,8 +4520,12 @@ does not exist or has not been shown.
 * **[OWNER DECISION] Factory procedures beyond what "Station tests" lists as existing:** a
   four-position level zero; the stereo calibration procedure and its PC fit; an IMU
   self-test; the flash's identity read-out; a "hold the camera rail on" command;
-  fixed-exposure dark frames; tilt logging at intervals.
-* **[OWNER DECISION] An on-unit sign of a missing calibration** (open issue 49).
+  fixed-exposure dark frames; tilt logging at intervals; a way to read NTC1; an automatic
+  "charge to X %" for shipping; a PC-side updater and the update tests P3 / P4 (no linked
+  image exists). The full list against the three plans is in "Phase-3 review", "Station
+  tests that still cannot be run".
+* **[OWNER DECISION] An on-unit sign of a missing calibration** other than the `Z?` of a
+  missing level zero (open issue 49).
 * **[OWNER DECISION] The regulatory text** of the INFO screen: a placeholder
   (`docs/COMPLIANCE.md` supplies it; a release build fails until then), like the USB ids.
 * **[OWNER DECISION] Grain.** Wired through and off by default; with GRAIN ON the line moves
@@ -4229,7 +4553,7 @@ closed them. Every other item says what it waits for: **[NEEDS HARDWARE]** a boa
 measurement, **[NEEDS A DATA SHEET]** a document nobody here has read, **[OWNER DECISION]** a
 choice of the product's, the hardware's, the specification's or the estimator's owner,
 **[NOT MET]** a requirement that is not met, pinned by a test with the measured number. 52 to
-58 are new in phase 3 (builder 3).
+58 are new in phase 3 (builder 3); 59 to 66 come from the phase-3 review.
 
 Hardware and system decisions first: none of them can be closed in firmware.
 
@@ -4522,17 +4846,12 @@ From the phase-2 review (the findings that were not, or not wholly, fixed):
     applied to the READING (60.0 C), whose worst-case error at 60 C is 1.43 K by the
     tolerance budget, plus what the one-B equation and the cell-to-thermistor gradient add
     (not quantified).
-39. **[NEEDS A DATA SHEET] [NOT MET]** **Does the charger's status line show a recharge?** Not known (no data sheet read;
+39. **[NEEDS A DATA SHEET]** **Does the charger's status line show a recharge?** Not known (no data sheet read;
     `GL_PROV_BQ25101_CHG_LOW_ON_RECHARGE`). If it shows the first cycle only, a recharge is
-    invisible to the firmware: "FULL" stays on the screen while current flows, and the 6 h
-    backstop of E32 does not count a recharge that an awake marker (a host that keeps
-    talking) keeps from terminating - pinned as NOT MET for that variant of the model. To
-    read in TI SLUSBV8. If the answer is "first cycle only", choose: accept (the cell is then
-    held at 4.2 V for as long as a PC talks to a docked marker that had already been full
-    once); or let the firmware restart the charger's cycle through `CHG_INHIBIT` at
-    intervals while a host keeps it awake, so that the status line speaks again (not
-    implemented: it rests on one more unread fact, that a stop through TS restarts the
-    cycle); or count docked-and-awake time instead of CHG-low time.
+    invisible to the firmware: "FULL" stays on the screen while current flows. **The backstop
+    no longer depends on the answer** (phase-3 review: it counts docked, un-inhibited time
+    whatever the line says; the NOT MET of builder 1 is MET on the model variant). What is
+    left is cosmetic: the symbol during an invisible recharge. To read in TI SLUSBV8.
 
 40. **[OWNER DECISION]** **Which level zero a read uses is a SETTING (SURFACE: TURF / HARD), not a field of the
     calibration record.** The record holds both zeros. Say if the factory must be able to fix
@@ -4563,11 +4882,16 @@ From the phase-2 review (the findings that were not, or not wholly, fixed):
     images (the CRC guards against a broken image, not a forged one).
 48. **[OWNER DECISION]** **Test gate 2 at 13.0 or 13.5 degrees?** DESIGN_SPEC E17 says 13.0 and the firmware uses
     13.0 (`GL_PROTO_FIELD_ELEV_DEG`); `mechanical/README.md` step 16 still says 13.5.
-49. **[OWNER DECISION]** **Nothing on the unit shows a missing calibration.** `GET_IDENT` carries the flags and a
-    "calibration complete" bit; the display does not change (builder 3 did not change it
-    either: the specification names three display states and none of them is "uncalibrated").
-    To decide: whether a unit without its factory records should show every result as APPROX,
-    or refuse to read, or say so on the INFO screen only.
+49. **[OWNER DECISION]** **What the unit shows of a missing calibration.** `GET_IDENT` carries the flags and a
+    "calibration complete" bit (tested with every flag set and each one missing since the
+    phase-3 review). On the result screen there is now ONE sign: `Z?` at the lower left when
+    the level zero of the seat the read was made on (SURFACE, E11) is not stored - the other
+    seat's zero, or none, was removed. Measured at 4 m: the result with the other seat's zero
+    (1.6 mrad off) is 11.3 mrad of aim, 45 mm at the hole, from the calibrated unit's, and was
+    shown as a normal result with no mark. The result stays NORMAL (the specification names
+    three display states and none of them is "uncalibrated"); the confidence is not capped.
+    Nothing shows a missing six-face, temperature or camera calibration. To decide: whether
+    such a unit should show every result as APPROX, or refuse to read.
 50. **[OWNER DECISION]** **The 72-byte read summary and the estimator event are still written** next to the new
     read record that contains them (116 of the 1156 bytes of a Quick Read). They can go when
     nothing reads them any more (`docs/VALIDATION_PLAN.md` 3.2 describes them).
@@ -4584,7 +4908,8 @@ New in phase 3, builder 3:
     the margin should follow the green speed (the tilt error is a larger part of a smaller
     critical slope); and whether Survey fits, which were not swept, need their own.
 53. **[NEEDS HARDWARE] [OWNER DECISION]** **Recall: the rule's constants and the tap.** 2
-    degrees of turn, 4 mg of tilt, 3 moving blocks and 24 hours are guesses that no marker
+    degrees of turn, 4 mg of tilt (0.6 mg for a marker that has seated itself anew: open
+    issue 65), 3 moving blocks and 24 hours are guesses that no marker
     on turf has tested; whether a tap wakes the IMU at its provisional threshold, and what
     the IMU misses while it starts, are bring-up measurements. To decide: whether a result
     older than some minutes should be recalled at all (the green does not change; the hole
@@ -4615,6 +4940,59 @@ New in phase 3, builder 3:
     only to 14.0 (E17). Its display model (direction steps of 0.94 degree) is coarser than
     the firmware's renderer (0.05 degree rms). To decide: a re-run with the revision E
     figures and a display model that matches the firmware.
+59. **[NOT MET] [OWNER DECISION]** **Once in ST's loader, only a DFU host or a flat cell gets
+    the unit out.** Three failed starts, a bad image or an accidental update request end in
+    ST's USB loader. The MCU runs from the sealed cell and the cradle has no reset contact:
+    lifting the marker out and putting it back is not a reset, and the loader has no
+    time-out. For a user with a wall-charger cradle the unit is dark with no exit; docked it
+    charges without termination and without the firmware's 45 C limit (already pinned);
+    lifted out the loader runs the cell down to its protection cut-off (about 10 h at the
+    model's guessed 4 mA). E34's "cannot strand a unit" is met only for users with a PC and
+    ST's DFU tool. To decide: a reset path in the cradle; or the stub starting a watchdog on
+    the loader path so that a hostless loader returns to the stub (then every real update
+    must finish inside one watchdog period, or the loader must feed it - it does not).
+60. **[OWNER DECISION]** **What the 6 h backstop does to a marker left in its cradle.** Since
+    the phase-3 review the backstop counts docked time whatever the charger's status line
+    says (it must not depend on the line it backs up). It therefore also holds the charger
+    off on a marker that finished its charge hours ago and sleeps: over 30 docked days the
+    model's cell cycles between 100 % and 79.3 % (restart at 4.00 V), the screen saying FULL.
+    A scratch build with the restart at 4.10 V gave 90.4 %. To decide: the restart voltage;
+    or not to count time asleep in the cradle (then a charger that never terminates on a
+    sleeping marker - a leak above 2 mA - is not backed up).
+61. **[NEEDS A DATA SHEET]** **The memory LCD's current with DISP low.** The panel is on the
+    always-on rail; the supply model counts nothing for it asleep and in ship mode. E14 (25
+    uA through the pads) is met only if it draws less than 4.32 uA; every other term is a
+    typical value at room temperature. To read: Sharp LS013B7DH03; then a worst-case column.
+62. **[NEEDS A DATA SHEET] [NEEDS HARDWARE]** **The IMU's axes on the board.** The firmware
+    now takes the mounting from the pin map (marker x = -sensor Y, y = +sensor X). The pin map
+    marks that PROVISIONAL: it holds only if ST's axis drawing of the LSM6DSV16X matches the
+    land pattern as assumed. One tilt of a first board on a known slope settles it.
+63. **[OWNER DECISION]** **The edges of "TOO STEEP" (E31).** As written E31 is met. Pinned as
+    they are: (a) at and above the critical slope (ratio 1.03, 1.30) a dashed line is still
+    drawn - the reviewer found dashed lines 502 and 953 mrad off the hole at ratio 1.03; (b)
+    the confidence shown does not depend on the ratio, while just below the threshold a
+    result is sensitive: with the tilt changed by 0.2 mrad (`tools/steep_sweep.py --delta
+    2e-4`, run in this session, figures in "Phase-3 review"). To decide: no line from ratio
+    1.0; a confidence that falls with the ratio above about 0.6.
+64. **[OWNER DECISION]** **The tilt record does not store the temperature range its fit
+    covered.** The temperature terms are applied inside a fixed window (-10 to 60 C,
+    `GL_PROV_TILT_TEMPCO_T_*`), not inside the range of the unit's own chamber run; storing
+    that range needs a record version 3. The fit itself now needs 5 points over 30 K and
+    returns its largest residual.
+65. **[NEEDS HARDWARE]** **Recall: the reseat limit.** 0.6 mg is four standard deviations of
+    the comparison with the SIMULATOR's sensor noise. The real sensor's noise and its offset
+    drift with temperature decide how often a marker that was not touched reads again
+    instead of recalling; a reseat under the limit is still recalled (1.5 mrad of stale aim
+    at 0.2 mrad of reseat in the model).
+66. **[OWNER DECISION]** **Layers that cover for each other.** Removing the release of
+    `CHG_INHIBIT` from `enter_sleep_()` alone, `gl_imu_stop()` from `ship_enter_()` alone, or
+    the posture rule from `recall_watch_()` alone changes no behaviour any test or the
+    reviewers' fuzz can see: the gate's no-VBUS branch and the last-chance release in
+    `sleep_()`, the stop in `enter_sleep_()`, and the fact that "at rest" itself requires the
+    flat posture cover for them. The redundancy is deliberate and accepted; it is not tested
+    layer by layer (no hook exists to disable one layer), so the loss of one would go
+    unnoticed until the second went. The second layer of the low-battery rule
+    (`capture_start_()`) does have its own test now.
 
 ## The solver: decisions and open points
 

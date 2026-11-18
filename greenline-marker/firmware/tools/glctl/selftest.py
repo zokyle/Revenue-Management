@@ -87,8 +87,28 @@ def make_reads(t, dev):
     r = place("right camera blind at 3 m")
     check(r.get("estimate", {}).get("range_missing") == 1, "the blind-camera read is a range-missing fallback")
     t.world("set right_blind 0")
-    t.world("set dist 6")
-    t.world("run 60000")
+    # A SURVEY in the order of DESIGN_SPEC E29 (phase-3 review, factory finding 5: no test
+    # or demonstration decoded a Survey from the log): 3 m from the hole, 6 m, then the
+    # ball at 8 m.  The read at 3 m is its first placement; two double taps start it.
+    for k, v in (("dist", 3.0), ("bearing", -0.02), ("slope_x", -0.006), ("slope_y", -0.014)):
+        t.world("set %s %g" % (k, v))
+    t.world("run 50000")
+    place("quick read, 3 m (first placement of the Survey)")
+    t.world("doubletap")
+    w = t.world("doubletap")
+    check(w["state"] == "SURVEY_NEXT_DROP", "two double taps on a result start a Survey (%s)" % w["state"])
+    for k, v in (("dist", 6.0), ("bearing", 0.03), ("slope_x", 0.010), ("slope_y", -0.020)):
+        t.world("set %s %g" % (k, v))
+    r = place("Survey, 2 placements: 3 m, the ball at 6 m")
+    check(r.get("n_drops") == 2 and r.get("ball_index") == 1, "Survey of 2: the ball is the LAST placement")
+    for k, v in (("dist", 8.0), ("bearing", 0.01), ("slope_x", 0.012), ("slope_y", -0.016)):
+        t.world("set %s %g" % (k, v))
+    r = place("Survey, 3 placements: 3 m, 6 m, the ball at 8 m")
+    check(r.get("n_drops") == 3 and r.get("ball_index") == 2, "Survey of 3: the ball is the LAST placement")
+    # back to the scene the tilt-only read below has always had
+    for k, v in (("dist", 6.0), ("bearing", -0.08), ("slope_x", -0.015), ("slope_y", 0.010)):
+        t.world("set %s %g" % (k, v))
+    t.world("run 130000")
     t.world("dock")
     s = dev.set_settings(tilt_log=2)
     check(s["tilt_log"] == 2 and s["version"] == 3, "SET_SETTINGS tilt_log = ONLY (settings version 3)")
@@ -118,6 +138,62 @@ def test_log_and_replay(t, dev, out_dir, truth):
     rest = dev.log_download(resume_after=last)
     check(cut[:good] + rest == full, "LOG_SEEK: the resumed download completes the cut one, byte for byte")
     check(dev.log_download(resume_after=info["newest_seq"] + 5) == b"", "LOG_SEEK beyond the newest record: nothing")
+    # A DOWNLOAD THAT REALLY BREAKS (phase-3 review, factory finding 8): the link fails at
+    # the 4th LOG_READ.  The tool used to write its file only after a complete download:
+    # nothing was written, and --resume failed with FileNotFoundError.
+
+    class Flaky:
+        """The transport, failing once at the n-th LOG_READ frame it is asked to send."""
+        def __init__(self, inner, fail_at):
+            self.inner, self.fail_at, self.n = inner, fail_at, 0
+
+        def write(self, data):
+            if len(data) > 5 and data[5] == proto.CMD["LOG_READ"]:
+                self.n += 1
+                if self.n == self.fail_at:
+                    raise proto.ProtocolError("link lost (injected)")
+            self.inner.write(data)
+
+        def read(self, wait_s):
+            return self.inner.read(wait_s)
+
+    path = os.path.join(out_dir, "log_broken.bin")
+    if os.path.exists(path):
+        os.remove(path)
+    broken = Device(Flaky(t, 4))
+    broken.seq = 40
+    try:
+        broken.log_download_to(path)
+        check(False, "the injected link fault was not seen")
+    except proto.ProtocolError:
+        pass
+    part = open(path, "rb").read() if os.path.exists(path) else b""
+    check(0 < len(part) < len(full) and full.startswith(part) and logdec.last_seq(part)[1] == len(part),
+          "link lost at the 4th LOG_READ: %d of %d bytes are in the file, ending at a record boundary"
+          % (len(part), len(full)))
+    res = dev.log_download_to(path, resume=True)
+    check(open(path, "rb").read() == full and res["new_bytes"] == len(full) - len(part),
+          "log-download --resume completes that file, byte for byte (%d new bytes)" % res["new_bytes"])
+    # a file that was cut inside a record (copied half): resume cuts it back and completes it
+    with open(path, "wb") as fh:
+        fh.write(cut)
+    dev.log_download_to(path, resume=True)
+    check(open(path, "rb").read() == full, "--resume of a file cut inside a record completes it too")
+    # THE FIRMWARE'S SIDE: a download position belongs to its session.  LOG_SEEK, then the
+    # marker leaves the cradle and comes back; LOG_READ "continue" without a new LOG_SEEK
+    # starts at the oldest record (it returned 2990 of 5162 bytes: the old seek persisted)
+    dev.cmd("LOG_SEEK", struct.pack("<I", last + 1))
+    t.world("undock")
+    t.world("run 2000")
+    t.world("dock")
+    out, more = bytearray(), 1
+    while more:
+        d = dev.cmd("LOG_READ", b"\0", timeout=5.0)
+        more = d[0]
+        out += d[1:]
+    check(bytes(out).startswith(full) and logdec.last_seq(bytes(out))[1] == len(out),
+          "LOG_READ \"continue\" in a new session, with no LOG_SEEK: the whole log from its oldest "
+          "record (%d bytes, %d of them the log as it was)" % (len(out), len(full)))
     refused(lambda: dev.cmd("LOG_SEEK", b"\0\0\0"), "PARAM", "LOG_SEEK with 3 bytes")
 
     with open(os.path.join(out_dir, "log.bin"), "wb") as fh:
@@ -130,8 +206,13 @@ def test_log_and_replay(t, dev, out_dir, truth):
         kinds[rec["type"]] = kinds.get(rec["type"], 0) + 1
     print("    %d bytes, %d records: %s" % (len(full), len(decoded["records"]),
                                              ", ".join("%d %s" % (v, k) for k, v in sorted(kinds.items()))))
-    check(kinds.get("read", 0) == len(truth) and kinds.get("placement", 0) == len(truth),
-          "one read record and one placement record per result (%d)" % len(truth))
+    n_placements = sum(tr["n_drops"] for tr in truth.values())
+    check(kinds.get("read", 0) == len(truth) and kinds.get("placement", 0) == n_placements,
+          "one read record per result (%d) and one placement record per placement handed to the "
+          "estimator (%d)" % (len(truth), n_placements))
+    surveys = [r for r in decoded["reads"] if r["survey"]]
+    check(sorted((r["n_drops"], r["ball_index"]) for r in surveys) == [(2, 1), (3, 2)],
+          "the log holds the Survey reads of 2 and of 3 placements, the ball last")
     check(kinds.get("tilt", 0) == 1, "one tilt record (the tilt-only placement)")
     seqs = [r["seq"] for r in decoded["records"]]
     check(seqs == sorted(seqs) and len(set(seqs)) == len(seqs), "sequence numbers ascending, none twice")
@@ -156,6 +237,23 @@ def test_log_and_replay(t, dev, out_dir, truth):
                         d = abs(g - w) / max(1e-12, abs(w)) if w else abs(g)
                         worst = max(worst, d)
                         check(d < 5e-8, "read %d %s: %r, firmware %r" % (read["read_id"], key, g, w))
+        # ... the placement records carry the ball flag on the ball's record and no other
+        ball_flags = [rec["data"]["is_ball"] for rec in decoded["records"]
+                      if rec["type"] == "placement" and rec["data"]["read_id"] == read["read_id"]]
+        check(ball_flags == [i == tr["ball_index"] for i in range(tr["n_drops"])],
+              "read %d: ball flag on placement %d only (%r)" % (read["read_id"], tr["ball_index"], ball_flags))
+        # ... and the OPTIONS of the call, field by field (seed S15: near_miss read from the
+        # wrong field passed every check)
+        for key, w in tr["options"].items():
+            g = read["options"][key]
+            if isinstance(w, (bool, int)):
+                check(g == w, "read %d option %s: %r, firmware %r" % (read["read_id"], key, g, w))
+            else:
+                check(g is not None and abs(g - w) <= 5e-8 * max(1e-12, abs(w)),
+                      "read %d option %s: %r, firmware %r" % (read["read_id"], key, g, w))
+        check(len({read["options"][k] for k in ("past", "tol_miss", "tol_pace", "lm_tol", "near_miss")}) == 5,
+              "read %d: the five real options have five different values (a mixed-up field shows)"
+              % read["read_id"])
         for key, w in tr["estimate"].items():
             g = read["estimate"][key]
             if w is None or g is None or isinstance(w, int) and key not in ("phi",):
@@ -297,11 +395,26 @@ def test_commands(t, dev, out_dir):
     t.world("set face -1")
     pts = [(tc, 0.012 + 2e-4 * (tc - 23), -0.007 - 1e-4 * (tc - 23), 0.020 + 3e-4 * (tc - 23))
            for tc in (-10, 0, 10, 23, 35, 50)]
+    before = struct.unpack_from("<3f", dev.get_cal("tilt"), 2)
     fit = dev.tilt_tempco(pts, t0=23.0)
     near(fit["b1_g_per_k"][0], 2e-4, 2e-7, "TILT_TEMPCO b1 x")
     near(fit["b1_g_per_k"][2], 3e-4, 2e-7, "TILT_TEMPCO b1 z")
-    check(fit["rms_residual_g"] < 1e-6, "TILT_TEMPCO residual")
+    check(fit["rms_residual_g"] < 1e-6 and fit["max_residual_g"] < 3e-6, "TILT_TEMPCO residuals (RMS and largest)")
+    rec = dev.get_cal("tilt")
+    check(struct.unpack_from("<3f", rec, 2) == before and abs(before[0] - 0.012) < 0.0005 and rec[1] & 0x09 == 0x09,
+          "TILT_TEMPCO keeps the six-face offsets (%.4f, %.4f, %.4f) g and sets its flag" % before)
+    # pure DRIFT (what a 0 / 180 degree pair per chamber stop gives; z not measured): the same
+    drift = [(tc, 2e-4 * (tc - 23), -1e-4 * (tc - 23), 0.0) for tc in (0, 12, 23, 34, 45)]
+    fit = dev.tilt_tempco(drift, t0=23.0)
+    near(fit["b1_g_per_k"][1], -1e-4, 2e-7, "TILT_TEMPCO with drift points: b1 y")
+    check(struct.unpack_from("<3f", dev.get_cal("tilt"), 2) == before,
+          "TILT_TEMPCO with drift points: the six-face offsets are still there")
+    fit = dev.tilt_tempco(pts, t0=23.0)
     refused(lambda: dev.tilt_tempco(pts[:2]), "PARAM", "TILT_TEMPCO with 2 points")
+    refused(lambda: dev.tilt_tempco(pts[:4]), "PARAM", "TILT_TEMPCO with 4 points (at least 5)")
+    refused(lambda: dev.tilt_tempco([(tc, 0.0, 0.0, 0.0) for tc in (15, 19, 23, 27, 31)]), "PARAM",
+            "TILT_TEMPCO over a span of 16 K (at least 30)")
+    refused(lambda: dev.tilt_tempco(pts, t0=30.0), "RANGE", "TILT_TEMPCO with a t0 that is not the record's")
     near(dev.set_cam_horizon(1, 247.25)["pitch_up_rad"], math.atan(7.75 / 657.0), 1e-6, "SET_CAM_HORIZON")
     refused(lambda: dev.set_cam_horizon(0, 400.0), "RANGE", "SET_CAM_HORIZON row 400")
     mods = [0.02 + 0.002 * ((i * 37) % 50) for i in range(50)]
@@ -355,6 +468,41 @@ def test_commands(t, dev, out_dir):
     dev.unlock()
     check(dev.level_zero("arm", "ball")["state"] == "ARMED" and dev.level_zero("cancel")["state"] == "IDLE",
           "LEVEL_ZERO arm, cancel")
+    z = dev.level_zero("status")
+    check("ntc2_temp_c" in z and "rest_min" in z, "LEVEL_ZERO answers 40 bytes: NTC2 and the rest are in it")
+    z = dev.level_zero("arm", "ball", rest_min=30)
+    check(z["state"] == "ARMED" and z["rest_min"] == 30, "LEVEL_ZERO arm with 30 minutes of rest")
+    dev.level_zero("cancel")
+
+    section("the reference line on the seat plate, live streams, lock")
+    refused(lambda: (dev.lock(), dev.display_test("ref-raw", 20, plate=True))[1], "STATE",
+            "DISPLAY_TEST armed for the seat plate while locked")
+    check(not dev.status()["unlocked"], "UNLOCK \"LOCK\": locked, answered OK")
+    dev.unlock()
+    d = dev.display_test("ref-raw", 20, plate=True)
+    t.world("set stick 0")
+    t.world("undock")
+    w = t.world("state")
+    check(w["state"] == "SLEEP", "armed pattern: asleep after leaving the cradle (%s)" % w["state"])
+    rail = w["rail_cycles"]
+    t.world("place")
+    w = t.world("run 5000")
+    check(w["state"] == "WAIT_STILL" and w["black_pixels"] == d["black_pixels"] and w["rail_cycles"] == rail,
+          "put down out of the cradle: the reference line is on the screen again (%d black pixels), "
+          "no camera read" % w["black_pixels"])
+    w = t.world("run 17000")
+    check(w["state"] == "SLEEP" and w["rail_cycles"] == rail, "after its 20 s: asleep, still no camera read")
+    t.world("set stick 1")
+    t.world("dock")
+    frames = dev.stream(["imu"], period_ms=50, count=8)
+    check(len(frames) == 8 and all(f["source"] == "imu" for f in frames), "STREAM imu: 8 frames")
+    near(frames[-1]["accel_total_g"], 1.0, 0.03, "STREAM imu: total acceleration at rest (station test 4.5 #12)")
+    frames = dev.stream(["grain", "power"], period_ms=200, count=4)
+    check({f["source"] for f in frames} == {"grain", "power"} and
+          all(len(f["leds"]) == 16 for f in frames if f["source"] == "grain"),
+          "STREAM grain + power: the live grain cycle (station test 4.5 #14)")
+    check(dev.ping(), "the streams are off again and the unit answers")
+    dev.unlock()
 
     section("the sleep-current test")
     dev.unlock()
@@ -428,6 +576,28 @@ def test_cli(glsim, out_dir):
     check(rc == 0 and json.loads(out)["reads"] >= 4, "glctl log-decode (no unit needed)")
     rc, out, _ = cli("replay", os.path.join(out_dir, "log_cli.json"))
     check(rc == 0 and "do not" in out and " 0 do not" in out, "glctl replay")
+    # a dump that was cut at 3000 bytes: decoded up to its last complete record, with a
+    # warning (it ended in an uncaught traceback, exit 1 = "the unit refused", nothing decoded)
+    whole = open(os.path.join(out_dir, "log.bin"), "rb").read()
+    with open(os.path.join(out_dir, "log_trunc.bin"), "wb") as fh:
+        fh.write(whole[:3000])
+    rc, out, err = cli("log-decode", os.path.join(out_dir, "log_trunc.bin"), os.path.join(out_dir, "log_trunc.json"))
+    ok = rc == 0 and "Traceback" not in err and "warning" in err
+    n_cut = json.loads(out)["records"] if ok else -1
+    check(ok and n_cut >= 5, "glctl log-decode of a dump cut at 3000 bytes: %d complete records decoded, "
+          "a warning, exit %d" % (n_cut, rc))
+    with open(os.path.join(out_dir, "log_bad.bin"), "wb") as fh:
+        fh.write(b"\x06\x00\x10\x00\x01\x00\x00\x00" + b"\x63" * 16)  # a read record of 16 bytes
+    rc, _, err = cli("log-decode", os.path.join(out_dir, "log_bad.bin"), os.path.join(out_dir, "log_bad.json"))
+    check(rc == 2 and "Traceback" not in err and "not a log dump" in err,
+          "glctl log-decode of a record of an unknown layout: exit 2 and a sentence, no traceback")
+    rc, out, _ = cli("--sim", glsim, "lock")
+    check(rc == 0 and json.loads(out)["unlocked"] is False, "glctl lock")
+    rc, out, _ = cli("--sim", glsim, "stream", "imu,tilt", "--count", "4", "--period", "50")
+    check(rc == 0 and len(json.loads(out)) == 4, "glctl stream imu,tilt")
+    rc, out, _ = cli("--sim", glsim, "capture", "0", "636", "0", "8", "2", os.path.join(out_dir, "edge.pgm"))
+    check(rc == 0 and json.loads(out)["x0"] == 600 and json.loads(out)["width"] == 8,
+          "glctl capture of an 8-pixel window at x0 636: taken at x0 600 and reported so (it answered IO)")
 
 
 def test_boot_tools(boot_check, out_dir):

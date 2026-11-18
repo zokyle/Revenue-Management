@@ -23,6 +23,7 @@
  */
 #include "gl_test.h"
 
+#include "gl_boot.h"
 #include "gl_pins.h"
 #include "gl_provisional.h"
 #include "gl_trace_util.h"
@@ -588,6 +589,180 @@ GL_TEST(test_backend_follows_the_rev_e_notes_in_text)
            (long)(after_(body, "gl_hal_gpio_mode(") - ucpd));
 }
 
+/* Phase-3 review, hardware findings 4, 6, 7 and 8: more of the TEXT of the two
+ * STM32-only files.  Each check is one of the reviewer's seeded defects that
+ * passed every test (the Shutdown pull-downs removed; the stub starting the
+ * watchdog before the loader; the stub taking VBUS as always present; the
+ * reboot not clearing the stub's count; the reset flags never cleared), or
+ * one of the lines the fixes of this review added.  A text check proves
+ * that a line is THERE, not that it works: neither file has ever run. */
+static char boot_src_[40000];
+
+/* [fn, end of fn) of a function that starts with `head`; NULL if not found */
+static const char *fn_(const char *src, const char *head, const char **end)
+{
+    const char *fn = after_(src, head);
+    *end = (fn != NULL) ? after_(fn, "\n}\n") : NULL;
+    return (*end != NULL) ? fn : NULL;
+}
+
+static bool in_(const char *fn, const char *end, const char *what)
+{
+    const char *p = (fn != NULL) ? after_(fn, what) : NULL;
+    return p != NULL && p < end;
+}
+
+GL_TEST(test_stm32_only_lines_of_the_review_in_text)
+{
+    FILE *f = fopen("hal/stm32u5/gl_hal_stm32u5.c", "rb");
+    const char *fn, *fe;
+    size_t n;
+
+    GL_CHECK(f != NULL);
+    if (f == NULL) {
+        return;
+    }
+    n = fread(backend_src_, 1, sizeof(backend_src_) - 1u, f);
+    fclose(f);
+    backend_src_[n] = '\0';
+    f = fopen("boot/gl_boot_stm32u5.c", "rb");
+    GL_CHECK(f != NULL);
+    if (f == NULL) {
+        return;
+    }
+    n = fread(boot_src_, 1, sizeof(boot_src_) - 1u, f);
+    fclose(f);
+    boot_src_[n] = '\0';
+    GL_CHECK(n > 1000u && n < sizeof(boot_src_) - 1u);
+
+    /* ---- the backend ---- */
+    /* ship mode: the Shutdown pull-downs are configured AND switched on
+     * (the pin map's open item on the UCPD pads: PB5 and PB14 are in the
+     * floating / pulled-down sets), before the wake-up pin is armed; VBUS is
+     * read again after the arming, before Shutdown is entered */
+    fn = fn_(backend_src_, "\nstatic void ship_shutdown_(void)\n{", &fe);
+    GL_CHECK(fn != NULL);
+    if (fn != NULL) {
+        const char *pd = after_(fn, "GL_PINS_FLOATING_TABLE(GLH_PD)");
+        const char *pd2 = after_(fn, "pin_[p].pull == (uint8_t)GL_PINPULL_DOWN");
+        const char *apc = after_(fn, "HAL_PWREx_EnablePullUpPullDownConfig();");
+        const char *arm = after_(fn, "HAL_PWR_EnableWakeUpPin(GLH_WKUP_VBUS_HIGH);");
+        const char *again = after_(arm, "if (vbus_now_()) {");
+        const char *sd = after_(fn, "HAL_PWREx_EnterSHUTDOWNMode();");
+        GL_CHECK(pd != NULL && pd2 != NULL && apc != NULL && arm != NULL && again != NULL && sd != NULL);
+        GL_CHECK(pd < apc && pd2 < apc && apc < arm && arm < again && again < sd && sd < fe);
+        GL_CHECK(in_(again, sd, "NVIC_SystemReset();"));
+    }
+    /* a reset without VBUS in ship mode: flags cleared, back to Shutdown */
+    fn = fn_(backend_src_, "\nstatic uint32_t ship_check_(void)\n{", &fe);
+    GL_CHECK(fn != NULL && in_(fn, fe, "__HAL_RCC_CLEAR_RESET_FLAGS();") && in_(fn, fe, "ship_shutdown_();"));
+    /* E34, the application's half: a reset made on purpose clears the stub's
+     * count BEFORE the reset; the confirm clears it; the reset flags are
+     * cleared once read */
+    fn = fn_(backend_src_, "\nvoid gl_hal_reboot(gl_reboot_t how)\n{", &fe);
+    GL_CHECK(fn != NULL);
+    if (fn != NULL) {
+        const char *clr = after_(fn, "TAMP->BKP3R = 0;");
+        const char *rst = after_(fn, "NVIC_SystemReset();");
+        const char *acc = after_(fn, "HAL_PWR_EnableBkUpAccess();");
+        GL_CHECK(clr != NULL && rst != NULL && acc != NULL && acc < clr && clr < rst && rst < fe);
+    }
+    fn = fn_(backend_src_, "\nvoid gl_hal_boot_confirm(void)\n{", &fe);
+    GL_CHECK(fn != NULL && in_(fn, fe, "HAL_PWR_EnableBkUpAccess();") && in_(fn, fe, "TAMP->BKP3R = 0;"));
+    fn = fn_(backend_src_, "\nstatic uint32_t read_reset_flags_(void)\n{", &fe);
+    GL_CHECK(fn != NULL);
+    if (fn != NULL) {
+        const char *rd = after_(fn, "RCC_FLAG_IWDGRST");
+        const char *clr = after_(fn, "__HAL_RCC_CLEAR_RESET_FLAGS();");
+        GL_CHECK(rd != NULL && clr != NULL && rd < clr && clr < fe);
+    }
+    /* the registers the two programs share are the same ones */
+    GL_CHECK(after_(backend_src_, "#define GLH_SHIP_MAGIC           0x474C5348u") != NULL);
+    GL_CHECK_EQ(GL_BOOT_SHIP_MAGIC, 0x474C5348u);
+    GL_CHECK(after_(backend_src_, "#define GLH_DFU_MAGIC            0x474C4446u") != NULL);
+    GL_CHECK_EQ(GL_BOOT_UPDATE_MAGIC, 0x474C4446u);
+    GL_CHECK(after_(backend_src_, "TAMP->BKP2R = GLH_SHIP_MAGIC;") != NULL);
+    GL_CHECK_EQ(GL_BOOT_BKP_SHIP, 2u);
+    GL_CHECK_EQ(GL_BOOT_BKP_ATTEMPTS, 3u);
+    GL_CHECK_EQ(GL_BOOT_BKP_FAULTS, 5u);
+    GL_CHECK(after_(backend_src_, "TAMP->BKP5R") == NULL); /* the stub's own register */
+
+    /* ---- the boot stub ---- */
+    /* the loader path starts no watchdog: nothing in loader_() or jump_()
+     * touches IWDG, and Reset_Handler reaches IWDG only through start_app_() */
+    fn = fn_(boot_src_, "\nstatic void loader_(void)\n{", &fe);
+    GL_CHECK(fn != NULL && !in_(fn, fe, "IWDG->") && in_(fn, fe, "jump_(GL_BOOT_ROM_LOADER);"));
+    fn = fn_(boot_src_, "\nstatic void jump_(uint32_t vectors_at)\n{", &fe);
+    GL_CHECK(fn != NULL && !in_(fn, fe, "IWDG->"));
+    fn = fn_(boot_src_, "\nstatic void start_app_quiet_(void)\n{", &fe);
+    GL_CHECK(fn != NULL && !in_(fn, fe, "IWDG->") && in_(fn, fe, "jump_(GL_BOOT_APP_BASE);"));
+    fn = fn_(boot_src_, "\nstatic void wait_vbus_(void)\n{", &fe);
+    GL_CHECK(fn != NULL && !in_(fn, fe, "IWDG->"));
+    if (fn != NULL) {
+        /* armed, then VBUS read again, then the WFI */
+        const char *arm = after_(fn, "PWR->WUCR1 |= PWR_WUCR1_WUPEN2;");
+        const char *again = after_(arm, "if (vbus_()) {");
+        const char *wfi = after_(fn, "__WFI();");
+        GL_CHECK(arm != NULL && again != NULL && wfi != NULL && arm < again && again < wfi && wfi < fe);
+    }
+    fn = fn_(boot_src_, "\nstatic void start_app_(void)\n{", &fe);
+    GL_CHECK(fn != NULL && in_(fn, fe, "IWDG->KR = 0x0000CCCCu;"));
+    fn = fn_(boot_src_, "\nvoid Reset_Handler(void)\n{", &fe);
+    GL_CHECK(fn != NULL);
+    if (fn != NULL) {
+        const char *ucpd = after_(fn, "PWR->UCPDR |= PWR_UCPDR_UCPD_DBDIS;");
+        const char *vb = after_(fn, "in.vbus = vbus_();");
+        const char *ship = after_(fn, "in.ship_mode = (TAMP->BKP2R == GL_BOOT_SHIP_MAGIC);");
+        const char *may = after_(fn, "read_image = gl_boot_may_read_image(faults);");
+        const char *chk = after_(fn, "gl_boot_image_check(");
+        const char *re = after_(chk, "faults = TAMP->BKP5R;");
+        const char *dec = after_(fn, "gl_boot_decide(&in, &d);");
+        const char *aft = after_(fn, "TAMP->BKP5R = gl_boot_faults_after(faults, read_image, d.action);");
+        const char *ld = after_(fn, "loader_();");
+        const char *wv = after_(fn, "wait_vbus_();");
+        const char *q = after_(fn, "start_app_quiet_();");
+        const char *sa = after_(fn, "start_app_();");
+        GL_CHECK(!in_(fn, fe, "IWDG->"));
+        GL_CHECK(ucpd != NULL && vb != NULL && ship != NULL && may != NULL && chk != NULL && re != NULL &&
+                 dec != NULL && aft != NULL && ld != NULL && wv != NULL && q != NULL && sa != NULL);
+        /* VBUS is READ (not assumed); the image is read only if allowed;
+         * the fault register is looked at again after the read; the
+         * decision comes after all inputs; the watchdog-starting action is
+         * the last resort of the dispatch */
+        GL_CHECK(ucpd < vb && vb < may && ship < dec && may < chk && chk < re && re < dec && dec < aft &&
+                 aft < ld && ld < wv && wv < q && q < sa && sa < fe);
+        GL_CHECK(in_(may, chk, "if (read_image) {"));
+    }
+    fn = fn_(boot_src_, "\nstatic bool vbus_(void)\n{", &fe);
+    GL_CHECK(fn != NULL && in_(fn, fe, "return (GPIOC->IDR & GPIO_IDR_ID13) != 0u;"));
+    /* a fault is counted before the reset; the NMI of an unreadable flash
+     * word is noted and RETURNS; the vector table sends NMI there */
+    fn = fn_(boot_src_, "\nvoid Default_Handler(void)\n{", &fe);
+    GL_CHECK(fn != NULL);
+    if (fn != NULL) {
+        const char *note = after_(fn, "TAMP->BKP5R = gl_boot_fault_note(TAMP->BKP5R, false);");
+        const char *rst = after_(fn, "NVIC_SystemReset();");
+        GL_CHECK(note != NULL && rst != NULL && note < rst && rst < fe);
+    }
+    fn = fn_(boot_src_, "\nvoid NMI_Handler(void)\n{", &fe);
+    GL_CHECK(fn != NULL);
+    if (fn != NULL) {
+        const char *ecc = after_(fn, "if ((FLASH->ECCR & FLASH_ECCR_ECCD) != 0u) {");
+        const char *note = after_(fn, "TAMP->BKP5R = gl_boot_fault_note(TAMP->BKP5R, true);");
+        const char *ret = after_(note, "return;");
+        const char *other = after_(fn, "Default_Handler();");
+        GL_CHECK(ecc != NULL && note != NULL && ret != NULL && other != NULL);
+        GL_CHECK(ecc < note && note < ret && ret < other && other < fe);
+        GL_CHECK(!in_(fn, ret, "NVIC_SystemReset"));
+    }
+    GL_CHECK(after_(boot_src_, "(const void *)NMI_Handler,") != NULL);
+    printf("    hal/stm32u5/gl_hal_stm32u5.c and boot/gl_boot_stm32u5.c: Shutdown pull-downs "
+           "switched on before the wake-up pin is armed, VBUS read again after it; the loader "
+           "path starts no watchdog; VBUS is read from the pin; faults inside the stub are "
+           "counted, the flash's NMI returns; reboot and confirm clear BKP3R; the reset flags "
+           "are cleared (TEXT only: compiled, never run)\n");
+}
+
 int main(void)
 {
     GL_RUN(test_chip_selects_are_inactive_through_reset_and_init);
@@ -597,5 +772,6 @@ int main(void)
     GL_RUN(test_extcomin_divides_32768_by_547);
     GL_RUN(test_backend_starts_the_watchdog_first);
     GL_RUN(test_backend_follows_the_rev_e_notes_in_text);
+    GL_RUN(test_stm32_only_lines_of_the_review_in_text);
     return gl_test_summary();
 }

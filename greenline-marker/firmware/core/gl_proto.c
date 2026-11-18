@@ -193,6 +193,9 @@ void gl_proto_zero_encode(const gl_proto_zero_t *z, uint8_t out[GL_PROTO_ZERO_LE
     gl_wr_f32(&w, z->surface_y);
     gl_wr_f32(&w, z->temp_c);
     gl_wr_u32(&w, z->time_s);
+    gl_wr_u16(&w, (uint16_t)z->ntc2_x10);
+    gl_wr_u8(&w, z->rest_min);
+    gl_wr_u8(&w, z->rested_min);
 }
 
 void gl_proto_six_encode(const gl_proto_six_t *x, uint8_t out[GL_PROTO_SIX_LEN])
@@ -434,6 +437,11 @@ static gl_status_t h_unlock(gl_proto_t *p, const uint8_t *in, size_t n, gl_wr_t 
 {
     (void)n;
     (void)out;
+    if (memcmp(in, "LOCK", 4) == 0) {
+        /* the station's explicit "lock" (final test 7.1): GL_OK, locked */
+        p->unlocked = false;
+        return GL_OK;
+    }
     p->unlocked = (memcmp(in, "GLFC", 4) == 0);
     return p->unlocked ? GL_OK : GL_ERR_PARAM;
 }
@@ -571,9 +579,9 @@ static const cmd_entry_t cmd_table_[] = {
     { GL_CMD_CAM_CAPTURE, 10, 10, h_factory },
     { GL_CMD_CAM_DATA, 6, 6, h_factory },
     { GL_CMD_CAM_FIELD, 1, 1, h_factory },
-    { GL_CMD_DISPLAY_TEST, 2, 2, h_factory },
+    { GL_CMD_DISPLAY_TEST, 2, 3, h_factory },
     { GL_CMD_GRAIN_TEST, 1, 1, h_factory },
-    { GL_CMD_LEVEL_ZERO, 2, 2, h_factory },
+    { GL_CMD_LEVEL_ZERO, 2, 3, h_factory },
     { GL_CMD_CAL_STATUS, 0, 0, h_factory },
     { GL_CMD_TILT_TEMPCO, 5u + 16u * GL_PROTO_TEMPCO_MIN_POINTS,
       5u + 16u * GL_PROTO_TEMPCO_MAX_POINTS, h_factory },
@@ -653,6 +661,8 @@ bool gl_proto_needs_unlock(uint8_t cmd, const uint8_t *payload, size_t n)
         return n >= 1u && payload[0] == (uint8_t)GL_GRAIN_MODE_STORE;
     case GL_CMD_DISPLAY_ROT:
         return n >= 1u && payload[0] != 0u;
+    case GL_CMD_DISPLAY_TEST:
+        return n >= 3u && payload[2] != 0u; /* armed for the seat plate */
     case GL_CMD_SERIAL:
         return n != 0u;
     default:

@@ -901,6 +901,80 @@ GL_TEST(test_precision_read_spin_and_reread)
 /* 4b. Survey: a second drop along the line                                 */
 /* ======================================================================= */
 
+/* THE FIT OF A TWO-PLACEMENT SURVEY, FROM REAL READS (phase-3 review,
+ * application finding 8).  Phase 2 asserted here the twist and the curvature
+ * the estimator fits from two real reads; when E29 turned the Survey round,
+ * test_survey_second_drop (which walks the old way and now uses one
+ * placement) lost those assertions without a replacement.  The same two
+ * places and tilts in the NEW order: 3 m from the hole first (slope -1.5 %
+ * toward the hole, cross slope -0.4 %), then the ball at 6 m (-2.0 %, cross
+ * slope +1.2 %).  Both placements are used; the slope toward the hole eases
+ * from -2.0 % to -1.5 % over 3 m (curvature c > 0) and the cross slope
+ * changes sign (twist d != 0). */
+GL_TEST(test_survey_two_placements_fit_twist_and_curvature)
+{
+    double t_now;
+    world_defaults_();
+    W.dist_m = 3.0;
+    W.bearing_rad = -0.02;
+    W.slope_x = -0.004;
+    W.slope_y = -0.015;
+    project_scene_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 9000));
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 100u);
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_((uint32_t)(gl_sim_now_us() / 1000u) + 100u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_SURVEY_NEXT_DROP);
+    GL_CHECK_EQ(app.survey.count, 1);
+    t_now = (double)gl_sim_now_us() * 1e-6;
+    W.t_pick_s = t_now + 0.5;
+    W.t_place_s = t_now + 2.0;
+    run_until_ms_((uint32_t)((t_now + 1.0) * 1000.0));
+    W.dist_m = 6.0;
+    W.bearing_rad = 0.05;
+    W.slope_x = 0.012;
+    W.slope_y = -0.020;
+    project_scene_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, (uint32_t)(t_now * 1000.0) + 9000u));
+    GL_CHECK_EQ(app.survey.count, 2);
+    GL_CHECK(app.solve_survey);
+    GL_CHECK_EQ(app.solve_drops, 2); /* both placements are handed to the estimator */
+    GL_CHECK_EQ(app.solve_ball, 1);  /* E29: the ball is the placement the marker stands on */
+    GL_CHECK_EQ(app.solver_status, GL_OK);
+    GL_CHECK(app.view.have_result && app.view.solved && app.line_here);
+    GL_CHECK_EQ(app.solver_work.fit.n_drops, 2);
+    GL_CHECK_NEAR(app.solver_work.fit.stations_m[0], 0.0, 0.0);  /* the ball */
+    GL_CHECK_NEAR(app.solver_work.fit.stations_m[1], 3.0, 0.15); /* 3 m along the line */
+    GL_CHECK(app.est.fit_converged && !app.est.flag_missing && !app.est.range_missing);
+    GL_CHECK_NEAR(app.est.distance_m, 6.0, 0.15);
+    /* the twist, from two real reads (phase 2: patch[3] > 0.001) */
+    GL_CHECK(fabsf(app.est.patch[3]) > 0.001f);
+    /* the curvature (phase 2: 0.0005 < c < 0.003 "when the base is seen";
+     * the tilts imply 0.0008).  It needs the height of the hole, which
+     * comes from a stick base that was seen; which placements saw it in
+     * this run is printed.  PINNED as this run gives it: the base class at
+     * 3 m is known to flip with the frame noise (test_survey_second_drop) */
+    GL_CHECK(app.est.patch[2] > 0.0005f && app.est.patch[2] < 0.003f);
+    printf("    stick base classed %s at the 3 m placement and %s at the ball (6 m) in this run\n",
+           app.meas[0].flag_base_visible ? "VISIBLE" : "AT THE HORIZON",
+           app.meas[1].flag_base_visible ? "VISIBLE" : "AT THE HORIZON");
+    {
+        gl_ui_result_text_t t;
+        gl_ui_result_text(&app.ui, &app.view, &t);
+        GL_CHECK(strcmp(t.mode, "D2") == 0);
+    }
+    printf("    Survey of two real reads in the E29 order (3 m, then the ball at 6 m): stations "
+           "%.2f and %.2f m, patch a %.4f b %.4f, curvature c %.5f /m (the tilts imply 0.0008), "
+           "twist d %.5f /m\n", (double)app.solver_work.fit.stations_m[0],
+           (double)app.solver_work.fit.stations_m[1], (double)app.est.patch[0],
+           (double)app.est.patch[1], (double)app.est.patch[2], (double)app.est.patch[3]);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
 GL_TEST(test_survey_second_drop)
 {
     double t_now;
@@ -970,7 +1044,9 @@ GL_TEST(test_survey_second_drop)
         gl_ui_result_text_t t;
         gl_ui_result_text(&app.ui, &app.view, &t);
         GL_CHECK(strstr(t.note, "PUT") == NULL);
-        GL_CHECK(strcmp(t.mode, "D2") == 0);
+        /* the second stop, a result made of ONE placement, and marked so
+         * ("D2" until the phase-3 review: application finding 3) */
+        GL_CHECK(strcmp(t.mode, "D2/1") == 0);
     }
     GL_CHECK_EQ(app.solver_status, GL_OK);
     GL_CHECK(app.view.have_result && app.view.solved);
@@ -1426,6 +1502,34 @@ GL_TEST(test_missing_devices_are_reported_not_fatal)
 
 /* Battery: below the LOW threshold the device still reads; below CRITICAL
  * it shows the warning and sleeps without ever switching the cameras on. */
+/* Phase-3 review, application finding 7, seed S29: "a critically low cell no
+ * longer stops the camera read in capture_start_()" passed every test - only
+ * the gate at the wake-up was tested.  The second layer alone: the marker
+ * wakes on a good cell (the wake-up gate passes), and the cell is found
+ * critical while the tilt is being read; the camera read must not start. */
+GL_TEST(test_critical_cell_found_after_the_wake_up_stops_the_cameras)
+{
+    world_defaults_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_READ_TILT, 9000));
+    GL_CHECK(!app.power.critical);
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 0u);
+    /* what a measurement made now would say (the supervision's periodic
+     * measurement is not due for minutes: the state is set as it would
+     * leave it) */
+    gl_sim_set_vbat_mv(3300);
+    app.power.batt_mv = 3300;
+    app.power.critical = true;
+    GL_CHECK(run_until_state_(GL_UI_LOW_BATT, (uint32_t)(gl_sim_now_us() / 1000u) + 4000u));
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 0u); /* about 90 mA were not drawn from it */
+    GL_CHECK_EQ(gl_sim_stats()->frames_captured, 0u);
+    GL_CHECK(!gl_sim_cam_rail_on());
+    GL_CHECK_EQ(app.reads_total, 0u);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
 GL_TEST(test_low_and_critical_battery)
 {
     world_defaults_();
@@ -1519,9 +1623,11 @@ int main(void)
     GL_RUN(test_bump_during_capture_aborts_and_rereads);
     GL_RUN(test_precision_read_spin_and_reread);
     GL_RUN(test_survey_second_drop);
+    GL_RUN(test_survey_two_placements_fit_twist_and_curvature);
     GL_RUN(test_zeroing_on_a_table_top);
     GL_RUN(test_cradle_usb_charging_and_dfu);
     GL_RUN(test_missing_devices_are_reported_not_fatal);
+    GL_RUN(test_critical_cell_found_after_the_wake_up_stops_the_cameras);
     GL_RUN(test_low_and_critical_battery);
     GL_RUN(test_spurious_wake_right_after_sleep_is_ignored);
     return gl_test_summary();

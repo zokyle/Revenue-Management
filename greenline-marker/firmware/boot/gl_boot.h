@@ -71,6 +71,27 @@
  *   5. Otherwise the stub starts the INDEPENDENT WATCHDOG (so that an image
  *      that hangs before it has set up anything still comes back), counts
  *      the start and jumps to the application.
+ *   6. SHIP MODE (phase-3 review, hardware finding 8).  The application
+ *      marks ship mode in BKP_SHIP before it enters Shutdown.  A reset
+ *      without VBUS in that state (a stray reset; a watchdog that counts in
+ *      Shutdown after all) must lead back to Shutdown and nowhere else: the
+ *      stub does not count it and does NOT start the watchdog - it jumps to
+ *      a valid image, whose first act is to see the mark and enter Shutdown
+ *      again with its pull-downs (GL_BOOT_START_APP_QUIET).  Before this
+ *      rule every such reset was counted as an unconfirmed start with the
+ *      watchdog restarted: four of them, and the next docking of a shipped
+ *      unit with a good image ended in ST's loader.  Rules 2 to 4 come
+ *      first: an invalid image in ship mode waits for VBUS as in (3).
+ *   0. A FAULT INSIDE THE STUB (phase-3 review, hardware finding 4).  The
+ *      stub reads every byte of the image.  A flash word that cannot be
+ *      read (a reset or brown-out during programming; the STM32U5's flash
+ *      signals an uncorrectable word with an NMI - PROVISIONAL, RM0456 not
+ *      read) is exactly the half-written image this stub exists for, and
+ *      must not turn into a reset loop that never reaches the decision.
+ *      The NMI handler notes the flash error in BKP_FAULTS and returns; the
+ *      image is then invalid.  Any other fault is counted in BKP_FAULTS and
+ *      resets; after GL_BOOT_MAX_STUB_FAULTS such passes in a row the stub
+ *      no longer reads the image and treats it as invalid (rule 3).
  *
  * A bad image therefore shows itself as a unit that sits in the USB loader
  * in its cradle - seen by the PC as ST's DFU device - after at most three
@@ -117,6 +138,15 @@
 #define GL_BOOT_ATTEMPTS_COUNT_MASK 0x7Fu  /* ... the count in the low 7 ... */
 #define GL_BOOT_ATTEMPTS_TO_LOADER 0x80u   /* ... and "go to the loader when VBUS is there" */
 #define GL_BOOT_MAX_FAILED_STARTS 3u
+/* (BKP1R is the application's "RTC is set" mark) */
+#define GL_BOOT_BKP_SHIP 2u     /* BKP2R: the application's "in ship mode" mark */
+#define GL_BOOT_SHIP_MAGIC 0x474C5348u /* "GLSH" (hal/stm32u5: GLH_SHIP_MAGIC) */
+/* (BKP4R is the stub's report of what it found and did) */
+#define GL_BOOT_BKP_FAULTS 5u   /* BKP5R: faults INSIDE the stub (rule 0 of the file comment) */
+#define GL_BOOT_FAULTS_MAGIC 0x474C4600u /* "GLF" in the upper 24 bits of BKP5R ... */
+#define GL_BOOT_FAULTS_COUNT_MASK 0x7Fu  /* ... the count of faults in the low 7 ... */
+#define GL_BOOT_FAULTS_ECC 0x80u         /* ... and "a flash word of the image could not be read" */
+#define GL_BOOT_MAX_STUB_FAULTS 3u
 
 /* ---- the image ------------------------------------------------------------------ */
 typedef struct {
@@ -162,7 +192,10 @@ gl_boot_img_t gl_boot_image_check(const uint8_t *image, size_t region_len, uint3
 typedef enum {
     GL_BOOT_START_APP = 0, /**< start the watchdog, jump to the application */
     GL_BOOT_LOADER,        /**< jump to ST's USB loader in system memory */
-    GL_BOOT_WAIT_VBUS      /**< Shutdown until VBUS appears (which is a reset: the stub again) */
+    GL_BOOT_WAIT_VBUS,     /**< Shutdown until VBUS appears (which is a reset: the stub again) */
+    GL_BOOT_START_APP_QUIET /**< ship mode, no VBUS: jump to the application WITHOUT starting the
+                                 watchdog and without counting the start; its first act is to go
+                                 back to Shutdown (hal/stm32u5 ship_check_) */
 } gl_boot_action_t;
 
 typedef enum {
@@ -170,7 +203,8 @@ typedef enum {
     GL_BOOT_WHY_UPDATE_REQUESTED,
     GL_BOOT_WHY_IMAGE_INVALID,
     GL_BOOT_WHY_FAILED_STARTS,
-    GL_BOOT_WHY_PENDING       /**< an earlier decision for the loader, carried out now (or still waiting) */
+    GL_BOOT_WHY_PENDING,      /**< an earlier decision for the loader, carried out now (or still waiting) */
+    GL_BOOT_WHY_SHIP_MODE     /**< the marker is in ship mode and VBUS is not there */
 } gl_boot_why_t;
 
 typedef struct {
@@ -179,6 +213,7 @@ typedef struct {
     bool abnormal_reset;     /**< this reset was a watchdog or a software reset */
     bool vbus;               /**< VBUS_SENSE is high */
     uint32_t attempts_reg;   /**< BKP_ATTEMPTS as found */
+    bool ship_mode;          /**< BKP_SHIP == GL_BOOT_SHIP_MAGIC */
 } gl_boot_inputs_t;
 
 typedef struct {
@@ -190,5 +225,24 @@ typedef struct {
 
 /** The rule in the file comment.  Pure. */
 void gl_boot_decide(const gl_boot_inputs_t *in, gl_boot_decision_t *out);
+
+/* ---- faults inside the stub (rule 0) ------------------------------------------------ */
+
+/** May the stub read the application image on this pass?  False when
+ *  BKP_FAULTS (as found) says that a flash word of the image could not be
+ *  read, or that GL_BOOT_MAX_STUB_FAULTS passes in a row have ended in a
+ *  fault: the image is then INVALID without being read again, and the
+ *  decision runs.  Pure. */
+bool gl_boot_may_read_image(uint32_t faults_reg);
+
+/** The value a fault handler of the stub writes to BKP_FAULTS: one more
+ *  fault; `ecc` = it was the flash's "uncorrectable word" signal.  Pure. */
+uint32_t gl_boot_fault_note(uint32_t faults_reg, bool ecc);
+
+/** The value the stub writes to BKP_FAULTS once the decision is taken:
+ *  0 when the image was read to its end without a fault, or when the loader
+ *  is entered (whatever comes out of it is checked afresh); otherwise the
+ *  register as found (a unit waiting for VBUS keeps its verdict).  Pure. */
+uint32_t gl_boot_faults_after(uint32_t faults_reg, bool image_was_read, uint8_t action);
 
 #endif /* GL_BOOT_H */

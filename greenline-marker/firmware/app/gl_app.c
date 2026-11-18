@@ -285,7 +285,19 @@ static uint8_t chg_view_(const gl_app_t *app, uint8_t *blocked, bool *full)
     case GL_CHG_NO_VBUS: b = 0u; break;
     case GL_CHG_TOO_COLD: b = 1u; break;
     case GL_CHG_TOO_HOT: b = 2u; break;
-    case GL_CHG_TIME_LIMIT: b = 4u; break;
+    case GL_CHG_TIME_LIMIT:
+        /* The backstop counts docked time whatever the charger's status
+         * says, so it also comes round on a marker that finished its charge
+         * hours ago and sleeps in the cradle.  With the cell seen at or
+         * above the restart voltage that is simply FULL; "TIME LIMIT" is
+         * for the cell that six hours did not bring up. */
+        if (app->power.limit_cell_was_up) {
+            b = 0u;
+            f = true;
+        } else {
+            b = 4u;
+        }
+        break;
     case GL_CHG_FORCED: b = 5u; break;
     default: b = 3u; break; /* unknown, NTC fault, implausible */
     }
@@ -325,6 +337,16 @@ static void log_event_any_(gl_app_t *app, uint16_t code, int32_t arg)
  * counts as known only if it is fresh. */
 static void charge_gate_(gl_app_t *app, uint32_t now)
 {
+    /* The factory's "hold the charge stopped" (GL_CMD_SET_CHARGE 1) belongs
+     * to the unlocked session that asked for it.  When that session is over
+     * - USB gone, the cradle sleep, a wrong UNLOCK word, "LOCK", a reset -
+     * the stop is over too: a station program that died after assembly
+     * step 13 must not leave a docked marker that runs its cell down behind
+     * a charger held off (phase-3 review, hardware finding 3: 50.0 % to
+     * 44.5 % in 24 h in the model). */
+    if (app->power.forced && !app->proto.unlocked) {
+        gl_power_charge_force(&app->power, false);
+    }
     const bool cell_fresh = app->cell_seen &&
                             (uint32_t)(now - app->cell_temp_ms) <= GL_APP_CELL_TEMP_MAX_AGE_MS;
     const bool imu_t = app->imu_ok && app->temp_valid &&
@@ -628,6 +650,11 @@ static void usb_session_end_(gl_app_t *app)
     app->usb_on = false;
     app->stream_mask = 0;
     app->six.active = false;
+    /* a download position belongs to the session that sought it: the next
+     * session's LOG_READ "continue" without a LOG_SEEK starts at the oldest
+     * record (phase-3 review, factory finding 8) */
+    app->log_seek_seq = 0;
+    app->log_iter_valid = false;
     gl_proto_disconnect(&app->proto);
 }
 
@@ -932,7 +959,13 @@ static void battery_service_(gl_app_t *app, uint32_t now)
     charge_gate_(app, now);
     /* E13: a marker that wakes too hot says so at once, before the tilt read
      * (the read itself is gated again where the cameras would start) */
-    if (!app->power.vbus &&
+    /* ... unless what this wake-up may lead to is a RECALL (E30): that shows
+     * a stored result and uses no camera, and E13 is about camera reads.  A
+     * hot marker that is tapped shows its result again; if it turns out to
+     * have been lifted, the new read is refused where its cameras would
+     * start (phase-3 review, application finding 6: the stored result was
+     * refused AND lost). */
+    if (!app->power.vbus && !app->ui.recall &&
         (app->ui.state == (uint8_t)GL_UI_WAKE || app->ui.state == (uint8_t)GL_UI_WAIT_STILL)) {
         (void)read_temp_ok_(app, now, false);
     }
@@ -1704,6 +1737,11 @@ static void compose_view_(gl_app_t *app)
     v->break_cups = e->break_cups;
     v->confidence = shown_confidence_(app);
     v->drop = (c->stored && app->survey.count > 0u) ? app->survey.count : 0u;
+    v->drops_used = (v->drop != 0u && app->solve_survey) ? app->solve_drops : v->drop;
+    /* E11: the zero that was removed is the one of the seat the SURFACE
+     * setting names - or it is the other seat's, or none at all (phase-3
+     * review, application finding 4: nothing on the screen said so) */
+    v->zero_missing = (app->seat_used != app->settings.surface);
     /* from the read frame to the marker's present frame */
     v->aim_rad = gl_wrap_pi(e->aim_azimuth_device_rad - c->view_yaw_rad);
     /* E12: the renderer turns the line by the stored rotation of the glass */
@@ -1967,6 +2005,27 @@ static void recall_watch_(gl_app_t *app, unsigned flags, uint32_t dt_ms)
             if (app->recall_moving > GL_APP_RECALL_MOVING_BLOCKS) {
                 gone = true; /* more movement than a tap leaves behind */
             }
+            app->recall_still = 0;
+            app->recall_sum_x = 0.0f;
+            app->recall_sum_y = 0.0f;
+        } else if ((flags & GL_MOTION_F_BLOCK_STILL) != 0u) {
+            /* RESEATED?  The mean of the still blocks before the one that
+             * would show the result, against where the marker lay at its
+             * read, at the noise of that comparison (gl_app_cfg.h).  Decided
+             * one block BEFORE the UI's "at rest", so that a new read is
+             * what follows, not a stale line that is taken back */
+            app->recall_sum_x += app->motion.avg.prev_mean_a[0];
+            app->recall_sum_y += app->motion.avg.prev_mean_a[1];
+            if (app->recall_still < 255u) {
+                app->recall_still++;
+            }
+            if (app->recall_still == GL_APP_STILL_BLOCKS - 1u) {
+                const float n = (float)app->recall_still;
+                if (fabsf(app->recall_sum_x / n - app->recall_rest_x) > GL_APP_RECALL_RESEAT_G ||
+                    fabsf(app->recall_sum_y / n - app->recall_rest_y) > GL_APP_RECALL_RESEAT_G) {
+                    gone = true; /* it has seated itself anew: the stored line is not this one's */
+                }
+            }
         }
     }
     if (gone) {
@@ -1993,6 +2052,9 @@ static void recall_wake_(gl_app_t *app)
     }
     app->recall_checking = true;
     app->recall_moving = 0;
+    app->recall_still = 0;
+    app->recall_sum_x = 0.0f;
+    app->recall_sum_y = 0.0f;
     gl_rot_int_start(&app->recall_rot, app->cur.gyro_bias);
 }
 
@@ -2303,28 +2365,67 @@ gl_status_t gl_app_start_cal(gl_app_t *app, uint8_t procedure, uint8_t arg)
             if (st != GL_OK) {
                 return st;
             }
-            app->cal_tilt.offset_g[0] = offset.x;
-            app->cal_tilt.offset_g[1] = offset.y;
-            app->cal_tilt.offset_g[2] = offset.z;
-            app->cal_tilt.m = m;
-            if (app->temp_valid) {
-                app->cal_tilt.t0_c = app->temp_c;
+            /* Solved into a COPY; the copy must pass the record's own range
+             * check (a matrix element the decoder refuses would be stored
+             * and then dropped to defaults at the next boot), must be
+             * stored, and only then is it the unit's calibration.  If any of
+             * that fails nothing has changed - the RAM record, the flags
+             * GET_IDENT reports, and the six captured faces, which the
+             * operator can solve again (phase-3 review, factory finding 10:
+             * a refused store left the new offsets and the FACTORY flag in
+             * RAM until the next reset). */
+            {
+                const gl_cal_tilt_t before = app->cal_tilt;
+                gl_cal_tilt_t cal = app->cal_tilt, chk;
+                uint8_t blob[GL_CAL_TILT_BLOB_LEN];
+                cal.offset_g[0] = offset.x;
+                cal.offset_g[1] = offset.y;
+                cal.offset_g[2] = offset.z;
+                cal.m = m;
+                if (app->temp_valid) {
+                    cal.t0_c = app->temp_c;
+                }
+                cal.flags |= (uint8_t)GL_CAL_TILT_FLAG_FACTORY;
+                gl_cal_tilt_encode(&cal, blob);
+                st = gl_cal_tilt_decode(blob, sizeof(blob), &chk);
+                if (st != GL_OK) {
+                    return st;
+                }
+                app->cal_tilt = cal;
+                st = gl_app_cal_store(app, (uint8_t)GL_CAL_ID_TILT);
+                if (st != GL_OK) {
+                    app->cal_tilt = before;
+                    return st;
+                }
             }
-            app->cal_tilt.flags |= (uint8_t)GL_CAL_TILT_FLAG_FACTORY;
             app->six.done_mask = 0;
-            return gl_app_cal_store(app, (uint8_t)GL_CAL_ID_TILT);
+            return GL_OK;
         }
         return GL_ERR_PARAM;
     case GL_CALPROC_GRAIN_WHITE: {
+        const gl_cal_grain_t before = app->cal_grain;
+        gl_cal_grain_t cal = app->cal_grain, chk;
+        uint8_t blob[GL_CAL_GRAIN_BLOB_LEN];
         gl_status_t st = gl_grain_fe_measure(&grain_raw_, GL_GRAIN_MAX_CYCLES);
         if (st == GL_OK) {
-            st = gl_grain_white_reference(&grain_raw_, &app->cal_grain);
+            st = gl_grain_white_reference(&grain_raw_, &cal);
         }
         gl_app_log_event(app, (uint16_t)GL_APP_LOGEV_GRAIN_WHITE, (int32_t)st);
         if (st != GL_OK) {
             return st;
         }
-        return gl_app_cal_store(app, (uint8_t)GL_CAL_ID_GRAIN);
+        /* as for the six-face solve: checked, stored, and only then adopted */
+        gl_cal_grain_encode(&cal, blob);
+        st = gl_cal_grain_decode(blob, sizeof(blob), &chk);
+        if (st != GL_OK) {
+            return st;
+        }
+        app->cal_grain = cal;
+        st = gl_app_cal_store(app, (uint8_t)GL_CAL_ID_GRAIN);
+        if (st != GL_OK) {
+            app->cal_grain = before;
+        }
+        return st;
     }
     case GL_CALPROC_ABORT:
         app->six.active = false;
@@ -2419,6 +2520,14 @@ static void do_actions_(gl_app_t *app, uint32_t a, uint32_t now)
     }
     if ((a & GL_ACT_SURVEY_RESET) != 0u) {
         gl_survey_reset(&app->survey);
+        /* The read on the screen is no longer a placement of any Survey.  If
+         * the golfer starts one again on this same result it must be stored
+         * again: survey_store_() refuses a read that is marked as stored,
+         * and until the phase-3 review the mark outlived the Survey it
+         * belonged to - the restarted Survey silently lost its first
+         * placement, showed "D1" at the next one, and the UI counted one
+         * placement more than the application held (application finding 1). */
+        app->cur.stored = false;
     }
     if ((a & GL_ACT_NEW_READ) != 0u) {
         app->view.have_result = false;
@@ -2579,6 +2688,7 @@ gl_status_t gl_app_init(gl_app_t *app)
         return GL_ERR_STATE;
     }
     gl_event_init(&app->events);
+    app->boot_ms = gl_hal_tick_ms(); /* the 10 s of E34's confirmation count from here */
 
     gl_settings_defaults(&app->settings);
     gl_cal_tilt_defaults(&app->cal_tilt);
@@ -2957,7 +3067,7 @@ void gl_app_run_once(gl_app_t *app)
     /* E34: this image has run its main loop for a while - tell the boot stub
      * (it would otherwise count this start as one that ended badly if a
      * watchdog reset follows) */
-    if (!app->boot_confirmed && now >= GL_APP_BOOT_CONFIRM_MS) {
+    if (!app->boot_confirmed && (uint32_t)(now - app->boot_ms) >= GL_APP_BOOT_CONFIRM_MS) {
         app->boot_confirmed = true;
         gl_hal_boot_confirm();
     }
@@ -2970,7 +3080,16 @@ void gl_app_run_once(gl_app_t *app)
 
     /* 3. events -> transition table -> actions */
     while (gl_event_get(&app->events, &e)) {
-        const uint32_t a = gl_ui_dispatch(&app->ui, (gl_ui_event_t)e.type, e.arg, now);
+        uint32_t a;
+        if (gl_factory_holds_ui(app) && e.type != (uint8_t)GL_EV_USB_ATTACH &&
+            e.type != (uint8_t)GL_EV_USB_DETACH && e.type != (uint8_t)GL_EV_FORCE_SLEEP &&
+            e.type != (uint8_t)GL_EV_BATT_LOW && e.type != (uint8_t)GL_EV_FAULT) {
+            /* a display pattern is being shown on the factory's seat plate:
+             * the marker lies under a camera with nothing on its pads, and
+             * neither stillness nor a gesture starts a read (app/gl_factory.c) */
+            continue;
+        }
+        a = gl_ui_dispatch(&app->ui, (gl_ui_event_t)e.type, e.arg, now);
         do_actions_(app, a, now);
         if (app->ui.state != (uint8_t)GL_UI_SETTINGS_DIAL) {
             gl_motion_dial_end(&app->motion);

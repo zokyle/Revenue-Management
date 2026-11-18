@@ -245,7 +245,10 @@ GL_TEST(test_axis_mapping)
     GL_CHECK_NEAR((float)s.gy * imu_.gyro_rad_s_per_lsb, g[1], 1e-3);
     GL_CHECK_NEAR((float)s.gz * imu_.gyro_rad_s_per_lsb, g[2], 1e-3);
     /* with the identity map the same board would read wrongly */
-    GL_CHECK_EQ(gl_imu_init(&imu_, NULL), GL_OK);
+    {
+        const gl_imu_mount_t identity = { { 0, 1, 2 }, { 1, 1, 1 } };
+        GL_CHECK_EQ(gl_imu_init(&imu_, &identity), GL_OK);
+    }
     GL_CHECK_EQ(gl_imu_start_measure(&imu_), GL_OK);
     gl_hal_delay_ms(10);
     GL_CHECK_EQ(gl_imu_read(&imu_, &s), GL_OK);

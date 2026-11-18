@@ -248,8 +248,8 @@ GL_TEST(test_guarded_commands_need_unlock)
     }
     /* the two with long payloads */
     memset(big, 0, sizeof(big));
-    big[0] = 3;
-    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 3), GL_ERR_STATE);
+    big[0] = 5;
+    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 5), GL_ERR_STATE);
     big[0] = 20;
     GL_CHECK_EQ(st_(GL_CMD_SET_GRAIN_FLOOR, big, 1 + 4 * 20), GL_ERR_STATE);
     /* nothing was armed, stored or started */
@@ -353,27 +353,56 @@ GL_TEST(test_bad_arguments)
         }
         GL_CHECK_EQ(st, bad[i].want);
     }
-    /* the temperature fit: too few points, too many, a length that does not
-     * match the count, a point out of range, only two distinct temperatures */
+    /* the temperature fit: too few points (fewer than FIVE since the phase-3
+     * review: a quadratic through three is exact and its residual says
+     * nothing), too many, a length that does not match the count, a point
+     * out of range, a span under 30 K, only two distinct temperatures */
     memset(big, 0, sizeof(big));
     big[0] = 2;
     GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 2), GL_ERR_PARAM);
+    big[0] = 4;
+    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 4), GL_ERR_PARAM);
     big[0] = 17;
     GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 17), GL_ERR_PARAM);
-    big[0] = 4;
-    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 3), GL_ERR_PARAM);
-    big[0] = 3;
+    big[0] = 6;
+    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 5), GL_ERR_PARAM);
+    big[0] = 5;
     gl_put_f32(&big[1], 25.0f);
     gl_put_f32(&big[5], 10.0f);
     gl_put_f32(&big[21], 10.0f);
-    gl_put_f32(&big[37], 40.0f);
-    GL_CHECK(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 3) != GL_OK); /* two distinct temperatures */
-    gl_put_f32(&big[21], 25.0f);
+    gl_put_f32(&big[37], 45.0f);
+    gl_put_f32(&big[53], 45.0f);
+    gl_put_f32(&big[69], 45.0f);
+    GL_CHECK(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 5) != GL_OK); /* two distinct temperatures */
+    gl_put_f32(&big[21], 20.0f);
+    gl_put_f32(&big[37], 25.0f);
+    gl_put_f32(&big[53], 35.0f);
     gl_put_f32(&big[9], 0.9f); /* an offset of 0.9 g */
-    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 3), GL_ERR_PARAM);
+    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 5), GL_ERR_PARAM);
     gl_put_f32(&big[9], 0.0f);
     gl_put_f32(&big[1], 200.0f); /* t0 */
-    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 3), GL_ERR_PARAM);
+    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 5), GL_ERR_PARAM);
+    gl_put_f32(&big[1], 25.0f);
+    gl_put_f32(&big[69], 39.0f); /* five good points, 10 .. 39 C: a span of 29 K */
+    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 5), GL_ERR_PARAM);
+    /* ... and five good points over 35 K on a unit WITHOUT a six-face
+     * calibration: there are no offsets the terms could be added to */
+    gl_put_f32(&big[69], 45.0f);
+    GL_CHECK(!(app.cal_tilt.flags & GL_CAL_TILT_FLAG_FACTORY));
+    GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, big, 5 + 16 * 5), GL_ERR_STATE);
+    GL_CHECK(!(app.cal_tilt.flags & GL_CAL_TILT_FLAG_TEMPCO));
+    /* the two new optional bytes: values beyond their range */
+    {
+        const uint8_t dt[3] = { GL_DISP_PATTERN_REF_RAW, 30, 2 };
+        const uint8_t dn[3] = { GL_DISP_PATTERN_NORMAL, 0, 1 };
+        const uint8_t zr[3] = { GL_ZERO_OP_ARM, 0, 121 };
+        const uint8_t zs[3] = { GL_ZERO_OP_STATUS, 0, 30 };
+        GL_CHECK_EQ(st_(GL_CMD_DISPLAY_TEST, dt, 3), GL_ERR_PARAM);
+        GL_CHECK_EQ(st_(GL_CMD_DISPLAY_TEST, dn, 3), GL_ERR_PARAM);
+        GL_CHECK_EQ(st_(GL_CMD_LEVEL_ZERO, zr, 3), GL_ERR_PARAM);
+        GL_CHECK_EQ(st_(GL_CMD_LEVEL_ZERO, zs, 3), GL_ERR_PARAM);
+        GL_CHECK(!app.fac.plate_armed && app.fac.zero.state == (uint8_t)GL_ZERO_STATE_IDLE);
+    }
     /* the grain floor: too few readings, a count that does not match, a NaN */
     memset(big, 0, sizeof(big));
     big[0] = 19;
@@ -596,6 +625,54 @@ GL_TEST(test_camera_identity_and_frames)
 
 /* TEST GATE 2: bars at +13.0 and -13.0 degrees; the brightness of the rows
  * that image them. */
+/* Phase-3 review, factory finding 9: "CAM_CAPTURE of a narrow window at the
+ * right edge writes inconsistent sensor registers and answers IO" - widths 4
+ * and 8 at every x0 from 604 to 632, each with a cycle of the camera rail
+ * and a simulator rule violation.  The sensor's start register cannot hold
+ * a start column beyond 600; such a window is now moved inward, as one that
+ * overhangs the edge always was, and the answer says where it lies. */
+GL_TEST(test_narrow_window_at_the_right_edge)
+{
+    static const uint16_t widths[5] = { 4, 8, 36, 40, 96 };
+    const uint8_t *pl;
+    uint8_t req[10];
+    unsigned ok = 0, tried = 0, moved = 0;
+
+    docked_(true);
+    for (size_t wi = 0; wi < GL_ARRAY_LEN(widths); wi++) {
+        for (uint16_t x0 = 596; x0 <= 636; x0 = (uint16_t)(x0 + 4u)) {
+            const uint16_t w = widths[wi];
+            const unsigned want = (x0 + w > 640u) ? (640u - w) : x0;
+            const unsigned expect = (want > 600u) ? 600u : want;
+            int n;
+            req[0] = (uint8_t)(tried & 1u);
+            req[1] = GL_CAPTURE_NORMAL;
+            gl_put_u16(&req[2], x0);
+            gl_put_u16(&req[4], 200);
+            gl_put_u16(&req[6], w);
+            gl_put_u16(&req[8], 2);
+            n = cmd_(GL_CMD_CAM_CAPTURE, req, 10, &pl);
+            tried++;
+            GL_CHECK_EQ(n, 1 + (int)GL_PROTO_CAPTURE_LEN);
+            GL_CHECK_EQ(pl[0], GL_OK);
+            if (n == 1 + (int)GL_PROTO_CAPTURE_LEN && pl[0] == GL_OK) {
+                ok++;
+                GL_CHECK_EQ(gl_get_u16(&pl[3]), expect); /* where the window really lies */
+                GL_CHECK_EQ(gl_get_u16(&pl[7]), w);
+                moved += (expect != x0) ? 1u : 0u;
+            }
+            GL_CHECK(!gl_sim_cam_rail_on() && cam_pins_parked_());
+            run_talking_until_ms_(now_ms_() + 50u);
+        }
+    }
+    printf("    %u windows of 4 to 96 pixels with x0 596 .. 636: %u answered OK (before the fix "
+           "widths 4 and 8 from x0 604 answered IO), %u of them moved inward and reported so; "
+           "simulator rule violations %u\n", tried, ok, moved, gl_sim_violation_total());
+    GL_CHECK_EQ(ok, tried);
+    GL_CHECK(moved >= 16u);
+    no_violation_();
+}
+
 GL_TEST(test_camera_field_gate_2)
 {
     const uint8_t *pl;
@@ -1033,10 +1110,18 @@ GL_TEST(test_grain_leds_and_dark_offset)
  * rest 0.6 s later), let the armed zeroing take its first read, turn the
  * marker by `turn_deg` and wait for the zeroing to end.  Returns the state
  * of the armed zeroing afterwards. */
+static uint8_t zero_placed_(double turn_deg);
+
 static uint8_t zero_on_the_plate_(double turn_deg)
 {
-    double t_now;
     undock_();
+    return zero_placed_(turn_deg);
+}
+
+/* the same without the lifting off the contacts (the marker is out already) */
+static uint8_t zero_placed_(double turn_deg)
+{
+    double t_now;
     W.turn_len_s = 0.0;
     W.t_pick_s = (double)now_ms_() / 1000.0 + 0.5;
     W.t_place_s = W.t_pick_s + 0.6;
@@ -1212,10 +1297,6 @@ GL_TEST(test_level_zero_armed_on_two_seats)
     no_violation_();
 }
 
-/* ======================================================================= */
-/* 6. six-face step by step, temperature fit, horizon, floor, serial        */
-/* ======================================================================= */
-
 static float face_g_[3];
 static void face_imu_(void *ctx, uint64_t t_us, float a[3], float g[3])
 {
@@ -1227,6 +1308,404 @@ static void face_imu_(void *ctx, uint64_t t_us, float a[3], float g[3])
     a[2] = 1.002f * face_g_[2] + 0.020f;
     g[0] = g[1] = g[2] = 0.0f;
 }
+
+/* Phase-3 review, factory finding 3: assembly step 19 rests the marker at
+ * least 30 minutes OFF THE PADS before the zeros (six-face on USB,
+ * disconnect, rest, zero with nothing on the pads).  The arming lasted ten
+ * minutes: "rest 900 s and 1800 s: state FAILED, status 3 (TIMEOUT)".  And
+ * the base-face zero - the default of every read - can only be taken this
+ * way.  The arming now lasts 60 minutes; ARM can carry the rest, and the
+ * zeroing then does not start before the marker has been off VBUS that long;
+ * the result carries NTC2 (the soak rule of step 19 is on that sensor) and
+ * how long the marker had rested. */
+GL_TEST(test_level_zero_after_the_30_minute_rest)
+{
+    static const float bias_base[3] = { 0.0035f, -0.0025f, 0.0f };
+    static const float gyro_bias[3] = { 0.004f, -0.002f, 0.001f };
+    const uint8_t arm_plain[2] = { GL_ZERO_OP_ARM, GL_CAL_SEAT_BASE };
+    const uint8_t arm_rest[3] = { GL_ZERO_OP_ARM, GL_CAL_SEAT_BASE, 30 };
+    const uint8_t status[2] = { GL_ZERO_OP_STATUS, 0 };
+    const uint8_t *pl;
+    uint32_t t_off;
+    int n;
+
+    /* (a) the reviewer's sequence: armed, undocked, 1800 s of rest, then onto the plate */
+    docked_(true);
+    W.stick = false;
+    gl_sim_imu_set_errors(0.0008f, 0.002f, bias_base, gyro_bias);
+    unlock_();
+    (void)cmd_(GL_CMD_LEVEL_ZERO, arm_plain, 2, &pl);
+    GL_CHECK_EQ(pl[1], GL_ZERO_STATE_ARMED);
+    undock_();
+    run_until_ms_(now_ms_() + 1800u * 1000u);
+    GL_CHECK_EQ(app.fac.zero.state, GL_ZERO_STATE_ARMED); /* (FAILED / TIMEOUT before the fix) */
+    GL_CHECK_EQ(zero_placed_(180.0), GL_ZERO_STATE_DONE);
+    GL_CHECK_EQ(app.fac.zero.attempts, 1);
+    GL_CHECK(app.cal_tilt.flags & GL_CAL_TILT_FLAG_BASE);
+    GL_CHECK_NEAR(app.cal_tilt.base_bias_x, 0.0035, 0.0004);
+    printf("    armed, undocked, 1800 s of rest, onto the plate: state DONE, attempts %u, bias "
+           "(%.3f, %.3f) mrad (before the fix: FAILED, status TIMEOUT, attempts 0)\n",
+           (unsigned)app.fac.zero.attempts, 1000.0 * (double)app.cal_tilt.base_bias_x,
+           1000.0 * (double)app.cal_tilt.base_bias_y);
+
+    /* (b) ARM with a rest of 30 minutes: a placement BEFORE the rest is over
+     * is not the zeroing (an ordinary placement; the arming stays), the
+     * placement after it is */
+    docked_(true);
+    W.stick = false;
+    gl_sim_imu_set_errors(0.0008f, 0.002f, bias_base, gyro_bias);
+    gl_sim_imu_set_temperature(23.5f);
+    unlock_();
+    n = cmd_(GL_CMD_LEVEL_ZERO, arm_rest, 3, &pl);
+    GL_CHECK_EQ(n, 1 + (int)GL_PROTO_ZERO_LEN);
+    GL_CHECK_EQ(pl[1], GL_ZERO_STATE_ARMED);
+    GL_CHECK_EQ(pl[39], 30); /* the rest asked for */
+    undock_();
+    t_off = now_ms_();
+    run_until_ms_(t_off + 5u * 60000u);
+    W.t_pick_s = (double)now_ms_() / 1000.0 + 0.5;
+    W.t_place_s = W.t_pick_s + 0.6;
+    run_until_ms_(now_ms_() + 8000u);
+    GL_CHECK(!app.zero.active);
+    GL_CHECK_EQ(app.fac.zero.state, GL_ZERO_STATE_ARMED);
+    GL_CHECK_EQ(app.fac.zero.attempts, 0);
+    GL_CHECK(!(app.cal_tilt.flags & GL_CAL_TILT_FLAG_BASE));
+    (void)run_until_state_(GL_UI_SLEEP, now_ms_() + 70000u);
+    run_until_ms_(t_off + 31u * 60000u);
+    GL_CHECK_EQ(app.fac.zero.state, GL_ZERO_STATE_ARMED);
+    GL_CHECK_EQ(zero_placed_(180.0), GL_ZERO_STATE_DONE);
+    GL_CHECK(app.cal_tilt.flags & GL_CAL_TILT_FLAG_BASE);
+    run_until_ms_(now_ms_() + 3000u);
+    dock_();
+    n = cmd_(GL_CMD_LEVEL_ZERO, status, 2, &pl);
+    GL_CHECK_EQ(pl[1], GL_ZERO_STATE_DONE);
+    GL_CHECK_NEAR((double)(int16_t)gl_get_u16(&pl[37]), 235.0, 3.0); /* NTC2 at the zeroing, 0.1 C */
+    GL_CHECK_NEAR(gl_get_f32(&pl[29]), 23.5, 0.1);                   /* the IMU's, as before */
+    GL_CHECK_EQ(pl[39], 30);
+    GL_CHECK(pl[40] >= 30u && pl[40] <= 33u);                         /* minutes it had rested */
+    printf("    ARM with 30 min of rest: placed after 5 min -> not zeroed, still armed; placed "
+           "after %u min -> DONE; result carries NTC2 %.1f C and IMU %.1f C\n", (unsigned)pl[40],
+           0.1 * (double)(int16_t)gl_get_u16(&pl[37]), (double)gl_get_f32(&pl[29]));
+
+    /* (c) the arming does end: 60 minutes (plus the rest) without a zeroing */
+    unlock_();
+    (void)cmd_(GL_CMD_LEVEL_ZERO, arm_plain, 2, &pl);
+    undock_();
+    run_until_ms_(now_ms_() + GL_FACTORY_ZERO_ARM_TIMEOUT_MS - 120000u);
+    GL_CHECK_EQ(app.fac.zero.state, GL_ZERO_STATE_ARMED);
+    run_until_ms_(now_ms_() + 240000u);
+    GL_CHECK_EQ(app.fac.zero.state, GL_ZERO_STATE_FAILED);
+    GL_CHECK_EQ(app.fac.zero.status, GL_ERR_TIMEOUT);
+    no_violation_();
+}
+
+/* Phase-3 review, factory finding 2: step 19 measures the reference line
+ * with the marker on a seat plate against the fence, a camera above, "no
+ * contacts on either plate".  A display test ended at once when the marker
+ * left the cradle ("100 ms after undocking the state is SLEEP ... the
+ * pattern is gone").  A pattern can now be ARMED for the seat plate: it is
+ * shown in the cradle as before, and shown again when the marker is next
+ * put down out of the cradle - instead of a read, for the hold time, with
+ * nothing on the pads. */
+GL_TEST(test_reference_line_on_the_seat_plate)
+{
+    const double deg = PI_D / 180.0;
+    const uint8_t armed[3] = { GL_DISP_PATTERN_REF_RAW, 60, 1 };
+    const uint8_t plain[2] = { GL_DISP_PATTERN_REF_RAW, 60 };
+    const uint8_t *pl;
+    double a_cradle, a_plate, xc;
+    unsigned rows, black;
+    uint32_t t_shown, crc;
+    int n;
+
+    docked_(true);
+    W.stick = false;
+    /* locked: an armed pattern is refused, a plain one is not */
+    GL_CHECK_EQ(st_(GL_CMD_DISPLAY_TEST, armed, 3), GL_ERR_STATE);
+    GL_CHECK(!app.fac.plate_armed);
+    /* the reviewer's measurement, unchanged: a plain pattern ends at the undocking */
+    GL_CHECK_EQ(st_(GL_CMD_DISPLAY_TEST, plain, 2), GL_OK);
+    run_until_ms_(now_ms_() + 50u);
+    undock_();
+    GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP);
+    GL_CHECK_EQ(app.fac.pattern, GL_DISP_PATTERN_NORMAL);
+    W.t_pick_s = (double)now_ms_() / 1000.0 + 20.5;
+    W.t_place_s = W.t_pick_s + 0.6;
+    run_until_ms_(now_ms_() + 20000u);
+    dock_();
+    /* armed */
+    unlock_();
+    n = cmd_(GL_CMD_DISPLAY_TEST, armed, 3, &pl);
+    GL_CHECK_EQ(n, 8);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    crc = gl_get_u32(&pl[2]);
+    black = gl_get_u16(&pl[6]);
+    run_until_ms_(now_ms_() + 50u);
+    GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
+    a_cradle = line_angle_(&app.gfx, &xc, &rows);
+    GL_CHECK_EQ(rows, 96u);
+    undock_();
+    GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP); /* asleep on the way to the plate, display off */
+    GL_CHECK(!gl_sim_lcd()->disp);
+    GL_CHECK(app.fac.plate_armed && !app.fac.plate_showing);
+    run_until_ms_(now_ms_() + 40000u); /* carried over, 40 s */
+    W.t_pick_s = (double)now_ms_() / 1000.0 + 0.5;
+    W.t_place_s = W.t_pick_s + 0.6;
+    {
+        const uint32_t t0 = now_ms_();
+        while (!app.fac.plate_showing && now_ms_() < t0 + 6000u) {
+            run_until_ms_(now_ms_() + 10u);
+        }
+    }
+    GL_CHECK(app.fac.plate_showing);
+    t_shown = now_ms_();
+    run_until_ms_(now_ms_() + 100u);
+    /* on the plate: the SAME frame the cradle showed, on the panel, display on */
+    GL_CHECK(gl_sim_lcd()->disp);
+    GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
+    GL_CHECK_EQ(gl_crc32(app.gfx.px, sizeof(app.gfx.px)), crc);
+    GL_CHECK_EQ(gl_gfx_count_black(&app.gfx), black);
+    a_plate = line_angle_(&app.gfx, &xc, &rows);
+    GL_CHECK_EQ(rows, 96u);
+    GL_CHECK_NEAR(a_plate, a_cradle, 1e-9);
+    GL_CHECK_NEAR(xc, 63.5, 0.05);
+    /* held: 30 s and 55 s later it is still there, no read has started, no
+     * camera was powered, nothing was put on the pads */
+    run_until_ms_(t_shown + 30000u);
+    GL_CHECK(app.fac.plate_showing && gl_sim_lcd()->disp);
+    GL_CHECK_EQ(app.ui.state, GL_UI_WAIT_STILL);
+    run_until_ms_(t_shown + 55000u);
+    GL_CHECK(app.fac.plate_showing);
+    GL_CHECK_EQ(gl_crc32(app.gfx.px, sizeof(app.gfx.px)), crc);
+    GL_CHECK_EQ(panel_differs_from_framebuffer_(), 0u);
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 0u);
+    GL_CHECK_EQ(app.reads_total, 0u);
+    GL_CHECK(!app.power.vbus && !app.usb_on);
+    /* ... and after the hold: asleep, display off, disarmed */
+    run_until_ms_(t_shown + 61500u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_SLEEP);
+    GL_CHECK(!gl_sim_lcd()->disp && !app.fac.plate_showing && !app.fac.plate_armed);
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 0u);
+    GL_CHECK_EQ(app.fac.plate_shown, 1u);
+    printf("    reference line armed for the seat plate: shown %.1f s after the marker was put "
+           "down out of the cradle, the frame of the cradle (CRC %08lx, %u black pixels, line "
+           "at %+.3f deg), held 60 s with no camera read, then asleep\n",
+           ((double)t_shown - 1000.0 * W.t_place_s) / 1000.0, (unsigned long)crc, black,
+           a_plate / deg);
+    /* the next placement is an ordinary one again (no flagstick here: the
+     * cameras do run) */
+    W.t_pick_s = (double)now_ms_() / 1000.0 + 0.5;
+    W.t_place_s = W.t_pick_s + 0.6;
+    run_until_ms_(now_ms_() + 9000u);
+    GL_CHECK_EQ(app.fac.plate_shown, 1u);
+    GL_CHECK(gl_sim_stats()->cam_rail_cycles >= 1u);
+    /* docking ends a pattern that is being shown; "normal" cancels an arming */
+    (void)run_until_state_(GL_UI_SLEEP, now_ms_() + 70000u);
+    dock_();
+    unlock_();
+    GL_CHECK_EQ(st_(GL_CMD_DISPLAY_TEST, armed, 3), GL_OK);
+    GL_CHECK(app.fac.plate_armed);
+    GL_CHECK_EQ(st_(GL_CMD_DISPLAY_TEST, "\0\0", 2), GL_OK);
+    GL_CHECK(!app.fac.plate_armed);
+    GL_CHECK_EQ(st_(GL_CMD_DISPLAY_TEST, armed, 3), GL_OK);
+    undock_();
+    W.t_pick_s = (double)now_ms_() / 1000.0 + 0.5;
+    W.t_place_s = W.t_pick_s + 0.6;
+    {
+        const uint32_t t0 = now_ms_();
+        while (!app.fac.plate_showing && now_ms_() < t0 + 6000u) {
+            run_until_ms_(now_ms_() + 10u);
+        }
+    }
+    GL_CHECK(app.fac.plate_showing);
+    dock_();
+    run_until_ms_(now_ms_() + 200u);
+    GL_CHECK(!app.fac.plate_showing && !app.fac.plate_armed);
+    GL_CHECK_EQ(app.fac.pattern, GL_DISP_PATTERN_NORMAL);
+    no_violation_();
+}
+
+/* Phase-3 review, factory findings 10 and 11 (seeds S09, S12): a store that
+ * REFUSES - a flash that does not program - must leave every calibration
+ * value as it was, in RAM and in the store's own RAM copy, for every command
+ * that writes one; and the "calibration complete" flag of GET_IDENT, on
+ * which the final test relies, needs every flag. */
+GL_TEST(test_a_refused_store_changes_nothing)
+{
+    static const float face[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 },
+                                      { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+    const uint8_t solve[2] = { GL_CALPROC_SIX_FACE, 6 };
+    const uint8_t white[2] = { GL_CALPROC_GRAIN_WHITE, 0 };
+    const uint8_t *pl, *d;
+    uint8_t req[1 + 200];
+    gl_cal_tilt_t tilt0;
+    gl_cal_cam_t cam0, c;
+    gl_cal_grain_t grain0;
+    gl_cal_device_t dev0;
+    size_t len;
+    unsigned refused = 0;
+    int n;
+
+    docked_(true);
+    memcpy(face_g_, face[4], sizeof(face_g_));
+    gl_sim_imu_set_motion(face_imu_, NULL);
+    gl_sim_imu_set_errors(0.0008f, 0.002f, NULL, NULL);
+    unlock_();
+    for (unsigned f = 0; f < 6u; f++) {
+        const uint8_t step[2] = { GL_CALPROC_SIX_FACE, (uint8_t)f };
+        uint32_t t0;
+        memcpy(face_g_, face[f], sizeof(face_g_));
+        run_talking_until_ms_(now_ms_() + 1500u);
+        GL_CHECK_EQ(st_(GL_CMD_START_CAL, step, 2), GL_OK);
+        t0 = now_ms_();
+        do {
+            run_until_ms_(now_ms_() + 200u);
+            (void)cmd_(GL_CMD_CAL_STATUS, NULL, 0, &pl);
+        } while (pl[2] != 0u && now_ms_() < t0 + 5000u);
+    }
+    GL_CHECK_EQ(app.six.done_mask, 0x3Fu);
+    tilt0 = app.cal_tilt;
+    cam0 = app.cal_cam[GL_CAM_LEFT];
+    grain0 = app.cal_grain;
+    dev0 = app.cal_dev;
+
+    gl_sim_flash_fail_programs(true);
+    /* six-face solve (before the fix: status 10, but "RAM tilt flags are 0x01
+     * and offset_g is (0.0120, -0.0070, 0.0200) ... and the six captured
+     * faces are discarded") */
+    n = (int)st_(GL_CMD_START_CAL, solve, 2);
+    GL_CHECK(n != GL_OK);
+    refused += (n != GL_OK) ? 1u : 0u;
+    GL_CHECK_EQ(memcmp(&tilt0, &app.cal_tilt, sizeof(tilt0)), 0);
+    GL_CHECK_EQ(app.six.done_mask, 0x3Fu); /* the faces are kept: solve again */
+    (void)cmd_(GL_CMD_GET_IDENT, NULL, 0, &pl);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    printf("    flash that does not program: six-face solve answers %d, RAM tilt flags 0x%02X, "
+           "offset (%.4f, %.4f, %.4f), faces kept 0x%02X\n", n, (unsigned)app.cal_tilt.flags,
+           (double)app.cal_tilt.offset_g[0], (double)app.cal_tilt.offset_g[1],
+           (double)app.cal_tilt.offset_g[2], (unsigned)app.six.done_mask);
+    /* grain white reference */
+    n = (int)st_(GL_CMD_START_CAL, white, 2);
+    GL_CHECK(n != GL_OK);
+    refused += (n != GL_OK) ? 1u : 0u;
+    GL_CHECK_EQ(memcmp(&grain0, &app.cal_grain, sizeof(grain0)), 0);
+    /* SET_CAL (seed S09: the RAM copy kept although the store refused) */
+    gl_cal_cam_defaults(&c, 0);
+    c.fx_px = 700.0f;
+    req[0] = (uint8_t)GL_CAL_ID_CAM_L;
+    gl_cal_cam_encode(&c, &req[1]);
+    n = (int)st_(GL_CMD_SET_CAL, req, 1u + GL_CAL_CAM_BLOB_LEN);
+    GL_CHECK(n != GL_OK);
+    refused += (n != GL_OK) ? 1u : 0u;
+    GL_CHECK_EQ(memcmp(&cam0, &app.cal_cam[GL_CAM_LEFT], sizeof(cam0)), 0);
+    GL_CHECK_NEAR(app.read.model[GL_CAM_LEFT].fx, cam0.fx_px, 1e-6);
+    /* ... and the store's own RAM copy does not hold the refused value
+     * either (a sector change-over would have written it to flash later) */
+    GL_CHECK_EQ(gl_store_get(&app.store, (uint8_t)GL_STORE_ID_CAL_CAM_L, &d, &len), GL_ERR_NOT_FOUND);
+    /* display rotation, serial, camera horizon, grain floor */
+    req[0] = 1;
+    gl_put_f32(&req[1], 0.01f);
+    n = (int)st_(GL_CMD_DISPLAY_ROT, req, 5);
+    GL_CHECK(n != GL_OK);
+    refused += (n != GL_OK) ? 1u : 0u;
+    n = (int)st_(GL_CMD_SERIAL, "SNUM", 4);
+    GL_CHECK(n != GL_OK);
+    refused += (n != GL_OK) ? 1u : 0u;
+    GL_CHECK_EQ(memcmp(&dev0, &app.cal_dev, sizeof(dev0)), 0);
+    req[0] = 0;
+    gl_put_f32(&req[1], 247.25f);
+    gl_put_f32(&req[5], 0.0f);
+    n = (int)st_(GL_CMD_SET_CAM_HORIZON, req, 9);
+    GL_CHECK(n != GL_OK);
+    refused += (n != GL_OK) ? 1u : 0u;
+    GL_CHECK_EQ(memcmp(&cam0, &app.cal_cam[GL_CAM_LEFT], sizeof(cam0)), 0);
+    req[0] = 20;
+    for (int i = 0; i < 20; i++) {
+        gl_put_f32(&req[1 + 4 * i], 0.02f + 0.002f * (float)i);
+    }
+    n = (int)st_(GL_CMD_SET_GRAIN_FLOOR, req, 1 + 4 * 20);
+    GL_CHECK(n != GL_OK);
+    refused += (n != GL_OK) ? 1u : 0u;
+    GL_CHECK_EQ(memcmp(&grain0, &app.cal_grain, sizeof(grain0)), 0);
+    GL_CHECK(gl_sim_flash_stats()->programs_dropped >= 7u);
+    gl_sim_flash_fail_programs(false);
+
+    /* the flash works again: the SAME six faces solve and are stored */
+    GL_CHECK_EQ(st_(GL_CMD_START_CAL, solve, 2), GL_OK);
+    GL_CHECK(app.cal_tilt.flags & GL_CAL_TILT_FLAG_FACTORY);
+    GL_CHECK_NEAR(app.cal_tilt.offset_g[0], 0.012, 0.0005);
+    GL_CHECK_EQ(app.six.done_mask, 0u);
+    printf("    %u writing commands refused with the flash not programming: tilt, camera, grain "
+           "and device records unchanged in RAM, nothing in the store; with the flash back the "
+           "kept faces solve: offset (%.4f, %.4f, %.4f)\n", refused, (double)app.cal_tilt.offset_g[0],
+           (double)app.cal_tilt.offset_g[1], (double)app.cal_tilt.offset_g[2]);
+    /* nothing of what was refused comes back after a reset */
+    gl_sim_mcu_reset(GL_RESET_SOFTWARE);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    GL_CHECK_NEAR(app.cal_cam[GL_CAM_LEFT].fx_px, cam0.fx_px, 1e-6);
+    GL_CHECK_EQ(app.cal_dev.flags, dev0.flags);
+    GL_CHECK(app.cal_tilt.flags & GL_CAL_TILT_FLAG_FACTORY);
+
+    /* ---- seed S12: "calibration complete" needs EVERY flag ---- */
+    run_until_ms_(now_ms_() + 500u);
+    host_rx_len_ = 0;
+    {
+        gl_cal_tilt_t t = app.cal_tilt;
+        gl_cal_cam_t cl = app.cal_cam[GL_CAM_LEFT], cr = app.cal_cam[GL_CAM_RIGHT];
+        gl_cal_grain_t g = app.cal_grain;
+        gl_cal_device_t dv = app.cal_dev;
+        unsigned missing_seen = 0;
+        t.flags = GL_CAL_TILT_FLAG_FACTORY | GL_CAL_TILT_FLAG_FLIP | GL_CAL_TILT_FLAG_BASE |
+                  GL_CAL_TILT_FLAG_TEMPCO;
+        cl.flags = GL_CAL_CAM_FLAG_ALL;
+        cr.flags = GL_CAL_CAM_FLAG_ALL;
+        g.flags = GL_CAL_GRAIN_FLAG_WHITE_REF;
+        dv.flags = GL_CAL_DEV_FLAG_ALL;
+        app.cal_tilt = t;
+        app.cal_cam[GL_CAM_LEFT] = cl;
+        app.cal_cam[GL_CAM_RIGHT] = cr;
+        app.cal_grain = g;
+        app.cal_dev = dv;
+        (void)cmd_(GL_CMD_GET_IDENT, NULL, 0, &pl);
+        GL_CHECK(pl[50] & GL_PROTO_IDENT_CAL_COMPLETE); /* all there: complete */
+        for (unsigned k = 0; k < 12u; k++) {
+            app.cal_tilt = t;
+            app.cal_cam[GL_CAM_LEFT] = cl;
+            app.cal_cam[GL_CAM_RIGHT] = cr;
+            app.cal_grain = g;
+            app.cal_dev = dv;
+            switch (k) {
+            case 0: app.cal_tilt.flags &= (uint8_t)~GL_CAL_TILT_FLAG_FACTORY; break;
+            case 1: app.cal_tilt.flags &= (uint8_t)~GL_CAL_TILT_FLAG_FLIP; break;
+            case 2: app.cal_tilt.flags &= (uint8_t)~GL_CAL_TILT_FLAG_BASE; break;
+            case 3: app.cal_tilt.flags &= (uint8_t)~GL_CAL_TILT_FLAG_TEMPCO; break;
+            case 4: app.cal_cam[GL_CAM_LEFT].flags &= (uint8_t)~GL_CAL_CAM_FLAG_INTRINSICS; break;
+            case 5: app.cal_cam[GL_CAM_LEFT].flags &= (uint8_t)~GL_CAL_CAM_FLAG_EXTRINSICS; break;
+            case 6: app.cal_cam[GL_CAM_LEFT].flags &= (uint8_t)~GL_CAL_CAM_FLAG_HORIZON; break;
+            case 7: app.cal_cam[GL_CAM_RIGHT].flags &= (uint8_t)~GL_CAL_CAM_FLAG_INTRINSICS; break;
+            case 8: app.cal_cam[GL_CAM_RIGHT].flags &= (uint8_t)~GL_CAL_CAM_FLAG_EXTRINSICS; break;
+            case 9: app.cal_cam[GL_CAM_RIGHT].flags &= (uint8_t)~GL_CAL_CAM_FLAG_HORIZON; break;
+            case 10: app.cal_grain.flags &= (uint8_t)~GL_CAL_GRAIN_FLAG_WHITE_REF; break;
+            default: app.cal_dev.flags &= (uint8_t)~GL_CAL_DEV_FLAG_DISPLAY_ROT; break;
+            }
+            (void)cmd_(GL_CMD_GET_IDENT, NULL, 0, &pl);
+            GL_CHECK(!(pl[50] & GL_PROTO_IDENT_CAL_COMPLETE));
+            missing_seen += (pl[50] & GL_PROTO_IDENT_CAL_COMPLETE) ? 0u : 1u;
+        }
+        app.cal_tilt = t;
+        app.cal_dev = dv;
+        app.cal_dev.flags &= (uint8_t)~GL_CAL_DEV_FLAG_SERIAL;
+        (void)cmd_(GL_CMD_GET_IDENT, NULL, 0, &pl);
+        GL_CHECK(!(pl[50] & GL_PROTO_IDENT_CAL_COMPLETE));
+        printf("    GET_IDENT \"calibration complete\": set with every flag, cleared with each of "
+               "%u single flags missing (right camera included)\n", missing_seen + 1u);
+    }
+    no_violation_();
+}
+
+/* ======================================================================= */
+/* 6. six-face step by step, temperature fit, horizon, floor, serial        */
+/* ======================================================================= */
 
 GL_TEST(test_six_face_tempco_horizon_floor_serial)
 {
@@ -1279,11 +1758,19 @@ GL_TEST(test_six_face_tempco_horizon_floor_serial)
            "(0.0120, -0.0070, 0.0200)\n", (double)app.cal_tilt.offset_g[0],
            (double)app.cal_tilt.offset_g[1], (double)app.cal_tilt.offset_g[2]);
 
-    /* ---- temperature fit from points the PC supplies: b(T) = b0 + b1 dT + b2 dT^2 ---- */
+    /* ---- temperature fit from points the PC supplies ----
+     * The command stores ONLY the temperature terms, about the record's own
+     * t0 (the six-face temperature), and keeps the six-face offsets
+     * (phase-3 review, factory finding 1).  The points below are ABSOLUTE
+     * offsets b(T) = b0 + b1 (T - 23) + b2 (T - 23)^2; about the record's
+     * t0 the same curve has the linear term b1 + 2 b2 (t0 - 23). */
     {
         static const float temps[6] = { -10.0f, 0.0f, 10.0f, 23.0f, 35.0f, 50.0f };
         const double b0[3] = { 0.012, -0.007, 0.020 }, b1[3] = { 2.0e-4, -1.0e-4, 3.0e-4 },
                      b2[3] = { -2.0e-6, 1.0e-6, 4.0e-6 };
+        const gl_cal_tilt_t six = app.cal_tilt;
+        const double t0 = (double)six.t0_c;
+        GL_CHECK_NEAR(t0, 22.0, 0.5); /* the board's temperature at the six-face solve */
         req[0] = 6;
         gl_put_f32(&req[1], 23.0f);
         for (int i = 0; i < 6; i++) {
@@ -1294,21 +1781,30 @@ GL_TEST(test_six_face_tempco_horizon_floor_serial)
             }
         }
         n = cmd_(GL_CMD_TILT_TEMPCO, req, 5 + 16 * 6, &pl);
-        GL_CHECK_EQ(n, 41);
+        GL_CHECK_EQ(n, 45);
         GL_CHECK_EQ(pl[0], GL_OK);
         for (int a = 0; a < 3; a++) {
-            GL_CHECK_NEAR(gl_get_f32(&pl[1 + 4 * a]), b0[a], 2e-6);
-            GL_CHECK_NEAR(gl_get_f32(&pl[13 + 4 * a]), b1[a], 2e-7);
+            const double d0 = t0 - 23.0;
+            const double b0_at = b0[a] + b1[a] * d0 + b2[a] * d0 * d0, b1_at = b1[a] + 2.0 * b2[a] * d0;
+            GL_CHECK_NEAR(gl_get_f32(&pl[1 + 4 * a]), b0_at, 2e-6);
+            GL_CHECK_NEAR(gl_get_f32(&pl[13 + 4 * a]), b1_at, 2e-7);
             GL_CHECK_NEAR(gl_get_f32(&pl[25 + 4 * a]), b2[a], 2e-8);
-            GL_CHECK_NEAR(app.cal_tilt.tempco1_g_per_k[a], b1[a], 2e-7);
+            GL_CHECK_NEAR(app.cal_tilt.tempco1_g_per_k[a], b1_at, 2e-7);
+            GL_CHECK_NEAR(app.cal_tilt.tempco2_g_per_k2[a], b2[a], 2e-8);
+            /* THE SIX-FACE OFFSETS ARE KEPT, bit for bit */
+            GL_CHECK(app.cal_tilt.offset_g[a] == six.offset_g[a]);
         }
         GL_CHECK(gl_get_f32(&pl[37]) < 2e-6f); /* RMS residual of an exact quadratic */
+        GL_CHECK(gl_get_f32(&pl[41]) < 6e-6f); /* ... and the largest single one */
         GL_CHECK(app.cal_tilt.flags & GL_CAL_TILT_FLAG_TEMPCO);
-        GL_CHECK_NEAR(app.cal_tilt.t0_c, 23.0, 1e-6);
-        printf("    temperature fit of 6 points -10 .. 50 C: b1 (%.2e, %.2e, %.2e) g/K, true "
-               "(2.00e-04, -1.00e-04, 3.00e-04); RMS residual %.1e g\n",
+        GL_CHECK(app.cal_tilt.flags & GL_CAL_TILT_FLAG_FACTORY);
+        GL_CHECK(app.cal_tilt.t0_c == six.t0_c); /* the record's t0 stays the six-face temperature */
+        GL_CHECK_EQ(memcmp(&app.cal_tilt.m, &six.m, sizeof(six.m)), 0);
+        printf("    temperature fit of 6 points -10 .. 50 C: b1 (%.2e, %.2e, %.2e) g/K about the "
+               "record's t0 %.1f C; RMS residual %.1e g, largest %.1e g; six-face offsets kept\n",
                (double)gl_get_f32(&pl[13]), (double)gl_get_f32(&pl[17]),
-               (double)gl_get_f32(&pl[21]), (double)gl_get_f32(&pl[37]));
+               (double)gl_get_f32(&pl[21]), t0, (double)gl_get_f32(&pl[37]),
+               (double)gl_get_f32(&pl[41]));
         /* a fit whose coefficients the record does not accept is refused
          * and changes nothing: 0.012 g/K (the record takes 0.01) */
         {
@@ -1318,6 +1814,119 @@ GL_TEST(test_six_face_tempco_horizon_floor_serial)
             }
             GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, req, 5 + 16 * 6), GL_ERR_RANGE);
             GL_CHECK_EQ(memcmp(&before, &app.cal_tilt, sizeof(before)), 0);
+        }
+        /* THE REVIEWER'S CASE: five points of pure DRIFT, 2e-4 g/K x (T - 23)
+         * on x and y, nothing for z - what a 0 / 180 degree pair on a flat at
+         * each chamber stop yields.  Before the fix: status 0, the record's
+         * offsets became (-1.2e-10, 1.2e-10, 0.0), "the six-face offsets of
+         * 12 and 7 mg are gone, FACTORY is still set, and nothing warns". */
+        {
+            static const float tc[5] = { 0.0f, 12.0f, 23.0f, 34.0f, 45.0f };
+            req[0] = 5;
+            gl_put_f32(&req[1], 23.0f);
+            for (int i = 0; i < 5; i++) {
+                const float d = 2.0e-4f * (tc[i] - 23.0f);
+                gl_put_f32(&req[5 + 16 * i], tc[i]);
+                gl_put_f32(&req[9 + 16 * i], d);
+                gl_put_f32(&req[13 + 16 * i], -d);
+                gl_put_f32(&req[17 + 16 * i], 0.0f);
+            }
+            n = cmd_(GL_CMD_TILT_TEMPCO, req, 5 + 16 * 5, &pl);
+            GL_CHECK_EQ(n, 45);
+            GL_CHECK_EQ(pl[0], GL_OK);
+            for (int a = 0; a < 3; a++) {
+                GL_CHECK(app.cal_tilt.offset_g[a] == six.offset_g[a]);
+            }
+            GL_CHECK_NEAR(app.cal_tilt.tempco1_g_per_k[0], 2.0e-4, 2e-7);
+            GL_CHECK_NEAR(app.cal_tilt.tempco1_g_per_k[1], -2.0e-4, 2e-7);
+            GL_CHECK_NEAR(app.cal_tilt.tempco1_g_per_k[2], 0.0, 2e-7);
+            printf("    five points of pure drift (2e-4 g/K, z not measured): status 0, offsets "
+                   "still (%.4f, %.4f, %.4f) g (before the fix: (-1.2e-10, 1.2e-10, 0.0)), "
+                   "b1 (%.2e, %.2e, %.2e)\n", (double)app.cal_tilt.offset_g[0],
+                   (double)app.cal_tilt.offset_g[1], (double)app.cal_tilt.offset_g[2],
+                   (double)app.cal_tilt.tempco1_g_per_k[0], (double)app.cal_tilt.tempco1_g_per_k[1],
+                   (double)app.cal_tilt.tempco1_g_per_k[2]);
+            /* six-face, then the fit, then what a tilt read does with it: a
+             * sensor with the six-face errors AND that drift, level, at five
+             * temperatures - the corrected gravity is level within 0.1 mg */
+            for (int i = 0; i < 5; i++) {
+                const float d = 2.0e-4f * (tc[i] - six.t0_c);
+                const gl_vec3_t raw = { 0.012f + d, -0.007f - d, 1.002f * 1.0f + 0.020f };
+                const gl_vec3_t c = gl_tilt_apply_cal(&app.cal_tilt, raw, tc[i]);
+                GL_CHECK_NEAR(c.x, 0.0, 2.5e-4); /* (the six-face solve itself is good to 0.2 mg here) */
+                GL_CHECK_NEAR(c.y, 0.0, 2.5e-4);
+                GL_CHECK_NEAR(c.z, 1.0, 1e-3);
+            }
+            {
+                /* without the temperature terms the same sensor at 45 C reads 4.6 mrad of slope */
+                gl_cal_tilt_t no = app.cal_tilt;
+                const float d = 2.0e-4f * (45.0f - six.t0_c);
+                const gl_vec3_t raw = { 0.012f + d, -0.007f - d, 1.022f };
+                memset(no.tempco1_g_per_k, 0, sizeof(no.tempco1_g_per_k));
+                GL_CHECK(fabsf(gl_tilt_apply_cal(&no, raw, 45.0f).x) > 4.0e-3f);
+            }
+            /* outside the window of gl_provisional.h the terms are not
+             * extrapolated: 85 C corrects as 60 C does */
+            {
+                const gl_vec3_t raw = { 0.02f, 0.0f, 1.0f };
+                const gl_vec3_t a60 = gl_tilt_apply_cal(&app.cal_tilt, raw, GL_PROV_TILT_TEMPCO_T_MAX_C);
+                const gl_vec3_t a85 = gl_tilt_apply_cal(&app.cal_tilt, raw, 85.0f);
+                const gl_vec3_t a50 = gl_tilt_apply_cal(&app.cal_tilt, raw, 50.0f);
+                GL_CHECK(a60.x == a85.x && a60.y == a85.y);
+                GL_CHECK(fabsf(a60.x - a50.x) > 1.0e-3f);
+            }
+        }
+        /* the host's t0 must be the record's: 5 K off is refused */
+        {
+            const gl_cal_tilt_t before = app.cal_tilt;
+            gl_put_f32(&req[1], six.t0_c + 5.0f);
+            GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, req, 5 + 16 * 5), GL_ERR_RANGE);
+            GL_CHECK_EQ(memcmp(&before, &app.cal_tilt, sizeof(before)), 0);
+            gl_put_f32(&req[1], 23.0f);
+        }
+        /* a level zero that is already stored, taken 13 K from t0: the new
+         * terms would change the correction there by 2.6 mg - refused,
+         * nothing changed; taken at t0 it is untouched and the fit is stored */
+        {
+            gl_cal_tilt_t before;
+            app.cal_tilt.flags |= GL_CAL_TILT_FLAG_BASE;
+            app.cal_tilt.base_temp_c = six.t0_c + 13.0f;
+            memset(app.cal_tilt.tempco1_g_per_k, 0, sizeof(app.cal_tilt.tempco1_g_per_k));
+            memset(app.cal_tilt.tempco2_g_per_k2, 0, sizeof(app.cal_tilt.tempco2_g_per_k2));
+            before = app.cal_tilt;
+            GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, req, 5 + 16 * 5), GL_ERR_STATE);
+            GL_CHECK_EQ(memcmp(&before, &app.cal_tilt, sizeof(before)), 0);
+            app.cal_tilt.base_temp_c = six.t0_c;
+            GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, req, 5 + 16 * 5), GL_OK);
+            app.cal_tilt.flags &= (uint8_t)~GL_CAL_TILT_FLAG_BASE;
+            GL_CHECK_EQ(gl_app_cal_store(&app, GL_CAL_ID_TILT), GL_OK);
+        }
+        /* CONDITIONING (factory finding 7).  The reviewer's case - three
+         * points over 16 K with 0.2 mg of noise, accepted with a residual
+         * of 0 and 3 mg wrong at 0 and 45 C - is refused twice over: three
+         * points, and a span under 30 K.  And a point that does not fit
+         * shows in the largest residual, which the RMS waters down */
+        {
+            static const float tc[5] = { 15.0f, 19.0f, 23.0f, 27.0f, 31.0f };
+            const gl_cal_tilt_t before = app.cal_tilt;
+            for (int i = 0; i < 5; i++) {
+                gl_put_f32(&req[5 + 16 * i], tc[i]);
+            }
+            GL_CHECK_EQ(st_(GL_CMD_TILT_TEMPCO, req, 5 + 16 * 5), GL_ERR_PARAM);
+            GL_CHECK_EQ(memcmp(&before, &app.cal_tilt, sizeof(before)), 0);
+            req[0] = 6;
+            for (int i = 0; i < 6; i++) {
+                gl_put_f32(&req[5 + 16 * i], temps[i]);
+                gl_put_f32(&req[9 + 16 * i], 2.0e-4f * (temps[i] - 23.0f) + ((i == 2) ? 1.0e-3f : 0.0f));
+                gl_put_f32(&req[13 + 16 * i], 0.0f);
+                gl_put_f32(&req[17 + 16 * i], 0.0f);
+            }
+            n = cmd_(GL_CMD_TILT_TEMPCO, req, 5 + 16 * 6, &pl);
+            GL_CHECK_EQ(pl[0], GL_OK);
+            GL_CHECK(gl_get_f32(&pl[41]) > 5.0e-4f);                         /* the point that is 1 mg out */
+            GL_CHECK(gl_get_f32(&pl[41]) > 2.5f * gl_get_f32(&pl[37]));      /* the RMS hides it */
+            printf("    one point of six 1 mg out: RMS residual %.2f mg, largest %.2f mg\n",
+                   1000.0 * (double)gl_get_f32(&pl[37]), 1000.0 * (double)gl_get_f32(&pl[41]));
         }
     }
     /* ---- CAM_HORIZON ---- */
@@ -1850,6 +2459,158 @@ GL_TEST(test_field_log_records_and_resume)
 
 /* What the log holds, and for how long: record sizes, capacity, wear.  The
  * numbers the README quotes are computed and printed here. */
+/* Phase-3 review, factory finding 5: "Survey log records are untested: four
+ * seeded defects in them pass every test" - ball_index always 0 in the read
+ * record (S06), the "ball" flag always on placement 0 (S19), the placements
+ * logged in reverse order (S22), the removed zero not logged (S21).  The
+ * first three make every replay of an E29-order Survey wrong, because the
+ * ball is the LAST placement.
+ * A Survey of three placements in the E29 order on a unit with a base-face
+ * zero; after the second and after the third placement the log must hold,
+ * for that read: one placement record per placement handed to the
+ * estimator, in the estimator's order, each bit-identical to the record it
+ * was handed, the ball flag on the ball's record and on no other; and a
+ * read record with the same count, the ball's index, the zero that was
+ * removed and the estimate. */
+static void survey_place_(double dist, double bearing, double sx, double sy)
+{
+    const double t = (double)gl_sim_now_us() * 1e-6;
+    W.t_pick_s = t + 0.5;
+    W.t_place_s = t + 2.0;
+    run_until_ms_((uint32_t)((t + 1.0) * 1000.0));
+    W.dist_m = dist;
+    W.bearing_rad = bearing;
+    W.slope_x = sx;
+    W.slope_y = sy;
+    project_scene_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, (uint32_t)(t * 1000.0) + 12000u));
+}
+
+GL_TEST(test_survey_in_the_field_log)
+{
+    static struct {
+        uint16_t read_id;
+        uint8_t n, ball;
+        gl_measurements_t m[GL_SOLVER_MAX_DROPS];
+        gl_vec2_t zero;
+        gl_estimate_t est;
+    } want[2];
+    unsigned len = 0, checked = 0;
+    uint32_t seq = 0;
+
+    world_defaults_();
+    W.dist_m = 3.0;
+    W.bearing_rad = -0.02;
+    W.slope_x = -0.006;
+    W.slope_y = -0.014;
+    project_scene_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    /* a unit with its base-face zero: what a read on turf removes */
+    app.cal_tilt.flags |= GL_CAL_TILT_FLAG_BASE;
+    app.cal_tilt.base_bias_x = 0.0015f;
+    app.cal_tilt.base_bias_y = -0.0010f;
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 12000));
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_(now_ms_() + 150u);
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_(now_ms_() + 150u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_SURVEY_NEXT_DROP);
+    for (int k = 0; k < 2; k++) {
+        if (k == 0) {
+            survey_place_(6.0, 0.03, 0.010, -0.020);
+        } else {
+            survey_place_(8.0, 0.01, 0.012, -0.016);
+        }
+        GL_CHECK(app.solve_survey);
+        GL_CHECK_EQ(app.solve_drops, 2 + k);
+        GL_CHECK_EQ(app.solve_ball, 1 + k); /* E29: the ball is the LAST placement */
+        want[k].read_id = app.read_id;
+        want[k].n = app.solve_drops;
+        want[k].ball = app.solve_ball;
+        memcpy(want[k].m, app.solve_meas, sizeof(want[k].m));
+        want[k].zero = app.zero_used;
+        want[k].est = app.est;
+        GL_CHECK_NEAR(app.zero_used.x, 0.0015, 1e-9);
+        GL_CHECK_NEAR(app.zero_used.y, -0.0010, 1e-9);
+    }
+    GL_CHECK(want[0].read_id != want[1].read_id);
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, now_ms_() + 130000u));
+    dock_();
+    GL_CHECK(log_download_(0, true) >= 2u);
+    for (int k = 0; k < 2; k++) {
+        unsigned found = 0, balls = 0, n_meas = dump_count_(0, GL_LOG_REC_MEAS);
+        const uint8_t *p;
+        for (unsigned j = 0; j < n_meas; j++) {
+            p = dump_find_(0, GL_LOG_REC_MEAS, j, &len, &seq);
+            if (p == NULL || gl_get_u16(&p[0]) != want[k].read_id) {
+                continue;
+            }
+            /* the records of one read come in the estimator's order */
+            GL_CHECK_EQ(p[2], found);
+            GL_CHECK_EQ(p[3], want[k].n);
+            if (p[2] < want[k].n) {
+                const gl_measurements_t *m = &want[k].m[p[2]];
+                const float f[15] = { m->f_px, m->baseline_m, m->h_cam_m, m->tilt_x, m->tilt_y,
+                                      m->flag_bearing_rad, m->flag_disparity_px, m->flag_low_elev_rad,
+                                      m->flag_top_elev_rad, m->stick_height_est_m,
+                                      m->stick_height_rel_sigma, m->grain_kappa, m->grain_azimuth_rad,
+                                      m->stimp_ft, m->user_distance_m };
+                GL_CHECK_EQ(len, GL_FIELDLOG_MEAS_FIXED + 8u * m->n_horizon);
+                for (int i = 0; i < 15; i++) {
+                    GL_CHECK_MEM(&p[8 + 4 * i], &f[i], 4);
+                }
+                /* the ball's record, and only it, carries the ball flag */
+                GL_CHECK_EQ((p[4] & GL_FIELDLOG_MEAS_F_BALL) != 0u, p[2] == want[k].ball);
+                balls += (p[4] & GL_FIELDLOG_MEAS_F_BALL) ? 1u : 0u;
+                checked++;
+            }
+            found++;
+        }
+        GL_CHECK_EQ(found, want[k].n);
+        GL_CHECK_EQ(balls, 1u);
+        /* the placements are different ones: an exchanged order cannot pass */
+        GL_CHECK(want[k].m[0].flag_disparity_px != want[k].m[want[k].ball].flag_disparity_px);
+        GL_CHECK(want[k].m[0].tilt_y != want[k].m[want[k].ball].tilt_y);
+        /* the read record of this read */
+        p = NULL;
+        for (unsigned j = 0; j < dump_count_(0, GL_LOG_REC_READ2); j++) {
+            const uint8_t *q = dump_find_(0, GL_LOG_REC_READ2, j, &len, &seq);
+            if (q != NULL && gl_get_u16(&q[2]) == want[k].read_id) {
+                p = q;
+            }
+        }
+        GL_CHECK(p != NULL);
+        if (p != NULL) {
+            const float e7[7] = { want[k].est.phi_rad, want[k].est.aim_azimuth_device_rad,
+                                  want[k].est.v0_mps, want[k].est.plays_like_m, want[k].est.break_m,
+                                  want[k].est.break_cups, want[k].est.distance_m };
+            GL_CHECK_EQ(p[52], want[k].n);    /* n_drops */
+            GL_CHECK_EQ(p[53], want[k].ball); /* ball_index: NOT 0 in the E29 order */
+            GL_CHECK(p[53] != 0u);
+            GL_CHECK(gl_get_u16(&p[14]) & GL_FIELDLOG_F_SURVEY);
+            GL_CHECK_EQ(p[57], GL_CAL_SEAT_BASE);
+            GL_CHECK_MEM(&p[76], &want[k].zero.x, 4); /* the zero that was removed */
+            GL_CHECK_MEM(&p[80], &want[k].zero.y, 4);
+            GL_CHECK(gl_get_f32(&p[76]) != 0.0f && gl_get_f32(&p[80]) != 0.0f);
+            /* slope used = raw slope less that zero */
+            GL_CHECK_NEAR(gl_get_f32(&p[68]), gl_get_f32(&p[60]) - gl_get_f32(&p[76]), 1e-7);
+            GL_CHECK_NEAR(gl_get_f32(&p[72]), gl_get_f32(&p[64]) - gl_get_f32(&p[80]), 1e-7);
+            for (int i = 0; i < 7; i++) {
+                GL_CHECK_MEM(&p[296 + 4 * i], &e7[i], 4);
+            }
+        }
+    }
+    GL_CHECK_EQ(checked, 5u);
+    printf("    Survey of 3 placements (3 m, 6 m, the ball at 8 m) in the log: the reads after the "
+           "2nd and 3rd placement hold 2 and 3 placement records in the estimator's order, "
+           "bit-identical to what it was handed, ball flag on record 1 and 2, read records with "
+           "ball_index 1 and 2 and the removed base-face zero (%.2f, %.2f) mrad\n",
+           1000.0 * (double)want[1].zero.x, 1000.0 * (double)want[1].zero.y);
+    no_violation_();
+}
+
 GL_TEST(test_log_capacity_and_wear)
 {
     const double sector = 4096.0 - GL_LOG_SECTOR_HDR;
@@ -1863,10 +2624,11 @@ GL_TEST(test_log_capacity_and_wear)
     const unsigned survey4 = 4u * (hdr + meas) + (hdr + GL_LOG_READ_LEN) + (hdr + 12u) +
                              (hdr + GL_FIELDLOG_READ_LEN);
     const unsigned tilt = hdr + GL_FIELDLOG_TILT_LEN;
-    const double reads = floor(sectors * sector / (double)quick);
+    const double reads_if_split = floor(sectors * sector / (double)quick);
     const double tilts = floor(sectors * floor(sector / (double)tilt));
     /* wear: the ring erases each sector once per pass through the log */
     const double cycles = 100000.0; /* PROVISIONAL: the endurance class of the MX25R family */
+    double reads;
 
     GL_CHECK_EQ(GL_FIELDLOG_READ_LEN % 4u, 0u);
     GL_CHECK_EQ(GL_FIELDLOG_TILT_LEN % 4u, 0u);
@@ -1877,14 +2639,73 @@ GL_TEST(test_log_capacity_and_wear)
            "sample; %u with the 32 of a read), summary %u, estimator event %u, read record %u, "
            "tilt record %u\n", hdr + GL_FIELDLOG_MEAS_FIXED, hdr + meas, hdr + GL_LOG_READ_LEN,
            hdr + 12u, hdr + GL_FIELDLOG_READ_LEN, tilt);
-    printf("    a Quick Read: %u bytes; a Survey of 4 placements: %u bytes\n", quick, survey4);
-    printf("    log region: %u sectors of 4096 bytes = %.2f MB: %.0f Quick Reads, or %.0f tilt "
-           "records, before the oldest sector is dropped\n", (unsigned)GL_APP_LOG_SECTORS,
-           sectors * 4096.0 / 1.0e6, reads, tilts);
+    /* E29: a Survey is solved after every placement from the second on, and
+     * every solve logs all the placements it used: a session of four
+     * placements writes a Quick Read, then reads of 2, 3 and 4 placements */
+    printf("    a Quick Read: %u bytes; the last read of a Survey of 4 placements: %u bytes; the "
+           "whole Survey session (reads of 1, 2, 3 and 4 placements): %u bytes\n", quick, survey4,
+           4u * quick + 6u * (hdr + meas));
+    GL_CHECK_EQ(4u * quick + 6u * (hdr + meas), 6664u);
+    /* THE CAPACITY, MEASURED (phase-3 review, factory finding 6).  Until the
+     * review this test pinned floor(2044 x 4080 / 1156) = 7214 Quick Reads -
+     * arithmetic that splits records across sectors, which the log does not
+     * do.  The log of the booted application is filled here with the real
+     * record pattern of a Quick Read (payloads 324, 72, 12 and 684 bytes)
+     * until the oldest sector is dropped for the first time. */
+    {
+        static uint8_t rec[GL_FIELDLOG_READ_LEN];
+        static const struct {
+            uint8_t type;
+            uint16_t len;
+        } pat[4] = { { GL_LOG_REC_MEAS, 324 }, { GL_LOG_REC_READ, GL_LOG_READ_LEN },
+                     { GL_LOG_REC_EVENT, 12 }, { GL_LOG_REC_READ2, GL_FIELDLOG_READ_LEN } };
+        gl_log_stats_t ls;
+        uint32_t base, written = 0, retained_reads = 0, used = 0;
+        bool dropped = false;
+
+        world_defaults_();
+        W.t_pick_s = 1.0e9;
+        W.t_place_s = 1.0e9;
+        board_up_(true);
+        GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+        GL_CHECK_EQ(GL_LOG_READ_LEN, 72u);
+        memset(rec, 0x5A, sizeof(rec));
+        GL_CHECK_EQ(gl_log_stats(&app.log, &ls), GL_OK);
+        base = ls.record_estimate;
+        while (!dropped && written < 9000u) {
+            for (int k = 0; k < 4; k++) {
+                GL_CHECK_EQ(gl_log_append(&app.log, pat[k].type, 0, rec, pat[k].len, NULL), GL_OK);
+            }
+            written++;
+            if ((written & 0xFFu) == 0u) {
+                gl_hal_watchdog_kick();
+            }
+            GL_CHECK_EQ(gl_log_stats(&app.log, &ls), GL_OK);
+            if (ls.record_estimate < base + 4u * written) {
+                dropped = true;
+                retained_reads = ls.record_estimate / 4u;
+            } else {
+                used = ls.bytes_used;
+            }
+        }
+        GL_CHECK(dropped);
+        reads = (double)retained_reads;
+        printf("    log region: %u sectors of 4096 bytes = %.2f MB.  FILLED with the record pattern "
+               "of a Quick Read until the oldest sector was first dropped: %u patterns written, "
+               "%.0f read records then retained, %u of %u bytes used (records are not split "
+               "across sectors: 3 reads per sector, 612 bytes of each left empty; the arithmetic "
+               "that splits them gave %.0f).  Or %.0f tilt records\n",
+               (unsigned)GL_APP_LOG_SECTORS, sectors * 4096.0 / 1.0e6, (unsigned)written, reads,
+               (unsigned)used, (unsigned)ls.bytes_capacity, reads_if_split, tilts);
+        /* three reads per sector, one sector of the ring always being the
+         * erased one ahead of the head */
+        GL_CHECK_NEAR((double)written, 3.0 * sectors, 3.0 * 3.0);
+        GL_CHECK(reads >= 3.0 * (sectors - 2.0) - 4.0 && reads <= 3.0 * sectors);
+        GL_CHECK(reads < 0.86 * reads_if_split); /* the old figure overstated it by 15 % and more */
+    }
     printf("    wear: one erase per sector per %.0f reads; at 200 reads a day the ring turns "
            "once in %.1f days, and %.0f erase cycles (PROVISIONAL endurance) last %.0f years\n",
            reads, reads / 200.0, cycles, cycles * reads / 200.0 / 365.0);
-    GL_CHECK(reads > 7000.0 && reads < 7400.0);
     GL_CHECK(tilts > 80000.0);
 }
 
@@ -1894,14 +2715,19 @@ int main(void)
     GL_RUN(test_guarded_commands_need_unlock);
     GL_RUN(test_bad_arguments);
     GL_RUN(test_camera_identity_and_frames);
+    GL_RUN(test_narrow_window_at_the_right_edge);
     GL_RUN(test_camera_field_gate_2);
     GL_RUN(test_display_test_patterns);
     GL_RUN(test_display_rotation_from_pixels);
     GL_RUN(test_grain_leds_and_dark_offset);
     GL_RUN(test_level_zero_armed_on_two_seats);
+    GL_RUN(test_level_zero_after_the_30_minute_rest);
+    GL_RUN(test_reference_line_on_the_seat_plate);
+    GL_RUN(test_a_refused_store_changes_nothing);
     GL_RUN(test_six_face_tempco_horizon_floor_serial);
     GL_RUN(test_sleep_current_test_mode);
     GL_RUN(test_field_log_records_and_resume);
+    GL_RUN(test_survey_in_the_field_log);
     GL_RUN(test_log_capacity_and_wear);
     return gl_test_summary();
 }

@@ -203,6 +203,23 @@
  * (NOT VERIFIED on hardware: the IMU's start-up time out of wake-on-motion). */
 #define GL_APP_RECALL_MAX_TURN_RAD 0.035f /* 2 degrees */
 #define GL_APP_RECALL_DISPLACE_G 0.004f
+/** RESEATED.  The aim moves by about 7 mrad for every mrad the marker lies
+ *  differently in cross slope: a marker that was nudged and seated itself
+ *  anew by 1 to 3.9 mrad - under the 4 mg above - was recalled with a SOLID
+ *  line that was 6.5 to 30 mrad (up to 241 mm at the hole) stale (phase-3
+ *  review, application finding 2).  So, after the wake-up, the mean of the
+ *  first GL_APP_STILL_BLOCKS - 1 still blocks (0.4 s; the result is not
+ *  shown before the fourth) is compared with the gravity direction of the
+ *  read at THIS limit, and the marker makes a new read if it differs.
+ *  0.6 mg is about four standard deviations of that comparison with the
+ *  simulator's accelerometer noise (0.8 mg rms per sample: 0.14 mg for the
+ *  reference block, 0.08 mg for the mean of three) - PROVISIONAL: the real
+ *  sensor's noise and its offset drift with temperature decide how often a
+ *  marker that was NOT reseated reads again instead of recalling (the safe
+ *  side; tests/test_e2e_recall.c prints the rate in the model).
+ *  What is left, measured there: a reseat under the limit is still recalled,
+ *  and its line is stale by what that reseat is worth. */
+#define GL_APP_RECALL_RESEAT_G 0.0006f
 #define GL_APP_RECALL_MOVING_BLOCKS 3u
 /** A result older than this is not recalled: a tap then makes a new read. */
 #define GL_APP_RECALL_MAX_AGE_MS (24u * 3600u * 1000u)

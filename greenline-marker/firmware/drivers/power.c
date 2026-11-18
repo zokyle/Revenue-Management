@@ -245,22 +245,29 @@ void gl_power_charge_force(gl_power_t *p, bool stop)
     p->forced = stop;
 }
 
-/* E32: account the time since the last gate call as charging if the charger
- * said "charging" then and says so now; anything else starts the count
- * again.  Returns true while the limit holds.
+/* E32: the backstop.  The time since the last gate call counts whenever the
+ * firmware was NOT holding the charger stopped in it - VBUS present,
+ * CHG_INHIBIT released - WHATEVER the charger's status output said.  The
+ * backstop exists for the case in which the charger does not end a charge
+ * by itself; it must not depend on the status line it backs up
+ * (NETLIST_NOTES section 7; phase-3 review, hardware finding 2: counted
+ * only while CHG read low, one high sample every five hours kept it from
+ * ever firing, and a charger that shows its first cycle only was never
+ * counted on a recharge).  Time in which the firmware itself holds the
+ * charger stopped (temperature, command) is not counted and does not start
+ * the count again; only VBUS going (gl_power_charge_release) and the
+ * restart rule below do.  Returns true while the limit holds.
  *
  * The limit is lifted again (VBUS staying) only for a cell that was SEEN at
  * or above the restart voltage while the limit held and has fallen below it
- * since: the marker left docked under a host that keeps it awake.  A cell
- * that is still under that voltage after six hours of charging is not given
- * another six: the stop then holds until the marker is lifted out. */
+ * since: the marker left docked.  A cell that is still under that voltage
+ * after six hours of charging is not given another six: the stop then holds
+ * until the marker is lifted out. */
 static bool time_limit_(gl_power_t *p, uint32_t now_ms)
 {
-    if (p->gate_timed && p->charging && !p->inhibit) {
+    if (p->gate_timed && !p->inhibit) {
         const uint32_t dt = (uint32_t)(now_ms - p->chg_last_ms);
         p->chg_run_ms = (dt > UINT32_MAX - p->chg_run_ms) ? UINT32_MAX : (p->chg_run_ms + dt);
-    } else if (!p->charging) {
-        p->chg_run_ms = 0;
     }
     p->gate_timed = true;
     p->chg_last_ms = now_ms;
@@ -273,11 +280,12 @@ static bool time_limit_(gl_power_t *p, uint32_t now_ms)
     if (p->time_limit && p->batt_mv != 0u) {
         if (p->batt_mv >= GL_PROV_CHARGE_RESTART_MV) {
             p->limit_cell_was_up = true;
-        } else if (p->limit_cell_was_up && p->chg_run_ms < GL_PROV_CHARGE_MAX_MS) {
+        } else if (p->limit_cell_was_up) {
             /* the cell has run down behind the stopped charger: let it charge
              * again, with a fresh limit */
             p->time_limit = false;
             p->limit_cell_was_up = false;
+            p->chg_run_ms = 0;
         }
     }
     return p->time_limit;
@@ -378,13 +386,32 @@ bool gl_power_read_allowed(gl_power_t *p, bool cell_fresh, float imu_temp_c, boo
     const bool have_mcu = mcu_temp_fresh && p->mcu_temp_valid && isfinite(p->mcu_temp_c);
     float t;
 
-    if (have_cell) {
+    /* NTC2 is believed as the charge gate believes it: only while at least
+     * one live die sensor is within GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C of it.
+     * An NTC2 that every live die sensor contradicts (25 C beside two dies
+     * at 75 C) cannot hide a hot marker: the hottest of the three readings
+     * decides then (phase-3 review, hardware finding 10) - so a hot NTC2
+     * that the dies contradict still refuses, the safe side.  With no die
+     * sensor alive there is nothing to check it against, and it is taken as
+     * it reads. */
+    bool cell_ok = have_cell;
+    if (have_cell && (have_imu || have_mcu)) {
+        const bool near_imu =
+            have_imu && fabsf(p->cell_temp_c - imu_temp_c) <= GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C;
+        const bool near_mcu =
+            have_mcu && fabsf(p->cell_temp_c - p->mcu_temp_c) <= GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C;
+        cell_ok = near_imu || near_mcu;
+    }
+    if (cell_ok) {
         t = p->cell_temp_c;
     } else if (have_imu || have_mcu) {
         /* NTC2 has nothing to say: the hotter die sensor stands in */
         t = have_imu ? imu_temp_c : p->mcu_temp_c;
         if (have_imu && have_mcu && p->mcu_temp_c > t) {
             t = p->mcu_temp_c;
+        }
+        if (have_cell && p->cell_temp_c > t) {
+            t = p->cell_temp_c; /* implausible, but the hottest: it decides */
         }
     } else {
         p->read_hot = false; /* no temperature at all: see power.h */

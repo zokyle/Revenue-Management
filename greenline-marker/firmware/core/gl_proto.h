@@ -65,7 +65,9 @@
  * or leaves for the update loader: SET_CAL, START_CAL (but ABORT), LOG_ERASE,
  * REBOOT "DFU!", SHIP_MODE "SHIP", SET_CHARGE, LEVEL_ZERO arm, TILT_TEMPCO,
  * SET_CAM_HORIZON, SET_GRAIN_FLOOR, DISPLAY_ROT write, GRAIN_TEST with
- * "store", SLEEP_TEST, SERIAL commit.  Reading, the tests that change
+ * "store", SLEEP_TEST, SERIAL commit, DISPLAY_TEST armed for the seat plate.
+ * A charge held stopped by SET_CHARGE ends when the unit is locked again
+ * (app/gl_app.c, charge_gate_).  UNLOCK "LOCK" locks and answers GL_OK.  Reading, the tests that change
  * nothing (camera, display, grain, sensors) and the user's own settings
  * need no unlock.  The four bytes are a guard against accidents and stray
  * bytes, NOT a secret: anyone with a cradle and this file can send them.
@@ -99,8 +101,9 @@ typedef enum {
     GL_CMD_LOG_ERASE = 0x0B,    /**< -> "ERAS"              <- -   (needs UNLOCK) */
     GL_CMD_STREAM = 0x0C,       /**< -> source mask (2), period ms (2)  <- - */
     GL_CMD_SET_TIME = 0x0D,     /**< -> RTC seconds (4)     <- - */
-    GL_CMD_UNLOCK = 0x0E,       /**< -> "GLFC" unlocks (GL_OK), anything else locks (and
-                                     answers GL_ERR_PARAM)  <- - */
+    GL_CMD_UNLOCK = 0x0E,       /**< -> "GLFC" unlocks (GL_OK); "LOCK" locks (GL_OK: the
+                                     station's explicit lock, final test); anything else
+                                     locks too (and answers GL_ERR_PARAM)  <- - */
     GL_CMD_REBOOT = 0x0F,       /**< -> "BOOT" normal reset, "DFU!" ROM DFU (needs UNLOCK: the ROM
                                      bootloader has no time-out)  <- - (sent before reset) */
     /* rev E: power */
@@ -139,27 +142,60 @@ typedef enum {
                                      brightness of the rows that image bars at +13.0 and at
                                      -13.0 degrees elevation (DESIGN_SPEC E17) */
     GL_CMD_DISPLAY_TEST = 0x19, /**< -> pattern (1: gl_proto_pattern_t), hold seconds (1:
-                                     1..120)  <- pattern (1), CRC-32 of the frame buffer shown
-                                     (4), black pixels in it (2) */
+                                     1..120) [, where (1): 0 = in the cradle (the pattern ends
+                                     at once when the marker leaves it), 1 = ALSO ON THE SEAT
+                                     PLATE (U): the pattern is shown in the cradle as usual
+                                     and is ARMED - the next time the marker is put down out
+                                     of the cradle (within GL_FACTORY_PATTERN_ARM_TIMEOUT_MS)
+                                     it shows the pattern again for the hold time instead of
+                                     reading, with nothing on its pads, then sleeps.  This is
+                                     how assembly step 19 measures the reference line under
+                                     the camera of the seat plate]
+                                     <- pattern (1), CRC-32 of the frame buffer shown (4),
+                                     black pixels in it (2) */
     GL_CMD_GRAIN_TEST = 0x1A,   /**< -> mode (1: gl_proto_grain_mode_t)  <- gl_proto_grain_t
                                      (108): the photodiode dark offset and one cycle of all
                                      16 LEDs.  Mode STORE (U) also records the dark offset in
                                      the grain calibration record (assembly step 11a) */
     GL_CMD_LEVEL_ZERO = 0x1B,   /**< -> op (1: gl_proto_zero_op_t), seat (1: 0 base face, 1 ball
-                                     feet)  <- gl_proto_zero_t (36).  ARM (U): the zeroing for
-                                     that seat runs BY ITSELF after the marker has been lifted
-                                     off the contacts and has come to rest on the seat plate
-                                     (read, turn 180 degrees into the other nest, read), with
-                                     nothing on its pads; the result is fetched with STATUS
-                                     when it is docked again */
+                                     feet) [, rest minutes (1: 0..120)]  <- gl_proto_zero_t
+                                     (40).  ARM (U): the zeroing for that seat runs BY ITSELF
+                                     after the marker has been lifted off the contacts and has
+                                     come to rest on the seat plate (read, turn 180 degrees
+                                     into the other nest, read), with nothing on its pads; the
+                                     result is fetched with STATUS when it is docked again.
+                                     REST: the zeroing is not started before the marker has
+                                     been off VBUS for that many minutes (assembly step 19:
+                                     30 minutes of rest off the pads before the zeros); a
+                                     placement before that is an ordinary placement.  The
+                                     arming lasts GL_FACTORY_ZERO_ARM_TIMEOUT_MS plus the rest */
     GL_CMD_CAL_STATUS = 0x1C,   /**< -> -  <- gl_proto_six_t (80): progress of the six-face
                                      calibration (faces captured, the face being averaged, the
                                      six raw means) - the steps themselves are
                                      GL_CMD_START_CAL GL_CALPROC_SIX_FACE */
-    GL_CMD_TILT_TEMPCO = 0x1D,  /**< U -> n (1: 3..16), t0 (f32, deg C), n x [temperature
+    GL_CMD_TILT_TEMPCO = 0x1D,  /**< U -> n (1: 5..16), t0 (f32, deg C), n x [temperature
                                      (f32), offset x, y, z (3 x f32, g)]  <- b0 (3 x f32), b1
-                                     (3 x f32), b2 (3 x f32), RMS residual of the fit (f32, g).
-                                     Fits the offset polynomial and stores it */
+                                     (3 x f32), b2 (3 x f32), RMS residual of the fit (f32, g),
+                                     largest single residual (f32, g).
+                                     THE CONVENTION.  The command stores the TEMPERATURE TERMS
+                                     b1 and b2 of offset(T) = offset_six_face + b1 (T - t0) +
+                                     b2 (T - t0)^2 and NOTHING ELSE: the six-face offsets and
+                                     t0 of the record (the six-face temperature) are KEPT.
+                                     The points may therefore be absolute offsets or drift
+                                     against any reference (a 0 / 180 degree pair on a flat at
+                                     each chamber stop gives x and y; send 0 for an axis that
+                                     was not measured): only their change with temperature is
+                                     used.  b0, the fitted value at t0, is returned for the
+                                     host to compare and is not stored.
+                                     Refused: GL_ERR_STATE without a stored six-face
+                                     calibration, or when a stored level zero was taken at a
+                                     temperature at which the new terms change the correction
+                                     by more than 0.5 mg (take the zeros after the fit);
+                                     GL_ERR_PARAM for fewer than 5 points or a span under
+                                     GL_PROTO_TEMPCO_MIN_SPAN_K; GL_ERR_RANGE when the `t0` of
+                                     the request is more than GL_PROTO_TEMPCO_T0_TOL_K from
+                                     the record's, or a coefficient is beyond the record's
+                                     limits */
     GL_CMD_SET_CAM_HORIZON = 0x1E, /**< U -> camera (1), row (f32), roll (f32, rad)
                                      <- pitch_up_rad (f32).  CAM_HORIZON: gl_cal_cam_set_horizon */
     GL_CMD_SET_GRAIN_FLOOR = 0x1F, /**< U -> n (1: 20..64), n x modulation (f32) of no-grain
@@ -294,8 +330,14 @@ typedef struct {
     float surface_x, surface_y; /**< slope of the plate itself (what the reversal removed) */
     float temp_c;           /**< IMU temperature at the zeroing */
     uint32_t time_s;        /**< RTC seconds at the zeroing */
+    int16_t ntc2_x10;       /**< the cell thermistor NTC2 at the zeroing, 0.1 C
+                                 (GL_PROTO_TEMP_NONE: no valid reading): the soak rule of
+                                 step 19 is on THIS sensor, and it cannot be asked for over
+                                 USB while the marker lies on the plate */
+    uint8_t rest_min;       /**< the rest that was asked for with ARM */
+    uint8_t rested_min;     /**< minutes off VBUS when the zeroing started (255 = more) */
 } gl_proto_zero_t;
-#define GL_PROTO_ZERO_LEN 36u
+#define GL_PROTO_ZERO_LEN 40u
 
 typedef struct {
     uint8_t done_mask;      /**< bit f: face f captured */
@@ -307,7 +349,13 @@ typedef struct {
 } gl_proto_six_t;
 #define GL_PROTO_SIX_LEN 80u
 
-#define GL_PROTO_TEMPCO_MIN_POINTS 3u
+/* The temperature fit is a quadratic: through three points it is exact, its
+ * residual is 0 and says nothing, and 0.2 mg of noise over a 16 K span left
+ * 3 mg of error at 0 and 45 C (phase-3 review, factory finding 7).  At least
+ * five points over at least 30 K. */
+#define GL_PROTO_TEMPCO_MIN_POINTS 5u
+#define GL_PROTO_TEMPCO_MIN_SPAN_K 30.0f
+#define GL_PROTO_TEMPCO_T0_TOL_K 3.0f
 #define GL_PROTO_TEMPCO_MAX_POINTS 16u
 #define GL_PROTO_FLOOR_MIN_READINGS 20u /* what gl_grain_noise_floor() needs */
 #define GL_PROTO_FLOOR_MAX_READINGS 64u

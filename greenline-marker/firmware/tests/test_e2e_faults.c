@@ -22,6 +22,7 @@
  */
 #include "gl_e2e_world.h"
 
+#include "gl_boot.h"
 #include "lsm6dsv16x.h"
 
 static uint32_t now_ms_(void)
@@ -796,6 +797,92 @@ GL_TEST(test_dead_imu_ends_in_a_watchdog_reset)
     GL_CHECK_EQ(gl_sim_violation_total(), gl_sim_violations()->watchdog);
 }
 
+/* DESIGN_SPEC E34, THE APPLICATION'S HALF (phase-3 review, hardware finding
+ * 6: an application that never called gl_hal_boot_confirm() passed every
+ * test).  The simulator runs the boot stub's own decision at every MCU
+ * reset on a model of its backup register; the application under test is
+ * what clears that register - after 10 s of main loop, and before a reset it
+ * makes on purpose.
+ *   - no confirmation before 10 s of main loop, exactly one after;
+ *   - an image that works: watchdog resets, each after a confirmed run,
+ *     never add up (20 of them: the stub starts the application 20 times);
+ *   - an image that is reset before it confirms: three starts, and at the
+ *     fourth reset the stub does not start it again;
+ *   - GL_CMD_REBOOT clears the count: a deliberate reset 3 s after a start
+ *     is not an unconfirmed start. */
+GL_TEST(test_application_confirms_its_start_to_the_boot_stub)
+{
+    const uint32_t one = GL_BOOT_ATTEMPTS_MAGIC | 1u;
+    uint32_t t0;
+    uint8_t seq;
+    const uint8_t *pl;
+
+    world_defaults_();
+    board_up_(true);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    gl_sim_usb_host_open(true);
+    gl_sim_mcu_reset(GL_RESET_PIN); /* through the stub: the first start is counted */
+    GL_CHECK_EQ(gl_sim_stats()->boot_last_action, GL_BOOT_START_APP);
+    GL_CHECK_EQ(gl_sim_boot_attempts_reg(), one);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    host_rx_len_ = 0;
+    t0 = now_ms_();
+    run_talking_until_ms_(t0 + GL_APP_BOOT_CONFIRM_MS - 500u);
+    GL_CHECK_EQ(gl_sim_stats()->boot_confirms, 0u);
+    GL_CHECK_EQ(gl_sim_boot_attempts_reg(), one); /* not yet confirmed */
+    run_talking_until_ms_(t0 + GL_APP_BOOT_CONFIRM_MS + 500u);
+    GL_CHECK_EQ(gl_sim_stats()->boot_confirms, 1u);
+    GL_CHECK_EQ(gl_sim_boot_attempts_reg(), 0u);
+    run_talking_until_ms_(t0 + 60000u);
+    GL_CHECK_EQ(gl_sim_stats()->boot_confirms, 1u); /* once */
+    /* an image that works */
+    for (int k = 0; k < 20; k++) {
+        gl_sim_mcu_reset(GL_RESET_WATCHDOG);
+        GL_CHECK_EQ(gl_sim_stats()->boot_last_action, GL_BOOT_START_APP);
+        GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+        run_talking_until_ms_(now_ms_() + GL_APP_BOOT_CONFIRM_MS + 1000u);
+        GL_CHECK_EQ(gl_sim_boot_attempts_reg(), 0u);
+    }
+    GL_CHECK_EQ(gl_sim_stats()->boot_confirms, 21u);
+    GL_CHECK_EQ(gl_sim_stats()->boot_not_started, 0u);
+    /* reset before it confirms, three times running */
+    {
+        unsigned starts = 0;
+        for (int k = 0; k < 6 && gl_sim_stats()->boot_not_started == 0u; k++) {
+            gl_sim_mcu_reset(GL_RESET_WATCHDOG);
+            if (gl_sim_stats()->boot_not_started != 0u) {
+                break;
+            }
+            starts++;
+            GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+            run_talking_until_ms_(now_ms_() + GL_APP_BOOT_CONFIRM_MS - 3000u);
+            GL_CHECK_EQ(gl_sim_boot_attempts_reg(), GL_BOOT_ATTEMPTS_MAGIC | starts);
+        }
+        GL_CHECK_EQ(starts, GL_BOOT_MAX_FAILED_STARTS);
+        GL_CHECK_EQ(gl_sim_stats()->boot_last_action, GL_BOOT_LOADER); /* docked: VBUS is there */
+        GL_CHECK_EQ(gl_sim_stats()->boot_last_why, GL_BOOT_WHY_FAILED_STARTS);
+        printf("    the application confirms its start once, %u ms after gl_app_init(); 20 watchdog "
+               "resets after confirmed runs: 20 starts; reset before the confirmation: %u starts, "
+               "then the stub's verdict is the USB loader\n", (unsigned)GL_APP_BOOT_CONFIRM_MS, starts);
+    }
+    /* a reset made on purpose is not an unconfirmed start */
+    gl_sim_mcu_reset(GL_RESET_PIN);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    host_rx_len_ = 0;
+    run_talking_until_ms_(now_ms_() + 3000u);
+    GL_CHECK_EQ(gl_sim_boot_attempts_reg(), one);
+    host_send_(9, GL_CMD_REBOOT, "BOOT", 4);
+    GL_CHECK_EQ(host_get_(GL_CMD_REBOOT | GL_PROTO_RESPONSE_FLAG, &seq, &pl), 1);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    run_talking_until_ms_(now_ms_() + 200u);
+    GL_CHECK(gl_sim_stats()->reboots >= 1u);
+    GL_CHECK_EQ(gl_sim_boot_attempts_reg(), 0u);
+    gl_sim_mcu_reset(GL_RESET_SOFTWARE); /* the reset the request asked for */
+    GL_CHECK_EQ(gl_sim_stats()->boot_last_action, GL_BOOT_START_APP);
+    GL_CHECK_EQ(gl_sim_boot_attempts_reg(), one);
+}
+
 /* Review (major, two reviewers): the sample pump was purely edge driven.
  * With the part's latched data-ready (INT2 stays high until the output is
  * read) one lost interrupt latch meant no further edge: "no IMU sample for
@@ -1501,6 +1588,7 @@ int main(void)
     GL_RUN(test_imu_absent_at_boot_only);
     GL_RUN(test_imu_reset_while_asleep_is_repaired);
     GL_RUN(test_dead_imu_ends_in_a_watchdog_reset);
+    GL_RUN(test_application_confirms_its_start_to_the_boot_stub);
     GL_RUN(test_a_lost_data_ready_interrupt_does_not_stall);
     GL_RUN(test_precision_reread_with_a_second_turn);
     GL_RUN(test_fault_and_double_tap_in_the_cradle);

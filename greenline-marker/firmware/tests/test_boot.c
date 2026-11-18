@@ -192,10 +192,13 @@ GL_TEST(test_image_check)
                 GL_BOOT_IMG_BAD_LENGTH);
 }
 
+static bool ship_; /* the application's ship-mode mark, for decide_() */
+
 static gl_boot_decision_t decide_(bool valid, bool request, bool abnormal, bool vbus, uint32_t reg)
 {
     gl_boot_inputs_t in;
     gl_boot_decision_t d;
+    in.ship_mode = ship_;
     in.image_valid = valid;
     in.update_requested = request;
     in.abnormal_reset = abnormal;
@@ -332,7 +335,7 @@ GL_TEST(test_decision_rule)
                            abnormal = (m & 4u) != 0u, vbus = (m & 8u) != 0u;
                 d = decide_(valid, request, abnormal, vbus, regs[r]);
                 cases++;
-                GL_CHECK(d.action <= GL_BOOT_WAIT_VBUS);
+                GL_CHECK(d.action <= GL_BOOT_WAIT_VBUS); /* never "quiet" outside ship mode */
                 GL_CHECK_EQ(d.clear_request, request);
                 if (d.action == GL_BOOT_LOADER) {
                     GL_CHECK(vbus);
@@ -361,10 +364,224 @@ GL_TEST(test_decision_rule)
     }
 }
 
+/* ---- rule 6: ship mode (phase-3 review, hardware finding 8) -------------------------
+ * As the reviewer ran it: a shipped unit with a GOOD image; four resets
+ * without VBUS, each with the watchdog flag set (a watchdog that counts in
+ * Shutdown after all, or a stale flag).  Before the rule: START_APP three
+ * times with the count growing, then WAIT_VBUS, and the next docking gave
+ * "LOADER why 4".  Now none of them is counted, none starts the watchdog,
+ * and the docking starts the application. */
+GL_TEST(test_ship_mode_resets_are_not_counted)
+{
+    gl_boot_decision_t d;
+    uint32_t reg = 0u;
+    unsigned quiet = 0;
+
+    ship_ = true;
+    for (int k = 0; k < 40; k++) {
+        d = decide_(true, false, true, false, reg);
+        GL_CHECK_EQ(d.action, GL_BOOT_START_APP_QUIET);
+        GL_CHECK_EQ(d.why, GL_BOOT_WHY_SHIP_MODE);
+        GL_CHECK_EQ(d.attempts_reg, reg); /* as found */
+        GL_CHECK(!d.clear_request);
+        reg = d.attempts_reg;
+        quiet++;
+    }
+    /* the docking: VBUS, a wake-up reset - the ordinary start, first of three */
+    d = decide_(true, false, false, true, reg);
+    GL_CHECK_EQ(d.action, GL_BOOT_START_APP);
+    GL_CHECK_EQ(d.attempts_reg, REG(1));
+    /* ... and with the watchdog flag still standing (never cleared: the
+     * application did not get that far), it is still a start */
+    d = decide_(true, false, true, true, reg);
+    GL_CHECK_EQ(d.action, GL_BOOT_START_APP);
+    printf("    ship mode, good image: %u resets without VBUS (watchdog flag set) -> each back "
+           "to Shutdown through the application, no watchdog, count unchanged (%08lx); then "
+           "docked -> START_APP (before the rule: the fourth was WAIT_VBUS and the docking the "
+           "loader)\n", quiet, (unsigned long)reg);
+    /* a count that was there before ship mode is kept, not grown, not cleared */
+    d = decide_(true, false, true, false, REG(2));
+    GL_CHECK_EQ(d.action, GL_BOOT_START_APP_QUIET);
+    GL_CHECK_EQ(d.attempts_reg, REG(2));
+    /* the other rules come first: an invalid image waits for VBUS (the
+     * stub's own Shutdown), a pending loader stays pending, and with VBUS
+     * the loader is entered */
+    d = decide_(false, false, true, false, 0u);
+    GL_CHECK_EQ(d.action, GL_BOOT_WAIT_VBUS);
+    d = decide_(true, false, false, false, REG_PENDING);
+    GL_CHECK_EQ(d.action, GL_BOOT_WAIT_VBUS);
+    d = decide_(false, false, false, true, 0u);
+    GL_CHECK_EQ(d.action, GL_BOOT_LOADER);
+    d = decide_(true, true, false, true, 0u);
+    GL_CHECK_EQ(d.action, GL_BOOT_LOADER);
+    /* an update request without VBUS is dropped as before, and the unit
+     * goes back to Shutdown */
+    d = decide_(true, true, false, false, 0u);
+    GL_CHECK_EQ(d.action, GL_BOOT_START_APP_QUIET);
+    GL_CHECK(d.clear_request);
+    /* every combination in ship mode: quiet only without VBUS and with a
+     * valid image; never the watchdog-counted start without VBUS */
+    {
+        static const uint32_t regs[] = { 0u, 0xFFFFFFFFu, REG(1), REG(3), REG(127), REG_PENDING };
+        for (unsigned m = 0; m < 16u; m++) {
+            for (size_t r = 0; r < sizeof(regs) / sizeof(regs[0]); r++) {
+                const bool valid = (m & 1u) != 0u, request = (m & 2u) != 0u,
+                           abnormal = (m & 4u) != 0u, vbus = (m & 8u) != 0u;
+                d = decide_(valid, request, abnormal, vbus, regs[r]);
+                if (d.action == GL_BOOT_START_APP_QUIET) {
+                    GL_CHECK(valid && !vbus);
+                    GL_CHECK_EQ(d.attempts_reg, regs[r]);
+                }
+                if (!vbus) {
+                    GL_CHECK(d.action != GL_BOOT_START_APP && d.action != GL_BOOT_LOADER);
+                }
+                if (!valid) {
+                    GL_CHECK(d.action != GL_BOOT_START_APP && d.action != GL_BOOT_START_APP_QUIET);
+                }
+            }
+        }
+    }
+    ship_ = false;
+}
+
+/* ---- rule 0: a fault inside the stub (phase-3 review, hardware finding 4) -----------
+ * A model of Reset_Handler's sequence in boot/gl_boot_stm32u5.c, built from
+ * the same three pure functions it calls (tests/test_board.c checks in the
+ * TEXT of that file that it calls them in this order).  `kind` is what
+ * reading the image does on this unit: 0 nothing, 1 the flash signals an
+ * uncorrectable word (NMI, the handler returns), 2 a fault that resets.
+ * Returns the action, or -1 for "the pass ended in a reset". */
+static int stub_pass_(uint32_t *faults_reg, uint32_t *attempts_reg, int kind, bool crc_good,
+                      bool vbus, bool *image_read)
+{
+    gl_boot_inputs_t in;
+    gl_boot_decision_t d;
+    uint32_t faults = *faults_reg;
+    const bool read_image = gl_boot_may_read_image(faults);
+
+    *image_read = read_image;
+    in.update_requested = false;
+    in.abnormal_reset = true; /* the fault handler's reset is a software reset */
+    in.vbus = vbus;
+    in.ship_mode = false;
+    in.attempts_reg = *attempts_reg;
+    in.image_valid = false;
+    if (read_image) {
+        if (kind == 2) {
+            *faults_reg = gl_boot_fault_note(*faults_reg, false); /* Default_Handler */
+            return -1;
+        }
+        if (kind == 1) {
+            *faults_reg = gl_boot_fault_note(*faults_reg, true); /* NMI_Handler, returns */
+        }
+        in.image_valid = crc_good;
+        faults = *faults_reg;
+        if (!gl_boot_may_read_image(faults)) {
+            in.image_valid = false;
+        }
+    }
+    gl_boot_decide(&in, &d);
+    *faults_reg = gl_boot_faults_after(faults, read_image, d.action);
+    *attempts_reg = d.attempts_reg;
+    return (int)d.action;
+}
+
+GL_TEST(test_fault_inside_the_stub_reaches_the_decision)
+{
+    uint32_t faults, attempts;
+    bool rd;
+    int a = -1, passes;
+
+    /* an image word that faults on every read, in the cradle.  Before the
+     * rule: reset, read, fault, reset ... for ever */
+    faults = 0xFFFFFFFFu; /* a backup register that holds anything at first power */
+    attempts = 0u;
+    for (passes = 1; passes <= 10; passes++) {
+        a = stub_pass_(&faults, &attempts, 2, true, true, &rd);
+        if (a != -1) {
+            break;
+        }
+    }
+    GL_CHECK_EQ(passes, (int)GL_BOOT_MAX_STUB_FAULTS + 1);
+    GL_CHECK_EQ(a, GL_BOOT_LOADER);
+    GL_CHECK(!rd);              /* the pass that decided did not read the image */
+    GL_CHECK_EQ(faults, 0u);    /* whatever the loader writes is read afresh */
+    printf("    an image that faults on every read: %d passes end in a reset, pass %d does not "
+           "read it and enters the USB loader (before: an endless reset loop)\n",
+           passes - 1, passes);
+    /* the same out of the cradle: waits for VBUS, and VBUS leads to the
+     * loader without another read */
+    faults = 0u;
+    attempts = 0u;
+    for (passes = 1; passes <= 10; passes++) {
+        a = stub_pass_(&faults, &attempts, 2, true, false, &rd);
+        if (a != -1) {
+            break;
+        }
+    }
+    GL_CHECK_EQ(a, GL_BOOT_WAIT_VBUS);
+    GL_CHECK(!gl_boot_may_read_image(faults)); /* the verdict is kept while it waits */
+    a = stub_pass_(&faults, &attempts, 2, true, true, &rd);
+    GL_CHECK_EQ(a, GL_BOOT_LOADER);
+    GL_CHECK(!rd);
+    GL_CHECK_EQ(faults, 0u);
+    /* the flash's "uncorrectable word" (NMI, the handler returns): invalid
+     * on the FIRST pass, even if the garbage happened to give the right CRC */
+    faults = 0u;
+    attempts = 0u;
+    a = stub_pass_(&faults, &attempts, 1, true, true, &rd);
+    GL_CHECK_EQ(a, GL_BOOT_LOADER);
+    GL_CHECK(rd);
+    GL_CHECK_EQ(faults, 0u);
+    faults = 0u;
+    attempts = 0u;
+    a = stub_pass_(&faults, &attempts, 1, true, false, &rd);
+    GL_CHECK_EQ(a, GL_BOOT_WAIT_VBUS);
+    GL_CHECK((faults & GL_BOOT_FAULTS_ECC) != 0u);
+    a = stub_pass_(&faults, &attempts, 0, true, true, &rd); /* docked: not read again */
+    GL_CHECK_EQ(a, GL_BOOT_LOADER);
+    GL_CHECK(!rd);
+    /* after the loader has written a good image: read, valid, started */
+    a = stub_pass_(&faults, &attempts, 0, true, true, &rd);
+    GL_CHECK_EQ(a, GL_BOOT_START_APP);
+    GL_CHECK(rd);
+    GL_CHECK_EQ(faults, 0u);
+    /* a fault that happens once or twice and not again (a glitch) does not
+     * condemn a good image: the count is cleared by the pass that reads it
+     * to its end */
+    faults = 0u;
+    attempts = 0u;
+    GL_CHECK_EQ(stub_pass_(&faults, &attempts, 2, true, true, &rd), -1);
+    GL_CHECK_EQ(stub_pass_(&faults, &attempts, 2, true, true, &rd), -1);
+    GL_CHECK_EQ(faults, GL_BOOT_FAULTS_MAGIC | 2u);
+    a = stub_pass_(&faults, &attempts, 0, true, true, &rd);
+    GL_CHECK_EQ(a, GL_BOOT_START_APP);
+    GL_CHECK_EQ(faults, 0u);
+    /* the pure functions at their edges */
+    GL_CHECK(gl_boot_may_read_image(0u) && gl_boot_may_read_image(0xDEADBEEFu));
+    GL_CHECK(gl_boot_may_read_image(GL_BOOT_FAULTS_MAGIC | (GL_BOOT_MAX_STUB_FAULTS - 1u)));
+    GL_CHECK(!gl_boot_may_read_image(GL_BOOT_FAULTS_MAGIC | GL_BOOT_MAX_STUB_FAULTS));
+    GL_CHECK(!gl_boot_may_read_image(GL_BOOT_FAULTS_MAGIC | GL_BOOT_FAULTS_ECC));
+    {
+        uint32_t r = 0u;
+        for (int k = 0; k < 300; k++) {
+            r = gl_boot_fault_note(r, false);
+        }
+        GL_CHECK_EQ(r, GL_BOOT_FAULTS_MAGIC | GL_BOOT_FAULTS_COUNT_MASK); /* saturates */
+        GL_CHECK_EQ(gl_boot_fault_note(r, true), r | GL_BOOT_FAULTS_ECC);
+    }
+    GL_CHECK_EQ(gl_boot_faults_after(GL_BOOT_FAULTS_MAGIC | 3u, false, GL_BOOT_WAIT_VBUS),
+                GL_BOOT_FAULTS_MAGIC | 3u);
+    GL_CHECK_EQ(gl_boot_faults_after(GL_BOOT_FAULTS_MAGIC | 3u, false, GL_BOOT_LOADER), 0u);
+    GL_CHECK_EQ(gl_boot_faults_after(GL_BOOT_FAULTS_MAGIC | 2u, true, GL_BOOT_START_APP), 0u);
+}
+
 int main(void)
 {
     GL_RUN(test_crc32_is_zlibs);
     GL_RUN(test_image_check);
     GL_RUN(test_decision_rule);
+    GL_RUN(test_ship_mode_resets_are_not_counted);
+    GL_RUN(test_fault_inside_the_stub_reaches_the_decision);
     return gl_test_summary();
 }

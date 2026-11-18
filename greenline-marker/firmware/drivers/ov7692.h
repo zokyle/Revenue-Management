@@ -167,7 +167,9 @@ gl_status_t gl_ov7692_release_all(gl_ov7692_t *d);
  * Set the strip window of one camera.  x0 is rounded down to a multiple of
  * 4 and y0 to a multiple of 2; w must be a multiple of 4 and h of 2, and
  * the window must lie inside the 640 x 480 sensor (it is shifted inward if
- * it does not).  GL_ERR_PARAM for an impossible size.
+ * it does not, and also if its start column would not fit the sensor's
+ * 8-bit start register: a start beyond column 600 becomes 600).
+ * GL_ERR_PARAM for an impossible size.
  */
 gl_status_t gl_ov7692_set_window(gl_ov7692_t *d, gl_cam_id_t cam, uint16_t x0, uint16_t y0,
                                  uint16_t w, uint16_t h);

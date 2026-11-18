@@ -75,9 +75,12 @@ def make_read(rng, Measurements, ph, curv):
         grain_azimuth=0.0, stimp_ft=stimp, user_distance=math.nan)
 
 
+DELTA = 1e-6  # the tilt change, rad (--delta; the E31 sweep uses one microradian)
+
+
 def perturbed(m, k, dataclasses):
     t = m.tilt.copy()
-    t[k // 2] += 1e-6 if (k % 2 == 0) else -1e-6
+    t[k // 2] += DELTA if (k % 2 == 0) else -DELTA
     return dataclasses.replace(m, tilt=t)
 
 
@@ -110,7 +113,15 @@ def main():
     ap.add_argument("--curv", type=float, default=0.0015,
                     help="sigma of the true curvatures c, d of the green, 1/m (default 0.0015)")
     ap.add_argument("--threshold", type=float, required=True, help="GL_UI_STEEP_RATIO, printed with the result")
+    ap.add_argument("--delta", type=float, default=1e-6,
+                    help="tilt change in rad (default 1e-6: the sweep the threshold was chosen from; "
+                         "2e-4 is about the tilt noise of a read: how far a result just below the "
+                         "threshold moves for that - phase-3 review, application finding 9)")
     args = ap.parse_args()
+    global DELTA
+    DELTA = args.delta
+    if args.delta != 1e-6:
+        print(f"TILT CHANGE {args.delta:g} rad (not the one microradian of the E31 sweep)")
     import dataclasses
 
     es, ph, _rv, Measurements = ds.load_reference()

@@ -608,9 +608,11 @@ GL_TEST(test_charge_gate_unknown_faulty_and_implausible_temperatures)
 }
 
 /* DESIGN_SPEC E32: "firmware asserts CHG_INHIBIT after 6 hours of continuous
- * charging as a backstop."  Continuous = the charger's status output low at
- * every gate call; the limit holds until VBUS goes or the cell has fallen
- * below the restart voltage. */
+ * charging as a backstop."  The firmware counts the time in which it has NOT
+ * held the charger stopped (VBUS present, CHG_INHIBIT released), whatever
+ * the charger's status output says: a backstop must not depend on the line
+ * it backs up (phase-3 review, hardware finding 2).  The limit holds until
+ * VBUS goes or the cell has fallen below the restart voltage. */
 GL_TEST(test_charge_time_limit_of_6_hours)
 {
     const uint32_t step = 5000u;
@@ -674,8 +676,10 @@ GL_TEST(test_charge_time_limit_of_6_hours)
     gl_power_poll_pins(&pw_);
     GL_CHECK(pw_.charging);
     GL_CHECK(pw_.chg_run_ms < 60000u);
-    /* an interruption starts the count again: 5 h 59 min, the charger pauses
-     * (its status output released for one call), another 5 h 59 min */
+    /* The status line does NOT start the count again (until the phase-3
+     * review it did, and one released sample every few hours kept the
+     * backstop from ever firing): 5 h 59 min, the status output released for
+     * one call, and the limit still comes at six hours. */
     {
         const uint32_t almost = GL_PROV_CHARGE_MAX_MS - 60000u;
         const uint32_t t0 = t;
@@ -688,13 +692,8 @@ GL_TEST(test_charge_time_limit_of_6_hours)
         gl_power_poll_pins(&pw_);
         GL_CHECK(!pw_.charging);
         GL_CHECK(gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
-        GL_CHECK_EQ(pw_.chg_run_ms, 0u);
+        GL_CHECK(pw_.chg_run_ms > almost - 2u * step); /* kept */
         gl_sim_set_vbat_mv(3900); /* recharge */
-        for (uint32_t t1 = t; t - t1 < almost; t += step) {
-            gl_power_poll_pins(&pw_);
-            GL_CHECK(gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
-        }
-        GL_CHECK_EQ(pw_.chg_reason, GL_CHG_ALLOWED);
     }
     /* A cell that is STILL below the restart voltage after six hours of
      * charging gets no second six hours: the limit fires and holds, however
@@ -721,6 +720,115 @@ GL_TEST(test_charge_time_limit_of_6_hours)
     GL_CHECK(!pw_.time_limit && pw_.chg_run_ms == 0u);
     GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
     GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* Phase-3 review, hardware finding 2, as the reviewer ran it: VBUS present,
+ * 25 C, a gate call every 5 s for 48 h, the charger's status output read as
+ * "not charging" for one sample every 5 h.  Before the fix: "time limit
+ * NEVER reached".  And the other reading of the status line (first cycle
+ * only): CHG released all the time while the charger charges. */
+GL_TEST(test_backstop_does_not_depend_on_the_status_line)
+{
+    const uint32_t step = 5000u;
+    for (int variant = 0; variant < 2; variant++) {
+        uint32_t t = 1000u, stopped_at = 0, glitches = 0, low = 0, calls = 0;
+        fresh_();
+        gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+        pw_.cell_temp_c = 25.0f;
+        pw_.cell_temp_valid = true;
+        pw_.ntc_fault = (uint8_t)GL_NTC_OK;
+        pw_.mcu_temp_c = 25.0f;
+        pw_.mcu_temp_valid = true;
+        pw_.batt_mv = 4150;
+        for (; t < 48u * 3600u * 1000u; t += step) {
+            const bool glitch = (variant == 1) || (((t - 1000u) % (5u * 3600u * 1000u)) == 2u * 3600u * 1000u);
+            /* the pin read as high: the model's cell at its end voltage
+             * releases CHG; the driver's own cell reading is left alone */
+            gl_sim_set_vbat_mv(glitch ? 4200 : 3900);
+            gl_power_poll_pins(&pw_);
+            glitches += pw_.charging ? 0u : 1u;
+            low += pw_.charging ? 1u : 0u;
+            calls++;
+            if (!gl_power_charge_gate(&pw_, t, true, 25.0f, true, true)) {
+                stopped_at = t;
+                break;
+            }
+        }
+        GL_CHECK(stopped_at != 0u);
+        GL_CHECK(glitches >= 1u);
+        if (variant == 1) {
+            GL_CHECK_EQ(low, 0u); /* the firmware never saw "charging" */
+        }
+        GL_CHECK(stopped_at - 1000u >= GL_PROV_CHARGE_MAX_MS &&
+                 stopped_at - 1000u <= GL_PROV_CHARGE_MAX_MS + step);
+        GL_CHECK_EQ(pw_.chg_reason, GL_CHG_TIME_LIMIT);
+        expect_gate_(false);
+        printf("    %s: stopped by the firmware after %.4f h (%u gate calls, CHG read high in %u "
+               "of them)\n",
+               variant == 0 ? "status output released for one 5 s sample every 5 h"
+                            : "status output never low (a charger that shows the first cycle only, on a recharge)",
+               (double)(stopped_at - 1000u) / 3.6e6, (unsigned)calls, (unsigned)glitches);
+        /* time in which the firmware itself holds the charger is not counted */
+        gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
+        gl_power_poll_pins(&pw_);
+        (void)gl_power_charge_gate(&pw_, t, true, 25.0f, true, true);
+        gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+        gl_power_poll_pins(&pw_);
+        GL_CHECK(gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+        gl_power_charge_force(&pw_, true);
+        for (uint32_t t1 = t; t - t1 < 8u * 3600u * 1000u; t += step) {
+            gl_power_poll_pins(&pw_);
+            GL_CHECK(!gl_power_charge_gate(&pw_, t, true, 25.0f, true, true));
+        }
+        GL_CHECK_EQ(pw_.chg_reason, GL_CHG_FORCED);
+        GL_CHECK(!pw_.time_limit && pw_.chg_run_ms <= 2u * step);
+    }
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* Phase-3 review, hardware finding 10: the read gate (E13) believes NTC2 only
+ * as the charge gate does.  NTC2 at 25 C beside two die sensors at 75 C was
+ * "read ALLOWED" while the charge gate called the same reading IMPLAUSIBLE. */
+GL_TEST(test_read_gate_does_not_believe_an_implausible_ntc)
+{
+    fresh_();
+    pw_.cell_temp_c = 25.0f;
+    pw_.cell_temp_valid = true;
+    pw_.ntc_fault = (uint8_t)GL_NTC_OK;
+    pw_.mcu_temp_c = 75.0f;
+    pw_.mcu_temp_valid = true;
+    /* both die sensors contradict it: the hotter die sensor decides */
+    GL_CHECK(!gl_power_read_allowed(&pw_, true, 75.0f, true, true));
+    GL_CHECK(pw_.read_hot);
+    /* the charge gate's verdict on the same inputs */
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    gl_power_poll_pins(&pw_);
+    GL_CHECK(!gl_power_charge_gate(&pw_, 1000u, true, 75.0f, true, true));
+    GL_CHECK_EQ(pw_.chg_reason, GL_CHG_IMPLAUSIBLE);
+    /* one die sensor near NTC2 vouches for it (the other may be wrong) */
+    pw_.read_hot = false;
+    pw_.mcu_temp_c = 30.0f;
+    GL_CHECK(gl_power_read_allowed(&pw_, true, 75.0f, true, true));
+    /* a hot NTC2 that a die sensor confirms refuses, as before */
+    pw_.cell_temp_c = 62.0f;
+    pw_.mcu_temp_c = 58.0f;
+    GL_CHECK(!gl_power_read_allowed(&pw_, true, 55.0f, true, true));
+    /* a hot NTC2 contradicted by two cool dies still refuses: the hottest
+     * reading decides when they do not agree */
+    pw_.read_hot = false;
+    pw_.cell_temp_c = 70.0f;
+    pw_.mcu_temp_c = 24.0f;
+    GL_CHECK(!gl_power_read_allowed(&pw_, true, 25.0f, true, true));
+    /* no die sensor alive: NTC2 is taken as it reads */
+    pw_.read_hot = false;
+    pw_.cell_temp_c = 63.0f;
+    GL_CHECK(!gl_power_read_allowed(&pw_, true, 0.0f, false, false));
+    pw_.read_hot = false;
+    pw_.cell_temp_c = 25.0f;
+    GL_CHECK(gl_power_read_allowed(&pw_, true, 0.0f, false, false));
+    printf("    NTC2 25 C, both die sensors 75 C: read REFUSED (was allowed), charge gate "
+           "IMPLAUSIBLE; one die sensor within %.0f K of NTC2: NTC2 believed\n",
+           (double)GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C);
 }
 
 /* The factory's "stop the charge" (GL_CMD_SET_CHARGE): held until released,
@@ -927,10 +1035,17 @@ GL_TEST(test_read_gate_at_60_c)
             }
         }
     }
-    /* the die sensors do not overrule a valid NTC2, either way */
+    /* The die sensors cannot make a hot NTC2 acceptable.  The other way
+     * round this test pinned, until the phase-3 review, that an NTC2 at
+     * 30 C was believed beside two die sensors at 90 C; the charge gate
+     * calls that reading IMPLAUSIBLE, and the read gate now does not believe
+     * it either (test_read_gate_does_not_believe_an_implausible_ntc) */
     p.cell_temp_c = 30.0f;
     p.mcu_temp_c = 90.0f;
     p.mcu_temp_valid = true;
+    GL_CHECK(!gl_power_read_allowed(&p, true, 90.0f, true, true));
+    p.read_hot = false;
+    p.mcu_temp_c = 36.0f; /* one die sensor within 10 K vouches for NTC2 */
     GL_CHECK(gl_power_read_allowed(&p, true, 90.0f, true, true));
     p.cell_temp_c = 65.0f;
     p.mcu_temp_c = 20.0f;
@@ -1238,6 +1353,8 @@ int main(void)
     GL_RUN(test_charge_gate_window_guard_and_hysteresis);
     GL_RUN(test_charge_gate_unknown_faulty_and_implausible_temperatures);
     GL_RUN(test_charge_time_limit_of_6_hours);
+    GL_RUN(test_backstop_does_not_depend_on_the_status_line);
+    GL_RUN(test_read_gate_does_not_believe_an_implausible_ntc);
     GL_RUN(test_charge_stop_by_command);
     GL_RUN(test_charger_status_inference);
     GL_RUN(test_read_gate_at_60_c);

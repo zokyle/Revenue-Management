@@ -9,11 +9,21 @@ Reading (no unlock):
     display PATTERN [SECONDS]      normal white black checker1 checker8 rows columns orient ref-raw ref-corrected
     display-rot                    read the stored rotation
     grain {dark,cycle} | zero status | cal-status | log-info
-    log-download FILE.bin [--resume]      then:  log-decode FILE.bin FILE.json  and  replay FILE.json
+    stream SOURCE[,SOURCE] [--period MS] [--count N]     imu tilt grain power; imu frames carry the
+                                   acceleration in g and its total (close to 1 g at rest)
+    log-download FILE.bin [--resume]      written as it arrives; --resume continues a broken one
+                                   then:  log-decode FILE.bin FILE.json  and  replay FILE.json
+    lock                           end the factory session (also ends a "charge stop")
 Writing (the tool unlocks first; the unit refuses them while locked):
     cal-set NAME FILE | display-rot --set DEG | display-rot --measured DEG
-    grain store | zero arm {base,ball} | zero cancel | six-face {0..5,solve}
-    tempco FILE.csv [--t0 C]       lines: temperature C, offset x, y, z in g
+    display PATTERN SECONDS --plate    also arm the pattern for the seat plate: shown again, with
+                                   nothing on the pads, when the marker is next put down out of the cradle
+    grain store | grain white | zero arm {base,ball} [--rest MINUTES] | zero cancel | six-face {0..5,solve}
+    tempco FILE.csv [--t0 C]       lines: temperature C, offset x, y, z in g - AT LEAST 5 lines over
+                                   at least 30 K.  Only the CHANGE with temperature is stored (b1, b2);
+                                   the six-face offsets are kept, so the lines may be absolute offsets
+                                   or drift against any reference (0 for an axis not measured).
+                                   --t0: the six-face temperature (the unit checks it against its record)
     cam-horizon CAM ROW [ROLL_RAD] | grain-floor FILE     one modulation per line
     sleep-test [--motion] [--timer SECONDS] | sleep-test --off
     ship | ship --stay | charge {stop,auto} | serial --commit | time | log-erase
@@ -22,7 +32,9 @@ Writing (the tool unlocks first; the unit refuses them while locked):
 Without a unit:
     log-decode FILE.bin FILE.json | replay FILE.json [--sim-dir DIR]
 
-Every command prints JSON.  Exit status: 0 done, 1 the unit refused, 2 usage, 3 no link.
+Every command prints JSON.  Exit status: 0 done, 1 the unit refused, 2 usage or a file that
+cannot be read (a log dump of an unknown layout), 3 no link.  log-decode of a dump that was cut
+decodes up to its last complete record and says how many bytes it left out.
 """
 import json
 import math
@@ -77,11 +89,16 @@ def offline(cmd, args):
         if len(args) != 2:
             raise ValueError("log-decode FILE.bin FILE.json")
         with open(args[0], "rb") as fh:
-            decoded = logdec.decode(fh.read())
+            decoded = logdec.decode_tolerant(fh.read())
         with open(args[1], "w", encoding="utf-8") as fh:
             json.dump(decoded, fh, indent=1)
-        return {"records": len(decoded["records"]), "reads": len(decoded["reads"]),
-                "replayable": sum(1 for r in decoded["reads"] if r["replayable"]), "written": args[1]}
+        out = {"records": len(decoded["records"]), "reads": len(decoded["reads"]),
+               "replayable": sum(1 for r in decoded["reads"] if r["replayable"]), "written": args[1]}
+        if decoded["cut_bytes"]:
+            out["warning"] = ("the dump ends inside a record: %d bytes behind the last complete record "
+                              "were left out (log-download --resume completes the file)" % decoded["cut_bytes"])
+            sys.stderr.write("glctl: warning: %s\n" % out["warning"])
+        return out
     return None
 
 
@@ -90,7 +107,8 @@ def run(dev, cmd, args):
     deg = math.pi / 180.0
     guarded = {"cal-set", "tempco", "cam-horizon", "grain-floor", "ship", "charge", "update-loader",
                "log-erase", "six-face"}
-    if cmd in guarded or (cmd == "display-rot" and args) or (cmd == "grain" and args[:1] == ["store"]) or \
+    if cmd in guarded or (cmd == "display-rot" and args) or \
+            (cmd == "grain" and args[:1] in (["store"], ["white"])) or (cmd == "display" and "--plate" in args) or \
             (cmd == "zero" and args[:1] == ["arm"]) or (cmd == "sleep-test" and "--off" not in args) or \
             (cmd == "serial" and "--commit" in args):
         if cmd != "ship" or "--stay" not in args:
@@ -137,8 +155,16 @@ def run(dev, cmd, args):
         info, px = dev.frame(int(args[0]), dark)
         pgm(args[1], 640, 480, px)
         return dict(info, written=args[1])
+    if cmd == "lock":
+        dev.lock()
+        return dev.status()
+    if cmd == "stream":
+        period = int(flag(args, "--period", True, "100"))
+        count = int(flag(args, "--count", True, "10"))
+        return dev.stream(args[0].split(","), period, count)
     if cmd == "display":
-        return dev.display_test(args[0], int(args[1]) if len(args) > 1 else 30)
+        plate = flag(args, "--plate", default=False)
+        return dev.display_test(args[0], int(args[1]) if len(args) > 1 else 30, plate=bool(plate))
     if cmd == "display-rot":
         measured = flag(args, "--measured", True)
         setv = flag(args, "--set", True)
@@ -153,9 +179,12 @@ def run(dev, cmd, args):
         r["rotation_deg"] = r["rotation_rad"] / deg
         return r
     if cmd == "grain":
+        if args[:1] == ["white"]:
+            return dev.grain_white()
         return dev.grain_test(args[0] if args else "cycle")
     if cmd == "zero":
-        return dev.level_zero(args[0] if args else "status", args[1] if len(args) > 1 else "base")
+        rest = int(flag(args, "--rest", True, "0"))
+        return dev.level_zero(args[0] if args else "status", args[1] if len(args) > 1 else "base", rest)
     if cmd == "cal-status":
         return dev.cal_status()
     if cmd == "six-face":
@@ -192,17 +221,7 @@ def run(dev, cmd, args):
         return {"erasing": True}
     if cmd == "log-download":
         resume = flag(args, "--resume", default=False)
-        have, after = b"", None
-        if resume:
-            with open(args[0], "rb") as fh:
-                have = fh.read()
-            after, good = logdec.last_seq(have)
-            have = have[:good]
-        more = dev.log_download(after if resume and after is not None else None)
-        with open(args[0], "wb") as fh:
-            fh.write(have + more)
-        return {"bytes": len(have) + len(more), "new_bytes": len(more), "resumed_after_seq": after,
-                "written": args[0]}
+        return dev.log_download_to(args[0], resume=bool(resume))
     raise ValueError("unknown command %r" % cmd)
 
 
@@ -250,6 +269,9 @@ def main(argv):
     except ProtocolError as exc:
         sys.stderr.write("glctl: %s\n" % exc)
         return 3
+    except logdec.LogError as exc:
+        sys.stderr.write("glctl: this is not a log dump this tool can decode: %s\n" % exc)
+        return 2
     except (ValueError, IndexError, KeyError, OSError) as exc:
         sys.stderr.write("glctl: %s\n" % (exc if str(exc) else repr(exc)))
         return 2

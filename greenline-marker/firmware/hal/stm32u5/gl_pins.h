@@ -286,6 +286,61 @@
     X(15, D16, 0, 3375, 3, 2)
 
 /*
+ * IMU MOUNTING (the pin map's "imu_mounting": U4 at 90.0 degrees counter-clockwise
+ * seen from above).  marker axis = SIGN * sensor axis AXIS; index 0 = sensor X,
+ * 1 = Y, 2 = Z; marker frame: +x right, +y forward (toward the hole), +z up.
+ * drivers/lsm6dsv16x.c gl_imu_mount_defaults() uses exactly these.
+ * PROVISIONAL: holds only if ST's axis drawing of the LSM6DSV16X matches KiCad's
+ * LGA-14 land pattern at rotation 0 (X along the long side toward pins 5-7 ... not
+ * read); marker frame: +x right, +y forward (toward the hole), +z up, seen from
+ * above
+ */
+#define GL_PINS_IMU_MARKER_X_AXIS 1
+#define GL_PINS_IMU_MARKER_X_SIGN (-1)
+#define GL_PINS_IMU_MARKER_Y_AXIS 0
+#define GL_PINS_IMU_MARKER_Y_SIGN (+1)
+#define GL_PINS_IMU_MARKER_Z_AXIS 2
+#define GL_PINS_IMU_MARKER_Z_SIGN (+1)
+
+/*
+ * OPEN ITEMS FOR FIRMWARE of the pin map, and what the firmware does about
+ * each.  An item that tools/gen_pins.py does not know stops the generation.
+ *
+ *  1. IMU axes: U4 is NOT at rotation 0 on the board - see 'imu_mounting'.
+ *     firmware/core/gl_provisional.h (GL_PROV_IMU_MARKER_*) still has the identity
+ *     placeholder; with it the two in-plane tilt axes are exchanged and one is
+ *     inverted.
+ *     -> GL_PINS_IMU_MARKER_* above, generated from the pin map's imu_mounting and
+ *        used by drivers/lsm6dsv16x.c gl_imu_mount_defaults(); tests/test_pins.c
+ *        (PROVISIONAL in the pin map itself: ST's axis drawing was not read)
+ *  2. Ship mode (Shutdown), PROVISIONAL - RM0456 not read: PB5 (SPI1_MOSI,
+ *     UCPD1_DBCC1) and PB14 (SPI2_MISO, UCPD1_DBCC2) have no board pull and float
+ *     while the pads are high-impedance. If the dead-battery switch acts in
+ *     Shutdown and UCPD_DBDIS is not retained, a floating-high PB5 puts 5.1 kohm
+ *     on PA15 against R13 (100 kohm to V2V8): 2.8 V / 105 kohm = 27 uA, more than
+ *     five times the 5 uA ship-mode limit (E13 / E23). Read RM0456 on PWR_UCPDR in
+ *     Shutdown; if the risk is real, apply the PWR pull-downs (PWR_PDCRB bits 5
+ *     and 14 with APC) before entering Shutdown, or ask for 100 kohm pull-downs on
+ *     SPI1_MOSI and SPI2_MISO on the next board. Board test: measure the ship-mode
+ *     current at the cell-lead pads BT1 / BT2.
+ *     -> hal/stm32u5/gl_hal_stm32u5.c ship_shutdown_(): pull-downs on PB5 and PB14
+ *        applied with APC before Shutdown (text check in tests/test_board.c; NOT
+ *        RUN: no hardware; README open issues)
+ *  3. First programming of a blank board is by SWD only (pads 5 to 7 through the
+ *     factory fixture): BOOT0 is tied low through R2 and has no pad (E34). That a
+ *     blank STM32U5 does not enter its ROM loader by itself is PROVISIONAL
+ *     (memory).
+ *     -> nothing in the firmware: factory process (README, boot stub: recovery is
+ *        SWD)
+ *  4. SWDIO, SWCLK and NRST go from the underside pads straight to the MCU with no
+ *     clamp and no series resistor (the specification names only VBUS, D+ and D-
+ *     for the clamp): a known EVT limitation; include the three service pads in
+ *     the ESD test plan.
+ *     -> nothing in the firmware: ESD test plan (README open issues)
+ */
+#define GL_PINS_OPEN_ITEMS 4
+
+/*
  * FIRMWARE NOTES of the pin map, and where the firmware acts on each.  A note
  * that tools/gen_pins.py does not know stops the generation.
  *

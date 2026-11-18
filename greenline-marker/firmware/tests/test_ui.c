@@ -2126,6 +2126,158 @@ GL_TEST(test_steep_ratio)
            100.0 * 0.80 * (1.83 * 1.83 / (2.0 * 13.0 * 0.3048)) / 7.00475);
 }
 
+/* Phase-3 review, application findings 7 (seed S30: the threshold moved
+ * from 0.80 to 0.83 passed every test - none had a result between the two),
+ * 9, 3, 4 and 10.
+ *   - the TOO STEEP threshold from both sides: 0.79 is NORMAL, 0.81 and 0.82
+ *     are TOO STEEP, through gl_ui_steep_ratio() on a patch of that slope;
+ *   - THE EDGES OF E31, PINNED AS THEY ARE (owner decisions, README open
+ *     issues): at and above the critical slope (ratio 1.03) a dashed line is
+ *     still drawn; nothing in the classification lowers the confidence as
+ *     the ratio rises toward the threshold;
+ *   - the Survey mark says how many placements the result is made of;
+ *   - "Z?" on a result whose seat has no level zero;
+ *   - the PLAYS label and an aim line at the edge of the aperture: the white
+ *     margin between them, measured. */
+GL_TEST(test_result_screen_marks_of_the_review)
+{
+    const float a_r = 0.549f; /* Stimp 10 */
+    const float s_crit = a_r / ((5.0f / 7.0f) * 9.80665f);
+    static const float r_in[5] = { 0.79f, 0.81f, 0.82f, 1.03f, 1.30f };
+    gl_ui_class_in_t in;
+    gl_ui_result_text_t t;
+    gl_ui_view_t v;
+    gl_ui_note_t note;
+
+    GL_CHECK_NEAR(GL_UI_STEEP_RATIO, 0.80, 1e-7);
+    for (int i = 0; i < 5; i++) {
+        const float ratio = gl_ui_steep_ratio(r_in[i] * s_crit, 0.0f, 0.0f, 0.0f, 4.0f, a_r);
+        gl_ui_show_t show;
+        GL_CHECK_NEAR(ratio, r_in[i], 1e-4);
+        memset(&in, 0, sizeof(in));
+        in.aim_source = (uint8_t)GL_AIM_FROM_PATCH;
+        in.solve_status = (uint8_t)GL_SOLVE_OK;
+        in.fit_converged = true;
+        in.distance_known = true;
+        in.steep_ratio = ratio;
+        show = gl_ui_classify(&in, &note);
+        if (i == 0) {
+            GL_CHECK_EQ(show, GL_UI_SHOW_NORMAL);
+            GL_CHECK_EQ(note, GL_UI_NOTE_NONE);
+        } else {
+            /* 0.81 and 0.82 (seed S30), and - PINNED, an owner decision -
+             * 1.03 and 1.30, steeper than the slope a ball stops on: still a
+             * line, dashed, "TOO STEEP" */
+            GL_CHECK_EQ(show, GL_UI_SHOW_APPROX);
+            GL_CHECK_EQ(note, GL_UI_NOTE_TOO_STEEP);
+        }
+    }
+    printf("    ratio 0.79: NORMAL; 0.81, 0.82: TOO STEEP (dashed); PINNED, owner decision: 1.03 "
+           "and 1.30 of the critical slope also draw a dashed TOO STEEP line (E31 names only "
+           "\"close to\" that slope), and the confidence shown does not depend on the ratio\n");
+
+    /* the Survey mark */
+    fresh();
+    ui.state = (uint8_t)GL_UI_SHOW_RESULT;
+    view_default(&v);
+    v.show = (uint8_t)GL_UI_SHOW_NORMAL;
+    v.drop = 3;
+    v.drops_used = 3;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.mode, "D3") == 0);
+    v.drops_used = 0; /* "not said": all of them */
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.mode, "D3") == 0);
+    v.drops_used = 1;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.mode, "D3/1") == 0);
+    v.drop = 4;
+    v.drops_used = 2;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(strcmp(t.mode, "D4/2") == 0);
+    gl_ui_render(&ui, &v, &gfx);
+    GL_CHECK_EQ(ink_outside(), 0u);
+
+    /* "Z?": the zero of the seat is missing */
+    view_default(&v);
+    v.show = (uint8_t)GL_UI_SHOW_NORMAL;
+    gl_ui_result_text(&ui, &v, &t);
+    GL_CHECK(t.zero[0] == '\0');
+    gl_ui_render(&ui, &v, &gfx);
+    {
+        static uint8_t without[GL_GFX_BYTES];
+        unsigned diff = 0, diff_outside_box = 0;
+        memcpy(without, gfx.px, sizeof(without));
+        v.zero_missing = true;
+        gl_ui_result_text(&ui, &v, &t);
+        GL_CHECK(strcmp(t.zero, "Z?") == 0);
+        gl_ui_render(&ui, &v, &gfx);
+        for (int y = 0; y < GL_GFX_H; y++) {
+            for (int x = 0; x < GL_GFX_W; x++) {
+                static gl_gfx_t other;
+                memcpy(other.px, without, sizeof(without));
+                if (gl_gfx_get(&gfx, x, y) != gl_gfx_get(&other, x, y)) {
+                    diff++;
+                    if (x < 18 || x > 46 || y < 100 || y > 116) {
+                        diff_outside_box++;
+                    }
+                }
+            }
+        }
+        GL_CHECK(diff >= 10u);               /* it is on the screen */
+        GL_CHECK_EQ(diff_outside_box, 0u);   /* ... at the lower left, and nowhere else */
+        GL_CHECK_EQ(ink_outside(), 0u);
+        GL_CHECK_EQ(gl_ui_view_show(&v), GL_UI_SHOW_NORMAL); /* the state is not changed by it */
+    }
+
+    /* the PLAYS label against a line at the edge of the aperture (the
+     * reviewer's picture: 8 m, aim +200 mrad, "PLAYS 26.3FT") */
+    {
+        int w, x_end, x_start;
+        unsigned min_gap = 999, rows_with_line = 0;
+        view_default(&v);
+        v.show = (uint8_t)GL_UI_SHOW_NORMAL;
+        v.distance_m = 8.0f;
+        v.plays_like_m = 8.02f;
+        v.aim_rad = 0.200f;
+        ui.edit.units = GL_UNITS_FEET;
+        gl_ui_result_text(&ui, &v, &t);
+        gl_ui_render(&ui, &v, &gfx);
+        GL_CHECK(strstr(t.plays, "26.3FT") != NULL);
+        w = gl_gfx_text_width(t.plays, 1);
+        x_start = 64 - w / 2;
+        x_end = x_start + w; /* first column right of the text */
+        /* in the rows of the label (drawn at y 24): the first ink to the
+         * right of the text and to its left - that is the aim line (or
+         * nothing); its distance from the text */
+        for (int y = 24; y < 24 + GL_FONT_H; y++) {
+            for (int x = x_end; x < x_end + 12 && x < GL_GFX_W; x++) {
+                if (!gl_gfx_get(&gfx, x, y)) {
+                    const unsigned gap = (unsigned)(x - x_end);
+                    min_gap = (gap < min_gap) ? gap : min_gap;
+                    rows_with_line++;
+                    break;
+                }
+            }
+            for (int x = x_start - 1; x > x_start - 12 && x >= 0; x--) {
+                if (!gl_gfx_get(&gfx, x, y)) {
+                    const unsigned gap = (unsigned)(x_start - 1 - x);
+                    min_gap = (gap < min_gap) ? gap : min_gap;
+                    rows_with_line++;
+                    break;
+                }
+            }
+        }
+        printf("    \"%s\" (%d pixels wide) with an aim line of +200 mrad: the line comes within "
+               "%u white pixel%s of the label's text in %u of its rows (the label's box clears 2 "
+               "pixels beside the text).  PINNED as measured; legibility on the real panel is NOT "
+               "VERIFIED\n", t.plays, w, min_gap, (min_gap == 1u) ? "" : "s", rows_with_line);
+        GL_CHECK(rows_with_line >= 1u); /* the line does pass the label in this picture */
+        GL_CHECK(min_gap >= 2u);        /* ... and the box keeps its 2 white pixels */
+        ui.edit.units = GL_UNITS_METRES;
+    }
+}
+
 /* E29: the Survey on the table - 2 to 4 placements, a fifth is a new read,
  * a lift without a placement and a result left alone both end it. */
 GL_TEST(test_survey_e29_flow)
@@ -2625,6 +2777,7 @@ int main(void)
     GL_RUN(test_three_display_states_are_unmistakable);
     GL_RUN(test_every_estimate_maps_to_one_state);
     GL_RUN(test_steep_ratio);
+    GL_RUN(test_result_screen_marks_of_the_review);
     GL_RUN(test_survey_e29_flow);
     GL_RUN(test_recall_table);
     GL_RUN(test_info_screen);

@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "gl_boot.h"
 #include "gl_pins.h"
 #include "gl_provisional.h"
 #include "gl_sim_cost.h"
@@ -115,6 +116,8 @@ static struct {
     bool rom;                    /* ST's ROM loader is running */
     bool shutdown;               /* ship mode */
     bool ship_marker;            /* the backend's marker in the backup domain */
+    uint32_t boot_attempts_reg;  /* the boot stub's count of unconfirmed starts (TAMP BKP3R) */
+    double lcd_off_ua;           /* the panel with DISP low (gl_sim_set_lcd_off_ua) */
     uint64_t shutdown_since;
     /* core clock */
     uint8_t clock;
@@ -783,6 +786,8 @@ static double load_now_(double *mcu_out, double *imu_out, double *cam_out)
     /* the display, and the two resistors that hang on DISP */
     if (disp) {
         rest += GL_SIM_I_LCD_ON_UA + GL_SIM_I_DISP_PULLDOWN_UA + GL_SIM_I_GRAIN_BIAS_UA;
+    } else {
+        rest += S.lcd_off_ua; /* the panel stays on the always-on rail (see gl_sim.h) */
     }
     rest += (S.adc_on ? GL_SIM_I_ADC_UA : 0.0) + (S.opamp_on ? GL_SIM_I_OPAMP_UA : 0.0) +
             ((gl_sim_grain_lit_mask() != 0u) ? GL_SIM_I_GRAIN_LED_UA : 0.0);
@@ -924,6 +929,7 @@ void gl_sim_reset(bool erase_flash)
     S.chg_stat_first_only = (GL_PROV_BQ25101_CHG_LOW_ON_RECHARGE == 0);
     S.vbus_sense_fall_at = SIM_NEVER;
     S.stats.grain_bias_short_us = UINT64_MAX;
+    S.lcd_off_ua = GL_SIM_I_LCD_OFF_UA;
     sim_lcd_reset();
     sim_flash_reset(erase_flash);
     sim_imu_reset();
@@ -1085,7 +1091,37 @@ static void mcu_pins_release_(void)
 void gl_sim_mcu_reset(uint32_t reason)
 {
     mcu_pins_release_();
+    /* "the peripherals stop": a camera capture that was running is over
+     * (until the phase-3 review the capture model stayed busy and judged a
+     * frame that no peripheral was receiving: a false "the driving camera
+     * changed during a capture" about 7 ms after a reset inside an exposure) */
+    sim_cam_mcu_reset();
     S.rom = false;
+    /* DESIGN_SPEC E34: every reset passes through the boot stub.  The model
+     * runs the stub's own decision (boot/gl_boot_logic.c) on its backup
+     * register, with a valid image, and records what the stub would do; it
+     * does not act on it (a test that wants the ROM loader says so with
+     * gl_sim_mcu_enter_rom).  The application's half of the contract -
+     * gl_hal_boot_confirm(), the cleared count before a deliberate reset -
+     * is what moves the register between two resets. */
+    {
+        gl_boot_inputs_t in;
+        gl_boot_decision_t d;
+        in.image_valid = true;
+        in.update_requested = false;
+        in.abnormal_reset = (reason & (GL_RESET_WATCHDOG | GL_RESET_SOFTWARE)) != 0u;
+        in.vbus = S.vbus_pad;
+        in.attempts_reg = S.boot_attempts_reg;
+        in.ship_mode = S.ship_marker;
+        gl_boot_decide(&in, &d);
+        S.boot_attempts_reg = d.attempts_reg;
+        S.stats.boot_last_action = d.action;
+        S.stats.boot_last_why = d.why;
+        S.stats.boot_stub_passes++;
+        if (d.action != (uint8_t)GL_BOOT_START_APP && d.action != (uint8_t)GL_BOOT_START_APP_QUIET) {
+            S.stats.boot_not_started++;
+        }
+    }
     if (S.shutdown) {
         /* a reset ends Shutdown; the backend's marker decides at the next
          * gl_hal_init() whether the marker goes straight back */
@@ -1093,6 +1129,16 @@ void gl_sim_mcu_reset(uint32_t reason)
     }
     S.reset_reason = reason;
     sim_trace(GL_SIM_TR_REBOOT, 0xFFu, 0, reason, 0);
+}
+
+void gl_sim_set_lcd_off_ua(double ua)
+{
+    S.lcd_off_ua = ua;
+}
+
+uint32_t gl_sim_boot_attempts_reg(void)
+{
+    return S.boot_attempts_reg;
 }
 
 void gl_sim_mcu_enter_rom(void)
@@ -1660,6 +1706,7 @@ void gl_hal_reboot(gl_reboot_t how)
                                        "routed: INT1 / INT2 are the ROM's SPI1 inputs");
         }
     }
+    S.boot_attempts_reg = 0; /* a reset made on purpose: not an unconfirmed start (E34) */
     S.stats.reboots++;
     S.stats.last_reboot = (uint8_t)how;
     sim_trace(GL_SIM_TR_REBOOT, (unsigned)how, 0, 0, 0);
@@ -1667,6 +1714,7 @@ void gl_hal_reboot(gl_reboot_t how)
 
 void gl_hal_boot_confirm(void)
 {
+    S.boot_attempts_reg = 0;
     S.stats.boot_confirms++;
 }
 

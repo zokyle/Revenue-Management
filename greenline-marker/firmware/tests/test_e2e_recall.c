@@ -12,9 +12,9 @@
  *
  *   recalled                          a new read instead
  *   a tap (60 ms)                     a shove of 0.6 s
- *   a nudge of 0.2 s                  a nudge after which it lies 6 mrad
- *   ... after which it lies             differently
- *       2 mrad differently            a twist of 5 degrees on the spot
+ *   a nudge of 0.2 s                  a nudge after which it lies 1, 2, 3,
+ *   ... after which it lies             3.9 or 6 mrad differently
+ *       0.2 mrad differently          a twist of 5 degrees on the spot
  *   a twist of 1 degree               lifted and put back on the same spot
  *                                     twisted by 10 degrees while the result
  *                                       was still on the screen
@@ -237,7 +237,10 @@ GL_TEST(test_what_is_a_lift_and_what_is_not)
         /* name                                         jolt  step  turn  len  lift  recall */
         { "a tap (60 ms)",                               0.06, 0.0,  0.0, 0.0,  0.0, true },
         { "a nudge of 0.2 s",                            0.20, 0.0,  0.0, 0.0,  0.0, true },
-        { "a nudge, then lying 2 mrad differently",      0.20, 2.0,  0.0, 0.0,  0.0, true },
+        /* (until the phase-3 review this row was pinned as RECALL: the limit
+         * was 4 mg, and the recalled solid line was 13 to 15 mrad stale -
+         * application finding 2; test_recall_of_a_reseated_marker below) */
+        { "a nudge, then lying 2 mrad differently",      0.20, 2.0,  0.0, 0.0,  0.0, false },
         { "a tap and a twist of 1 degree",               0.06, 0.0,  1.0, 0.15, 0.0, true },
         { "a shove of 0.6 s",                            0.60, 0.0,  0.0, 0.0,  0.0, false },
         { "a nudge, then lying 6 mrad differently",      0.20, 6.0,  0.0, 0.0,  0.0, false },
@@ -280,6 +283,205 @@ GL_TEST(test_what_is_a_lift_and_what_is_not)
         }
         GL_CHECK_EQ(gl_sim_violation_total(), 0);
     }
+}
+
+/* Phase-3 review, application finding 2: "Recall shows a stale solid line
+ * after the marker was nudged and reseated by less than 4 mrad: up to 30 mrad
+ * (241 mm at the hole) wrong" - reseated by 1.0, 2.0, 3.0 and 3.9 mrad it was
+ * RECALLED, 6.5 to 30 mrad stale.  The reviewer's measurement again: read,
+ * sleep, a 0.2 s nudge after which the marker lies differently in cross
+ * slope, and for comparison a fresh read of a marker that lies that way
+ * from the start.  A reseat the marker can measure now makes a new read;
+ * what is still recalled is printed with what it costs. */
+static double fresh_aim_(double step_mrad)
+{
+    world_defaults_();
+    W.slope_x += 0.001 * step_mrad;
+    project_scene_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 12000));
+    return (double)app.view.aim_rad;
+}
+
+GL_TEST(test_recall_of_a_reseated_marker)
+{
+    static const struct {
+        double step_mrad;
+        bool recall;
+    } c[] = { { 0.2, true }, { 1.0, false }, { 2.0, false }, { 3.0, false }, { 3.9, false },
+              { -1.0, false }, { -0.2, true } };
+    double worst_recalled_stale = 0.0;
+
+    printf("    reseated by | outcome    | the line shown is off the fresh read's by\n");
+    for (size_t i = 0; i < GL_ARRAY_LEN(c); i++) {
+        const act_t a = { "reseat", 0.20, c[i].step_mrad, 0.0, 0.0, 0.0, c[i].recall };
+        const double fresh = fresh_aim_(c[i].step_mrad);
+        double shown, stale;
+        uint32_t t0;
+        bool recalled;
+        read_and_sleep_();
+        t0 = now_ms_() + 400u;
+        act_(&a, 0.001 * (double)t0);
+        GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, t0 + 14000u));
+        run_until_ms_(now_ms_() + 30u);
+        recalled = app.view.recalled;
+        shown = (double)app.view.aim_rad;
+        stale = 1000.0 * fabs(shown - fresh);
+        printf("    %+5.1f mrad   | %-10s | %5.2f mrad = %3.0f mm at the hole (6 m)%s\n", c[i].step_mrad,
+               recalled ? "RECALLED" : "a new read", stale, stale * 6.0,
+               recalled ? "  <- STALE BY THIS MUCH, shown solid" : "");
+        GL_CHECK_EQ(recalled, c[i].recall);
+        if (recalled) {
+            worst_recalled_stale = (stale > worst_recalled_stale) ? stale : worst_recalled_stale;
+            GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 1u);
+        } else {
+            /* the new read is the read of the marker as it lies now */
+            GL_CHECK(stale < 1.5);
+            GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, 2u);
+        }
+    }
+    /* what a recall can still be wrong by: a reseat under the limit */
+    GL_CHECK(worst_recalled_stale < 3.0);
+    printf("    limit of the reseat check %.1f mg (PROVISIONAL, from the model's sensor noise); the "
+           "worst recalled line above is %.2f mrad stale (before the check: 30 mrad at 3.9 mrad)\n",
+           1000.0 * (double)GL_APP_RECALL_RESEAT_G, worst_recalled_stale);
+}
+
+/* The other side of that limit, and application finding 5 ("a 60 ms tap
+ * wakes the marker in 36 of 40 timings; shorter taps mostly do not"): one
+ * sleeping marker, tapped again and again - 40 start times 7 ms apart for
+ * each tap length, the builders' own tap model (0.15 g at 9 Hz).  Counted:
+ * taps that woke the marker (the IMU's wake-up compares consecutive
+ * low-rate samples with 62 mg: a short tap can fall between two samples),
+ * and of those the ones that ended in a recall (a marker that was NOT
+ * reseated and makes a new read instead is the reseat check's false alarm).
+ * MODEL ONLY: whether a real tap wakes the real IMU is not verified. */
+GL_TEST(test_tap_length_and_start_time)
+{
+    static const double len_ms[5] = { 20.0, 40.0, 60.0, 100.0, 200.0 };
+    unsigned woke[5] = { 0, 0, 0, 0, 0 }, recalled[5] = { 0, 0, 0, 0, 0 }, reads0;
+
+    read_and_sleep_();
+    reads0 = app.reads_total;
+    for (int l = 0; l < 5; l++) {
+        for (int k = 0; k < 40; k++) {
+            const uint32_t recalls0 = app.recalls, reads = app.reads_total;
+            uint32_t t0;
+            if (app.ui.state != (uint8_t)GL_UI_SLEEP) {
+                GL_CHECK(run_until_state_(GL_UI_SLEEP, now_ms_() + 70000u));
+            }
+            run_until_ms_(now_ms_() + 20000u);
+            t0 = now_ms_() + 400u + 7u * (uint32_t)k;
+            W.jolt_at_s = 0.001 * (double)t0;
+            W.jolt_len_s = 0.001 * len_ms[l];
+            run_until_ms_(t0 + 3000u);
+            if (app.awake || app.recalls != recalls0 || app.reads_total != reads) {
+                woke[l]++;
+                (void)run_until_state_(GL_UI_SHOW_RESULT, t0 + 14000u);
+                run_until_ms_(now_ms_() + 30u);
+                if (app.recalls == recalls0 + 1u && app.view.recalled) {
+                    recalled[l]++;
+                }
+            }
+        }
+    }
+    printf("    tap length | woke the marker | of those: recalled\n");
+    for (int l = 0; l < 5; l++) {
+        printf("    %6.0f ms  | %2u of 40        | %2u of %2u\n", len_ms[l], woke[l], recalled[l], woke[l]);
+    }
+    printf("    new reads instead of a recall on a marker that was not reseated: %u of %u wake-ups\n",
+           (unsigned)(app.reads_total - reads0),
+           woke[0] + woke[1] + woke[2] + woke[3] + woke[4]);
+    /* PINNED as measured: a tap of 100 ms or more always wakes this model; a
+     * 60 ms tap mostly; shorter ones are not reliable */
+    GL_CHECK_EQ(woke[3], 40u);
+    GL_CHECK_EQ(woke[4], 40u);
+    GL_CHECK(woke[2] >= 30u);
+    GL_CHECK(woke[0] < woke[2]);
+    /* every wake-up of a marker that was only tapped ends in the recall */
+    for (int l = 0; l < 5; l++) {
+        GL_CHECK(recalled[l] + 1u >= woke[l]);
+    }
+    GL_CHECK(app.reads_total - reads0 <= 2u);
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
+}
+
+/* Phase-3 review, application finding 6: what a HOT marker does, which the
+ * README's tables did not say.
+ *   Recall: result, sleep, the cell goes to 64 C, a tap.  Before the review:
+ *     SLEEP > WAKE > TOO_HOT > SLEEP - the stored result refused, although a
+ *     recall uses no camera, and lost.  Now the tap recalls it; a hot marker
+ *     that was LIFTED is refused where its camera read would start.
+ *   Survey: a placement refused as too hot ends the Survey (pinned as it
+ *     is; the README's Survey table says so now). */
+GL_TEST(test_recall_and_survey_on_a_hot_marker)
+{
+    const act_t tap = { "tap", 0.10, 0.0, 0.0, 0.0, 0.0, true };
+    const act_t lift = { "lift", 0.0, 0.0, 0.0, 0.0, 1.2, false };
+    uint32_t t0, rails;
+
+    read_and_sleep_();
+    gl_sim_imu_set_temperature(64.0f);
+    run_until_ms_(now_ms_() + 8000u);
+    rails = gl_sim_stats()->cam_rail_cycles;
+    t0 = now_ms_() + 400u;
+    act_(&tap, 0.001 * (double)t0);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, t0 + 6000u));
+    run_until_ms_(now_ms_() + 30u);
+    GL_CHECK(app.view.recalled);
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, rails); /* no camera: E13 has nothing to refuse */
+    for (unsigned i = 0; i < seen.n; i++) {
+        GL_CHECK(seen.state[i] != (uint8_t)GL_UI_TOO_HOT);
+    }
+    printf("    cell at 64 C, tapped: the stored result is RECALLED (no camera; before the review "
+           "TOO HOT, and the result was lost)\n");
+    /* still hot, and now it is lifted and put back: a new read is due, and
+     * that is refused - no camera */
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, now_ms_() + 47000u));
+    run_until_ms_(now_ms_() + 8000u);
+    t0 = now_ms_() + 400u;
+    act_(&lift, 0.001 * (double)t0);
+    GL_CHECK(run_until_state_(GL_UI_TOO_HOT, t0 + 9000u));
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, rails);
+    GL_CHECK_EQ(gl_sim_stats()->frames_captured > 0u, true);
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, now_ms_() + 6000u));
+    GL_CHECK(!app.ui.recall);
+
+    /* the Survey: first placement cool, the second at 63 C */
+    world_defaults_();
+    board_up_(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, 12000));
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_(now_ms_() + 150u);
+    gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+    run_until_ms_(now_ms_() + 150u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_SURVEY_NEXT_DROP);
+    GL_CHECK_EQ(app.survey.count, 1);
+    gl_sim_imu_set_temperature(63.0f);
+    run_until_ms_(now_ms_() + 7000u);
+    rails = gl_sim_stats()->cam_rail_cycles;
+    W.t_pick_s = 0.001 * (double)now_ms_() + 0.5;
+    W.t_place_s = W.t_pick_s + 0.6;
+    GL_CHECK(run_until_state_(GL_UI_TOO_HOT, now_ms_() + 9000u));
+    GL_CHECK_EQ(gl_sim_stats()->cam_rail_cycles, rails);
+    GL_CHECK_EQ(app.survey.count, 0);   /* PINNED: the refused placement ends the Survey */
+    GL_CHECK_EQ(app.ui.survey_count, 0);
+    GL_CHECK(run_until_state_(GL_UI_SLEEP, now_ms_() + 6000u));
+    gl_sim_imu_set_temperature(40.0f);
+    run_until_ms_(now_ms_() + 8000u);
+    W.t_pick_s = 0.001 * (double)now_ms_() + 0.5;
+    W.t_place_s = W.t_pick_s + 0.6;
+    GL_CHECK(run_until_state_(GL_UI_SHOW_RESULT, now_ms_() + 12000u));
+    GL_CHECK_EQ(app.view.drop, 0); /* a plain read, no D mark */
+    GL_CHECK_EQ(app.ui.read_kind, GL_READ_QUICK);
+    printf("    Survey, second placement at 63 C: TOO HOT, no camera, the Survey is over (0 "
+           "placements held); after cooling the next placement is a plain read\n");
+    GL_CHECK_EQ(gl_sim_violation_total(), 0);
 }
 
 /* ======================================================================= */
@@ -564,6 +766,9 @@ int main(void)
 {
     GL_RUN(test_tap_recalls_the_result_without_a_read);
     GL_RUN(test_what_is_a_lift_and_what_is_not);
+    GL_RUN(test_recall_of_a_reseated_marker);
+    GL_RUN(test_tap_length_and_start_time);
+    GL_RUN(test_recall_and_survey_on_a_hot_marker);
     GL_RUN(test_turned_while_shown_or_spin_given_up_is_not_recalled);
     GL_RUN(test_no_recall_without_a_result_or_after_the_cradle);
     GL_RUN(test_info_screen_from_the_dial);

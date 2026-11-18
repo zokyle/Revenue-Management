@@ -50,6 +50,7 @@ extern uint32_t gl_boot_stack_top_; /* from the linker script */
 
 void Reset_Handler(void);
 void Default_Handler(void);
+void NMI_Handler(void);
 
 /* ---- small services ------------------------------------------------------------- */
 
@@ -115,6 +116,14 @@ static void start_app_(void)
     jump_(GL_BOOT_APP_BASE);
 }
 
+static void start_app_quiet_(void)
+{
+    /* rule 6, ship mode without VBUS: the application's first act is to go
+     * back to Shutdown (hal/stm32u5 ship_check_).  NO watchdog is started
+     * here and nothing is counted. */
+    jump_(GL_BOOT_APP_BASE);
+}
+
 static void loader_(void)
 {
     /* ST's loader in system memory.  Nothing has been configured that it
@@ -136,9 +145,16 @@ static void wait_vbus_(void)
     PWR->WUCR1 |= PWR_WUCR1_WUPEN2;
     PWR->WUSCR = PWR_WUSCR_CWUF2;
     PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | (PWR_CR1_LPMS_2 | PWR_CR1_LPMS_1); /* Shutdown */
+    /* The wake-up is an edge.  VBUS may have come between the check that
+     * led here and the arming above, and that edge is lost: look again now
+     * that the pin is armed, and decide again through a reset if it is
+     * there (phase-3 review, hardware finding 7) */
+    if (vbus_()) {
+        NVIC_SystemReset();
+    }
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
     __WFI();
-    NVIC_SystemReset(); /* VBUS came between the check and the WFI */
+    NVIC_SystemReset(); /* the entry fell through: a wake-up event was pending */
     for (;;) {
     }
 }
@@ -149,7 +165,8 @@ void Reset_Handler(void)
 {
     gl_boot_inputs_t in;
     gl_boot_decision_t d;
-    uint32_t csr;
+    uint32_t csr, faults;
+    bool read_image;
 
     /* FIRST, before any pin is configured (pin map, firmware note 5): the
      * dead-battery pull-downs of the UCPD pads off - PA15 is CHG_STAT,
@@ -168,9 +185,25 @@ void Reset_Handler(void)
     in.update_requested = (TAMP->BKP0R == GL_BOOT_UPDATE_MAGIC);
     in.attempts_reg = TAMP->BKP3R;
     in.vbus = vbus_();
-    in.image_valid = gl_boot_image_check((const uint8_t *)GL_BOOT_APP_BASE, GL_BOOT_APP_MAX_BYTES,
-                                         GL_BOOT_APP_BASE, NULL) == GL_BOOT_IMG_OK;
+    in.ship_mode = (TAMP->BKP2R == GL_BOOT_SHIP_MAGIC);
+    /* rule 0: the image is read only if earlier passes have not shown that
+     * reading it faults.  A flash word that cannot be read raises NMI in
+     * the middle of the check below; NMI_Handler notes it in BKP5R and
+     * returns, and the verdict is taken from there, whatever the CRC of the
+     * garbage came to */
+    faults = TAMP->BKP5R;
+    read_image = gl_boot_may_read_image(faults);
+    in.image_valid = false;
+    if (read_image) {
+        in.image_valid = gl_boot_image_check((const uint8_t *)GL_BOOT_APP_BASE, GL_BOOT_APP_MAX_BYTES,
+                                             GL_BOOT_APP_BASE, NULL) == GL_BOOT_IMG_OK;
+        faults = TAMP->BKP5R; /* as the handler may have left it */
+        if (!gl_boot_may_read_image(faults)) {
+            in.image_valid = false;
+        }
+    }
     gl_boot_decide(&in, &d);
+    TAMP->BKP5R = gl_boot_faults_after(faults, read_image, d.action);
 
     if (d.clear_request) {
         TAMP->BKP0R = 0u;
@@ -186,26 +219,51 @@ void Reset_Handler(void)
         loader_();
     } else if (d.action == (uint8_t)GL_BOOT_WAIT_VBUS) {
         wait_vbus_();
+    } else if (d.action == (uint8_t)GL_BOOT_START_APP_QUIET) {
+        start_app_quiet_();
     }
     start_app_();
 }
 
+/* A fault inside the stub (rule 0): COUNT it in BKP5R, then reset.  An
+ * unconditional reset here - what this handler did until the phase-3 review
+ * - loops for ever on anything that faults on every pass, and never reaches
+ * gl_boot_decide(): after GL_BOOT_MAX_STUB_FAULTS passes the stub stops
+ * reading the image and treats it as invalid. */
 void Default_Handler(void)
 {
-    /* a fault inside the stub: reset and try again (the stub has no state
-     * that a second pass could make worse) */
+    backup_access_();
+    TAMP->BKP5R = gl_boot_fault_note(TAMP->BKP5R, false);
     NVIC_SystemReset();
     for (;;) {
     }
 }
 
+/* NMI.  On the STM32U5 an uncorrectable (double-bit) error of a flash word
+ * that is being READ sets ECCD in FLASH_ECCR and raises NMI (PROVISIONAL:
+ * from memory of RM0456, not read; a release gate).  That is the image
+ * whose programming was cut short.  Note it, clear the flag (write 1) and
+ * RETURN: the read that raised it completes with whatever data, the check
+ * in Reset_Handler runs to its end, finds the note and calls the image
+ * invalid.  An NMI from anything else is a fault like any other. */
+void NMI_Handler(void)
+{
+    if ((FLASH->ECCR & FLASH_ECCR_ECCD) != 0u) {
+        FLASH->ECCR |= FLASH_ECCR_ECCD;
+        backup_access_();
+        TAMP->BKP5R = gl_boot_fault_note(TAMP->BKP5R, true);
+        return;
+    }
+    Default_Handler();
+}
+
 /* The stub's own vector table: stack, reset, and the same handler for
- * every fault (no interrupt is ever enabled). */
+ * every fault but NMI (no interrupt is ever enabled). */
 __attribute__((section(".isr_vector"), used))
 static const void *const vectors_[16] = {
     &gl_boot_stack_top_,
     (const void *)Reset_Handler,
-    (const void *)Default_Handler, /* NMI */
+    (const void *)NMI_Handler,     /* NMI: the flash's "uncorrectable word" (rule 0) */
     (const void *)Default_Handler, /* HardFault */
     (const void *)Default_Handler, /* MemManage */
     (const void *)Default_Handler, /* BusFault */

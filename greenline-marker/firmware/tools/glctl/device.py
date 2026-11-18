@@ -77,7 +77,31 @@ class Device:
         self.cmd("UNLOCK", b"GLFC")
 
     def lock(self):
-        self.raw(CMD["UNLOCK"], b"lock")
+        """The explicit lock of the final test: UNLOCK with the word LOCK answers OK, locked."""
+        self.cmd("UNLOCK", b"LOCK")
+
+    def stream(self, sources, period_ms=100, count=10, timeout=10.0):
+        """Switch live streams on (sources: names of proto.STREAM_SOURCE), collect `count`
+        frames, switch them off again.  The unit must be talked to at least every 30 s to
+        stay awake in its cradle: a stream it was asked for counts as talking."""
+        mask = 0
+        for name in sources:
+            mask |= 1 << proto.STREAM_SOURCE[name]
+        self.cmd("STREAM", struct.pack("<HH", mask, period_ms))
+        frames = []
+        deadline = time.monotonic() + timeout
+        tries = 0
+        try:
+            while len(frames) < count:
+                for _seq, rcmd, body in self.parser.feed(self.t.read(0.05)):
+                    if rcmd & proto.STREAM_FLAG and not rcmd & proto.RESPONSE_FLAG:
+                        frames.append(proto.parse_stream(rcmd & 0x3F, body))
+                tries += 1
+                if time.monotonic() > deadline or tries > 2000:
+                    raise ProtocolError("the unit sent %d of %d stream frames" % (len(frames), count))
+        finally:
+            self.cmd("STREAM", struct.pack("<HH", 0, 0))
+        return frames[:count]
 
     def get_settings(self):
         return proto.parse_settings(self.cmd("GET_SETTINGS"))
@@ -162,17 +186,28 @@ class Device:
     def cam_field(self, cam):
         return proto.parse_field(self.cmd("CAM_FIELD", bytes([cam]), timeout=5.0))
 
-    def display_test(self, pattern, hold_s=30):
-        d = self.cmd("DISPLAY_TEST", bytes([proto.PATTERN[pattern], hold_s if pattern != "normal" else 0]))
+    def display_test(self, pattern, hold_s=30, plate=False):
+        """plate=True (needs unlock): also ARM the pattern for the seat plate - it is shown
+        again, for hold_s, when the marker is next put down out of the cradle."""
+        req = bytes([proto.PATTERN[pattern], hold_s if pattern != "normal" else 0])
+        d = self.cmd("DISPLAY_TEST", req + (b"\x01" if plate else b""))
         return {"pattern": d[0], "frame_crc32": struct.unpack_from("<I", d, 1)[0],
                 "black_pixels": struct.unpack_from("<H", d, 5)[0]}
 
     def grain_test(self, mode="cycle"):
         return proto.parse_grain(self.cmd("GRAIN_TEST", bytes([{"dark": 0, "cycle": 1, "store": 2}[mode]])))
 
-    def level_zero(self, op="status", seat="base"):
-        d = self.cmd("LEVEL_ZERO", bytes([{"status": 0, "arm": 1, "cancel": 2}[op], proto.SEAT[seat]]))
+    def level_zero(self, op="status", seat="base", rest_min=0):
+        """rest_min (with arm): the zeroing does not start before the marker has been off
+        VBUS for that many minutes (assembly step 19: 30)."""
+        req = bytes([{"status": 0, "arm": 1, "cancel": 2}[op], proto.SEAT[seat]])
+        d = self.cmd("LEVEL_ZERO", req + (bytes([rest_min]) if rest_min else b""))
         return proto.parse_zero(d)
+
+    def grain_white(self):
+        """The white reference of the grain reader (the marker on the white tile)."""
+        self.start_cal("GRAIN_WHITE", 0)
+        return {"grain_cal_flags": self.get_cal("grain")[1]}
 
     def cal_status(self):
         return proto.parse_six(self.cmd("CAL_STATUS"))
@@ -193,12 +228,20 @@ class Device:
         return self.cal_status()
 
     def tilt_tempco(self, points, t0=25.0):
-        """points: [(temperature C, offset x, y, z in g), ...]; fits and stores."""
+        """points: [(temperature C, offset x, y, z in g), ...], at least 5 over at least 30 K.
+        The unit stores the TEMPERATURE TERMS b1, b2 about its six-face temperature and KEEPS
+        its six-face offsets: the points may be absolute offsets or drift against any
+        reference (0 for an axis that was not measured).  t0 = the six-face temperature the
+        host believes in; the unit refuses (RANGE) if its record says otherwise by 3 K.
+        b0, the fitted value at t0, comes back for comparison and is not stored."""
         payload = struct.pack("<Bf", len(points), t0) + b"".join(struct.pack("<ffff", *p) for p in points)
         d = self.cmd("TILT_TEMPCO", payload)
         f = struct.unpack_from("<10f", d, 0)
-        return {"b0_g": list(f[0:3]), "b1_g_per_k": list(f[3:6]), "b2_g_per_k2": list(f[6:9]),
-                "rms_residual_g": f[9]}
+        out = {"b0_fit_g_not_stored": list(f[0:3]), "b1_g_per_k": list(f[3:6]), "b2_g_per_k2": list(f[6:9]),
+               "rms_residual_g": f[9]}
+        if len(d) >= 44:
+            out["max_residual_g"] = struct.unpack_from("<f", d, 40)[0]
+        return out
 
     def set_cam_horizon(self, cam, row, roll_rad=0.0):
         d = self.cmd("SET_CAM_HORIZON", struct.pack("<Bff", cam, row, roll_rad))
@@ -232,9 +275,11 @@ class Device:
     def log_erase(self):
         self.cmd("LOG_ERASE", b"ERAS")
 
-    def log_download(self, resume_after=None, progress=None):
+    def log_download(self, resume_after=None, progress=None, sink=None):
         """The raw record stream (type, flags, length, sequence number, payload per record).
-        resume_after = the sequence number of the last record a broken download already has."""
+        resume_after = the sequence number of the last record a broken download already has.
+        sink(bytes), if given, receives every response's records AS THEY ARRIVE (each
+        response holds whole records): what has arrived is kept if the link then drops."""
         if resume_after is None:
             restart = 1
         else:
@@ -245,7 +290,32 @@ class Device:
             d = self.cmd("LOG_READ", bytes([restart]), timeout=5.0)
             restart = 0
             out += d[1:]
+            if sink:
+                sink(d[1:])
             if progress:
                 progress(len(out))
             if d[0] == 0:
                 return bytes(out)
+
+    def log_download_to(self, path, resume=False):
+        """Download the log INTO A FILE, writing it as the responses arrive: a link that
+        drops leaves a file that ends at a record boundary, and resume=True continues it
+        (LOG_SEEK after its last complete record).  Until the phase-3 review the file was
+        written only after a complete download, so a broken one left nothing to resume."""
+        from . import logdec  # noqa: PLC0415
+        have, after = 0, None
+        if resume:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            after, have = logdec.last_seq(data)
+            if have != len(data):
+                with open(path, "r+b") as fh:
+                    fh.truncate(have)  # a record cut in half at the end of the file
+        new = [0]
+        with open(path, "ab" if resume else "wb") as fh:
+            def sink(chunk):
+                fh.write(chunk)
+                fh.flush()
+                new[0] += len(chunk)
+            self.log_download(after if resume else None, sink=sink)
+        return {"bytes": have + new[0], "new_bytes": new[0], "resumed_after_seq": after, "written": path}

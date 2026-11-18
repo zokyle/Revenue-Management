@@ -189,6 +189,80 @@ def parse_state(row):
     return rail, sleep
 
 
+# ---- the pin map's "open_items_for_firmware" and "imu_mounting" ------------------
+# An open item is something the netlist's authors want the firmware's authors
+# to read.  As with the firmware notes, one that this script does not know
+# stops the generation: read it, act on it (or list it in the README's open
+# issues), then add a rule.  An item that has gone is not an error (it was
+# closed on the board's side); the header lists the ones that are there.
+# (key, expression that recognises the item, where the firmware acts on it)
+OPEN_ITEM_RULES = [
+    ("imu_axes", r"^IMU axes: U4 is NOT at rotation 0",
+     "GL_PINS_IMU_MARKER_* above, generated from the pin map's imu_mounting and used by "
+     "drivers/lsm6dsv16x.c gl_imu_mount_defaults(); tests/test_pins.c "
+     "(PROVISIONAL in the pin map itself: ST's axis drawing was not read)"),
+    ("ship_ucpd", r"^Ship mode \(Shutdown\), PROVISIONAL .*PWR_PDCRB bits 5 and 14",
+     "hal/stm32u5/gl_hal_stm32u5.c ship_shutdown_(): pull-downs on PB5 and PB14 applied with "
+     "APC before Shutdown (text check in tests/test_board.c; NOT RUN: no hardware; README open issues)"),
+    ("swd_first", r"^First programming of a blank board is by SWD only",
+     "nothing in the firmware: factory process (README, boot stub: recovery is SWD)"),
+    ("swd_no_clamp", r"^SWDIO, SWCLK and NRST go from the underside pads straight to the MCU",
+     "nothing in the firmware: ESD test plan (README open issues)"),
+]
+
+
+def open_item_index(items):
+    """[(key, text)] of the open items that are there; an unknown one is an error."""
+    found = []
+    errors = []
+    for i, text in enumerate(items):
+        hits = [key for key, rx, _where in OPEN_ITEM_RULES if re.search(rx, text)]
+        if len(hits) != 1:
+            errors.append("open item %d of the pin map (open_items_for_firmware) is %s: %r" %
+                          (i + 1, "not known to tools/gen_pins.py (read it, act on it in the "
+                                  "firmware or list it as open, then add it to OPEN_ITEM_RULES)"
+                           if not hits else "matched by several rules", text[:90]))
+            continue
+        if hits[0] in [k for k, _t in found]:
+            errors.append("two open items match the rule %r" % hits[0])
+        found.append((hits[0], text))
+    if errors:
+        raise PinError("\n          ".join(errors))
+    return found
+
+
+def imu_mounting(doc):
+    """[(axis, sign)] for marker x, y, z: marker[i] = sign * sensor[axis]."""
+    m = doc.get("imu_mounting")
+    if not isinstance(m, dict):
+        raise PinError("the pin map has no imu_mounting: the IMU's axes on the board are not known")
+    out = []
+    for name in ("x", "y", "z"):
+        row = m.get("marker_" + name)
+        if not isinstance(row, dict) or row.get("sensor_axis") not in (0, 1, 2) or \
+                row.get("sign") not in (1, -1):
+            raise PinError("imu_mounting.marker_%s is not {sensor_axis 0..2, sign +1/-1}: %r" % (name, row))
+        out.append((row["sensor_axis"], row["sign"]))
+    if sorted(a for a, _s in out) != [0, 1, 2]:
+        raise PinError("imu_mounting is not a permutation of the sensor axes: %r" % (out,))
+    # a proper rotation (the part is not mirrored): determinant +1
+    perm = [a for a, _s in out]
+    inversions = sum(1 for i in range(3) for j in range(i + 1, 3) if perm[i] > perm[j])
+    det = (-1 if inversions % 2 else 1) * out[0][1] * out[1][1] * out[2][1]
+    if det != 1:
+        raise PinError("imu_mounting is a mirror image, not a rotation of the part (determinant %d)" % det)
+    blk = m.get("gl_provisional_h")
+    if isinstance(blk, dict):
+        for i, name in enumerate("XYZ"):
+            if blk.get("GL_PROV_IMU_MARKER_%s_AXIS" % name) != out[i][0] or \
+                    blk.get("GL_PROV_IMU_MARKER_%s_SIGN" % name) != out[i][1]:
+                raise PinError("imu_mounting says two things for marker %s: marker_%s %r, its "
+                               "gl_provisional_h block (%r, %r)" %
+                               (name, name.lower(), out[i], blk.get("GL_PROV_IMU_MARKER_%s_AXIS" % name),
+                                blk.get("GL_PROV_IMU_MARKER_%s_SIGN" % name)))
+    return out
+
+
 def note_index(notes):
     """{key: (index, text, match)}; every note known, every rule matched."""
     found = {}
@@ -237,6 +311,8 @@ def build(doc):
         raise PinError("\n          ".join(errors))
 
     notes = note_index(doc["firmware_notes"])
+    open_items = open_item_index(doc.get("open_items_for_firmware", []))
+    imu = imu_mounting(doc)
 
     # ---- the table ----
     table = []
@@ -467,7 +543,7 @@ def build(doc):
     return {
         "table": table, "fixed": fixed, "boot0_shared": boot0_shared, "supply": doc["supply_pads"],
         "boot": boot, "ucpd": ucpd, "wkup": wkup, "adc": adc, "reset": reset, "floating": floating,
-        "leds": leds, "ticks": ticks, "notes": notes, "vbus_ms": vbus_ms, "grain_ms": grain_ms,
+        "leds": leds, "ticks": ticks, "notes": notes, "open_items": open_items, "imu": imu, "vbus_ms": vbus_ms, "grain_ms": grain_ms,
     }
 
 
@@ -690,6 +766,32 @@ def generate(doc, src_name, sha):
                                                   " \\" if i + 1 < len(g["leds"]) else ""))
     w("")
     w("/*")
+    w(" * IMU MOUNTING (the pin map's \"imu_mounting\": %s at %s degrees counter-clockwise" %
+      (doc["imu_mounting"].get("ref", "?"), doc["imu_mounting"].get("rotation_deg_ccw_seen_from_above", "?")))
+    w(" * seen from above).  marker axis = SIGN * sensor axis AXIS; index 0 = sensor X,")
+    w(" * 1 = Y, 2 = Z; marker frame: +x right, +y forward (toward the hole), +z up.")
+    w(" * drivers/lsm6dsv16x.c gl_imu_mount_defaults() uses exactly these.")
+    for line in wrap(str(doc["imu_mounting"].get("status", "no status in the pin map")), 84, " * ", " * "):
+        w(line)
+    w(" */")
+    for i, name in enumerate("XYZ"):
+        w("#define GL_PINS_IMU_MARKER_%s_AXIS %d" % (name, g["imu"][i][0]))
+        w("#define GL_PINS_IMU_MARKER_%s_SIGN (%+d)" % (name, g["imu"][i][1]))
+    w("")
+    w("/*")
+    w(" * OPEN ITEMS FOR FIRMWARE of the pin map, and what the firmware does about")
+    w(" * each.  An item that tools/gen_pins.py does not know stops the generation.")
+    w(" *")
+    owhere = {key: text for key, _rx, text in OPEN_ITEM_RULES}
+    for n, (key, text) in enumerate(g["open_items"]):
+        for line in wrap(text, 84, " * %2d. " % (n + 1), " *     "):
+            w(line)
+        for line in wrap("-> " + owhere[key], 84, " *     ", " *        "):
+            w(line)
+    w(" */")
+    w("#define GL_PINS_OPEN_ITEMS %d" % len(g["open_items"]))
+    w("")
+    w("/*")
     w(" * FIRMWARE NOTES of the pin map, and where the firmware acts on each.  A note")
     w(" * that tools/gen_pins.py does not know stops the generation.")
     w(" *")
@@ -790,6 +892,17 @@ SEEDED = [
      lambda d: _note(d, "= EXTI7", "= EXTI9")),
     ("a line said to float that has a board pull", "floats in reset, its row has a board pull",
      lambda d: _note(d, "CAM_L_PWDN (PC2)", "IMU_CS (PB1)")),
+    ("an open item for firmware nobody has read", "open item 5 of the pin map (open_items_for_firmware) is not known",
+     lambda d: d["open_items_for_firmware"].append("Hold NRST low for 20 ms after VBUS appears.")),
+    ("an IMU mounting that uses one sensor axis twice", "not a permutation of the sensor axes",
+     lambda d: d["imu_mounting"]["marker_y"].update(sensor_axis=d["imu_mounting"]["marker_x"]["sensor_axis"])),
+    ("an IMU mounting that is a mirror image", "mirror image",
+     lambda d: d["imu_mounting"]["marker_z"].update(sign=-d["imu_mounting"]["marker_z"]["sign"])),
+    ("an IMU mounting that says two things", "imu_mounting says two things for marker X",
+     lambda d: d["imu_mounting"]["gl_provisional_h"].update(
+         GL_PROV_IMU_MARKER_X_SIGN=-d["imu_mounting"]["gl_provisional_h"]["GL_PROV_IMU_MARKER_X_SIGN"])),
+    ("a pin map without an IMU mounting", "no imu_mounting",
+     lambda d: d.pop("imu_mounting")),
     ("a grain LED on a line that is not a charlieplex line", "not a charlieplex line",
      lambda d: d["grain_leds"][3].update(anode_line="LCD_DISP")),
     ("fifteen grain LEDs", "lists 15 grain LEDs",

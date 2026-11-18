@@ -253,6 +253,8 @@ typedef struct gl_app {
     bool recall_checking;     /**< woken with a result that may be recalled: watching for a
                                    lift until the marker is at rest */
     uint8_t recall_moving;    /**< moving blocks since that wake-up */
+    uint8_t recall_still;     /**< consecutive still blocks since that wake-up ... */
+    float recall_sum_x, recall_sum_y; /**< ... and the sum of their mean gravity directions */
     uint32_t recalls;         /**< results shown again since boot (diagnostics) */
     gl_app_zero_t zero;
     gl_app_six_face_t six;
@@ -277,6 +279,9 @@ typedef struct gl_app {
     uint16_t cam_on_ms;
     uint32_t log_seek_seq;    /**< GL_CMD_LOG_SEEK: records below this number are skipped */
     bool boot_confirmed;      /**< the boot stub has been told that this image runs (E34) */
+    uint32_t boot_ms;         /**< tick at gl_app_init(): the confirmation is due
+                                   GL_APP_BOOT_CONFIRM_MS of main loop after it (not "tick >=":
+                                   a tick that does not start at 0 would confirm at once) */
     /* ---- phase 3: factory commands (app/gl_factory.c) ---- */
     gl_factory_t fac;
     /* ---- USB ---- */

@@ -209,6 +209,134 @@ GL_TEST(test_no_camera_read_from_a_hot_cell)
     no_violation_();
 }
 
+/* Phase-3 review, hardware finding 11: no random test went above 55 C, so
+ * none could see a read above 60 C.  Random placements at twelve board
+ * temperatures from -8 to 72 C, scheduled so that EVERY placement attempts
+ * a read (the marker has been at the temperature for 6.5 s, longer than the
+ * gate's oldest accepted reading).  Invariants, per placement:
+ *   at or above 61 C   the camera rail does not come on, no frame is taken;
+ *   at or below 55 C   (under the 57 C at which the gate lets go) a read
+ *                      completes with exactly one rail cycle;
+ *   58 C               either (it depends on where the marker came from).
+ * A third of the scenarios also take a watchdog reset between placements. */
+#ifndef GL_HOT_STRESS_SCENARIOS
+#define GL_HOT_STRESS_SCENARIOS 60u
+#endif
+
+GL_TEST(test_read_gate_under_random_temperatures)
+{
+    static const float temps[12] = { -8.0f, -1.0f, 1.0f, 22.0f, 40.0f, 44.0f, 46.5f, 55.0f,
+                                     58.0f, 61.0f, 64.0f, 72.0f };
+    uint32_t rng = 20261118u;
+    unsigned hot_attempts = 0, hot_rail = 0, cool_attempts = 0, cool_reads = 0, between = 0,
+             resets = 0, viol = 0;
+
+    for (unsigned sc = 0; sc < GL_HOT_STRESS_SCENARIOS; sc++) {
+        world_defaults_();
+        W.t_pick_s = 1.0e9; /* nothing happens until place_and_see_() says so */
+        W.t_place_s = 1.0e9 + 0.6;
+        board_up_(true);
+        rng = rng * 1664525u + 1013904223u;
+        gl_sim_imu_set_temperature(temps[(rng >> 24) % 12u]);
+        GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+        watch_reset_();
+        for (int k = 0; k < 4; k++) {
+            float t;
+            uint32_t cycles, frames;
+            gl_ui_state_t st;
+            rng = rng * 1664525u + 1013904223u;
+            t = temps[(rng >> 24) % 12u];
+            if (app.ui.state != (uint8_t)GL_UI_SLEEP) {
+                (void)run_until_state_(GL_UI_SLEEP, now_ms_() + 70000u);
+            }
+            gl_sim_imu_set_temperature(t);
+            rng = rng * 1664525u + 1013904223u;
+            if ((rng >> 24) % 3u == 0u) {
+                gl_sim_mcu_reset(GL_RESET_WATCHDOG);
+                gl_sim_advance_ms(3);
+                (void)gl_app_init(&app);
+                resets++;
+            }
+            run_until_ms_(now_ms_() + 6500u);
+            cycles = gl_sim_stats()->cam_rail_cycles;
+            frames = gl_sim_stats()->frames_captured;
+            st = place_and_see_();
+            run_until_ms_(now_ms_() + 4000u); /* whatever was started has ended */
+            if (t >= 61.0f) {
+                hot_attempts++;
+                if (gl_sim_stats()->cam_rail_cycles != cycles || gl_sim_stats()->frames_captured != frames ||
+                    st == GL_UI_SHOW_RESULT) {
+                    hot_rail++;
+                }
+            } else if (t <= 55.0f) {
+                cool_attempts++;
+                if (st == GL_UI_SHOW_RESULT && gl_sim_stats()->cam_rail_cycles == cycles + 1u) {
+                    cool_reads++;
+                }
+            } else {
+                between++;
+            }
+        }
+        viol += gl_sim_violation_total();
+        GL_CHECK_EQ(seen.rail_outside_capture, 0u);
+    }
+    printf("    %u scenarios, %u placements at 61 C or more: the camera rail came on in %u; %u at "
+           "55 C or less: %u completed reads; %u at 58 C (either); %u watchdog resets between "
+           "placements; %u simulator rule violations\n",
+           (unsigned)GL_HOT_STRESS_SCENARIOS, hot_attempts, hot_rail, cool_attempts, cool_reads,
+           between, resets, viol);
+    GL_CHECK(hot_attempts >= GL_HOT_STRESS_SCENARIOS / 2u);
+    GL_CHECK_EQ(hot_rail, 0u);
+    GL_CHECK_EQ(cool_reads, cool_attempts);
+    GL_CHECK_EQ(viol, 0u);
+}
+
+/* Phase-3 review, hardware finding 13: a watchdog reset at every 25 ms of a
+ * read, from 1.5 s to 6.5 s after power-on (200 points; the exposures of a
+ * read lie in that span).  After the reset the camera rail is off at once
+ * (its enable is the board's pull-down again), the simulator reports no rule
+ * violation - before the review its capture model stayed busy through the
+ * reset and reported "the driving camera changed during a capture" at four
+ * of the 200 points - and the next placement reads. */
+GL_TEST(test_reset_at_every_25_ms_of_a_read)
+{
+    unsigned in_capture = 0, rail_was_on = 0, rail_on_after = 0, viol = 0, next_ok = 0, n = 0;
+
+    for (uint32_t t_rst = 1500u; t_rst < 6500u; t_rst += 25u) {
+        world_defaults_();
+        board_up_(true);
+        GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+        watch_reset_();
+        run_until_ms_(t_rst);
+        n++;
+        in_capture += (app.ui.state == (uint8_t)GL_UI_CAPTURE) ? 1u : 0u;
+        rail_was_on += gl_sim_cam_rail_on() ? 1u : 0u;
+        gl_sim_mcu_reset(GL_RESET_WATCHDOG);
+        rail_on_after += gl_sim_cam_rail_on() ? 1u : 0u;
+        GL_CHECK(cam_pins_parked_());
+        gl_sim_advance_ms(3);
+        GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+        run_until_ms_(now_ms_() + 2000u);
+        (void)run_until_state_(GL_UI_SLEEP, now_ms_() + 70000u);
+        if (place_and_see_() == GL_UI_SHOW_RESULT) {
+            next_ok++;
+        }
+        viol += gl_sim_violation_total();
+        if (gl_sim_violation_total() != 0u && viol <= 3u) {
+            printf("    reset at %u ms: %s\n", (unsigned)t_rst, gl_sim_violations()->first);
+        }
+    }
+    printf("    watchdog reset at each of %u instants 25 ms apart (%u in CAPTURE, %u with the "
+           "camera rail on): rail on right after the reset in %u, simulator rule violations %u, "
+           "the next placement read in %u of %u\n", n, in_capture, rail_was_on, rail_on_after, viol,
+           next_ok, n);
+    GL_CHECK_EQ(n, 200u);
+    GL_CHECK(rail_was_on >= 40u); /* the sweep does cut into the exposures */
+    GL_CHECK_EQ(rail_on_after, 0u);
+    GL_CHECK_EQ(viol, 0u);
+    GL_CHECK_EQ(next_ok, n);
+}
+
 /* The gate is applied again where the cameras would start, on a reading that
  * is at most GL_APP_READ_TEMP_MAX_AGE_MS (5 s) old there - measured again if
  * it is older.  (a) A marker that wakes at 20 C and is carried about for 9 s
@@ -709,8 +837,17 @@ GL_TEST(test_awake_in_the_cradle_the_charge_never_ends_until_the_backstop)
     GL_CHECK(!gl_sim_charger_on());
     GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DISABLED);
     GL_CHECK_EQ(gl_sim_stats()->chg_terminations, 0u);
-    run_talking_until_ms_(now_ms_() + 1000u);
-    GL_CHECK_EQ(app.view.chg_blocked, 4); /* "TIME LIMIT" on the cradle screen */
+    run_talking_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 1000u);
+    /* On the cradle screen: FULL.  The cell was seen above the restart
+     * voltage with the limit in force, and the backstop - which since the
+     * phase-3 review counts docked time whatever the status line says - comes
+     * round on every marker left docked for six hours; "TIME LIMIT" (4) is
+     * kept for a cell that six hours did not bring up
+     * (test_backstop_on_a_cell_that_does_not_come_up).  Before the review
+     * this line pinned 4 here. */
+    GL_CHECK(app.power.limit_cell_was_up);
+    GL_CHECK_EQ(app.view.chg_blocked, 0);
+    GL_CHECK(app.view.chg_full && !app.view.charging);
     printf("    ... stopped by the firmware %.3f h after docking (CHG_INHIBIT high, reason TIME "
            "LIMIT)\n", (double)t_stop / 3.6e6);
     /* the host can see all of it */
@@ -758,16 +895,16 @@ GL_TEST(test_awake_in_the_cradle_the_charge_never_ends_until_the_backstop)
  *   - a recharge is invisible: the symbol keeps saying FULL while current
  *     flows (harmless), and nothing is called a fault while the cell stays
  *     at or above the "done" voltage;
- *   - NOT MET, pinned: the 6 h backstop of E32 counts the time CHG is low.
- *     A recharge under a host that keeps the marker awake never terminates
- *     (the marker's draw is above the termination current) and is not
- *     counted: the charger holds the cell at its regulation voltage for as
- *     long as the host talks.  The first cycle and every cycle after a stop
- *     of the firmware's own ARE counted (a stop through TS restarts the
- *     charger's cycle in the model). */
-GL_TEST(test_charger_whose_status_shows_the_first_cycle_only)
+ *   - the 6 h backstop of E32.  Until the phase-3 review this test PINNED
+ *     NOT MET here: the backstop counted the time CHG was low, a recharge
+ *     under a host that keeps the marker awake never terminates and was
+ *     never counted ("7.0 h later ... the 6 h backstop has counted 0 ms").
+ *     The backstop now counts the time in which the firmware does not hold
+ *     the charger, whatever CHG says; the same scenario is run below and
+ *     the stop is asserted: MET, exercised on the model variant.
+ * Returns the time the invisible recharge started (0 = it did not). */
+static uint32_t first_cycle_only_until_the_recharge_(void)
 {
-    const double i_term = (double)GL_PROV_BQ25101_TERM_FRACTION * (double)GL_PROV_BQ25101_ICHG_UA;
     uint32_t t0, t_re = 0;
     double hours = 0.0;
 
@@ -800,7 +937,7 @@ GL_TEST(test_charger_whose_status_shows_the_first_cycle_only)
     gl_sim_usb_host_bus(GL_USB_BUS_ACTIVE);
     GL_CHECK(run_until_state_(GL_UI_CRADLE_USB, now_ms_() + 100u));
     t0 = now_ms_();
-    while (now_ms_() - t0 < 6u * 3600u * 1000u) {
+    while (now_ms_() - t0 < 5u * 3600u * 1000u) {
         run_talking_until_ms_(now_ms_() + 60000u);
         if (gl_sim_charger_on()) {
             t_re = now_ms_();
@@ -816,29 +953,56 @@ GL_TEST(test_charger_whose_status_shows_the_first_cycle_only)
     GL_CHECK_EQ(app.power.chg_status, GL_CHGST_DONE); /* the cell is above the "done" voltage */
     GL_CHECK(app.view.chg_full && !app.view.charging);
     GL_CHECK(app.power.batt_mv >= GL_PROV_CHARGE_DONE_MIN_MV);
+    GL_CHECK(!app.power.time_limit);
+    return t_re;
+}
+
+GL_TEST(test_charger_whose_status_shows_the_first_cycle_only)
+{
+    const double i_term = (double)GL_PROV_BQ25101_TERM_FRACTION * (double)GL_PROV_BQ25101_ICHG_UA;
+    const uint32_t t_re = first_cycle_only_until_the_recharge_();
+    uint32_t t_stop = 0;
+
     printf("    VARIANT of the model (CHG low in the first cycle only): first cycle ended asleep "
-           "in the cradle; awake under a talking host the recharge started %.2f h later at %u mV "
-           "with CHG released - the firmware says FULL (status DONE) while %.1f mA flow\n",
-           (double)(t_re - t0) / 3.6e6, (unsigned)app.power.batt_mv, gl_sim_charger_out_ua() / 1000.0);
-    /* seven more hours of the talking host: no termination (the marker's
-     * draw), and the backstop does not count what the status line does not
-     * show.  PINNED as NOT MET for this variant */
-    t0 = now_ms_();
-    run_talking_until_ms_(t0 + 7u * 3600u * 1000u);
-    GL_CHECK(gl_sim_charger_on());
-    GL_CHECK(gl_sim_charger_out_ua() > i_term);
-    GL_CHECK_EQ(gl_sim_stats()->chg_terminations, 1u);
-    GL_CHECK(!app.power.time_limit);              /* NOT MET: see the comment above */
-    GL_CHECK_EQ(app.power.chg_run_ms, 0u);
-    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_ALLOWED);
-    GL_CHECK_EQ(app.power.chg_status, GL_CHGST_DONE);
+           "in the cradle; awake under a talking host the recharge started %.2f h after docking "
+           "at %u mV with CHG released - the firmware says FULL (status DONE) while %.1f mA flow\n",
+           (double)t_re / 3.6e6, (unsigned)app.power.batt_mv, gl_sim_charger_out_ua() / 1000.0);
+    /* the talking host goes on: no termination (the marker's draw), CHG
+     * never low - and the backstop stops it all the same, six hours of
+     * docked, un-inhibited time after the docking */
+    while (now_ms_() < 8u * 3600u * 1000u) {
+        GL_CHECK(app.power.time_limit || !app.power.charging); /* never seen as "charging" */
+        run_talking_until_ms_(now_ms_() + 10000u);
+        if (app.power.time_limit) {
+            t_stop = now_ms_();
+            break;
+        }
+        GL_CHECK(gl_sim_charger_on());
+        GL_CHECK(gl_sim_charger_out_ua() > i_term);
+    }
+    GL_CHECK(t_stop != 0u);
+    GL_CHECK(t_stop >= GL_PROV_CHARGE_MAX_MS && t_stop <= GL_PROV_CHARGE_MAX_MS + 30000u);
+    GL_CHECK_EQ(gl_sim_stats()->chg_terminations, 1u); /* the recharge never terminated */
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TIME_LIMIT);
+    GL_CHECK(gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(!gl_sim_charger_on());
+    GL_CHECK_EQ(gl_sim_charger_state(), GL_SIM_CHG_DISABLED);
+    run_talking_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 1000u);
+    GL_CHECK(app.view.chg_full && app.view.chg_blocked == 0u); /* the cell is up: FULL */
     GL_CHECK_EQ(log_events_((uint16_t)GL_APP_LOGEV_CHARGER, NULL), 1u); /* "done", once; no fault */
-    printf("    ... NOT MET for this variant: 7.0 h later the charger still delivers %.2f mA "
-           "(cell at %.1f %%), the 6 h backstop has counted %u ms: it only counts while CHG is low\n",
-           gl_sim_charger_out_ua() / 1000.0, 100.0 * (double)gl_sim_cell_soc(),
-           (unsigned)app.power.chg_run_ms);
-    /* what the firmware CAN still do there: its temperature gate.  A stop
-     * through TS also restarts the charger's cycle, and CHG is low again */
+    printf("    ... MET for this variant (was NOT MET: \"the 6 h backstop has counted 0 ms\"): the "
+           "recharge ran %.2f h with CHG released and without terminating, and the firmware "
+           "stopped it %.3f h after docking (CHG_INHIBIT high, reason TIME LIMIT, charger "
+           "DISABLED; the count does not look at CHG)\n",
+           (double)(t_stop - t_re) / 3.6e6, (double)t_stop / 3.6e6);
+    no_violation_();
+}
+
+/* The same variant: what the firmware's temperature gate does there.  A stop
+ * through TS also restarts the charger's cycle, and CHG is low again. */
+GL_TEST(test_first_cycle_only_charger_and_the_temperature_gate)
+{
+    (void)first_cycle_only_until_the_recharge_();
     gl_sim_imu_set_temperature(50.0f);
     run_talking_until_ms_(now_ms_() + GL_APP_CHG_TEMP_PERIOD_MS + 1000u);
     GL_CHECK(!gl_sim_charger_on());
@@ -849,8 +1013,173 @@ GL_TEST(test_charger_whose_status_shows_the_first_cycle_only)
     GL_CHECK(!gl_sim_pin_level(GL_PIN_CHG_STAT));
     GL_CHECK(app.power.charging);
     GL_CHECK_EQ(app.power.chg_status, GL_CHGST_CHARGING);
-    run_talking_until_ms_(now_ms_() + 60000u);
-    GL_CHECK(app.power.chg_run_ms >= 50000u); /* counted again */
+    {
+        /* the time held by the temperature gate was not counted, and the
+         * count was not started again by it */
+        const uint32_t before = app.power.chg_run_ms;
+        run_talking_until_ms_(now_ms_() + 60000u);
+        GL_CHECK(app.power.chg_run_ms >= before + 50000u);
+        GL_CHECK(app.power.chg_run_ms < now_ms_());
+    }
+    no_violation_();
+}
+
+/* The backstop on a cell that six hours do not bring up (a charger whose
+ * input is too low to charge): "TIME LIMIT" on the cradle screen, held until
+ * the marker is lifted out.  With the cell up it shows FULL (the test of
+ * the talking host above). */
+GL_TEST(test_backstop_on_a_cell_that_does_not_come_up)
+{
+    uint32_t t_stop = 0;
+    still_board_();
+    gl_sim_cell_enable(0.40f);
+    gl_sim_charger_input_low(true);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    gl_sim_usb_host_open(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    host_rx_len_ = 0;
+    while (now_ms_() < 7u * 3600u * 1000u) {
+        run_talking_until_ms_(now_ms_() + 10000u);
+        if (app.power.time_limit) {
+            t_stop = now_ms_();
+            break;
+        }
+    }
+    GL_CHECK(t_stop >= GL_PROV_CHARGE_MAX_MS && t_stop <= GL_PROV_CHARGE_MAX_MS + 30000u);
+    run_talking_until_ms_(now_ms_() + 2u * GL_APP_CHG_TEMP_PERIOD_MS);
+    GL_CHECK(app.power.batt_mv < GL_PROV_CHARGE_RESTART_MV);
+    GL_CHECK(!app.power.limit_cell_was_up);
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TIME_LIMIT);
+    GL_CHECK_EQ(app.view.chg_blocked, 4); /* "TIME LIMIT" */
+    GL_CHECK(!app.view.chg_full);
+    GL_CHECK(gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+    run_talking_until_ms_(now_ms_() + 3u * 3600u * 1000u);
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_TIME_LIMIT); /* no second six hours */
+    printf("    a charger that cannot charge (input low), cell at %u mV: the firmware stops "
+           "after %.3f h and shows TIME LIMIT; three hours later still stopped\n",
+           (unsigned)app.power.batt_mv, (double)t_stop / 3.6e6);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, false);
+    run_until_ms_(now_ms_() + 500u);
+    GL_CHECK(!app.power.time_limit);
+    GL_CHECK_EQ(gl_sim_pin_mode(GL_PIN_CHG_INHIBIT), GL_PIN_MODE_ANALOG);
+    no_violation_();
+}
+
+/* Phase-3 review, hardware finding 3, as the reviewer ran it: dock with a
+ * host, UNLOCK, SET_CHARGE 1, the host goes away, the marker stays docked
+ * for 24 h.  Before the fix: "forced 1, CHG_INHIBIT high, charger DISABLED,
+ * cell 50.0 % -> 44.5 %".  The stop now ends with the unlocked session. */
+GL_TEST(test_forced_charge_stop_ends_with_the_session)
+{
+    uint8_t seq;
+    const uint8_t *pl;
+    double soc0;
+
+    still_board_();
+    gl_sim_cell_enable(0.50f);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    gl_sim_usb_host_open(true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    host_rx_len_ = 0;
+    run_talking_until_ms_(now_ms_() + 8000u);
+    GL_CHECK(gl_sim_charger_on());
+    host_send_(1, GL_CMD_UNLOCK, "GLFC", 4);
+    (void)host_get_(GL_CMD_UNLOCK | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    host_send_(2, GL_CMD_SET_CHARGE, "\x01", 1);
+    GL_CHECK_EQ(host_get_(GL_CMD_SET_CHARGE | GL_PROTO_RESPONSE_FLAG, &seq, &pl), 1);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    GL_CHECK(app.power.forced && gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(!gl_sim_charger_on());
+    /* while the session lives and stays unlocked the stop holds (step 13) */
+    run_talking_until_ms_(now_ms_() + 120000u);
+    GL_CHECK(app.power.forced && !gl_sim_charger_on());
+    GL_CHECK_EQ(app.power.chg_reason, GL_CHG_FORCED);
+    /* "LOCK": the explicit end of the factory session ends the stop too */
+    host_send_(3, GL_CMD_UNLOCK, "LOCK", 4);
+    GL_CHECK_EQ(host_get_(GL_CMD_UNLOCK | GL_PROTO_RESPONSE_FLAG, &seq, &pl), 1);
+    GL_CHECK_EQ(pl[0], GL_OK);
+    GL_CHECK(!app.proto.unlocked);
+    run_talking_until_ms_(now_ms_() + 2u * GL_APP_CHG_TEMP_PERIOD_MS);
+    GL_CHECK(!app.power.forced && gl_sim_charger_on());
+    /* again, and this time the station program dies: the host is gone */
+    host_send_(4, GL_CMD_UNLOCK, "GLFC", 4);
+    (void)host_get_(GL_CMD_UNLOCK | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    host_send_(5, GL_CMD_SET_CHARGE, "\x01", 1);
+    (void)host_get_(GL_CMD_SET_CHARGE | GL_PROTO_RESPONSE_FLAG, &seq, &pl);
+    GL_CHECK(app.power.forced && !gl_sim_charger_on());
+    soc0 = (double)gl_sim_cell_soc();
+    gl_sim_usb_host_open(false);
+    GL_CHECK(run_until_state_(GL_UI_CRADLE_SLEEP, now_ms_() + 40000u));
+    run_until_ms_(now_ms_() + 2u * GL_APP_CHG_TEMP_PERIOD_MS + 20000u);
+    GL_CHECK(!app.proto.unlocked);
+    GL_CHECK(!app.power.forced);
+    GL_CHECK(!gl_sim_pin_drives_high(GL_PIN_CHG_INHIBIT));
+    GL_CHECK(gl_sim_charger_on());
+    run_until_ms_(now_ms_() + 24u * 3600u * 1000u);
+    GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_SLEEP);
+    GL_CHECK(!app.power.forced);
+    GL_CHECK((double)gl_sim_cell_soc() > 0.90);
+    printf("    SET_CHARGE 1, then the host gone, docked 24 h: ui CRADLE_SLEEP, unlocked %d, "
+           "forced %d, cell %.1f %% -> %.1f %% (before the fix: forced 1, charger DISABLED, "
+           "50.0 %% -> 44.5 %%)\n", (int)app.proto.unlocked, (int)app.power.forced, 100.0 * soc0,
+           100.0 * (double)gl_sim_cell_soc());
+    no_violation_();
+}
+
+/* WHAT THE BACKSTOP COSTS a marker that is simply left in its cradle.  The
+ * count does not look at the status line, so it also comes round on a marker
+ * whose charge ended by itself hours ago: after six docked hours the
+ * firmware holds the charger off, the sleeping marker runs from its cell,
+ * and the charge starts again when the cell has fallen below the restart
+ * voltage (GL_PROV_CHARGE_RESTART_MV; the charger's own recharge threshold
+ * would be about 100 mV under 4.2 V).  Measured here over 30 days on a wall
+ * charger: the lowest state of charge a user can find, what the screen
+ * says, and how often the charge restarts.  (Model: the cell curve and all
+ * currents are provisional.) */
+GL_TEST(test_left_in_the_cradle_for_a_month)
+{
+    double soc_min = 1.0;
+    unsigned restarts = 0, not_full = 0, samples = 0;
+    bool was_on;
+    uint16_t mv_min = 65535u;
+
+    still_board_();
+    gl_sim_cell_enable(0.90f);
+    gl_sim_set_input(GL_PIN_VBUS_SENSE, true);
+    GL_CHECK_EQ(gl_app_init(&app), GL_OK);
+    watch_reset_();
+    GL_CHECK(run_until_state_(GL_UI_CRADLE_SLEEP, now_ms_() + 40000u));
+    run_until_ms_(7u * 3600u * 1000u); /* past the first charge and the limit */
+    GL_CHECK(app.power.time_limit);
+    was_on = gl_sim_charger_on();
+    for (unsigned h = 0; h < 30u * 24u; h++) {
+        run_until_ms_(now_ms_() + 3600u * 1000u);
+        if ((double)gl_sim_cell_soc() < soc_min) {
+            soc_min = (double)gl_sim_cell_soc();
+        }
+        if (app.power.batt_mv != 0u && app.power.batt_mv < mv_min) {
+            mv_min = app.power.batt_mv;
+        }
+        if (gl_sim_charger_on() && !was_on) {
+            restarts++;
+        }
+        was_on = gl_sim_charger_on();
+        samples++;
+        if (!(app.view.chg_full || app.view.charging) || app.view.chg_blocked != 0u) {
+            not_full++;
+        }
+        GL_CHECK_EQ(app.ui.state, GL_UI_CRADLE_SLEEP);
+    }
+    GL_CHECK_EQ(not_full, 0u);      /* the screen says FULL or CHARGING, never a fault */
+    GL_CHECK(soc_min > 0.70);       /* PINNED: see the number printed */
+    GL_CHECK_EQ(gl_sim_violations()->watchdog, 0u);
+    printf("    30 days asleep in the cradle on a wall charger: lowest state of charge %.1f %% "
+           "(lowest cell reading %u mV; restart voltage %u mV), the charge restarted %u times, "
+           "the screen showed FULL or CHARGING in %u of %u hourly looks\n",
+           100.0 * soc_min, (unsigned)mv_min, (unsigned)GL_PROV_CHARGE_RESTART_MV, restarts,
+           samples - not_full, samples);
     no_violation_();
 }
 
@@ -1074,15 +1403,46 @@ GL_TEST(test_sleep_current_dark_and_lit_against_25_microamps)
     printf("    underside LIT: %.2f uA at the cell (+%.2f through the 150 kohm wake pull-up)\n", lit,
            lit - dark);
     printf("    E14 limit 25 uA, measured through the cell-lead pads (the protection circuit is not "
-           "in that path): model %.2f uA dark -> %s; %.2f uA lit -> %s (E27: the limit is for a dark "
-           "underside).  Every figure PROVISIONAL, nothing measured\n", pads,
-           (pads <= 25.0) ? "MET (model)" : "NOT MET", lit - GL_SIM_I_CELL_PCM_UA,
-           (lit - GL_SIM_I_CELL_PCM_UA <= 25.0) ? "met" : "NOT MET");
+           "in that path): model %.2f uA dark WITHOUT THE DISPLAY -> %s; %.2f uA lit -> %s (E27: "
+           "the limit is for a dark underside).  Every figure PROVISIONAL and typical, nothing "
+           "measured\n", pads,
+           (pads <= 25.0) ? "met only if the panel draws less than the margin below" : "NOT MET",
+           lit - GL_SIM_I_CELL_PCM_UA, (lit - GL_SIM_I_CELL_PCM_UA <= 25.0) ? "met" : "NOT MET");
     /* the model's sum, pinned (a change of the model must be looked at) */
     GL_CHECK_NEAR(dark, fixed + GL_SIM_I_MCU_STOP_UA + GL_SIM_I_IMU_WAKE_UA + GL_SIM_I_FLASH_DPD_UA, 0.15);
     GL_CHECK_NEAR(lit - dark, GL_SIM_I_WAKE_PULLUP_LIT_UA, 0.01);
-    GL_CHECK(pads <= 25.0);                              /* E14, dark: MET by the model */
+    GL_CHECK(pads <= 25.0);                              /* E14, dark: the model WITHOUT the panel */
     GL_CHECK(lit - GL_SIM_I_CELL_PCM_UA > 25.0);         /* PINNED: with a lit underside it is not */
+    /* THE TERM THAT IS MISSING (phase-3 review, hardware finding 5).  The
+     * panel's VDD and VDDA are on the always-on 2.8 V rail: it is powered
+     * asleep, with DISP low, and no figure is known for that (the model
+     * counts GL_SIM_I_LCD_OFF_UA = 0).  E14 is therefore NOT "met by the
+     * model"; it is met IF the panel draws less than the margin, which is
+     * exercised here: with the term just under the margin the limit holds,
+     * just over it the limit is missed. */
+    {
+        const double margin = 25.0 - pads;
+        double under, over;
+        GL_CHECK_NEAR(GL_SIM_I_LCD_OFF_UA, 0.0, 1e-12);
+        gl_sim_set_underside_lit(false);
+        gl_sim_set_lcd_off_ua(margin - 0.10);
+        m = mark_();
+        run_until_ms_(now_ms_() + 3600u * 1000u);
+        under = cell_ua_since_(m) - GL_SIM_I_CELL_PCM_UA;
+        gl_sim_set_lcd_off_ua(margin + 0.10);
+        m = mark_();
+        run_until_ms_(now_ms_() + 3600u * 1000u);
+        over = cell_ua_since_(m) - GL_SIM_I_CELL_PCM_UA;
+        gl_sim_set_lcd_off_ua(GL_SIM_I_LCD_OFF_UA);
+        GL_CHECK(margin > 0.0 && margin < 10.0);
+        GL_CHECK(under <= 25.0);
+        GL_CHECK(over > 25.0);
+        printf("    E14 is MET ONLY IF the memory LCD draws less than %.2f uA with DISP low (it "
+               "stays on the always-on 2.8 V rail; NO FIGURE IS KNOWN, the model counts %.1f): "
+               "with %.2f uA the pads carry %.2f uA, with %.2f uA %.2f uA.  NEEDS A DATA SHEET; "
+               "typical values only, no maximum and no temperature case\n",
+               margin, GL_SIM_I_LCD_OFF_UA, margin - 0.10, under, margin + 0.10, over);
+    }
     printf("    standby from a full cell (%.0f mAh) at %.1f uA: %.0f days to empty; from 30 %%: %.0f "
            "days (ship mode exists for that)\n", GL_SIM_CELL_MAH, dark,
            GL_SIM_CELL_MAH * 1000.0 / dark / 24.0, 0.30 * GL_SIM_CELL_MAH * 1000.0 / dark / 24.0);
@@ -1093,12 +1453,18 @@ int main(void)
 {
     GL_RUN(test_no_camera_read_from_a_hot_cell);
     GL_RUN(test_read_gate_measures_before_the_cameras);
+    GL_RUN(test_read_gate_under_random_temperatures);
+    GL_RUN(test_reset_at_every_25_ms_of_a_read);
     GL_RUN(test_ship_mode_entry_and_wake_on_vbus);
     GL_RUN(test_ship_mode_disarm_bounce_and_asleep_in_the_cradle);
     GL_RUN(test_ship_mode_rules_of_the_simulator);
     GL_RUN(test_cradle_sleep_on_a_wall_charger_lets_the_charge_end);
     GL_RUN(test_awake_in_the_cradle_the_charge_never_ends_until_the_backstop);
     GL_RUN(test_charger_whose_status_shows_the_first_cycle_only);
+    GL_RUN(test_first_cycle_only_charger_and_the_temperature_gate);
+    GL_RUN(test_backstop_on_a_cell_that_does_not_come_up);
+    GL_RUN(test_forced_charge_stop_ends_with_the_session);
+    GL_RUN(test_left_in_the_cradle_for_a_month);
     GL_RUN(test_cradle_sleep_under_a_host_standby_resume_and_silence);
     GL_RUN(test_cradle_sleep_supervises_the_charge);
     GL_RUN(test_sleep_current_dark_and_lit_against_25_microamps);

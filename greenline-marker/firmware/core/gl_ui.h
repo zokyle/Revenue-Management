@@ -442,6 +442,14 @@ typedef struct {
     uint8_t note;            /**< gl_ui_note_t */
     uint8_t drop;            /**< Survey: number of the drop this result was taken at (1..4);
                                   0 = not a Survey */
+    bool zero_missing;       /**< E11: the level zero of the seat this read was made on (the
+                                  SURFACE setting) is NOT stored - the other seat's zero, or
+                                  none, was removed.  A unit without it reads the 1.6 mrad
+                                  between the two seats as slope: 10.9 mrad of aim at 4 m.
+                                  Shown as "Z?" at the lower left of every result */
+    uint8_t drops_used;      /**< Survey: how many placements the result is MADE OF (the
+                                  estimator cannot use one that lies behind the present ball);
+                                  0 or equal to `drop`: all of them.  Shown as "D3/1" when fewer */
     float aim_rad;           /**< aim line direction in the marker's CURRENT frame, CCW from forward */
     float display_rot_rad;   /**< E12: the stored display rotation (gl_cal_device_t).  The
                                   AIM LINE is drawn turned by it about the screen centre,
@@ -499,7 +507,9 @@ typedef struct {
     char note[16];           /**< gl_ui_note_text() */
     char slope[8];           /**< "2.3%" */
     char brk[12];            /**< "<2.5 CUP", "2.5 CUP>", "STRAIGHT", "BREAK ?" */
-    char mode[4];            /**< "D2", "2X" */
+    char mode[6];            /**< "D2", "2X"; "D3/1": the third placement of a Survey, a result
+                                  made of 1 placement (the others lie behind this ball) */
+    char zero[4];            /**< "Z?" when the zero of the seat is missing, else "" */
     char state[8];           /**< "APPROX" in the APPROX state, "" otherwise (drawn where the
                                   confidence bar is in the NORMAL state) */
     char age[12];            /**< a recalled result: "45S AGO", "12M AGO", "5H AGO", "3D AGO" */

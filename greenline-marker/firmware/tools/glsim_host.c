@@ -22,6 +22,8 @@
  *
  * WORLD COMMANDS
  *   dock | undock            the marker into / out of the cradle (VBUS, host port)
+ *   doubletap                the double-tap gesture (twice on a result: a Survey;
+ *                            the next "place" is then its next placement)
  *   place                    pick the marker up and put it down; runs until a
  *                            result, an error or 12 s; answers the state and,
  *                            for a result, the estimator's inputs and outputs
@@ -201,6 +203,20 @@ static void j_result_(void)
        "\"fit_converged\": %d, \"aim_source\": %u, \"solve_status\": %u}",
        e->base_hidden, e->flag_missing, e->range_missing, e->poor_horizon, e->fit_converged,
        e->aim_source, e->solve_status);
+    /* the options of the call, as the application handed them over (the
+     * self-test compares the log decoder's options with these, field by
+     * field: phase-3 review, seed S15) */
+    j_(", \"options\": {");
+    j_num_("past", (double)app.solve_opt.past_m, false);
+    j_num_("tol_miss", (double)app.solve_opt.tol_miss_m, false);
+    j_num_("tol_pace", (double)app.solve_opt.tol_pace_m, false);
+    j_num_("lm_tol", (double)app.solve_opt.lm_tol, false);
+    j_num_("near_miss", (double)app.solve_opt.near_miss_m, false);
+    j_("\"max_steps\": %u, \"max_rolls\": %u, \"lm_max_iter\": %u, \"method\": %u, "
+       "\"use_grain\": %s}",
+       (unsigned)app.solve_opt.max_steps, (unsigned)app.solve_opt.max_rolls,
+       (unsigned)app.solve_opt.lm_max_iter, (unsigned)app.solve_opt.method,
+       app.solve_opt.use_grain ? "true" : "false");
 }
 
 /* ---- the world ---------------------------------------------------------------------- */
@@ -337,6 +353,11 @@ static void world_(char *cmd)
     } else if (strcmp(cmd, "place") == 0) {
         place_();
         result = (app.ui.state == (uint8_t)GL_UI_SHOW_RESULT);
+    } else if (strcmp(cmd, "doubletap") == 0) {
+        /* the gesture as the gesture detector reports it (the end-to-end
+         * tests post it the same way) */
+        gl_app_post(&app, GL_EV_DOUBLE_TAP, 0);
+        run_until_ms_(now_ms_() + 150u);
     } else if (sscanf(cmd, "zero %lf", &v) == 1) {
         zero_(v);
     } else if (sscanf(cmd, "run %lf", &v) == 1 && v >= 0.0 && v <= 4.0e6) {

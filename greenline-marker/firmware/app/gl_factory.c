@@ -438,10 +438,13 @@ bool gl_factory_draw(gl_app_t *app)
     return true;
 }
 
-static gl_status_t display_test_(gl_app_t *app, const uint8_t *in, uint8_t *out, size_t *len)
+static gl_status_t display_test_(gl_app_t *app, const uint8_t *in, size_t n, uint8_t *out,
+                                 size_t *len)
 {
+    const bool plate = (n >= 3u && in[2] != 0u);
     if (in[0] >= (uint8_t)GL_DISP_PATTERN_COUNT ||
-        (in[0] != (uint8_t)GL_DISP_PATTERN_NORMAL && (in[1] == 0u || in[1] > 120u))) {
+        (in[0] != (uint8_t)GL_DISP_PATTERN_NORMAL && (in[1] == 0u || in[1] > 120u)) ||
+        (n >= 3u && in[2] > 1u) || (plate && in[0] == (uint8_t)GL_DISP_PATTERN_NORMAL)) {
         return GL_ERR_PARAM;
     }
     if (!app->lcd.on) {
@@ -451,6 +454,14 @@ static gl_status_t display_test_(gl_app_t *app, const uint8_t *in, uint8_t *out,
     app->fac.pattern_until_ms = gl_hal_tick_ms() + 1000u * (uint32_t)in[1];
     app->fac.pattern_crc = 0;
     app->fac.pattern_black = 0;
+    /* every new command replaces an arming; "normal" cancels it */
+    app->fac.plate_armed = plate;
+    app->fac.plate_showing = false;
+    if (plate) {
+        app->fac.plate_pattern = in[0];
+        app->fac.plate_hold_s = in[1];
+        app->fac.plate_armed_ms = gl_hal_tick_ms();
+    }
     if (in[0] != (uint8_t)GL_DISP_PATTERN_NORMAL) {
         /* drawn into the frame buffer now, so that the answer can describe
          * it; the screen update of this loop pass sends it to the panel */
@@ -462,6 +473,11 @@ static gl_status_t display_test_(gl_app_t *app, const uint8_t *in, uint8_t *out,
     gl_put_u16(&out[5], app->fac.pattern_black);
     *len = 7;
     return GL_OK;
+}
+
+bool gl_factory_holds_ui(const gl_app_t *app)
+{
+    return app->fac.plate_showing;
 }
 
 /* ---- grain LEDs and the photodiode ---------------------------------------------- */
@@ -522,10 +538,13 @@ static gl_status_t grain_test_(gl_app_t *app, const uint8_t *in, uint8_t *out, s
 
 /* ---- level zero, armed ------------------------------------------------------------ */
 
-static gl_status_t level_zero_(gl_app_t *app, const uint8_t *in, uint8_t *out, size_t *len)
+static gl_status_t level_zero_(gl_app_t *app, const uint8_t *in, size_t n, uint8_t *out,
+                               size_t *len)
 {
     gl_proto_zero_t *z = &app->fac.zero;
-    if (in[0] > (uint8_t)GL_ZERO_OP_CANCEL || in[1] >= (uint8_t)GL_CAL_SEAT_COUNT) {
+    const uint8_t rest = (n >= 3u) ? in[2] : 0u;
+    if (in[0] > (uint8_t)GL_ZERO_OP_CANCEL || in[1] >= (uint8_t)GL_CAL_SEAT_COUNT || rest > 120u ||
+        (rest != 0u && in[0] != (uint8_t)GL_ZERO_OP_ARM)) {
         return GL_ERR_PARAM;
     }
     if (in[0] == (uint8_t)GL_ZERO_OP_ARM) {
@@ -535,6 +554,8 @@ static gl_status_t level_zero_(gl_app_t *app, const uint8_t *in, uint8_t *out, s
         memset(z, 0, sizeof(*z));
         z->state = (uint8_t)GL_ZERO_STATE_ARMED;
         z->seat = in[1];
+        z->rest_min = rest;
+        z->ntc2_x10 = GL_PROTO_TEMP_NONE;
         app->fac.zero_armed_ms = gl_hal_tick_ms();
     } else if (in[0] == (uint8_t)GL_ZERO_OP_CANCEL) {
         if (z->state == (uint8_t)GL_ZERO_STATE_ARMED) {
@@ -561,6 +582,11 @@ void gl_factory_zero_result(gl_app_t *app, gl_status_t st, gl_vec2_t bias, gl_ve
         z->surface_y = surface.y;
         z->temp_c = app->temp_valid ? app->temp_c : app->cal_tilt.t0_c;
         z->time_s = gl_hal_rtc_seconds();
+        /* the cell thermistor, as the read gate measured it when the marker
+         * woke for this placement (the soak rule of step 19 is on NTC2) */
+        z->ntc2_x10 = temp_x10_(app->cell_seen && app->power.cell_temp_valid &&
+                                    app->power.ntc_fault == (uint8_t)GL_NTC_OK,
+                                app->power.cell_temp_c);
     } else if (z->attempts < GL_FACTORY_ZERO_MAX_ATTEMPTS && st != GL_ERR_STATE) {
         z->state = (uint8_t)GL_ZERO_STATE_ARMED; /* the operator tries again on the plate */
     } else {
@@ -591,12 +617,19 @@ static gl_status_t cal_status_(gl_app_t *app, uint8_t *out, size_t *len)
     return GL_OK;
 }
 
+/* The temperature terms of the tilt record (the convention is at
+ * GL_CMD_TILT_TEMPCO in core/gl_proto.h).  Until the phase-3 review this
+ * command also REPLACED the six-face offsets by the constant term of the
+ * fit: drift data (which is what the chamber procedure of the manufacturing
+ * plan yields) then wiped 12 and 7 mg of offset - 12 and 7 mrad of tilt -
+ * with status 0 and the FACTORY flag still set (factory finding 1). */
 static gl_status_t tempco_(gl_app_t *app, const uint8_t *in, size_t n, uint8_t *out, size_t *len)
 {
     const unsigned pts = in[0];
     const float t0 = gl_get_f32(&in[1]);
     gl_cal_tilt_t cal = app->cal_tilt;
-    float sq = 0.0f;
+    gl_cal_tilt_t fit;
+    float sq = 0.0f, worst = 0.0f, t_min = 1000.0f, t_max = -1000.0f;
     gl_status_t st;
 
     if (pts < GL_PROTO_TEMPCO_MIN_POINTS || pts > GL_PROTO_TEMPCO_MAX_POINTS ||
@@ -615,10 +648,28 @@ static gl_status_t tempco_(gl_app_t *app, const uint8_t *in, size_t n, uint8_t *
             fabsf(fit_off_[i].z) > 0.5f) {
             return GL_ERR_PARAM;
         }
+        t_min = (fit_temp_[i] < t_min) ? fit_temp_[i] : t_min;
+        t_max = (fit_temp_[i] > t_max) ? fit_temp_[i] : t_max;
     }
-    st = gl_tilt_tempco_fit(fit_temp_, fit_off_, pts, t0, &cal);
+    if (t_max - t_min < GL_PROTO_TEMPCO_MIN_SPAN_K) {
+        return GL_ERR_PARAM; /* a quadratic over a short span: its ends are anybody's guess */
+    }
+    /* the terms are added to offsets that must be there, about THEIR temperature */
+    if ((cal.flags & (uint8_t)GL_CAL_TILT_FLAG_FACTORY) == 0u) {
+        return GL_ERR_STATE;
+    }
+    if (fabsf(t0 - cal.t0_c) > GL_PROTO_TEMPCO_T0_TOL_K) {
+        return GL_ERR_RANGE; /* the host's idea of the six-face temperature is not the record's */
+    }
+    fit = cal;
+    st = gl_tilt_tempco_fit(fit_temp_, fit_off_, pts, cal.t0_c, &fit);
     if (st != GL_OK) {
         return st; /* fewer than three distinct temperatures */
+    }
+    /* ONLY the temperature terms are taken; offset_g and t0_c stay */
+    for (int a = 0; a < 3; a++) {
+        cal.tempco1_g_per_k[a] = fit.tempco1_g_per_k[a];
+        cal.tempco2_g_per_k2[a] = fit.tempco2_g_per_k2[a];
     }
     cal.flags |= (uint8_t)GL_CAL_TILT_FLAG_TEMPCO;
     {
@@ -631,13 +682,35 @@ static gl_status_t tempco_(gl_app_t *app, const uint8_t *in, size_t n, uint8_t *
             return st; /* GL_ERR_RANGE: a coefficient beyond what the record accepts */
         }
     }
+    /* A level zero that is already stored was measured with the OLD
+     * correction at its own temperature.  If the new terms change the
+     * correction there by more than half a milli-g, that zero would be
+     * silently wrong by as much: refused - the zeros are taken after the fit. */
+    {
+        const uint8_t zf[2] = { GL_CAL_TILT_FLAG_FLIP, GL_CAL_TILT_FLAG_BASE };
+        const float zt[2] = { cal.flip_temp_c, cal.base_temp_c };
+        for (int k = 0; k < 2; k++) {
+            if ((cal.flags & zf[k]) != 0u) {
+                const float dt = zt[k] - cal.t0_c, dt0 = zt[k] - app->cal_tilt.t0_c;
+                for (int a = 0; a < 2; a++) {
+                    const float now = dt * (cal.tempco1_g_per_k[a] + dt * cal.tempco2_g_per_k2[a]);
+                    const float was = dt0 * (app->cal_tilt.tempco1_g_per_k[a] +
+                                             dt0 * app->cal_tilt.tempco2_g_per_k2[a]);
+                    if (fabsf(now - was) > GL_FACTORY_TEMPCO_ZERO_SHIFT_MAX_G) {
+                        return GL_ERR_STATE;
+                    }
+                }
+            }
+        }
+    }
     for (unsigned i = 0; i < pts; i++) {
         const float dt = fit_temp_[i] - cal.t0_c;
         const float v[3] = { fit_off_[i].x, fit_off_[i].y, fit_off_[i].z };
         for (int a = 0; a < 3; a++) {
-            const float r = v[a] - (cal.offset_g[a] + cal.tempco1_g_per_k[a] * dt +
-                                    cal.tempco2_g_per_k2[a] * dt * dt);
+            const float r = v[a] - (fit.offset_g[a] + fit.tempco1_g_per_k[a] * dt +
+                                    fit.tempco2_g_per_k2[a] * dt * dt);
             sq += r * r;
+            worst = (fabsf(r) > worst) ? fabsf(r) : worst;
         }
     }
     {
@@ -650,12 +723,13 @@ static gl_status_t tempco_(gl_app_t *app, const uint8_t *in, size_t n, uint8_t *
         }
     }
     for (int a = 0; a < 3; a++) {
-        gl_put_f32(&out[4 * a], cal.offset_g[a]);
+        gl_put_f32(&out[4 * a], fit.offset_g[a]); /* b0: the fit at t0, NOT stored */
         gl_put_f32(&out[12 + 4 * a], cal.tempco1_g_per_k[a]);
         gl_put_f32(&out[24 + 4 * a], cal.tempco2_g_per_k2[a]);
     }
     gl_put_f32(&out[36], sqrtf(sq / (3.0f * (float)pts)));
-    *len = 40;
+    gl_put_f32(&out[40], worst);
+    *len = 44;
     return GL_OK;
 }
 
@@ -864,21 +938,60 @@ void gl_factory_service(gl_app_t *app, uint32_t now_ms)
 {
     gl_factory_t *f = &app->fac;
 
+    /* how long the marker has been off VBUS (the rest of an armed zeroing) */
+    if (app->power.vbus) {
+        f->off_vbus_valid = false;
+    } else if (!f->off_vbus_valid) {
+        f->off_vbus_valid = true;
+        f->off_vbus_since_ms = now_ms;
+    }
     /* a display test ends by its time, and at once when the marker leaves
-     * the cradle */
-    if (f->pattern != (uint8_t)GL_DISP_PATTERN_NORMAL &&
+     * the cradle - unless it is the one being shown on the seat plate */
+    if (f->pattern != (uint8_t)GL_DISP_PATTERN_NORMAL && !f->plate_showing &&
         ((int32_t)(now_ms - f->pattern_until_ms) >= 0 || !app->power.vbus)) {
         f->pattern = (uint8_t)GL_DISP_PATTERN_NORMAL;
         app->redraw = true;
     }
+    /* a pattern armed for the seat plate (assembly step 19: the reference
+     * line measured under the plate's camera, nothing on the pads) */
+    if (f->plate_showing) {
+        if ((int32_t)(now_ms - f->pattern_until_ms) >= 0 || app->power.vbus || !app->awake) {
+            f->plate_showing = false;
+            f->plate_armed = false;
+            f->pattern = (uint8_t)GL_DISP_PATTERN_NORMAL;
+            app->redraw = true;
+            if (!app->power.vbus && app->awake) {
+                gl_app_post(app, GL_EV_FORCE_SLEEP, 0);
+            }
+        } else {
+            gl_ui_keepalive(&app->ui, now_ms); /* held where it is: no time-out, no read */
+        }
+    } else if (f->plate_armed) {
+        if ((uint32_t)(now_ms - f->plate_armed_ms) > GL_FACTORY_PATTERN_ARM_TIMEOUT_MS) {
+            f->plate_armed = false;
+        } else if (app->awake && !app->power.vbus && app->lcd.on &&
+                   app->ui.state == (uint8_t)GL_UI_WAIT_STILL) {
+            f->plate_showing = true;
+            f->plate_shown++;
+            f->pattern = f->plate_pattern;
+            f->pattern_until_ms = now_ms + 1000u * (uint32_t)f->plate_hold_s;
+            app->redraw = true;
+            gl_ui_keepalive(&app->ui, now_ms);
+        }
+    }
     /* the armed zeroing: when the marker lies out of the cradle, where a
-     * read would start */
+     * read would start - and not before it has rested off VBUS for as long
+     * as the ARM asked */
     if (f->zero.state == (uint8_t)GL_ZERO_STATE_ARMED) {
-        if ((uint32_t)(now_ms - f->zero_armed_ms) > GL_FACTORY_ZERO_ARM_TIMEOUT_MS) {
+        const uint32_t rest_ms = 60000u * (uint32_t)f->zero.rest_min;
+        if ((uint32_t)(now_ms - f->zero_armed_ms) > GL_FACTORY_ZERO_ARM_TIMEOUT_MS + rest_ms) {
             f->zero.state = (uint8_t)GL_ZERO_STATE_FAILED;
             f->zero.status = (uint8_t)GL_ERR_TIMEOUT;
-        } else if (app->awake && !app->power.vbus && !app->zero.active &&
+        } else if (app->awake && !app->power.vbus && !app->zero.active && !f->plate_showing &&
+                   f->off_vbus_valid && (uint32_t)(now_ms - f->off_vbus_since_ms) >= rest_ms &&
                    app->ui.state == (uint8_t)GL_UI_WAIT_STILL) {
+            const uint32_t rested = (uint32_t)(now_ms - f->off_vbus_since_ms) / 60000u;
+            f->zero.rested_min = (uint8_t)((rested > 255u) ? 255u : rested);
             gl_app_post(app, GL_EV_CAL_ARMED, 0);
         }
     }
@@ -916,9 +1029,9 @@ gl_status_t gl_factory_cmd(void *ctx, uint8_t cmd, const uint8_t *in, size_t n, 
     case GL_CMD_CAM_CAPTURE: return cam_capture_(app, in, out, len);
     case GL_CMD_CAM_DATA: return cam_data_(app, in, out, cap, len);
     case GL_CMD_CAM_FIELD: return cam_field_(app, in, out, len);
-    case GL_CMD_DISPLAY_TEST: return display_test_(app, in, out, len);
+    case GL_CMD_DISPLAY_TEST: return display_test_(app, in, n, out, len);
     case GL_CMD_GRAIN_TEST: return grain_test_(app, in, out, len);
-    case GL_CMD_LEVEL_ZERO: return level_zero_(app, in, out, len);
+    case GL_CMD_LEVEL_ZERO: return level_zero_(app, in, n, out, len);
     case GL_CMD_CAL_STATUS: return cal_status_(app, out, len);
     case GL_CMD_TILT_TEMPCO: return tempco_(app, in, n, out, len);
     case GL_CMD_SET_CAM_HORIZON: return cam_horizon_(app, in, out, len);

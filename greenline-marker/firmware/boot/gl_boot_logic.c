@@ -102,6 +102,13 @@ void gl_boot_decide(const gl_boot_inputs_t *in, gl_boot_decision_t *out)
         why = (uint8_t)GL_BOOT_WHY_PENDING;
     } else if (!in->image_valid) {
         why = (uint8_t)GL_BOOT_WHY_IMAGE_INVALID;
+    } else if (in->ship_mode && !in->vbus) {
+        /* rule 6: back to Shutdown through the application, nothing counted,
+         * no watchdog, the register left exactly as it was found */
+        out->action = (uint8_t)GL_BOOT_START_APP_QUIET;
+        out->why = (uint8_t)GL_BOOT_WHY_SHIP_MODE;
+        out->attempts_reg = in->attempts_reg;
+        return;
     } else {
         if (count != 0u && !in->abnormal_reset) {
             count = 0u; /* the unconfirmed start ended for a reason that says nothing about the image */
@@ -123,4 +130,42 @@ void gl_boot_decide(const gl_boot_inputs_t *in, gl_boot_decision_t *out)
         out->action = (uint8_t)GL_BOOT_WAIT_VBUS;
         out->attempts_reg = GL_BOOT_ATTEMPTS_MAGIC | GL_BOOT_ATTEMPTS_TO_LOADER;
     }
+}
+
+/* ---- faults inside the stub ---------------------------------------------------------- */
+
+static uint32_t faults_count_(uint32_t reg)
+{
+    return ((reg & 0xFFFFFF00u) == GL_BOOT_FAULTS_MAGIC) ? (reg & GL_BOOT_FAULTS_COUNT_MASK) : 0u;
+}
+
+static bool faults_ecc_(uint32_t reg)
+{
+    return (reg & 0xFFFFFF00u) == GL_BOOT_FAULTS_MAGIC && (reg & GL_BOOT_FAULTS_ECC) != 0u;
+}
+
+bool gl_boot_may_read_image(uint32_t faults_reg)
+{
+    return !faults_ecc_(faults_reg) && faults_count_(faults_reg) < GL_BOOT_MAX_STUB_FAULTS;
+}
+
+uint32_t gl_boot_fault_note(uint32_t faults_reg, bool ecc)
+{
+    uint32_t n = faults_count_(faults_reg);
+    const bool e = ecc || faults_ecc_(faults_reg);
+    if (n < GL_BOOT_FAULTS_COUNT_MASK) {
+        n++;
+    }
+    return GL_BOOT_FAULTS_MAGIC | n | (e ? GL_BOOT_FAULTS_ECC : 0u);
+}
+
+uint32_t gl_boot_faults_after(uint32_t faults_reg, bool image_was_read, uint8_t action)
+{
+    if (image_was_read && !faults_ecc_(faults_reg)) {
+        return 0u; /* read to its end, no fault: the passes before say nothing any more */
+    }
+    if (action == (uint8_t)GL_BOOT_LOADER) {
+        return 0u;
+    }
+    return faults_reg;
 }

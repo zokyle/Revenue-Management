@@ -200,6 +200,16 @@ def dec_raw_chunk(p):
 DECODERS = {1: dec_summary, 2: dec_raw_chunk, 3: dec_event, 5: dec_placement, 6: dec_read, 7: dec_tilt}
 
 
+def decode_tolerant(stream):
+    """decode() of a dump that may have been CUT (a download that broke, a file copied
+    half): everything up to the last complete record is decoded, and "cut_bytes" says how
+    many bytes behind it were left out (0 for a whole dump)."""
+    _last, good = last_seq(stream)
+    out = decode(stream[:good])
+    out["cut_bytes"] = len(stream) - good
+    return out
+
+
 def decode(stream):
     """The whole dump: {"records": [...], "reads": [...]}.
 

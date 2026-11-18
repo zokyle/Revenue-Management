@@ -177,10 +177,41 @@ def parse_grain(p):
 
 def parse_zero(p):
     state, seat, st, attempts, bx, by, scatter, turn, sx, sy, temp, t = struct.unpack_from("<BBBBfffffffI", p, 0)
-    return {"state": ZERO_STATE[state] if state < len(ZERO_STATE) else state,
-            "seat": "base" if seat == 0 else "ball", "status": STATUS[st] if st < len(STATUS) else st,
-            "attempts": attempts, "bias_x": bx, "bias_y": by, "scatter": scatter, "turn_rad": turn,
-            "surface_x": sx, "surface_y": sy, "temp_c": temp, "time_s": t}
+    out = {"state": ZERO_STATE[state] if state < len(ZERO_STATE) else state,
+           "seat": "base" if seat == 0 else "ball", "status": STATUS[st] if st < len(STATUS) else st,
+           "attempts": attempts, "bias_x": bx, "bias_y": by, "scatter": scatter, "turn_rad": turn,
+           "surface_x": sx, "surface_y": sy, "temp_c": temp, "time_s": t}
+    if len(p) >= 40:
+        # NTC2 at the zeroing, the rest asked for with ARM, the minutes off VBUS when it started
+        ntc2, rest, rested = struct.unpack_from("<hBB", p, 36)
+        out.update({"ntc2_temp_c": _t10(ntc2), "rest_min": rest, "rested_min": rested})
+    return out
+
+
+STREAM_SOURCE = {"imu": 0, "tilt": 1, "grain": 2, "power": 3}
+IMU_G_PER_LSB = 0.061e-3  # drivers/lsm6dsv16x.h GL_IMU_ACCEL_G_PER_LSB_2G (the firmware's range)
+
+
+def parse_stream(source, p):
+    """One stream frame (app/gl_usb.c streams_)."""
+    if source == 0 and len(p) >= 14:
+        ax, ay, az, gx, gy, gz, t = struct.unpack_from("<7h", p, 0)
+        g = [ax * IMU_G_PER_LSB, ay * IMU_G_PER_LSB, az * IMU_G_PER_LSB]
+        return {"source": "imu", "accel_counts": [ax, ay, az], "gyro_counts": [gx, gy, gz],
+                "accel_g": g, "accel_total_g": (g[0] ** 2 + g[1] ** 2 + g[2] ** 2) ** 0.5,
+                "temp_c": t / 100.0}
+    if source == 1 and len(p) >= 9:
+        sx, sy = struct.unpack_from("<ff", p, 0)
+        return {"source": "tilt", "slope_x": sx, "slope_y": sy, "still": bool(p[8])}
+    if source == 2 and len(p) >= 96:
+        v = struct.unpack_from("<48H", p, 0)
+        return {"source": "grain", "leds": [{"dark1": v[3 * i], "on": v[3 * i + 1], "dark2": v[3 * i + 2]}
+                                            for i in range(16)]}
+    if source == 3 and len(p) >= 4:
+        mv, flags, pct = struct.unpack_from("<HBB", p, 0)
+        return {"source": "power", "battery_mv": mv, "vbus": bool(flags & 1), "charging": bool(flags & 2),
+                "charge_enabled": bool(flags & 4), "percent": pct}
+    return {"source": source, "bytes": len(p)}
 
 
 def parse_six(p):

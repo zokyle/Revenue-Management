@@ -38,6 +38,8 @@
 #include "gl_pins.h"
 #include "gl_provisional.h"
 #include "grain_frontend.h"
+#include "gl_sim.h"
+#include "lsm6dsv16x.h"
 
 /* ---- the generated table ------------------------------------------------------- */
 
@@ -797,6 +799,120 @@ GL_TEST(test_constants_carried_by_the_pin_map)
 }
 
 /*
+ * The IMU's mounting (phase-3 review, hardware finding 1).  The pin map says
+ * how U4 lies on the board; until this test existed the firmware kept an
+ * identity placeholder and every slope on the real board would have come out
+ * turned by 90 degrees, with all tests passing (the simulator's board was
+ * identity too).  Three things are proved here, each against the JSON read
+ * by this file's own scanner:
+ *   - the generated header carries the pin map's mounting;
+ *   - the driver's default mounting IS that mounting;
+ *   - on a simulated board mounted as the JSON says, a marker tilted
+ *     toward +x reads as +x through the driver's default, and with the old
+ *     identity placeholder it reads on the wrong axis.
+ * NOT VERIFIED: that the pin map's statement is right (it marks itself
+ * PROVISIONAL: ST's axis drawing of the LSM6DSV16X was not read).
+ */
+static gl_imu_t pins_imu_;
+
+GL_TEST(test_imu_mounting_is_the_pin_maps)
+{
+    static const char *const keys[3] = { "marker_x", "marker_y", "marker_z" };
+    const int h_axis[3] = { GL_PINS_IMU_MARKER_X_AXIS, GL_PINS_IMU_MARKER_Y_AXIS,
+                            GL_PINS_IMU_MARKER_Z_AXIS };
+    const int h_sign[3] = { GL_PINS_IMU_MARKER_X_SIGN, GL_PINS_IMU_MARKER_Y_SIGN,
+                            GL_PINS_IMU_MARKER_Z_SIGN };
+    const gl_imu_mount_t identity = { { 0, 1, 2 }, { 1, 1, 1 } };
+    const float a[3] = { 0.050f, -0.020f, 0.9985f }; /* tilted: marker +x up-slope */
+    const float g[3] = { 0.0f, 0.0f, 0.0f };
+    int8_t j_axis[3] = { 0, 0, 0 }, j_sign[3] = { 0, 0, 0 };
+    gl_imu_mount_t def;
+    gl_imu_raw_t s;
+    const char *m, *end;
+
+    GL_CHECK(json_len_ != 0u);
+    m = jkey_(json_, json_ + json_len_, "imu_mounting");
+    end = (m != NULL) ? strstr(m, "\"open_items_for_firmware\"") : NULL;
+    GL_CHECK(m != NULL && end != NULL);
+    if (m == NULL || end == NULL) {
+        return;
+    }
+    for (unsigned i = 0; i < 3u; i++) {
+        const char *row = jkey_(m, end, keys[i]);
+        const char *stop = (row != NULL) ? strchr(row, '}') : NULL;
+        const char *v;
+        GL_CHECK(row != NULL && stop != NULL && stop < end);
+        if (row == NULL || stop == NULL) {
+            return;
+        }
+        v = jkey_(row, stop, "sensor_axis");
+        GL_CHECK(v != NULL);
+        j_axis[i] = (int8_t)((v != NULL) ? atoi(v) : -1);
+        v = jkey_(row, stop, "sign");
+        GL_CHECK(v != NULL);
+        j_sign[i] = (int8_t)((v != NULL) ? atoi(v) : 0);
+        GL_CHECK_EQ(h_axis[i], j_axis[i]);
+        GL_CHECK_EQ(h_sign[i], j_sign[i]);
+    }
+    gl_imu_mount_defaults(&def);
+    for (unsigned i = 0; i < 3u; i++) {
+        GL_CHECK_EQ(def.axis[i], (uint8_t)j_axis[i]);
+        GL_CHECK_EQ(def.sign[i], j_sign[i]);
+    }
+    /* behaviour: the board of the JSON, the driver's default */
+    gl_sim_reset(true);
+    (void)gl_hal_init();
+    gl_sim_imu_set_mounting(j_axis, j_sign);
+    GL_CHECK_EQ(gl_imu_init(&pins_imu_, NULL), GL_OK);
+    GL_CHECK_EQ(gl_imu_start_measure(&pins_imu_), GL_OK);
+    gl_sim_imu_set_static(a, g);
+    gl_hal_delay_ms(10);
+    GL_CHECK_EQ(gl_imu_read(&pins_imu_, &s), GL_OK);
+    GL_CHECK_NEAR((float)s.ax * pins_imu_.accel_g_per_lsb, a[0], 1e-3);
+    GL_CHECK_NEAR((float)s.ay * pins_imu_.accel_g_per_lsb, a[1], 1e-3);
+    GL_CHECK_NEAR((float)s.az * pins_imu_.accel_g_per_lsb, a[2], 1e-3);
+    {
+        const float ok_x = (float)s.ax * pins_imu_.accel_g_per_lsb;
+        float bad_x, bad_y;
+        /* the placeholder the firmware had until this review */
+        GL_CHECK_EQ(gl_imu_init(&pins_imu_, &identity), GL_OK);
+        GL_CHECK_EQ(gl_imu_start_measure(&pins_imu_), GL_OK);
+        gl_hal_delay_ms(10);
+        GL_CHECK_EQ(gl_imu_read(&pins_imu_, &s), GL_OK);
+        bad_x = (float)s.ax * pins_imu_.accel_g_per_lsb;
+        bad_y = (float)s.ay * pins_imu_.accel_g_per_lsb;
+        if (j_axis[0] != 0 || j_sign[0] != 1 || j_axis[1] != 1 || j_sign[1] != 1) {
+            GL_CHECK(fabsf(bad_x - a[0]) > 0.02f || fabsf(bad_y - a[1]) > 0.02f);
+        }
+        printf("    pin map: marker x = %+d * sensor %c, y = %+d * sensor %c, z = %+d * sensor %c; "
+               "header and driver default equal to it.  A 50 / -20 mg tilt on that board reads "
+               "x %+.1f mg through the driver's default; the old identity placeholder read "
+               "x %+.1f, y %+.1f mg\n",
+               j_sign[0], "XYZ"[j_axis[0]], j_sign[1], "XYZ"[j_axis[1]], j_sign[2], "XYZ"[j_axis[2]],
+               (double)(1000.0f * ok_x), (double)(1000.0f * bad_x), (double)(1000.0f * bad_y));
+    }
+    /* the open items: the header's count is the file's (an unknown one stops
+     * the generator; its self-test seeds one) */
+    {
+        const char *p = jkey_(json_, json_ + json_len_, "open_items_for_firmware");
+        const char *e2 = (p != NULL) ? strstr(p, "\"verification\"") : NULL;
+        unsigned items = 0;
+        GL_CHECK(p != NULL && e2 != NULL && *p == '[');
+        for (p = (p != NULL) ? p + 1 : NULL; p != NULL && e2 != NULL && p < e2 && *p != ']'; p++) {
+            if (*p == '"') {
+                items++;
+                for (p++; p < e2 && *p != '"'; p++) {
+                    if (*p == '\\') {
+                        p++;
+                    }
+                }
+            }
+        }
+        GL_CHECK_EQ(items, (unsigned)GL_PINS_OPEN_ITEMS);
+    }
+}
+
+/*
  * The charger circuit: what the netlist's pin map states and what the driver
  * does.  Until phase 3 this test PINNED A DIFFERENCE as NOT MET (the driver
  * was written for the rev C2 charger: CHG_INHIBIT open drain, LOW = stop).
@@ -910,6 +1026,7 @@ int main(int argc, char **argv)
     GL_RUN(test_usb_type_c_cc_pads);
     GL_RUN(test_boot0_reset_levels_and_floating_lines);
     GL_RUN(test_constants_carried_by_the_pin_map);
+    GL_RUN(test_imu_mounting_is_the_pin_maps);
     GL_RUN(test_charger_of_the_pin_map_is_the_drivers);
     GL_RUN(test_grain_leds_of_the_netlist_are_the_drivers);
     GL_RUN(test_print_the_generated_table);

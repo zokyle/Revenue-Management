@@ -2,7 +2,9 @@
  * gl_factory.h - the factory and calibration commands of the USB protocol
  * (GL_CMD_GET_IDENT .. GL_CMD_SERIAL, core/gl_proto.h) and the three things
  * they leave running in the application: a display test pattern that holds
- * the screen, a level zero that is ARMED over USB and runs by itself when
+ * the screen (in the cradle, or ARMED for the seat plate: shown again when
+ * the marker is next put down out of the cradle, with nothing on its pads),
+ * a level zero that is ARMED over USB and runs by itself when
  * the marker lies on the seat plate with nothing on its pads, and the
  * sleep-current test.
  *
@@ -16,8 +18,12 @@
  * bss of gl_factory).  The picture of a capture lies in the image memory of
  * the read (gl_read_t.img): a camera read overwrites it, and it is marked
  * invalid then.  Stack (-fstack-usage): gl_factory_cmd() 376 bytes below
- * the protocol's dispatch, the temperature fit 432 below that - about
- * 1.5 kB below main() with the main loop's and the USB service's frames.
+ * the protocol's dispatch, the temperature fit 560 below that (432 until the
+ * phase-3 review: it keeps the stored record beside the fitted one) - about
+ * 1.6 kB below main() with the main loop's and the USB service's frames, and
+ * about 2.1 kB when the fit goes on into the calibration store and the flash
+ * driver: the deepest chain of the firmware, in the cradle only (README,
+ * "Memory").
  */
 #ifndef GL_FACTORY_H
 #define GL_FACTORY_H
@@ -27,7 +33,15 @@
 
 /** How long the armed zeroing waits for the marker to be lifted off the
  *  contacts and put down before it gives up (GL_ERR_TIMEOUT). */
-#define GL_FACTORY_ZERO_ARM_TIMEOUT_MS 600000u
+#define GL_FACTORY_ZERO_ARM_TIMEOUT_MS 3600000u /* 60 min, plus the rest asked for with ARM.
+    (Ten minutes until the phase-3 review: assembly step 19 rests the marker at least 30
+    minutes off the pads before the zeros, and every armed zeroing timed out.) */
+/** How long a display pattern armed "for the seat plate" waits for the marker
+ *  to be put down out of the cradle. */
+#define GL_FACTORY_PATTERN_ARM_TIMEOUT_MS 3600000u
+/** A stored level zero may lie at a temperature at which a new temperature
+ *  fit changes the offset correction by at most this (g, about rad). */
+#define GL_FACTORY_TEMPCO_ZERO_SHIFT_MAX_G 0.0005f
 /** Attempts of an armed zeroing before it disarms itself. */
 #define GL_FACTORY_ZERO_MAX_ATTEMPTS 3u
 /** The sleep test starts this long after VBUS has gone (pin bounce). */
@@ -42,9 +56,18 @@ typedef struct {
     uint32_t pattern_until_ms;
     uint32_t pattern_crc;
     uint16_t pattern_black;
+    /* ... armed for the seat plate (GL_CMD_DISPLAY_TEST, where = 1) */
+    bool plate_armed;           /**< will be shown at the next placement out of the cradle */
+    bool plate_showing;         /**< is being shown out of the cradle now: the UI is held */
+    uint8_t plate_pattern;
+    uint8_t plate_hold_s;
+    uint32_t plate_armed_ms;
+    uint32_t plate_shown;       /**< times a pattern was shown out of the cradle (tests) */
     /* armed level zero */
     gl_proto_zero_t zero;       /**< state, seat, and the last result */
     uint32_t zero_armed_ms;
+    uint32_t off_vbus_since_ms; /**< when VBUS was last seen to have gone */
+    bool off_vbus_valid;
     /* sleep-current test */
     bool sleep_armed;           /**< will start when VBUS has gone */
     bool sleep_running;         /**< asleep in the test now */
@@ -82,6 +105,11 @@ void gl_factory_zero_result(struct gl_app *app, gl_status_t st, gl_vec2_t bias, 
  *  `cause` is the GL_PROTO_WAKE_* that woke it, 0 if it is not known yet. */
 void gl_factory_on_sleep(struct gl_app *app, uint32_t now_ms);
 void gl_factory_on_wake(struct gl_app *app, uint32_t now_ms);
+
+/** True while a display pattern is shown out of the cradle: the main loop
+ *  then hands no gesture, motion or time-out event to the UI (no read
+ *  starts under the camera of the seat plate). */
+bool gl_factory_holds_ui(const struct gl_app *app);
 
 /** True while the sleep test wants the IMU's wake-on-motion OFF. */
 bool gl_factory_sleep_no_motion(const struct gl_app *app);

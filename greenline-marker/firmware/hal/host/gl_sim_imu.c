@@ -28,6 +28,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "gl_pins.h"
 #include "gl_sim_internal.h"
 
 #define IMU_MAX_HZ 10000000u
@@ -89,10 +90,14 @@ void sim_imu_reset(void)
     I.reg[REG_CTRL3] = 0x44;
     I.stat_a[2] = 1.0f;
     I.temp_c = 25.0f;
-    for (int i = 0; i < 3; i++) {
-        I.mount_axis[i] = (int8_t)i;
-        I.mount_sign[i] = 1;
-    }
+    /* the simulated board is the netlist's board: U4 lies as the pin map
+     * says (generated gl_pins.h), not at rotation 0 */
+    I.mount_axis[0] = (int8_t)GL_PINS_IMU_MARKER_X_AXIS;
+    I.mount_sign[0] = (int8_t)GL_PINS_IMU_MARKER_X_SIGN;
+    I.mount_axis[1] = (int8_t)GL_PINS_IMU_MARKER_Y_AXIS;
+    I.mount_sign[1] = (int8_t)GL_PINS_IMU_MARKER_Y_SIGN;
+    I.mount_axis[2] = (int8_t)GL_PINS_IMU_MARKER_Z_AXIS;
+    I.mount_sign[2] = (int8_t)GL_PINS_IMU_MARKER_Z_SIGN;
 }
 
 void gl_sim_imu_set_motion(gl_sim_imu_fn_t fn, void *ctx)

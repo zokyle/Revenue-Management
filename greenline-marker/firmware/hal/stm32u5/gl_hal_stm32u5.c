@@ -561,9 +561,15 @@ static void dfu_check_(void)
          * reset contact.  Enter it only with VBUS present (in the cradle);
          * with VBUS gone there is no USB host to talk to and the device
          * would sit in the bootloader until the cell is flat.
-         * LIMIT: a marker left in a powered cradle whose host never issues
-         * a DFU "leave" stays in the bootloader until it is lifted out and
-         * put back (a power cycle of VBUS alone does not reset the MCU).
+         * LIMIT (README open issues; phase-3 review, hardware finding 9):
+         * ONCE IN ST'S LOADER, ONLY A DFU HOST OR A FLAT CELL GETS THE UNIT
+         * OUT.  The MCU runs from the sealed cell and the cradle has no
+         * reset contact, so lifting the marker out and putting it back is
+         * NOT a reset (a power cycle of VBUS alone does not reset the MCU),
+         * and the loader has no time-out.  A user with a wall-charger cradle
+         * has no exit: lifted out, the loader runs the cell down to its
+         * protection cut-off.  Recovery is a PC with a DFU tool, or SWD on
+         * the cradle's service pins.
          * Rev E: it CHARGES there by the charger's own rules - the BQ25101
          * enforces its temperature window with its own thermistor
          * (DESIGN_SPEC E1); CHG_INHIBIT is high-Z after the reset and the
@@ -596,9 +602,15 @@ static void dfu_check_(void)
  * while APC is set; the low-speed oscillator and the RTC can be switched off
  * before the entry (the data sheet's lowest Shutdown figure is without RTC);
  * the independent watchdog does not run in Shutdown (LSI is off there).  If
- * the last is wrong, the watchdog resets the MCU about 32 s after the entry
- * and gl_hal_init() goes straight back to Shutdown BEFORE it starts the
- * watchdog again: one extra reset, then quiet. */
+ * the last is wrong, the watchdog resets the MCU about 32 s after the entry.
+ * WITH THE BOOT STUB (E34) that reset passes through the stub first: the
+ * stub sees the ship-mode mark (BKP2R) and no VBUS, and jumps here WITHOUT
+ * starting the watchdog and without counting the start (boot/gl_boot.h,
+ * rule 6); gl_hal_init() then goes straight back to Shutdown before it
+ * starts the watchdog: one extra reset, then quiet.  (Until the phase-3
+ * review the stub restarted the watchdog and counted every such pass: a
+ * shipped unit with a good image could end in ST's loader at its first
+ * docking - hardware finding 8.) */
 
 /* Go to Shutdown with the wake-up armed.  Does not return: if the entry
  * falls through (a wake-up event already pending), a reset follows and
@@ -629,6 +641,14 @@ static void ship_shutdown_(void)
     __disable_irq();
     HAL_PWR_EnableWakeUpPin(GLH_WKUP_VBUS_HIGH);
     __HAL_PWR_CLEAR_FLAG(GLH_WKUP_VBUS_FLAG);
+    /* The wake-up is an edge, and the callers looked at VBUS BEFORE the pin
+     * was armed: an edge in between is lost and the docked marker would
+     * stay in Shutdown until it is docked again.  Look once more now that
+     * the pin is armed; if VBUS is there, decide again through a reset
+     * (ship_check_ then finds VBUS and leaves ship mode) */
+    if (vbus_now_()) {
+        NVIC_SystemReset();
+    }
     HAL_PWREx_EnterSHUTDOWNMode();
     NVIC_SystemReset();
     for (;;) {
@@ -645,6 +665,12 @@ static uint32_t ship_check_(void)
         return 0;
     }
     if (!vbus_now_()) {
+        /* a reset without VBUS says nothing about the image: whatever the
+         * stub's count of unconfirmed starts holds from before, it does not
+         * grow here (the stub does not count this pass either), and the
+         * reset flags are cleared so that a stale watchdog flag is not
+         * found again at the next docking */
+        __HAL_RCC_CLEAR_RESET_FLAGS();
         ship_shutdown_();
     }
     TAMP->BKP2R = 0;

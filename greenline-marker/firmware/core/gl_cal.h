@@ -226,6 +226,13 @@ typedef struct {
     uint8_t flags;                  /**< GL_CAL_GRAIN_FLAG_* */
 } gl_cal_grain_t;
 
+/* Accepted ranges of the grain record's two integer limits (counts of the
+ * 14-bit photodiode reading; our choice, PROVISIONAL until the grain sensor
+ * has been characterised). */
+#define GL_CAL_GRAIN_MIN_SIGNAL_LO 20u
+#define GL_CAL_GRAIN_MIN_SIGNAL_HI 8000u
+#define GL_CAL_GRAIN_DARK_DRIFT_LO 1u
+#define GL_CAL_GRAIN_DARK_DRIFT_HI 2000u
 #define GL_CAL_GRAIN_BLOB_LEN 82u
 #define GL_CAL_GRAIN_BLOB_LEN_V1 78u
 

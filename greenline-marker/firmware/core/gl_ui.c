@@ -742,9 +742,20 @@ void gl_ui_result_text(const gl_ui_t *ui, const gl_ui_view_t *v, gl_ui_result_te
     if (v->drop > 0u) {
         t->mode[0] = 'D';
         t->mode[1] = (char)('0' + (int)((v->drop <= 9u) ? v->drop : 9u));
+        if (v->drops_used != 0u && v->drops_used < v->drop) {
+            /* the golfer must be able to see that this "Survey result" is
+             * made of fewer placements than were stopped at - of ONE, it is
+             * a Quick Read (phase-3 review, application finding 3) */
+            t->mode[2] = '/';
+            t->mode[3] = (char)('0' + (int)v->drops_used);
+        }
     } else if (v->precision) {
         t->mode[0] = '2';
         t->mode[1] = 'X';
+    }
+    if (v->zero_missing) {
+        t->zero[0] = 'Z';
+        t->zero[1] = '?';
     }
     if (show == GL_UI_SHOW_APPROX) {
         gl_fmt_append(t->state, sizeof(t->state), "APPROX");
@@ -859,6 +870,10 @@ static void screen_result_(const gl_ui_t *ui, const gl_ui_view_t *v, gl_gfx_t *g
         }
     }
     /* mode mark (Survey drop, Precision) and, for a recalled result, its age */
+    if (t.zero[0] != '\0') {
+        /* lower left, opposite the mode mark: out of the way of the line */
+        label_(g, CX - 32, 104, t.zero, 1);
+    }
     if (t.mode[0] != '\0') {
         label_(g, CX + 32, 104, t.mode, 1);
     }

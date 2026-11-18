@@ -238,7 +238,12 @@ bool gl_sim_vbus_present(void);
  * gl_hal_init() the model is "MCU in reset": the board's pull resistors and
  * the charger's hardware default are all there is.  `reason`: GL_RESET_*.
  */
+/** What the memory LCD draws with DISP low (default GL_SIM_I_LCD_OFF_UA: 0,
+ *  "not known").  Counted whenever DISP is low, in every MCU state. */
+void gl_sim_set_lcd_off_ua(double ua);
 void gl_sim_mcu_reset(uint32_t reason);
+/** The boot stub's backup register as the model holds it (TAMP BKP3R). */
+uint32_t gl_sim_boot_attempts_reg(void);
 /** The same reset, after which ST's ROM loader runs (an update): the pins
  *  stay as the reset left them and the MCU draws GL_SIM_I_MCU_ROM_UA from
  *  the cell node until the next gl_hal_init(). */
@@ -284,6 +289,14 @@ typedef struct {
     uint32_t reboots;
     uint8_t last_reboot;       /**< gl_reboot_t of the most recent request */
     uint32_t boot_confirms;    /**< gl_hal_boot_confirm() calls */
+    /** The boot stub of E34, modelled at every gl_sim_mcu_reset(): how many
+     *  resets passed through it, what it decided at the last one
+     *  (gl_boot_action_t, gl_boot_why_t), and at how many resets it would
+     *  NOT have started the application (loader, or waiting for VBUS). */
+    uint32_t boot_stub_passes;
+    uint8_t boot_last_action;
+    uint8_t boot_last_why;
+    uint32_t boot_not_started;
     uint32_t frames_captured;  /**< completed DCMI captures */
     /** Time both sensors had their pads enabled before both had been
      *  released once since the rail came on (the power-up window that
@@ -380,10 +393,15 @@ typedef struct {
     uint32_t reads, page_programs, sector_erases;
     uint32_t bytes_programmed;
     uint32_t overwrite_bytes; /**< programmed bytes that were not blank (NOR AND) */
+    uint32_t programs_dropped; /**< page programs that did nothing (gl_sim_flash_fail_programs) */
     bool deep_power_down;
 } gl_sim_flash_stats_t;
 
 const gl_sim_flash_stats_t *gl_sim_flash_stats(void);
+/** A flash that does not program: every page program is accepted and leaves
+ *  the cells as they were, until switched off again (or gl_sim_reset).  For
+ *  the tests of "a refused store changes nothing". */
+void gl_sim_flash_fail_programs(bool fail);
 /** Direct access to the simulated memory array (GL_SIM_FLASH_BYTES). */
 uint8_t *gl_sim_flash_mem(void);
 
@@ -655,10 +673,20 @@ uint64_t gl_sim_stage_instr(gl_trace_point_t point, uint32_t work);
 #define GL_SIM_I_CHG_INHIBIT_UA 28.0
 #define GL_SIM_I_BOOT0_PULLDOWN_UA 280.0
 #define GL_SIM_I_OPAMP_OUT_LOW_UA 19.0
-/** Memory LCD with DISP on (15 uW static + EXTCOMIN; with DISP off NO FIGURE
- *  IS KNOWN and none is counted); flash in standby / in deep power-down /
- *  while programming or erasing; ADC and op-amp powered; one grain LED lit. */
+/** Memory LCD with DISP on (15 uW static + EXTCOMIN); flash in standby / in
+ *  deep power-down / while programming or erasing; ADC and op-amp powered;
+ *  one grain LED lit. */
 #define GL_SIM_I_LCD_ON_UA 6.0
+/** Memory LCD with DISP LOW.  The netlist puts the panel's VDD and VDDA on
+ *  the always-on 2.8 V rail (NETLIST_NOTES, rail V2V8), so the panel is
+ *  POWERED asleep and in ship mode.  NO FIGURE IS KNOWN for that state (the
+ *  Sharp data sheet was not read): the term exists, its default is 0, and
+ *  every sleep and ship-mode figure of the model is therefore "plus what the
+ *  panel draws with DISP low".  gl_sim_set_lcd_off_ua() sets it; the test
+ *  of E14 (tests/test_e2e_power.c) states how much the panel may draw
+ *  before the 25 uA limit is missed.  PROVISIONAL / NEEDS A DATA SHEET
+ *  (phase-3 review, hardware finding 5). */
+#define GL_SIM_I_LCD_OFF_UA 0.0
 #define GL_SIM_I_FLASH_STANDBY_UA 5.0
 #define GL_SIM_I_FLASH_DPD_UA 0.1
 #define GL_SIM_I_FLASH_BUSY_UA 5000.0

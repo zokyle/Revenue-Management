@@ -445,6 +445,16 @@ static void flip_cols_(uint8_t *img, unsigned w, unsigned h)
     }
 }
 
+/* An MCU reset: the DCMI peripheral stops.  A capture that was running is
+ * gone without a result - nothing calls back, nothing is judged (the
+ * sensors themselves keep their state; they are on their own rail). */
+void sim_cam_mcu_reset(void)
+{
+    D.busy = false;
+    D.state = GL_DCMI_IDLE;
+    D.bytes = 0;
+}
+
 void sim_cam_fire(uint64_t t)
 {
     (void)t;

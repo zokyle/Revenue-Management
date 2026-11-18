@@ -43,13 +43,21 @@ static struct {
     bool pending_wren, pending_wrdi, pending_dp, pending_rdp;
 } F;
 
+static bool fail_programs_;
+
 void sim_flash_reset(bool erase)
 {
+    fail_programs_ = false;
     if (erase) {
         memset(mem_, 0xFF, sizeof(mem_));
     }
     memset(&stats_, 0, sizeof(stats_));
     memset(&F, 0, sizeof(F));
+}
+
+void gl_sim_flash_fail_programs(bool fail)
+{
+    fail_programs_ = fail;
 }
 
 const gl_sim_flash_stats_t *gl_sim_flash_stats(void)
@@ -166,6 +174,13 @@ void sim_flash_cs(bool asserted)
                           (unsigned)F.addr);
         } else if (F.page_len == 0u) {
             sim_violation(&sim_viol()->flash, "page program with no data");
+        } else if (fail_programs_) {
+            /* a part that does not program (gl_sim_flash_fail_programs): the
+             * command is taken, the busy time passes, the cells stay as they
+             * were - what a firmware that reads back must notice */
+            stats_.programs_dropped++;
+            F.busy_until = sim_now() + FL_T_PP_BASE_US + (uint64_t)F.page_len * FL_T_PP_BYTE_US;
+            F.wel = false;
         } else {
             const uint32_t page_base = F.addr & ~0xFFu;
             uint32_t off = F.addr & 0xFFu;

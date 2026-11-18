@@ -44,8 +44,11 @@
  *                is also what is left of the temperature protection when
  *                NTC1 is OPEN, which the charger reads as "no thermistor,
  *                no limits" (GL_PROV_BQ25101_TS_OPEN_IS_TTDM).
- *   time         E32: after GL_PROV_CHARGE_MAX_MS (6 h) of CONTINUOUS
- *                charging.  An awake marker draws more than the charger's
+ *   time         E32: after GL_PROV_CHARGE_MAX_MS (6 h) in which the firmware
+ *                has not held the charger stopped (VBUS present,
+ *                CHG_INHIBIT released), WHATEVER the charger's status
+ *                output said in them: the backstop does not depend on the
+ *                line it backs up.  An awake marker draws more than the charger's
  *                2 mA termination current from the node the charger feeds,
  *                so the charger may never see the end of a charge; the
  *                application therefore sleeps in the cradle, and this is
@@ -169,7 +172,8 @@ typedef struct {
                                Sticky until the next gl_power_init() */
     bool read_hot;        /**< E13: too hot for a camera read (with hysteresis) */
     bool gate_timed;      /**< chg_last_ms is valid */
-    uint32_t chg_run_ms;  /**< continuous charging so far (CHG low at consecutive gate calls) */
+    uint32_t chg_run_ms;  /**< E32: time docked with the charger free to charge (not held by
+                           *   the firmware) since VBUS came or the limit was last lifted */
     uint32_t chg_last_ms; /**< time of the last gate call */
 } gl_power_t;
 
@@ -257,8 +261,11 @@ gl_chg_status_t gl_power_charger_status(const gl_power_t *p);
  * (`cell_fresh` false, or a fault) the hotter of the die sensors that are
  * alive stands in for it; with no temperature at all the read is allowed
  * (a marker whose three sensors are all dead has other problems, and the
- * tilt read that precedes every camera read needs the IMU alive).  Updates
- * p->read_hot.
+ * tilt read that precedes every camera read needs the IMU alive).  NTC2 is
+ * believed as the charge gate believes it: if every live die sensor is more
+ * than GL_PROV_CHARGE_TEMP_MAX_DISAGREE_C away from it, the HOTTEST of the
+ * readings decides (an NTC2 stuck at 25 C does not let a 75 C marker read).
+ * Updates p->read_hot.
  */
 bool gl_power_read_allowed(gl_power_t *p, bool cell_fresh, float imu_temp_c, bool imu_temp_valid,
                            bool mcu_temp_fresh);
