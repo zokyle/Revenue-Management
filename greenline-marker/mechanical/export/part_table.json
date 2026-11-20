@@ -101,8 +101,8 @@
   "kind": "purchased",
   "material": "FR-4 + parts (envelope)",
   "valid": true,
-  "volume_mm3": 1499.675,
-  "mass_g": 3.2993,
+  "volume_mm3": 1417.258,
+  "mass_g": 3.118,
   "bbox_min": [
    -21.1,
    -21.1,
@@ -461,11 +461,11 @@
   "kind": "reference",
   "material": "polyimide FPC (PROVISIONAL shape)",
   "valid": true,
-  "volume_mm3": 3.42,
-  "mass_g": 0.0055,
+  "volume_mm3": 3.87,
+  "mass_g": 0.0062,
   "bbox_min": [
    -3.0,
-   -18.212,
+   -18.712,
    2.725
   ],
   "bbox_max": [
@@ -475,7 +475,7 @@
   ],
   "size": [
    6.0,
-   1.412,
+   1.912,
    2.125
   ]
  },
@@ -867,14 +867,14 @@
   "name": "cradle_pcb",
   "group": "cradle",
   "kind": "purchased",
-  "material": "FR-4 1.6",
+  "material": "FR-4 1.0 (E36)",
   "valid": true,
-  "volume_mm3": 1024.546,
-  "mass_g": 1.8954,
+  "volume_mm3": 640.341,
+  "mass_g": 1.1846,
   "bbox_min": [
    -15.0,
    -34.2,
-   -6.455
+   -5.855
   ],
   "bbox_max": [
    15.0,
@@ -884,7 +884,7 @@
   "size": [
    30.0,
    22.0,
-   1.6
+   1.0
   ]
  },
  {
@@ -989,12 +989,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 14.014,
-  "mass_g": 0.1191,
+  "volume_mm3": 13.579,
+  "mass_g": 0.1154,
   "bbox_min": [
    -8.535,
    -17.915,
-   -7.155
+   -6.195
   ],
   "bbox_max": [
    -6.705,
@@ -1004,7 +1004,7 @@
   "size": [
    1.83,
    1.83,
-   8.12
+   7.16
   ]
  },
  {
@@ -1013,12 +1013,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 14.014,
-  "mass_g": 0.1191,
+  "volume_mm3": 13.579,
+  "mass_g": 0.1154,
   "bbox_min": [
    -5.995,
    -17.915,
-   -7.155
+   -6.195
   ],
   "bbox_max": [
    -4.165,
@@ -1028,7 +1028,7 @@
   "size": [
    1.83,
    1.83,
-   8.12
+   7.16
   ]
  },
  {
@@ -1037,12 +1037,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 14.014,
-  "mass_g": 0.1191,
+  "volume_mm3": 13.579,
+  "mass_g": 0.1154,
   "bbox_min": [
    -3.455,
    -17.915,
-   -7.155
+   -6.195
   ],
   "bbox_max": [
    -1.625,
@@ -1052,7 +1052,7 @@
   "size": [
    1.83,
    1.83,
-   8.12
+   7.16
   ]
  },
  {
@@ -1061,12 +1061,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 14.014,
-  "mass_g": 0.1191,
+  "volume_mm3": 13.579,
+  "mass_g": 0.1154,
   "bbox_min": [
    -0.915,
    -17.915,
-   -7.155
+   -6.195
   ],
   "bbox_max": [
    0.915,
@@ -1076,7 +1076,7 @@
   "size": [
    1.83,
    1.83,
-   8.12
+   7.16
   ]
  },
  {
@@ -1085,12 +1085,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 14.014,
-  "mass_g": 0.1191,
+  "volume_mm3": 13.579,
+  "mass_g": 0.1154,
   "bbox_min": [
    1.625,
    -17.915,
-   -7.155
+   -6.195
   ],
   "bbox_max": [
    3.455,
@@ -1100,7 +1100,7 @@
   "size": [
    1.83,
    1.83,
-   8.12
+   7.16
   ]
  },
  {
@@ -1109,12 +1109,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 14.014,
-  "mass_g": 0.1191,
+  "volume_mm3": 13.579,
+  "mass_g": 0.1154,
   "bbox_min": [
    4.165,
    -17.915,
-   -7.155
+   -6.195
   ],
   "bbox_max": [
    5.995,
@@ -1124,7 +1124,7 @@
   "size": [
    1.83,
    1.83,
-   8.12
+   7.16
   ]
  },
  {
@@ -1133,12 +1133,12 @@
   "kind": "purchased",
   "material": "Mill-Max 0914 spring pin (PROVISIONAL)",
   "valid": true,
-  "volume_mm3": 14.014,
-  "mass_g": 0.1191,
+  "volume_mm3": 13.579,
+  "mass_g": 0.1154,
   "bbox_min": [
    6.705,
    -17.915,
-   -7.155
+   -6.195
   ],
   "bbox_max": [
    8.535,
@@ -1148,7 +1148,7 @@
   "size": [
    1.83,
    1.83,
-   8.12
+   7.16
   ]
  },
  {

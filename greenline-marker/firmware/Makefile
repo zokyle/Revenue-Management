@@ -57,11 +57,13 @@
 #                NOT part of `make test`: the sweep the "TOO STEEP" threshold
 #                of DESIGN_SPEC E31 was chosen from (tools/steep_sweep.py)
 #   make readme-logs
-#                run test, cross, appdiff, tooltest, bench-vision, diff (and
-#                cross-hal / boot-cross if STM32_HEADERS is set) and keep
-#                their output in build/readme/ - about 20 minutes
+#                run test, cross, appdiff, tooltest, replay-demo, bench-vision,
+#                bench, diff, steep-sweep and asan (and cross-hal / boot-cross
+#                if STM32_HEADERS is set) and keep their output in
+#                build/readme/ - about half an hour
 #   make readme-check
-#                compare every figure README.md quotes through
+#                NEEDS `make readme-logs` FIRST (it runs nothing; `make clean`
+#                deletes the logs).  Compares every figure README.md quotes through
 #                tools/readme_check.py with those logs; fails on a difference
 #                (`python3 tools/readme_check.py --update` rewrites the
 #                generated blocks of the README from the logs)
@@ -473,8 +475,9 @@ replay-demo: build/host/glsim
 
 # ---- the README's figures against the runs ------------------------------------
 # `make readme-logs` runs the targets whose output the README quotes and keeps
-# each output in build/readme/<target>.log (about 45 minutes: test 5, asan 20,
-# diff 9, steep-sweep 8; every step must succeed).  With STM32_HEADERS set it
+# each output in build/readme/<target>.log (about half an hour - 28 minutes in
+# the rev E run: test 7, asan 9, diff 3, steep-sweep 9; every step must
+# succeed).  With STM32_HEADERS set it
 # also keeps cross-hal and boot-cross.  `make readme-check` then runs
 # tools/readme_check.py: every block of README.md between
 #     <!-- readme-check:begin NAME -->  and  <!-- readme-check:end NAME -->

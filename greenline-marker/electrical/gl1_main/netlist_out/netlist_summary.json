@@ -34,9 +34,12 @@
   },
   "exports": {
    "bom_lines": 37,
-   "bom_lines_by_status": {
+   "bom_lines_by_design_evidence": {
     "PROVISIONAL": 31,
     "RESEARCH": 6
+   },
+   "bom_lines_by_status": {
+    "VERIFIED": 37
    },
    "passed": true
   },
@@ -50,25 +53,20 @@
    "passed": true
   },
   "rules": {
-   "as_specified": 58,
+   "as_specified": 62,
    "departures": [
-    "rail VDDUSB",
     "cam 2d",
     "grain c",
     "grain d",
-    "E1 b",
-    "PCB c",
-    "PCB k2"
+    "PCB c"
    ],
    "failed": [],
    "open_not_met": [],
    "passed": true,
    "rows": 66,
-   "selftest_defects": 43,
+   "selftest_defects": 49,
    "selftest_missed": 0,
-   "workarounds": [
-    "bare copper"
-   ]
+   "workarounds": []
   },
   "schematic": {
    "components_compared": 112,

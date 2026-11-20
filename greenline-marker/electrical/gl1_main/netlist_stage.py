@@ -35,8 +35,10 @@ Nothing is routed: that is the layout step.  The mechanical JSON goes to
 NOT where ``mechanical/cad/board_import.py`` looks for the real board.
 """
 import csv
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -47,9 +49,17 @@ if TOOLS not in sys.path:
 
 from gleda import board, checks, drc, outputs, schematic          # noqa: E402
 
+#: Rev E: TWO status columns, because they answer two different questions.
+#: * "Status" follows docs/SOURCING.md (its section 2 defines the two words): VERIFIED = a US
+#:   source listing this exact part number was seen on the date given; PROVISIONAL = everything
+#:   else.  It is copied from the row of docs/sourcing.csv with the same MPN; a part number
+#:   that has no row is PROVISIONAL.  VERIFIED says nothing about the land pattern or pin table.
+#: * "Design evidence" is the level of the DESIGN data of the line (pin table, land pattern,
+#:   values): RESEARCH or PROVISIONAL, from Part.fields["Status"], with its note.
 BOM_STATUS_COLUMNS = ("Item", "Qty", "References", "Value", "Description", "Footprint", "MPN",
                       "Manufacturer", "Distributor", "Distributor PN", "Unit Price", "DNP",
-                      "Status", "Status note")
+                      "Status", "Design evidence", "Design evidence note")
+SOURCING_STATUSES = ("VERIFIED", "PROVISIONAL")
 
 
 def say(msg=""):
@@ -66,13 +76,17 @@ def row_status(row):
 
 
 def write_bom_with_status(design, path):
-    """The toolchain's grouped BOM (``outputs.bom_groups``) plus the evidence
-    status of every line (``Part.fields['Status']`` / ``['StatusNote']``).
-    Returns (lines, {status: line count})."""
+    """The toolchain's grouped BOM (``outputs.bom_groups``) plus, for every line, the sourcing
+    status of its part number as docs/SOURCING.md has it (column "Status": VERIFIED /
+    PROVISIONAL) and the evidence level of the design data (``Part.fields['Status']`` /
+    ``['StatusNote']``, columns "Design evidence" / "Design evidence note").
+    Returns (lines, {design evidence: line count}, {sourcing status: line count})."""
     by_ref = design.parts_by_ref
     groups = outputs.bom_groups(design)
-    counts = {}
+    counts, src_counts = {}, {}
     sourcing = sourcing_rows()
+    prefer = "cradle" if "cradle" in design.name else "main"
+    SOURCING_MISMATCHES[:] = [m for m in SOURCING_MISMATCHES if not m.startswith(design.name + " ")]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh, lineterminator="\n")
         w.writerow(list(BOM_STATUS_COLUMNS) + list(SOURCING_COLUMNS))
@@ -81,20 +95,133 @@ def write_bom_with_status(design, path):
             notes = sorted({by_ref[r].fields.get("StatusNote", "") for r in g["refs"]} - {""})
             status = " / ".join(statuses) or "MISSING"
             counts[status] = counts.get(status, 0) + 1
+            src_status, cells, problem = sourcing_cells(sourcing, g["mpn"], prefer,
+                                                        refs=g["refs"], item=g["item"])
+            if problem:
+                SOURCING_MISMATCHES.append("%s item %s (%s): %s" % (design.name, g["item"],
+                                                                    " ".join(g["refs"]), problem))
+            src_counts[src_status] = src_counts.get(src_status, 0) + 1
             w.writerow([g["item"], g["qty"], " ".join(g["refs"]), g["value"], g["description"],
                         g["footprint"], g["mpn"], g["manufacturer"], g["distributor"],
                         g["distributor_pn"], "" if g["unit_price"] is None else "%.2f" % g["unit_price"],
-                        "DNP" if g["dnp"] else "", status, "; ".join(notes)]
-                       + sourcing_cells(sourcing, g["mpn"]))
-    return len(groups), counts
+                        "DNP" if g["dnp"] else "", src_status, status, "; ".join(notes)] + cells)
+    return len(groups), counts, src_counts
 
 
-#: REVIEW ADDITION: three columns copied from docs/sourcing.csv (read-only; matched by MPN) so
-#: that the availability doubts and the approved alternates are visible on the BOM itself.
-SOURCING_COLUMNS = ("Sourcing risk (docs/sourcing.csv)", "Approved alternates (docs/sourcing.csv)",
+def status_text(counts, src_counts):
+    """One line for the build log: both status columns."""
+    return "Status per docs/SOURCING.md: %s; design evidence: %s" % (
+        ", ".join("%d %s" % (v, k) for k, v in sorted(src_counts.items())),
+        ", ".join("%d %s" % (v, k) for k, v in sorted(counts.items()))) + (
+        "; sourcing rows of docs/sourcing.csv out of step with the BOM: %d%s" % (
+            len(SOURCING_MISMATCHES), "".join("\n    WARNING " + m for m in SOURCING_MISMATCHES)))
+
+
+def bom_status_ok(counts, src_counts):
+    """No line without a design evidence level; every sourcing status one of the two words of
+    docs/SOURCING.md."""
+    return counts.get("MISSING", 0) == 0 and all(k in SOURCING_STATUSES for k in src_counts)
+
+
+ASSEMBLY_README_MARK = "ADDED BY THE BOARD BUILD (not by the toolchain)"
+
+
+def extend_assembly_readme(out, name, off_board=()):
+    """The toolchain's assembly README lists the files it wrote itself.  Append what this
+    package adds to the folder: the status BOM and what its columns mean, and (``off_board``)
+    the purchased items that are joined to the board but are on no board BOM.  Idempotent.
+    Returns the path of the README."""
+    path = os.path.join(out, "assembly", "README.txt")
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    if ASSEMBLY_README_MARK in text:
+        text = text[:text.index(ASSEMBLY_README_MARK)].rstrip("\n") + "\n"
+    lines = ["", ASSEMBLY_README_MARK, "-" * len(ASSEMBLY_README_MARK),
+             "%s-bom-status.csv   the same grouped BOM with, for every line:" % name,
+             "  Status                  sourcing status of the exact part number as docs/SOURCING.md has it:",
+             "                          VERIFIED = a US source listing this part number was seen on the date in",
+             "                          the last column (listed for sale, NOT a stock promise); PROVISIONAL =",
+             "                          everything else. It says nothing about the land pattern or pin table.",
+             "  Design evidence / note  RESEARCH or PROVISIONAL: how well the design data of the line (pin table,",
+             "                          land pattern, value) is known. PROVISIONAL lines gate the board order.",
+             "  Sourcing risk, alternates, sourcing row: copied from the row of docs/sourcing.csv that has the",
+             "                          line's references (main-NN / cradle-NN = the BOM item number). The alternates",
+             "                          are CANDIDATES named by the sourcing report, NOT approved parts: each is",
+             "                          VERIFIED (a listing was seen) or PROVISIONAL as its text says, and none has",
+             "                          been approved by the design owner (docs/SOURCING.md action A18).",
+             "Read a live distributor page before ordering: every stock figure behind these columns is an",
+             "undated snapshot."]
+    if off_board:
+        lines += ["", "OFF-BOARD ITEMS joined to this board (on no board BOM; they belong on the purchasing list",
+                  "above the board BOMs, docs/SOURCING.md actions A11 / A12):"]
+        lines += ["  " + l for l in off_board]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text + "\n".join(lines) + "\n")
+    return path
+
+
+def refresh_manifest(out, paths):
+    """``<out>/outputs.json`` is written by the toolchain BEFORE this package adds the status
+    BOM to the assembly folder and zips that folder again, so its entry for the assembly zip
+    was stale and the status BOM was not in it.  Enter ``paths`` (files under ``out``) with
+    their size and SHA-256, replacing an entry of the same path, then compare EVERY entry of
+    the manifest with the file on disk.  Returns the list of entries that do not match (empty
+    = the manifest is true)."""
+    mpath = os.path.join(out, "outputs.json")
+    with open(mpath, encoding="utf-8") as fh:
+        data = json.load(fh)
+    entries = {e["path"]: e for e in data.get("files", [])}
+    for path in paths:
+        with open(path, "rb") as fh:
+            blob = fh.read()
+        rel = os.path.relpath(path, out).replace(os.sep, "/")
+        entries[rel] = {"path": rel, "bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest()}
+    data["files"] = [entries[k] for k in sorted(entries)]
+    data["files_added_after_the_toolchain"] = sorted(
+        os.path.relpath(p, out).replace(os.sep, "/") for p in paths)
+    with open(mpath, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    return verify_manifest(out)
+
+
+def verify_manifest(out):
+    """Every entry of ``<out>/outputs.json`` against the file on disk: [problem, ...]."""
+    with open(os.path.join(out, "outputs.json"), encoding="utf-8") as fh:
+        data = json.load(fh)
+    bad = []
+    for e in data.get("files", []):
+        full = os.path.join(out, e["path"])
+        if not os.path.isfile(full):
+            bad.append("%s: listed but missing" % e["path"])
+            continue
+        with open(full, "rb") as fh:
+            blob = fh.read()
+        if len(blob) != e["bytes"] or hashlib.sha256(blob).hexdigest() != e["sha256"]:
+            bad.append("%s: size or SHA-256 differs from the manifest" % e["path"])
+    return bad
+
+
+#: REVIEW ADDITION: three columns copied from docs/sourcing.csv (read-only) so that the
+#: availability doubts and the alternates the sourcing report names are visible on the BOM itself
+#: (docs/SOURCING.md actions A4 and A18: the alternates column).
+#: FINAL-AUDIT FIX: (1) the alternates are CANDIDATES - docs/SOURCING.md A18 says they are
+#: "still PROVISIONAL, to be confirmed one by one before they are listed" - so the column no
+#: longer says "approved"; (2) the row is found by the line's REFERENCES (the numbered row
+#: main-NN / cradle-NN whose reference list equals the BOM line's), not by the first row with
+#: the same part number: two lines with one part number (cradle SP1-4 and the unfitted SP5-7)
+#: now each cite their own row, and a numbered row that names another part number, or whose
+#: number is not the BOM item number, is reported (SOURCING_MISMATCHES) instead of hidden.
+SOURCING_COLUMNS = ("Sourcing risk (docs/sourcing.csv)",
+                    "Alternates named in docs/sourcing.csv (candidates, NOT approved; VERIFIED or "
+                    "PROVISIONAL as each says)",
                     "Sourcing row / status / checked on")
 SOURCING_CSV = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                                              "docs", "sourcing.csv"))
+#: filled by write_bom_with_status: every BOM line whose sourcing row is not "the numbered row
+#: with these references, this part number and this item number"
+SOURCING_MISMATCHES = []
+_NUMBERED = re.compile(r"^(main|cradle)-(\d+):\s*(.*)$")
 
 
 def sourcing_rows(path=SOURCING_CSV):
@@ -108,16 +235,59 @@ def sourcing_rows(path=SOURCING_CSV):
     return rows
 
 
-def sourcing_cells(rows, mpn):
-    hits = rows.get((mpn or "").strip(), [])
-    if not hits:
-        return ["NOT IN docs/sourcing.csv", "", ""]
-    # a board row (main-NN / cradle-NN) first, then replacement / candidate rows
-    hits = sorted(hits, key=lambda r: (not (r.get("bom_ref") or "").startswith(("main", "cradle")),))
-    r = hits[0]
-    label = (r.get("bom_ref") or r.get("item") or "").split(":")[0].strip()
-    return [(r.get("risk") or "").strip(), (r.get("alternative") or "").strip(),
-            "%s / %s / %s" % (label, (r.get("status") or "").strip(), (r.get("checked_on") or "").strip())]
+def _numbered_row(rows, prefer, refs):
+    """(number, row) of the numbered row of board ``prefer`` whose references are exactly
+    ``refs``; (None, None) if there is none."""
+    want = set(refs)
+    for hits in rows.values():
+        for r in hits:
+            m = _NUMBERED.match((r.get("bom_ref") or "").strip())
+            if m and m.group(1) == prefer:
+                have = set(m.group(3).replace("(DNP)", " ").split())
+                if have == want:
+                    return int(m.group(2)), r
+    return None, None
+
+
+def sourcing_cells(rows, mpn, prefer="main", refs=None, item=None):
+    """(sourcing status, [risk, alternates, row / status / date], problem) of one BOM line.
+
+    The row is the numbered row (main-NN / cradle-NN) of docs/sourcing.csv with the line's
+    references.  The status is the word that row has, PROVISIONAL when the row names another
+    part number than the BOM or when there is no row at all.  ``problem`` is None when the row
+    was found by its references, names the BOM's part number and carries the BOM's item
+    number; else it is a sentence saying what is out of step (the caller collects them).
+    Without ``refs`` (or when no numbered row has them) the row is looked up by part number,
+    as before the final audit, and that is reported as a problem."""
+    mpn = (mpn or "").strip()
+    number, r = _numbered_row(rows, prefer, refs) if refs else (None, None)
+    problem = None
+    if r is not None:
+        label = "%s-%02d" % (prefer, number)
+        row_mpn = (r.get("mpn") or "").strip()
+        if row_mpn != mpn:
+            problem = "sourcing row %s names %s, the BOM %s" % (label, row_mpn, mpn)
+            return "PROVISIONAL", ["SOURCING ROW %s NAMES ANOTHER PART NUMBER (%s)" % (label, row_mpn), "",
+                                   "%s / part number differs / %s" % (label, (r.get("checked_on") or "").strip())], problem
+        if item is not None and int(item) != number:
+            problem = "sourcing row %s is not numbered like the BOM item (%s)" % (label, item)
+    else:
+        hits = rows.get(mpn, [])
+        if not hits:
+            return "PROVISIONAL", ["NOT IN docs/sourcing.csv", "", ""], "no row in docs/sourcing.csv"
+        # this board's own row (main-NN / cradle-NN) first, then the other board's, then
+        # replacement / candidate rows
+        def rank(x):
+            ref = (x.get("bom_ref") or "")
+            return (not ref.startswith(prefer), not ref.startswith(("main", "cradle")))
+        r = sorted(hits, key=rank)[0]
+        label = (r.get("bom_ref") or r.get("item") or "").split(":")[0].strip()
+        problem = "no numbered row with these references; row %r found by part number" % label
+        label += " (found by part number)"
+    status = (r.get("status") or "").strip()
+    return (status if status in SOURCING_STATUSES else "PROVISIONAL",
+            [(r.get("risk") or "").strip(), (r.get("alternative") or "").strip(),
+             "%s / %s / %s" % (label, status, (r.get("checked_on") or "").strip())], problem)
 
 
 def part_counts(design):
@@ -272,17 +442,18 @@ def run(design, out, *, rules=None, rules_selftest=None, pinmap_cmd=None, title=
     with open(os.path.join(out, name + "-netlist.json"), "w", encoding="utf-8") as fh:
         json.dump(outputs.netlist_data(design), fh, indent=1, sort_keys=True)
         fh.write("\n")
-    lines, status_counts = write_bom_with_status(design, os.path.join(out, name + "-bom-status.csv"))
+    lines, status_counts, src_counts = write_bom_with_status(design, os.path.join(out, name + "-bom-status.csv"))
     with open(os.path.join(out, name + "-nominal-mechanical.json"), "w", encoding="utf-8") as fh:
         json.dump(outputs.mechanical_data(design), fh, indent=1, sort_keys=True)
         fh.write("\n")
     counts = part_counts(design)
     say("  %s-netlist.json, %s-bom-status.csv (%d lines: %s), %s-nominal-mechanical.json"
-        % (name, name, lines, ", ".join("%d %s" % (v, k) for k, v in sorted(status_counts.items())), name))
-    missing = status_counts.get("MISSING", 0)
-    summary["stages"]["exports"] = {"passed": missing == 0, "bom_lines": lines,
-                                    "bom_lines_by_status": status_counts}
-    passed = passed and missing == 0
+        % (name, name, lines, status_text(status_counts, src_counts), name))
+    bom_ok = bom_status_ok(status_counts, src_counts)
+    summary["stages"]["exports"] = {"passed": bom_ok, "bom_lines": lines,
+                                    "bom_lines_by_status": src_counts,
+                                    "bom_lines_by_design_evidence": status_counts}
+    passed = passed and bom_ok
     summary["counts"] = counts
     summary["passed"] = bool(passed)
     with open(os.path.join(out, "netlist_summary.json"), "w", encoding="utf-8") as fh:

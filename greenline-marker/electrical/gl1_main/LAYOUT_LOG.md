@@ -8,7 +8,43 @@ comparable only roughly. Connection totals changed with the netlist: 302 before 
 amendments E24 to E26, 305 after (U12 and U11 have more pins), 306 since the revision after
 the layout reviews (test pad TP5).
 
-## Revision after the three layout reviews (2026-11-18) - the board as delivered
+## Revision E (E-EVT1, 2026-11-18) - the board as delivered
+
+No placement, net, class, keep-out for copper or router option changed. What changed in the
+design dictionary: the revision stamp (D-EVT1 to E-EVT1), the LCD-tail HEIGHT limit (YAML zone
+y -21.1 to -17.3; a placement rule, not a routing obstacle), fab-note and status-note texts
+(E35, sourcing actions), one order code (U12), and the "not fitted" mark taken off six
+bare-copper footprints.
+
+**Why the board was routed again.** `build_gl1_main.py` reuses `routing.json` only when its
+fingerprint matches, and the fingerprint is a hash of the whole design dictionary, the texts
+included. It could not match. The alternative, re-stamping the old file, would have meant
+going round that test; routing again and comparing was the honest way, and the router is
+deterministic.
+
+| # | Name | What | Routed | Time s | Result |
+|---|---|---|---|---|---|
+| 68 | e0 | the rev D design file on the rev E YAML (only the stamp and the tail height limit differ), `--stages route --reroute --no-store` into a scratch directory | **306/306** | 338 | tracks and vias equal to the stored rev D routing item by item, in the same order (2570 / 278) |
+| 69 | build 4 | the rev E design file, `build_gl1_main.py` (stored routing refused: fingerprint), whole flow | **306/306** | 328 (whole build 389) | audit clean; tracks and vias again equal to the rev D routing item by item; KiCad DRC 0 errors, 0 unconnected, 2 cosmetic warnings; outputs verified; mechanical import exit 0 without a warning; build exit 0. Stored as `routing.json` (new fingerprint) |
+| 70 | build 5 | the same, second run | reused | (whole build 59) | "fingerprint of design + router options matches; audited again": audit clean, same DRC result, exit 0 |
+
+The full audit ran on every one of them: the router's own audit of the copper against the
+design (0 violations), KiCad's DRC on the filled board with the full rule set and nothing
+excluded, the toolchain's verification of the plotted data against the model, the netlist
+round trip, the mechanical import, and `layout_quality.py` / `layout_review.py`, whose figures
+are those of revision D to the last digit (278 vias, 2297.4 mm, 218.3 mm of fine track).
+
+Closed at revision E (they are described as open in the section below, which is kept as
+written): the mechanical import **passes** (J1 is in the YAML where E24 puts it, and the check
+compares body box and anchor); the notch in the battery keep-out is a YAML key; the six
+bare-copper bottom footprints carry no "not fitted" mark; the fine class on F.Cu, In2.Cu and
+B.Cu inside areas of pad field + 5 mm is what E35 specifies, no departure. One figure is
+reported differently: `layout_quality.py` now gives copper-to-edge (outline and the routed
+locating slot: 0.325 mm routed, 0.355 mm pads; rule 0.30) apart from copper-to-hole (the
+drilled locating hole H1: 0.321 mm routed, 0.795 mm pads; rule 0.20). The 0.321 mm that
+earlier issues called "copper to edge" is the distance to that hole.
+
+## Revision after the three layout reviews (2026-11-18)
 
 Attempt 61 (the design file as it stands; attempt 63 is the build): **306 of 306 connections,
 router audit clean, KiCad DRC 0 errors and 0 unconnected (2 cosmetic silkscreen warnings),
@@ -53,7 +89,8 @@ What is NOT as the first report said, stated here because the first log did not:
   + 5 mm, 175 mm2 on the board). The toolchain has no per-layer fine area. Smaller areas:
   pad field + 4.0 mm ended at 303 of 306 (attempt 66), + 3.5 mm stood at 5 to 7 open
   (attempt 67) and + 3.0 mm at 12 to 14 open (attempt 65), each on the delivered placement.
-  This is a departure from the specification's "used only to escape the camera BGAs"; the E7
+  At the time this was a departure from the specification's "used only to escape the camera
+  BGAs"; amendment E35 has since made it the specification (three layers, 5 mm), and the E7
   fab note names all three layers.
 * **A capacitor within 2 mm of every camera supply ball (finding 13).** 23 routing variants
   with 100 nF capacitors 1.45 mm beside the DOVDD and AVDD balls (and, in the first four, the
@@ -119,7 +156,9 @@ GND pours. "Close capacitors" = 100 nF 1.45 mm beside the DOVDD / AVDD balls. Ru
 | 67 | l2 | j0, fine areas + 3.5 mm | stopped, 5 to 7 open | 670 | |
 
 Full attempts that ran to an end or were stopped in a standing end game since the first
-layout: 39 (29 to 67), one of them complete.
+layout: 39 (29 to 67), with
+one complete placement (attempt 61, repeated identically by build 63).
+Attempts 68 to 70 (section "Revision E") are that same placement again.
 
 ## Result of the FIRST layout (superseded by the section above)
 

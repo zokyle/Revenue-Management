@@ -1,7 +1,8 @@
 # GreenLine GL-1 firmware (phase 3: the rev E board, the factory commands, the field log, the boot stub, and what a result looks like)
 
-Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.md`, rev D
-EVT1 with amendments E1 to E34, and `../design/master_params.yaml`). **The firmware targets
+Firmware for the GreenLine GL-1 electronic ball marker (`../design/DESIGN_SPEC.md`, rev E
+EVT1 - rev D with its amendments E1 to E36 worked in -, and `../design/master_params.yaml`,
+rev E-EVT1). **The firmware targets
 the rev E board only** (hardware revision 5, shown as "E"): the charger is a TI BQ25101 with
 a thermistor of its own, and the pin map is the netlist's
 (`../electrical/gl1_main/pinmap.json`). The board this file used to call **rev C2** (another
@@ -89,8 +90,13 @@ still appears below it is history.
   with builder 3, above.)
 * **Nothing here has run on hardware.** No board exists and no vendor SDK is available in the
   build environment. What exists is portable C99 that is built and unit-tested on the host
-  against a simulator of the board, and cross-compiled (compile only, not linked) for the
-  Cortex-M33 to check that it is clean and to measure its size.
+  against a simulator of the board, and cross-compiled for the Cortex-M33 to check that it
+  is clean and to measure its size. "Compile only, not linked" - what this bullet used to say -
+  is true of the STM32 backend (`make cross-hal`) and no longer of the rest: `make cross`
+  also LINKS the application's objects as a probe against the toolchain's libm and libc (no
+  start-up code, no HAL: it answers which library functions the code reaches, it is not an
+  image), and `make boot-cross` with the vendor's device header links the boot stub (1536
+  bytes of its 8 kB page). Neither has run anywhere.
 * **`hal/stm32u5/gl_hal_stm32u5.c` has been compiled, and never linked or run** (phase 2,
   builder 3). `make cross-hal STM32_HEADERS=<dir>` compiles it - compile only - against ST's
   and Arm's header files, warning-free with the firmware's whole warning set; the first compile
@@ -170,7 +176,8 @@ still appears below it is history.
   classification of the stick's base, and a drift that reverses inside a group of four strips
   is not noticed ("End to end", "Vision").
 * **Rev C and later.** `core/gl_config.h` is generated from `master_params.yaml`, which now
-  reads rev D-EVT1 (`GL_CFG_PARAMS_REV`; the string will become E-EVT1, and no test
+  reads rev E-EVT1 (`GL_CFG_PARAMS_REV`; it was D-EVT1 until the amendments entered the YAML, and that string is the
+  ONLY line of the generated header that the step from D to E changed; no test
   writes it: `tests/test_basics.c` reads the expected string from the YAML itself); the values this firmware takes from it are the ones
   rev C set (stereo baseline 20.0 mm, cameras at x = +-10.0 mm). Where this file says "the rev
   C YAML" it means that change. The user calibration is a **zeroing on any hard flat surface**
@@ -260,8 +267,9 @@ Against `docs/MANUFACTURING_PLAN.md` (4.5, 6, 7), `mechanical/README.md` section
 * **Now possible, were not:** step 19's display rotation on the seat plate; step 19's zeros
   after the 30-minute rest; the temperature calibration with the data the chamber procedure
   yields; the total acceleration and the live grain stream from glctl; the explicit lock.
-* **A conflict between two documents, not firmware:** gate 2 is +-13.5 degrees in the step
-  table of `mechanical/README.md` and +-13.0 in E17 and in `CAM_FIELD`.
+* **A conflict between two documents, closed at rev E:** gate 2 was +-13.5 degrees in the step
+  table of `mechanical/README.md` and +-13.0 in E17 and in `CAM_FIELD`; the mechanical README
+  (step 16) and the YAML (`cameras.gate2_bars_deg`) now say +-13.0 as well.
 
 ## Phase 3, builder 2: factory commands, calibration data, field log, PC tool, boot stub
 
@@ -397,8 +405,8 @@ Notes that decide whether a station works:
 * **CAM_FIELD rows follow the camera's calibration record** (nominal: +13.0 deg is row 88,
   -13.0 deg is row 391). Three 8-row exposures per call. "equal bars give ratio 1.000, an upper
   bar 25 % darker gives 0.750". The limit (proposed: not below 0.900) is the PC's.
-  `mechanical/README.md` step 16 still says 13.5 degrees; DESIGN_SPEC E17 says 13.0, and that
-  is what the firmware uses.
+  DESIGN_SPEC E17, the YAML (`cameras.gate2_bars_deg`) and, since rev E, step 16 of
+  `mechanical/README.md` all say 13.0 degrees, which is what the firmware uses.
 * **E13 holds for the factory**: no camera command above 60 C (`GL_ERR_STATE`).
 * **LEVEL_ZERO ARM** survives the lift out of the fixture (RAM only: not a reset), runs where
   a read would start - the marker lying still out of the cradle - and takes the place of that
@@ -443,7 +451,7 @@ From `docs/MANUFACTURING_PLAN.md` (4.5 electrical test list, 6 calibration, 7.1 
 | Gate 1: NTC1 plausible (charge starts, stops when TS is pulled low) | SET_CHARGE + GET_POWER (`charge stop`, `charge auto`) | yes | NTC1 itself cannot be read: it is wired to the charger only |
 | Gate 1: serial number | SERIAL (`serial`, `serial --commit`) | yes | derived from the unique number; a freely assigned serial has no field |
 | Gate 2: frames through the windows | `frame` | yes | - |
-| Gate 2: bars at +13.0 / -13.0 degrees | CAM_FIELD (`cam-field`) | yes | the README of the enclosure still names 13.5 |
+| Gate 2: bars at +13.0 / -13.0 degrees | CAM_FIELD (`cam-field`) | yes | the README of the enclosure says 13.0 too since rev E (it named 13.5 at rev D) |
 | Gate 2 and step 18: dark frames under side light | CAM_CAPTURE kind 1 (`capture --dark`) | partly | no fixed exposure; no limit |
 | Gate 2: LCD | DISPLAY_TEST (`display PATTERN`) | yes | judged by eye or a camera |
 | Step 19: soak until the cell thermistor is within 1 K of the room | GET_SENSORS; NTC2 in the LEVEL_ZERO result | partly | GET_SENSORS only in the cradle (USB); off the pads NTC2 is known afterwards: in the zero's result and in the log's tilt records |
@@ -651,7 +659,12 @@ what the stub found, for the factory; 5: faults inside the stub).
 * **The STM32 part** (`boot/gl_boot_stm32u5.c`, `boot/gl_boot.ld`) is written by inspection
   against the device header: UCPD_DBDIS first, backup access, reset flags (read, not cleared),
   VBUS_SENSE, the decision, then the jump to the application (VTOR, stack pointer), to system
-  memory at 0x0BF90000, or Shutdown with wake-up pin 2. It reads the write protection and
+  memory at 0x0BF90000, or Shutdown with wake-up pin 2. The stub names VBUS_SENSE in register
+  macros (GPIOC, pin 13, wake-up pin 2), not through the pin table; since the final audit of rev
+  E it includes the generated `hal/stm32u5/gl_pins.h` and three compile-time checks stop
+  `make boot-cross` (with STM32_HEADERS) if the pin map moves VBUS_SENSE off PC13, off the
+  divider or off wake-up pin 2 - `make pins` alone does not move the stub, and `make
+  pins-check` / `tests/test_pins.c` do not see it. It reads the write protection and
   records whether page 0 is protected; it does not write option bytes (the file lists them:
   WRP1A pages 0..0, nSWBOOT0 = 0 / nBOOT0 = 1, IWDG_SW = 1, RDP 0 at EVT, TZEN = 0).
   `make boot-cross STM32_HEADERS=<dir>` compiles and LINKS it with no library (the generated
@@ -1299,7 +1312,7 @@ asked for is still not there (open issue 21). **Still not fixed: 9, 10, 20, 32.*
 | 24 | The confidence bar does not separate weak results from clean ones; several fallbacks look like a normal result (major) | **Fixed in part**: flag-out is tentative (23), a poor horizon and a kept near miss have messages, `PLAYS n?` marks a hidden base, and the table under "Result on the display" now says which results look normal. **Not done**: an indicator relative to what a clean read achieves at that distance | open issue 21 |
 | 25 | Time to a line and camera-rail time exceed the specification's figures in a third of the reads between 2.25 and 4.5 m (major) | **Fixed for that cause, not in general.** The second "line" was the shoulder of the stick in the widest template: dropped. And a lone line that is not a flagstick is given up after its first group | 65 reads at 1.5-4.5 m: 23 with two candidates, rail up to 3.12 s, result up to 5.07 s -> 0, 2.42-2.46 s, at most 4.40 s. 88 stick-free reads: mean rail 1.65 s -> 1.02 s. `test_near_stick_is_one_candidate`, `test_no_flagstick`. Still slow: a person behind the stick, two real lines; the high compute factor; open issue 1 |
 | 26 | The distance prompt after "no flagstick seen" is a dead end for 30 s (major) | **Fixed**: picking the marker up and putting it down again reads again; the prompt says so | `test_distance_prompt_re_placing_reads_again`, `test_ui.c` |
-| 27 | DESIGN_SPEC has been amended (E1 to E16) since the builders' brief (major) | **Phase 2: not fixed, by the brief's decision. Phase 3: the firmware targets the rev E board ("DESIGN_SPEC amendments").** What follows is the phase-2 text. The generator now reads the charger sentence of the spec and a test pins the difference as NOT MET; the README's statements are corrected | `test_charger_of_the_specification_is_not_the_firmwares`; "DESIGN_SPEC amendments" (E1 to E34 now); open issue 2 |
+| 27 | DESIGN_SPEC has been amended (E1 to E16) since the builders' brief (major) | **Phase 2: not fixed, by the brief's decision. Phase 3: the firmware targets the rev E board ("DESIGN_SPEC amendments").** What follows is the phase-2 text. The generator now reads the charger sentence of the spec and a test pins the difference as NOT MET; the README's statements are corrected | `test_charger_of_the_specification_is_not_the_firmwares`; "DESIGN_SPEC amendments" (E1 to E36 now); open issue 2 |
 | 28 | Survey in the order the specification gives never shows a line until a fourth placement back at the ball (minor) | Phase 2: not fixed (product decision). **Phase 3: fixed by amendment E29** - the placement the marker stands on is the ball; a line after every placement | `test_survey_two_three_and_four_drops`, `test_survey_e29_flow`; open issue 18 |
 | 29 | A solved aim more than 13.5 degrees off the visor axis is drawn like a tentative one, with an arrow pointing away from the aim (minor) | **Fixed**: the parallel substitute is drawn in the style of the result (solid if solved) and the arrow is gone | aim +258.8 mrad: 0.46 of the solid core inked and 63 pixels of arrow -> 0.73 and 0. `test_solved_aim_off_the_screen_keeps_its_style`, `test_gfx.c` |
 | 30 | `PLAYS` is the roll-out distance including the PAST setting (minor) | **Fixed**: `PLAYS` is the estimator's plays-like distance minus PAST | 6 m, dead flat, PAST 0 / 30 / 90 cm: `PLAYS 6.0M` each (estimator 5.98 / 6.28 / 6.88 m). `test_plays_like_is_the_flat_putt` |
@@ -1310,9 +1323,15 @@ asked for is still not there (open issue 21). **Still not fixed: 9, 10, 20, 32.*
 
 ## DESIGN_SPEC amendments: where the firmware stands
 
-`../design/DESIGN_SPEC.md` reads "rev D, EVT1, with amendments E1 to E34". This is all 34,
+`../design/DESIGN_SPEC.md` reads "rev E, EVT1": rev D with the amendments E1 to E36 worked into
+its text, the amendment table kept as the change history (`master_params.yaml` is rev E-EVT1).
+This is all 36: E1 to E34
 after the three builders of phase 3 (1: the rev E board and its power behaviour; 2:
-calibration, factory commands, field log, boot stub; 3: what the golfer sees). "Unaffected"
+calibration, factory commands, field log, boot stub; 3: what the golfer sees), and E35 and
+E36, which were written with the routed boards and need nothing of the firmware. Moving the
+parameters from rev D to rev E changed ONE generated line of the firmware, the revision
+string of `core/gl_config.h`; the pin table and the solver's reference vectors were
+regenerated and are byte-identical. "Unaffected"
 means that no line of the firmware depends on the matter; it is a statement about the
 firmware, not a check of the amendment. Nothing in the last column has been measured on
 hardware.
@@ -1335,7 +1354,7 @@ hardware.
 | E14 | Sleep current no more than 25 uA at 3.8 V | supply model: 20.7 uA at the cell-lead pads with the underside dark, WITHOUT the display (no figure is known for the panel with DISP low) | **met only if the panel draws less than 4.3 uA with DISP low** (phase-3 review; open issue 61); 25.9 uA with a lit underside (E27 excludes that case) |
 | E15 | Read time 4.1 to 4.8 s, camera rail 2.2 to 2.8 s | the timing model; since builder 3 a read with several lines in view has eight groups in all | **agrees by the model** for the nominal read and for reads with several lines ("Read time: the rail-time bound"). Missing: a near stick at the high compute factor (2.99 s by the phase-2 review, not repeated); any measurement |
 | E16 | Baffle-ring tape thickness | - | **unaffected** |
-| E17 | Guaranteed upward field 14.0 degrees; test gate 2 bars at +13.0 and -13.0 degrees | `GL_CMD_CAM_FIELD` measures at +-13.0 degrees (`GL_PROTO_FIELD_ELEV_DEG`). No firmware constant holds the field itself | **implemented** for the gate (builder 2). `mechanical/README.md` step 16 still says 13.5 (open issue 48) |
+| E17 | Guaranteed upward field 14.0 degrees; test gate 2 bars at +13.0 and -13.0 degrees | `GL_CMD_CAM_FIELD` measures at +-13.0 degrees (`GL_PROTO_FIELD_ELEV_DEG`). No firmware constant holds the field itself | **implemented** for the gate (builder 2). `mechanical/README.md` step 16 says 13.0 since rev E (issue 48, closed) |
 | E18 | Legend print rules; a statement block holds 88 characters | the INFO screen's text block: 171 cells a page, 4 pages; four statements of 88 characters need 3 pages (test) | **unaffected** as a print rule |
 | E19 | Quarter-wave film size and clocking flat | - | **unaffected** |
 | E20 | Base-plate thickness limits; ball grade | - | **unaffected** |
@@ -1353,6 +1372,8 @@ hardware.
 | E32 | Asleep in the cradle 30 s after the host fell silent or with no host; 6 h backstop | UI states `CRADLE_USB` (30 s without host activity) and `CRADLE_SLEEP`; `GL_PROV_CHARGE_MAX_MS` | **implemented** (builder 1). **NOT MET, pinned:** a silent host on a running bus loses the marker until it is re-docked. Phase-3 review: the backstop counts docked, un-inhibited time whatever the status line says (it did not see a recharge on a charger that shows the first cycle only); what that costs a marker left in its cradle is open issue 60 |
 | E33 | Three display states; the solve limited to 300,000 integration steps | `gl_ui_classify()` / `gl_ui_view_show()`; `GL_APP_SOLVE_MAX_STEPS` | **implemented** (builder 3; the step budget since the phase-2 review). NOT MET against the reference at 1e-9 m in 1 of 340 vectors (pinned) |
 | E34 | Boot stub; SWD recovery; USB ids a release gate | `boot/`: image header, `gl_boot_decide()`, `tools/stamp_image.py`; `app/gl_usb_ids.h` placeholders, `make RELEASE=1` / `make release-gate` fail | **implemented as far as a host can take it** (builder 2): the logic is tested, the STM32 part links and has NEVER RUN; release gates in "Boot stub". Phase-3 review: a fault inside the stub reaches the decision; ship-mode resets are not counted. **NOT MET for a user without a PC:** once in ST's loader only a DFU host gets the unit out (open issue 59) |
+| E35 | The 0.100 / 0.100 mm track class on three layers inside two rule areas around the camera ball fields | - | **unaffected** (a rule of the board's layout; the pin map did not change with it) |
+| E36 | Cradle board 1.0 mm thick so that the spring-pin tails come through | - | **unaffected** (the firmware sees the cradle only as VBUS and a USB host) |
 
 ## Architecture
 
@@ -1487,9 +1508,15 @@ make steep-sweep
 make readme-logs [STM32_HEADERS=<dir>]
               # runs test, cross, appdiff, tooltest, bench-vision, bench, diff, steep-sweep
               #   and asan (and cross-hal, boot-cross with the headers) and keeps each
-              #   output in build/readme/ (about 45 minutes)
+              #   output in build/readme/ (28 minutes on the 4-core machine of the rev E
+              #   run, alone on it; "about 45 minutes" was the sum of earlier, slower runs)
 make readme-check
-              # tools/readme_check.py: every generated block of this file and every figure
+              # NEEDS `make readme-logs` FIRST: it runs nothing itself, it only reads the
+              #   logs in build/readme/, and `make clean` deletes them with the rest of
+              #   build/.  Without them every block and figure is reported missing and the
+              #   exit code is 1; with logs made WITHOUT STM32_HEADERS the blocks cross-hal
+              #   and boot-cross are reported "NOT CHECKED" and do not fail.
+              #   tools/readme_check.py: every generated block of this file and every figure
               #   the script binds must be what those logs say; exit 1 on a difference
               #   (`python3 tools/readme_check.py --update` rewrites the blocks,
               #   `--audit` lists numbers of this file that occur in no log)
@@ -2655,9 +2682,12 @@ on it is about 96 mA (86 for the cameras, 9.5 for the MCU). Asleep, the model no
 **23.7 uA at the cell** (20.6 before: the rev E board has 3.1 uA more of always-on parts,
 "Sleep and the supply model (rev E)"): 0.57 mAh per day, 76 days from a full cell with no
 read at all; a round of 40 read cycles is 2.9 mAh at the nominal factor, the equivalent of 5
-days asleep. A read with several lines in the band keeps the rail on longer (about 3.4 s
-with a person behind the stick, "Run time"): by the same arithmetic about 0.09 mAh per
-cycle.
+days asleep. A read with several lines in the band kept the rail on longer until phase 3
+(about 3.4 s with a person behind the stick: by the same arithmetic about 0.09 mAh per
+cycle). Since the rail-time bound of phase 3 that is no longer so: the longest such read of
+`test_rail_time_is_bounded_with_several_lines` keeps the rail on for 2.59 s, inside the 2.2
+to 2.8 s of the nominal read ("Read time: the rail-time bound"); the charge of such a
+cycle was not computed again.
 
 What the L R R L timing correction is worth (stick drifting steadily at 6 px/s = 0.2 px per
 frame, 8 groups):
@@ -3250,7 +3280,8 @@ alternate-function output on a USB Type-C CC pad; an AF row without its AF numbe
 signal without its channel, `IMU_INT1` or `VBUS_SENSE` off a PWR wake-up pin; a pin map whose
 own verification did not pass.
 
-The table as generated (pin map sha256 d33ff53f50f0... since the end of phase 3, when the
+The table as generated (pin map sha256 30505550677b... since the final audit of rev E, which changed two texts of the
+pin map and no pin; d33ff53f50f0... from the end of phase 3, when the
 electrical side re-issued `pinmap.json` at its layout stage and `make pins` was run again: the
 header's pin definitions did not change, only its hash and comments; printed by
 `build/host/tests/test_pins`; **a snapshot - `make pins` is the truth**):
@@ -4681,12 +4712,17 @@ Product decisions:
     whose result is fetched at the next docking. `START_CAL ZERO` in the cradle still answers
     `GL_ERR_STATE`; the user's zeroing is still started from the dial.
 15. **[OWNER DECISION]** **DESIGN_SPEC text:** still to correct: the register table's "INT pins pulsed" (latched is
-    used and selected explicitly). The rail table of section 4 still names the series Schottky
-    and the MCP1700-3.3 for VDDUSB, which E25 / E26 replace (the supply model follows the
-    amendments); `pinmap.json` stated "amendments E1 to E16" as its specification until it was
-    re-issued at the end of phase 3 (now "E1 to E34 (in the netlist: E1 to E4 and E24 to E28)",
-    quoted as it is in the generated header). `mechanical/README.md` step 16 still says
-    13.5 degrees for test gate 2 (issue 48). `sim/results/REPORT.md` said "hardware revision C"
+    used and selected explicitly). **Corrected in the specification at rev E** (not by the
+    firmware): the rail table of section 4, which at rev D still named the series Schottky
+    and the MCP1700-3.3 for VDDUSB, now has the ideal-diode switch U12 and the LP5907-3.3
+    with its enable on V2V8 (E25 / E26; the supply model had followed the amendments
+    already). Corrected in `electrical/` in the final audit of rev E: the `spec` string of `pinmap.json` (it said "amendments E1
+    to E16" until the end of phase 3, then "DESIGN_SPEC rev D with amendments E1 to E34") now reads "DESIGN_SPEC rev E
+    (EVT1) with amendments E1 to E36 (in the netlist and on the board: E1 to E4, E24 to E28 and E35)", and its first
+    open item says that the IMU axis map is generated (it said `gl_provisional.h` still had the identity placeholder).
+    `make pins` carried both texts into `gl_pins.h`: only comment lines and the hash changed there (pin map sha256
+    30505550677b..., d33ff53f50f0... before), no pin definition.
+    `mechanical/README.md` step 16 says 13.0 degrees for test gate 2 since rev E (issue 48, closed). `sim/results/REPORT.md` said "hardware revision C"
     and described the display as stepping in 0.94 degree: corrected in its generator in phase
     3, without a new run (issue 58).
 16. **[CLOSED]** **State name.** `CAL_FLIP` of the original state list is now `CAL_ZERO` (rev C wording); the
@@ -4806,7 +4842,7 @@ From the phase-2 review (the findings that were not, or not wholly, fixed):
 31. **[CLOSED]** **A result cannot be recalled** (finding 33). Closed by amendment E30 and implemented
     (phase 3, "Recall"). What it left to decide is issue 53.
 32. **[CLOSED]** **The specification's amendments that this firmware does not implement yet.** Closed:
-    all 34 are implemented or do not concern the firmware ("DESIGN_SPEC amendments" says
+    all 36 (E35 and E36, added with rev E, are board matters) are implemented or do not concern the firmware ("DESIGN_SPEC amendments" says
     which, and what is missing under each).
 33. **[NOT MET] [OWNER DECISION]** **Ship mode draws 12.9 uA in the supply model; the requirement is 5 uA** (and three
     months from a 30 % charge: 42 days). The firmware has switched off everything it can
@@ -4880,8 +4916,9 @@ From the phase-2 review (the findings that were not, or not wholly, fixed):
 47. **[OWNER DECISION]** **Boot stub, production choices:** WRP with UNLOCK = 1 (the protection can be lifted by
     SWD; permanent protection would also make a faulty stub permanent), RDP level, signed
     images (the CRC guards against a broken image, not a forged one).
-48. **[OWNER DECISION]** **Test gate 2 at 13.0 or 13.5 degrees?** DESIGN_SPEC E17 says 13.0 and the firmware uses
-    13.0 (`GL_PROTO_FIELD_ELEV_DEG`); `mechanical/README.md` step 16 still says 13.5.
+48. **[CLOSED at rev E]** **Test gate 2 at 13.0 or 13.5 degrees?** 13.0: DESIGN_SPEC E17, the YAML
+    (`cameras.gate2_bars_deg: [13.0, -13.0]`), `mechanical/README.md` step 16 and the firmware
+    (`GL_PROTO_FIELD_ELEV_DEG`) agree. The 13.5 of the mechanical README was rev D and stands only in its history.
 49. **[OWNER DECISION]** **What the unit shows of a missing calibration.** `GET_IDENT` carries the flags and a
     "calibration complete" bit (tested with every flag set and each one missing since the
     phase-3 review). On the result screen there is now ONE sign: `Z?` at the lower left when

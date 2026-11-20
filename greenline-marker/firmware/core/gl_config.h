@@ -9,7 +9,7 @@
 #ifndef GL_CONFIG_H
 #define GL_CONFIG_H
 
-#define GL_CFG_PARAMS_REV "D-EVT1"
+#define GL_CFG_PARAMS_REV "E-EVT1"
 
 /* ---- envelope ---- */
 #define GL_CFG_OUTER_RADIUS_MM          23.0f

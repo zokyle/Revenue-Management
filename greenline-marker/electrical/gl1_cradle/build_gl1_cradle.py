@@ -16,7 +16,11 @@ recorded in ``out/build_summary.json``:
  6. ``outputs``    Gerber, drill, position, BOM (and a BOM with a status column),
                    netlist / mechanical JSON, STEP, renders, fab README
  7. ``schematic``  sheets, PDF, PNG, netlist round trip through kicad-cli
- 8. ``quality``    a few figures measured on the copper and review pictures
+ 8. ``mechanical`` ``mechanical/cad/board_import.py --cradle`` on ``out/gl1_cradle-mechanical.json``
+                   (rev E: thickness, outline, screw holes, the seven pins on the pad row, which
+                   pins are fitted, the receptacle, nothing else on the top face, bottom parts
+                   clear of the screw heads)
+ 9. ``quality``    a few figures measured on the copper and review pictures
 
 Exit status 0 only if every stage passed.  No fabrication data is written for
 a board that is not completely routed or not DRC-clean.
@@ -25,6 +29,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 
@@ -42,7 +47,8 @@ import layout_quality                                                     # noqa
 import silk_text                                                          # noqa: E402
 from gleda import board, checks, drc, outputs, router, routeplot, schematic   # noqa: E402
 
-ALL_STAGES = ("checks", "rules", "board", "route", "drc", "outputs", "schematic", "quality")
+ALL_STAGES = ("checks", "rules", "board", "route", "drc", "outputs", "schematic", "mechanical", "quality")
+MECH_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "mechanical"))
 
 
 def say(msg=""):
@@ -139,17 +145,64 @@ def stage_outputs(design, out, ctx):
     ok, info = outputs.build_demo_stage(design, out, ctx)
     if "error" in info:
         return False, info
-    lines, counts = netlist_stage.write_bom_with_status(
-        design, os.path.join(out, "assembly", design.name + "-bom-status.csv"))
-    outputs.write_zip(os.path.join(out, "assembly"), os.path.join(out, design.name + "-assembly.zip"))
-    say("  BOM with status column: %d lines (%s)" % (lines, ", ".join(
-        "%d %s" % (v, k) for k, v in sorted(counts.items()))))
-    info["bom_status"] = {"lines": lines, "by_status": counts}
-    return ok and counts.get("MISSING", 0) == 0, info
+    status_bom = os.path.join(out, "assembly", design.name + "-bom-status.csv")
+    lines, counts, src_counts = netlist_stage.write_bom_with_status(design, status_bom)
+    assembly_readme = netlist_stage.extend_assembly_readme(out, design.name, off_board=())
+    assembly_zip = os.path.join(out, design.name + "-assembly.zip")
+    outputs.write_zip(os.path.join(out, "assembly"), assembly_zip)
+    say("  BOM with status columns: %d lines (%s)" % (lines, netlist_stage.status_text(counts, src_counts)))
+    info["bom_status"] = {"lines": lines, "by_status": src_counts, "by_design_evidence": counts}
+    # outputs.json was written before the two files above: enter the status BOM, the extended assembly README and the FINAL
+    # assembly zip, then compare every entry of the manifest with the file on disk
+    stale = netlist_stage.refresh_manifest(out, [status_bom, assembly_readme, assembly_zip])
+    info["manifest_problems"] = stale
+    info["files"] = len(json.load(open(os.path.join(out, "outputs.json"), encoding="utf-8"))["files"])
+    for line in stale:
+        say("  PROBLEM outputs.json: %s" % line)
+    say("  outputs.json: %d files, %s" % (info["files"], "every entry equals the file on disk"
+                                         if not stale else "%d entries DIFFER" % len(stale)))
+    fab = open(os.path.join(out, "fab", "README.txt"), encoding="utf-8").read()
+    need = ("%.1f mm" % design.board_thickness, "1.11 mm")
+    missing = [w for w in need if w not in fab]
+    if missing:
+        say("  PROBLEM fab README does not mention: %s" % ", ".join(missing))
+    info["fab_readme_mentions"] = {w: w in fab for w in need}
+    return ok and not stale and not missing and netlist_stage.bom_status_ok(counts, src_counts), info
 
 
 def stage_schematic(design, out, ctx):
     return schematic.build_demo_stage(design, out, ctx)
+
+
+def stage_mechanical(design, out, ctx):
+    """mechanical/cad/board_import.py --cradle on the board file of THIS build.  Passes only on
+    exit status 0 and without a warning that the file is stale against the YAML."""
+    path = os.path.join(out, design.name + "-mechanical.json")
+    if not os.path.exists(path):
+        say("  no %s (the outputs stage writes it)" % os.path.basename(path))
+        return False, {"error": "mechanical JSON missing"}
+    cmd = [ctx["args"].mech_python, "-B", os.path.join("cad", "board_import.py"), "--cradle",
+           os.path.relpath(path, MECH_DIR)]
+    try:
+        proc = subprocess.run(cmd, cwd=MECH_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    except OSError as exc:
+        say("  cannot run %s: %s" % (" ".join(cmd), exc))
+        return False, {"error": str(exc)}
+    lines = [l for l in proc.stdout.splitlines() if l.strip()]
+    for line in lines[-12:]:
+        say("  " + line[:400])
+    say("  (cd mechanical && %s) -> exit %d" % (" ".join(cmd), proc.returncode))
+    with open(os.path.join(out, "mechanical_import.txt"), "w", encoding="utf-8") as fh:
+        fh.write("$ cd mechanical && %s\n" % " ".join(cmd))
+        fh.write(proc.stdout)
+        fh.write("exit status %d\n" % proc.returncode)
+    result = next((l for l in lines if l.startswith(("PASS", "FAIL"))), "")
+    warnings = [l.strip() for l in lines if l.strip().startswith("warning:")]
+    stale = [w for w in warnings if "stamped" in w or "stated in the board file" in w]
+    for w in stale:
+        say("  PROBLEM (board file against the YAML): %s" % w[:300])
+    return proc.returncode == 0 and not stale, {"exit_status": proc.returncode, "result": result,
+                                                "warnings": warnings, "stale_against_yaml": stale}
 
 
 def stage_quality(design, out, ctx):
@@ -183,7 +236,8 @@ def stage_quality(design, out, ctx):
 
 
 STAGES = {"checks": stage_checks, "rules": stage_rules, "board": stage_board, "route": stage_route,
-          "drc": stage_drc, "outputs": stage_outputs, "schematic": stage_schematic, "quality": stage_quality}
+          "drc": stage_drc, "outputs": stage_outputs, "schematic": stage_schematic,
+          "mechanical": stage_mechanical, "quality": stage_quality}
 
 
 def main(argv=None):
@@ -192,8 +246,13 @@ def main(argv=None):
     ap.add_argument("--stages", default=",".join(ALL_STAGES))
     ap.add_argument("--time-limit", type=float, default=600.0)
     ap.add_argument("--review-dpi", type=int, default=500)
+    ap.add_argument("--mech-python", default="python3",
+                    help="interpreter for mechanical/cad/board_import.py (needs cadquery)")
     args = ap.parse_args(argv)
     wanted = [s.strip() for s in args.stages.split(",") if s.strip()]
+    unknown = [s for s in wanted if s not in STAGES]
+    if unknown:
+        ap.error("unknown stage(s): %s" % ", ".join(unknown))
     os.makedirs(args.out, exist_ok=True)
     design = G.gl1_cradle_design()
     ctx = {"args": args}
@@ -231,6 +290,9 @@ def main(argv=None):
                                                and bool(st["outputs"].get("drc_clean"))) if "outputs" in st else None,
         "schematic netlist round trip matches": bool(st["schematic"].get("round_trip", {}).get("ok"))
         if "schematic" in st else None,
+        "mechanical import check (--cradle) passes": (
+            st["mechanical"].get("exit_status") == 0 and not st["mechanical"].get("stale_against_yaml"))
+        if "mechanical" in st else None,
     }
     passed = passed and all(v is not False for v in crit.values())
     counts = netlist_stage.part_counts(design)

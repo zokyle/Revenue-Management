@@ -1,8 +1,8 @@
 {
- "rev": "D-EVT1",
+ "rev": "E-EVT1",
  "source": "/home/user/Revenue-Management/greenline-marker/design/master_params.yaml",
  "yaml": {
-  "rev": "D-EVT1",
+  "rev": "E-EVT1",
   "envelope": {
    "outer_radius": 23.0,
    "thickness": 7.6,
@@ -22,7 +22,7 @@
     "thickness_over_mask": 0.1
    },
    "thickness_accepted": [
-    0.76,
+    0.78,
     0.9
    ],
    "mask_relief_dia": 1.25,
@@ -30,7 +30,17 @@
     "side": "outer",
     "process": "white legend print on the black mask, or laser mark",
     "clear_of_features": 1.0,
-    "content": "maker, model, Practice device, required statements (docs/COMPLIANCE.md), serial-number box"
+    "content": "maker, model, Practice device, required statements (docs/COMPLIANCE.md), serial-number box",
+    "min_line": 0.15,
+    "min_space": 0.15,
+    "min_text_height": 1.0,
+    "thickness_max": 0.03,
+    "seat_zones_clear_dia": 8.5,
+    "edge_margin": 0.75,
+    "registration": 0.15,
+    "statement_block_chars": 88,
+    "print_rules_basis": "provisional",
+    "fixture_rule": "every fixture or gauge that takes the outer face as its reference bears on bare mask inside the seat zones: gauge plate on three bosses, seat plate on three pads next to the feet, bridge depth gauge"
    },
    "psa": {
     "mpn": "3M 93020LE (300LSE) double-coated tape, die cut",
@@ -45,7 +55,7 @@
     "foot_hole_dia": 1.15,
     "baffle": "integral",
     "thickness_accepted": [
-     0.83,
+     0.84,
      0.92
     ]
    },
@@ -90,6 +100,8 @@
    },
    "feet": {
     "ball_dia": 1.0,
+    "dia_tol": 0.0127,
+    "dia_tol_basis": "provisional",
     "material": "316 stainless grade 100 or better, or silicon nitride; not 440C (E8)",
     "protrusion": 0.1,
     "hole_dia": 1.1,
@@ -129,7 +141,14 @@
       -0.03,
       0.0
      ],
-     "matched_to": "measured plate thickness + 0.02",
+     "matched_to": "measured plate thickness + 0.15 - tape thickness",
+     "rule_offset": 0.15,
+     "tape": [
+      0.1,
+      0.145
+     ],
+     "nominal_tape": 0.13,
+     "print_height": 1.1,
      "adhesive": "opaque black double-coated tape, 0.10 to 0.145 as available (E16)",
      "crest_z": [
       0.0,
@@ -143,6 +162,24 @@
    "z_bottom": 1.0,
    "radius": 21.1,
    "flat_y": 17.3,
+   "net_classes": {
+    "default": {
+     "track": 0.15,
+     "clearance": 0.127
+    },
+    "fine": {
+     "track": 0.1,
+     "clearance": 0.1,
+     "layers": [
+      "F.Cu",
+      "In2.Cu",
+      "B.Cu"
+     ],
+     "area_beyond_camera_ball_field": 5.0,
+     "basis": "E35; fabricator acceptance is a release gate (E7)"
+    }
+   },
+   "via_drill": 0.25,
    "locating_holes": {
     "round": {
      "x": 14.35,
@@ -156,7 +193,18 @@
      "length_x": 2.2
     },
     "spigot_dia": 1.0,
-    "spigot_height": 0.6
+    "spigot_height": 0.6,
+    "dia_tol": [
+     0.0,
+     0.05
+    ],
+    "spigot_dia_tol": [
+     -0.05,
+     0.0
+    ],
+    "spigot_dia_min": 0.95,
+    "fit_nominal": 0.075,
+    "fit_max": 0.125
    },
    "component_edge_clearance": 0.2,
    "max_top_height_under_lcd": 2.55
@@ -184,7 +232,8 @@
    },
    "aperture_dia": 22.0,
    "fpc_exit_edge": "rear",
-   "psa_thickness": 0.15
+   "psa_thickness": 0.15,
+   "rotation_in_pocket_max_deg": 1.2
   },
   "cover_glass": {
    "dia": 28.0,
@@ -198,7 +247,14 @@
    "retarder": {
     "type": "quarter-wave film, about 0.1 mm, on the glass underside, axis 45 deg to the LCD polariser",
     "status": "EVT trial (E9)",
-    "basis": "provisional"
+    "basis": "provisional",
+    "dia": 23.4,
+    "clocking_flat": {
+     "y": 11.5,
+     "length": 4.3
+    },
+    "thickness_max": 0.11,
+    "placement": 0.25
    }
   },
   "battery": {
@@ -213,7 +269,20 @@
    },
    "swell_allowance": 0.4,
    "foam_above": 0.3,
-   "fixing_adhesive_max": 0.05,
+   "fixing_adhesive_max": 0.06,
+   "board_keepout_notch": {
+    "ref": "J1",
+    "x": [
+     -5.55,
+     5.55
+    ],
+    "y": [
+     -10.2,
+     -9.9
+    ],
+    "reason": "J1 courtyard only; no copper, solder or body of J1 inside the cell box",
+    "pad_to_cell_gap": 0.2
+   },
    "pads": {
     "zone": {
      "x": [
@@ -230,7 +299,17 @@
      2.4
     ],
     "joint_max_height": 2.4,
-    "basis": "design"
+    "basis": "design",
+    "centres": {
+     "BAT+": [
+      -18.4,
+      -2.7
+     ],
+     "BAT-": [
+      -18.4,
+      -5.8
+     ]
+    }
    }
   },
   "cameras": {
@@ -257,9 +336,19 @@
    "field_required_deg": {
     "h": 26.0,
     "up": 17.6,
-    "up_guaranteed": 14.5,
+    "up_guaranteed": 14.0,
     "down": 8.0
-   }
+   },
+   "up_guaranteed_case": {
+    "optics_high": 0.2,
+    "locating_fit": 0.125,
+    "roof_temperature_C": -10,
+    "model_deg": 14.03
+   },
+   "gate2_bars_deg": [
+    13.0,
+    -13.0
+   ]
   },
   "prisms": {
    "mpn": "Edmund Optics 32-526",
@@ -378,8 +467,8 @@
    "lcd_tail": {
     "half_w": 3.25,
     "y": [
-     -18.3,
-     -16.8
+     -21.1,
+     -17.3
     ],
     "max_part_height": 0.7,
     "basis": "provisional"
@@ -416,6 +505,7 @@
     "compression": 1.14,
     "stroke": 2.29,
     "force_working_N": 0.59,
+    "tail_length": 1.34,
     "basis": "provisional"
    },
    "float": 0.25,
@@ -443,7 +533,7 @@
    "pcb": {
     "dx": 30.0,
     "dy": 22.0,
-    "thickness": 1.6,
+    "thickness": 1.0,
     "x": [
      -15.0,
      15.0
@@ -483,12 +573,19 @@
   "top_side_parts": [
    {
     "ref": "U1",
-    "name": "STM32U585RIT6 LQFP-64",
+    "name": "STM32U585RIT6 LQFP-64 (body; leads to 12.0 square)",
     "x": 0.0,
-    "y": 7.2,
-    "dx": 12.2,
-    "dy": 12.2,
-    "h": 1.6
+    "y": 6.7,
+    "dx": 10.0,
+    "dy": 10.0,
+    "h": 1.6,
+    "mpn": "STM32U585RIT6",
+    "courtyard": [
+     -6.7,
+     0.0,
+     6.7,
+     13.4
+    ]
    },
    {
     "ref": "U2",
@@ -498,7 +595,14 @@
     "dx": 3.47,
     "dy": 2.95,
     "h": 2.76,
-    "fixed": true
+    "fixed": true,
+    "mpn": "OVM7692-RYAA",
+    "courtyard": [
+     -11.94,
+     13.92,
+     -8.06,
+     17.28
+    ]
    },
    {
     "ref": "U3",
@@ -508,38 +612,66 @@
     "dx": 3.47,
     "dy": 2.95,
     "h": 2.76,
-    "fixed": true
+    "fixed": true,
+    "mpn": "OVM7692-RYAA",
+    "courtyard": [
+     8.06,
+     13.92,
+     11.94,
+     17.28
+    ]
    },
    {
     "ref": "U4",
     "name": "LSM6DSV16X IMU LGA-14",
-    "x": -11.0,
-    "y": 6.0,
-    "dx": 3.0,
-    "dy": 2.5,
-    "h": 0.86
+    "x": 9.5,
+    "y": 3.0,
+    "dx": 2.5,
+    "dy": 3.0,
+    "h": 0.86,
+    "mpn": "LSM6DSV16XTR",
+    "courtyard": [
+     8.0,
+     1.25,
+     11.0,
+     4.75
+    ]
    },
    {
     "ref": "U6",
     "name": "MX25R6435F flash WSON-8 6x5",
-    "x": 11.5,
-    "y": 6.4,
-    "dx": 6.4,
-    "dy": 5.4,
-    "h": 0.8
+    "x": 15.6,
+    "y": 5.9,
+    "dx": 6.0,
+    "dy": 5.0,
+    "h": 0.8,
+    "mpn": "MX25R6435FZNIL0",
+    "courtyard": [
+     12.3,
+     3.15,
+     18.9,
+     8.65
+    ]
    },
    {
     "ref": "U8",
-    "name": "LP5907-2.8 LDO SOT-23-5",
-    "x": -11.0,
-    "y": 11.6,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.45
+    "name": "LP5907MFX-2.8 LDO SOT-23-5 (V2V8_CAM)",
+    "x": -16.9,
+    "y": 5.98,
+    "dx": 2.9,
+    "dy": 1.6,
+    "h": 1.45,
+    "mpn": "LP5907MFX-2.8/NOPB",
+    "courtyard": [
+     -18.6,
+     3.93,
+     -15.2,
+     8.03
+    ]
    },
    {
     "ref": "BT1",
-    "name": "LiPo GM201030-PCB",
+    "name": "LiPo GM201030-PCB (the cell; not a board part: battery.body with the swelling allowance)",
     "x": 0.0,
     "y": -5.2,
     "dx": 34.0,
@@ -549,59 +681,925 @@
    },
    {
     "ref": "J1",
-    "name": "LCD FPC conn FH12A-10S-0.5SH top-contact",
+    "name": "LCD FPC conn FH12A-10S-0.5SH top-contact (E24)",
     "x": 0.0,
-    "y": -13.9,
-    "dx": 8.4,
-    "dy": 5.8,
+    "y": -14.5,
+    "dx": 8.1,
+    "dy": 5.6,
     "h": 2.0,
-    "fixed": true
+    "fixed": true,
+    "anchor": [
+     0.0,
+     -12.9
+    ],
+    "mouth_y": -17.3,
+    "body_y": [
+     -17.3,
+     -11.7
+    ],
+    "pads_end_y": -10.4,
+    "mpn": "FH12A-10S-0.5SH(55)",
+    "courtyard": [
+     -5.55,
+     -17.8,
+     5.55,
+     -9.9
+    ]
    },
    {
     "ref": "U7",
     "name": "MCP1700-2.8 LDO SOT-23",
-    "x": 10.5,
-    "y": -13.5,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.2
+    "x": 8.42,
+    "y": -12.3,
+    "dx": 1.3,
+    "dy": 2.9,
+    "h": 1.2,
+    "mpn": "MCP1700T-2802E/TT",
+    "courtyard": [
+     6.5,
+     -14.0,
+     10.34,
+     -10.6
+    ]
    },
    {
     "ref": "U11",
-    "name": "MCP1700-3.3 LDO SOT-23 (VDDUSB)",
-    "x": 14.0,
-    "y": -12.2,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.2
+    "name": "LP5907MFX-3.3 LDO SOT-23-5 (VDDUSB, E26)",
+    "x": 13.33,
+    "y": -12.6,
+    "dx": 1.6,
+    "dy": 2.9,
+    "h": 1.45,
+    "mpn": "LP5907MFX-3.3/NOPB",
+    "courtyard": [
+     11.28,
+     -14.3,
+     15.38,
+     -10.9
+    ]
+   },
+   {
+    "ref": "U12",
+    "name": "LM66100DCKR ideal diode SC-70-6 (E25)",
+    "x": -7.25,
+    "y": -12.85,
+    "dx": 1.35,
+    "dy": 2.2,
+    "h": 1.1,
+    "mpn": "LM66100DCKR",
+    "courtyard": [
+     -8.85,
+     -14.25,
+     -5.65,
+     -11.45
+    ]
    },
    {
     "ref": "U9",
     "name": "BQ25101YFP charger DSBGA-6 (E1)",
-    "x": -10.5,
-    "y": -13.5,
-    "dx": 1.6,
-    "dy": 0.9,
-    "h": 0.5
+    "x": -18.4,
+    "y": 1.0,
+    "dx": 0.9,
+    "dy": 1.6,
+    "h": 0.5,
+    "mpn": "BQ25101YFPR",
+    "courtyard": [
+     -19.05,
+     0.0,
+     -17.75,
+     2.0
+    ]
    },
    {
     "ref": "U10",
     "name": "USBLC6-2SC6 ESD SOT-23-6",
-    "x": -13.9,
-    "y": -12.2,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.45
+    "x": -7.65,
+    "y": -16.05,
+    "dx": 1.6,
+    "dy": 2.9,
+    "h": 1.45,
+    "mpn": "USBLC6-2SC6",
+    "courtyard": [
+     -9.7,
+     -17.75,
+     -5.6,
+     -14.35
+    ]
+   },
+   {
+    "ref": "Q1",
+    "name": "BSS138 N-MOSFET SOT-23 (CHG_INHIBIT)",
+    "x": -13.2,
+    "y": -12.4,
+    "dx": 1.3,
+    "dy": 2.9,
+    "h": 1.2,
+    "mpn": "BSS138LT1G",
+    "courtyard": [
+     -15.12,
+     -14.1,
+     -11.28,
+     -10.7
+    ]
    },
    {
     "ref": "Y1",
     "name": "32.768 kHz xtal 3215",
-    "x": 8.6,
-    "y": 12.2,
-    "dx": 3.4,
-    "dy": 1.7,
-    "h": 0.9
+    "x": -9.95,
+    "y": 8.3,
+    "dx": 3.2,
+    "dy": 1.5,
+    "h": 0.9,
+    "mpn": "ABS07-120-32.768KHZ-T",
+    "courtyard": [
+     -11.95,
+     7.15,
+     -7.95,
+     9.45
+    ]
+   },
+   {
+    "ref": "C1",
+    "name": "100n cap 0402",
+    "x": -6.98,
+    "y": 0.72,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C2",
+    "name": "100n cap 0402",
+    "x": 6.2,
+    "y": 1.95,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C3",
+    "name": "100n cap 0402",
+    "x": -5.9,
+    "y": 13.2,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C4",
+    "name": "100n cap 0402",
+    "x": -6.3,
+    "y": 11.8,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C5",
+    "name": "4u7 cap 0402",
+    "x": -14.5,
+    "y": 0.45,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C6",
+    "name": "4u7 cap 0402",
+    "x": 5.1,
+    "y": 0.72,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C7",
+    "name": "1u cap 0402",
+    "x": -7.25,
+    "y": 4.4,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C8",
+    "name": "10n cap 0402",
+    "x": -8.2,
+    "y": 4.4,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C9",
+    "name": "100n cap 0402",
+    "x": 7.25,
+    "y": 10.0,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C10",
+    "name": "100n cap 0402",
+    "x": -10.1,
+    "y": 4.4,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C11",
+    "name": "6p8 cap 0402",
+    "x": -11.2,
+    "y": 6.24,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C12",
+    "name": "6p8 cap 0402",
+    "x": -8.7,
+    "y": 6.24,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C13",
+    "name": "100n cap 0402",
+    "x": 17.2,
+    "y": 9.3,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C14",
+    "name": "100n cap 0402",
+    "x": -6.6,
+    "y": 14.7,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C15",
+    "name": "100n cap 0402",
+    "x": -6.4,
+    "y": 16.3,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C16",
+    "name": "1u cap 0402",
+    "x": -12.625,
+    "y": 12.75,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C17",
+    "name": "100n cap 0402",
+    "x": 16.2,
+    "y": 11.4,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C18",
+    "name": "100n cap 0402",
+    "x": 7.1,
+    "y": 16.6,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C19",
+    "name": "1u cap 0402",
+    "x": 7.1,
+    "y": 12.75,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C20",
+    "name": "1u cap 0402",
+    "x": 10.81,
+    "y": -12.3,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C21",
+    "name": "1u cap 0402",
+    "x": 6.02,
+    "y": -13.45,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C22",
+    "name": "2u2 cap 0402",
+    "x": 13.0,
+    "y": -15.0,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C23",
+    "name": "2u2 cap 0402",
+    "x": 15.85,
+    "y": -12.1,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C24",
+    "name": "1u cap 0402",
+    "x": -19.3,
+    "y": 4.9,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C25",
+    "name": "1u cap 0402",
+    "x": -14.4,
+    "y": 7.35,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C26",
+    "name": "2u2 cap 0402",
+    "x": -19.6,
+    "y": 0.0,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C27",
+    "name": "2u2 cap 0402",
+    "x": -18.0,
+    "y": -0.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C28",
+    "name": "100n cap 0402",
+    "x": -8.45,
+    "y": -10.72,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C29",
+    "name": "100n cap 0402",
+    "x": -8.86,
+    "y": 0.72,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C30",
+    "name": "100n cap 0402",
+    "x": 11.95,
+    "y": 1.7,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C31",
+    "name": "100n cap 0402",
+    "x": 11.95,
+    "y": 2.65,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C32",
+    "name": "1u cap 0402",
+    "x": 6.02,
+    "y": -11.5,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C33",
+    "name": "10p cap 0402",
+    "x": -8.2,
+    "y": 2.55,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C34",
+    "name": "100n cap 0402",
+    "x": -9.15,
+    "y": 2.55,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "R1",
+    "name": "10R res 0402",
+    "x": -9.15,
+    "y": 4.4,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R2",
+    "name": "10k res 0402",
+    "x": -2.45,
+    "y": 14.45,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R3",
+    "name": "100k res 0402",
+    "x": 12.4,
+    "y": 9.15,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R4",
+    "name": "1k res 0402",
+    "x": -12.65,
+    "y": 9.75,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R5",
+    "name": "1k res 0402",
+    "x": 6.05,
+    "y": 14.4,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R6",
+    "name": "2k2 res 0402",
+    "x": -13.4,
+    "y": 7.89,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R7",
+    "name": "2k2 res 0402",
+    "x": -15.0,
+    "y": 3.35,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R8",
+    "name": "2k2 res 0402",
+    "x": -13.4,
+    "y": 6.01,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R9",
+    "name": "33R res 0402",
+    "x": 8.95,
+    "y": 7.0,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R10",
+    "name": "100k res 0402",
+    "x": -14.4,
+    "y": 5.45,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R11",
+    "name": "6k81 res 0402",
+    "x": -19.6,
+    "y": 2.0,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R12",
+    "name": "100k res 0402",
+    "x": -13.2,
+    "y": -14.8,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R13",
+    "name": "100k res 0402",
+    "x": -18.0,
+    "y": 2.5,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R14",
+    "name": "6k04 res 0402",
+    "x": -18.0,
+    "y": 3.45,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive",
+    "dnp": true
+   },
+   {
+    "ref": "R15",
+    "name": "100k res 0402",
+    "x": -6.55,
+    "y": -10.72,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R16",
+    "name": "100k res 0402",
+    "x": -9.5,
+    "y": -12.5,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R17",
+    "name": "1M res 0402",
+    "x": -12.9,
+    "y": 4.6,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R18",
+    "name": "1M res 0402",
+    "x": -12.9,
+    "y": 3.65,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R19",
+    "name": "10k res 0402",
+    "x": -12.9,
+    "y": 2.7,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R20",
+    "name": "100k res 0402",
+    "x": 6.98,
+    "y": 0.72,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R21",
+    "name": "100k res 0402",
+    "x": 9.65,
+    "y": -14.6,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R22",
+    "name": "100k res 0402",
+    "x": 10.9,
+    "y": -15.55,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R23",
+    "name": "68R res 0402",
+    "x": 8.95,
+    "y": 7.95,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R24",
+    "name": "68R res 0402",
+    "x": 8.86,
+    "y": 0.72,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R25",
+    "name": "68R res 0402",
+    "x": 2.55,
+    "y": 16.2,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R26",
+    "name": "68R res 0402",
+    "x": -2.55,
+    "y": 16.2,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R27",
+    "name": "68R res 0402",
+    "x": 2.45,
+    "y": 14.45,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R28",
+    "name": "470k res 0402",
+    "x": -7.25,
+    "y": 2.55,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R29",
+    "name": "100k res 0402",
+    "x": -10.1,
+    "y": 2.55,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R30",
+    "name": "100k res 0402",
+    "x": -11.05,
+    "y": 2.55,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R31",
+    "name": "150k res 0402",
+    "x": -5.1,
+    "y": 0.72,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "RN1",
+    "name": "4x220R res 4x0402 array",
+    "x": -8.4,
+    "y": 11.62,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN2",
+    "name": "4x220R res 4x0402 array",
+    "x": -10.9,
+    "y": 11.6,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN3",
+    "name": "4x220R res 4x0402 array",
+    "x": -14.35,
+    "y": 12.92,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN4",
+    "name": "4x220R res 4x0402 array",
+    "x": 8.85,
+    "y": 11.95,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN5",
+    "name": "4x220R res 4x0402 array",
+    "x": 11.35,
+    "y": 11.95,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN6",
+    "name": "4x220R res 4x0402 array",
+    "x": 14.2,
+    "y": 12.92,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RT1",
+    "name": "NTC 10k 0402",
+    "x": -12.62,
+    "y": 0.4,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "RT2",
+    "name": "NTC 10k 0402",
+    "x": -10.74,
+    "y": 0.4,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.55,
+    "class": "passive"
    }
+  ],
+  "top_side_test_points": [
+   {
+    "ref": "TP1",
+    "net": "VBAT",
+    "x": -17.0,
+    "y": 0.62,
+    "dia": 1.0
+   },
+   {
+    "ref": "TP2",
+    "net": "V2V8",
+    "x": 8.0,
+    "y": -15.25,
+    "dia": 1.0
+   },
+   {
+    "ref": "TP3",
+    "net": "V2V8_CAM",
+    "x": -14.6,
+    "y": 9.0,
+    "dia": 1.0
+   },
+   {
+    "ref": "TP4",
+    "net": "GND",
+    "x": 18.4,
+    "y": 0.6,
+    "dia": 1.0
+   },
+   {
+    "ref": "TP5",
+    "net": "VDDUSB",
+    "x": 18.6,
+    "y": -2.2,
+    "dia": 1.0
+   }
+  ],
+  "top_side_fiducials": [
+   [
+    -16.8,
+    9.3
+   ],
+   [
+    18.9,
+    -4.5
+   ],
+   [
+    8.6,
+    -17.2
+   ]
   ],
   "bottom_side_parts": {
    "grain_led_ring": {
@@ -621,6 +1619,192 @@
     "h": 0.48
    },
    "pads": "7 gold pads dia 1.8 at base_plate.pad_holes (VBUS, D-, D+, GND, SWDIO, SWCLK, NRST); ENIG at EVT, selective hard gold for production",
+   "board_parts": [
+    {
+     "ref": "D1",
+     "name": "LED red VLMS1500-GS08",
+     "x": 4.9955,
+     "y": -2.472,
+     "rot": -157.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D2",
+     "name": "LED NIR SFH 4053B",
+     "x": 4.6128,
+     "y": -1.5481,
+     "rot": 22.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D3",
+     "name": "LED red VLMS1500-GS08",
+     "x": 2.4519,
+     "y": 0.6128,
+     "rot": -112.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D4",
+     "name": "LED NIR SFH 4053B",
+     "x": 1.528,
+     "y": 0.9955,
+     "rot": 67.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D5",
+     "name": "LED red VLMS1500-GS08",
+     "x": -1.528,
+     "y": 0.9955,
+     "rot": -67.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D6",
+     "name": "LED NIR SFH 4053B",
+     "x": -2.4519,
+     "y": 0.6128,
+     "rot": 112.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D7",
+     "name": "LED red VLMS1500-GS08",
+     "x": -4.6128,
+     "y": -1.5481,
+     "rot": -22.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D8",
+     "name": "LED NIR SFH 4053B",
+     "x": -4.9955,
+     "y": -2.472,
+     "rot": 157.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D9",
+     "name": "LED red VLMS1500-GS08",
+     "x": -4.9955,
+     "y": -5.528,
+     "rot": 22.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D10",
+     "name": "LED NIR SFH 4053B",
+     "x": -4.6128,
+     "y": -6.4519,
+     "rot": -157.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D11",
+     "name": "LED red VLMS1500-GS08",
+     "x": -2.4519,
+     "y": -8.6128,
+     "rot": 67.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D12",
+     "name": "LED NIR SFH 4053B",
+     "x": -1.528,
+     "y": -8.9955,
+     "rot": -112.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D13",
+     "name": "LED red VLMS1500-GS08",
+     "x": 1.528,
+     "y": -8.9955,
+     "rot": 112.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D14",
+     "name": "LED NIR SFH 4053B",
+     "x": 2.4519,
+     "y": -8.6128,
+     "rot": -67.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D15",
+     "name": "LED red VLMS1500-GS08",
+     "x": 4.6128,
+     "y": -6.4519,
+     "rot": 157.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "D16",
+     "name": "LED NIR SFH 4053B",
+     "x": 4.9955,
+     "y": -5.528,
+     "rot": -22.5,
+     "dx": 1.0,
+     "dy": 0.5,
+     "h": 0.45
+    },
+    {
+     "ref": "PD1",
+     "name": "VEMD8080",
+     "x": 0.0,
+     "y": -4.0,
+     "rot": 0.0,
+     "dx": 4.8,
+     "dy": 2.5,
+     "h": 0.48
+    }
+   ],
+   "fiducials": [
+    [
+     -13.5,
+     -3.0
+    ],
+    [
+     14.0,
+     -7.0
+    ],
+    [
+     -17.0,
+     7.5
+    ]
+   ],
    "via_keepouts": {
     "grain_opening": {
      "x": 0.0,
@@ -633,6 +1817,46 @@
      "width": 2.2
     }
    }
+  },
+  "requirements": {
+   "status": "proposed",
+   "reads_per_charge": {
+    "test": "F6",
+    "min_at_20C_new_cell": 150,
+    "min_at_0C_or_after_300_cycles": 100,
+    "to": "low-battery symbol",
+    "model_to_empty": 600
+   },
+   "standby_days": {
+    "test": "F7",
+    "min_at_20C": 45,
+    "to": "low-battery symbol",
+    "model_days_to_empty": 76,
+    "model_sleep_current_uA": 23.7
+   },
+   "ship_mode": {
+    "cell_current_max_uA": 5,
+    "months_min": 3,
+    "from_charge_percent": 30,
+    "cell_voltage_min": 3.0,
+    "modelled": false
+   },
+   "drop": {
+    "test": "K3",
+    "height_m": 1.0,
+    "surface": "paving",
+    "attitudes": [
+     "glass down",
+     "base down",
+     "visor flat",
+     "rear edge",
+     "left",
+     "right"
+    ],
+    "level_zero_shift_max_mrad": 0.5,
+    "recorded_not_required_m": 1.5
+   },
+   "step_on": "not a requirement at EVT (the crystal is not step-proof); a requirement for production"
   }
  },
  "active_base_variant": "fr4",
@@ -653,10 +1877,11 @@
    "cte": 15.0,
    "psa_tol": 0.02,
    "accept": [
-    0.76,
+    0.78,
     0.9
    ],
-   "accept_lo_needed": 0.76,
+   "accept_lo_needed_nominal_ball": 0.76,
+   "accept_lo_needed": 0.78,
    "seal_joint_height": 0.3999999999999999,
    "psa_z": [
     0.8,
@@ -707,10 +1932,11 @@
    "cte": 110.0,
    "psa_tol": 0.013,
    "accept": [
-    0.83,
+    0.84,
     0.92
    ],
-   "accept_lo_needed": 0.83,
+   "accept_lo_needed_nominal_ball": 0.83,
+   "accept_lo_needed": 0.84,
    "seal_joint_height": 0.32999999999999996,
    "psa_z": [
     0.87,
@@ -814,10 +2040,6 @@
   ],
   "potting_dispense_tol": 0.03,
   "baffle_psa_tol": 0.02,
-  "baffle_tape_range_default": [
-   0.1,
-   0.145
-  ],
   "baffle_ring_lap_allowance": 0.15,
   "plate_gauging_tol": 0.01,
   "ring_sprue": {
@@ -845,7 +2067,6 @@
   "tol_pa12_plate": 0.1,
   "tol_ball_set": 0.02,
   "ball_gap_min": 0.02,
-  "ball_dia_tol": 0.0127,
   "ball_dia_tol_g25": 0.0025,
   "seal_dispense_margin": 1.0,
   "cte_pa12": 110.0,
@@ -862,6 +2083,7 @@
   "flex_z_top_run": 4.775,
   "fpc_entry_h": 1.0,
   "flex_straight": 0.35,
+  "flex_part_clr": 0.2,
   "foam_dx": 26.6,
   "pupil_below_cube_top": 0.4,
   "pupil_dia": 0.38,
@@ -874,16 +2096,9 @@
   "print_tol": 0.2,
   "retarder_t_default": 0.1,
   "retarder_t_tol": 0.01,
-  "retarder_dia": 23.4,
   "retarder_flat_overlap": 0.5,
-  "retarder_place_tol": 0.25,
   "retarder_clock_tol_deg": 3.0,
-  "legend_edge_margin": 0.75,
-  "legend_stroke": 0.15,
   "legend_frame_stroke": 0.2,
-  "legend_min_text_h": 1.0,
-  "legend_min_gap": 0.15,
-  "legend_ink_t_max": 0.03,
   "legend_ink_t": 0.02,
   "cal": {
    "plate": [
@@ -934,13 +2149,10 @@
    ],
    "mask_od": 24.0
   },
-  "legend_registration": 0.15,
-  "pcb_hole_tol": 0.05,
-  "spigot_undersize": 0.05,
-  "up_guaranteed_proposed": 14.0,
   "pupil_dia_alt": 0.4,
   "pupil_below_alt": 0.5,
   "roof_cold_drop": 0.02,
+  "up_guaranteed_model_tol": 0.01,
   "lcd_free_rotation_limit_deg": 1.25,
   "lcd_line_budget_deg": 0.5,
   "lcd_pusher_pad_w": 5.0,
@@ -988,9 +2200,18 @@
   "pin_body_dia": 1.83,
   "pin_tail_dia": 0.76,
   "pin_body_margin": 0.2,
-  "pin_tail_below_pcb": 0.7,
+  "pin_tail_solder_min": 0.2,
   "cradle_screw_pilot_dia": 1.7,
   "cradle_screw_pilot_depth": 0.5,
+  "cradle_screw_len": 4.0,
+  "cradle_screw_drill": [
+   1.6,
+   3.2
+  ],
+  "cradle_screw_tip_clear": 0.2,
+  "cradle_screw_skin_min": 0.4,
+  "cradle_screw_hole_dia": 2.2,
+  "cradle_screw_head_dia": 4.0,
   "usb": [
    8.94,
    7.35,
@@ -1134,7 +2355,7 @@
   "fov_h_half_deg": 26.0,
   "fov_up_deg": 17.6,
   "fov_down_deg": 8.0,
-  "fov_up_guaranteed_deg": 14.5,
+  "fov_up_guaranteed_deg": 14.0,
   "lip_half_w": 6.0,
   "lip_overlap": 1.2,
   "lip_t": 1.6,
@@ -1151,10 +2372,21 @@
   "tab_stop_travel": 2.0,
   "pin_max_working_h": 6.96,
   "pin_full_stroke": 2.29,
-  "cradle_float": 0.25
+  "cradle_float": 0.25,
+  "ball_dia_tol": 0.0127,
+  "legend_edge_margin": 0.75,
+  "legend_stroke": 0.15,
+  "legend_min_gap": 0.15,
+  "legend_min_text_h": 1.0,
+  "legend_ink_t_max": 0.03,
+  "legend_registration": 0.15,
+  "retarder_dia": 23.4,
+  "retarder_place_tol": 0.25,
+  "pcb_hole_tol": 0.05,
+  "spigot_undersize": 0.05
  },
  "derived": {
-  "REV": "D-EVT1",
+  "REV": "E-EVT1",
   "R_OUT": 23.0,
   "T": 7.6,
   "WALL": 1.0,
@@ -1235,6 +2467,8 @@
   "SPIGOT_Z0": 1.2000000000000002,
   "SPIGOT_FIT": 0.07499999999999996,
   "SPIGOT_SPAN": 28.7,
+  "SPIGOT_FIT_MAX": 0.125,
+  "SPIGOT_D_MIN": 0.95,
   "LEDGE_RI": 21.35,
   "LEDGE_Z0": 1.2,
   "LEDGE_Z1": 2.2,
@@ -1279,10 +2513,18 @@
   "RETARDER": {
    "type": "quarter-wave film, about 0.1 mm, on the glass underside, axis 45 deg to the LCD polariser",
    "status": "EVT trial (E9)",
-   "basis": "provisional"
+   "basis": "provisional",
+   "dia": 23.4,
+   "clocking_flat": {
+    "y": 11.5,
+    "length": 4.3
+   },
+   "thickness_max": 0.11,
+   "placement": 0.25
   },
   "RETARDER_T": 0.1,
   "RETARDER_D": 23.4,
+  "RETARDER_T_MAX": 0.11,
   "RETARDER_Z1": 6.4799999999999995,
   "RETARDER_Z0": 6.38,
   "RETARDER_LEDGE_GAP": 0.03000000000000025,
@@ -1301,7 +2543,7 @@
   },
   "BAT_SWELL": 0.4,
   "FOAM_T": 0.3,
-  "BAT_FIX_T": 0.05,
+  "BAT_FIX_T": 0.06,
   "FOAM_Z1": 4.65,
   "FOAM_Z0": 4.3500000000000005,
   "BAT_PAD_ZONE": [
@@ -1332,7 +2574,7 @@
   "CAM_Z1": 4.56,
   "FOV_H": 26.0,
   "FOV_UP": 17.6,
-  "FOV_UP_GUAR": 14.5,
+  "FOV_UP_GUAR": 14.0,
   "FOV_DOWN": 8.0,
   "PRISM_LEG": 2.0,
   "PRISM_BOND": 0.05,
@@ -1439,8 +2681,8 @@
   "KO_TAIL": {
    "half_w": 3.25,
    "y": [
-    -18.3,
-    -16.8
+    -21.1,
+    -17.3
    ],
    "max_part_height": 0.7,
    "basis": "provisional"
@@ -1448,12 +2690,19 @@
   "TOP_PARTS": [
    {
     "ref": "U1",
-    "name": "STM32U585RIT6 LQFP-64",
+    "name": "STM32U585RIT6 LQFP-64 (body; leads to 12.0 square)",
     "x": 0.0,
-    "y": 7.2,
-    "dx": 12.2,
-    "dy": 12.2,
-    "h": 1.6
+    "y": 6.7,
+    "dx": 10.0,
+    "dy": 10.0,
+    "h": 1.6,
+    "mpn": "STM32U585RIT6",
+    "courtyard": [
+     -6.7,
+     0.0,
+     6.7,
+     13.4
+    ]
    },
    {
     "ref": "U2",
@@ -1463,7 +2712,14 @@
     "dx": 3.47,
     "dy": 2.95,
     "h": 2.76,
-    "fixed": true
+    "fixed": true,
+    "mpn": "OVM7692-RYAA",
+    "courtyard": [
+     -11.94,
+     13.92,
+     -8.06,
+     17.28
+    ]
    },
    {
     "ref": "U3",
@@ -1473,38 +2729,66 @@
     "dx": 3.47,
     "dy": 2.95,
     "h": 2.76,
-    "fixed": true
+    "fixed": true,
+    "mpn": "OVM7692-RYAA",
+    "courtyard": [
+     8.06,
+     13.92,
+     11.94,
+     17.28
+    ]
    },
    {
     "ref": "U4",
     "name": "LSM6DSV16X IMU LGA-14",
-    "x": -11.0,
-    "y": 6.0,
-    "dx": 3.0,
-    "dy": 2.5,
-    "h": 0.86
+    "x": 9.5,
+    "y": 3.0,
+    "dx": 2.5,
+    "dy": 3.0,
+    "h": 0.86,
+    "mpn": "LSM6DSV16XTR",
+    "courtyard": [
+     8.0,
+     1.25,
+     11.0,
+     4.75
+    ]
    },
    {
     "ref": "U6",
     "name": "MX25R6435F flash WSON-8 6x5",
-    "x": 11.5,
-    "y": 6.4,
-    "dx": 6.4,
-    "dy": 5.4,
-    "h": 0.8
+    "x": 15.6,
+    "y": 5.9,
+    "dx": 6.0,
+    "dy": 5.0,
+    "h": 0.8,
+    "mpn": "MX25R6435FZNIL0",
+    "courtyard": [
+     12.3,
+     3.15,
+     18.9,
+     8.65
+    ]
    },
    {
     "ref": "U8",
-    "name": "LP5907-2.8 LDO SOT-23-5",
-    "x": -11.0,
-    "y": 11.6,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.45
+    "name": "LP5907MFX-2.8 LDO SOT-23-5 (V2V8_CAM)",
+    "x": -16.9,
+    "y": 5.98,
+    "dx": 2.9,
+    "dy": 1.6,
+    "h": 1.45,
+    "mpn": "LP5907MFX-2.8/NOPB",
+    "courtyard": [
+     -18.6,
+     3.93,
+     -15.2,
+     8.03
+    ]
    },
    {
     "ref": "BT1",
-    "name": "LiPo GM201030-PCB",
+    "name": "LiPo GM201030-PCB (the cell; not a board part: battery.body with the swelling allowance)",
     "x": 0.0,
     "y": -5.2,
     "dx": 34.0,
@@ -1514,58 +2798,1080 @@
    },
    {
     "ref": "J1",
-    "name": "LCD FPC conn FH12A-10S-0.5SH top-contact",
+    "name": "LCD FPC conn FH12A-10S-0.5SH top-contact (E24)",
     "x": 0.0,
-    "y": -13.9,
-    "dx": 8.4,
-    "dy": 5.8,
+    "y": -14.5,
+    "dx": 8.1,
+    "dy": 5.6,
     "h": 2.0,
-    "fixed": true
+    "fixed": true,
+    "anchor": [
+     0.0,
+     -12.9
+    ],
+    "mouth_y": -17.3,
+    "body_y": [
+     -17.3,
+     -11.7
+    ],
+    "pads_end_y": -10.4,
+    "mpn": "FH12A-10S-0.5SH(55)",
+    "courtyard": [
+     -5.55,
+     -17.8,
+     5.55,
+     -9.9
+    ]
    },
    {
     "ref": "U7",
     "name": "MCP1700-2.8 LDO SOT-23",
-    "x": 10.5,
-    "y": -13.5,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.2
+    "x": 8.42,
+    "y": -12.3,
+    "dx": 1.3,
+    "dy": 2.9,
+    "h": 1.2,
+    "mpn": "MCP1700T-2802E/TT",
+    "courtyard": [
+     6.5,
+     -14.0,
+     10.34,
+     -10.6
+    ]
    },
    {
     "ref": "U11",
-    "name": "MCP1700-3.3 LDO SOT-23 (VDDUSB)",
-    "x": 14.0,
-    "y": -12.2,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.2
+    "name": "LP5907MFX-3.3 LDO SOT-23-5 (VDDUSB, E26)",
+    "x": 13.33,
+    "y": -12.6,
+    "dx": 1.6,
+    "dy": 2.9,
+    "h": 1.45,
+    "mpn": "LP5907MFX-3.3/NOPB",
+    "courtyard": [
+     11.28,
+     -14.3,
+     15.38,
+     -10.9
+    ]
+   },
+   {
+    "ref": "U12",
+    "name": "LM66100DCKR ideal diode SC-70-6 (E25)",
+    "x": -7.25,
+    "y": -12.85,
+    "dx": 1.35,
+    "dy": 2.2,
+    "h": 1.1,
+    "mpn": "LM66100DCKR",
+    "courtyard": [
+     -8.85,
+     -14.25,
+     -5.65,
+     -11.45
+    ]
    },
    {
     "ref": "U9",
     "name": "BQ25101YFP charger DSBGA-6 (E1)",
-    "x": -10.5,
-    "y": -13.5,
-    "dx": 1.6,
-    "dy": 0.9,
-    "h": 0.5
+    "x": -18.4,
+    "y": 1.0,
+    "dx": 0.9,
+    "dy": 1.6,
+    "h": 0.5,
+    "mpn": "BQ25101YFPR",
+    "courtyard": [
+     -19.05,
+     0.0,
+     -17.75,
+     2.0
+    ]
    },
    {
     "ref": "U10",
     "name": "USBLC6-2SC6 ESD SOT-23-6",
-    "x": -13.9,
-    "y": -12.2,
-    "dx": 3.0,
-    "dy": 3.0,
-    "h": 1.45
+    "x": -7.65,
+    "y": -16.05,
+    "dx": 1.6,
+    "dy": 2.9,
+    "h": 1.45,
+    "mpn": "USBLC6-2SC6",
+    "courtyard": [
+     -9.7,
+     -17.75,
+     -5.6,
+     -14.35
+    ]
+   },
+   {
+    "ref": "Q1",
+    "name": "BSS138 N-MOSFET SOT-23 (CHG_INHIBIT)",
+    "x": -13.2,
+    "y": -12.4,
+    "dx": 1.3,
+    "dy": 2.9,
+    "h": 1.2,
+    "mpn": "BSS138LT1G",
+    "courtyard": [
+     -15.12,
+     -14.1,
+     -11.28,
+     -10.7
+    ]
    },
    {
     "ref": "Y1",
     "name": "32.768 kHz xtal 3215",
-    "x": 8.6,
-    "y": 12.2,
-    "dx": 3.4,
-    "dy": 1.7,
-    "h": 0.9
+    "x": -9.95,
+    "y": 8.3,
+    "dx": 3.2,
+    "dy": 1.5,
+    "h": 0.9,
+    "mpn": "ABS07-120-32.768KHZ-T",
+    "courtyard": [
+     -11.95,
+     7.15,
+     -7.95,
+     9.45
+    ]
+   },
+   {
+    "ref": "C1",
+    "name": "100n cap 0402",
+    "x": -6.98,
+    "y": 0.72,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C2",
+    "name": "100n cap 0402",
+    "x": 6.2,
+    "y": 1.95,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C3",
+    "name": "100n cap 0402",
+    "x": -5.9,
+    "y": 13.2,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C4",
+    "name": "100n cap 0402",
+    "x": -6.3,
+    "y": 11.8,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C5",
+    "name": "4u7 cap 0402",
+    "x": -14.5,
+    "y": 0.45,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C6",
+    "name": "4u7 cap 0402",
+    "x": 5.1,
+    "y": 0.72,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C7",
+    "name": "1u cap 0402",
+    "x": -7.25,
+    "y": 4.4,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C8",
+    "name": "10n cap 0402",
+    "x": -8.2,
+    "y": 4.4,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C9",
+    "name": "100n cap 0402",
+    "x": 7.25,
+    "y": 10.0,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C10",
+    "name": "100n cap 0402",
+    "x": -10.1,
+    "y": 4.4,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C11",
+    "name": "6p8 cap 0402",
+    "x": -11.2,
+    "y": 6.24,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C12",
+    "name": "6p8 cap 0402",
+    "x": -8.7,
+    "y": 6.24,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C13",
+    "name": "100n cap 0402",
+    "x": 17.2,
+    "y": 9.3,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C14",
+    "name": "100n cap 0402",
+    "x": -6.6,
+    "y": 14.7,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C15",
+    "name": "100n cap 0402",
+    "x": -6.4,
+    "y": 16.3,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C16",
+    "name": "1u cap 0402",
+    "x": -12.625,
+    "y": 12.75,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C17",
+    "name": "100n cap 0402",
+    "x": 16.2,
+    "y": 11.4,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C18",
+    "name": "100n cap 0402",
+    "x": 7.1,
+    "y": 16.6,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C19",
+    "name": "1u cap 0402",
+    "x": 7.1,
+    "y": 12.75,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C20",
+    "name": "1u cap 0402",
+    "x": 10.81,
+    "y": -12.3,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C21",
+    "name": "1u cap 0402",
+    "x": 6.02,
+    "y": -13.45,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C22",
+    "name": "2u2 cap 0402",
+    "x": 13.0,
+    "y": -15.0,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C23",
+    "name": "2u2 cap 0402",
+    "x": 15.85,
+    "y": -12.1,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C24",
+    "name": "1u cap 0402",
+    "x": -19.3,
+    "y": 4.9,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C25",
+    "name": "1u cap 0402",
+    "x": -14.4,
+    "y": 7.35,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C26",
+    "name": "2u2 cap 0402",
+    "x": -19.6,
+    "y": 0.0,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C27",
+    "name": "2u2 cap 0402",
+    "x": -18.0,
+    "y": -0.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C28",
+    "name": "100n cap 0402",
+    "x": -8.45,
+    "y": -10.72,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C29",
+    "name": "100n cap 0402",
+    "x": -8.86,
+    "y": 0.72,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C30",
+    "name": "100n cap 0402",
+    "x": 11.95,
+    "y": 1.7,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C31",
+    "name": "100n cap 0402",
+    "x": 11.95,
+    "y": 2.65,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C32",
+    "name": "1u cap 0402",
+    "x": 6.02,
+    "y": -11.5,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C33",
+    "name": "10p cap 0402",
+    "x": -8.2,
+    "y": 2.55,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "C34",
+    "name": "100n cap 0402",
+    "x": -9.15,
+    "y": 2.55,
+    "dx": 0.5,
+    "dy": 1.0,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "R1",
+    "name": "10R res 0402",
+    "x": -9.15,
+    "y": 4.4,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R2",
+    "name": "10k res 0402",
+    "x": -2.45,
+    "y": 14.45,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R3",
+    "name": "100k res 0402",
+    "x": 12.4,
+    "y": 9.15,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R4",
+    "name": "1k res 0402",
+    "x": -12.65,
+    "y": 9.75,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R5",
+    "name": "1k res 0402",
+    "x": 6.05,
+    "y": 14.4,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R6",
+    "name": "2k2 res 0402",
+    "x": -13.4,
+    "y": 7.89,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R7",
+    "name": "2k2 res 0402",
+    "x": -15.0,
+    "y": 3.35,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R8",
+    "name": "2k2 res 0402",
+    "x": -13.4,
+    "y": 6.01,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R9",
+    "name": "33R res 0402",
+    "x": 8.95,
+    "y": 7.0,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R10",
+    "name": "100k res 0402",
+    "x": -14.4,
+    "y": 5.45,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R11",
+    "name": "6k81 res 0402",
+    "x": -19.6,
+    "y": 2.0,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R12",
+    "name": "100k res 0402",
+    "x": -13.2,
+    "y": -14.8,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R13",
+    "name": "100k res 0402",
+    "x": -18.0,
+    "y": 2.5,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R14",
+    "name": "6k04 res 0402",
+    "x": -18.0,
+    "y": 3.45,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive",
+    "dnp": true
+   },
+   {
+    "ref": "R15",
+    "name": "100k res 0402",
+    "x": -6.55,
+    "y": -10.72,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R16",
+    "name": "100k res 0402",
+    "x": -9.5,
+    "y": -12.5,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R17",
+    "name": "1M res 0402",
+    "x": -12.9,
+    "y": 4.6,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R18",
+    "name": "1M res 0402",
+    "x": -12.9,
+    "y": 3.65,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R19",
+    "name": "10k res 0402",
+    "x": -12.9,
+    "y": 2.7,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R20",
+    "name": "100k res 0402",
+    "x": 6.98,
+    "y": 0.72,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R21",
+    "name": "100k res 0402",
+    "x": 9.65,
+    "y": -14.6,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R22",
+    "name": "100k res 0402",
+    "x": 10.9,
+    "y": -15.55,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R23",
+    "name": "68R res 0402",
+    "x": 8.95,
+    "y": 7.95,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R24",
+    "name": "68R res 0402",
+    "x": 8.86,
+    "y": 0.72,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R25",
+    "name": "68R res 0402",
+    "x": 2.55,
+    "y": 16.2,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R26",
+    "name": "68R res 0402",
+    "x": -2.55,
+    "y": 16.2,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R27",
+    "name": "68R res 0402",
+    "x": 2.45,
+    "y": 14.45,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R28",
+    "name": "470k res 0402",
+    "x": -7.25,
+    "y": 2.55,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R29",
+    "name": "100k res 0402",
+    "x": -10.1,
+    "y": 2.55,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R30",
+    "name": "100k res 0402",
+    "x": -11.05,
+    "y": 2.55,
+    "dx": 0.54,
+    "dy": 1.05,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "R31",
+    "name": "150k res 0402",
+    "x": -5.1,
+    "y": 0.72,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.4,
+    "class": "passive"
+   },
+   {
+    "ref": "RN1",
+    "name": "4x220R res 4x0402 array",
+    "x": -8.4,
+    "y": 11.62,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN2",
+    "name": "4x220R res 4x0402 array",
+    "x": -10.9,
+    "y": 11.6,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN3",
+    "name": "4x220R res 4x0402 array",
+    "x": -14.35,
+    "y": 12.92,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN4",
+    "name": "4x220R res 4x0402 array",
+    "x": 8.85,
+    "y": 11.95,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN5",
+    "name": "4x220R res 4x0402 array",
+    "x": 11.35,
+    "y": 11.95,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RN6",
+    "name": "4x220R res 4x0402 array",
+    "x": 14.2,
+    "y": 12.92,
+    "dx": 2.0,
+    "dy": 1.0,
+    "h": 0.45,
+    "class": "passive"
+   },
+   {
+    "ref": "RT1",
+    "name": "NTC 10k 0402",
+    "x": -12.62,
+    "y": 0.4,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.55,
+    "class": "passive"
+   },
+   {
+    "ref": "RT2",
+    "name": "NTC 10k 0402",
+    "x": -10.74,
+    "y": 0.4,
+    "dx": 1.05,
+    "dy": 0.54,
+    "h": 0.55,
+    "class": "passive"
+   }
+  ],
+  "J1": {
+   "ref": "J1",
+   "name": "LCD FPC conn FH12A-10S-0.5SH top-contact (E24)",
+   "x": 0.0,
+   "y": -14.5,
+   "dx": 8.1,
+   "dy": 5.6,
+   "h": 2.0,
+   "fixed": true,
+   "anchor": [
+    0.0,
+    -12.9
+   ],
+   "mouth_y": -17.3,
+   "body_y": [
+    -17.3,
+    -11.7
+   ],
+   "pads_end_y": -10.4,
+   "mpn": "FH12A-10S-0.5SH(55)",
+   "courtyard": [
+    -5.55,
+    -17.8,
+    5.55,
+    -9.9
+   ]
+  },
+  "J1_BOX": [
+   -4.05,
+   -17.3,
+   4.05,
+   -11.7
+  ],
+  "J1_MOUTH_Y": -17.3,
+  "J1_TOP_Z": 3.8,
+  "BOTTOM_BOARD_PARTS": [
+   {
+    "ref": "D1",
+    "name": "LED red VLMS1500-GS08",
+    "x": 4.9955,
+    "y": -2.472,
+    "rot": -157.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D2",
+    "name": "LED NIR SFH 4053B",
+    "x": 4.6128,
+    "y": -1.5481,
+    "rot": 22.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D3",
+    "name": "LED red VLMS1500-GS08",
+    "x": 2.4519,
+    "y": 0.6128,
+    "rot": -112.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D4",
+    "name": "LED NIR SFH 4053B",
+    "x": 1.528,
+    "y": 0.9955,
+    "rot": 67.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D5",
+    "name": "LED red VLMS1500-GS08",
+    "x": -1.528,
+    "y": 0.9955,
+    "rot": -67.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D6",
+    "name": "LED NIR SFH 4053B",
+    "x": -2.4519,
+    "y": 0.6128,
+    "rot": 112.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D7",
+    "name": "LED red VLMS1500-GS08",
+    "x": -4.6128,
+    "y": -1.5481,
+    "rot": -22.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D8",
+    "name": "LED NIR SFH 4053B",
+    "x": -4.9955,
+    "y": -2.472,
+    "rot": 157.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D9",
+    "name": "LED red VLMS1500-GS08",
+    "x": -4.9955,
+    "y": -5.528,
+    "rot": 22.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D10",
+    "name": "LED NIR SFH 4053B",
+    "x": -4.6128,
+    "y": -6.4519,
+    "rot": -157.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D11",
+    "name": "LED red VLMS1500-GS08",
+    "x": -2.4519,
+    "y": -8.6128,
+    "rot": 67.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D12",
+    "name": "LED NIR SFH 4053B",
+    "x": -1.528,
+    "y": -8.9955,
+    "rot": -112.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D13",
+    "name": "LED red VLMS1500-GS08",
+    "x": 1.528,
+    "y": -8.9955,
+    "rot": 112.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D14",
+    "name": "LED NIR SFH 4053B",
+    "x": 2.4519,
+    "y": -8.6128,
+    "rot": -67.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D15",
+    "name": "LED red VLMS1500-GS08",
+    "x": 4.6128,
+    "y": -6.4519,
+    "rot": 157.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "D16",
+    "name": "LED NIR SFH 4053B",
+    "x": 4.9955,
+    "y": -5.528,
+    "rot": -22.5,
+    "dx": 1.0,
+    "dy": 0.5,
+    "h": 0.45
+   },
+   {
+    "ref": "PD1",
+    "name": "VEMD8080",
+    "x": 0.0,
+    "y": -4.0,
+    "rot": 0.0,
+    "dx": 4.8,
+    "dy": 2.5,
+    "h": 0.48
    }
   ],
   "LED_RING": {
@@ -1615,8 +3921,10 @@
   "CPCB_SIZE": [
    30.0,
    22.0,
-   1.6
+   1.0
   ],
+  "PIN_TAIL_L": 1.34,
+  "PIN_TAIL_THROUGH": 0.34,
   "RIM_Z": 0.25,
   "LCD_POCKET_X": 13.55,
   "LCD_POCKET_Y1": 13.75,
@@ -1682,7 +3990,7 @@
   "BAFFLE_RING_RULE": 0.15,
   "BAFFLE_CREST_MAX_Z": 0.15,
   "BAFFLE_RING_H_RANGE": [
-   0.735,
+   0.755,
    0.9500000000000001
   ],
   "BAFFLE_RING_PRINT_H": 1.1,
@@ -1693,6 +4001,11 @@
   "FLEX_ZT": 4.775,
   "FLEX_ZB": 2.8,
   "FLEX_BEND_R": 0.9875000000000003,
+  "FLEX_FOLD_Y": -17.650000000000002,
+  "FLEX_REAR_Y": -18.712500000000002,
+  "FLEX_TOP_RUN": 0.8500000000000014,
+  "FLEX_FREE_LEN": 4.302322745419922,
+  "FLEX_OVER_J1": 0.9000000000000004,
   "PUPIL_Z": 4.159999999999999,
   "VIRTUAL_PUPIL_BEHIND_EXIT": 1.7683915622940019,
   "VIRTUAL_PUPIL_Y": 14.831608437705999,
@@ -1706,7 +4019,7 @@
   "CRADLE_Y1": 24.0,
   "CRADLE_CY": -6.0,
   "CPCB_Z1": -4.855,
-  "CPCB_Z0": -6.455,
+  "CPCB_Z0": -5.855,
   "CPCB_HX": 15.0,
   "CPCB_Y0": -34.2,
   "CPCB_Y1": -12.2,
@@ -1720,6 +4033,9 @@
     -14.5
    ]
   ],
+  "PIN_TAIL_Z0": -6.195,
+  "SCREW_ENGAGE": 3.0,
+  "SCREW_DRILL_TOP_Z": -1.6550000000000002,
   "PIN_TIP_FREE_Z": 2.1049999999999995,
   "PIN_BODY_Z1": -0.3850000000000005,
   "PIN_COMPRESSION": 1.1399999999999997,
@@ -1850,7 +4166,28 @@
   "RIM_FLAT_R": [
    22.0,
    22.7
-  ]
+  ],
+  "FOV_GUAR_CASE": {
+   "optics_high": 0.2,
+   "locating_fit": 0.125,
+   "roof_temperature_C": -10,
+   "model_deg": 14.03
+  },
+  "GATE2_DEG": 13.0,
+  "LCD_ROT_YAML": 1.2,
+  "BAT_NOTCH": {
+   "ref": "J1",
+   "x": [
+    -5.55,
+    5.55
+   ],
+   "y": [
+    -10.2,
+    -9.9
+   ],
+   "reason": "J1 courtyard only; no copper, solder or body of J1 inside the cell box",
+   "pad_to_cell_gap": 0.2
+  }
  },
  "posts": [
   {
@@ -1980,7 +4317,7 @@
    0.13
   ],
   "unmatched": [
-   -0.03,
+   -0.01,
    0.22
   ]
  },

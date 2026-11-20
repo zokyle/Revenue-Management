@@ -1,14 +1,54 @@
 {
  "all_defects_caught": true,
- "seeded_defects": 62,
+ "seeded_defects": 83,
  "cases": [
   {
-   "defect": "roof 0.01 mm low over the camera L opening ONLY (camera R untouched): the guaranteed case of camera L falls below 14.5 deg",
+   "defect": "LCD tail fold 0.5 mm further forward (the rev D fold, in front of the E24 mouth of J1): the lower run would lie in the connector body",
+   "check": "12 tub keep-out contract (YAML tub_keepouts)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: LCD tail keep-out: tail outside the zone (x margin 0.250, rear margin 2.888), or only 0.236 mm above a part of the allowed height, or in front of the mouth not over the body of J1 (x 1.050, y 4.600) or only -1.07"
+  },
+  {
+   "defect": "LCD tail fold 2.6 mm further back (it reaches the rear wall of the tub)",
+   "check": "2 clearances",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: ['LCD flex (representative shape) to connector J1 / PCB parts']"
+  },
+  {
+   "defect": "cradle board 1.6 mm thick with its top face kept (the rev D board: the pin tails end inside the holes)",
+   "check": "7 cradle: pins, key, hold-down, insertion",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: E36: cradle PCB thickness (solid): measured 1.5999999999999996 vs 1.0; E36: pin tail through the underside of the board (solder fillet): -0.2599999999999998 < 0.2"
+  },
+  {
+   "defect": "cradle board 1.0 mm hung from the old underside (top face 0.6 mm low: the pins would stand 0.6 mm short)",
+   "check": "7 cradle: pins, key, hold-down, insertion",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: pin 1; pin 2; pin 3; pin 4; pin 5; pin 6; pin 7; cradle PCB top at z = -5.455, not pad face 0.965 - working height 5.82; skin between the well floor and the PCB pocket: measured 1.6550000000000002 vs 1.0550000000"
+  },
+  {
+   "defect": "spring pin 4 with a tail that ends 0.1 mm inside the cradle board (no solder fillet)",
+   "check": "7 cradle: pins, key, hold-down, insertion",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED: E36: spring-pin tail tip z (all seven): measured -5.755000000000001 vs -6.195; E36: pin tail through the underside of the board (solder fillet): -0.09999999999999964 < 0.2"
+  },
+  {
+   "defect": "roof 0.01 mm low over the camera L opening ONLY (camera R untouched): the guaranteed case of camera L falls below 14.0 deg",
    "check": "4 fold geometry",
    "expected": "fail",
    "result": "fail",
    "as_expected": true,
-   "message": "FAILED: upper field of camera L in the guaranteed case (optics 0.2 high and 0.075 of spigot play against it) is 14.43 deg, BELOW the 14.5 deg the YAML guarantees"
+   "message": "FAILED: upper field of camera L in the guaranteed case (optics 0.2 high, 0.125 of spigot play against it, roof 0.02 lower) is 13.86 deg, BELOW the 14.0 deg the YAML guarantees"
   },
   {
    "defect": "legend layer written un-mirrored (every word would read backwards on the outer face)",
@@ -120,7 +160,7 @@
    "expected": "fail",
    "result": "fail",
    "as_expected": true,
-   "message": "FAILED: display rotation: the LCD glass can turn 1.54 deg in its pocket, more than the 1.25 deg the stored correction (E12) is sized for"
+   "message": "FAILED: display rotation: the LCD glass can turn 1.54 deg in its pocket, more than the 1.25 deg the stored correction (E12, E22: YAML lcd.rotation_in_pocket_max_deg 1.2) is sized for; display rotation: the model gives 1."
   },
   {
    "defect": "calibration seat plate with pockets only 0.08 mm deep (a ball foot stands on the pocket floor)",
@@ -131,12 +171,12 @@
    "message": "FAILED: nest A, base-face seat: ball foot to its pocket, nearest (the floor under it); nest B, base-face seat: ball foot to its pocket, nearest (the floor under it); ball_1 in nest A; ball_2 in nest A; ball_3 in nest A; "
   },
   {
-   "defect": "U10 back at x -14.2: 0.19 mm from ball-foot zone 2 (N7 asks for 0.3)",
+   "defect": "U11 moved to (14.6747, -11.9753): its corner 0.20 mm from ball-foot zone 3 (N7 asks for 0.3)",
    "check": "10 support posts and ball-foot zones",
    "expected": "fail",
    "result": "fail",
    "as_expected": true,
-   "message": "FAILED: foot zone 2: over it none, nearest part U10 at 0.192 mm (required 0.3), tub 0.0 mm2"
+   "message": "FAILED: foot zone 3: over it none, nearest part U11 at 0.2 mm (required 0.3), tub 0.0 mm2"
   },
   {
    "defect": "prism R raised 0.30 mm into the roof",
@@ -203,20 +243,20 @@
    "message": "FAILED: camera R axis: chief ray clipped at the visor opening; camera R left edge: chief ray clipped at the visor opening; camera R right edge: chief ray clipped at the visor opening; upper field of camera R in the guara"
   },
   {
-   "defect": "roof 0.1 mm low over the camera R opening (upper field far below the guaranteed 14.5 deg)",
+   "defect": "roof 0.1 mm low over the camera R opening (upper field far below the guaranteed 14.0 deg)",
    "check": "4 fold geometry",
    "expected": "fail",
    "result": "fail",
    "as_expected": true,
-   "message": "FAILED: upper field of camera R in the guaranteed case (optics 0.2 high and 0.075 of spigot play against it) is 12.82 deg, BELOW the 14.5 deg the YAML guarantees; test gate 2: a bar at +13.5 deg is only 93.5 % clear in c"
+   "message": "FAILED: upper field of camera R in the guaranteed case (optics 0.2 high, 0.125 of spigot play against it, roof 0.02 lower) is 12.27 deg, BELOW the 14.0 deg the YAML guarantees; test gate 2: a bar at +13.0 deg is only 91."
   },
   {
-   "defect": "roof 0.01 mm low over the camera R opening (the guaranteed case loses 0.18 deg: more than its 0.11 deg margin to 14.5)",
+   "defect": "roof 0.01 mm low over the camera R opening (the guaranteed case loses 0.18 deg: more than its 0.03 deg margin to 14.0)",
    "check": "4 fold geometry",
    "expected": "fail",
    "result": "fail",
    "as_expected": true,
-   "message": "FAILED: upper field of camera R in the guaranteed case (optics 0.2 high and 0.075 of spigot play against it) is 14.43 deg, BELOW the 14.5 deg the YAML guarantees"
+   "message": "FAILED: upper field of camera R in the guaranteed case (optics 0.2 high, 0.125 of spigot play against it, roof 0.02 lower) is 13.86 deg, BELOW the 14.0 deg the YAML guarantees"
   },
   {
    "defect": "hood gasket bead R dispensed 0.2 mm too far forward (over the chamfer of the rear wall)",
@@ -296,7 +336,7 @@
    "expected": "fail",
    "result": "fail",
    "as_expected": true,
-   "message": "FAILED: foot zone 1: over it none, nearest part U1 at 0.45 mm (required 0.3), tub 2.56 mm2"
+   "message": "FAILED: foot zone 1: over it none, nearest part R2 at 0.93 mm (required 0.3), tub 2.56 mm2"
   },
   {
    "defect": "U8 back over the front ball foot (rev C position in the YAML part list)",
@@ -395,12 +435,12 @@
    "message": "FAILED: seal: FAILED: the cavity is connected to the outside; outside and cavity are ONE connected air solid: the marker is open; perimeter bead at z = 1.03 is not one closed ring (1 pieces); seal land interrupted: bead "
   },
   {
-   "defect": "board import: board built from the amended rev D YAML (conforming, synthetic)",
+   "defect": "board import: board built from the rev E YAML (conforming, synthetic; J1 with its anchor apart from its body centre; test pads, fiducials on both sides and the three ball-foot lands listed as FITTED copper-only footprints)",
    "check": "17 board import (electrical/gl1_main)",
    "expected": "pass",
    "result": "pass",
    "as_expected": true,
-   "message": "board gl1_synthetic_from_yaml agrees with the YAML outline, hole and slot; 14 top-side parts clear the tub by 0.25 mm or more (U2) and respect post feet, hood zones, free height and foot zones; 18 bottom-side parts insid"
+   "message": "board gl1_synthetic_from_yaml agrees with the YAML outline, hole and slot; 86 top-side parts clear the tub by 0.25 mm or more (U2) and respect post feet, hood zones, free height and foot zones; J1 body box and anchor on "
   },
   {
    "defect": "board import: a 1.5 mm part under camera hood R",
@@ -499,12 +539,76 @@
    "message": "FAILED (1): C908: 0.72 mm tall inside the LCD-tail keep-out (limit 0.7, YAML tub_keepouts.lcd_tail)"
   },
   {
+   "defect": "board import: the BODY of J1 0.5 mm forward (its rev D place) with the footprint anchor kept on the YAML anchor",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (2): LCD connector J1 BODY box: x min, y min (the mouth), x max, y max, height: board (-4.05, -16.8, 4.05, -11.2, 2.0), YAML (-4.05, -17.3, 4.05, -11.7, 2.0); LCD connector J1 body centre (body.cx, body.cy of the "
+  },
+  {
+   "defect": "board import: the footprint anchor of J1 0.3 mm off with the body kept",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): LCD connector J1 footprint anchor: x, y: board (0.0, -12.6), YAML (0.0, -12.9)"
+  },
+  {
+   "defect": "board import: the battery keep-out without the J1 courtyard notch (the full cell rectangle)",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): battery keep-out: x min, y min, x max, y max, and the area that differs from the YAML body less the J1 courtyard notch (mm2): board (-17.0, -10.2, 17.0, -0.2, 3.329999999999994), YAML (-17.0, -10.2, 17.0, -0."
+  },
+  {
+   "defect": "board import: copper only: a bottom-side fiducial inside the grain opening",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): FID901 (bottom, copper only): bare copper inside the grain opening (wetted, lit by the LEDs)"
+  },
+  {
+   "defect": "board import: copper only: the same fiducial marked 'not fitted' (the mark must not hide copper)",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): FID902 (bottom, copper only): bare copper inside the grain opening (wetted, lit by the LEDs)"
+  },
+  {
+   "defect": "board import: copper only: ball-foot land 1 0.5 mm off its foot",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (2): FL1 (bottom, copper only): ball-foot land 0.500 mm from the nearest YAML foot (foot 1), dia 1.6 (YAML land dia 1.6); ball-foot lands: found on 2 of 3 feet (FL2, FL3); each foot bears on a land"
+  },
+  {
+   "defect": "board import: a bottom-side part WITH a BOM line and a body height of 0, outside both openings (it may not pass as copper)",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): C909 (bottom): in the BOM with a body height of 0: a part without a body cannot be verified (a copper-only footprint has no BOM line); outside the grain opening and the pad slot"
+  },
+  {
+   "defect": "board import: copper only: a top-side fiducial under post foot A+",
+   "check": "17 board import (electrical/gl1_main)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): FID903: on post foot A+"
+  },
+  {
    "defect": "board import: a 2.5 mm part under hood R that is marked not fitted (DNP): passes, with a warning",
    "check": "17 board import (electrical/gl1_main)",
    "expected": "pass",
    "result": "pass",
    "as_expected": true,
-   "message": "board gl1_synthetic_from_yaml agrees with the YAML outline, hole and slot; 14 top-side parts clear the tub by 0.25 mm or more (U2) and respect post feet, hood zones, free height and foot zones; 18 bottom-side parts insid"
+   "message": "board gl1_synthetic_from_yaml agrees with the YAML outline, hole and slot; 86 top-side parts clear the tub by 0.25 mm or more (U2) and respect post feet, hood zones, free height and foot zones; J1 body box and anchor on "
   },
   {
    "defect": "board import: demonstration board of the toolchain (rev C positions: holes under posts E, U8 over the front foot)",
@@ -512,7 +616,7 @@
    "expected": "fail",
    "result": "fail",
    "as_expected": true,
-   "message": "FAILED (8): locating hole (round, NPTH): x, y, diameter: board (-4.2, 14.55, 1.15), YAML (14.35, 10.8, 1.15); locating slot: centre x, y, width, overall length along x, y1 - y2: board (4.2, 14.55, 1.15, 1.65, 0.0), YAML "
+   "message": "FAILED (9): locating hole (round, NPTH): x, y, diameter: board (-4.2, 14.55, 1.15), YAML (14.35, 10.8, 1.15); locating slot: centre x, y, width, overall length along x, y1 - y2: board (4.2, 14.55, 1.15, 1.65, 0.0), YAML "
   },
   {
    "defect": "board import: no board file",
@@ -523,12 +627,92 @@
    "message": "skipped: no board file"
   },
   {
+   "defect": "cradle board import: board built from the rev E YAML cradle block (conforming, synthetic)",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "cradle board gl1_cradle_synthetic_from_yaml: thickness 1.0, outline 30.0 x 22.0, four screw holes, seven spring pins on the pad row and on the modelled pin axes (4 fitted), USB-C receptacle on the modelled receptacle, no"
+  },
+  {
+   "defect": "cradle board import: a 1.6 mm board (the rev D cradle board; E36 asks for 1.0)",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): board thickness: board 1.6, model / YAML 1"
+  },
+  {
+   "defect": "cradle board import: the spring-pin row 0.3 mm off the pad row",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (14): spring pin 1 (SP1): x, y in the marker frame; offset from the modelled pin axis: board (-7.62, -16.7, 0.3), model / YAML (-7.62, -17, 0); spring pin 2 (SP2): x, y in the marker frame; offset from the modelle"
+  },
+  {
+   "defect": "cradle board import: one screw hole 0.5 mm off",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): screw hole 1: x, y in the marker frame, diameter: board (-12, -31.5, 2.2), model / YAML (-12.5, -31.5, 2.2)"
+  },
+  {
+   "defect": "cradle board import: the USB-C receptacle 0.5 mm further in (mouth off the YAML)",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (2): USB-C receptacle body: x min, y min (the mouth), x max, y max in the marker frame, height: board (-4.47, -35, 4.47, -27.65, 3.26), model / YAML (-4.47, -35.5, 4.47, -28.15, 3.26); J1: 0.000 mm to the cradle b"
+  },
+  {
+   "defect": "cradle board import: an 0402 capacitor on the top face, which lies against the pocket ceiling",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): C901: a 0.55 mm part on the top face: the board lies against the pocket ceiling (only the receptacle and the pins pass through it)"
+  },
+  {
+   "defect": "cradle board import: pin 7 fitted and pin 1 not (the consumer board fits VBUS, D-, D+, GND)",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): pins fitted at x [-5.08, -2.54, 0.0, 7.62], YAML populated_consumer is x [-7.62, -5.08, -2.54, 0.0]"
+  },
+  {
+   "defect": "cradle board import: a board 0.8 mm wider than the YAML outline",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (2): outline bounds in the marker frame (x min, y min, x max, y max): board (-15.4, -34.2, 15.4, -12.2), model / YAML (-15, -34.2, 15, -12.2); outline: number of straight edges, other elements, area that differs f"
+  },
+  {
+   "defect": "cradle board import: a bottom-side capacitor under the head of a screw",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "fail",
+   "result": "fail",
+   "as_expected": true,
+   "message": "FAILED (1): C902: under the head of the screw at (12.5, -31.5) (head dia 4.0, PROVISIONAL)"
+  },
+  {
+   "defect": "cradle board import: no board file",
+   "check": "19 cradle board import (electrical/gl1_cradle)",
+   "expected": "pass",
+   "result": "pass",
+   "as_expected": true,
+   "message": "skipped: no cradle board file"
+  },
+  {
    "defect": "unmodified model",
    "check": "2 clearances",
    "expected": "pass",
    "result": "pass",
    "as_expected": true,
-   "message": "106 key gaps and 12 PCB parts evaluated; 3 rows below their minimum are recorded deviations (the two spigot fits, D19; the epoxy under an oversize grade 100 ball, D33); retarder film after its centring chain: 0.05 to the"
+   "message": "107 key gaps and 87 PCB parts evaluated; 2 rows below their minimum are recorded deviations (the two spigot fits, D19); epoxy under an oversize grade 100 ball at the lower plate limit 0.027 mm (0.02 required, E20); LCD t"
   },
   {
    "defect": "unmodified model",
@@ -552,7 +736,7 @@
    "expected": "pass",
    "result": "pass",
    "as_expected": true,
-   "message": "no tub material in the layout space below z 4.35 (0.000000 mm3 common); eight post feet inside their squares (1.6 mm, posts B 2.2 mm, built 1.9 x 2.2); LCD tail inside its zone, 0.225 mm over a 0.7 mm part; hood skirts 1"
+   "message": "no tub material in the layout space below z 4.35 (0.000000 mm3 common); eight post feet inside their squares (1.6 mm, posts B 2.2 mm, built 1.9 x 2.2); LCD tail fold behind the J1 mouth (y -17.3) inside its zone, 0.225 m"
   },
   {
    "defect": "unmodified model",
@@ -560,7 +744,7 @@
    "expected": "pass",
    "result": "pass",
    "as_expected": true,
-   "message": "outside and inner cavity are separate air solids (cavity 4218 mm3 incl. the cell under the cover glass); perimeter bead is one closed ring, 0.40 mm high, narrowest joint 0.40 mm, 49.8 mm3 at nominal gaps; adhesive-sheet "
+   "message": "outside and inner cavity are separate air solids (cavity 4300 mm3 incl. the cell under the cover glass); perimeter bead is one closed ring, 0.40 mm high, narrowest joint 0.40 mm, 49.8 mm3 at nominal gaps; adhesive-sheet "
   },
   {
    "defect": "unmodified model",

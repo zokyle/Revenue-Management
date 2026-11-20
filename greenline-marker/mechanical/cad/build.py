@@ -63,7 +63,7 @@ def readme_facts(parts, results):
     row = lambda rid, title, key, val: next(q for t in by[rid]["tables"] if title in t["title"] for q in t["rows"] if str(q.get(key, "")).startswith(val))
     mass = by[8]["summary"].split("marker ")[1].split(" g")[0]
     guar = row(4, "Sensitivity", "case", "GUARANTEED CASE")
-    mrow = [q for t in by[4]["tables"] if "uses up" in t["title"] for q in t["rows"]]
+    mrow = {q["key"]: q for t in by[4]["tables"] if "uses up" in t["title"] for q in t["rows"]}
     slot_past = (P.LOC_SLOT[0] + P.LOC_SLOT[3] / 2) + P.LCD_POCKET_X          # inner end of the slot past the inner face of the foot of post B-
     cap = sum(L.capacity(b)[0] * L.capacity(b)[1] for b in L.blocks() if b["name"].startswith("statements"))
     ch = P.retarder_chain()
@@ -73,8 +73,12 @@ def readme_facts(parts, results):
         ("number of checks and warnings", f"with {warn} warnings"),
         ("check 4, guaranteed case", f"**{guar['upper_field_full_pupil_deg']:.2f} deg in the guaranteed case"),
         ("check 4, both cameras", f"camera L {guar['upper_field_full_pupil_deg_camera_L']:.2f}, camera R {guar['upper_field_full_pupil_deg_camera_R']:.2f}"),
-        ("check 4, PCB hole at its upper limit", f"{mrow[1]['upper_field_deg_closed_form']:.3f} deg"),
-        ("check 4, pupil diameter", f"{mrow[2]['upper_field_deg_closed_form']:.2f}"),
+        ("check 4, defined case, closed form", f"closed form {mrow['defined']['upper_field_deg_closed_form']:.3f}"),
+        ("check 4, nominal fit at 20 C", f"{mrow['nominal_fit']['upper_field_deg_closed_form']:.3f} deg"),
+        ("check 4, PCB hole at its upper limit", f"{mrow['hole_hi']['upper_field_deg_closed_form']:.3f} deg"),
+        ("check 4, pupil diameter", f"{mrow['pupil_dia']['upper_field_deg_closed_form']:.2f}"),
+        ("LCD tail fold", f"free length {P.FLEX_FREE_LEN:.2f} mm"),
+        ("cradle board", f"cradle board {P.CPCB_SIZE[2]:.1f} mm"),
         ("slot under post B- past the foot", f"{slot_past:.2f} mm past the cut-back foot"),
         ("marker mass", f"**{mass} g**"),
         ("parts exported", f"one STEP per part ({n_step}:"),

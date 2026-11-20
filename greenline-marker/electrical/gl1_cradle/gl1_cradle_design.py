@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """GreenLine GL-1 charging / data cradle board - netlist and layout as code (gleda 0.4.0).
 
-STAGE: LAYOUT.  Nothing has been built.  ``build_gl1_cradle.py`` routes this
+STAGE: LAYOUT, revision E (DESIGN_SPEC E36: the board is 1.0 mm thick).  Nothing has been built.  ``build_gl1_cradle.py`` routes this
 board with the toolchain's router and takes it through KiCad's DRC and the
 output stage; ``build_netlist.py`` is the earlier stage without copper.  The
 mechanical interfaces (outline, four screw holes, the seven spring-pin
@@ -59,7 +59,8 @@ CPCB = CR["pcb"]
 X0 = 0.5 * (CPCB["x"][0] + CPCB["x"][1])             # 0.0
 Y0 = 0.5 * (CPCB["y"][0] + CPCB["y"][1])             # -23.2: board centre in the marker frame
 BOARD_DX, BOARD_DY = CPCB["dx"], CPCB["dy"]          # 30 x 22
-BOARD_THICKNESS = CPCB["thickness"]                  # 1.6
+BOARD_THICKNESS = CPCB["thickness"]                  # 1.0 since rev E (spec E36; it was 1.6)
+BOARD_TOP_Z = CPCB["top_z"]                          # -4.855: the top face sets the pin height (unchanged by E36)
 PIN_XS = [x - X0 for x in Y["base_plate"]["pad_holes"]["xs"]]     # seven positions, 2.54 mm pitch
 PIN_Y = CR["pin_row_y"] - Y0                         # 6.2
 SCREWS = [(x - X0, y - Y0) for x, y in CPCB["screws"]]
@@ -78,20 +79,22 @@ CONSUMER_PINS = tuple(CR["pins"]["populated_consumer"])            # VBUS, D-, D
 #: hole), which that data contradicts.  ``hole_dia`` is the FINISHED plated hole: 0.80 mm
 #: nominal, so that a +-0.05 mm hole tolerance stays above Mill-Max's 0.737 mm minimum (fab
 #: note); diametral play 0.165 mm nominal (it was 0.265).
-#: OPEN, NOT RESOLVED HERE - TAIL LENGTH: 8.3 mm overall (element14) less 6.96 mm above the
-#: board leaves about 1.34 mm of tail (a subtraction of two extracts, not a reading) in a
-#: 1.6 mm board (``tail_length_estimate`` / BOARD_THICKNESS): the tail would end about 0.26 mm
-#: inside the hole and cannot form a fillet on the far side.  Ways out, none of which this
-#: package may take alone: the long-tail variant 0914-1-15-20-77-14-11-0 (``mpn_long_tail``;
-#: 11.35 mm overall per element14's title, PROVISIONAL; it stands about 2.8 mm out below the
-#: board: check the pocket under the board), or a thinner cradle board (YAML
-#: cradle.pcb.thickness and top_z).  Barrel and plunger diameters are still the mechanical
-#: model's assumptions.
+#: TAIL LENGTH - spec E36 (rev E): "Cradle board thickness 1.0 mm instead of 1.6 mm, so the
+#: Mill-Max 0914 spring-pin tail (about 1.34 mm, PROVISIONAL until the Mill-Max drawing is read)
+#: comes through the board and can be soldered.  The board top face, which sets the pin height,
+#: does not move".  The tail length is the YAML key cradle.pins.tail_length (1.34: 8.3 mm overall
+#: per element14 less 6.96 mm above the board - a subtraction of two search extracts, not a
+#: reading; PROVISIONAL).  In the 1.0 mm board the tail stands 0.34 mm out of the underside
+#: (``tail_through_board_min`` is the 0.2 mm the mechanical package asks for a fillet; rule row
+#: "E36" of check_cradle_rules.py).  In the 1.6 mm board of rev D it ended 0.26 mm inside the
+#: hole.  Barrel and plunger diameters are still the mechanical model's assumptions; the
+#: mechanical model still draws a 0.76 mm tail in a 0.90 mm hole (not in the YAML: open).
 MILLMAX_0914 = {
     "mpn": "0914-0-15-20-77-14-11-0",
     "mpn_long_tail": "0914-1-15-20-77-14-11-0",
     "tail_dia": 0.635, "min_mounting_hole": 0.737, "hole_dia": 0.80, "pad_dia": 1.60, "barrel_dia": 1.83,
-    "overall_length": 8.3, "tail_length_estimate": 1.34,
+    "overall_length": 8.3, "tail_length_estimate": CR["pins"]["tail_length"],     # 1.34, PROVISIONAL
+    "tail_through_board_min": 0.2,
     "height_above_board": 6.96,                      # maximum working height (free plunger tip)
     "working_height": CR["pins"]["working_height"],   # 5.82 with the marker on its feet
 }
@@ -231,13 +234,17 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
         "The TOP face lies against a plastic ceiling: only J1 and the spring pins stand on it.",
         "Spring pins SP1-SP7 are soldered square to the board in a jig (mechanical/README).",
         "Lead-free assembly (SAC305), RoHS-compliant parts (DESIGN_SPEC E5).",
+        "Finished board thickness %.1f mm (DESIGN_SPEC E36; it was 1.6 mm): the tail of the Mill-Max "
+        "0914 pin (about %.2f mm, PROVISIONAL until the Mill-Max drawing is read) comes about %.2f mm "
+        "through the board and is soldered on the bottom side. The TOP face is the datum of the pin "
+        "height: thickness tolerance to the bottom side."
+        % (BOARD_THICKNESS, MILLMAX_0914["tail_length_estimate"],
+           MILLMAX_0914["tail_length_estimate"] - BOARD_THICKNESS),
         "SP1-SP7: FINISHED plated hole 0.80 mm +-0.05 (Mill-Max minimum mounting hole for the 0.635 mm "
-        "tail of the 0914 pin: 0.737 mm; PROVISIONAL until the Mill-Max drawing is read). OPEN: the "
-        "standard pin's tail (about 1.34 mm) is shorter than this 1.6 mm board - do not order before "
-        "the pin variant / board thickness is decided (electrical/README.md).",
-        "J1 land pattern: the four outer ground pads are 1.07 mm long (0.04 mm shorter than KiCad's "
-        "USB4105 pattern) to keep 0.20 mm from the peg holes: confirm against the GCT USB4105 drawing "
-        "before ordering.",
+        "tail of the 0914 pin: 0.737 mm; PROVISIONAL until the Mill-Max drawing is read).",
+        "J1 land pattern: the four outer ground pads are 1.11 mm long (0.04 mm shorter than the 1.15 mm "
+        "of KiCad's USB4105 pattern) to keep 0.20 mm from the peg holes: confirm against the GCT USB4105 "
+        "drawing before ordering.",
     ]
 
     # ---- USB-C receptacle, top side, mouth toward -y, overhanging the rear edge ----------
@@ -257,22 +264,24 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
               fields=_status(PROV, "MPN, KiCad footprint, Digi-Key PN research-confirmed; body "
                                    "8.94 x 7.35 x 3.26 mm is the mechanical model's PROVISIONAL envelope; "
                                    "the land pattern is a project copy with four ground pads 0.04 mm "
-                                   "shorter (make_usb_footprint.py), not checked against GCT's drawing"))
+                                   "shorter, 1.11 mm (make_usb_footprint.py), not checked against GCT's "
+                                   "drawing"))
     j1.place(0.0, round(USB_MOUTH_Y + USB_BODY_FRONT, 4), 0.0)
     d.add(j1)
     # ---- spec E6: "5.1 kohm from CC1 and from CC2 to ground (without them a C-to-C charger
     # supplies nothing)" ------------------------------------------------------------------------
     for ref, cc in (("R1", "CC1"), ("R2", "CC2")):
         p = Part(ref, "5k1", R0402, pins=two_pin(), mpn="RC0402FR-075K1L", manufacturer="Yageo",
-                 distributor=BY_MPN, distributor_pn="RC0402FR-075K1L", side=BOTTOM, height_mm=0.40,
+                 distributor="Digi-Key", distributor_pn="311-5.10KLRCT-ND", side=BOTTOM, height_mm=0.40,
                  group="usb", description="Resistor 0402 1 % 5.1 kohm",
-                 fields=dict(_status(PROV, "MPN from memory"), Purpose="Rd on %s" % cc))
+                 fields=dict(_status(PROV, "MPN from memory; Digi-Key code from docs/SOURCING.md A17"),
+                             Purpose="Rd on %s" % cc))
         p.place(*place[ref][:2], place[ref][2])
         d.add(p)
         d.net(cc, "J1.%s" % cc, "%s.1" % ref)
         d.net("GND", "%s.2" % ref)
     # ---- spec E6 / E25: "a resettable fuse in VBUS", hold 0.2 to 0.5 A, no more than 1.5 ohm after a trip ----
-    f1 = Part("F1", "PTC %.1fA" % (PTC["hold_mA"] / 1000.0), PTC["footprint"], pins=two_pin(),
+    f1 = Part("F1", "PTC %.2fA" % (PTC["hold_mA"] / 1000.0), PTC["footprint"], pins=two_pin(),
               mpn=PTC["mpn"], manufacturer=PTC["manufacturer"], distributor="Digi-Key",
               distributor_pn="F2903CT-ND (per one search extract)", side=BOTTOM,
               height_mm=PTC["height"], group="usb",
@@ -299,9 +308,12 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
     d.net("USB_DM", "J1.DM", "U1.IO1A", "U1.IO1B")
     d.net("USB_DP", "J1.DP", "U1.IO2A", "U1.IO2B")
     c1 = Part("C1", "100n", C0402, pins=two_pin(), mpn="GRM155R71C104KA88D", manufacturer="Murata",
-              distributor=BY_MPN, distributor_pn="GRM155R71C104KA88D", side=BOTTOM, height_mm=0.55,
+              distributor="Digi-Key", distributor_pn="490-3261-1-ND", side=BOTTOM, height_mm=0.55,
               group="usb", description="MLCC 0402 100 nF 16 V X7R",
-              fields=dict(_status(PROV, "MPN from memory"), Purpose="U1 VBUS - ADDED"))
+              fields=dict(_status(PROV, "MPN from memory, Digi-Key code from docs/SOURCING.md A17; the "
+                                        "sourcing report records a conflicting not-recommended-for-new-"
+                                        "designs flag (A4: alternate candidate Samsung CL05B104KO5NNNC)"),
+                          Purpose="U1 VBUS - ADDED"))
     c1.place(*place["C1"][:2], place["C1"][2])
     d.add(c1)
     d.net("VBUS_IN", "C1.1")
@@ -320,10 +332,12 @@ def gl1_cradle_design(name=DESIGN_NAME, placement=None):
                   description="Spring pin, long stroke, 0.59 N at the working height",
                   fields=dict(_status(PROV, "series and stroke research-confirmed; tail 0.635 mm and "
                                             "minimum hole 0.737 mm from docs/SOURCING.md A6 (search extracts, "
-                                            "not the drawing); TAIL LENGTH about 1.34 mm in a 1.6 mm board is "
-                                            "OPEN (long-tail variant %s or a thinner board); barrel and plunger "
+                                            "not the drawing); tail length about %.2f mm (YAML, PROVISIONAL): "
+                                            "%.2f mm through the %.1f mm board of spec E36; barrel and plunger "
                                             "diameters assumed (MILLMAX_0914); Digi-Key PN from docs/sourcing.csv"
-                                            % MILLMAX_0914["mpn_long_tail"]),
+                                            % (MILLMAX_0914["tail_length_estimate"],
+                                               MILLMAX_0914["tail_length_estimate"] - BOARD_THICKNESS,
+                                               BOARD_THICKNESS)),
                               Purpose="pin %d: %s%s" % (i, pname, "" if pname in fitted
                                                          else " (factory fixture only)")))
         sp.place(round(x, 4), round(PIN_Y, 4), 0.0)

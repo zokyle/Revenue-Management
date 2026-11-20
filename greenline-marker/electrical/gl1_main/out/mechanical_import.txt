@@ -1,4 +1,3 @@
 $ cd mechanical && python3 -B cad/board_import.py ../electrical/gl1_main/out/gl1_main-mechanical.json
-FAIL FAILED (1): LCD connector J1: x, y: board (0.0, -12.9), YAML (0.0, -13.9)
-  warning: keep-out battery_body of the board file: battery body: DIFFERS from the YAML
-exit status 1
+PASS board gl1_main agrees with the YAML outline, hole and slot; 86 top-side parts clear the tub by 0.25 mm or more (U2) and respect post feet, hood zones, free height and foot zones; J1 body box and anchor on the YAML (mouth y -17.3); 18 bottom-side parts inside the grain opening or the pad slot; 14 copper-only footprints by their own rules (3 ball-foot lands on their feet); 7 contact pads on the cradle pin axes
+exit status 0

@@ -1,19 +1,19 @@
-"""Deviations of the mechanical model from the written specification, with reasons (revision D as amended: decisions N1 to N10,
-spec amendments E1 to E16).
+"""Deviations of the mechanical model from the written specification, with reasons (revision E: decisions N1 to N10, spec
+amendments E1 to E16, and E17 to E22, E24, E36 entered at revision letter E, which close D31 and D33 to D35).
 
 This list is written into export/check_report.{json,md} by checks.run_all() and is copied into the README.
 Numbers are taken from params so they follow the YAML.
 
 status:
-    "closed (rev C)" / "closed (rev D)" / "closed (rev D amended, N<n>)"
+    "closed (rev C)" / "closed (rev D)" / "closed (rev D amended, N<n>)" / "closed (rev E, E<n>)"
                        that YAML revision or decision removed the conflict (the model is now what the specification says and
                        params asserts it); kept here only as a pointer
     "accepted"         the system owner accepted it; it stays a recorded deviation from a general rule
     "recorded"         the model differs from the specification text for a stated reason
-    "open"             needs a decision or a change of a shared number (see PROPOSED_PARAM_CHANGES.md, part C: part B of that
-                       file is the disposition of the decided proposals N1 to N10)
-`yaml_change` = True means a SHARED number or the shared text would have to change (the YAML is not edited here); the
-proposal is in PROPOSED_PARAM_CHANGES.md, part C.
+    "open"             needs a decision or a change of a shared number (see PROPOSED_PARAM_CHANGES.md: part B is the
+                       disposition of the decided proposals N1 to N10, part C that of N11 to N19 = E17 to E22)
+`yaml_change` = True means a SHARED number or the shared text would have to change (the YAML is not edited here).  At rev E
+no standing deviation carries it.
 """
 import math
 import params as P
@@ -26,7 +26,8 @@ _lcd_corner_r_fwd = math.hypot(P.LCD_X1, P.LCD_Y0 + M["lcd_bias"])
 _bundle_pad = 1.622 - P.THIN_STRIP_T * math.tan(math.radians(P.FOV_H))
 _alt = P.BASE_VARIANTS[P.BASE_ALT]
 _uf_lim = O.upper_field_closed_form(M["print_tol"])
-_uf_play = O.upper_field_closed_form(M["print_tol"], P.spigot_play()["fore_aft"])
+_uf_play_nom = O.upper_field_closed_form(M["print_tol"], P.spigot_play()["fore_aft"])            # rev D definition (nominal fit, 20 C)
+_uf_play = O.upper_field_closed_form(M["print_tol"] + M["roof_cold_drop"], P.spigot_play(P.SPIGOT_FIT_MAX)["fore_aft"])   # E17: loosest fit, cold roof
 _uf_a, _uf_L, _uf_m = O.upper_field_terms(M["print_tol"])
 _gap = lambda v: v["accept"][0] + (v["psa_t"] - v["psa_tol"]) - (P.BALL_TOP_Z + M["tol_ball_set"])      # epoxy under a nominal ball at the lower plate limit
 _ink_to_opening = L.geometry().distance(L.feature_shapes()["grain opening"])                               # legend ink to the grain opening (1.2)
@@ -133,7 +134,8 @@ DEVIATIONS = [
          implemented=f"four pockets dia {M['foot_pocket_dia']} x {M['foot_pocket_depth']} for dia {M['foot_dia']} x {M['foot_h']} mm adhesive bumpers, each with a blind core "
                      f"dia {M['core_dia']} behind it (the corners would otherwise be 13 mm solid); PCB held "
                      f"against the pocket ceiling by four M2 thread-forming screws (not modelled; printed as dia {M['cradle_screw_pilot_dia']} x {M['cradle_screw_pilot_depth']} spot marks, "
-                     "drilled dia 1.6 x 3 after printing because a blind 1.7 mm hole would trap powder); three lightening pockets underneath",
+                     f"drilled dia {M['cradle_screw_drill'][0]} x {M['cradle_screw_drill'][1]} after printing because a blind 1.7 mm hole would trap powder; M2 x {M['cradle_screw_len']:g} screws "
+                     f"through the {P.CPCB_SIZE[2]} mm board of E36, {P.SCREW_ENGAGE:.1f} mm of thread in the body); three lightening pockets underneath",
          reason="'3 mm feet' read as 3 mm high bumpers (ambiguous); the pin force pushes the PCB out of its pocket so it needs positive retention"),
     dict(id="D19", part="tub / main_pcb", status="accepted", yaml_change=False,
          requirement="0.25 mm clearance on every drop-in fit",
@@ -197,12 +199,13 @@ DEVIATIONS = [
                      f"(side gaps, top bead {M['window_top_bead']}, sill fillet {P.WIN_SILL_FILLET} x {P.WIN_SILL_FILLET}); nothing behind the glass",
          reason=f"the amended YAML says exactly this (visor_window.sub_flush {P.Y['visor_window']['sub_flush']}, bond_line {P.Y['visor_window']['bond_line']}, bond); params asserts the numbers; "
                 "check 13 proves that the frame, not the bare seat, closes the opening"),
-    dict(id="D31", part="tub / optics", status="closed (rev D amended, N3)", yaml_change=False,
-         requirement="upper field 15.0 deg guaranteed at the tolerance limit (rev D before the amendment)",
-         implemented=f"YAML up_guaranteed = {P.FOV_UP_GUAR} deg, DEFINED as the worst case with the optics {M['print_tol']} mm high and the {P.spigot_play()['fore_aft']:.3f} mm fore-aft play of the spigot fit "
-                     f"against it: the model gives {_uf_play:.2f} deg there (closed form {_uf_play:.3f}; {_uf_lim:.2f} without the play)",
-         reason=f"check 4 compares the with-play figure with the YAML strictly and fails below it; the margin is {_uf_play - P.FOV_UP_GUAR:.2f} deg (closed form: {_uf_a:.2f} tan(t) + {_uf_L:.2f} tan(t') = "
-                f"{_uf_m:.2f} mm, sin(t) = {M['n_prism']} sin(t'), without the play)"),
+    dict(id="D31", part="tub / optics", status="closed (rev E, E17; before: rev D amended, N3)", yaml_change=False,
+         requirement="upper field 15.0 deg guaranteed at the tolerance limit (rev D before the amendment); 14.5 deg on the nominal spigot fit (N3)",
+         implemented=f"YAML up_guaranteed = {P.FOV_UP_GUAR} deg, DEFINED (E17) as the worst case with the optics {M['print_tol']} mm high, the {P.spigot_play(P.SPIGOT_FIT_MAX)['fore_aft']:.3f} mm fore-aft play of the "
+                     f"LOOSEST spigot fit ({P.SPIGOT_FIT_MAX}) against it and the roof at {M['t_range'][0]:g} C ({M['roof_cold_drop']} mm lower, this package's estimate): the model gives {_uf_play:.2f} deg there "
+                     f"(closed form {_uf_play:.3f}; {_uf_play_nom:.3f} at the nominal fit and 20 C; {_uf_lim:.2f} without any play)",
+         reason=f"check 4 compares the figure of the defined case with the YAML strictly, on both cameras, and fails below it; the margin is {_uf_play - P.FOV_UP_GUAR:.2f} deg (closed form: {_uf_a:.2f} tan(t) + "
+                f"{_uf_L:.2f} tan(t') = {_uf_m:.2f} mm, sin(t) = {M['n_prism']} sin(t'), without the play). The pupil position and diameter behind the figure are still ASSUMED (release gate)"),
     dict(id="D32", part="grain_potting / baffle_ring", status="closed (rev D amended, N4 and E16)", yaml_change=False,
          requirement="clear potting with its surface 0.05 below the base plane; baffle ring with its top flush with the potting (rev D before the amendment)",
          implemented=f"potting surface never closer to the base plane than z {P.GRAIN_FILL_Z}, aimed at z {P.GRAIN_FILL_TARGET_Z}, accepted to z {P.GRAIN_FILL_Z_MAX} and from the ring crest to "
@@ -210,15 +213,14 @@ DEVIATIONS = [
                      f"plate thickness + {P.BAFFLE_RING_RULE:.2f} - tape thickness, crest z {P.baffle_crest_range()['matched'][0]:.2f} to {P.baffle_crest_range()['matched'][1]:.2f} (accepted 0 to {P.BAFFLE_CREST_MAX_Z})",
          reason="the amended YAML carries these numbers (base_plate.grain_cavity.fill_surface_z, base_plate.baffle.ring); the model reads them and asserts target, ring height, crest window "
                 f"and tape range; E16: the tape is {min(P.BAFFLE_TAPE_RANGE)} to {max(P.BAFFLE_TAPE_RANGE)} mm as available (modelled {P.BAFFLE_PSA_T})"),
-    dict(id="D33", part="ball feet / base_plate", status="recorded", yaml_change=True,
+    dict(id="D33", part="ball feet / base_plate", status="closed (rev E, E20)", yaml_change=False,
          requirement=f"plates accepted from {P.BASE_VARIANTS['fr4']['accept'][0]:.2f} mm (PA12 {P.BASE_VARIANTS['pa12']['accept'][0]:.2f}): the lower limit keeps {M['ball_gap_min']} mm of epoxy between each ball and "
                      f"its land (YAML base_plate.thickness_accepted, N6); balls of grade 100 or better (E8)",
-         implemented=f"true for a ball of exactly {P.BALL_D} mm. A grade 100 ball may be {M['ball_dia_tol']} mm larger (basic diameter tolerance, ABMA figure as remembered): set to its protrusion on the gauge "
-                     f"plate it stands that much higher, and {_gap_g100:.3f} mm (PA12 {_gap_g100_pa:.3f}) of epoxy is left at the lower plate limit. Incoming rule of this package: the ball lot is measured and "
-                     f"the lower plate limit is raised by the oversize of the lot ({P.BASE_VARIANTS['fr4']['accept'][0] + M['ball_dia_tol']:.3f} mm at the grade limit)",
-         reason=f"E8 widened the ball grade from 25 (+-{M['ball_dia_tol_g25']} mm) to 100 after the plate limits were fixed; no grade 25 ball in 316 stainless was found at 1 mm (docs/SOURCING.md). "
-                "The protrusion, not the ball top, is what the gauge plate sets. Check 2 carries the row as this deviation"),
-    dict(id="D34", part="fixtures on the outer face (calibration seat plate, ball gauge plate, bridge gauge) / base_plate legend", status="recorded", yaml_change=True,
+         implemented=f"E20 raised the lower limits (0.76 -> 0.78, PA12 0.83 -> 0.84) and put the ball tolerance in the YAML (feet.dia_tol {M['ball_dia_tol']}, PROVISIONAL: as remembered from the "
+                     f"ball standard). A grade 100 ball at its upper limit, set to its protrusion on the gauge plate, now leaves {_gap_g100:.3f} mm (PA12 {_gap_g100_pa:.3f}) of epoxy at the lower plate limit",
+         reason=f"at the rev D limits such a ball left 0.007 mm (PA12 0.014). Check 2 REQUIRES the row since rev E and params asserts that the YAML limit is the least one that keeps "
+                f"{M['ball_gap_min']} mm under an oversize ball. Open with it: the tolerance itself against the ball standard or the supplier's certificate (release gate)"),
+    dict(id="D34", part="fixtures on the outer face (calibration seat plate, ball gauge plate, bridge gauge) / base_plate legend", status="closed (rev E, E18)", yaml_change=False,
          requirement="turf-seat zero on a plate with three clearance pockets for the balls so that the base face seats (DESIGN_SPEC section 6, E11); legend at least "
                      f"{M['legend_clear']} mm from the ball-foot holes (E10); balls set on a gauge plate (YAML base_plate.feet)",
          implemented=f"no fixture bears on printed legend. The base face seats on three annular pads (dia {P.CAL['pad_od']} round each dia {P.CAL['pocket_dia']} x {P.CAL['pocket_depth']} pocket, trimmed "
@@ -231,8 +233,9 @@ DEVIATIONS = [
                 f"add itself to the ball protrusion ({P.BALL_PROT} +-{M['tol_ball_set']}) and take the same {M['legend_ink_t_max']} from the epoxy between ball and land ({M['ball_gap_min']} at the lower plate "
                 f"limit); a depth gauge resting on legend {_ink_to_opening:.1f} mm from the grain opening would read the potting level that much deep against a never-below "
                 f"limit of {P.GRAIN_FILL_Z}. Three points next to the feet on bare mask are one reference plane for all of these, and they measure what E11 is about: the plane of the base face against the plane "
-                "of the balls. A laser-marked legend has no height and would not need this"),
-    dict(id="D35", part="retarder_film (optional) / cover_glass", status="recorded", yaml_change=True,
+                "of the balls. A laser-marked legend has no height and would not need this. E18 put the seat zone (dia 8.5), the edge margin, the registration, the print rules "
+                "and the fixture rule into the YAML (base_plate.legend) and the spec; params asserts them and checks 15 and 18 measure them"),
+    dict(id="D35", part="retarder_film (optional) / cover_glass", status="closed (rev E, E19)", yaml_change=False,
          requirement="quarter-wave film, about 0.1 mm, on the underside of the cover glass, axis 45 deg to the LCD polariser; 1.08 mm of air between display and glass, so nothing else moves (E9)",
          implemented=f"film dia {P.RETARDER_D} x {P.RETARDER_T} (with its laminating adhesive) with a clocking flat {P.RETARDER_FLAT_LEN:.1f} long toward the visor: {P.RETARDER_Z0 - P.LCD_Z1:.2f} mm to the display, "
                      f"{(M['cover_tape_id'] - P.RETARDER_D) / 2:.2f} mm inside the bore of the tape ring ({P.retarder_chain()['bore'][1]:.2f} left after the centring chain at its worst case), "
@@ -242,7 +245,17 @@ DEVIATIONS = [
          reason=f"the air gap of 1.08 mm exists only inside the aperture. A film (with adhesive) thicker than {P.RETARDER_T + M['retarder_t_tol']:.2f} mm would carry the glass off its tape ring: "
                 f"it is then cut to dia {P.APERTURE_D - 2 * P.CLR:.1f} and hangs inside the aperture (its edge visible). The diameter is set by the centring chain (film on glass {M['retarder_place_tol']}, glass in "
                 f"its recess {(P.RECESS_D - P.CG_D) / 2:.2f}, tape ring in the recess {(P.RECESS_D - P.CG_D) / 2:.2f}): a film that reached under the tape would lift the glass off its seal. The crystal and its "
-                f"recess are round, so the flat is what carries the film axis to the tub (edge mark on the crystal set to the nose groove, +-{M['retarder_clock_tol_deg']:.0f} deg). Check 2 carries the rows"),
+                f"recess are round, so the flat is what carries the film axis to the tub (edge mark on the crystal set to the nose groove, +-{M['retarder_clock_tol_deg']:.0f} deg). Check 2 carries the rows. E19 put the diameter, the flat, the thickness limit and the "
+                "placement into the YAML (cover_glass.retarder) and the spec; params asserts them"),
+    dict(id="D36", part="cradle (screw holes of the cradle PCB)", status="recorded", yaml_change=False,
+         requirement="every printed wall >= 0.8 mm; cradle board 1.0 mm instead of 1.6 mm with its top face unmoved (E36)",
+         implemented=f"four M2 x {M['cradle_screw_len']:g} thread-forming screws (rev D: M2 x 5) through the {P.CPCB_SIZE[2]} mm board into holes drilled dia {M['cradle_screw_drill'][0]} x "
+                     f"{M['cradle_screw_drill'][1]} from the spot marks in the pocket ceiling: {P.SCREW_ENGAGE:.1f} mm of thread ({P.SCREW_ENGAGE / 2:.1f} screw diameters), {M['cradle_screw_tip_clear']} under the tip. "
+                     f"Above the two front holes (y {P.CPCB_SCREWS[-1][1]}), which lie under the drained basin of the nest, about 0.47 mm of material is left (check 7 measures it and requires "
+                     f"{M['cradle_screw_skin_min']}); above the two rear holes several millimetres",
+         reason="the skin is left by a drill after printing, not printed as a wall, and it carries no load (the thread is below it); a break-through would open a path from the basin to the PCB pocket. "
+                "Rev D had 0.67 mm there on paper, but its M2 x 5 screw needed 3.4 mm of thread in a 3 mm hole. Shorter standard screws would leave less than 1.5 diameters of thread in PA12. "
+                "Remedy if first articles break through or the pull test fails: move the two front screws outboard of the basin (a cradle and cradle-board change)"),
 ]
 
 OPEN = [d for d in DEVIATIONS if not d["status"].startswith("closed")]

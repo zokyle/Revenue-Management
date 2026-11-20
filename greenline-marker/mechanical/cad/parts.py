@@ -467,7 +467,7 @@ def cradle_pcb():
         body = body.cut(cyl(x, P.PAD_Y, M["pin_tail_dia"] / 2 + 0.07, P.CPCB_Z0 - 1, P.CPCB_Z1 + 1))
     for (sx, sy_) in P.CPCB_SCREWS:
         for s in (1, -1):
-            body = body.cut(cyl(s * sx, sy_, 1.1, P.CPCB_Z0 - 1, P.CPCB_Z1 + 1))
+            body = body.cut(cyl(s * sx, sy_, M["cradle_screw_hole_dia"] / 2, P.CPCB_Z0 - 1, P.CPCB_Z1 + 1))
     return body
 
 
@@ -477,9 +477,10 @@ def usb_receptacle():
 
 
 def spring_pin(x):
-    """Mill-Max 0914-series pin (PROVISIONAL envelope), drawn compressed to its working height on the pad face."""
+    """Mill-Max 0914-series pin (PROVISIONAL envelope), drawn compressed to its working height on the pad face.  E36: the tail
+    is YAML cradle.pins.tail_length long below the board top (PROVISIONAL), so it comes PIN_TAIL_THROUGH out of the 1.0 mm board."""
     y = P.PAD_Y
-    tail = cyl(x, y, M["pin_tail_dia"] / 2, P.CPCB_Z0 - M["pin_tail_below_pcb"], P.CPCB_Z1)
+    tail = cyl(x, y, M["pin_tail_dia"] / 2, P.PIN_TAIL_Z0, P.CPCB_Z1)
     body = cyl(x, y, M["pin_body_dia"] / 2, P.CPCB_Z1, P.PIN_BODY_Z1)
     plunger = cyl(x, y, M["pin_plunger_dia"] / 2, P.PIN_BODY_Z1, P.PAD_Z0)
     return tail.union(body).union(plunger)
@@ -536,10 +537,11 @@ def led_boxes(z_overlap=0.0):
 
 
 def main_pcb():
-    """Board + every top-side part box (except cameras / battery) + bottom-side LEDs, photodiode and pads."""
+    """Board + every fitted top-side part box (except cameras / battery; rev E: the list of the routed board, passives
+    included, parts marked dnp left out) + bottom-side LEDs, photodiode and pads."""
     body = pcb_board()
     for p in P.TOP_PARTS:
-        if p["ref"] in PCB_SKIP:
+        if p["ref"] in PCB_SKIP or p.get("dnp"):
             continue
         body = body.union(box(p["x"] - p["dx"] / 2, p["x"] + p["dx"] / 2, p["y"] - p["dy"] / 2, p["y"] + p["dy"] / 2,
                               P.PCB_Z1 - 0.01, P.PCB_Z1 + p["h"]))
@@ -578,13 +580,14 @@ def lcd_glass():
 
 def lcd_flex():
     """Representative FPC tail (PROVISIONAL): leaves the rear edge of the glass, makes one U-fold (centre-line radius
-    about 1 mm) and runs forward into the mouth of J1, which faces the rear.  Modelled up to the mouth face."""
+    about 1 mm) and runs forward into the mouth of J1, which faces the rear.  Modelled up to the mouth face.
+    E24: the mouth (y -17.30) is 0.50 behind the glass edge (-16.80): the upper run passes back over the rear of the connector
+    body, the fold starts flex_straight behind the mouth (P.FLEX_FOLD_Y) and lies wholly behind it."""
     t, w = M["flex_t"], M["flex_w"]
     zt, zb = P.FLEX_ZT, P.FLEX_ZB
     r = P.FLEX_BEND_R
-    ya = P.LCD_Y0 - M["flex_straight"]
-    j1 = next(p for p in P.TOP_PARTS if p["ref"] == "J1")
-    mouth = j1["y"] - j1["dy"] / 2
+    ya = P.FLEX_FOLD_Y
+    mouth = P.J1_MOUTH_Y
     pts = [(P.LCD_Y0, zt), (ya, zt)]
     for i in range(1, 24):
         a = math.pi / 2 + math.pi * i / 24

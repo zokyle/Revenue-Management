@@ -1,5 +1,5 @@
 M48
-; GreenLine GL-1, GL1-011 base plate FR-4: NON-PLATED holes (NPTH). PROVISIONAL - not released. Rev D-EVT1
+; GreenLine GL-1, GL1-011 base plate FR-4: NON-PLATED holes (NPTH). PROVISIONAL - not released. Rev E-EVT1
 ; origin = centre of the outline arc, absolute, millimetres, decimal point
 FMAT,2
 METRIC,TZ

@@ -1,19 +1,20 @@
-# GreenLine GL-1 mechanical design package (parameters rev D-EVT1 as amended, drawings rev D-EVT1.2)
+# GreenLine GL-1 mechanical design package (parameters rev E-EVT1, drawings rev E-EVT1.0)
 
 **Status: PROVISIONAL, not released. Nothing in this folder has been built, printed, fabricated or measured.**
-Every number comes from the CAD model, which is driven by `../design/master_params.yaml` (rev D, amended in place by
-the decisions N1 to N10 and the spec amendments E1 to E16). "Computed" below means
+Every number comes from the CAD model, which is driven by `../design/master_params.yaml` (rev E: rev D with the
+decisions N1 to N10, the spec amendments E1 to E36 and the part lists of the routed boards). "Computed" below means
 a boolean, ray or sampling computation on the solids of this build; "estimate" means arithmetic on assumed inputs;
 nothing is "tested". Where the model differs from the specification the difference is a numbered deviation
-(section 11); where a shared number should change it is in `PROPOSED_PARAM_CHANGES.md`. `master_params.yaml` was not edited.
+(section 11). `PROPOSED_PARAM_CHANGES.md` records what became of every proposal of this package; at rev E none is
+open that the model depends on. `master_params.yaml` was not edited by this package.
 
 The package is for three readers: a PCB fabricator (the routed FR-4 base plate, drawing GL1-011), a US 3D-printing
 bureau (tub, cradle, baffle ring and the alternative PA12 base plate) and the person who assembles the first units.
 Read "Open issues, release gates and test items" (section 12) before ordering anything. The four that matter most:
 the EVT units are **not step-proof**; the seal, every adhesive and the cradle latch are calculated or chosen by class,
-not tested; the upper edge of the camera field has almost no tolerance margin (accepted: the YAML guarantees 14.5
-degrees with the optics 0.2 mm high and the spigot play against it, and the model gives 14.61 there for the nominal
-spigot fit; the hole tolerance of the board alone uses that margin up, section 5); and the tilt
+not tested; the upper edge of the camera field has almost no tolerance margin (accepted: since E17 the YAML guarantees
+14.0 degrees with the optics 0.2 mm high, the loosest locating fit against it and the roof at -10 C, and the model
+gives 14.03 there; that figure still rests on an assumed lens pupil, section 5); and the tilt
 drift of the PCB / base laminate with temperature and humidity has to be **measured** on both base-plate variants at EVT.
 
 ![assembled marker](renders/GL1_render_a_front_top.png)
@@ -23,7 +24,8 @@ drift of the PCB / base laminate with temperature and humidity has to be **measu
 ```
 cd greenline-marker/mechanical
 python3 cad/build.py              # about 7 minutes; exits non-zero on any failed check, drawing, render or stale README number
-python3 cad/build.py --selftest   # seeds 62 defects and confirms that each check catches its defect (about 20 minutes)
+                                  # (2026-11-18, on the rebuilt rev E boards: exit 0)
+python3 cad/build.py --selftest   # seeds 83 defects and confirms that each check catches its defect (about 30 minutes)
 ```
 
 `build.py` regenerates the solids, STEP and STL files, the resolved parameters, the check report, the drawings
@@ -39,13 +41,13 @@ times; a blank picture fails the build.
 
 | Path | Content |
 |---|---|
-| `cad/params.py` | loads the YAML, holds the mechanical-only choices (`MECH`), derives every dependent dimension once; the base-plate material is a parameter (`BASE_VARIANTS`, `base_variant()`); asserts that the YAML and the model agree (among them every decision N1 to N10) |
+| `cad/params.py` | loads the YAML, holds the mechanical-only choices (`MECH`), derives every dependent dimension once; the base-plate material is a parameter (`BASE_VARIANTS`, `base_variant()`); asserts that the YAML and the model agree (among them every decision N1 to N10 and, since rev E, every number of E17 to E22, E24 and E36) |
 | `cad/parts.py` | one function per part, each returns a CadQuery solid in the assembly frame; base plate, adhesive sheet, seal joint, pottings follow the active base variant |
 | `cad/assembly.py` | named, coloured parts of the primary build and of the alternative build (suffix `_pa12`); allow-list of intended contacts; STEP / STL export; print orientations |
-| `cad/checks.py` | the eighteen checks; `cad/optics.py` the exact ray trace and its closed-form cross-check; `cad/geom.py` sections, projections, ray casting |
+| `cad/checks.py` | the nineteen checks; `cad/optics.py` the exact ray trace and its closed-form cross-check; `cad/geom.py` sections, projections, ray casting |
 | `cad/legend.py` | the legend of the outer face of the FR-4 base plate (E10): placeholder blocks, a small stroke font with its letter-spacing rule, the keep-clear zones, the footprints of the fixtures that bear on the face |
 | `cad/fabdata.py` | Gerber and Excellon files of the FR-4 base plate (profile, two mask layers, the legend layer of the outer face, drill), written from the plate solid and from `legend.py`, and the readers check 15 uses to read them back |
-| `cad/board_import.py` | check 17: reads the board toolchain's `*-mechanical.json` and checks the real circuit board against the YAML and the tub |
+| `cad/board_import.py` | checks 17 and 19: reads the board toolchain's `*-mechanical.json` files and checks the real main board against the YAML and the tub, and the real cradle board against the YAML cradle block and the cradle model; also a command (`python3 cad/board_import.py [file]`, `--cradle [file]`) |
 | `cad/holddown.py`, `cad/latchfe.py` | cradle hold-down: beam model of the latch and plane-strain finite-element model of its section |
 | `cad/deviations.py` | the recorded deviations with their status (text is built from the parameters) |
 | `cad/drawings.py`, `cad/drawlib.py` | dimensioned drawings from projections and true sections of the solids; DXF profiles |
@@ -59,11 +61,31 @@ times; a blank picture fails the build.
 | `export/check_report.md`, `.json` | full check results with every table; `export/selftest_report.json` |
 | `drawings/` | GL1-001, -002, -010, -011, -012, -013, -020, -050 as PDF and SVG; `dxf/` 2D profiles; `fab/` Gerber profile, two mask layers, legend layer and Excellon drill of the FR-4 plate; `preview/` PNG of every sheet |
 | `renders/` | six PNG renders |
-| `PROPOSED_PARAM_CHANGES.md` | disposition of the rev C proposals under rev D (part A), of the proposals N1 to N10 (part B), and the new changes proposed to the YAML (part C) |
+| `PROPOSED_PARAM_CHANGES.md` | disposition of the rev C proposals under rev D (part A), of the proposals N1 to N10 (part B), of N11 to N19 = E17 to E22, all closed at rev E (part C), and what the package asks for after rev E (part D) |
 
 Frame (same as the YAML): origin at the puck centre on the base plane, +x right, +y forward toward the hole (the flat
 visor face), +z up, millimetres. The base plane is the underside of the base plate. The cradle is modelled in the same
 frame with the marker seated.
+
+### What revision E changed in this package
+
+Revision E enters the amendments E17 to E22 (this package's proposals N11 to N19), E24 and E36 in the YAML and folds
+the routed boards back in. The numbers below are those of this build; the three tables that follow are the record of
+revision D and of its two later issues and keep the figures of their time (14.5 / 14.61 degrees, 12.23 g, plates from
+0.76 mm, gate bars at +-13.5 degrees, U11 at 0.312 mm), which the rows here replace.
+
+| Amendment (proposal) | YAML rev E | In the model, the checks and the drawings |
+|---|---|---|
+| E17 (N18) guaranteed upper field | `up_guaranteed: 14.0`, defined by `cameras.up_guaranteed_case` (optics 0.2 high, locating fit 0.125, roof at -10 C, model 14.03); `pcb.locating_holes`: hole and slot width +0.05 / 0, spigot +0 / -0.05, `fit_max: 0.125`, no-go gauge dia 0.95; gate bars +-13.0 | `params.py` asserts fits, case and bars. Check 4 traces THAT case on both cameras and compares strictly: **14.03 deg in the guaranteed case** (camera L 14.03, camera R 14.03; closed form 14.033, required to reproduce the YAML model figure), margin +0.03 deg. The rev D case (nominal fit, 20 C) is kept as an information row: 14.611 deg. D31 stays closed, now on E17 |
+| E18 (N12, N19) legend rules, fixtures on bare mask | `base_plate.legend`: line / space 0.15, text 1.0, ink 0.03, seat zones dia 8.5, edge 0.75, registration 0.15, 88 characters, `fixture_rule` | the former `MECH` numbers are read from the YAML and asserted (zone = pad 7.0 + 2 x (0.6 + 0.15)); checks 15 and 18 unchanged in substance; D34 closed |
+| E19 (N13) retarder film | `cover_glass.retarder`: dia 23.4, flat 4.3 at y 11.5, 0.11 max, placement 0.25 | read and asserted; D35 closed |
+| E20 (N11) plate limits, ball tolerance | `thickness_accepted` [0.78, 0.90] / [0.84, 0.92]; `feet.dia_tol` 0.0127 (PROVISIONAL) | the lower limit must now keep 0.02 mm of epoxy under a ball at the UPPER diameter limit: asserted, and check 2 requires the row (0.027 mm, PA12 0.024; it was a recorded 0.007 / 0.014); D33 closed |
+| E21 (N15) ring rule | `baffle.ring`: `rule_offset` 0.15, `tape` [0.10, 0.145], `nominal_tape` 0.13, `print_height` 1.10 | all asserted (the old assertion parsed "+ 0.02" from the text). Finished rings over the accepted plates 0.755 to 0.95 (0.735 belonged to the 0.76 limit) |
+| E22 (N16, N17) rotation, cell adhesive | `lcd.rotation_in_pocket_max_deg` 1.2; `battery.fixing_adhesive_max` 0.06 | check 14: 1.19 deg computed, must agree with the YAML within 0.05, fails above 1.25; 0.09 mm of air left over a fully swollen cell |
+| E24 J1 0.5 mm to the rear | J1 body centre (0, -14.5), 8.1 x 5.6 x 2.0, mouth y -17.30, `anchor` (0, -12.9); `lcd_tail` zone y -21.1 to -17.3; `battery.board_keepout_notch` | the mouth is now 0.50 BEHIND the rear edge of the glass. The representative tail is re-modelled: 0.85 back from the glass edge (over the rear of the connector, 0.90 above it), one fold of radius 0.99 wholly behind the mouth, 0.35 into it; rearmost point y -18.71, **free length 4.30 mm** (was 3.80). Check 2: 0.70 to the tub, and 0.25 is now REQUIRED there. Check 12: fold inside the zone, 0.225 over a 0.7 mm part, upper run over J1 only |
+| E25, E26 parts; the routed part list | `top_side_parts`: 88 entries regenerated from the board (87 bodies + the cell; 73 passives; R14 not fitted), U12 LM66100DCKR (SC-70-6), U11 the 5-pin LP5907MFX-3.3; `bottom_side_parts.board_parts` | every fitted body is in the PCB solid and in checks 1, 2, 10; nearest part to a ball-foot zone is now C23 at 0.888 mm (U11 stands 1.6 mm clear: N14 settled). Marker **12.11 g** (was 12.23: the bodies are those of the board, mostly smaller than the rev D boxes) |
+| E36 cradle board 1.0 mm | `cradle.pcb.thickness` 1.0, `top_z` unchanged; `pins.tail_length` 1.34 (PROVISIONAL) | **cradle board 1.0 mm**, top face still at z -4.855 (measured on the board and on the pocket ceiling), underside z -5.855; pin heights unchanged (5.82 working, 6.07 floated); pin tail 0.34 through the board; screws M2 x 4, drill dia 1.6 x 3.2 (new recorded deviation D36: 0.47 mm of material above the two front screw holes); cradle assembly 30.4 g |
+| Board import | - | check 17 runs on the real main board for the first time and passes; it compares J1 by its body box, treats copper-only footprints by their own rules, and requires the battery keep-out with the J1 courtyard notch. New check 19: the cradle board file (thickness, outline, screw holes, pin row, USB receptacle) |
 
 ### What revision D changed in this package
 
@@ -139,7 +161,7 @@ reordered (cell and prisms after lamination and potting, a dry trial close befor
 | GL1-010 | Tub (top shell) | HP 3D High Reusability PA 12, Multi Jet Fusion, dyed black, chemical vapor smoothing | 46.0 x 41.4 x 7.35 | 2.471 cm3 | 2.50 g | 49.9 cm2 |
 | GL1-011 | Base plate, **primary** | FR-4 0.80 mm, matte black solder mask both sides, no copper; routed and drilled by the PCB fabricator; white legend on the outer face (E10, sheet 2) | 43.5 x 40.0 x 0.80 | 1.006 cm3 (12.57 cm2) | 1.86 g | - |
 | GL1-012 | Base plate, **alternative** | HP PA 12, Multi Jet Fusion, dyed black, NOT vapor smoothed | 43.5 x 40.0 x 0.87 | 1.115 cm3 | 1.13 g | 28.1 cm2 |
-| GL1-013 | Grain baffle ring (FR-4 build only) | HP PA 12, Multi Jet Fusion, dyed black, not smoothed; lapped to height by us | dia 8.2 / 6.6 x 0.82 finished (0.735 to 0.95 by plate lot and tape); print file: sprued set of six, 20.4 x 30.2 x 2.0, rings 1.10 high | 0.0153 cm3 (set 0.247 cm3) | 0.015 g | 0.75 cm2 |
+| GL1-013 | Grain baffle ring (FR-4 build only) | HP PA 12, Multi Jet Fusion, dyed black, not smoothed; lapped to height by us | dia 8.2 / 6.6 x 0.82 finished (0.755 to 0.95 by plate lot and tape); print file: sprued set of six, 20.4 x 30.2 x 2.0, rings 1.10 high | 0.0153 cm3 (set 0.247 cm3) | 0.015 g | 0.75 cm2 |
 | GL1-020 | Cradle body with lip and latch | HP PA 12, Multi Jet Fusion, any colour, not smoothed, not tumbled | 60.0 x 60.0 x 22.6 | 27.07 cm3 | 27.3 g | 161.8 cm2 |
 
 The print files are watertight single shells (tub 23,046 triangles, cradle 13,492, baffle-ring set 7,038, PA12 plate
@@ -165,7 +187,7 @@ status the item is PROVISIONAL here. Every envelope in the CAD is a simple solid
 | 7 | Visor window | 2 | 0.40 mm borosilicate (SCHOTT D 263 T eco class), custom cut 5.0 x 3.25; AR coating optional at EVT | 5.0 x 3.25 x 0.40 | PROVISIONAL (custom part, no source) |
 | 8 | Window adhesive | - | THIXOTROPIC (non-wicking, gel) light-cure adhesive: a closed frame round the edge of the glass, i.e. the fill of the two 0.25 mm side gaps, a 0.10 mm bead along the top edge and a 0.12 x 0.12 fillet on the shelf in front of the bottom edge. Nothing behind the glass | 0.91 mm3 per window | PROVISIONAL (class only) |
 | 9 | Vent | 1 | W. L. Gore VE80205 adhesive ePTFE vent, 5.0 outer, 2.0 vent area, 0.26 thick | dia 5.0 x 0.26 | PROVISIONAL (YAML basis: provisional). No US distributor was found and the water-entry pressure is unconfirmed; a Porex disc of the same size is the alternative named in docs/SOURCING.md |
-| 10 | Ball feet | 3 | 1.0 mm balls of **316 stainless, grade 100 or better, or silicon nitride; never 440C** (E8: 440C rusts in wet fertilised turf) | dia 1.0 | PROVISIONAL. 316 balls of 1 mm are listed in the US without a stated grade; the only grade 25 ball found is 440C, which is excluded (docs/SOURCING.md). The diameter of each lot is measured at incoming inspection (D33) |
+| 10 | Ball feet | 3 | 1.0 mm balls of **316 stainless, grade 100 or better, or silicon nitride; never 440C** (E8: 440C rusts in wet fertilised turf) | dia 1.0 | PROVISIONAL. 316 balls of 1 mm are listed in the US without a stated grade; the only grade 25 ball found is 440C, which is excluded (docs/SOURCING.md). The diameter of each lot is measured at incoming inspection: a lot beyond the grade 100 tolerance taken in the YAML (+0.0127, E20, PROVISIONAL) is not used |
 | 11 | Ball potting | - | stage 1 (in the hole, open to light from above): dual-cure or two-part epoxy. Stage 2 (between two opaque boards): a TWO-PART room-temperature epoxy. Per foot, FR-4 build: stage 1 0.27 mm3, stage 2 0.61 mm3 to fill the sheet hole, dispense 85 % (0.52); PA12 build: 0.40 and 0.41 (dispense 0.35) | plug in the hole + fill of the dia 2.0 sheet hole | PROVISIONAL (no part number); a UV-only grade does not cure in the shadow of the ball |
 | 12 | LCD adhesive frame | 1 | 0.15 mm foam-type PSA frame 26.6 x 30.3 with a dia 23 window and a 0.8 mm vent channel (`dxf/GL1-032`) | 0.15 thick | PROVISIONAL |
 | 13a | PCB-to-base adhesive sheet, FR-4 build | 1 | 3M 93020LE (300LSE) double-coated tape 0.20 mm, die cut: plain dia 13 opening, pad slot, three dia 2.0 foot holes (`dxf/GL1-030`) | 0.20 thick | thickness 0.20 found in docs/SOURCING.md (YAML basis still "provisional"); converter PROVISIONAL |
@@ -176,16 +198,16 @@ status the item is PROVISIONAL here. Every envelope in the CAD is a simple solid
 | 16a | Thermal adhesive for the two cell thermistors | 2 dabs | thermally conductive, electrically insulating, silicone-free adhesive that cures at room temperature (45 C at most); one dab joins each of the two NTCs (charger and MCU, 0402, within 1 mm of the cell edge) to the cell (DESIGN_SPEC section 4, E2) | not modelled: about 1 mm3 each, below the cell top (2.0 mm above the PCB) | PROVISIONAL (class only) |
 | 17 | Perimeter seal adhesive | 70 mm3 (PA12 build 65) | opaque BLACK, thixotropic, work life of an hour or more, cures at room temperature or at 45 C at most (the cell is on the board), rated for sustained peel at 70 C on primed PA12 and on FR-4 solder mask (structural acrylic or epoxy, not RTV) | 49.8 mm3 at nominal gaps in the FR-4 build (0.40 x 0.4 joint on the land + the 0.25 mm radial groove); 45.6 mm3 in the PA12 build (0.33 joint) | PROVISIONAL: adhesive not selected |
 | 18 | Hood gasket | 2 beads | black, soft (about Shore A 40), silicone-free form-in-place gasket material (UV-cure urethane-acrylate class), 0.43 mm3 per hood | bead 0.5 wide x 0.33 high x 3.9 long as dispensed; squeezed 24 % over a 0.17 mm land on the cube top | PROVISIONAL (class only) |
-| 19 | Main PCB assembly | 1 | 4-layer 0.8 mm, D outline R 21.1, flat y 17.3, round locating hole dia 1.15 at (14.35, 10.8) and slot 1.15 x 2.2 at (-14.35, 10.8) (`dxf/GL1-040`, re-issued: the slot was 1.8 long) | board + the 13 YAML part boxes + two battery-lead envelopes | Part boxes from the YAML (nominal); passives not modelled: the real board is checked by check 17 |
-| 20 | Cradle spring pin | 4 or 7 | Mill-Max 0914-series long stroke; consumer cradle 4 (VBUS, D-, D+, GND), factory fixture 7 | plunger dia 1.07, barrel dia 1.83 | PROVISIONAL (working height 5.82, 0.59 N, stroke 2.29; diameters and barrel length not confirmed) |
+| 19 | Main PCB assembly | 1 | 4-layer 0.8 mm, D outline R 21.1, flat y 17.3, round locating hole dia 1.15 at (14.35, 10.8) and slot 1.15 x 2.2 at (-14.35, 10.8) (`dxf/GL1-040`, re-issued: the slot was 1.8 long) | board + the 86 fitted top-side bodies of the YAML part list (rev E: regenerated from the routed board, passives included; R14 not fitted and left out; hole and slot dia 1.15 +0.05 / 0, E17) + two battery-lead envelopes | Bodies from the YAML (as routed); the board file itself is checked by check 17 |
+| 20 | Cradle spring pin | 4 or 7 | Mill-Max 0914-series long stroke; consumer cradle 4 (VBUS, D-, D+, GND), factory fixture 7 | plunger dia 1.07, barrel dia 1.83 | PROVISIONAL (working height 5.82, 0.59 N, stroke 2.29; diameters and barrel length not confirmed; tail taken as 1.34 below the board top, E36, an estimate: 0.34 through the 1.0 mm board) |
 | 21 | Cradle USB-C receptacle | 1 | GCT USB4105 | 8.94 x 7.35 x 3.26 | Envelope PROVISIONAL |
-| 22 | Cradle PCB | 1 | 2-layer 1.6 mm, 30 x 22 (YAML cradle.pcb), seven pin positions, resettable fuse on VBUS | 30 x 22 x 1.6 | position and top face from the YAML |
+| 22 | Cradle PCB | 1 | 2-layer 1.0 mm (E36; was 1.6), 30 x 22 (YAML cradle.pcb), seven pin positions, resettable fuse on VBUS | 30 x 22 x 1.0 | position, top face and thickness from the YAML; the board file is checked by check 19 |
 | 23 | Cradle feet | 4 | self-adhesive bumpers dia 8 x 3 | dia 8 x 3 | PROVISIONAL (generic) |
-| 24 | Cradle PCB screws | 4 | M2 x 5 thread-forming screws for plastic | not modelled | PROVISIONAL (generic) |
+| 24 | Cradle PCB screws | 4 | M2 x 4 thread-forming screws for plastic (rev D listed M2 x 5, which asked for 3.4 mm of thread in a 3 mm hole); drill dia 1.6 x 3.2 from the spot marks | not modelled; 3.0 mm of thread in the body | PROVISIONAL (generic); D36 |
 
 Fixtures and gauges the build needs (not product parts; in this CAD only where a solid is named). **Rule for every
 fixture that takes the outer face of the base plate as its reference: it bears on BARE MASK inside the legend-free
-zones round the three ball feet, never on printed legend** (ink 0.02 mm typical, 0.03 at most; D34; checks 15 and 18).
+zones round the three ball feet, never on printed legend** (ink 0.02 mm typical, 0.03 at most; a YAML rule since E18: `base_plate.legend.fixture_rule`; checks 15 and 18).
 
 - **Ball gauge plate** (step 2; solid `gauge_plate`, drawing GL1-050 item 3, detail on GL1-011 sheet 1, check 18):
   a ground plate 52 x 50 x 10 with three bosses dia 7.0, 0.30 proud, their tops ground in one plane within 0.005, at
@@ -201,7 +223,7 @@ zones round the three ball feet, never on printed legend** (ink 0.02 mm typical,
   the outline; a ball forced 0.05 off its gauge hole stands only 0.067 proud, design-review figure). Release: a
   non-transferring, silicone-free dry film (PTFE) baked onto the boss tops, nothing that can reach the bonding faces
   of the plate. A micrometer for the ball lot: an oversize ball stands just as proud but reaches higher into the
-  laminate (D33).
+  laminate (the lower plate limit of 0.78 allows for the grade 100 tolerance, E20).
 - **Bridge gauge** (steps 11, 12, 14, 15; a requirement, not drawn; its footprint is checked in checks 15 and 18): a
   small bridge on three annular feet dia 6.0 / 1.6 at the ball-foot positions, 1.0 proud and lapped in one plane
   within 0.002, carrying a dial indicator (0.001 mm) that can be set over the grain opening (centre, and four points at
@@ -256,8 +278,9 @@ zones round the three ball feet, never on printed legend** (ink 0.02 mm typical,
 - **Vacuum pen** for the LCD; dispensers for the epoxies, the hood gaskets, the window adhesive and the seal bead.
 - **Pogo test fixture** for the seven pads; **leak-test chamber** with a soft pad that occludes the vent hole and its
   grooves; a gasketed plate that closes the open underside of a tub for the tub leak test (step 10).
-- **Gate 2 target** (step 16): two evenly lit horizontal bars on the open front of the join fixture, at +13.5 and
-  -13.5 degrees from the optical axis of the seated unit (120 mm above and below the axis at 500 mm from the visor).
+- **Gate 2 target** (step 16): two evenly lit horizontal bars on the open front of the join fixture, at +13.0 and
+  -13.0 degrees from the optical axis of the seated unit (115 mm above and below the axis at 500 mm from the visor;
+  E17, YAML `cameras.gate2_bars_deg`; +-13.5 in rev D).
 - **Calibration seat plates** (step 19, drawing **GL1-050**, check 18), for the level zero on two seats (E11). Item 1,
   the BASE-FACE seat plate (the turf seat): hardened, stabilised tool steel 70 x 112 x 12; per nest three annular seat
   pads dia 7.0, 0.30 proud of the plate face and lapped into one plane within 0.001 mm, each round a clearance pocket
@@ -270,7 +293,7 @@ zones round the three ball feet, never on printed legend** (ink 0.02 mm typical,
   plate needs no parallelism. **No contacts on either plate**: a spring pin pushes five times harder than the marker
   weighs, so the zero is read with the marker lying free (started from the menu, or armed through the pogo fixture and
   run once the marker is at rest: a firmware requirement). Why pads and not the whole face: a legend print stands about
-  0.02 mm proud of the mask (0.8 mrad across the feet) and the rim is only 0.25 above the base plane (D34). The pads
+  0.02 mm proud of the mask (0.8 mrad across the feet) and the rim is only 0.25 above the base plane (E18). The pads
   end 0.75 inside the base-plate outline: pads 2 and 3 on R 21.0 about the nest centre, pad 1 on a line 0.9 from its
   datum face (dimensioned on GL1-050). **These plates give the 0 / 180 degree reversal only**: the fence takes the
   visor flat. The four-position zero (0, 90, 180, 270 degrees) that `docs/MANUFACTURING_PLAN.md` 6.2 and 6.7 plan for
@@ -291,14 +314,16 @@ zones round the three ball feet, never on printed legend** (ink 0.02 mm typical,
   against lip and hook, the latch is printed PA12 (creep), and with USB attached the charger warms the unit.
 - **Display-rotation measurement** (step 19; a requirement, not designed): the marker on a seat plate with its visor
   flat against the fence, a camera looking straight down, the display showing a test line (a firmware command that
-  does not exist yet). The angle of the line against the fence is measured and stored (E12). Needed: 0.1 degree, i.e.
+  does not exist yet). The angle of the line against the fence is measured and stored (E12, E22). Needed: 0.1 degree, i.e.
   0.035 mm over a 20 mm line, so about 20 micrometres per pixel over the dia 22 aperture; the camera axes are referred
   to the fence with a master plate that carries an engraved line.
 - Zeroing in the field is done by the user on any hard flat surface. No calibration step uses the charging cradle.
 
-Estimated mass (typical densities, envelope solids, no solder or passives; check 8 and check 16): marker with the FR-4
-plate **12.23 g**, centre of gravity at (0.00, -1.28, 3.48) mm, 8.2 mm inside the triangle of the ball feet; with the
-PA12 plate **11.39 g**, centre of gravity (-0.01, -1.38, 3.71), 8.1 mm inside; cradle assembly with seven pins 31.2 g.
+Estimated mass (typical densities, envelope solids; since rev E the PCB solid carries every fitted top-side body of the
+routed board, passives included, at board density; no solder; check 8 and check 16): marker with the FR-4
+plate **12.11 g**, centre of gravity at (-0.01, -1.37, 3.49) mm, 8.1 mm inside the triangle of the ball feet; with the
+PA12 plate **11.27 g**, centre of gravity (-0.01, -1.47, 3.72), 8.0 mm inside; cradle assembly with seven pins 30.4 g
+(rev D: 12.23 g, 11.39 g and 31.2 g; the difference is the part list and the 1.0 mm cradle board).
 (The optional retarder film would add 0.05 g.)
 
 ## 3. What the parts look like
@@ -320,7 +345,7 @@ shape reads; the real part is black, and so is the solder mask of the FR-4 plate
 - `GL1_render_f_cradle_section.png`: marker in the cradle cut on x = 0: centre spring pin compressed on its pad, lip over the front edge, raked latch hook over the rear edge, tab stop, drained floor.
 
 Drawings (A3, PDF and SVG; PNG previews in `drawings/preview/`; title block with part, material, process, general tolerance,
-drawing revision D-EVT1.2 and "PROVISIONAL - not released"):
+drawing revision E-EVT1.0, parameters rev E-EVT1 and "PROVISIONAL - not released"):
 
 - `GL1-001_assembly_outline`: top view, view on the visor face and side view with overall size (dia 46.0, 41.4, 7.6), camera baseline 20.0, optical axis height 5.61, window and recess sizes, ball feet, rim relief.
 - `GL1-002_sections` sheet 1: section A-A on x = 0 with every part labelled; detail C with the full z stack (FR-4 base 0.80, adhesive sheet 0.20, PCB 1.00 to 1.80, potting to z 0.05, ...) and the optional retarder film under the cover glass.
@@ -347,7 +372,7 @@ drawing revision D-EVT1.2 and "PROVISIONAL - not released"):
 2. **Thickness.** Finished thickness OVER THE MASK 0.80 +-0.10 mm (the usual tolerance below 1.0 mm). Ask the
    fabricator to choose the laminate for that finished thickness and to state the build-up: a nominal 0.8 mm
    copper-clad laminate ends near 0.75 mm once its copper is etched off (trade figure, not verified). We use plates
-   from **0.76 to 0.90 mm**; the lower limit comes from the gap under the ball feet (check 2). The thickness does NOT
+   from **0.78 to 0.90 mm** (E20; 0.76 in rev D); the lower limit comes from the gap under the ball feet with a ball at the upper diameter limit of its grade (check 2). The thickness does NOT
    set the seal joint (that is PCB - printed step + sheet); it sets the rim relief, the gap between each ball and its
    land and the depth of the grain opening, and the baffle rings are lapped to the plate lot (section 4.2).
 3. **Data to send.** `drawings/GL1-011_base_plate_FR4.pdf` (two sheets); the five files in `drawings/fab/` (Gerber
@@ -415,7 +440,7 @@ drawing revision D-EVT1.2 and "PROVISIONAL - not released"):
    sets. We cut the rings off, trim the gate flush and lap the bonding face in a pocket gauge. Finished height =
    measured plate thickness + 0.15 - thickness of the black tape actually used (E16: 0.10 to 0.145 mm as available),
    +0.00 / -0.03: for a 0.80 mm plate 0.85 with a 0.10 tape, 0.82 with 0.13 (the model), 0.805 with 0.145; over the
-   accepted plate lots (0.76 to 0.90) 0.735 to 0.95. The crest of the ring then ends 0.00 to 0.13 mm inside the base
+   accepted plate lots (0.78 to 0.90) 0.755 to 0.95. The crest of the ring then ends 0.00 to 0.13 mm inside the base
    plane whatever lot and tape (accepted 0.00 to 0.15); lapped to 0.82 regardless of the plate it could end 0.03 proud
    or 0.22 deep (check 2).
 6. **Dimensions to report at first article.**
@@ -423,10 +448,11 @@ drawing revision D-EVT1.2 and "PROVISIONAL - not released"):
      1.55 below them (it sets the rim relief). The bureau's general tolerance is wider, so these two are the first
      things to measure. Ledge radius 21.35 (a dia 42.6 disc must pass); bore below the ledge (a dia 43.7 disc must
      enter); bay roof 5.0 above the post feet (4.90 minimum); the two spigots under posts B (dia 1.0 x 0.6, 28.7
-     apart): diameter and spacing, a dia 1.10 ring gauge must go over each; the dummy unit must seat. The faces of the
+     apart): diameter and spacing, a dia 1.10 ring gauge must go over each and a dia 0.95 ring gauge must NOT (E17: the
+     guaranteed field is defined on a spigot of dia 1.0 +0 / -0.05); the dummy unit must seat. The faces of the
      two rear glass ribs (the datum the LCD is squared against): step between them, 0.05 mm or less wanted.
-   - PA12 base plate: as printed the bureau's tolerance applies. WE sort and finish: thickness 0.83 to 0.92 is used
-     (below 0.83 the ball would touch its land through the 0.13 sheet); order about twice the quantity needed.
+   - PA12 base plate: as printed the bureau's tolerance applies. WE sort and finish: thickness 0.84 to 0.92 is used
+     (E20; below 0.84 a ball at the upper limit of its grade leaves less than 0.02 mm of epoxy over its land through the 0.13 sheet); order about twice the quantity needed.
      Free-state flatness 0.3 mm is OUR target after flattening between plates under a weight, warm (time and
      temperature to be found on first articles), not a bureau requirement. The three foot holes are reamed to dia
      1.15 by us.
@@ -451,7 +477,7 @@ the PA12 plate). "Rule" is the 0.25 mm drop-in clearance of the specification.
 | PCB locating spigots in the round hole / across the slot | 0.075 | **below (D19), by specification** | the locating fit that positions the cameras; measured on the PCB solid of the build and compared with the nominal 0.075 (a hole or a slot 0.01 off its position fails checks 2 and 14); +-0.60 along the 2.2 mm slot (N9; 0.38 to 0.48 needed). Go gauge dia 1.10 |
 | Spigot tip above the adhesive sheet | 0.20 | - | spigot is 0.6 long in a 0.8 board; tip chamfer 0.15 captures +-0.225 |
 | PCB flat edge to visor wall | 0.30 | meets | |
-| LCD glass in its pocket (ribs, posts B and E, hood rear walls) | 0.25 | meets | the feet of posts B have their inner faces at x = +-13.55 for this (YAML, N1). Left free the glass can turn 1.19 deg in this pocket (E12, below) |
+| LCD glass in its pocket (ribs, posts B and E, hood rear walls) | 0.25 | meets | the feet of posts B have their inner faces at x = +-13.55 for this (YAML, N1). Left free the glass can turn 1.19 deg in this pocket (E12; the YAML says about 1.2 since E22; below) |
 | LCD glass as assembled in step 9 | 0.15 behind the nominal position: 0.10 to the rear ribs, 0.40 to posts E and the hood rear walls | inside the pocket | the tilted glass is pushed back against the rear ribs (they reach down to z 4.35); hinged flat it clears them by 0.10 (check 14) |
 | LCD glass past the seating ledge during assembly | 0.28, glass tilted 6 deg and shifted 0.55 forward | meets (D11) | check 14; a flat glass shifted 0.25 would have 0.10 |
 | LCD glass to roof bonding plane | 0.15 | adhesive frame | |
@@ -469,12 +495,12 @@ the PA12 plate). "Rule" is the 0.25 mm drop-in clearance of the specification.
 | Hood gasket bead: squeezed land on the cube top / peak squeeze / standing load | 0.17 mm / 24 % / about 0.11 N per hood | 0.10 mm and 30 % | the half behind the cube hangs 0.08 below the cube top like a curtain; load estimated at E = 1.5 MPa |
 | Hood gasket bead: placement window of its centre line | -0.10 / +0.08 | needle guide good to +-0.075 | rear edge on the wall underside, front edge behind the chamfer (0.31 mm of flat over the cube) |
 | LCD glass to camera cube | 0.63 | meets | |
-| Battery to foam pad | 0.55 | 0.40 swell + 0.15 | battery to LCD glass 0.85; the fixing adhesive (0.05 max) comes out of the 0.15 |
+| Battery to foam pad | 0.55 | 0.40 swell + 0.15 | battery to LCD glass 0.85; the fixing adhesive (0.06 max, E22) comes out of the 0.15: 0.09 left |
 | Battery leads and joints (envelope to 2.4 above the PCB) to the tub | 0.96 | meets | to the foam pad / LCD glass 3.70 / 3.73; joint top 0.15 below the free height |
 | Ball in its hole, radial | FR-4: 0.05; PA12: 0.075 | potting gap | drilled dia 1.10 / reamed dia 1.15 |
 | Ball top to PCB underside | 0.10, filled with epoxy | - | the ball bears on a dia 1.6 copper land inside a dia 2.5 zone without vias or tracks |
-| Ball top to its land with the plate at its lower incoming limit, the sheet at its thinnest and the ball set high | 0.02 (ball of exactly dia 1.0) | 0.02 required | this sets the incoming limits of the plate: FR-4 0.76 to 0.90, PA12 0.83 to 0.92 (YAML, N6) |
-| The same with a grade 100 ball at its upper diameter limit (+0.0127, as remembered) | 0.007 (PA12 0.014) | **below 0.02 (D33)** | the ball lot is measured; the lower plate limit is raised by the oversize of the lot (0.773 at the grade limit). Grade 25: 0.018 |
+| Ball top to its land with the plate at its lower incoming limit, the sheet at its thinnest and the ball set high | 0.04 (ball of exactly dia 1.0; PA12 0.037) | 0.02 required | plates FR-4 0.78 to 0.90, PA12 0.84 to 0.92 (YAML, E20) |
+| The same with a grade 100 ball at its upper diameter limit (+0.0127, YAML `feet.dia_tol`, PROVISIONAL: as remembered) | **0.027** (PA12 0.024) | 0.02 required (since rev E; it was recorded deviation D33 at 0.007 / 0.014) | this is what sets the lower plate limits: 0.78 and 0.84 are the least limits that keep 0.02 (asserted in `params.py`) |
 | Ball feet below the base plane | 0.10 | - | set on the gauge plate, not by the plate |
 | Photodiode to baffle ring | 0.594 | meets | ring dia 6.6 / 8.2 (both builds) |
 | Grain LEDs to the baffle ring / to the opening wall | 0.604 / 0.757 | meets | FR-4 build; PA12 build 0.604 to ring, wall and spokes |
@@ -483,8 +509,9 @@ the PA12 plate). "Rule" is the 0.25 mm drop-in clearance of the specification.
 | Potting surface (z, centre of each compartment) | never nearer the base plane than 0.05 (the modelled solid); accepted from the ring crest to 0.10 inside it, at most 0.20 | - | nominal crest: 0.05 to 0.15, fill target 0.10; a wall meniscus may reach, not pass, the base plane. PA12 build (crest on the base plane): 0.05 to 0.10, target 0.075 |
 | Potting over the photodiode | 0.47 at z 0.05; 0.32 at z 0.20 | 0.30 required | LEDs 0.45, photodiode 0.48 high |
 | Support posts on the PCB | 0 (contact) | datum | posts set the PCB height; nearest listed part 0.45 mm (U1 to posts E), 0.60 (U6 to post B+) |
-| Ball-foot zones (dia 2.5) to the nearest soldered part / post foot | 0.312 (U11; U10 0.378, U1 0.45) / 2.15 | 0.3 to a part (N7), no overlap | check 10; the battery lies over the two rear zones by decision |
-| LCD flex tail (representative) in its keep-out: in x / at the rear / underside over a part of the allowed 0.7 mm | 0.25 / 0.088 / 0.225 | inside; 0.2 over the part | YAML `tub_keepouts.lcd_tail` (N10), check 12; PROVISIONAL tail |
+| Ball-foot zones (dia 2.5) to the nearest soldered part / post foot | 0.888 (C23 at zone 3; R2 0.93 at zone 1; battery lead pad 1.50 at zone 2) / 2.15 | 0.3 to a part (N7), no overlap | check 10 on the 88 bodies of the routed part list; check 17 on the board file; the battery lies over the two rear zones by decision |
+| LCD flex tail (representative) in its keep-out: in x / at the rear / underside over a part of the allowed 0.7 mm | 0.25 / 2.39 / 0.225 | inside; 0.2 over the part | YAML `tub_keepouts.lcd_tail` (N10; E24: from the J1 mouth at y -17.30 to the board edge), check 12; PROVISIONAL tail |
+| LCD flex tail fold (E24: wholly behind the J1 mouth, rearmost point y -18.71) to the tub / upper run above the top of J1 | 0.70 / 0.90 | 0.25 / 0.2 | checks 2 and 12; the tail leaves the glass edge at y -16.80, 0.50 in front of the mouth, and runs back over the rear of the connector body. free length 4.30 mm closed. PROVISIONAL tail |
 | Marker in the cradle nest, radial | 0.25 | meets | |
 | Base plate above the nest strip and pads / tub rim above them | 0.10 / 0.35 | - | the three balls carry the marker |
 | Lip and latch nose above the tub top | 0.25 | meets | the marker floats up to 0.25 against them when pins are fitted (YAML cradle.float) |
@@ -496,20 +523,21 @@ the PA12 plate). "Rule" is the 0.25 mm drop-in clearance of the specification.
 | Light bundle to the visor opening: sides / sill / top | 0.377 / 0.397 / 0.054 | **top has no margin** | accepted, see below |
 | Marker on the base-face seat plate (GL1-050): ball to its pocket floor / to the pocket wall / rim to the plate | 0.40 / 1.18 / 0.55 | 0.25 / 0.25 after 0.6 of location / 0.30 | check 18; the base face rests on three pads of 24.7 to 28.0 mm2 |
 | Base plate on the ball gauge plate (step 2): legend to the relieved plate face / legend to a boss, less the location on the balls | 0.27 / 0.99 | 0.05 / 0.15 | check 18; three bosses dia 7.0 of 35.0 mm2 each; the gauge holes measured on the solid are dia 0.60 and set 0.100 of protrusion (an oversize grade 100 ball: 0.098) |
-| Legend ink to the footprints of the fixtures on the outer face (gauge-plate boss + 0.1, seat pad + 0.6, bridge-gauge foot + 0.53) | 0.99 / 0.49 / 1.06 | 0.15 (print registration) | check 15, measured on the legend layer read back; no fixture rests on legend (D34) |
+| Legend ink to the footprints of the fixtures on the outer face (gauge-plate boss + 0.1, seat pad + 0.6, bridge-gauge foot + 0.53) | 0.99 / 0.49 / 1.06 | 0.15 (print registration) | check 15, measured on the legend layer read back; no fixture rests on legend (E18) |
 | Legend: smallest clear space between two pieces of ink | 0.15 | 0.15 (assumed = least line width) | check 15; 0.05 with the letter pitch of the last issue |
 
 ### Camera position (check 4; four directions on camera R, the upper field on both cameras)
 
-Rev D: the PCB is located by the two spigots under posts B, 28.7 mm apart, with the cameras between them. With
-+-0.075 mm of radial fit at each spigot:
+Since rev D the PCB is located by the two spigots under posts B, 28.7 mm apart, with the cameras between them. E17
+tolerances the fit: hole and slot width dia 1.15 +0.05 / 0, spigot dia 1.0 +0 / -0.05, so the radial fit is 0.075
+nominal and 0.125 at its loosest (YAML `pcb.locating_holes`; go gauge dia 1.10 and no-go gauge dia 0.95 on the spigots).
 
-| Quantity | Rev D (posts B, 28.7 apart) | Rev C (posts E, 8.4 apart) |
-|---|---|---|
-| Sideways play at a camera | +-0.100 mm | +-0.094 mm |
-| Fore-aft play at a camera | +-0.075 mm | +-0.179 mm |
-| Yaw of the board (a stereo-calibration item) | +-0.30 deg | +-1.02 deg |
-| Upper field, full pupil, with the fore-aft play | 18.12 deg | 17.6 deg |
+| Quantity | Nominal fit 0.075 | Loosest fit 0.125 (E17) | Rev C (posts E, 8.4 apart) |
+|---|---|---|---|
+| Sideways play at a camera | +-0.100 mm | +-0.167 mm | +-0.094 mm |
+| Fore-aft play at a camera | +-0.075 mm | +-0.125 mm | +-0.179 mm |
+| Yaw of the board (a stereo-calibration item) | +-0.30 deg | +-0.50 deg | +-1.02 deg |
+| Upper field, full pupil, with the fore-aft play (optics not high) | 18.12 deg | - | 17.6 deg |
 
 | Case | Shift of the optics (x, y, z) | Full pupil clear to (deg): left / right / up / down | Upper field against the required 17.6 | Worst field-point transmission |
 |---|---|---|---|---|
@@ -521,49 +549,55 @@ Rev D: the PCB is located by the two spigots under posts B, 28.7 mm apart, with 
 | Fore-aft play plus 0.2 mm print tolerance | 0, -0.275, 0 | 25.60 / 25.60 / 17.05 / 14.07 | -0.55 | 93.5 % |
 | Optics 0.2 mm low | 0, 0, -0.2 | 25.60 / 25.60 / 22.06 / 11.67 | +4.46 | 97.7 % |
 | Optics 0.2 mm high, no play | 0, 0, 0.2 | 25.60 / 25.60 / 14.97 / 18.91 | -2.63 | 63.6 % |
-| **Guaranteed case (YAML, N3): optics 0.2 mm high and 0.075 away from the visor** | 0, -0.075, 0.2 | 25.60 / 25.60 / **14.61** / 18.47 | -2.99 | 55.8 % |
+| Rev D definition (N3, information): optics 0.2 mm high and the nominal 0.075 away from the visor, 20 C | 0, -0.075, 0.2 | 25.60 / 25.60 / 14.61 / 18.47 | -2.99 | 55.8 % |
+| **Guaranteed case (YAML, E17): optics 0.2 mm high, the loosest fit 0.125 away from the visor, roof 0.02 lower (-10 C)** | 0, -0.125, 0.22 | 25.60 / 25.60 / **14.03** / 18.53 | -3.57 | 44.2 % |
 
-Required field (YAML `cameras.field_required_deg`): +-26 deg horizontal, +17.6 / -8 deg vertical, with **14.5 deg of
-upper field guaranteed**, defined as the worst case with the optics 0.2 mm high AND the 0.075 mm fore-aft play of the
-spigot fit against it (decision N3). The horizontal limit of 25.60 deg is the 2.0 mm prism exit face, not the
+Required field (YAML `cameras.field_required_deg`): +-26 deg horizontal, +17.6 / -8 deg vertical, with **14.0 deg of
+upper field guaranteed**, defined (E17, `cameras.up_guaranteed_case`) as the worst case with the optics 0.2 mm high, the
+0.125 mm fore-aft play of the LOOSEST spigot fit against it and the roof at -10 C. The roof drop at -10 C, 0.02 mm, is
+this package's thermal estimate (PA12 tub against the FR-4 board); the YAML names the temperature, not the drop. The
+horizontal limit of 25.60 deg is the 2.0 mm prism exit face, not the
 opening (2.3 % of the assumed pupil is clipped at the field edge). The opening is wide enough sideways for the spigot
 play plus the print tolerance, and the lower field has 3.7 deg in hand even with the optics 0.2 mm low.
 
-The upper field is 18.56 deg nominally, 14.97 deg with the optics 0.2 mm high and **14.61 deg in the guaranteed case
-(camera L 14.61, camera R 14.61), 0.11 deg above the 14.5 the YAML guarantees**. Check 4 traces the upper field on
+The upper field is 18.56 deg nominally, 14.97 deg with the optics 0.2 mm high and **14.03 deg in the guaranteed case
+(camera L 14.03, camera R 14.03), 0.03 deg above the 14.0 the YAML guarantees**. Check 4 traces the upper field on
 both cameras in every case and compares the smaller value, so a change of the tub over one opening only is caught (the
 self-test lowers the roof by 0.01 mm over camera L alone). The limit angles are found by bisection to 0.002 deg with pupil samples
 that include the extreme rim points, and they agree with the closed form (1.70 tan(t) + 2.00 tan(t') = 0.80,
-sin(t) = 1.517 sin(t') gives 14.967 deg without the play; with the play 14.611). Check 4 compares the with-play figure
-with the YAML strictly and fails below it: there is no recorded shortfall any more. The margin is small: the upper
-field loses 0.18 deg per 0.01 mm of roof or optics height, so 0.11 deg is 0.006 mm (the self-test lowers the roof by
-0.01 mm and the check fails). The entrance-pupil position (0.4 mm below the cube top) and diameter (0.38 mm) are
-assumptions; the lens data is not published.
+sin(t) = 1.517 sin(t') gives 14.967 deg without the play; for the defined case closed form 14.033, which the check
+also requires to equal the YAML's `model_deg` 14.03 within 0.01). Check 4 compares the figure of the defined case
+with the YAML strictly and fails below it: there is no recorded shortfall. The margin is small: the upper
+field loses 0.18 deg per 0.01 mm of roof or optics height, so 0.03 deg is 0.002 mm (the self-test lowers the roof by
+0.01 mm and the check fails). **This margin is a statement about the definition, not about a lot of parts**: the
+definition already contains the mechanical tolerances that used the rev D margin up (hole, spigot, cold roof), and
+what is left outside it is the lens. The entrance-pupil position (0.4 mm below the cube top) and diameter (0.38 mm)
+are assumptions; the lens data is not published.
 
-**What uses up that margin** (check 4, table of the same name; closed form, one change per row). The YAML defines the
-guaranteed case on the nominal fit of 0.075 mm, and that is the case the check compares. It does not cover:
+**What the definition contains, and what it does not** (check 4, table "What uses up the margin"; closed form, one
+change per row):
 
-| Change | Upper field in the guaranteed case | Against 14.5 |
+| Case | Upper field | Against 14.0 |
 |---|---|---|
-| none (the case the YAML defines) | 14.611 deg | +0.111 |
-| PCB locating hole at +0.05 on diameter (ordinary non-plated hole tolerance, assumed; a spigot 0.05 undersize does the same) | 14.496 deg | -0.004 |
-| pupil dia 0.40 instead of the assumed 0.38 | 14.43 deg | -0.07 |
-| pupil 0.5 instead of 0.4 mm below the cube top | 14.16 deg | -0.34 |
-| roof 0.02 mm lower over the opening at -10 C | 14.26 deg | -0.24 |
-| hole +0.05 and spigot -0.05 (fit 0.125) | 14.38 deg | -0.12 |
-| fit 0.125 and the roof 0.02 mm lower | 14.03 deg | -0.47 |
+| the case the YAML defines (E17): fit 0.125, roof 0.02 lower, assumed pupil | 14.033 deg | +0.033 |
+| nominal fit 0.075, 20 C (the rev D definition, on which 14.5 was stated) | 14.611 deg | +0.611 |
+| PCB locating hole alone at +0.05 on diameter (fit 0.100), 20 C | 14.496 deg | +0.496 |
+| fit 0.125, 20 C | 14.38 deg | +0.38 |
+| nominal fit, roof 0.02 mm lower (-10 C) | 14.26 deg | +0.26 |
+| the defined case with a pupil of dia 0.40 instead of the assumed 0.38 | 13.86 deg | -0.14 |
+| the defined case with the pupil 0.5 instead of 0.4 mm below the cube top | 13.61 deg | -0.39 |
 
-The margin of 0.111 deg is worth 0.0063 mm of roof or optics height or 0.024 mm of extra fore-aft play. So the 14.5
-degrees is a guarantee for the nominal fit and the assumed lens, as the YAML words it, not for a board whose locating
-hole is at the top of its tolerance; the spigots have a go gauge (dia 1.10) but no gauge for their lower size. Proposal
-N18 (`PROPOSED_PARAM_CHANGES.md`): either tolerance the two fits or restate the guarantee as 14.0 degrees on the
-largest fit and the cold roof (the model gives 14.03 there).
+The margin of 0.033 deg is worth 0.0019 mm of roof or optics height or 0.008 mm of extra fore-aft play. The two last
+rows are why check 4 still carries a warning and why the lens pupil data is a release gate: with either of those
+pupil numbers a unit at the limit of the definition falls below 14.0 degrees (it would enter the field with the stick
+top a little further out than the 8.4 m the specification accepts).
 
 **Test gate 2 follows from the guarantee, not from the nominal field** (assembly step 16; check 4, last table). A
-target bar at +13.5 deg (the guaranteed 14.5 less 1.0 deg for the placement of target and unit in the join fixture) is
-100 % clear on a nominal unit and on a unit in the guaranteed case, and so is its mirror image at -13.5 deg (the lower
+target bar at +13.0 deg (the guaranteed 14.0 less 1.0 deg for the placement of target and unit in the join fixture;
+YAML `cameras.gate2_bars_deg`) is
+100 % clear on a nominal unit and on a unit in the guaranteed case, and so is its mirror image at -13.0 deg (the lower
 field is clear to 18.5 deg when the optics sit high). A bar at +17 deg, the former gate, passes 100 % on a nominal
-unit but only 66.8 % on a unit at the tolerance limit (55.8 % at +17.6 deg): it would have failed good units with the
+unit but only 55.8 % on a unit at the tolerance limit (44.2 % at +17.6 deg): it would have failed good units with the
 adhesive wet.
 
 ### Display rotation (check 14, E12)
@@ -573,7 +607,8 @@ Left free it can turn **1.19 deg** either way (computed on the tub sections at t
 a configuration-space obstacle, by bisection to 0.002 deg, and confirmed by a boolean on the solids: no interference at
 1.17 deg, interference at 1.24 deg). The stops at the limit are one rear rib and the hood rear wall on the opposite
 side, with a side rib and a post B; a pocket with continuous walls would give 0.95 deg (the manufacturing review's
-"about 1 degree"). That is more than the 0.5 deg the aim-line budget allows for transfer, so (a) in step 9 the tilted
+"about 1 degree"; E22 corrected the specification to "about 1.2 degrees", YAML `lcd.rotation_in_pocket_max_deg` 1.2,
+and check 14 requires the computed figure to agree with it within 0.05). That is more than the 0.5 deg the aim-line budget allows for transfer, so (a) in step 9 the tilted
 glass is pushed back by the squaring pusher on the centre of its front edge and beds on BOTH rear ribs (their faces
 are coplanar in the model; the residual angle is about 0.15 deg per 0.05 mm of step between the two printed faces,
 whose contact points are 19 mm apart), and (b) the residual angle of the drawn line against the visor flat is measured
@@ -601,7 +636,7 @@ the seal face and the rim measured from the post feet and which is a first-artic
 | Seal joint, printed step +-0.2 | 0.18 to 0.62 RSS, 0.10 to 0.70 worst case | 0.11 to 0.55 RSS, 0.04 to 0.62 worst case | 68.6 mm3 (64.4) at the upper RSS limit: **dispense 70 mm3 (PA12 build 65)**; nominal 49.8 (45.6) |
 | Rim relief, printed +-0.10 | 0.25 +-0.16 RSS (0.09 to 0.41), +-0.30 worst case | 0.25 +-0.16 RSS, +-0.29 worst case | the rim stays 0.05 (0.06) above the plane of the ball feet at the worst case |
 | Rim relief, printed +-0.2 | 0.01 to 0.49 RSS, -0.15 to 0.65 worst case | 0.01 to 0.49 RSS, -0.14 to 0.64 worst case | at the worst case the rim would touch 0.05 (0.04) BEFORE the balls: the rim height is a required dimension and is measured on every tub lot |
-| Ball to land | 0.10 +-0.10 RSS | 0.10 +-0.10 RSS | with unsorted plates the ball could hold the laminate open: plates are sorted to 0.76 to 0.90 (PA12 0.83 to 0.92), which keeps at least 0.02 mm of epoxy under the ball |
+| Ball to land | 0.10 +-0.10 RSS | 0.10 +-0.10 RSS | with unsorted plates the ball could hold the laminate open: plates are sorted to 0.78 to 0.90 (PA12 0.84 to 0.92; E20), which keeps at least 0.02 mm of epoxy under a ball at the upper limit of grade 100 |
 | Prism top to bay roof (carried from the rev C review, not recomputed) | 0.19 +-0.21 RSS (cube and bond tolerances assumed) | same | go gauges in steps 1 and 13 |
 | Cover glass below flush (tolerance carried from the rev C review) | 0.12 +-0.15 RSS (recess, tape, crystal) | same | still at or above flush on a minority of units; 0.2 mm more puck is the reserved remedy |
 
@@ -620,7 +655,7 @@ FR-4 base plate (same material); against the PA12 plate it moves 0.09 mm (72 % o
 move 0.13 mm apart against the PCB holes (the slot allows +-0.60). What the laminate, and the clear potting bonded
 into it, do to the tilt reading is not computed here: it is to be measured (section 12, test item 1).
 
-## 6. The z stack in revision D
+## 6. The z stack (as since revision D; rev E moved none of it)
 
 | From | To | Item |
 |---|---|---|
@@ -657,7 +692,9 @@ potting and their cures, so that no press load passes through bonded prisms and 
 Step numbers 1 to 19 are those of the last issue (`docs/MANUFACTURING_PLAN.md` refers to them); what the manufacturing
 review found missing is worked in as step 11a and as new parts of steps 1, 9, 13, 16 and 19. **The outer face of the
 base plate carries the legend: wherever a step takes that face as a reference (steps 2, 11, 12, 14, 15, 19) the
-fixture or gauge bears on the bare mask round the three ball feet, never on the print** (section 2, D34).
+fixture or gauge bears on the bare mask round the three ball feet, never on the print** (section 2; E18, YAML
+`base_plate.legend.fixture_rule`): the gauge plate on its three bosses (step 2), the bridge gauge on its three annular
+feet (steps 11, 12, 14, 15), the seat plate on its three pads (step 19).
 
 | Step | Operation | Check or gauge | Inspectable / reworkable until |
 |---|---|---|---|
@@ -677,7 +714,7 @@ fixture or gauge bears on the bare mask round the three ball feet, never on the 
 | 13 | Cell and leads soldered, joints cleaned, THEN thermal-adhesive dabs on the two cell thermistors, prisms, edge fillet; test gate 1; serial number marked | both dabs bridge thermistor and cell and are tack-free; prism height; **test gate 1** including both thermistor readings; serial number in its box | step 15 |
 | 14 | **Dry trial close** of the unit in its own tub | seats on all posts without force; rim relief at the four rim stations of the bridge gauge | - (pair and mark) |
 | 15 | Seal bead into the tub; tail into J1; close in the join fixture | LCD test pattern; rim relief 0.25 +-0.15, four readings equal within 0.05 (bridge gauge) | step 17 (open time of the adhesive) |
-| 16 | **Test gate 2** with the adhesive still wet; top-up fillet from outside | bar at +13.5 deg not darker than the bar at -13.5 deg; continuous visible fillet all round | step 17 |
+| 16 | **Test gate 2** with the adhesive still wet; top-up fillet from outside | bar at +13.0 deg not darker than the bar at -13.0 deg (E17); continuous visible fillet all round | step 17 |
 | 17 | Cure under the press weight, 45 C at most | - | no rework after this |
 | 18 | Leak test, functional test, dark frames | pressure decay | - |
 | 19 | Thermal cycle; soak at room temperature; **second leak test**; six-face calibration; rest; level zero on two seats; display rotation | unit within 1 K of the chamber before the leak test and before the zeros; pressure decay as in step 18; both zeros and the rotation stored | - |
@@ -687,20 +724,24 @@ fixture or gauge bears on the bare mask round the three ball feet, never on the 
      feet: seal face 0.60 below them, rim 1.55 below them (a tub outside these is not used: they set the seal joint
      and the rim relief). Recess dia 28.5; window recesses 5.5 wide; the dia 42.6 disc must pass the ledge ring and the
      dia 43.7 disc must enter the bore below it; the 4.90 block must stand on the post feet under each bay roof; the
-     dia 1.10 ring gauge must go over both spigots (posts B); a bare PCB and then the **dummy unit** must drop over the
+     dia 1.10 ring gauge must go over both spigots (posts B) and the dia 0.95 no-go ring gauge must not (E17: a spigot
+     below dia 0.95 is outside the fit the guaranteed field is defined on; such a tub is not used); a bare PCB and then the **dummy unit** must drop over the
      spigots and seat on all eight posts without force, its two blocks inside the hoods (dress an oversize spigot with
      a hollow punch or a fine file, never by enlarging the PCB hole). Vent hole, grooves, camera openings clear of
      powder.
-   - FR-4 base plate: thickness over the mask, measured on bare mask and not on the legend (use 0.76 to 0.90, note the
+   - FR-4 base plate: thickness over the mask, measured on bare mask and not on the legend (use 0.78 to 0.90, E20; note the
      value of the lot), a dia 1.0 ball drops through each hole, holes free of mask, no nub on the edge, flat; legend on
      the underside only, reading correctly seen from below (not mirrored), none inside dia 8.5 round a foot hole,
-     letters not filled in. (PA12 plate: sort to 0.83 to 0.92, flatten to 0.3 mm or better, ream the three foot holes
+     letters not filled in. (PA12 plate: sort to 0.84 to 0.92, flatten to 0.3 mm or better, ream the three foot holes
      to dia 1.15; legend laser-marked.)
    - Ball feet (E8): 316 stainless of grade 100 or better, or silicon nitride; never 440C. The certificate decides;
      a magnet is only a rough sorter (it picks up 440C strongly, 316 weakly or not at all, silicon nitride not at
-     all). Measure the diameter of a sample of the lot with a micrometer: a lot that
-     is oversize by d raises the lower limit of the plate thickness by d (0.76 + d; a grade 100 lot may be 0.013 over,
-     D33), because the gauge plate sets the protrusion, not the top of the ball.
+     all). Measure the diameter of a sample of the lot with a micrometer: the lower plate
+     limit of 0.78 (PA12 0.84) already allows for a ball 0.0127 mm over (the grade 100 tolerance taken in the YAML, E20,
+     PROVISIONAL), because the gauge plate sets the protrusion, not the top of the ball; a lot that is over by more
+     than that is not used.
+   - Main PCB: the round locating hole and the width of the slot with pin gauges, dia 1.15 must enter and dia 1.21
+     must not (E17: dia 1.15 +0.05 / 0).
    - Baffle rings (FR-4 build): cut from the sprue, trim the gate flush, lap the bonding face in the pocket gauge to
      the measured plate thickness + 0.15 - the measured thickness of the black tape (0.82 for a 0.80 plate and a 0.13
      tape, 0.85 for a 0.10 tape, 0.805 for 0.145), +0.00 / -0.03.
@@ -739,7 +780,7 @@ fixture or gauge bears on the bare mask round the three ball feet, never on the 
    bubbles. The flat is what carries the direction of the film axis: the converter cuts it at the angle to the axis
    that the display trial fixes. Before the unit leaves the nest, **mark the ground edge of the crystal** at the middle
    of the flat (the scribed line of the nest; a paint dot on the edge, not on a face). Measure film plus adhesive:
-   more than 0.11 mm does not fit over the roof ledge (D35); such a film is cut to dia 21.5 instead. Then apply the
+   more than 0.11 mm (YAML `thickness_max`, E19) does not fit over the roof ledge; such a film is cut to dia 21.5 instead. Then apply the
    tape ring to the recess floor as above and set the crystal down **with its edge mark at the nose groove** of the
    tub (the groove on the centre line toward the visor), within 0.7 mm on the rim, which is 3 degrees; the rim sealant
    afterwards hides the mark. The film must end inside the dia 25.0 bore of the tape ring, because a film under the
@@ -844,7 +885,7 @@ fixture or gauge bears on the bare mask round the three ball feet, never on the 
       least 0.15 mm below it. Reject a unit with a proud or tacky surface.
 13. **Cell, thermistor dabs, prisms, test gate 1, serial number.** The order of the first two items matters:
     cleaning comes before the dabs, because a solvent would wash a wet dab.
-    - Fix the cell with transfer adhesive of 0.05 mm or less; dress its two leads to the pads in the strip beyond the
+    - Fix the cell with transfer adhesive of 0.06 mm or less (E22; the tapes named in docs/SOURCING.md are about 0.058); dress its two leads to the pads in the strip beyond the
       protection-board end of the cell (x -19.3 to -17.5, y -7.0 to -1.5) and solder them; lead and joint must stay
       below 2.4 mm above the PCB. Clean the two joints, let the solvent dry, inspect. From here on nothing may be cured
       above 45 C.
@@ -880,7 +921,10 @@ fixture or gauge bears on the bare mask round the three ball feet, never on the 
     (PA12 build 65) as one continuous bead into the corner between the seal face and the side wall all round the
     arc (both faces look up) and along the underside of the visor wall, without a gap at the two D corners. Put the
     PCB / base unit on the hinged carrier, open; make the one U-fold in the LCD tail, insert it into J1 and close
-    the actuator under a magnifier (open issue 9: tail length and where the surplus loop goes). Power the unit
+    the actuator under a magnifier (open issue 9: tail length and where the surplus loop goes). E24: the mouth of J1
+    is 0.5 mm BEHIND the rear edge of the glass, so in the closed unit the tail runs back over the rear of the
+    connector and the whole fold lies behind the mouth (modelled: 4.30 mm of free tail, rearmost point 1.4 mm behind
+    the mouth, 0.70 mm from the tub); nothing taller than 0.7 mm stands on the board behind the mouth. Power the unit
     through the pogo block and check an LCD test pattern through the window of the nest. Close the carrier: the
     unit turns about the fixture hinge onto the two spigots and the eight posts. Press with the press plate. With
     the bridge gauge through the openings of the press plate, at the same four rim stations, the base plate must stand
@@ -891,13 +935,13 @@ fixture or gauge bears on the bare mask round the three ball feet, never on the 
     plate, LCD seen through the nest window, cameras through the open front): frames from both cameras through the
     windows (prisms centred in their openings, no gasket in the field, **the upper edge of the field free of
     adhesive**), dark frames under strong side light, LCD, IMU. The test for the upper edge is set from what the YAML
-    guarantees, not from the nominal field: the gate 2 target shows an evenly lit bar at +13.5 degrees (the guaranteed
-    14.5 less 1.0 for the placement of target and unit) and one at -13.5 degrees, and in each camera the upper bar
+    guarantees, not from the nominal field: the gate 2 target shows an evenly lit bar at +13.0 degrees (the guaranteed
+    14.0 less 1.0 for the placement of target and unit; E17) and one at -13.0 degrees, and in each camera the upper bar
     must not be darker than the lower one (proposed limit: not more than 10 % darker; to be set on the first units).
     Both bars are fully clear on every in-tolerance unit (check 4), so the gate cannot fail a good unit with the
     adhesive wet; on a unit whose optics sit low the lower bar is the dimmer one and the unit passes. What the gate
     finds is adhesive or gasket at the roof edge of the opening: from about 0.06 mm on a unit at the tolerance limit,
-    from about 0.28 mm on a nominal unit (0.18 degrees per 0.01 mm). The finer question, where the dimming starts, is
+    from about 0.31 mm on a nominal unit (0.18 degrees per 0.01 mm). The finer question, where the dimming starts, is
     validation test O1, measured dry. A bar at +17 degrees, the former gate, passes only 67 % of the light on a unit
     at the tolerance limit and is not used.
     If anything fails, open the carrier, wipe the adhesive off and correct. Then top up from outside into the
@@ -933,9 +977,9 @@ fixture or gauge bears on the bare mask round the three ball feet, never on the 
     - Temperature compensation, stereo and grain reference: `docs/MANUFACTURING_PLAN.md` section 6.
     None of this uses the charging cradle.
 
-Cradle: drill the four dia 1.6 x 3 pilots at the spot marks; solder the pins into the cradle PCB square to the board in a
+Cradle: drill the four dia 1.6 x 3.2 pilots at the spot marks (not deeper: 0.47 mm of material is left above the two front holes, D36); solder the pins into the 1.0 mm cradle PCB (E36: each tail comes about 0.34 mm through the underside and is soldered there; tail length PROVISIONAL) square to the board in a
 soldering jig (four pins at x = -7.62, -5.08, -2.54, 0.0 for the consumer cradle, all seven for the factory fixture) and the
-USB-C receptacle; screw the PCB against the pocket ceiling with four M2 thread-forming screws (the pins come up through the
+USB-C receptacle; screw the 1.0 mm PCB (E36) against the pocket ceiling with four M2 x 4 thread-forming screws in holes drilled dia 1.6 x 3.2 from the spot marks (the pins come up through the
 slot in the nest floor); fit the four bumpers. First articles from two builds: 3000 insert / release cycles with the
 hook position measured before and after, and a pull test of 12.4 N at the pin row (3 x the seven-pin force).
 
@@ -1024,7 +1068,7 @@ ending in a 0.4 mm flat), no trapped powder (checks 5 and 6).
 ## 9. Sealing concept and what must be tested
 
 The marker is bonded, with no O-ring. Check 13 proves on the solids that the modelled seals close the cavity: a box
-minus all marker solids leaves the outside and the inner cavity (4218 mm3) as two separate bodies of air. Check 16
+minus all marker solids leaves the outside and the inner cavity (are separate air solids ( mm3) as two separate bodies of air. Check 16
 proves the same for the PA12 build. A bare contact is not counted as a seal: for this test each visor window is drawn
 0.02 mm off the recess floor and off its shelf, so the cavity stays closed only if adhesive SOLIDS close all four
 edges of each glass. The self-test removes the sill fillet of one window, then its top bead, then all the adhesive of
@@ -1078,67 +1122,86 @@ Tests required before any water claim (loads from `../docs/research/enclosure-ma
 
 ## 10. Check report summary
 
-Full tables: `export/check_report.md`. All eighteen checks pass on the build of 2026-11-13 with 25 warnings. A check
+Full tables: `export/check_report.md`. On the build of 2026-11-18 (parameters rev E-EVT1) **all nineteen
+checks pass, with 23 warnings**. Both board files in `../electrical/` were rebuilt on the rev E YAML after the first
+rev E build of this package: the cradle board is 1.0 mm thick (E36) and both files are stamped E-EVT1, so check 19
+passes (it failed on the thickness row while the file was still the 1.6 mm rev D board) and check 17 has no warning
+any more (it had two: the D-EVT1 stamp and the rev D tail zone the file stated for itself). `cad/build.py` exits 0. A check
 fails when a requirement is violated and the violation is not a recorded deviation; recorded deviations stay visible as
 warnings. Checks 1 to 15 run on the primary build (FR-4 base plate); check 16 runs the base-specific checks on the
-alternative build; check 17 is the board import; check 18 covers the fixtures that bear on the outer face (the two
-calibration plates, the ball gauge plate and the footprint of the bridge gauge). The optional retarder
+alternative build; check 17 is the import of the main board; check 18 covers the fixtures that bear on the outer face
+(the two calibration plates, the ball gauge plate and the footprint of the bridge gauge); check 19 is the import of
+the cradle board. The optional retarder
 film and the fixtures are not part of the assembly of checks 1, 8 and 13; they have their own rows (checks 2 and 18).
 After the drawings are written the build reads the five fabrication files, the DXF of the PCB outline (`GL1-040`),
 the legend layers of the `GL1-011` DXF and the die cuts `GL1-034` and `GL1-035` back from disk and compares them with
 the checked data (the legend in the Gerber and in the DXF must be the mirror image of the legend as read; the film
 must carry its flat); a difference fails the build. So does a number in this README that the build no longer gives.
 
-`python3 cad/build.py --selftest` seeds 62 defects and each is caught by its check, most of them for a stated
-reason (the word the failure message must contain). New after the review of this issue (nine): a roof 0.01 mm low over
-the camera L opening only; the legend layer written un-mirrored; legend text at the letter pitch of the last issue
+`python3 cad/build.py --selftest` seeds 83 defects and each is caught by its check, most of them for a stated
+reason (the word the failure message must contain). New at rev E (twenty-one): the LCD tail fold 0.5 mm further forward
+(the rev D fold, in front of the E24 mouth) and one 2.6 mm further back (into the rear wall); a cradle board 1.6 mm
+thick with its top face kept, a 1.0 mm board hung 0.6 mm low, and a pin tail that ends inside the board (E36); on the
+main board: the BODY of J1 at its rev D place with the footprint anchor kept on the YAML anchor (the comparison that
+check 17 did not make before), the anchor off with the body kept, a battery keep-out without the J1 courtyard notch,
+a bottom-side fiducial inside the grain opening, the same fiducial marked "not fitted", a ball-foot land 0.5 mm off
+its foot, a part with a BOM line and a body height of 0 outside the openings (it may not pass as copper), and a
+top-side fiducial under a post foot; on the cradle board: a 1.6 mm board, the pin row 0.3 mm off, a screw hole 0.5 mm
+off, the receptacle 0.5 mm off, a part on the top face, the wrong pins fitted, a wider outline, and a part under a
+screw head. Replaced: "U10 back at its old position" (U10 is elsewhere on the routed board) by U11 moved to 0.20 mm
+from foot zone 3. The roof seeds now work against 14.0 degrees: 0.01 mm of roof costs 0.18 degrees against a margin of
+0.03. From the earlier issues: a roof 0.01 mm low over
+the camera L opening only; the legend layer written un-mirrored; legend text at the letter pitch of the first issue
 (0.05 mm between letters); the PCB slot 0.05 mm off its centre line (caught by check 14 and by check 2); the round
-locating hole 0.05 mm off; the dia 24.0 retarder film of the last issue (0.5 mm to the tape bore, less than its
-centring chain); a ball gauge plate without bosses; one with dia 0.70 gauge holes. New with the amendment: a legend line moved to 0.6 mm from a mask
+locating hole 0.05 mm off; the dia 24.0 retarder film (0.5 mm to the tape bore, less than its
+centring chain); a ball gauge plate without bosses; one with dia 0.70 gauge holes; a legend line moved to 0.6 mm from a mask
 relief, and one 3 mm from a foot hole but inside its seat zone; a PCB slot 1.8 long; a retarder film 0.15 thick and
 one of dia 25.6; an LCD pocket grown by 0.15 mm in length and 0.2 mm in width (the glass could turn 1.5 degrees; a
 pocket grown in one direction only is held by the other pair of stops to 1.24 degrees and is rightly not a failure);
-a calibration seat plate with pockets 0.08 deep; U10 back at its old position 0.19 mm from a foot zone; on the board:
-an 0402 part 0.15 mm from a foot zone and a part 0.02 mm too tall under the LCD tail. As before: a prism raised
+a calibration seat plate with pockets 0.08 deep; on the board:
+an 0402 part 0.15 mm from a foot zone and a part 0.02 mm too tall under the LCD tail; a prism raised
 0.3 mm, an LCD shifted 0.2 mm, a raised battery, a visor window standing 0.2 mm proud, potting 0.05 mm proud of the
 base plane, a baffle ring 0.5 mm off centre, a hood gasket bead 0.2 mm too far forward, a bar across a camera opening
-(two checks), a roof 0.1 mm and a roof 0.01 mm low over an opening (the guaranteed case falls below 14.5 degrees: the
-0.01 mm case costs 0.18 degrees against a margin of 0.11), a 0.3 mm roof pocket, a closed void, a cavity with a 1 mm
+(two checks), a roof 0.1 mm and a roof 0.01 mm low over an opening, a 0.3 mm roof pocket, a closed void, a cavity with a 1 mm
 exit, a lip 0.4 mm too low, a hook cut back by 0.6 mm, a missing tab stop, a rib over the PCB outside the keep-outs, a
-shortened post, a post standing on a ball-foot zone, U8 back over the front foot, the key notch of the first rev C
+shortened post, a post standing on a ball-foot zone, U8 moved over the front foot, the key notch of the first rev C
 model, a window adhesive frame without its sill fillet, one without its top bead and a window with no adhesive at all
 (each opens the cavity in the air test), a gap in the cover-glass tape ring, a seating ledge 0.3 mm too small, rear
 glass ribs 0.6 mm short (no stop for the LCD), an FR-4 plate with a square notch and one with a hole 0.4 mm from its
 edge, a PA12 plate with a foot hole too small and a gap in its seal bead, ten further defects of a circuit board
-(below) and the toolchain's demonstration board. A board built from the amended YAML, a board with a tall part marked
-not fitted (warning only), a missing board file and the unmodified model (nine checks) pass.
+(below) and the toolchain's demonstration board. A main board and a cradle board built from the rev E YAML, a board
+with a tall part marked not fitted (warning only), a missing board file (both checks) and the unmodified model (nine
+checks) pass.
 
 | # | Check | Result | Numbers |
 |---|---|---|---|
 | 1 | Interference, all 1128 pairs of 48 solids | pass | 188 pairs with overlapping boxes tested by boolean common (limit 0.01 mm3): no interference; 72 intended zero-volume contacts, each on the allow-list (a lost or an unlisted contact fails the check); no modelling overlap |
-| 2 | Clearances | pass, 3 warnings | 106 key gaps and 12 PCB parts. Below the rule and recorded: the two spigot fits, 0.075 by specification (D19; measured on the PCB solid of the build and compared with that nominal), and the epoxy under a ball at the upper diameter limit of grade 100, 0.007 against 0.02 at the lower plate limit (D33). Retarder film (dia 23.4 with its flat): 0.98 to the display, 0.80 inside the bore of the tape ring, 0.03 above the roof ledge against 0.023 needed, 0.70 beyond the aperture (0.50 at the flat), no interference with any part; after its centring chain at the worst case 0.05 to the tape bore, 0.20 beyond the aperture, 0.00 at the flat; ring height by tape (E16 table: 0.85 / 0.82 / 0.805 on the 0.80 plate, crest z 0.00 to 0.13 in every case, window 0.00 to 0.15); ring print file 1.10 high, 0.15 above the tallest finished ring; potting volume against the YAML. Tolerance chains for both base plates, potting volumes and levels, thermal table |
+| 2 | Clearances | pass, 2 warnings | 107 key gaps and 87 PCB parts (rev E: every fitted body of the routed part list). Below the rule and recorded: the two spigot fits, 0.075 by specification (D19; measured on the PCB solid of the build and compared with that nominal). The epoxy under a ball at the upper diameter limit of grade 100 is 0.027 against 0.02 at the lower plate limit and is REQUIRED since rev E (E20; it was D33 at 0.007). LCD tail (E24, fold behind the J1 mouth): 0.70 to the tub (0.25 now required), 0.90 above the top of J1. Retarder film (dia 23.4 with its flat): 0.98 to the display, 0.80 inside the bore of the tape ring, 0.03 above the roof ledge against 0.023 needed, 0.70 beyond the aperture (0.50 at the flat), no interference with any part; after its centring chain at the worst case 0.05 to the tape bore, 0.20 beyond the aperture, 0.00 at the flat; ring height by tape (E16 table: 0.85 / 0.82 / 0.805 on the 0.80 plate, crest z 0.00 to 0.13 in every case, window 0.00 to 0.15); ring print file 1.10 high, 0.15 above the tallest finished ring; potting volume against the YAML. Tolerance chains for both base plates, potting volumes and levels, thermal table |
 | 3 | Field of view | pass, 4 warnings | field frusta from the prism exit face to 200 mm (chief rays and full pupil, both cameras) have zero intersection with tub, base, seal adhesive, window adhesive and the other camera's parts. Chief rays clear to 31.22 deg left and right, 21.89 up, 18.74 down (required 26 / 17.6 / 8). The full 0.38 mm pupil is clear to 25.60 deg horizontally (prism exit face), 18.56 up, 15.33 down |
-| 4 | Fold ray trace | pass, 10 warnings | chief rays of all nine field points pass prism and opening. Pupil transmission 97.7 % at the horizontal field edges, 100 % elsewhere. Bundle margin to the opening: sides 0.377, sill 0.397, top 0.054 mm. Upper field 18.56 deg nominal, 14.97 with the optics 0.2 mm high, **14.61 deg in the guaranteed case of the YAML (optics high and the spigot play against it), traced on both cameras (camera L 14.61, camera R 14.61) and compared strictly on the smaller: 14.5 guaranteed, margin +0.11 deg at the nominal fit (N3)**; 0.18 deg per 0.01 mm of roof height. New table "what uses up the margin": 14.496 deg with the PCB hole 0.05 oversize, 14.43 with a pupil of dia 0.40, 14.26 with the roof 0.02 lower at -10 C, 14.03 with the largest fit and the cold roof (warning; proposal N18). Gate 2 target at +13.5 deg: 100 % clear in the guaranteed case in both cameras (a target at +17 deg: 67 %). Camera-position and sensitivity tables in section 5 |
+| 4 | Fold ray trace | pass, 10 warnings | chief rays of all nine field points pass prism and opening. Pupil transmission 97.7 % at the horizontal field edges, 100 % elsewhere. Bundle margin to the opening: sides 0.377, sill 0.397, top 0.054 mm. Upper field 18.56 deg nominal, 14.97 with the optics 0.2 mm high, **14.03 deg in the guaranteed case of the YAML (E17: optics high, the play of the loosest fit 0.125 against it, roof 0.02 lower at -10 C), traced on both cameras (camera L 14.03, camera R 14.03) and compared strictly on the smaller: 14.0 guaranteed, margin +0.03 deg**; closed form 14.033 (the YAML's model figure 14.03 must be reproduced within 0.01); 0.18 deg per 0.01 mm of roof height. Table "what uses up the margin": 14.611 deg at the nominal fit and 20 C (the rev D definition), 14.496 deg with the PCB hole alone 0.05 oversize, 14.38 at the largest fit warm, 14.26 at the nominal fit cold; with another pupil the defined case gives 13.86 (dia 0.40) or 13.61 (0.5 below the cube top): warning, release gate. Gate 2 bars at +-13.0 deg (compared with the YAML): 100 % clear in the guaranteed case in both cameras (a target at +17 deg: 56 %). Camera-position and sensitivity tables in section 5 |
 | 5 | Wall thickness (tub, cradle, baffle ring) | pass, 1 warning | tub minimum 0.500 mm (feet of the hood skirts; D04 strip 0.525), cradle 0.391 mm (hook nose, an edge), baffle ring 0.800 mm. Ten recorded regions below 0.8 mm, none unrecorded |
 | 6 | Trapped volume (tub, cradle, baffle ring) | pass | no closed void, no cavity without a 2 mm exit (voxel 0.1 / 0.2 / 0.041 mm); eight small open recesses listed in the tub |
-| 7 | Cradle: pins, key, hold-down, insertion | pass, 4 warnings | seven pin positions on pad centres, 0.565 mm clear in the slots, 5.82 mm high; seats at 0 deg only; retention without friction 6.0 x in the governing position (21.65 N at the hook), 8.8 x centred, 3.4 x with 0.3 mm less overlap (required 3 x); strain at full deflection 1.81 % / 1.78 % by the beam formula, 2.05 % peak by FE (limit 2.5 %); both stops verified on the solids; insertion 1.42 mm, about 11 N; release 1.37 to 1.86 mm, 9 to 12 N; 19 posed tilts without interference; finger access 42 of 42 rays on each side; drained floor measured |
-| 8 | Mass, centre of gravity | pass | marker 12.23 g, CoG (0.00, -1.28, 3.48), 8.2 mm inside the foot triangle; cradle assembly 31.2 g (densities stated in the report; balls taken as steel, 8.0 g/cm3) |
+| 7 | Cradle: pins, key, hold-down, insertion | pass, 4 warnings | seven pin positions on pad centres, 0.565 mm clear in the slots, 5.82 mm high; seats at 0 deg only; retention without friction 6.0 x in the governing position (21.65 N at the hook), 8.8 x centred, 3.4 x with 0.3 mm less overlap (required 3 x); strain at full deflection 1.81 % / 1.78 % by the beam formula, 2.05 % peak by FE (limit 2.5 %); both stops verified on the solids; insertion 1.42 mm, about 11 N; release 1.37 to 1.86 mm, 9 to 12 N; 19 posed tilts without interference; finger access 42 of 42 rays on each side; drained floor measured. **E36: cradle PCB 1.0 thick with its top face at z -4.855 as before (measured on the board solid and, by a ray, on the pocket ceiling), underside z -5.855; pin tail tip z -6.195, 0.34 through the board (0.2 required); M2 x 4 screws, 3.0 mm of thread, 0.468 mm of material above the drilled hole at the two front screws (0.4 required; D36)** |
+| 8 | Mass, centre of gravity | pass | marker 12.11 g, CoG (-0.01, -1.37, 3.49), 8.1 mm inside the foot triangle; cradle assembly 30.42 g (densities stated in the report; balls taken as steel, 8.0 g/cm3). Rev D: 12.23 g and 31.2 g; the difference is the part list of the routed board (bodies, not the larger rev D boxes) and the thinner cradle board |
 | 9 | Quoting data, export integrity | pass | boxes and volumes as in section 2 for the four print files (the baffle ring as its sprued set of six, each 1.10 high, 20.4 x 30.2 x 2.0, 0.247 cm3) and the fabricated FR-4 plate; print files rest on z = 0 with 0.005 mm facet sag or less; all 59 STEP files re-imported and all 59 STL files re-read: volumes match, meshes closed |
-| 10 | Support posts and ball-foot zones | pass | eight posts solid from PCB top to roof, 0.45 mm or more from listed parts, 0.25 mm from the LCD glass; spigots under posts B, 28.7 apart; feet 1.6 x 1.6 and 1.9 x 2.2 (posts B, as the YAML now states); seat area 20.6 mm2 (post B+ 3.14, post B- over its 2.2 mm slot 2.15). No tub material and no soldered part other than the battery over the three dia 2.5 foot zones; **nearest part U11 at 0.312 mm against the 0.3 the YAML now requires** (U10 0.378), nearest post 2.15 mm |
+| 10 | Support posts and ball-foot zones | pass | eight posts solid from PCB top to roof, 0.3 mm or more from the 88 listed parts (0.25 required), 0.25 mm from the LCD glass; spigots under posts B, 28.7 apart; feet 1.6 x 1.6 and 1.9 x 2.2 (posts B, as the YAML now states); seat area 20.6 mm2 (post B+ 3.14, post B- over its 2.2 mm slot 2.15). No tub material and no soldered part other than the battery over the three dia 2.5 foot zones; **nearest part C23 at 0.888 mm against the 0.3 the YAML requires** (R2 0.93 at zone 1; U11 stands 1.6 mm clear), nearest post 2.15 mm |
 | 11 | `design/check_layout.py` | pass | "OK: no layout errors" |
-| 12 | Tub keep-out contract | pass | tub INTERSECT layout space (PCB outline x z 1.80 to 4.35, minus the eight post squares, minus the hood zones above z 2.75) = 0.000000 mm3; feet inside their YAML squares (posts B built 1.9 x 2.2 in a 2.2 square); the modelled LCD tail lies inside the YAML `lcd_tail` zone and 0.225 mm above a 0.7 mm part under it (N10); hoods span +-2.80 of +-2.85 from y 13.75, skirts 1.20 mm above the PCB (parts to 0.95 allowed); lowest tub feature elsewhere 2.55 mm above the PCB (the foot of the two rear glass ribs, exactly the free height) |
-| 13 | Seal continuity | pass | air-solid test with each visor window drawn 0.02 mm off its seats: outside and cavity are separate bodies of air (cavity 4218 mm3 including the cell under the cover glass); potting, window adhesive frames, the test gaps behind and under the glass and the space in front of the windows probed; perimeter bead one closed ring, 0.40 mm high, narrowest 0.40 mm, 49.8 mm3 nominal, dispense 70; sheet lands 1.06 to 1.37 mm; window seats 0.50 / 0.40 / 0.65 and adhesive frames in one piece each; tape ring 1.50; one known closed pocket of 0.39 mm3 (round locating hole under post B+) |
+| 12 | Tub keep-out contract | pass | tub INTERSECT layout space (PCB outline x z 1.80 to 4.35, minus the eight post squares, minus the hood zones above z 2.75) = 0.000000 mm3; feet inside their YAML squares (posts B built 1.9 x 2.2 in a 2.2 square); the modelled LCD tail (E24: fold wholly behind the J1 mouth at y -17.30) lies inside the YAML `lcd_tail` zone (0.25 in x, 2.39 at the rear) and 0.225 mm above a 0.7 mm part under it (N10); in front of the mouth its upper run lies over the body of J1 only, 0.90 above it; hoods span +-2.80 of +-2.85 from y 13.75, skirts 1.20 mm above the PCB (parts to 0.95 allowed); lowest tub feature elsewhere 2.55 mm above the PCB (the foot of the two rear glass ribs, exactly the free height) |
+| 13 | Seal continuity | pass | air-solid test with each visor window drawn 0.02 mm off its seats: outside and cavity are separate bodies of air (cavity are separate air solids ( mm3 including the cell under the cover glass); potting, window adhesive frames, the test gaps behind and under the glass and the space in front of the windows probed; perimeter bead one closed ring, 0.40 mm high, narrowest 0.40 mm, 49.8 mm3 nominal, dispense 70; sheet lands 1.06 to 1.37 mm; window seats 0.50 / 0.40 / 0.65 and adhesive frames in one piece each; tape ring 1.50; one known closed pocket of 0.39 mm3 (round locating hole under post B+) |
 | 14 | Assembly paths | pass, 2 warnings | LCD tilt-in: 14 poses, 0.28 mm to the ledge, 0.25 mm between the glass and each post B; the two rear ribs are proven to be the stop at the push-back height, the glass ends 0.15 mm behind nominal; PCB / base unit: straight descent at 10 heights with +-0.1 mm lateral error and hinged close at 14 angles, no interference. **Slot (N9): 2.20 x 1.15 at (-14.35, 10.8) and round hole dia 1.15 at (14.35, 10.8), measured on the PCB solid and compared with the YAML to 0.01 in length, width and both centre coordinates; travel +-0.60 against 0.378 to 0.478 needed, margin 0.122 to 0.222; a shorter slot, a slot or hole off its position or a negative margin fails.** **Display rotation (E12): the glass can turn 1.187 deg in its pocket (0.952 with continuous walls at the fit clearance), stopped by a rear rib, a hood rear wall, a side rib and a post B; limit 1.25; the pose is confirmed on the solids (0 mm3 at 1.17 deg). Bedded on the two rear ribs (x 8 to 11 on each side) the rotation is 0; 0.05 mm of step between the ribs is 0.15 deg; the squaring pusher (pad 5.0 wide, guided +-0.5) acts between the ribs and passes 0.4 mm clear between posts E.** Warnings: the lateral chain base edge to bore (0.17 to 0.28 RSS, up to 0.60 worst case against 0.25) and the free rotation against the 0.5 deg line budget |
 | 15 | FR-4 base plate: fabrication rules | pass | 0.80 mm, constant section; one routed dia 13.0 opening, one routed slot, three drilled dia 1.10 holes; smallest internal radius 1.10 mm (rule 0.5), no sharp internal corner; smallest web 2.02 mm (slot to edge; rule 1.0, assumed); Gerber profile, mask layers and Excellon file generated from the solid, read back and equal to it. **Legend (E10): the layer `-B_Legend.gbr` is read back (55.30 mm2 of ink in 343 strokes, equal to the blocks within 0.0001 mm2) and proven MIRRORED, as a bottom layer must be (the file mirrored about x = 0 equals the legend as read; the first glyph of "GL-1" lies at larger x than the last); ink to the grain opening and to the pad slot 1.2 mm, to the three holes with their mask reliefs 3.97 to 3.98 (required 1.0), to the outline 1.57 (0.75), 0.342 outside the seat zones dia 8.5, 0.49 or more to the footprints of gauge-plate bosses, seat pads and bridge-gauge feet with their play (0.15); smallest clear space between two pieces of ink 0.15 (rule 0.15; 0.15 mm between letters at 1.0 mm text); six placeholder blocks present, text heights 1.0 to 2.2 (rule 1.0), line widths 0.15 to 0.25 (rule 0.15); the two statement blocks hold 88 characters at 1.0 mm; 940 of 1257 mm2 of the face stay open** |
-| 16 | Alternative base plate (printed PA12) | pass, 1 warning | 294 pairs with a base-specific part, 69 tested: no interference; 18 base-specific clearances met (ball in its dia 1.15 hole 0.075, photodiode to the integral ring 0.594, LEDs 0.604; gap under the balls 0.02 or more with plates sorted to 0.83 to 0.92, 0.014 with an oversize grade 100 ball, D33); plate minimum wall 0.800 mm, no trapped powder; air-solid test passes; seal joint 0.33 mm, 45.6 mm3, dispense 65, one closed ring; marker 11.39 g |
-| 17 | Board import | pass (skipped) | "skipped: no board file": `../electrical/gl1_main/out/gl1_main-mechanical.json` did not exist at build time (2026-11-13) |
+| 16 | Alternative base plate (printed PA12) | pass | 294 pairs with a base-specific part, 69 tested: no interference; 18 base-specific clearances met (ball in its dia 1.15 hole 0.075, photodiode to the integral ring 0.594, LEDs 0.604; gap under the balls with plates sorted to 0.84 to 0.92: 0.037, and 0.024 with an oversize grade 100 ball, both required (E20)); plate minimum wall 0.800 mm, no trapped powder; air-solid test passes; seal joint 0.33 mm, 45.6 mm3, dispense 65, one closed ring; marker 11.27 g |
+| 17 | Board import (main board) | pass | **run on the real board** `../electrical/gl1_main/out/gl1_main-mechanical.json` (121 components; stamped E-EVT1): outline, thickness, hole and slot equal the YAML; 86 fitted top-side bodies clear the tub by 0.25 mm or more (the cameras in their hoods) and respect post feet, hood zones, free height, foot zones and the LCD-tail zone; R14, not fitted, would pass too; J1 body box x -4.05 to 4.05, y -17.30 (mouth) to -11.70, 2.0 high and its anchor (0, -12.9) equal the YAML; battery keep-out = cell less the J1 courtyard notch; 18 bottom-side bodies and pad rows inside the grain opening or the pad slot; 14 copper-only footprints by their own rules (three ball-foot lands on their feet, six fiducials, five test pads); seven contact pads on the cradle pin axes. No warning: the file's revision stamp is the YAML's and the `lcd_tail` height limit it states for itself is the YAML zone (y -21.1 to -17.3); nothing is in that zone |
 | 18 | Fixtures on the outer face: calibration seat plates (E11), ball gauge plate, bridge gauge | pass | base-face seat plate: in both nests the FR-4 plate rests on three pads (contact 24.7 to 28.0 mm2 each), the balls hang 0.40 above the pocket floors and 1.18 from the pocket walls (0.575 left when the marker sits 0.6 off, the placement allowance), the pads end 0.75 inside the plate outline; the legend-free zones of check 15 (dia 8.5) cover the pads (dia 7.0) with that allowance and 0.15 to spare; the visor flat bears on the fence over 27.6 mm above its undercut, the round wall touches the stop pin, the tub rim is 0.55 above the relieved face; ball seat plate: the three balls stand on the plain face, the base 0.10 above it; no interference in either nest. **Ball gauge plate (step 2): the base plate rests on three bosses dia 7.0 and on nothing else (35.0 mm2 each); every piece of legend ink is 0.27 clear of the relieved plate face and 0.99 from a boss after the location on the balls; the three gauge holes measured on the solid are dia 0.60 and set 0.100 of protrusion. Bridge gauge: annular feet dia 6.0 / 1.6, 1.06 from the legend with their play, bore 0.175 clear of the mask relief; its four rim stations lie on the rim flat of the tub solid (z 0.250); feet 1.86 clear of the potting mask** |
+| 19 | Cradle board import | pass | `../electrical/gl1_cradle/out/gl1_cradle-mechanical.json` (stamped E-EVT1) against the YAML cradle block and the cradle model: board thickness 1.0 as the YAML (E36; the rev D board file, 1.6 mm, failed this row until it was rebuilt); outline 30 x 22 on x +-15, y -34.2 to -12.2; four dia 2.2 screw holes at (+-12.5, -31.5) and (+-12.5, -14.5); seven spring pins at x -7.62 to 7.62, y -17.0, each on its modelled pin axis (0.000), barrel dia 1.83, free height 6.96; pins 1 to 4 fitted (VBUS, D-, D+, GND); USB-C receptacle body x +-4.47, y -35.5 (mouth) to -28.15, 3.26 high, 0.25 or more from its pocket; nothing else on the top face; bottom-side parts (tallest 1.45) clear of the screw heads. Not in the file and not checked: the plated holes and tail diameters of the pins |
 
-### Check 17: the board import
+### Checks 17 and 19: the board imports
 
-`cad/board_import.py` reads the file the board toolchain writes (`electrical/tools/gleda/outputs.py`, `mechanical_data`):
-board thickness, exact outline contours and polygon, NPTH holes, slots, keep-outs, and every placed component with
-reference, side, position, rotation, body corners and height. When the file exists the check verifies:
+`cad/board_import.py` reads the files the board toolchain writes (`electrical/tools/gleda/outputs.py`, `mechanical_data`):
+board thickness, exact outline contours and polygon, NPTH holes, slots, keep-outs, height limits, and every placed
+component with reference, side, anchor position, rotation, body (centre, corners, height), courtyard and BOM flag.
+
+**Check 17, main board** (`../electrical/gl1_main/out/gl1_main-mechanical.json`). It verifies:
 
 - A. thickness, outline (largest deviation from the YAML D shape; the polygon tolerance the file states for itself is
   capped at 0.05 mm), the outer contour (it must be exactly one arc and one line: the D), the round hole and the slot
@@ -1146,40 +1209,77 @@ reference, side, position, rotation, body corners and height. When the file exis
   polygon or as an inner contour;
 - B. every component is on side "top" or "bottom" (anything else fails); every top-side part: body (a prism on its
   corner points) at least 0.2 mm from the tub solid, 0.2 mm from the post-foot keep-out squares, not taller than
-  0.95 mm inside a hood zone (camera exempt), not taller than the free height 2.55 mm (cameras exempt), **at least
-  0.3 mm from every ball-foot zone (YAML `part_margin`, N7; the battery exempt)**, inside the board keep-in, not inside
-  the battery body, not on a battery-lead pad, **not taller than 0.7 mm inside the LCD-tail zone (YAML
-  `tub_keepouts.lcd_tail`, N10; J1 exempt)** and at least 0.2 mm from the modelled LCD flex tail (the tail shape is
-  provisional); battery-lead pads inside
+  0.95 mm inside a hood zone (camera exempt), not taller than the free height 2.55 mm (cameras exempt), at least
+  0.3 mm from every ball-foot zone (YAML `part_margin`, N7; the battery exempt), inside the board keep-in, not inside
+  the battery body, not on a battery-lead pad, not taller than 0.7 mm inside the LCD-tail zone (YAML
+  `tub_keepouts.lcd_tail`, N10 / E24: from the J1 mouth to the rear edge of the board; J1 exempt) and at least 0.2 mm
+  from the modelled LCD flex tail (the tail shape is provisional); battery-lead pads inside
   `battery.pads.zone` and checked as joints 2.4 mm tall. Parts marked DNP are tested like fitted parts and what they
   would violate is reported as a warning;
-- C. the fixed interfaces: both cameras and J1 at their YAML positions, the battery keep-out equal to the YAML body;
-- D. every bottom-side part inside the grain opening or the pad slot; in the grain opening also 0.2 mm from the baffle
-  ring and the wall, and under at least 0.30 mm of potting;
+- C. the fixed interfaces: both cameras at their YAML positions. **J1 is compared by its BODY** (rev E): the box of
+  its corner points and its height against the YAML body (x -4.05 to 4.05, y -17.30, the mouth, to -11.70; 2.0 high),
+  its `body.cx / cy` against the YAML x, y, and separately its footprint anchor against the YAML `anchor` (0, -12.9).
+  Before rev E the check compared the anchor with the YAML x, y, which says nothing about where the body is: a
+  connector on the right anchor with a different land pattern passed, and the routed J1 failed by 1.6 mm. **The
+  battery keep-out** must be `battery.body` less `battery.board_keepout_notch` (the 0.3 mm strip of J1's courtyard,
+  x +-5.55, y -10.2 to -9.9, in which nothing of J1 stands): the area that differs must be zero;
+- D. every bottom-side part BODY inside the grain opening or the pad slot; in the grain opening also 0.2 mm from the
+  baffle ring and the wall, and under at least 0.30 mm of potting;
+- **copper-only footprints** (rev E): a component whose body height is 0 and which has no BOM line, as the file itself
+  states it (fiducials, test pads, ball-foot lands), is not a body. Before rev E check D treated the three ball-foot
+  lands and the three bottom fiducials as parts that must lie in an opening, and the board carried a "not fitted" mark
+  on them to get past it (`BARE_BOTTOM_COPPER_NOT_FITTED` in the electrical design; that flag is no longer needed and
+  no longer has any effect here). Now: a ball-foot land must sit on a YAML foot zone within 0.05 mm with the YAML land
+  diameter 1.6, one per foot; any other bare copper on the bottom must lie under the adhesive sheet, outside the grain
+  opening, the pad slot and the ball-foot zones; on the top side bare copper keeps every plan-view rule of a part
+  (post feet with 0.2 mm, foot zones, keep-in, battery body, lead pads) and skips only the distance to the tub solid
+  and to the tail, which need a body. The "not fitted" mark does not exempt copper. A component with a body height of
+  0 that HAS a BOM line fails on either side, so a real part cannot pass as copper;
 - E. the seven contact pads within 0.05 mm of the YAML pad row and of the modelled cradle pin axes;
-- F. (warnings only) the bottom-side keep-outs of the three foot zones and the two via keep-outs are present in the file.
+- F. (warnings only) the bottom-side keep-outs of the three foot zones and the two via keep-outs are present in the file;
+- G. (warnings only) what the file states about itself: its revision stamp against the YAML, and its own height limits
+  (hoods, LCD tail) against the YAML zones. The check applies the YAML zones to every part whatever the file says.
 
-Proof (self-test): a board file built from the amended rev D YAML passes (slot 2.2 long, U10 at its new position, U9
-1.6 x 0.9 x 0.5). Each of these is caught, and for the seeded reason: a
+Result on the routed board: **pass**, no warning (table above; while the board file was still the rev D one there were two, both from table G). The check was also run from the command line:
+`python3 cad/board_import.py ../electrical/gl1_main/out/gl1_main-mechanical.json` exits 0.
+
+**Check 19, cradle board** (`../electrical/gl1_cradle/out/gl1_cradle-mechanical.json`; `python3 cad/board_import.py
+--cradle [file]`). Frame: the file has its origin at the board centre, so marker x, y = board x, y + (0, -23.2); the
+z datum is the TOP face of the board (z -4.855), which sets the pin height and does not move with the thickness (E36).
+It verifies the thickness against `cradle.pcb.thickness`; the outline (four straight edges, the YAML rectangle, no
+cut-out); four non-plated screw holes dia 2.2 at the YAML positions; seven spring pins on the pad row and within
+0.05 mm of the modelled pin axes, with the modelled barrel diameter and free height, and that exactly the four
+consumer positions are fitted; the body of the USB-C receptacle against the modelled receptacle (mouth at
+`usb_mouth_y`) and 0.2 mm from the cradle body; that nothing else stands on the top face, which lies against the
+pocket ceiling; that bottom-side parts stay out from under the screw heads (dia 4.0, generic) and above the underside
+of the body. Not in the file and therefore not checked: the plated holes and tail diameters of the pins (the model
+has a dia 0.76 tail in a dia 0.90 hole, the electrical footprint dia 0.635 in dia 0.80: neither is from the Mill-Max
+drawing).
+
+Result on the routed cradle board: **pass**, every row agrees (thickness 1.0). The rev D board file, built before E36
+entered the YAML, failed the thickness row (1.6 against 1.0); the board was rebuilt, the model did not move. From the
+command line: `python3 cad/board_import.py --cradle ../electrical/gl1_cradle/out/gl1_cradle-mechanical.json` exits 0.
+
+Proof (self-test): boards built from the rev E YAML pass both checks; the synthetic main board carries J1 with its
+anchor apart from its body centre and lists test pads, fiducials on both sides and the three ball-foot lands as
+FITTED copper-only footprints. Each of these is caught, and for the seeded reason: a
 1.5 mm part under hood R, an 0402 on post foot A+, an 0402 over the front foot zone, a locating hole moved 0.3 mm, a
 pad row shifted 0.4 mm, a bottom-side part outside the openings, a rectangular outline with the bounds of the D that
 states a tolerance of 10 mm for itself, a part whose side is "front", an opening listed only in the polygon holes, a
-2.5 mm part in the path of the LCD tail behind J1, an 0402 capacitor 0.15 mm from foot zone 3 (N7) and a part 0.72 mm
-tall inside the LCD-tail zone (N10). A 2.5 mm part under a hood that is marked not fitted passes with a
+2.5 mm part in the path of the LCD tail behind J1, an 0402 capacitor 0.15 mm from foot zone 3 (N7), a part 0.72 mm
+tall inside the LCD-tail zone (N10), and the sixteen board seeds new at rev E (eight on the main board for J1, the
+battery keep-out and the copper-only footprints, eight on the cradle board: listed in the self-test paragraph above). A 2.5 mm part
+under a hood that is marked not fitted passes with a
 warning. The demonstration board of the toolchain (`electrical/tools/demo/demo_out/greenline_demo-mechanical.json`, rev
-C positions) fails as it should: hole and slot still under posts E, U8 over the front ball foot, one battery pad
-outside the pad zone; it also has no bottom-side keep-outs. The requirement N8 (what the board file must contain) is
-for the board package; this check is its acceptance test. To run the check on any file:
-`python3 cad/board_import.py path/to/board-mechanical.json` (exit status 1 when the board fails). The check has never
-run on a real board: only on the synthetic board, its seeded variants and the demonstration board. At the build of
-2026-11-13 the folder `../electrical/gl1_main/out/` did not exist, so check 17 reports "skipped: no board file".
+C positions) fails as it should (hole and slot still under posts E, among other rows). The requirement N8 (what the board file must
+contain) is for the board package; these checks are its acceptance tests.
 
 ## 11. Deviations from the specification
 
 Full text with numbers: `export/check_report.md` (end) and `cad/deviations.py`.
 
-Standing deviations: D04, D06, D09, D11, D14, D18, D19, D33, D34, D35 (seven of them unchanged; D34 and D35 revised
-after the review of drawings rev D-EVT1.1; nothing new, nothing closed since the first issue on the amended YAML).
+Standing deviations: D04, D06, D09, D11, D14, D18, D19, D36 (the first seven unchanged; D36 is new at rev E; D33, D34
+and D35 are closed by E20, E18 and E19; none of the standing ones asks for a YAML change).
 
 | ID | Status | Requirement | What is modelled | Why |
 |---|---|---|---|---|
@@ -1190,13 +1290,18 @@ after the review of drawings rev D-EVT1.1; nothing new, nothing closed since the
 | D14 | recorded | top radius and bottom chamfer all round; lower cavity clipped at the visor face | radius and chamfer on the arc only; wall ends cut on a radial plane; a 2 mm pocket under each end of the visor wall, outside the seal ring | a rounded visor edge would cut into the window recesses; the clipped cavity would leave feather edges |
 | D18 | recorded | four 3 mm feet pockets | pockets dia 8.4 x 1.0 for dia 8 x 3 bumpers with a blind core dia 5 behind each; PCB held by four screws | "3 mm feet" read as 3 mm high; the corners would be 13 mm solid |
 | D19 | accepted (rev D) | 0.25 mm on every drop-in fit | spigot fit 0.075 mm radial, as the YAML specifies, now under posts B | a locating fit below the print tolerance: gauged at first article (go gauge dia 1.10) |
-| D33 | recorded (new) | plates accepted from 0.76 mm (PA12 from 0.83): 0.02 mm of epoxy between each ball and its land (YAML `thickness_accepted`, N6); balls of grade 100 or better (E8) | with a ball at the upper diameter limit of grade 100 (+0.0127 mm, as remembered from the ball standard: to be confirmed on the supplier's certificate) the gap at the lower plate limit is 0.007 mm (PA12 0.014); check 2 carries the row | the plate limits were fixed for grade 25 balls (+-0.0025); E8 widened the grade. Incoming rule (step 1): measure the ball lot, raise the lower plate limit by the oversize. Proposal N11 |
-| D34 | recorded (new; extended after the review) | E11: turf-seat zero on a plate with three clearance pockets so that "the base face seats"; E10: legend 1.0 mm from the foot holes; balls set on a gauge plate | no fixture bears on printed legend: the base face seats on three annular pads dia 7.0 round the pockets (contact 24.7 to 28.0 mm2 each, plate relieved 0.3 elsewhere), not on the whole face; the ball gauge plate carries the base plate on three bosses dia 7.0 round its gauge holes (relieved 0.30); every depth reading on the underside is taken with a bridge gauge on three annular feet dia 6.0 / 1.6 round the balls; the legend keeps out of dia 8.5 round each foot hole (3.7 mm from the hole edge instead of 1.0) and 0.15 or more from each footprint | printed legend stands about 0.02 mm proud of the mask (0.03 at most) and the rim is only 0.25 above the base plane: on a full-face seat the marker would rest on ink, on a bowed plate or on the rim (0.02 mm across the foot triangle is 0.8 mrad); on a flat gauge plate the ink would add itself to the protrusion (0.10 +-0.02) and take the same from the 0.02 mm of epoxy between ball and land; a depth gauge on legend 1.2 mm from the grain opening would read 0.03 deep against a never-below limit of 0.05. A laser-marked legend would not need this. Proposal N12 |
-| D35 | recorded (new; film changed after the review) | E9: quarter-wave film of about 0.1 mm on the underside of the cover glass, axis 45 deg to the LCD polariser; "1.08 mm of air, so nothing else moves" | film dia 23.4 x 0.10 with a clocking flat 4.3 long toward the visor, inside the bore of the tape ring (dia 25.0): 0.80 to the bore, 0.05 left after the centring chain at its worst case; 0.03 mm above the roof ledge at nominal; a film thicker than 0.11 mm with its adhesive must be cut to dia 21.5 and hang inside the aperture | the 1.08 mm of air exists only inside the aperture dia 22; outside it the glass lies 0.13 mm (the tape) above the roof ledge, and the film must not carry the glass off its tape; crystal and recess are round, so the flat (edge mark on the crystal, set to the nose groove) carries the film axis to the tub. Proposal N13 |
+| D36 | recorded (new at rev E) | every printed wall 0.8 mm; cradle board 1.0 mm with its top face unmoved (E36) | four M2 x 4 thread-forming screws (rev D: M2 x 5) through the 1.0 mm board into holes drilled dia 1.6 x 3.2 from the spot marks: 3.0 mm of thread. Above the two front holes, which lie under the drained basin of the nest, 0.47 mm of material is left (check 7 measures it; 0.4 required by this package) | a skin left by a drill, not a printed wall, and it carries no load; a break-through would open a path from the basin to the PCB pocket. Rev D had 0.67 mm there on paper, but its M2 x 5 screw asked for 3.4 mm of thread in a 3 mm hole. Remedy if first articles break through: move the two front screws outboard of the basin |
 
-Closed by the amendment of revision D (the YAML now says what the model does, and `cad/params.py` asserts it): **D29**
+Closed by revision E (the YAML and the specification now say what the model does, and `cad/params.py` asserts it):
+**D33** the lower plate limits 0.78 / 0.84 keep 0.02 mm of epoxy under a ball at the upper diameter limit of grade 100
+(0.027 / 0.024; E20; the tolerance itself is PROVISIONAL); **D34** no fixture on printed legend: seat zones dia 8.5,
+gauge plate on three bosses, seat plate on three pads, bridge gauge (E18); **D35** retarder film dia 23.4 with its
+clocking flat, 0.11 at most (E19). **D31** is closed on the new definition: 14.0 degrees at the loosest fit and the
+cold roof, compared strictly: 14.03, margin 0.03 (E17).
+
+Closed by the amendment of revision D (the YAML then said what the model did): **D29**
 feet of posts B 1.9 x 2.2 (N1); **D30** visor window seated bare with an adhesive frame, `bond_line` 0 (N2); **D31**
-guaranteed upper field, now 14.5 degrees including the spigot play, compared strictly: 14.61, margin 0.11 (N3);
+guaranteed upper field, then 14.5 degrees including the nominal spigot play, 14.61, margin 0.11 (N3; superseded by E17, above);
 **D32** potting level never nearer than z 0.05, target 0.10, and the ring height rule (N4, E16).
 
 Closed by revision D (the YAML or the spec now says what the model does): D03 baffle ring 6.6 / 8.2, D05 straight
@@ -1204,22 +1309,24 @@ openings, D07 no key between base and tub, D13 pre-cured hood gasket, D20 cradle
 height, D23 rim relief, D24 vent pad and grooves, D25 drained nest, D26 vented LCD frame, D27 ball back-fill on a copper
 land, D28 pad plane. Closed by revision C: D01, D02, D08, D10, D12, D15, D16, D17.
 
-Mechanical-only choices that are not in the YAML: baffle rings printed as a sprued set 1.10 high (lapped to 0.735 to
-0.95; N15); black tape of the annulus modelled 0.13 thick; battery pads centred in x in their zone with a 0.7 mm gap;
+Mechanical-only choices that are not in the YAML: the lapping allowance of the baffle rings (0.15 on the tallest ring:
+the print height 1.10 itself is a YAML number since E21); battery pads centred in x in their zone with a 0.7 mm gap
+(the routed pads are tested by check 17 against the YAML pad zone; their centres are recorded in the YAML);
 hood gasket bead 0.5 x 0.33 centred 0.35 in front of the rear face of the hood rear wall; rear glass ribs down to
 z 4.35; tabs of the FR-4 plate on the flat only and the web rule 1.0; carrier liner 64 x 50 with two dia 3.0 tooling
 holes for the sheet die cuts; the tolerances of the chains in section 5; corner fill between hood and side wall from
-y = 16.79; pin barrel top assumed 0.285 mm below the nest strip; LCD tail modelled with a 1 mm fold radius entering J1
-at 1.0 mm above the PCB. New in this pass: everything about the legend except its 1.0 mm keep-clear (block positions
-and sizes, strokes 0.15 to 0.25, text heights 1.0 to 2.2, letter spacing 0.15 or the line width, edge margin 0.75, seat
-zones dia 8.5, registration 0.15, print thickness 0.03 at most; N12, N19); the ball gauge plate (bosses dia 7.0, relief
+y = 16.79; pin barrel top assumed 0.285 mm below the nest strip; pin tail dia 0.76 in a dia 0.90 hole; LCD tail
+modelled with a 1 mm fold radius, 0.35 of straight run into J1 at 1.0 mm above the PCB, 0.2 mm required between the
+tail and any part other than J1; the legend block positions and sizes, the frame stroke 0.20 and the typical ink
+height 0.02 (the print RULES are YAML numbers since E18); the ball gauge plate (bosses dia 7.0, relief
 0.30, holes dia 0.60 x 0.5, blank 52 x 50 x 10) and the bridge gauge (feet dia 6.0 / 1.6, rim stations at r 22.35,
-potting mask dia 15 / 24); retarder film dia 23.4 with a flat 0.5 outside the aperture radius, placed within 0.25 and
-clocked within 3 degrees, and its thickness limit 0.11 (N13); the rows of check 4 that show what uses up the margin (PCB
-hole +0.05, pupil 0.40 or 0.5 deep, roof 0.02 lower at -10 C, spigot 0.05 undersize; N18); calibration plates (70 x 112 x 12, fence 8 x 60 x 4, pin dia 3, pads dia 7.0,
+potting mask dia 15 / 24); the 0.5 mm overlap of the film's flat beyond the aperture radius (asserted against the YAML
+flat at y 11.5) and its clocking within 3 degrees; in check 4 the roof drop at -10 C (0.02 mm) and the two alternative
+pupil numbers (dia 0.40, 0.5 deep); calibration plates (70 x 112 x 12, fence 8 x 60 x 4, pin dia 3, pads dia 7.0,
 pockets dia 3.0 x 0.5, relief 0.3, coplanarity 0.001); the limit 1.25 degrees for the free rotation of the glass and
-the squaring pusher (pad 5 mm wide, guided to +-0.5); the gate 2 margin of 1.0 degree; the ball diameter tolerance
-taken for grade 100 (0.0127).
+the squaring pusher (pad 5 mm wide, guided to +-0.5); the gate 2 margin of 1.0 degree (the bars themselves are in the
+YAML); the grade 25 ball tolerance used for comparison (0.0025); the cradle screws (M2 x 4, drill dia 1.6 x 3.2,
+clearance hole dia 2.2, head dia 4.0) and the 0.2 mm of pin tail required through the board.
 
 ## 12. Open issues, release gates and test items
 
@@ -1245,9 +1352,10 @@ rev D); they were checked for plausibility but are not computed by this package 
   prism rest on assumed values.
 - **LCD tail geometry (B16)**: tail length, exit position, pin-1 side and the actuator side of J1 from the Sharp
   outline drawing. The drawing must give at least: **a free tail of 10 mm plus the insertion depth of J1** (the join
-  fixture mates the tail with the unit open 35 degrees: check 14 gives 6.5 mm at 20 deg, 10.0 mm at 35 deg, 15.3 mm at
-  60 deg, while the closed U-fold needs only 3.8 mm), a permitted bend radius of 1 mm or less starting within 0.35 mm
-  of the glass edge, and where the surplus loop of 6 mm or more may lie when the unit is closed (the pocket behind
+  fixture mates the tail with the unit open 35 degrees: check 14 gives 6.4 mm at 20 deg, 9.7 mm at 35 deg, 14.9 mm at
+  60 deg, while the closed U-fold needs only 4.3 mm since E24), a permitted bend radius of 1 mm or less starting about
+  0.85 mm behind the glass edge (E24: the mouth of J1 is 0.5 mm behind the glass edge and the fold has to lie behind
+  the mouth; in rev D it started 0.35 mm behind the glass), and where the surplus loop of 5.4 mm or more may lie when the unit is closed (the pocket behind
   the glass, between the rear ribs and the side wall, is 5 mm deep and 4 mm high above the J1 mouth).
 - **Battery (B15)**: maximum delivered thickness and end-of-life swelling from the PowerStream drawing; protection-board
   length (it decides where the leads leave the cell); maximum storage and process temperature.
@@ -1257,15 +1365,18 @@ rev D); they were checked for plausibility but are not computed by this package 
   two statement blocks hold 88 characters of 1.0 mm text between them, with 0.15 mm between letters; more text goes to
   the packaging and the manual, or the blocks are re-laid and check 15 run again). The fabricator's legend rules (line
   0.15, text 1.0, space 0.15, registration 0.15, ink height 0.02 to 0.03) are assumptions until the quote; the ink
-  height decides whether the seat zones and the bosses, pads and feet that use them are needed (D34): a laser-marked
+  height decides whether the seat zones and the bosses, pads and feet that use them are needed (E18): a laser-marked
   legend would make them unnecessary.
 - **Ball feet**: a supplier's certificate for dia 1.000 balls in 316 stainless, grade 100 or better, or in silicon
-  nitride, with the diameter tolerance of the lot (D33); never 440C.
+  nitride, with the diameter tolerance of the lot (E20: 0.0127 is taken, as remembered from the ball standard); never 440C.
 - **Tub first articles**: seal face 0.60 and rim 1.55 from the post feet within +-0.1; spigots; bore; dummy unit.
-- **Proposals N11 to N19** in `PROPOSED_PARAM_CHANGES.md` (ball diameter against the lower plate limit; legend seat
-  zones, fixtures on bare mask and the wording of E11; retarder film diameter, flat and thickness limit; U11 0.2 mm
-  inboard; ring height text and print height; the rotation figure of E12; fixing-adhesive thickness of the cell; the
-  guaranteed upper field against the tolerance of the spigot fit; legend print rules). N1 to N10 are decided and built.
+- **Proposals N11 to N19** are decided (E17 to E22) and built; N1 to N10 before them (`PROPOSED_PARAM_CHANGES.md` parts
+  B and C). What this package still asks for is in part D of that file: the roof drop behind the E17 case, the pin tail
+  and hole diameters, the cradle screws (the stale ring range in a YAML comment, 0.735 for 0.755, is corrected).
+- **Cradle board**: rebuilt at 1.0 mm in `../electrical/gl1_cradle/out/` (check 19 passes); **Mill-Max 0914
+  drawing**: tail length (1.34 taken), tail and hole diameters.
+- **Lens pupil data behind the guaranteed field (E17)**: with a pupil of dia 0.40, or 0.5 mm below the cube top, the
+  defined case gives 13.86 or 13.61 degrees against the 14.0 guaranteed (check 4 warning).
 - **Fixtures not designed**: the six-face calibration fixture (section 2 lists what its dimensions must come from),
   the display-rotation measurement, the LCD squaring pusher as a detail of the tilt-in fixture, the bridge gauge
   (stated as a requirement with its footprint, stations and tolerances; its footprint is checked), the film
@@ -1313,14 +1424,15 @@ rev D); they were checked for plausibility but are not computed by this package 
 
 ### Open mechanical issues
 
-1. **The upper edge of the camera field has no tolerance margin (accepted in rev D).** The +17.6 deg field edge clears
-   the roof underside by 0.054 mm. Optics 0.2 mm high: 14.97 deg; with the spigot play added (the guaranteed case of
-   the amended YAML): 14.61 deg against 14.5 on both cameras, a margin of 0.11 deg, which is 0.006 mm of roof height
-   (0.18 deg per 0.01 mm) or 0.024 mm of fore-aft play. **The margin belongs to the nominal fit and the assumed pupil
-   only**: a locating hole 0.05 over on diameter gives 14.496 deg, a pupil of dia 0.40 gives 14.43, a pupil 0.5 below
-   the cube top 14.16, the roof 0.02 mm lower at -10 C 14.26 (section 5, check 4). The YAML defines the guarantee on
-   the nominal fit, so the check passes; a real lot is not covered. Proposal N18. Any change to roof, opening, prism
-   height or spigot fit must be followed by check 4.
+1. **The upper edge of the camera field has no tolerance margin (accepted; restated by E17).** The +17.6 deg field edge
+   clears the roof underside by 0.054 mm. Optics 0.2 mm high: 14.97 deg; with the play of the loosest spigot fit
+   (0.125) and the roof 0.02 mm lower at -10 C (the guaranteed case of the rev E YAML): 14.03 deg against 14.0 on both
+   cameras, a margin of 0.03 deg, which is 0.002 mm of roof height (0.18 deg per 0.01 mm) or 0.008 mm of fore-aft play.
+   The definition now contains the hole and spigot tolerances and the cold roof, which the rev D figure of 14.5 did
+   not (it gave 14.496 with the hole alone at +0.05). **What it still does not contain is the lens**: a pupil of dia
+   0.40 gives 13.86, a pupil 0.5 below the cube top 13.61 (section 5, check 4), and the roof drop of 0.02 mm is an
+   estimate. The spigots need the dia 0.95 no-go gauge that E17 names (it does not exist yet). Any change to roof,
+   opening, prism height or spigot fit must be followed by check 4.
 2. **Spigot fit (D19).** 0.075 mm radial on printed dia 1.0 spigots is tighter than the print tolerance. Gauge and dress
    at first article; measure the achieved camera position through the windows. Along the slot the spigot now has
    +-0.60 (slot 2.2 long, N9, measured on the PCB solid and on the written DXF); spacing error, hole position and
@@ -1348,9 +1460,13 @@ rev D); they were checked for plausibility but are not computed by this package 
 8. **Wet docking.** The cradle drains, but the marker's pad slot (37 mm3) holds water by
    capillarity across 5 V contacts (review estimate: 0.1 to 0.6 mA through the film). VBUS gating was not adopted: the
    cradle board gets a resettable fuse instead. The grain opening no longer holds water. Dry the marker before docking.
-9. **LCD flex tail and J1**: release gate above. The mouth of J1 must face the rear because the battery is 0.8 mm in
-   front of it. Mating with the unit open needs a tail several millimetres longer than the closed fold (10 mm free at
-   35 degrees against 3.8 mm), J1 faces down into the upturned tub while its actuator is closed, and the surplus has
+9. **LCD flex tail and J1**: release gate above. The mouth of J1 must face the rear because the cell is 1.5 mm in
+   front of the connector body (0.20 mm in front of its signal pads, E24). Since E24 the mouth is 0.5 mm BEHIND the
+   rear edge of the glass: the tail has to run back over the rear of the connector (0.90 mm above it in the model)
+   before it folds, and the fold lies wholly behind the mouth, where the model finds 0.70 mm to the tub and nothing
+   but two post feet 2.7 mm to either side. Whether the real tail can do this is not known (Sharp drawing); the
+   fallback named in E24 is a 1.0 mm high back-flip connector. Mating with the unit open needs a tail several
+   millimetres longer than the closed fold (9.7 mm free at 35 degrees against 4.3 mm), J1 faces down into the upturned tub while its actuator is closed, and the surplus has
    to stow behind the glass: not demonstrated; to be tried on a mock-up before any seal adhesive is involved. The
    YAML now has a keep-out for the tail (`tub_keepouts.lcd_tail`, N10: parts under it at most 0.7 mm tall); check 12
    finds the modelled tail 0.225 mm above such a part, and the board import applies the rule to every placed part.
@@ -1365,8 +1481,8 @@ rev D); they were checked for plausibility but are not computed by this package 
 12. **Visor window bond (YAML `visor_window.bond`, N2)**: no adhesive line behind the glass; the seal is the frame
     round its edge, bonded to 0.40 mm of glass edge and, at the sill, to 0.12 mm of the front face. Whether it seals
     and holds is a coupon test. Adhesive at the roof edge of the opening costs upper field (0.18 degrees per
-    0.01 mm): thixotropic adhesive, no wicking. Test gate 2 (bars at +-13.5 degrees) finds 0.06 mm of it on a unit at
-    the tolerance limit and 0.28 mm on a nominal unit, not less: a thinner film at the roof edge passes the gate and
+    0.01 mm): thixotropic adhesive, no wicking. Test gate 2 (bars at +-13.0 degrees) finds 0.06 mm of it on a unit at
+    the tolerance limit and 0.31 mm on a nominal unit, not less: a thinner film at the roof edge passes the gate and
     is only seen in validation test O1 or by inspection of the opening at 10x before the join.
 13. **Battery**: the last 0.15 mm above a fully swollen cell is also claimed by the fixing adhesive (0.05), PCB
     deflection and thermal bow; delivered thickness is a release gate. Lead pads are nominal until the board is laid out.
@@ -1388,10 +1504,11 @@ rev D); they were checked for plausibility but are not computed by this package 
     pumping the membrane is untested.
 18. **Prism slightly undersized for the assumed pupil**: 2.3 % of the pupil is clipped at the horizontal field edge.
 19. **Thin wall behind the window recess (D04, accepted)**, 0.525 mm over 1.6 mm2 per camera.
-20. **Passives and the real board**: the YAML lists 13 top-side parts; everything else is checked only when the board
-    file exists (check 17, never yet run on a real board). The amended YAML asks for 0.3 mm between any part and a
-    foot zone (N7): U10, moved by the YAML, has 0.378; **U11 has 0.312**, a margin of 0.012 mm (N14 proposes 0.2 mm
-    more).
+20. **Passives and the real board**: closed as an open issue at rev E. The YAML lists every fitted top-side body of
+    the routed board (87 and the cell) and check 17 runs on the board file itself and passes. The nearest part to a
+    ball-foot zone is C23 at 0.888 mm (0.3 required, N7). Both board files are stamped E-EVT1 and state the
+    rev E tail zone (check 17 has no warning). Left open: if a rebuild moves a part, the YAML
+    part list has to be regenerated (`design/check_parts_vs_board.py`) before this package is rebuilt.
 21. **Vapor smoothing of 0.8 mm walls**: bureau confirmation and coupons.
 22. **Cradle details**: pin diameters, barrel length and stroke are provisional (the barrel top is assumed at z -0.385);
     the thumb tab and its rest are directly above the USB plug; no cable strain relief.
@@ -1402,13 +1519,13 @@ rev D); they were checked for plausibility but are not computed by this package 
     14). The plate top passes the rim 0.55 mm before the seat, after the spigots have engaged at 0.60 mm, so an
     offset plate would fight two dia 1.0 PA12 spigots with the bead wet. Units and tubs are paired dry.
 25. **Baffle ring**: its height is lapped to the plate lot and the tape (plate thickness + 0.15 - tape thickness,
-    E16: 0.735 to 0.95 over the accepted plates and tapes of 0.10 to 0.145); if the lots vary more than expected, or
+    E16: 0.755 to 0.95 over the accepted plates and tapes of 0.10 to 0.145); if the lots vary more than expected, or
     lapping a 0.015 g ring proves impractical, the alternative is a ring 0.07 mm lower that is always covered (with
     the optical penalty of a clear bridge). The gate stub must be trimmed flush (0.60 mm to the LEDs).
 26. **Tub dimensions required tighter than the bureau quotes**: seal face and rim from the post feet at +-0.1. If
     first articles do not hold them, the seal volume (70 mm3 covers the bureau's +-0.2) still fills the joint, but
     the rim relief does not survive the worst case; the remedy would be a larger rim relief (a YAML number).
-27. **Legend against every reference on the outer face (D34, N12).** The legend is ink on the face the marker rests
+27. **Legend against every reference on the outer face (E18; was D34, N12).** The legend is ink on the face the marker rests
     on in the turf seat, and on the face that the ball gauge plate, the calibration seat plate and every depth
     reading take as their reference. It is kept out of dia 8.5 round each foot hole, and the gauge-plate bosses, the
     seat pads and the feet of the bridge gauge bear only there; the press plates that touch the rest of the face have
@@ -1417,17 +1534,18 @@ rev D); they were checked for plausibility but are not computed by this package 
     bridge gauge is a requirement, not a design. The placeholder blocks leave 940 of 1257 mm2 of the face
     unprinted. On turf itself the marker lies on ink and mask alike: 0.02 mm of print is far below the seating
     scatter of 2 to 5 mrad the specification expects.
-28. **Ball grade against plate limit (D33, N11).** With a grade 100 ball at its upper diameter limit the epoxy under
-    the ball is 0.007 mm at the lower plate limit, not 0.02. The limit itself (0.02) is a judgement, not a measured
-    need; the diameter tolerance used is from memory of the ball standard and must be read from the certificate.
-29. **Retarder film (D35, N13)**, optional: laminated to the glass before the tape ring, inside its bore. The film's
+28. **Ball grade against plate limit (E20; was D33, N11).** With the lower plate limits raised to 0.78 / 0.84 a grade
+    100 ball at its upper diameter limit leaves 0.027 / 0.024 mm of epoxy, against 0.02. The 0.02 itself is a
+    judgement, not a measured need; the diameter tolerance used (0.0127) is from memory of the ball standard and must
+    be read from the standard or the certificate: if it is larger, the limits move again.
+29. **Retarder film (E19; was D35, N13)**, optional: laminated to the glass before the tape ring, inside its bore. The film's
     thickness with adhesive, the direction of the LCD polariser (and so the angle at which the converter cuts the
     clocking flat to the film axis) and bubbles under the film are open. The film is dia 23.4 so that the centring
     chain (0.25 each for film, crystal and tape ring) still leaves 0.05 mm to the tape bore at its worst case; its
     flat can then just reach the aperture edge (0.00), which would show as a short straight line at the visor side of
     the aperture. Clocking by an edge mark set to the nose groove is good to about 3 degrees; whether that is enough
     for the purpose is part of the trial. The lamination nest is a requirement, not a design.
-30. **Display rotation (E12).** Left to itself the glass can turn 1.19 degrees in its pocket (check 14). The squaring
+30. **Display rotation (E12, E22).** Left to itself the glass can turn 1.19 degrees in its pocket (check 14; the YAML says about 1.2). The squaring
     pusher of step 9 is a requirement, not a design; with it the residual is set by the step between the two rear
     ribs (0.15 degrees per 0.05 mm over their 19 mm spacing) and by the squareness of the pocket to the visor flat.
     Whether a printed rib pair is flat to 0.05 mm, and whether the glass stays bedded while the rear strip tacks, is

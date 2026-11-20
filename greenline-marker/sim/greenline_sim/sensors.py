@@ -131,7 +131,8 @@ GL1 = CameraPreset(
 )
 """The fixed GL-1 hardware, revision C (design/master_params.yaml): OVM7692
 cubes with fold prisms, f = 657 px, 20.0 mm baseline, optical axis 5.6 mm
-above the base."""
+above the base.  The YAML is at rev E-EVT1 now; the step from D to E changed
+none of the camera and prism numbers this preset is typed from."""
 
 CAMERA_PRESETS: Dict[str, CameraPreset] = {
     "GL1": GL1,

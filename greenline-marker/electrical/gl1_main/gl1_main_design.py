@@ -12,14 +12,15 @@ through KiCad's DRC and the output stage; ``build_netlist.py`` is the earlier
 stage without copper.  ``LAYOUT_LOG.md`` records every routing attempt and
 says why the parts are where they are.
 
-Implements DESIGN_SPEC rev D with the amendments E1 to E28.  The ones that
-change the netlist: E1 (charger TI BQ25101 with a hardware thermistor input),
+Implements DESIGN_SPEC rev E (E-EVT1): the amendments E1 to E28 and E35.  The ones that
+change the netlist or the board: E1 (charger TI BQ25101 with a hardware thermistor input),
 E2 (two cell thermistors, Murata NCU15XH103F60RC), E3 (named LED parts),
 E4 (four top-side test points), the stated order of the seven underside
-pads, E24 (J1 0.5 mm toward the rear of the mechanical model's box), E25 (the
+pads, E24 (J1 0.5 mm toward the rear; in the YAML since rev E), E25 (the
 series Schottky D17 is replaced by the ideal-diode switch U12, TI LM66100),
 E26 (U11 is an LP5907-3.3 enabled by V2V8), E27 (2.2 uF, 150 kohm, sense
-divider on the pad side) and E28 (J1 wired mirrored against the tail order).
+divider on the pad side), E28 (J1 wired mirrored against the tail order) and E35 (the fine
+class on F.Cu, In2.Cu and B.Cu inside two areas 5 mm beyond each camera ball field).
 
 Sources of truth (read-only):
 
@@ -97,20 +98,21 @@ CAM_R = (CAM["right"]["x"], CAM["right"]["y"])
 CAM_BODY = (CAM["body_dx"], CAM["body_dy"])          # 3.47 x 2.95
 CAM_HEIGHT = CAM["height"]                           # 2.76
 _J1 = next(p for p in Y["top_side_parts"] if p["ref"] == "J1")
-#: J1 - spec amendment E24 OVERRIDES the YAML point of J1 (the YAML is corrected at the next
-#: revision letter): "J1 moves 0.5 mm toward the rear: mouth at y = -17.30, body to y = -11.70,
-#: signal pads end at y = -10.40 (0.20 mm clear of the cell at y = -10.20)".
-#: The mechanical model (YAML) still draws a box dx x dy CENTRED on the YAML point (0, -13.9)
-#: with the mouth on its rear edge, y = -16.8 (J1_BOX).  The KiCad FH12 land pattern has its
-#: anchor 4.40 mm in front of the rear face of its body and its signal pads end 6.90 mm in front
-#: of that face (both measured on the placed footprint by check_netlist_rules.py, row "PCB k2").
-#: DEPARTURE from the YAML, by E24: anchor at y = -12.90 (YAML point: -13.90), rear face of the
-#: body (the mouth) at -17.30, body to -11.70, signal pads to -10.40.  mechanical/cad/board_import.py
-#: (check C) compares the ANCHOR with the YAML point and therefore reports J1 as 1.00 mm off
-#: until the YAML is corrected; the mechanical JSON carries the real body box.
-J1_YAML_XY = (_J1["x"], _J1["y"])                    # (0, -13.9): the model's box centre, NOT the anchor
-J1_MOUTH_Y = -17.30                                  # E24 (typed here: the YAML does not have it yet)
-J1_SIGNAL_PAD_END_Y = -10.40                         # E24
+#: J1 - spec amendment E24, in the YAML since rev E: "J1 moves 0.5 mm toward the rear: mouth at
+#: y = -17.30, body to y = -11.70, signal pads end at y = -10.40 (0.20 mm clear of the cell at
+#: y = -10.20)".  The YAML entry of J1 gives the BODY box (x, y = body centre (0, -14.5), dx, dy),
+#: the footprint anchor (``anchor``), the mouth (``mouth_y``) and the pad ends (``pads_end_y``).
+#: The KiCad FH12 land pattern has its anchor 4.40 mm in front of the rear face of its body and
+#: its signal pads end 6.90 mm in front of that face (both measured on the placed footprint by
+#: check_netlist_rules.py, row "PCB k2").  J1 is placed by its anchor, which is COMPUTED here
+#: from the YAML mouth and the land pattern; row "PCB k2" requires it to equal the YAML
+#: ``anchor`` and the measured body box to equal the YAML box.  Not a departure any more
+#: (rev D carried J1 0.5 mm further forward in the YAML).
+J1_YAML_XY = (_J1["x"], _J1["y"])                    # (0, -14.5): the YAML's BODY centre, NOT the anchor
+J1_YAML_ANCHOR = tuple(_J1["anchor"])                # (0, -12.9)
+J1_MOUTH_Y = _J1["mouth_y"]                          # -17.30 (E24)
+J1_SIGNAL_PAD_END_Y = _J1["pads_end_y"]              # -10.40 (E24)
+J1_BODY_Y = tuple(_J1["body_y"])                     # (-17.30, -11.70) (E24)
 J1_BODY_REAR_BEHIND_ANCHOR = 4.40                    # KiCad Hirose_FH12-10S-0.5SH land pattern (measured, row PCB k2)
 J1_XY = (_J1["x"], round(J1_MOUTH_Y + J1_BODY_REAR_BEHIND_ANCHOR, 4))    # anchor (0, -12.90)
 J1_HEIGHT = _J1["h"]
@@ -121,10 +123,24 @@ J1_BOX = (_J1["x"] - _J1["dx"] / 2.0, _J1["y"] - _J1["dy"] / 2.0,
 #: reaches 0.50 mm beyond the pad ends, i.e. 0.30 mm INTO the YAML box of the cell.  The
 #: battery-body placement keep-out (toolchain check and KiCad rule area work on courtyards)
 #: therefore has a notch of exactly J1's courtyard width and this depth at its rear edge.
-#: Nothing else can use the notch (J1's courtyard fills it); J1's body and pads are outside
-#: the cell box, which is what mechanical/cad/board_import.py tests.  RECORDED DEPARTURE.
-J1_COURTYARD_NOTCH = {"half_w": 5.55, "depth": 0.30}
+#: Since rev E the notch is a YAML key (battery.board_keepout_notch: "J1 courtyard only; no
+#: copper, solder or body of J1 inside the cell box"); mechanical/cad/board_import.py requires
+#: the keep-out of the board file to be battery.body less exactly that notch.  Nothing else
+#: can use the notch (J1's courtyard fills it); J1's body and pads are outside the cell box.
+_NOTCH = BAT["board_keepout_notch"]
+J1_COURTYARD_NOTCH = {"half_w": round((_NOTCH["x"][1] - _NOTCH["x"][0]) / 2.0, 4),      # 5.55
+                      "depth": round(_NOTCH["y"][1] - _NOTCH["y"][0], 4),                # 0.30
+                      "x_centre": round((_NOTCH["x"][1] + _NOTCH["x"][0]) / 2.0, 4)}     # 0.0 = J1's x
 LCD_EXIT_EDGE = Y["lcd"]["fpc_exit_edge"]            # "rear": the tail leaves the glass toward -y
+#: Purchased items that are joined to this board but are not board parts and therefore on no
+#: board BOM (docs/SOURCING.md actions A11 / A12 ask for them on a purchasing list above the
+#: board BOMs; the assembly README names them so that they are not forgotten).
+OFF_BOARD_ITEMS = (
+    "display %s (Sharp; its tail plugs into J1) - single source, 28-week factory lead (docs/SOURCING.md 9.2)"
+    % Y["lcd"]["mpn"],
+    "cell %s (PowerStream; leads soldered to BT1 = + and BT2 = -, polarity PROVISIONAL) - single seller "
+    "(docs/SOURCING.md 9.3)" % BAT["mpn"],
+)
 _U9 = next(p for p in Y["top_side_parts"] if p["ref"] == "U9")
 LED_RING = BOT["grain_led_ring"]
 PD_POS = BOT["photodiode"]
@@ -775,8 +791,14 @@ VIA_TENTING = "both"
 #: compares them); the margin is a second rule area each.
 NO_VIA_MARGIN = 0.15
 U4_NO_VIA_MARGIN = 0.3
-#: grows the pad field of each camera into its fine area (see "fine areas" in gl1_main_design())
-FINE_AREA_MARGIN = 5.0
+#: grows the pad field of each camera into its fine area (see "fine areas" in gl1_main_design()).
+#: Since rev E a YAML key (spec E35: "two rule areas that extend 5 mm beyond each camera ball
+#: field"); FINE_LAYERS are the layers E35 allows the fine class on - the toolchain's fine
+#: areas have no layer, so this is every routing layer of the board (In1.Cu is the ground plane).
+_FINE = PCB["net_classes"]["fine"]
+FINE_AREA_MARGIN = _FINE["area_beyond_camera_ball_field"]      # 5.0
+FINE_TRACK, FINE_CLEARANCE = _FINE["track"], _FINE["clearance"]   # 0.10 / 0.10
+FINE_LAYERS = tuple(_FINE["layers"])                           # F.Cu, In2.Cu, B.Cu
 
 FIDUCIALS_TOP = [(-16.8, 9.3), (18.9, -4.5), (8.6, -17.2)]
 FIDUCIALS_BOTTOM = [(-13.5, -3.0), (14.0, -7.0), (-17.0, 7.5)]
@@ -923,29 +945,18 @@ def battery_pad_positions():
 # ---------------------------------------------------------------------------
 # 7. The design
 # ---------------------------------------------------------------------------
-#: spec section 4, PCB paragraph: "default 0.15 mm tracks with 0.127 mm
-#: clearance, and a fine net class of 0.10 mm track / 0.10 mm clearance used
-#: only to escape the camera BGAs"; 0.25 mm drill, through vias only.
+#: spec section 4, PCB paragraph, as amended by E35: default 0.15 mm tracks with 0.127 mm
+#: clearance; a fine net class of 0.10 mm track / 0.10 mm clearance on F.Cu, In2.Cu and B.Cu
+#: inside two rule areas 5 mm beyond each camera ball field; 0.25 mm drill, through vias only.
 GL1_RULES = replace(US_4L_STD, name="GL1_4L_0.10mm", min_track=0.10, min_clearance=0.10)
 
-#: WORKAROUND for a gap between two other packages - reported, not hidden.
-#: mechanical/cad/board_import.py (check D) treats every fitted bottom-side
-#: component of the mechanical JSON as a body that must lie inside the grain
-#: opening or the pad slot; the toolchain's mechanical JSON lists copper-only
-#: footprints as components.  The three ball-foot lands (which the spec itself
-#: puts outside both openings) and the three bottom fiducials are bare copper
-#: of zero height, and with them listed as fitted that check fails with six
-#: rows "outside the grain opening and the pad slot".  With this flag they
-#: carry the "not fitted" mark, which board_import.py skips on the bottom side
-#: WITHOUT a warning: those six features are then not tested by it at all.
-#: The flag changes no copper, no Gerber, no BOM line, no position row and no
-#: line of the assembly README (its DNP list holds BOM parts only, its fiducial
-#: list every fiducial); it writes a "DNP" property onto six board-only
-#: footprints.  check_netlist_rules.py (row "bare copper") limits the mark to
-#: exactly these six zero-height, pin-less, board-only footprints, so that no
-#: real part can ride along.  Remove the flag when board_import.py ignores
-#: copper-only footprints; set it to False to see the six rows.
-BARE_BOTTOM_COPPER_NOT_FITTED = True
+#: Rev E: the flag BARE_BOTTOM_COPPER_NOT_FITTED is gone.  It put a "not fitted" mark on the three
+#: ball-foot lands and the three bottom fiducials so that mechanical/cad/board_import.py would
+#: not reject them as bodies outside the grain opening.  That check now recognises copper-only
+#: footprints (zero height, no BOM line) and tests them by their own rules - a land on its foot
+#: zone, other bare copper outside the openings and the foot zones - so the mark is neither
+#: needed nor honoured.  check_netlist_rules.py (row "bare copper") requires that NO footprint
+#: without a BOM line carries a "not fitted" mark.
 BARE_BOTTOM_COPPER_REFS = ("FL1", "FL2", "FL3", "FID4", "FID5", "FID6")
 
 
@@ -966,9 +977,10 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     d.add_netclass("Power", track_width=GL1_RULES.power_track,
                    clearance=GL1_RULES.default_clearance, min_track_width=0.15,
                    description="supply nets; neck-down to the default 0.15 mm allowed at fine pads")
-    d.add_netclass("Fine", track_width=0.10, clearance=0.10,
-                   description="camera-side nets only (ball to series array / pull-up): the escape "
-                               "of the 0.5 mm-pitch camera BGAs")
+    d.add_netclass("Fine", track_width=FINE_TRACK, clearance=FINE_CLEARANCE,
+                   description="camera-side nets only (ball to series array / pull-up), inside the two "
+                               "fine areas round the 0.5 mm-pitch camera BGAs, on F.Cu, In2.Cu and B.Cu "
+                               "(DESIGN_SPEC E35)")
     d.add_netclass("CamPower", track_width=0.15, clearance=0.10,
                    description="camera supply balls: a 0.15 mm track with the fine clearance, "
                                "confined to the same fine areas")
@@ -983,12 +995,12 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
         "Under each ball foot (0, 15), (-16.5, -9.5), (16.5, -9.5): an UNMASKED dia 1.6 copper land "
         "on the bottom side inside a dia 2.5 zone without tracks and vias.",
         "Layer 2 (In1.Cu) is a solid ground plane.",
-        "0.100 mm track and gap (3.94 mil) inside the two fine areas round the cameras: the "
-        "fabricator must accept it in writing (DESIGN_SPEC E7, release gate). The acceptance must cover "
-        "ALL THREE routing layers - F.Cu, In2.Cu (layer 3) and B.Cu: fine-class tracks change layer "
-        "inside the fine areas, so 0.100 mm track and 0.100 mm gap occur on the inner layer and on the "
-        "bottom as well as on the top (lengths per layer under TRACKS AS ROUTED; DEPARTURE from the "
-        "specification's 'used only to escape the camera BGAs', recorded in electrical/README.md).",
+        "0.100 mm track and 0.100 mm gap (3.94 mil) on THREE layers - F.Cu, In2.Cu (layer 3) and B.Cu - "
+        "inside the two fine areas, which extend 5 mm beyond each camera ball field (DESIGN_SPEC E35; "
+        "about 13 % of the board). The fabricator must accept 0.100 / 0.100 mm on F.Cu, In2.Cu and B.Cu "
+        "in writing before the order (DESIGN_SPEC E7 as widened by E35, release gate); the quote request "
+        "must name all three layers. Fine-class tracks change layer inside the fine areas (lengths per "
+        "layer under TRACKS AS ROUTED). Everywhere else: 0.15 mm track, 0.127 mm clearance.",
         "Lead-free assembly (SAC305), RoHS-compliant parts, no conformal coating (DESIGN_SPEC E5).",
         "Solder mask is drawn 1:1 on every land. U9 (6 balls on 0.4 mm, lands 0.23 mm) and U2 / U3 "
         "(25 balls on 0.5 mm, lands 0.20 mm): whatever mask compensation the fabricator applies must "
@@ -1077,17 +1089,18 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
         ("R7", "2k2", "CAM_SCL_R", "V2V8_CAM", "camera", "SCCB clock pull-up, right camera"),
         ("R8", "2k2", "CAM_SDA", "V2V8_CAM", "camera", "SCCB data pull-up (shared)"),
         ("R9", "33R", "MCO", "CAM_XVCLK", "camera", "XVCLK series at the MCU"),
-        # ---- regulators (spec rail table: 1 uF in, 1 uF out each) ----------------------------
+        # ---- regulators (spec rail table: 1 uF in, 1 uF out; 2.2 uF at the VDDUSB regulator, E27) ----
         ("C20", "1u", "VBAT", "GND", "power", "U7 input"),
         ("C21", "1u", "V2V8", "GND", "power", "U7 output"),
-        # 2.2 uF nominal where the spec says "1 uF" (DEVIATION, NETLIST_NOTES 5): at 5 V / 3.3 V a
+        # 2.2 uF nominal, as the rev E rail table says (E27; rev D said "1 uF"): at 5 V / 3.3 V a
         # 1 uF 10 V 0402 keeps roughly half / two thirds of its value (PROVISIONAL, no curve read)
         ("C22", "2u2", "VBUS_D", "GND", "power", "U11 input (2.2 uF nominal for about 1 uF at 5 V)"),
         ("C23", "2u2", "VDDUSB", "GND", "power", "U11 output (2.2 uF nominal for more than 1 uF at 3.3 V)"),
         ("C24", "1u", "VBAT", "GND", "power", "U8 input"),
         ("C25", "1u", "V2V8_CAM", "GND", "power", "U8 output"),
         ("R10", "100k", "CAM_EN", "GND", "power", "U8 EN pull-down"),
-        # ---- charger, spec E1: "IN from VBUS after the Schottky with 1 uF; OUT to the cell with 1 uF" ----
+        # ---- charger, spec E1 (rev E): "IN from VBUS_D, behind the ideal-diode switch U12 (E25), with
+        #      2.2 uF; OUT to the cell with 2.2 uF (E27)" ----
         ("C26", "2u2", "VBUS_D", "GND", "power", "U9 IN (2.2 uF nominal for about 1 uF at 5 V)"),
         ("C27", "2u2", "VBAT", "GND", "power", "U9 OUT (2.2 uF nominal for more than 1 uF at 4.2 V)"),
         # "ISET resistor 6.81 kohm 1 % to ground (K = 135 A-ohm, so 19.8 mA)"
@@ -1250,7 +1263,9 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
              distributor_pn="LP5907MFX-3.3/NOPB", height_mm=1.45, group="power",
              description="LDO 3.3 V 250 mA with enable, SOT-23-5 (VDDUSB, present only in the cradle; "
                          "enabled by V2V8, spec E26)",
-             fields=_status(PROV, "order code from DESIGN_SPEC E26; pin order as U8 (KiCad symbol "
+             fields=_status(PROV, "order code from DESIGN_SPEC E26; no distributor code entered: "
+                                  "docs/SOURCING.md A8 saw only the reel code 296-38557-2-ND on regional "
+                                  "pages and asks for the live US page first; pin order as U8 (KiCad symbol "
                                   "LP5907MFX-3.3); enable threshold and the enable pin's pull-down "
                                   "current from memory")))
     d.net("VBUS_D", "U11.IN")
@@ -1318,13 +1333,13 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     # CE = VBUS_D.  ST (status) is not used.  Pin table: LM66100_PINS (PROVISIONAL, from memory).
     sw_pins = {name: (pad, etype) for pad, (name, etype) in LM66100_PINS.items()}
     add(Part("U12", "LM66100", SC706, pins=sw_pins, mpn="LM66100DCKR",
-             manufacturer="Texas Instruments", distributor=BY_MPN, distributor_pn="LM66100DCKR",
+             manufacturer="Texas Instruments", distributor="Digi-Key", distributor_pn="296-53541-1-ND",
              height_mm=LM66100_HEIGHT, group="power",
              description="Ideal-diode switch 5.5 V 1.5 A, SC-70-6 (VBUS pad to charger; replaces the "
                          "Schottky D17, spec E25); PIN TABLE PROVISIONAL",
-             fields=_status(PROV, "part and wiring from DESIGN_SPEC E25; pin table, CE polarity, "
-                                  "on-resistance and height from memory of TI SLVSEZ8, not read "
-                                  "(LM66100_PINS)")))
+             fields=_status(PROV, "part and wiring from DESIGN_SPEC E25; Digi-Key cut-tape code from "
+                                  "docs/SOURCING.md A7; pin table, CE polarity, on-resistance and height "
+                                  "from memory of TI SLVSEZ8, not read (LM66100_PINS)")))
     d.net("VBUS", "U12.VIN", netclass="Power", power_flag=True)   # from the cradle
     d.net("VBUS_D", "U12.VOUT", "U12.CE")
     d.no_connect("U12.ST")
@@ -1391,8 +1406,8 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
                          "PROVISIONAL (tail pin n on pad %s)" % ("n" if straight else "11 - n"),
              fields=_status(PROV, "top-contact FH12A on the bottom-contact FH12 land pattern "
                                   "(spec); pin order and pin-1 edge of the tail PROVISIONAL (LCD_TAIL, "
-                                  "LCD_TAIL_PIN1_EDGE); placed per spec E24 (mouth at y -17.30), which "
-                                  "overrides the YAML point; Digi-Key PN from docs/sourcing.csv")),
+                                  "LCD_TAIL_PIN1_EDGE); placed per spec E24 / the rev E YAML (mouth at "
+                                  "y -17.30); Digi-Key PN from docs/sourcing.csv")),
         J1_XY, J1_ROTATION)
     d.net("SPI1_SCK", "J1.SCLK")
     d.net("SPI1_MOSI", "J1.SI")
@@ -1477,7 +1492,7 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     land = foot_land_footprint()
     for i, (x, y) in enumerate(FEET["positions"], start=1):
         fl = Part("FL%d" % i, "Ball-foot land", land, pins={}, side=BOTTOM, in_bom=False,
-                  board_only=True, dnp=BARE_BOTTOM_COPPER_NOT_FITTED, height_mm=0.0,
+                  board_only=True, height_mm=0.0,
                   group="board", description="unmasked copper land under ball foot %d, no net" % i)
         fl.place(x, y, 0.0)
         d.add(fl)
@@ -1497,7 +1512,7 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     bx0, bx1 = bb["x"] - bb["dx"] / 2.0, bb["x"] + bb["dx"] / 2.0
     by0, by1 = bb["y"] - bb["dy"] / 2.0, bb["y"] + bb["dy"] / 2.0
     nw, nd = J1_COURTYARD_NOTCH["half_w"], J1_COURTYARD_NOTCH["depth"]
-    # the YAML box of the cell with the notch for J1's courtyard (E24, see J1_COURTYARD_NOTCH)
+    # the YAML box of the cell less the YAML notch for J1's courtyard (battery.board_keepout_notch)
     d.add_keepout(RoundedPolygon(((bx0, by0), (J1_XY[0] - nw, by0), (J1_XY[0] - nw, by0 + nd),
                                   (J1_XY[0] + nw, by0 + nd), (J1_XY[0] + nw, by0), (bx1, by0),
                                   (bx1, by1), (bx0, by1))), layers=("F.Cu",),
@@ -1607,7 +1622,7 @@ def gl1_main_design(name=DESIGN_NAME, placement=None):
     for x, y in FIDUCIALS_TOP:
         d.add_fiducial(x, y)
     for x, y in FIDUCIALS_BOTTOM:
-        d.add_fiducial(x, y, side=BOTTOM).dnp = BARE_BOTTOM_COPPER_NOT_FITTED
+        d.add_fiducial(x, y, side=BOTTOM)
     # ---- per-net router options (layout) -------------------------------------------------------
     for net_name, options in NET_ROUTING.items():
         d.net(net_name, **options)

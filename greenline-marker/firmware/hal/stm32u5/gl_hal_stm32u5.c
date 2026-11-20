@@ -15,7 +15,7 @@
  * #  on hardware.  `make cross` does NOT compile it.                       #
  * ##########################################################################
  *
- * BOARD: revision E only (DESIGN_SPEC rev D with amendments E1 to E34).  The
+ * BOARD: revision E only (DESIGN_SPEC rev E: rev D with amendments E1 to E36).  The
  * pins are the netlist's: hal/stm32u5/gl_pins.h is GENERATED from
  * electrical/gl1_main/pinmap.json (`make pins`) and this file holds no port,
  * no pin number and no alternate function of its own - with ONE exception

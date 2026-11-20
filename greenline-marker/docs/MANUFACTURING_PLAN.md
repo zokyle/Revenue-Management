@@ -3,6 +3,14 @@
 Plan revision 2, 2026-11-11 (revised the same day after two independent reviews). Written
 against `design/DESIGN_SPEC.md` rev D (EVT1) and `design/master_params.yaml` rev D-EVT1.
 
+> **Rev E note (2026-11-18).** This plan has NOT been re-issued for design revision E-EVT1; it is still the plan
+> written against rev D. Known differences that the final audit of rev E found and did not work in: the cradle board
+> is 1.0 mm thick and is held by M2 x 4 screws (amendment E36; this plan says 1.6 mm); the guaranteed upward field is
+> 14.0 degrees with gate bars at +-13.0 (E17; 14.5 here); the firmware's sleep model of the rev E board is 23.7
+> microamps at the cell (20.6 here); the series Schottky is an ideal-diode switch and the USB regulator an LP5907
+> (E25, E26); and the specification no longer points to `docs/RELEASE_GATES.md`: its section 7 and the PROVISIONAL
+> lists of the packages are the gate list, so the statements below that the file is missing describe rev D.
+
 **Read this first.** Nothing in this project has been built or tested. No circuit board, printed
 part, fixture or finished unit exists. This plan says how the device is meant to be made and
 proven. Every time, yield and limit in it is either copied from the design files (which are

@@ -171,7 +171,7 @@ def gl1_001(parts):
     sh.note(16, 76, [
         "1. Outline of the assembled marker. Datum: the base plane z = 0 = underside of the base plate; the three ball feet protrude",
         f"   {fmt(P.BALL_PROT)} mm below it and the rim of the tub wall stays {fmt(P.RIM_Z)} mm above it (rim relief). Visor (flat) face at y = {co(yv)}.",
-        f"2. Envelope Ø{fmt(2 * R)} x {fmt(T)} mm. Rev D stack: base plate {fmt(P.BASE_T)} (FR-4) + adhesive sheet {fmt(P.PSA_T)}, PCB at z {fmt(P.PCB_Z0)} to {fmt(P.PCB_Z1)}; optical axis",
+        f"2. Envelope Ø{fmt(2 * R)} x {fmt(T)} mm. Stack (since rev D): base plate {fmt(P.BASE_T)} (FR-4) + adhesive sheet {fmt(P.PSA_T)}, PCB at z {fmt(P.PCB_Z0)} to {fmt(P.PCB_Z1)}; optical axis",
         f"   {fmt(zax)} above the base plane. Camera baseline {fmt(2 * cxr)} (x = +-{fmt(cxr)}). Cover glass {fmt(P.CG_BELOW_FLUSH)} below the top face.",
         f"3. Camera windows {fmt(P.WIN_W)} x {fmt(P.WIN_H)} x {fmt(P.WIN_T)} mm borosilicate, centred on x = +-{fmt(cxr)}, in recesses {fmt(P.WIN_RECESS_W)} wide x {fmt(P.WIN_RECESS_DEPTH)} deep from z = {fmt(P.WIN_Z0)}",
         f"   to the top face: glass {fmt(P.WIN_SUBFLUSH)} below the visor face, its top edge {fmt(P.WIN_TOP_BELOW)} below the tub top. Clear opening {fmt(2 * P.OPEN_HALF_W)} wide, z = {fmt(P.OPEN_Z0)} to {fmt(P.OPEN_Z1)}.",
@@ -218,7 +218,7 @@ def gl1_002(parts):
     top = [((-18.5, 0.5 * (P.BOND_Z + T)), f"thick roof {fmt(T - P.BOND_Z)}"), ((-9.0, 0.5 * (P.CG_Z0 + P.CG_Z1)), "cover glass"),
            ((-0.5 * (P.CG_D + M["cover_tape_id"]) / 2, 0.5 * (P.RECESS_FLOOR_Z + P.CG_Z0)), f"tape ring {fmt(P.CG_TAPE_T)}"),
            ((-15.5, 0.5 * (P.LCD_Z0 + P.LCD_Z1)), "LCD glass"), ((3.0, P.LCD_Z1 + 0.07), "LCD adhesive frame"),
-           ((-17.3, 4.4), "LCD flex tail (representative)"), ((-3.0, P.FOAM_Z0 + 0.15), "foam pad"), ((11.2, 0.5 * (P.BOND_Z + P.RECESS_FLOOR_Z)), "roof ledge"),
+           ((P.FLEX_FOLD_Y - 0.15, 4.4), "LCD flex tail (representative; fold behind the J1 mouth, E24)"), ((-3.0, P.FOAM_Z0 + 0.15), "foam pad"), ((11.2, 0.5 * (P.BOND_Z + P.RECESS_FLOOR_Z)), "roof ledge"),
            ((16.2, P.T - 0.5), "nose groove"), ((yv - 0.4, 3.5), "visor wall 0.8")]
     bot = [((-21.6, 1.0), "seal adhesive"), ((-22.5, P.RIM_Z), f"rim z {fmt(P.RIM_Z)}"), ((P.PAD_Y, 0.5), "pad slot"), ((j1["y"], 2.8), "connector J1"), ((-7.0, 2.8), "battery"),
            ((P.GRAIN_Y - 0.5 * (P.BAFFLE_RI + P.BAFFLE_RO), 0.45), "baffle ring"), ((P.GRAIN_Y, 0.76), "photodiode"),
@@ -265,7 +265,7 @@ def gl1_002(parts):
         "   No single vertical line crosses every layer: the battery ends at",
         f"   y = {co(bat['y'] - bat['dy'] / 2)}, the ledge and tape lie outside r = {fmt(P.APERTURE_D / 2)}.",
         "   Detail C therefore spans both.",
-        f"2. Rev D stack: FR-4 base plate {P.BASE_T:.2f} / adhesive sheet {P.PSA_T:.2f} /",
+        f"2. Stack (since rev D): FR-4 base plate {P.BASE_T:.2f} / adhesive sheet {P.PSA_T:.2f} /",
         f"   PCB {P.PCB_T:.2f} (underside at z {fmt(P.PCB_Z0)}). The posts hold the PCB",
         f"   top at z = {fmt(P.PCB_Z1)}; the perimeter seal joint (base top to",
         f"   the seal face at z {fmt(P.LEDGE_Z0)}) is {fmt(P.BEAD_T)} mm high. Alternative",
@@ -368,7 +368,7 @@ def gl1_002(parts):
         f"   closed by a black gasket bead ({fmt(M['hood_seal_w'])} x {fmt(M['hood_seal_free_h'])}, cured",
         f"   on the tub first; squeezed {100 * P.HOOD_SEAL_COMPRESSION:.0f} % by the cube).",
         "4. z = height above the base plane.",
-        f"5. Rev D window: {fmt(P.WIN_W)} x {fmt(P.WIN_H)} x {fmt(P.WIN_T)} borosilicate, seated",
+        f"5. Window (since rev D): {fmt(P.WIN_W)} x {fmt(P.WIN_H)} x {fmt(P.WIN_T)} borosilicate, seated",
         f"   on the recess floor, {fmt(P.WIN_SUBFLUSH)} below the visor face;",
         f"   seats {fmt(P.WIN_LANDS[0], 2)} (sides) / {fmt(P.WIN_LANDS[1], 2)} (sill) / {fmt(P.WIN_LANDS[2], 2)} (top).",
         "   Sealed by a frame of thixotropic adhesive round",
@@ -673,7 +673,7 @@ def gl1_011(parts):
         f"7. DATA (mm, same origin): drawings/fab/{FD.FILES['profile']} (Gerber: outline + routed cut-outs), {FD.FILES['mask_top'].split('-')[-1]} / {FD.FILES['mask_bottom'].split('-')[-1]} (mask), {FD.FILES['legend_bottom'].split('-')[-1]} (legend, sheet 2), {FD.FILES['drill'].split('-')[-1]} (Excellon, NPTH);",
         "   drawings/dxf/GL1-011_base_plate_FR4_fab.dxf (layers OUTLINE_ROUT, ROUT_OPENING_D13p0, ROUT_SLOT_17p44x2p2, DRILL_NPTH_D1p10); export/step/base_plate.step.",
         f"8. Datum: origin = centre of the R{fmt(R)} arc; +x to the right and +y toward the flat in this view (seen on the top face). The part is symmetric about the y axis.",
-        "9. To report with the first articles: thickness over the mask, hole diameters, outline. PROVISIONAL - not released. Nominal CAD dimensions (design/master_params.yaml rev D); checked by check 15 of the build.",
+        "9. To report with the first articles: thickness over the mask, hole diameters, outline. PROVISIONAL - not released. Nominal CAD dimensions (design/master_params.yaml rev E); checked by check 15 of the build.",
     ], fs=5.7, title="NOTES FOR THE FABRICATOR")
     return _save("GL1-011_base_plate_FR4", [sh, _gl1_011_legend(parts)])
 
@@ -1246,7 +1246,7 @@ def gl1_020(parts):
     d.dim_v(zb, P.LATCH_TOP_Z, y1c, y1c, 5, nd=2)
     top = [((P.TAB_Y0 + 2.0, P.LATCH_TOP_Z - 0.6), "thumb tab"), ((0.5 * (P.TAB_STOP_Y0 + P.TAB_STOP_Y1), P.TAB_STOP_Z - 1.0), "tab stop"),
            ((P.LATCH_Y_NA, 4.0), "latch"), ((-8.0, 6.9), "marker"), ((P.LIP_Y0 + 0.6, P.LIP_Z0 + 0.6), "lip"), ((22.0, 6.0), "lip tower")]
-    bot = [((P.USB_Y0 + 3, P.CPCB_Z1 + 1.6), "USB-C receptacle"), ((-24.0, 0.5 * (P.CPCB_Z0 + P.CPCB_Z1)), "cradle PCB 1.6"), ((P.PAD_Y, -2.5), "spring pin 4"),
+    bot = [((P.USB_Y0 + 3, P.CPCB_Z1 + 1.6), "USB-C receptacle"), ((-24.0, 0.5 * (P.CPCB_Z0 + P.CPCB_Z1)), f"cradle PCB {fmt(P.CPCB_SIZE[2], 1)}"), ((P.PAD_Y, -2.5), "spring pin 4"),
            ((-2.0, P.BASIN_RIDGE_Z - 0.05), "drained floor"), ((0.0, -3.0), "body"), ((8.0, -8.5), "lightening pocket"), ((15.0, P.NEST_FLOOR_Z - 0.05), "front strip")]
     d.label_row(top, d.Y(P.LATCH_TOP_Z) + 5, 250, 404, above=True, fs=5.8)
     d.label_row(bot, d.Y(zb) - 9, 244, 404, above=False, fs=5.8)
@@ -1259,11 +1259,11 @@ def gl1_020(parts):
     (sx1, sy1), (sx2, sy2) = P.CPCB_SCREWS
     lab = [((fx, P.CRADLE_CY - fy), f"foot pocket Ø{fmt(M['foot_pocket_dia'])} x {fmt(M['foot_pocket_depth'])} (x4) at\n(+-{fmt(fx)}, {co(P.CRADLE_CY)} +-{fmt(fy)}), blind core Ø{fmt(M['core_dia'])} to z {co(P.CORE_Z1)}"),
            ((hx - 1.0, -22.0), f"PCB pocket {fmt(2 * hx)} x {fmt(P.CPCB_Y1 - P.CPCB_Y0 + 2 * P.CLR)},\nceiling z {co(P.CPCB_Z1)}"),
-           ((sx1, sy2), f"spot mark (x4): drill Ø1.6 x 3 for M2\nscrews at (+-{fmt(sx1)}, {co(sy1)}), (+-{fmt(sx2)}, {co(sy2)})"),
+           ((sx1, sy2), f"spot mark (x4): drill Ø{fmt(M['cradle_screw_drill'][0])} x {fmt(M['cradle_screw_drill'][1])} for M2 x {fmt(M['cradle_screw_len'])}\nscrews at (+-{fmt(sx1)}, {co(sy1)}), (+-{fmt(sx2)}, {co(sy2)})"),
            ((M["lighten_x"][0] + 4, 0.0), f"lightening pocket (x3),\nceiling z {co(M['lighten_ceiling_z'])}")]
     b.label_column(lab, 280, side="left", fs=5.7, min_gap=7.4, y_min=70, y_max=150)
     sh.note(16, 108, [
-        f"1. Charging and data dock only (rev D: every number of the YAML cradle block). Printed body {fmt(2 * X)} x {fmt(P.CRADLE_SIZE[1])} x {fmt(P.CRADLE_SIZE[2])} mm (z {co(zb)} to {co(zt)}); lip and latch stand above it,",
+        f"1. Charging and data dock only (every number of the YAML cradle block; rev E: cradle board 1.0 mm, E36). Printed body {fmt(2 * X)} x {fmt(P.CRADLE_SIZE[1])} x {fmt(P.CRADLE_SIZE[2])} mm (z {co(zb)} to {co(zt)}); lip and latch stand above it,",
         f"   overall height {fmt(P.LATCH_TOP_Z - zb, 2)} mm. Frame: the marker frame with the marker seated (origin at the marker centre on its base plane); body from y {co(y0c)} to {co(y1c)}.",
         f"2. The nest is the marker outline + {fmt(P.CLR)} mm; the D flat is the key, so the marker seats one way round only. Its three ball feet rest on the front strip",
         f"   and on two pads (z = {co(P.NEST_FLOOR_Z)}); the rest of the floor is a basin that drains through the scallops. A rim round the pin slot and a dam in front of",
@@ -1401,7 +1401,8 @@ def gl1_020(parts):
     rows = [["Cradle PCB (2 layers)", "Value"],
             ["Outline", f"{fmt(P.CPCB_SIZE[0])} x {fmt(P.CPCB_SIZE[1])} x {fmt(P.CPCB_SIZE[2])}, x +-{fmt(P.CPCB_HX)}, y {co(P.CPCB_Y0)} to {co(P.CPCB_Y1)}"],
             ["Pin positions (7)", f"y = {co(P.PAD_Y)}, x = {co(xa)} ... {co(xb)}, pitch {fmt(P.PAD_XS[1] - P.PAD_XS[0])}"],
-            ["Screws (4 x M2 thread-forming)", f"(+-{fmt(sx1)}, {co(sy1)}) and (+-{fmt(sx2)}, {co(sy2)})"],
+            [f"Screws (4 x M2 x {fmt(M['cradle_screw_len'])} thread-forming)", f"(+-{fmt(sx1)}, {co(sy1)}) and (+-{fmt(sx2)}, {co(sy2)}); drill Ø{fmt(M['cradle_screw_drill'][0])} x {fmt(M['cradle_screw_drill'][1])}"],
+            ["Pin tails (PROVISIONAL)", f"{fmt(P.PIN_TAIL_L)} below the top face: {fmt(P.PIN_TAIL_THROUGH)} through the {fmt(P.CPCB_SIZE[2])} board (E36)"],
             ["USB-C receptacle", f"GCT USB4105, top face, mouth at y {co(P.USB_Y0)}"],
             ["Top face", f"z = {co(P.CPCB_Z1)} (pad face {fmt(P.PAD_Z0, 3)} - working height {fmt(P.PIN_WORK_H)})"]]
     sh.table(312, 270, rows, [33, 62], fs=5.2, row_h=3.7)

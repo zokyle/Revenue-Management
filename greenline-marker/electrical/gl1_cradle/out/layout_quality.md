@@ -3,5 +3,6 @@
 - Smallest via-to-pad gap on the top side: 0.269 mm to a pad of its own net (J1.A5), 0.170 mm to a pad of another net (J1.A12).
 - Smallest solder-mask web, bottom: 0.350 mm (U1.1 / U1.2); 0 touching openings of different nets.
 - Smallest solder-mask web, top: 0.200 mm (J1.A9 / J1.A12); 0 touching openings of different nets.
-- Copper to edge: routed copper 0.348 mm (track GND F.Cu), pads 0.236 mm (pad J1.A1).
+- Copper to edge (board outline and routed slots; rule in the note): routed copper 1.100 mm (track GND B.Cu, to the board outline), pads 0.405 mm (pad J1.S1, to the board outline).
+- Copper to hole (wall of a drilled non-plated hole, 6 on this board; a separate rule from the edge): routed copper 0.348 mm (track GND F.Cu, to NPTH hole J1 (locating peg)), pads 0.236 mm (pad J1.A1, to NPTH hole J1 (locating peg)).
 - USB pair: D- 18.0 mm, D+ 16.4 mm, vias 1 / 1, largest distance between the two lines 2.54 mm.

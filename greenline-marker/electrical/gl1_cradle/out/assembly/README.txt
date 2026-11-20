@@ -1,7 +1,7 @@
 GreenLine GL-1 cradle board - assembly data
 ===========================================
 
-Design: gl1_cradle    revision D-EVT1
+Design: gl1_cradle    revision E-EVT1
 
 FILES
 -----
@@ -37,3 +37,20 @@ BOM
 ---
 7 line(s), 10 part(s) to fit, 3 DNP.
 Prices are single-unit list prices from the design script.
+
+ADDED BY THE BOARD BUILD (not by the toolchain)
+-----------------------------------------------
+gl1_cradle-bom-status.csv   the same grouped BOM with, for every line:
+  Status                  sourcing status of the exact part number as docs/SOURCING.md has it:
+                          VERIFIED = a US source listing this part number was seen on the date in
+                          the last column (listed for sale, NOT a stock promise); PROVISIONAL =
+                          everything else. It says nothing about the land pattern or pin table.
+  Design evidence / note  RESEARCH or PROVISIONAL: how well the design data of the line (pin table,
+                          land pattern, value) is known. PROVISIONAL lines gate the board order.
+  Sourcing risk, alternates, sourcing row: copied from the row of docs/sourcing.csv that has the
+                          line's references (main-NN / cradle-NN = the BOM item number). The alternates
+                          are CANDIDATES named by the sourcing report, NOT approved parts: each is
+                          VERIFIED (a listing was seen) or PROVISIONAL as its text says, and none has
+                          been approved by the design owner (docs/SOURCING.md action A18).
+Read a live distributor page before ordering: every stock figure behind these columns is an
+undated snapshot.

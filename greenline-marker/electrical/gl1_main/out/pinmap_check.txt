@@ -103,7 +103,7 @@ E  rows fixed by DESIGN_SPEC section 4 (spec text parsed)
   ok    CAM_VSYNC: PB7 pad 59 AF10 as in the spec
   ok    CAM_XVCLK: PA8 pad 41 as in the spec
   ok    SPI1_MISO: PB4 pad 56 AF5 as in the spec
-  ok    LCD_EXTCOMIN: PB2 pad 28 as in the spec
+  ok    LCD_EXTCOMIN: PB2 pad 28 AF1 as in the spec
   ok    USB_DM: PA11 pad 44 as in the spec
   ok    USB_DP: PA12 pad 45 as in the spec
   ok    CAM_L_PWDN on PC2: not PA9 / PA2 / PC10 and not a pin the bootloader drives

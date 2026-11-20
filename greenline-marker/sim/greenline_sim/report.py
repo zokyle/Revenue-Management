@@ -1635,12 +1635,16 @@ def render(summary: dict, figs: Sequence[str]) -> str:
     add("")
     add(
         "**Which hardware.** The simulation takes the optical and inertial parameters of the GL-1 as they stood at "
-        "hardware revision C (the camera preset of section 2). The design is now at revision E (`design/DESIGN_SPEC.md`, "
-        "revision D with amendments E1 to E34), and THE SIMULATION HAS NOT BEEN RE-RUN FOR IT: every number below is the "
+        "hardware revision C (the camera preset of section 2). The design is now at revision E (`design/DESIGN_SPEC.md` rev E, EVT1: "
+        "revision D with its amendments E1 to E36; `design/master_params.yaml` rev E-EVT1), and THE SIMULATION HAS NOT BEEN RE-RUN FOR IT: every number below is the "
         "run of revision C. One input is known to differ: the usable upward field of the cameras, "
         f"{cam['up_fov_deg']:g} deg here, is guaranteed only to 14.0 deg on a worst-case unit (amendment E17), so on such a "
         "unit the top of the flagstick enters the field at a longer distance than simulated (about 8.4 m by the "
-        "specification). The other amendments were not checked one by one against the inputs of this simulation when "
+        "specification). When the amendments entered the parameter file (rev D-EVT1 to rev E-EVT1) the numbers the camera "
+        "preset is typed from were compared between the two files: focal length in pixels, baseline, camera "
+        "positions, the required field (26 deg to each side, 17.6 deg up) and the prism block are unchanged; of the "
+        "camera keys only the guaranteed upward field changed (14.5 to 14.0 deg), and no code here reads it. "
+        "The other amendments were not checked one by one against the inputs of this simulation when "
         "this paragraph was written; most concern the charger, the board, the enclosure and what the firmware shows, "
         "none of which is modelled here."
     )

@@ -21,6 +21,7 @@
   "100 % of the connections routed, audit clean": true,
   "KiCad DRC: 0 errors, 0 unconnected, nothing excluded": true,
   "design checks: 0 errors": true,
+  "mechanical import check (--cradle) passes": true,
   "outputs verified against the model": true,
   "schematic netlist round trip matches": true
  },
@@ -51,6 +52,13 @@
     "silk_overlap": 1
    }
   },
+  "mechanical": {
+   "exit_status": 0,
+   "passed": true,
+   "result": "PASS cradle board gl1_cradle: thickness 1.0, outline 30.0 x 22.0, four screw holes, seven spring pins on the pad row and on the modelled pin axes (4 fitted), USB-C receptacle on the modelled receptacle, nothing else on the top face",
+   "stale_against_yaml": [],
+   "warnings": []
+  },
   "outputs": {
    "anchor_offsets": [],
    "bom": {
@@ -70,9 +78,12 @@
     ]
    },
    "bom_status": {
-    "by_status": {
+    "by_design_evidence": {
      "PROVISIONAL": 6,
      "RESEARCH": 1
+    },
+    "by_status": {
+     "VERIFIED": 7
     },
     "lines": 7
    },
@@ -133,9 +144,14 @@
      ]
     ]
    },
+   "fab_readme_mentions": {
+    "1.0 mm": true,
+    "1.11 mm": true
+   },
    "fab_zip": "gl1_cradle-fab.zip",
-   "fab_zip_bytes": 34299,
-   "files": 28,
+   "fab_zip_bytes": 34225,
+   "files": 29,
+   "manifest_problems": [],
    "passed": true,
    "position_rows": 10,
    "problems": []
@@ -150,11 +166,27 @@
     },
     "camera_nets": {},
     "copper_to_edge": {
-     "note": "edge = board outline, the locating slot and the NPTH hole wall; rule 0.30 mm",
-     "pad": "pad J1.A1",
-     "pad_mm": 0.2358,
-     "routed_copper_mm": 0.3482,
-     "routed_item": "track GND F.Cu"
+     "note": "edge = the routed contours: board outline, routed slots and cut-outs; rule 0.30 mm. Drilled non-plated holes are reported under copper_to_hole",
+     "pad": "pad J1.S1",
+     "pad_mm": 0.4051,
+     "pad_to": "board outline",
+     "routed_copper_mm": 1.1,
+     "routed_item": "track GND B.Cu",
+     "routed_to": "board outline"
+    },
+    "copper_to_hole": {
+     "holes": 6,
+     "note": "hole = wall of a drilled non-plated hole (outline holes, NPTH pads of footprints); rule 0.20 mm (hole_clearance)",
+     "pad": {
+      "item": "pad J1.A1",
+      "mm": 0.2358,
+      "to": "NPTH hole J1 (locating peg)"
+     },
+     "routed": {
+      "item": "track GND F.Cu",
+      "mm": 0.3482,
+      "to": "NPTH hole J1 (locating peg)"
+     }
     },
     "router_warnings": [],
     "sensitive_nets": {
@@ -236,15 +268,15 @@
    "vias": 9
   },
   "rules": {
-   "as_specified": 13,
+   "as_specified": 14,
    "departures": [
     "USB-C land"
    ],
    "failed": [],
    "open_not_met": [],
    "passed": true,
-   "rows": 14,
-   "selftest_defects": 14,
+   "rows": 15,
+   "selftest_defects": 18,
    "selftest_missed": 0,
    "workarounds": []
   },
@@ -301,6 +333,7 @@
   "drc",
   "outputs",
   "schematic",
+  "mechanical",
   "quality"
  ]
 }

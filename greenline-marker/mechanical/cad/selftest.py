@@ -38,10 +38,21 @@ def _u8_over_the_front_foot(parts):
         P.TOP_PARTS = old
 
 
-def _u10_at_its_old_position(parts):
-    """YAML-level defect: U10 back at (-14.2, -12.2), 0.19 mm from ball-foot zone 2 (N7 asks for 0.3)."""
+def _u11_near_zone_xy():
+    """Where the body centre of U11 must be for its corner to stand 0.20 mm from ball-foot zone 3 (N7 asks for 0.3): the
+    corner nearest the foot on the 45 degree line through the foot centre.  Rev E: the routed U11 stands 1.6 mm clear."""
+    import math
+    u = next(q for q in P.TOP_PARTS if q["ref"] == "U11")
+    fx, fy = P.FOOT_ZONES[2]
+    r = (P.FOOT_ZONE_D / 2 + 0.20) / math.sqrt(2)
+    return round(fx - r - u["dx"] / 2, 4), round(fy - r - u["dy"] / 2, 4)
+
+
+def _u11_near_foot_zone(parts):
+    """YAML-level defect: U11 moved so that its corner is 0.20 mm from ball-foot zone 3 (inside the 0.3 mm margin of N7, not over the zone)."""
     old = P.TOP_PARTS
-    P.TOP_PARTS = [dict(q, x=-14.2) if q["ref"] == "U10" else q for q in old]
+    x, y = _u11_near_zone_xy()
+    P.TOP_PARTS = [dict(q, x=x, y=y) if q["ref"] == "U11" else q for q in old]
     try:
         return C.check_posts(parts)
     finally:
@@ -134,8 +145,20 @@ def main():
     rx, ry, rd = P.LOC_ROUND
     hole_off_pcb = pcb0.fuse(PT.cyl(rx, ry, rd / 2, P.PCB_Z0, P.PCB_Z1).val()).cut(PT.cyl(rx, ry + 0.05, rd / 2, P.PCB_Z0, P.PCB_Z1).val())   # the round hole 0.05 mm off in y
     old_film = PT.cyl(0, 0, 12.0, P.RETARDER_Z0, P.RETARDER_Z1).val()                # the dia 24.0 film of the previous issue: 0.5 inside the tape bore, less than its centring chain
+    # ---- rev E: the LCD tail behind the new J1 mouth (E24) and the cradle board (E36)
+    flex = _s(parts, "lcd_flex")
+    cb = A.bbox_of(parts["cradle_pcb"])
+    board_16_top_kept = PT.box(cb[0], cb[3], cb[1], cb[4], P.CPCB_Z1 - 1.6, P.CPCB_Z1).val()          # the rev D board: 1.6 mm, top face where it belongs
+    board_10_top_low = _s(parts, "cradle_pcb").translate((0, 0, -0.6))                                  # the 1.0 mm board hung from the OLD underside: top face 0.6 low
+    short_tail_pin = _s(parts, "spring_pin_4").cut(PT.box(-2, 2, P.PAD_Y - 2, P.PAD_Y + 2, P.PIN_TAIL_Z0 - 1, P.CPCB_Z0 + 0.1).val())   # tail ends 0.1 inside the board
     cases = [
-        ("roof 0.01 mm low over the camera L opening ONLY (camera R untouched): the guaranteed case of camera L falls below 14.5 deg", C.check_fold, _with(parts, tub=tub.fuse(roof_001_L)),
+        ("LCD tail fold 0.5 mm further forward (the rev D fold, in front of the E24 mouth of J1): the lower run would lie in the connector body", C.check_keepouts,
+         _with(parts, lcd_flex=flex.translate((0, 0.5, 0))), "LCD tail keep-out"),
+        ("LCD tail fold 2.6 mm further back (it reaches the rear wall of the tub)", C.check_clearances, _with(parts, lcd_flex=flex.translate((0, -2.6, 0))), "LCD flex"),
+        ("cradle board 1.6 mm thick with its top face kept (the rev D board: the pin tails end inside the holes)", C.check_cradle, _with(parts, cradle_pcb=board_16_top_kept), "cradle PCB thickness"),
+        ("cradle board 1.0 mm hung from the old underside (top face 0.6 mm low: the pins would stand 0.6 mm short)", C.check_cradle, _with(parts, cradle_pcb=board_10_top_low), "cradle PCB top"),
+        ("spring pin 4 with a tail that ends 0.1 mm inside the cradle board (no solder fillet)", C.check_cradle, _with(parts, spring_pin_4=short_tail_pin), "pin tail"),
+        (f"roof 0.01 mm low over the camera L opening ONLY (camera R untouched): the guaranteed case of camera L falls below {P.FOV_UP_GUAR} deg", C.check_fold, _with(parts, tub=tub.fuse(roof_001_L)),
          "camera L in the guaranteed case"),
         ("legend layer written un-mirrored (every word would read backwards on the outer face)", _legend_unmirrored, parts, "MIRRORED"),
         ("legend text at the letter pitch of the previous issue (0.05 mm between letters at 1.0 mm text)", _legend_tight_pitch, parts, "smallest clear space"),
@@ -154,7 +177,7 @@ def main():
         ("LCD pocket 0.15 mm longer and 0.2 mm wider (front and side stops cut back): the glass can turn 1.5 deg", C.check_assembly_paths, _with(parts, tub=tub.cut(big_pocket)), "display rotation"),
         ("calibration seat plate with pockets only 0.08 mm deep (a ball foot stands on the pocket floor)", C.check_cal_plates,
          _with(parts, cal_seat_plate=PT.cal_seat_plate(pocket_depth=0.08).val()), "ball foot to its pocket"),
-        ("U10 back at x -14.2: 0.19 mm from ball-foot zone 2 (N7 asks for 0.3)", _u10_at_its_old_position, parts, "foot zone 2"),
+        (f"U11 moved to {_u11_near_zone_xy()}: its corner 0.20 mm from ball-foot zone 3 (N7 asks for 0.3)", _u11_near_foot_zone, parts, "foot zone 3"),
         ("prism R raised 0.30 mm into the roof", C.check_interference, _with(parts, prism_R=_s(parts, "prism_R").translate((0, 0, 0.30)))),
         ("LCD glass shifted 0.20 mm toward the cameras", C.check_clearances, _with(parts, lcd_glass=_s(parts, "lcd_glass").translate((0, 0.20, 0)))),
         ("battery raised 0.25 mm (eats the swell allowance)", C.check_clearances, _with(parts, battery=_s(parts, "battery").translate((0, 0, 0.25)))),
@@ -164,8 +187,8 @@ def main():
         ("baffle ring bonded 0.5 mm off centre", C.check_clearances, _with(parts, baffle_ring=_s(parts, "baffle_ring").translate((0.5, 0, 0)))),
         ("0.4 mm bar across the camera R opening", C.check_fov, _with(parts, tub=tub.fuse(bar))),
         ("0.4 mm bar across the camera R opening", C.check_fold, _with(parts, tub=tub.fuse(bar))),
-        ("roof 0.1 mm low over the camera R opening (upper field far below the guaranteed 14.5 deg)", C.check_fold, _with(parts, tub=tub.fuse(low_roof)), "BELOW"),
-        ("roof 0.01 mm low over the camera R opening (the guaranteed case loses 0.18 deg: more than its 0.11 deg margin to 14.5)", C.check_fold,
+        (f"roof 0.1 mm low over the camera R opening (upper field far below the guaranteed {P.FOV_UP_GUAR} deg)", C.check_fold, _with(parts, tub=tub.fuse(low_roof)), "BELOW"),
+        (f"roof 0.01 mm low over the camera R opening (the guaranteed case loses 0.18 deg: more than its 0.03 deg margin to {P.FOV_UP_GUAR})", C.check_fold,
          _with(parts, tub=tub.fuse(roof_001)), "BELOW"),
         ("hood gasket bead R dispensed 0.2 mm too far forward (over the chamfer of the rear wall)", C.check_clearances,
          _with(parts, hood_seal_R=_s(parts, "hood_seal_R").translate((0, 0.20, 0)))),
@@ -213,7 +236,8 @@ def main():
         record(label, fn(mod), must_mention=(word[0] if word else None))
     # ---- board import (check 17): a board built from the YAML must pass; each seeded defect must be caught for its own reason;
     #      the demonstration board of the toolchain (older positions) must show its mismatches
-    record("board import: board built from the amended rev D YAML (conforming, synthetic)", C.check_board_import(parts, data=B.synthetic_board()), expect_caught=False)
+    record("board import: board built from the rev E YAML (conforming, synthetic; J1 with its anchor apart from its body centre; test pads, fiducials on both sides "
+           "and the three ball-foot lands listed as FITTED copper-only footprints)", C.check_board_import(parts, data=B.synthetic_board()), expect_caught=False)
     for defect, label, word in (("tall_under_hood", "a 1.5 mm part under camera hood R", "under camera hood"),
                                 ("part_on_post_foot", "an 0402 resistor on post foot A+", "post foot A+"),
                                 ("part_over_foot_zone", "an 0402 capacitor over the front ball-foot zone", "over ball-foot zone 1"),
@@ -225,7 +249,15 @@ def main():
                                 ("polygon_hole_only", "an opening listed only in the polygon holes of the outline", "openings listed only"),
                                 ("part_in_tail_path", "a 2.5 mm part in the path of the LCD tail behind J1", "LCD flex tail"),
                                 ("part_near_foot_zone", "an 0402 capacitor 0.15 mm from ball-foot zone 3 (N7: 0.3 required)", "to ball-foot zone 3"),
-                                ("tall_in_tail_zone", "a part 0.02 mm taller than the LCD-tail keep-out allows (N10)", "LCD-tail keep-out")):
+                                ("tall_in_tail_zone", "a part 0.02 mm taller than the LCD-tail keep-out allows (N10)", "LCD-tail keep-out"),
+                                ("j1_body_moved_anchor_kept", "the BODY of J1 0.5 mm forward (its rev D place) with the footprint anchor kept on the YAML anchor", "J1 BODY box"),
+                                ("j1_anchor_moved_body_kept", "the footprint anchor of J1 0.3 mm off with the body kept", "J1 footprint anchor"),
+                                ("battery_keepout_full", "the battery keep-out without the J1 courtyard notch (the full cell rectangle)", "battery keep-out"),
+                                ("bare_copper_in_grain_opening", "copper only: a bottom-side fiducial inside the grain opening", "inside the grain opening"),
+                                ("bare_copper_marked_dnp_in_opening", "copper only: the same fiducial marked 'not fitted' (the mark must not hide copper)", "inside the grain opening"),
+                                ("foot_land_moved", "copper only: ball-foot land 1 0.5 mm off its foot", "ball-foot land"),
+                                ("zero_height_bom_part", "a bottom-side part WITH a BOM line and a body height of 0, outside both openings (it may not pass as copper)", "body height of 0"),
+                                ("fiducial_on_post_foot", "copper only: a top-side fiducial under post foot A+", "post foot A+")):
         record(f"board import: {label}", C.check_board_import(parts, data=B.seeded(defect)), must_mention=word)
     r = C.check_board_import(parts, data=B.seeded("dnp_tall_under_hood"))
     r = dict(r, summary=r["summary"] + " | warnings: " + "; ".join(r["warnings"]))
@@ -234,6 +266,18 @@ def main():
         record("board import: demonstration board of the toolchain (rev C positions: holes under posts E, U8 over the front foot)",
                C.check_board_import(parts, path=B.DEMO_FILE), must_mention="locating hole")
     record("board import: no board file", C.check_board_import(parts, path=P.EXPORT_DIR / "no_such_board-mechanical.json"), expect_caught=False, must_mention="skipped: no board file")
+    # ---- cradle board import (check 19): a board built from the YAML cradle block must pass; each seeded defect must be caught for its own reason
+    record("cradle board import: board built from the rev E YAML cradle block (conforming, synthetic)", C.check_cradle_board_import(parts, data=B.synthetic_cradle_board()), expect_caught=False)
+    for defect, label, word in (("thick_board", "a 1.6 mm board (the rev D cradle board; E36 asks for 1.0)", "board thickness"),
+                                ("pin_row_shifted", "the spring-pin row 0.3 mm off the pad row", "spring pin 1"),
+                                ("screw_hole_moved", "one screw hole 0.5 mm off", "screw hole"),
+                                ("usb_moved", "the USB-C receptacle 0.5 mm further in (mouth off the YAML)", "USB-C receptacle body"),
+                                ("part_on_top", "an 0402 capacitor on the top face, which lies against the pocket ceiling", "pocket ceiling"),
+                                ("wrong_pins_fitted", "pin 7 fitted and pin 1 not (the consumer board fits VBUS, D-, D+, GND)", "pins fitted"),
+                                ("outline_wide", "a board 0.8 mm wider than the YAML outline", "outline"),
+                                ("bottom_part_under_screw_head", "a bottom-side capacitor under the head of a screw", "under the head")):
+        record(f"cradle board import: {label}", C.check_cradle_board_import(parts, data=B.seeded_cradle(defect)), must_mention=word)
+    record("cradle board import: no board file", C.check_cradle_board_import(parts, path=P.EXPORT_DIR / "no_such_cradle-mechanical.json"), expect_caught=False, must_mention="skipped: no cradle board file")
     # and the unmodified model must pass the same checks
     for fn in (C.check_clearances, C.check_fold, C.check_posts, C.check_keepouts, C.check_seal, C.check_assembly_paths, C.check_fr4_plate, C.check_alt_base, C.check_cal_plates):
         r = fn(parts)

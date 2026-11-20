@@ -11,8 +11,8 @@
 
 #define GL_APP_FW_VERSION 0x0003u /* major << 8 | minor: 0.3, phase 3 (the rev E board) */
 #define GL_APP_FW_BUILD 20261113u
-/* The board this firmware is for: revision E (DESIGN_SPEC rev D with the
- * amendments E1 to E34).  The rev C2 board (another charger, CHG_INHIBIT of
+/* The board this firmware is for: revision E (DESIGN_SPEC rev E: rev D with
+ * its amendments E1 to E36).  The rev C2 board (another charger, CHG_INHIBIT of
  * the opposite polarity) is NOT supported any more.  GET_INFO reports the
  * number; where a letter is shown it is 'A' + number - 1. */
 #define GL_APP_HW_REV 5u

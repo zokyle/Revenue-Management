@@ -1,7 +1,7 @@
 /*
  * gl_provisional.h - every PROVISIONAL hardware fact the firmware depends on.
  *
- * DESIGN_SPEC.md (rev D with amendments E1 to E34: the "rev E" board) marks
+ * DESIGN_SPEC.md (rev E: rev D with its amendments E1 to E36, the rev E board) marks
  * facts as VERIFIED or PROVISIONAL.  Anything
  * provisional that changes what the firmware does is a named constant HERE
  * and nowhere else, with the reason and what to check.  When a release gate

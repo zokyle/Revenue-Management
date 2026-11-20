@@ -6,8 +6,8 @@ stage (`build_netlist.py`, the board WITHOUT tracks) and still hold, with the tw
 layout made marked "LAYOUT".
 
 The board implements DESIGN_SPEC section 4, "Cradle board (E6)", on the mechanical interfaces
-of the `cradle` block of `design/master_params.yaml`: 30 x 22 mm, 1.6 mm, 2 layers, four screw
-holes, seven spring-pin positions on 2.54 mm under the marker's seven pads, the USB-C mouth
+of the `cradle` block of `design/master_params.yaml` (revision E-EVT1): 30 x 22 mm, **1.0 mm
+thick (spec amendment E36; it was 1.6 mm at rev D)**, 2 layers, four screw holes, seven spring-pin positions on 2.54 mm under the marker's seven pads, the USB-C mouth
 1.3 mm beyond the rear edge.
 
 Evidence levels: **RESEARCH** (seen in `docs/research/*.md` as "confirmed"; not a datasheet),
@@ -18,14 +18,14 @@ Evidence levels: **RESEARCH** (seen in `docs/research/*.md` as "confirmed"; not 
 | File | What it is |
 |---|---|
 | `gl1_cradle_design.py` | the netlist as code: parts, nets, footprints, outline and holes from the YAML, nominal placement |
-| `check_cradle_rules.py` | the spec's cradle sentence and the YAML block, row by row, tested against the netlist, and the pin tables of U1 and J1 against the installed KiCad symbols; `--selftest` seeds 14 defects |
+| `check_cradle_rules.py` | the spec's cradle sentence and the YAML block, row by row, tested against the netlist, and the pin tables of U1 and J1 against the installed KiCad symbols; `--selftest` seeds 18 defects |
 | `make_usb_footprint.py`, `gl1_cradle_fp.pretty/` | the project copy of the receptacle's land pattern and the script that derives it from the installed KiCad library (section 6) |
 | `build_netlist.py` | runner (the stages of `../gl1_main/netlist_stage.py`): toolchain checks, rule table, schematic with netlist round trip, KiCad DRC of the board without tracks, exports |
 | `netlist_out/` | results of the last run |
 | `build_gl1_cradle.py`, `out/` | LAYOUT: one command - checks, rules, board with silkscreen legend, routing, KiCad DRC, fabrication and assembly outputs, schematic, quality figures (section 9) |
 
     /usr/bin/python3 -B electrical/gl1_cradle/build_netlist.py
-    /usr/bin/python3 -B electrical/gl1_cradle/build_gl1_cradle.py      # about 15 s
+    /usr/bin/python3 -B electrical/gl1_cradle/build_gl1_cradle.py      # about 30 s, 20 of them the mechanical check
 
 Exit status 0 only if every stage passed. Content of the netlist:
 
@@ -41,19 +41,20 @@ A row is **pass** (as written), **departure** (the test passes, but the thing is
 differently from the letter of its source; section 6) or **FAIL**.
 
 <!-- BEGIN GENERATED: RULE_COUNTS -->
-**14 rows: 13 as specified; 1 departures from the letter of the spec (section 6): USB-C land; 0 open - NOT met (section none); 0 workaround (section none); 0 failed.**
+**15 rows: 14 as specified; 1 departures from the letter of the spec (section 6): USB-C land; 0 open - NOT met (section none); 0 workaround (section none); 0 failed.**
 <!-- END GENERATED: RULE_COUNTS -->
 
 <!-- BEGIN GENERATED: RULES -->
 | Rule | What the specification says | Where it is in the netlist | Result |
 |---|---|---|---|
-| board | cradle.pcb: 30.0 x 22.0, thickness 1.6; 2 layers (task) | outline rectangle about the board centre = marker (0, -23.2); layers 2 | pass |
+| board | cradle.pcb: 30.0 x 22.0, thickness 1.0 (E36: 1.0 mm instead of 1.6 mm); 2 layers (task) | outline rectangle about the board centre = marker (0, -23.2); layers 2; board thickness 1.00 mm, stack-up total 1.0000 mm | pass |
+| E36 | E36: cradle board 1.0 mm instead of 1.6 mm, so the Mill-Max 0914 tail (about 1.34 mm, PROVISIONAL) comes through the board and can be soldered; the board top face, which sets the pin height, does not move (YAML cradle.pins.tail_length 1.34, cradle.pcb.top_z -4.855) | tail 1.34 mm (MILLMAX_0914, read from the YAML) in a 1.0 mm board: 0.34 mm through the underside (0.2 mm asked for a fillet); the pins stand on the top side, height above the board 6.96 mm and working height 5.82 mm unchanged; fab note states the thickness, the tail and the datum face *(tail length and diameters PROVISIONAL until the Mill-Max drawing is read)* | pass |
 | screws | four screw holes at cradle.pcb.screws [[-12.5, -31.5], [12.5, -31.5], [-12.5, -14.5], [12.5, -14.5]] | NPTH holes MH1-MH4 dia 2.2 (diameter PROVISIONAL) | pass |
 | pin row | seven spring-pin positions on 2.54 mm pitch at pin_row_y -17.0, in the YAML order (VBUS, D-, D+, GND, SWDIO, SWCLK, NRST from x = -7.62 to +7.62 seen from above) | SP1-SP7 (through hole, top side): pad centres measured at marker x = [-7.62, -5.08, -2.54, 0.0, 2.54, 5.08, 7.62], y = [-17.0] | pass |
 | fitted | four spring pins fitted (VBUS, D-, D+, GND) and three service positions (SWDIO, SWCLK, NRST) for the factory fixture | SP1-SP4 fitted, SP5-SP7 not fitted (same footprint, fitted in the factory fixture) | pass |
 | service | (task) the three service positions taken to a small unpopulated header or test pads | J2: four bare pads on the bottom (GND, SWDIO, SWCLK, NRST) | pass |
 | USB-C | USB-C receptacle (USB 2.0; YAML: GCT USB4105, rear exit), the USB mouth at the YAML edge (usb_mouth_y -35.5) | J1 USB4105-GF-A, top side, body front at marker y -35.50 (1.3 mm beyond the board edge); SBU1 / SBU2 not connected | pass |
-| USB-C land | (KiCad DRC, rule set) 0.20 mm between a hole wall and foreign copper | J1 uses the project copy of KiCad's USB4105 land pattern: the four outer ground pads are 0.04 mm shorter; smallest distance from a locating-peg hole to a pad of J1 0.236 mm (library footprint: 0.194); one pad object per wide land instead of two coincident ones (B1 on A12, B12 on A1, B4 on A9, B9 on A4); the stored file equals the library file with exactly these changes *(DEVIATION from the maker's land pattern, PROVISIONAL; no design rule is relaxed. The merged pad objects are a workaround for the toolchain's router, which cannot join coincident pads; the copper is unchanged)* | **departure** |
+| USB-C land | (KiCad DRC, rule set) 0.20 mm between a hole wall and foreign copper | J1 uses the project copy of KiCad's USB4105 land pattern: the four outer ground pads (two lands, A1 / B12 and A12 / B1) are 0.04 mm shorter - measured 1.11 / 1.11 mm against 1.15 / 1.15 mm of the unchanged lands; smallest distance from a locating-peg hole to a pad of J1 0.236 mm (library footprint: 0.194); one pad object per wide land instead of two coincident ones (B1 on A12, B12 on A1, B4 on A9, B9 on A4); the stored file equals the library file with exactly these changes; the fab note states 1.11 mm *(DEVIATION from the maker's land pattern, PROVISIONAL; no design rule is relaxed. The merged pad objects are a workaround for the toolchain's router, which cannot join coincident pads; the copper is unchanged)* | **departure** |
 | CC | 5.1 kohm from CC1 and from CC2 to ground | R1: CC1 (A5) - GND, R2: CC2 (B5) - GND, one resistor each | pass |
 | fuse | a resettable fuse in VBUS (E6); E25: chosen for no more than 1.5 ohm after a trip (hold current 0.2 to 0.5 A) | F1 between VBUS_IN (J1 lands A4 / B9 and A9 / B4) and VBUS (SP1): hold 350 mA, trip 750 mA, 1.0 ohm at most after a trip (PROVISIONAL part 0603L035YR, ratings from the listing data in docs/SOURCING.md A5; trip 0.75 A departs from E6's 'about 0.5 A') | pass |
 | ESD | USBLC6-2SC6 on VBUS / D+ / D- | U1: D- through pins 1 + 6, D+ through pins 3 + 4, pin 5 on VBUS_IN (C1 100n), pin 2 GND *(ADDED: C1 100 nF at the VBUS pin of U1; the clamp sits on the connector side of the fuse)* | pass |
@@ -123,16 +124,19 @@ cradle-02 still names MF-FSMF020X-2 (3.5 ohm, fails E25): for the sourcing owner
 
 | Table / item | What is not known |
 |---|---|
-| `MILLMAX_0914` | tail 0.635 mm and minimum mounting hole 0.737 mm are search extracts of Mill-Max data recorded in `docs/SOURCING.md` (cradle-05, action A6), not the drawing; the finished hole is 0.80 mm (it was 0.90 for an assumed 0.76 mm tail); pad 1.60, barrel and plunger diameters are still the mechanical model's assumptions. **OPEN: the tail is about 1.34 mm long (8.3 mm overall less 6.96 mm above the board, a subtraction of two extracts) in a 1.6 mm board**, so it would end about 0.26 mm inside the hole. To decide outside this package: the long-tail variant 0914-1-15-20-77-14-11-0 (about 2.8 mm stands out below the board: check the pocket) or a thinner board (YAML `cradle.pcb.thickness`, `top_z`). Do not order the board before that |
+| `MILLMAX_0914` | tail 0.635 mm and minimum mounting hole 0.737 mm are search extracts of Mill-Max data recorded in `docs/SOURCING.md` (cradle-05, action A6), not the drawing; the finished hole is 0.80 mm (it was 0.90 for an assumed 0.76 mm tail); pad 1.60, barrel and plunger diameters are still the mechanical model's assumptions. **Tail length: about 1.34 mm** (YAML `cradle.pins.tail_length`: 8.3 mm overall less 6.96 mm above the board, a subtraction of two extracts, not a reading). **E36 answers the rev D open item**: in the 1.0 mm board the tail stands 0.34 mm out of the underside and can be soldered (in the 1.6 mm board it ended 0.26 mm inside the hole); the board's top face, which sets the pin height, did not move. Rule row "E36" requires 0.2 mm or more through the board. Still to read before ordering: the Mill-Max drawing (tail length and diameter). The mechanical model draws a 0.76 mm tail in a 0.90 mm hole; neither diameter is in the YAML |
 | `PTC` | the ratings of the part are a distributor listing, not the data sheet; height from memory |
-| USB-C land | the four outer ground pads are 1.07 mm long, 0.04 mm shorter than KiCad's GCT USB4105 pattern, to keep 0.20 mm from the peg holes: to be confirmed against the GCT drawing |
+| USB-C land | the four outer ground pads (two lands, A1 / B12 and A12 / B1) are 1.11 mm long, 0.04 mm shorter than the 1.15 mm of KiCad's GCT USB4105 pattern, to keep 0.20 mm from the peg holes: to be confirmed against the GCT drawing. (Earlier issues of this file, of the fab note and of the README said 1.07 mm: that was wrong; the footprint has always been 1.11 mm, and rule row "USB-C land" now measures it and reads the fab note) |
 | `SCREW_HOLE_DIA`, `SCREW_HEAD_DIA` | 2.2 mm hole (what the mechanical model drills), 4.0 mm head: an M2 thread-forming screw that has not been selected |
 | J1 | body envelope 8.94 x 7.35 x 3.26 mm (mechanical model); that the KiCad land pattern's front (3.675 mm before its anchor) is the mouth of the shell; the four shortened ground pads of the project copy (section 6) against GCT's drawing |
-| R1, R2, C1 | MPNs from memory |
+| R1, R2, C1 | MPNs from memory; Digi-Key codes from `docs/SOURCING.md` A17 (311-5.10KLRCT-ND, 490-3261-1-ND); alternate candidate for C1 per A4: Samsung CL05B104KO5NNNC (candidates column of the status BOM; not approved) |
 | USB-C behaviour | Rd range, default current of a source, 4.75 V lower limit: from memory of the USB specifications |
 | placement | final for this revision (section 9); nothing has been built |
 
-`netlist_out/gl1_cradle-bom-status.csv` carries the status of every BOM line.
+`netlist_out/gl1_cradle-bom-status.csv` carries two status columns for every BOM line: "Status"
+is the sourcing status of the part number as `docs/SOURCING.md` has it (VERIFIED = a US listing
+of this exact part number was seen; PROVISIONAL = everything else), "Design evidence" is the
+level of the design data (RESEARCH / PROVISIONAL, this section).
 
 ## 6. Departures and additions
 
@@ -166,22 +170,28 @@ Nothing was relaxed, excluded or waived.
 
 ## 8. Not done
 
-No datasheet was read. `mechanical/cad/board_import.py` checks the main board only; nothing in
-the mechanical package checks this board's file (`out/gl1_cradle-mechanical.json`).
+No datasheet was read. Since revision E `mechanical/cad/board_import.py --cradle` (the mechanical
+package's check 19) compares this board's file (`out/gl1_cradle-mechanical.json`) with the
+model: thickness, outline, four screw holes, the seven pins on the pad row and on the modelled
+pin axes, which pins are fitted, the receptacle against the modelled one, nothing else on the
+top face, bottom parts clear of the screw heads. `build_gl1_cradle.py` runs it as its stage
+"mechanical". It cannot compare the pin's tail and hole diameters (not in the YAML or the file).
 
 ## 9. Layout (LAYOUT stage)
 
 `/usr/bin/python3 -B electrical/gl1_cradle/build_gl1_cradle.py` builds everything into `out/`
 and exits 0 only if every stage passed: toolchain checks, the rule table with its self-test,
-board, routing, KiCad DRC, outputs verified against the model, schematic round trip.
+board, routing, KiCad DRC, outputs verified against the model (and `outputs.json` against the
+files on disk, the final assembly zip and the status BOM included), schematic round trip,
+mechanical import (`--cradle`).
 
 | | |
 |---|---|
-| board | 30 x 22 x 1.6 mm, 2 layers, rule set `US_2L_STD` (tracks 0.20 mm, supply 0.40 mm, clearance 0.15 mm, vias 0.50 / 0.25 mm) |
+| board | 30 x 22 x 1.0 mm (E36), 2 layers: 0.035 mm copper either side of a 0.91 mm FR-4 core, 0.01 mm mask each side. Rule set `US_2L_STD`: board minimum 0.127 / 0.127 mm (track / clearance); net classes Default 0.20 / 0.15 mm and Power 0.40 / 0.15 mm; via 0.50 mm pad / 0.25 mm hole |
 | placement | J1 and the seven spring pins on the top side at their YAML positions; F1, U1, C1, R1, R2 and the four service pads J2 on the bottom; three fiducials per side |
 | routing | 29 of 29 connections, 9 vias, 127 mm of track (x1.10 of the spanning trees), router run time about 2 s |
 | KiCad DRC | 0 errors, 0 unconnected; 1 cosmetic warning (`silk_overlap`: the "GND" label touches the pin-1 dot of J2). Nothing is excluded |
-| outputs | Gerbers (2 copper layers, mask, paste, silkscreen, outline), drill (9 vias 0.25, 4 slots 0.60 for the shell, 7 holes 0.80 for the spring pins, NPTH 2 x 0.65 and 4 x 2.20), position file (10 rows), BOM 7 lines and the same BOM with a status column (`out/assembly/gl1_cradle-bom-status.csv`: 6 PROVISIONAL, 1 RESEARCH), netlist and mechanical JSON, STEP, renders, fab README |
+| outputs | Gerbers (2 copper layers, mask, paste, silkscreen, outline), drill (9 vias 0.25, 4 slots 0.60 for the shell, 7 holes 0.80 for the spring pins, NPTH 2 x 0.65 and 4 x 2.20), position file (10 rows), BOM 7 lines and the same BOM with a status column (`out/assembly/gl1_cradle-bom-status.csv`: Status 7 VERIFIED; design evidence 6 PROVISIONAL, 1 RESEARCH), netlist and mechanical JSON, STEP, renders, fab README |
 
 **The mirror, checked.** The YAML lists the marker's pads seen from above: VBUS at x = -7.62 ...
 NRST at x = +7.62. This board is drawn in the same frame, also seen from above, and its pins
@@ -211,14 +221,18 @@ applied and before KiCad's DRC runs, so it is on the judged board and in the Ger
 
 **Figures measured on the copper** (`out/layout_quality.md`): smallest gap from a via to a
 top-side pad 0.269 mm (own net) and 0.170 mm (other net); smallest solder-mask web 0.200 mm
-(between the receptacle's lands A9 and A12); routed copper 0.348 mm from the edge at least,
-pads 0.236 mm from the locating-peg holes of the receptacle.
+(between the receptacle's lands A9 and A12). Two different distances, reported separately
+since revision E: **to the board edge** routed copper 1.100 mm and pads 0.405 mm (the
+receptacle's shell pad S1; rule 0.30 mm); **to the walls of the six drilled non-plated holes**
+routed copper 0.348 mm and pads 0.236 mm, both at a locating-peg hole of the receptacle (rule
+0.20 mm). Earlier issues gave the 0.348 mm as an edge distance.
 
 **Open for the mechanical owner**: the 1.3 mm overhang of the receptacle (section 7); the
 Mill-Max pin dimensions (`MILLMAX_0914`): the holes are now 0.80 mm for the 0.635 mm tail of
 the sourcing data, where `mechanical/cad/params.py` still assumes a 0.76 mm tail in a 0.90 mm
-hole; the tail length against the 1.6 mm board (section 5); the M2 x 5 screw that bottoms
-0.4 mm before its head seats (`docs/SOURCING.md` A20).
+hole (neither is in the YAML, so no check compares them). Closed at revision E: the tail
+length against the board (E36, 1.0 mm) and the screw (the mechanical package now states
+M2 x 4).
 
 **Service pads (review)**: SP5 to SP7 and J2 carry SWDIO, SWCLK and NRST with no clamp and no
 series resistor, like the marker's own pads (the specification names VBUS, D+ and D- only);

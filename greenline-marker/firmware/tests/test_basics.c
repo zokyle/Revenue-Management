@@ -519,7 +519,7 @@ GL_TEST(test_calibration_records)
 /* The parameter revision the generator read: the first top-level "rev:" of
  * design/master_params.yaml, scanned here a second time (not through the
  * Python generator).  The string itself is NOT written in this file: the
- * YAML's revision letter changes without the firmware ("D-EVT1" becomes
+ * YAML's revision letter changes without the firmware ("D-EVT1" became
  * "E-EVT1"), and then `make config` regenerates core/gl_config.h and this
  * test must pass unchanged.  Returns false if the file or the key is not
  * found.  The test runs from the firmware directory (make test). */

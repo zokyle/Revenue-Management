@@ -1,0 +1,3 @@
+$ cd mechanical && python3 -B cad/board_import.py --cradle ../electrical/gl1_cradle/out/gl1_cradle-mechanical.json
+PASS cradle board gl1_cradle: thickness 1.0, outline 30.0 x 22.0, four screw holes, seven spring pins on the pad row and on the modelled pin axes (4 fitted), USB-C receptacle on the modelled receptacle, nothing else on the top face
+exit status 0

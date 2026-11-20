@@ -6,7 +6,12 @@ edge distances; 0 errors, every connection still open): that is not the DRC of a
 The part positions in `gl1_main_design.py` are a nominal, legal placement that exists only
 because the checks need one; the layout step owns them.
 
-The netlist implements DESIGN_SPEC rev D **with the amendments E1 to E16**. The ones that
+**Revision E (E-EVT1).** The netlist and the routed board implement DESIGN_SPEC rev E: the
+amendments E1 to E28 and E35 (E36 is the cradle board). Section 12 says what revision E
+changed in this package; where sections 1 to 11 still describe the rev D state, section 12 and
+the generated tables are the current state.
+
+The first netlist implemented DESIGN_SPEC rev D with the amendments E1 to E16. The ones that
 change the netlist: E1 (charger TI BQ25101 with a hardware thermistor input; the MCP73831, its
 PROG MOSFET and its gate divider are gone), E2 (two cell thermistors, Murata NCU15XH103F60RC),
 E3 (named LED parts), E4 (four top-side test points), and the stated order of the seven
@@ -14,12 +19,16 @@ underside pads. E6 is the cradle board (`../gl1_cradle/CRADLE_NOTES.md`).
 
 This is the netlist **after two independent reviews** (circuit, and conformance with the
 specification and the mechanical model). Section 10 lists what changed and what the reviews
-found that the netlist cannot settle: one mechanical contract that is not met (J1, section
-5.1), one workaround for another package's check (section 5.2), and three things only the
-specification's owner can change (charger input headroom, VDDUSB before VDD with a dead cell,
-the series diode; section 8).
+found that the netlist could not settle at the time: one mechanical contract that was not met
+(J1, section 5.1), one workaround for another package's check (section 5.2), and three things
+only the specification's owner could change (charger input headroom, VDDUSB before VDD with a
+dead cell, the series diode; section 8). All five are closed at revision E: E24 is in the YAML,
+the mechanical check handles copper-only footprints, and E25 / E26 are in the netlist
+(sections 11 and 12).
 
-Evidence levels used below, in the design file and in the BOM status column:
+Evidence levels used below, in the design file and in the BOM column "Design evidence" (the
+BOM column "Status" is a different thing since revision E: the sourcing status of the part
+number, VERIFIED or PROVISIONAL as `docs/SOURCING.md` defines them; section 12):
 
 - **RESEARCH** - seen in `docs/research/*.md` with status "confirmed". Not the manufacturer's datasheet.
 - **PINDATA** - read from ST's open pin data (`STM32U585RITx.xml`, `GPIO-STM32U5x_gpio_v1_0_Modes.xml`), re-checked by `check_pinmap.py` on every run.
@@ -32,7 +41,7 @@ Evidence levels used below, in the design file and in the BOM status column:
 | `gl1_main_design.py` | the netlist as code: parts, nets, net classes, footprints, pin map, mechanical contract (read from `design/master_params.yaml`), nominal placement |
 | `check_pinmap.py` | proof of the pin map against ST's open pin data; exports `pinmap.json`; `--selftest` seeds 20 defects and requires each to be caught |
 | `pinmap.json` | the final pin map (signal, port pin, pad, mode, AF, pull, initial state, source, reason), with the verification result and the notes for the firmware |
-| `check_netlist_rules.py` | DESIGN_SPEC section 4, rule by rule, tested against the netlist, and the pin tables of the library-backed parts against the installed KiCad symbols; `--selftest` seeds 37 defects |
+| `check_netlist_rules.py` | DESIGN_SPEC section 4, rule by rule, tested against the netlist, and the pin tables of the library-backed parts against the installed KiCad symbols; `--selftest` seeds 46 defects |
 | `netlist_stage.py`, `build_netlist.py` | runner: toolchain checks, rule table, pin map, schematic with netlist round trip, KiCad DRC of the board without tracks, exports |
 | `update_notes.py` | fills the generated tables of this file from the design (`--check` fails if one is stale) |
 | `netlist_out/` | results of the last run: `checks.txt`, `spec_rules.md`, `pinmap_check.txt`, schematic sheets + PDF, `unrouted/` (board file without tracks and `drc.json`), `gl1_main-netlist.json`, `gl1_main-bom-status.csv`, `gl1_main-nominal-mechanical.json`, `netlist_summary.json` |
@@ -70,7 +79,7 @@ contract that is NOT met and cannot be met inside this package; the row measures
 5.2). **FAIL**: the netlist is not what the row describes. Only FAIL makes the run exit 1.
 
 <!-- BEGIN GENERATED: RULE_COUNTS -->
-**66 rows: 58 as specified; 7 departures from the letter of the spec (section 5): rail VDDUSB, cam 2d, grain c, grain d, E1 b, PCB c, PCB k2; 0 open - NOT met (section 5.1); 1 workaround (section 5.2): bare copper; 0 failed.**
+**66 rows: 62 as specified; 4 departures from the letter of the spec (section 5): cam 2d, grain c, grain d, PCB c; 0 open - NOT met (section 5.1); 0 workaround (section 5.2); 0 failed.**
 <!-- END GENERATED: RULE_COUNTS -->
 
 <!-- BEGIN GENERATED: RULES -->
@@ -86,7 +95,7 @@ contract that is NOT met and cannot be met inside this package; the row measures
 | rail V2V8 b | Loads: MCU VDD / VDDA / VBAT pin, IMU, LCD VDD / VDDA, flash | U1 pads 19, 32, 64, 1; VDDA through R1; U4.VDD, U4.VDDIO; J1.VDD, J1.VDDA; U6.VCC *(ADDED: C13 (flash), C30 / C31 (IMU) 100 nF, C32 1 uF at J1)* | pass |
 | rail V2V8 c | 100 nF per MCU supply pin plus 4.7 uF bulk | C1, C2, C3 (VDD), C4 (VBAT), C9 (VDDUSB) 100n; C5 4u7 on V2V8; C6 4u7 on VCAP *(ADDED: C6 on VCAP - not in the spec, needed by the internal regulator; value PROVISIONAL)* | pass |
 | rail V2V8 d | VDDA through 10 ohm with 1 uF + 10 nF | R1 10R from V2V8 to VDDA; C7 1u, C8 10n; U1.VDDA pad 13, VSSA to GND | pass |
-| rail VDDUSB | E26 (replaces the MCP1700T-3302E/TT of the rail table): TI LP5907MFX-3.3/NOPB, enabled by the 2.8 V rail; fed from VBUS behind the series switch; MCU VDDUSB pin only; 1 uF in, 1 uF out | U11 (LP5907MFX-3.3/NOPB, SOT-23-5): IN VBUS_D (C22 2u2), OUT VDDUSB (C23 2u2), EN on V2V8, pad 4 open; net VDDUSB = U1 pad 48, U11.OUT, C9, C23, TP5 (test pad, added) *(DEVIATION: 2.2 uF nominal where the rail table says 1 uF (accepted by E27). With EN on V2V8 the USB supply pin cannot rise before the main supply (E26). PROVISIONAL, from memory: the enable pin of the LP5907 has an internal pull-down of about 1 Mohm, which draws about 2.8 uA from the always-on rail - it counts against the 25 uA sleep limit of E14 (NETLIST_NOTES 11))* | **departure** |
+| rail VDDUSB | E26 (replaces the MCP1700T-3302E/TT of the rail table): TI LP5907MFX-3.3/NOPB, enabled by the 2.8 V rail; fed from VBUS_D (behind the series switch); MCU VDDUSB pin only; 2.2 uF in, 2.2 uF out (E27) | U11 (LP5907MFX-3.3/NOPB, SOT-23-5): IN VBUS_D (C22 2u2), OUT VDDUSB (C23 2u2), EN on V2V8, pad 4 open; net VDDUSB = U1 pad 48, U11.OUT, C9, C23, TP5 (test pad, added) *(2.2 uF in and out is the letter of the rev E rail table (E27; it was a departure from rev D's 1 uF); the DC-bias curves behind E27 are PROVISIONAL. With EN on V2V8 the USB supply pin cannot rise before the main supply (E26). PROVISIONAL, from memory: the enable pin of the LP5907 has an internal pull-down of about 1 Mohm, which draws about 2.8 uA from the always-on rail - it counts against the 25 uA sleep limit of E14 (NETLIST_NOTES 11))* | pass |
 | rail V2V8_CAM a | LP5907MFX-2.8/NOPB, EN from MCU with 100k pull-down; 1 uF in, 1 uF out | U8: IN VBAT (C24), OUT V2V8_CAM (C25), EN = CAM_EN (PH0) with R10 100k to GND | pass |
 | rail V2V8_CAM b | Loads: both camera AVDD and DOVDD; camera DVDD pin: 1 uF to ground each | U2 / U3 AVDD, DOVDD on V2V8_CAM; C16, C19 1u on CAM_L_DVDD / CAM_R_DVDD *(ADDED: C14, C15, C17, C18 100 nF at the AVDD / DOVDD balls)* | pass |
 | cam 1 | SCCB pull-ups (2.2 kohm) go to V2V8_CAM, not V2V8 | R6 (CAM_SCL_L), R7 (CAM_SCL_R), R8 (CAM_SDA) to V2V8_CAM *('driven low or analog while the rail is off' is a firmware rule; every camera-facing pin is a GPIO or a DCMI / MCO pin that can be set analog)* | pass |
@@ -108,7 +117,7 @@ contract that is NOT met and cannot be met inside this package; the row measures
 | grain c | (YAML) eight LED pairs on a 5.2 mm radius about (0, -4), first at 22.5 degrees, 45 degrees apart, on the underside; red anode on the lower line (firmware table) | D(2k+1) red, D(2k+2) NIR at azimuth 22.5 + 45 k, 0.5 mm either side of the ring point; measured on the pads: inner pad = lower line, outer pad = higher line for all 16 *(DEVIATION: 1.00 mm between the two LEDs of a pair (mechanical model 0.90): two KiCad 0402 courtyards need 0.95)* | **departure** |
 | grain d | Photodiode cathode to the op-amp inverting input, 470 kohm + 10 pF feedback, non-inverting input at a mid-rail bias from a 2 x 100 kohm divider with 100 nF | PD1.K, R28 470k, C33 10p on PD_K = PA1 (OPAMP1_VINM); other ends on OPAMP_OUT = PA3; R29 (from LCD_DISP) / R30 100k, C34 100n on VBIAS = PA0 (OPAMP1_VINP); PD1.A to GND *(DEVIATION: the spec names neither the anode net nor the rail of the divider: anode to GND, divider fed from the LCD_DISP line so that it draws nothing asleep. ADDED: R31 150k from PA3 to V2V8 (PA3 is the ROM's USART2_RX))* | **departure** |
 | E1 a | Charger: TI BQ25101YFP (4.20 V, DSBGA-6, 0.4 mm ball pitch, all six balls on the perimeter); the ball map is PROVISIONAL and is kept in one marked table | U9 BQ25101YFPR on a generated 2 x 3 land pattern, 0.4 mm pitch; every pin of U9 comes from the table BQ25101_BALLS (OUT A1, IN A2, TS B1, ISET B2, CHG C1, VSS C2) | pass |
-| E1 b | IN from VBUS after the series element (E25: the ideal-diode switch) with 1 uF; OUT to the cell with 1 uF | U9.IN on VBUS_D with C26 2u2; U9.OUT on VBAT (BT1) with C27 2u2; U9.VSS to GND *(DEVIATION: 2.2 uF nominal where the spec says 1 uF (accepted by E27; DC bias, PROVISIONAL). Headroom of the charger input with the switch of E25: NETLIST_NOTES 4.1 / 11 (all numbers PROVISIONAL))* | **departure** |
+| E1 b | IN from VBUS_D, behind the ideal-diode switch U12 (E25), with 2.2 uF; OUT to the cell with 2.2 uF (E27) | U9.IN on VBUS_D with C26 2u2; U9.OUT on VBAT (BT1) with C27 2u2; U9.VSS to GND *(2.2 uF at IN and OUT is the letter of the rev E spec (E27; it was a departure from rev D's 1 uF; the DC-bias curves are PROVISIONAL). Headroom of the charger input with the switch of E25: NETLIST_NOTES 4.1 / 11 (all numbers PROVISIONAL))* | pass |
 | E1 c | ISET resistor 6.81 kohm 1 % to ground (K = 135 A-ohm, so 19.8 mA) | R11 6k81 from CHG_ISET (U9.ISET) to GND: 135 / 6810 = 19.82 mA | pass |
 | E1 d | TS to a 10 kohm NTC at the cell | RT1 from CHG_TS (U9.TS) to GND; the only other thing on CHG_TS is the drain of Q1 | pass |
 | E1 e | CHG (open drain, low while charging) to an MCU input with a 100 kohm pull-up to V2V8 | CHG_STAT = U9.CHG, PA15, R13 100k to V2V8 (and the unfitted R14) | pass |
@@ -126,7 +135,7 @@ contract that is NOT met and cannot be met inside this package; the row measures
 | imu area | No copper pours or vias under the IMU body on the top layer; keep it away from the charger and regulators | rule area under_U4 on F.Cu (tracks, vias, pours); placement: U4 to U9 26.2 mm, to U8 23.7, to U7 12.3, to U11 12.8 mm *('away' has no number in the spec: the test uses this file's own floor of 2.5 mm between bodies (the YAML's nominal part list has 2.85 mm between U4 and U8); the layout step owns the distances)* | pass |
 | PCB a | 4 layers, 0.8 mm, D-shaped outline (radius 21.1 mm, flat at y = 17.3 mm) | Design: layers 4, thickness 0.8, PathShape.d_shape from the YAML *(ENIG is the toolchain's stack-up default, written by the fabrication outputs of the layout step)* | pass |
 | PCB b | two non-plated locating holes at (14.35, 10.8) and (-14.35, 10.8, a 1.15 x 2.2 mm slot along x) | outline hole H1 dia 1.15 and NPTH slot | pass |
-| PCB c | through vias only, 0.25 mm drill, default 0.15 mm tracks with 0.127 mm clearance, and a fine net class of 0.10 mm track / 0.10 mm clearance used only to escape the camera BGAs; E7: fabricator acceptance of 0.100 mm is a release gate | rules GL1_4L_0.10mm; classes Default 0.15 / 0.127, Fine 0.10 / 0.10 and CamPower 0.15 / 0.10 (31 nets, each with a camera ball), fine areas round U2 and U3; fab note on E7 *(DEVIATION: CamPower (0.15 / 0.10) is a second class with the fine clearance for the camera supply balls, confined to the same areas)* | **departure** |
+| PCB c | through vias only, 0.25 mm drill, default 0.15 mm tracks with 0.127 mm clearance; E35: the 0.100 / 0.100 mm fine class may be used on F.Cu, In2.Cu and B.Cu inside two rule areas that extend 5 mm beyond each camera ball field, everywhere else 0.15 / 0.127 mm; E7 / E35: fabricator acceptance of 0.100 mm on all three layers is a release gate, the quote request names them | rules GL1_4L_0.10mm; classes Default 0.15 / 0.127, Fine 0.10 / 0.10 and CamPower 0.15 / 0.10 (31 nets, each with a camera ball); two fine areas, pad field of U2 / U3 + 5/5 mm (YAML pcb.net_classes.fine: 0.1 / 0.1 on F.Cu, In2.Cu, B.Cu, 5.0 mm); the fab note on E7 / E35 names F.Cu, In2.Cu and B.Cu *(DEVIATION: CamPower (0.15 / 0.10) is a second class with the fine clearance for the camera supply balls, confined to the same areas)* | **departure** |
 | PCB d | provisional 5 x 5 footprint, 0.5 mm pitch, 0.20 mm pads | camera_footprint(): 25 round pads 0.20 mm on 0.5 mm, pad clearance 0.10 (OVM7692_BALLS) | pass |
 | PCB e | Vias tented and plugged on the underside, and no via at all inside the grain opening or the pad slot | via_tenting 'both' (the top side is tented too: the cell lies on it), via_protection text; rule areas grain_opening_no_via, pad_slot_no_via and a second area 0.1 mm larger round each | pass |
 | PCB f | Layer 2 solid ground | plane GND on In1.Cu (whole board, not routable) *(In2.Cu: V2V8 plane that is also a routing layer - the layout step may change this)* | pass |
@@ -134,11 +143,11 @@ contract that is NOT met and cannot be met inside this package; the row measures
 | PCB h | no soldered part above a ball foot or within 0.3 mm of its zone; under each ball foot the bottom side has a 2.5 mm circle with no via and no track and an unmasked 1.6 mm copper land | foot_zone_n_top (placement, dia 2.5 + 2 x 0.3), foot_zone_n (B.Cu: no track, no via, no pour), FL1-FL3: bare dia 1.6 pads WITHOUT a net (mask open, no paste) | pass |
 | PCB i | Two solder pads for the cell leads sit in the strip beyond the protection-board end of the cell | BT1 (+, VBAT), BT2 (-, GND): 1.5 x 2.4 pads inside battery.pads.zone | pass |
 | PCB j | Parts on the top side except the grain LEDs, photodiode and contact pads | bottom side: D1-D16, PD1 (fitted), J2, FL1-FL3, three fiducials (bare copper) | pass |
-| PCB k | The cameras, the LCD connector and the battery are fixed mechanical interfaces | U2, U3: body boxes equal the YAML boxes; battery_body placement keep-out from the YAML; J1: at the position E24 gives (row PCB k2) | pass |
-| PCB k2 | E24: J1 moves 0.5 mm toward the rear: mouth at y = -17.30, body to y = -11.70, signal pads end at y = -10.40 (0.20 mm clear of the cell at y = -10.20). This OVERRIDES the YAML (top_side_parts J1: box 8.4 x 5.8 centred on (0.0, -13.9), mouth at y = -16.8), which is corrected at the next revision letter | measured on the placed land pattern: anchor (0.00, -12.90), body y -17.30 to -11.70 (rear face = mouth), signal pads y -11.70 to -10.40, cell edge -10.20, courtyard to -9.90; 3.25 mm2 of the body inside the YAML's LCD-tail zone (y -18.3 to -16.8; J1 is exempt there). Battery keep-out: the YAML box of the cell less a notch 11.10 x 0.30 mm for J1's courtyard *(DEVIATION: from the YAML, as E24 decides: the anchor is 1.00 mm in front of the YAML point, so mechanical/cad/board_import.py (check C, anchor against the YAML point) reports J1 until the YAML is corrected. The courtyard of the land pattern (0.5 mm beyond the pad ends) reaches 0.30 mm into the YAML box of the cell: the placement keep-out has a notch of exactly that size; body and pads are outside the cell (NETLIST_NOTES 5.1 / 11))* | **departure** |
+| PCB k | The cameras, the LCD connector and the battery are fixed mechanical interfaces | U2, U3: body boxes equal the YAML boxes; battery_body placement keep-out from the YAML; J1: at the position E24 and the rev E YAML give (row PCB k2) | pass |
+| PCB k2 | E24: J1 moves 0.5 mm toward the rear: mouth at y = -17.30, body to y = -11.70, signal pads end at y = -10.40 (0.20 mm clear of the cell at y = -10.20); the tail-fold zone starts at the mouth. Rev E YAML: top_side_parts J1 body box 8.1 x 5.6 centred on (0.0, -14.5), anchor (0.0, -12.9), mouth_y -17.3, pads_end_y -10.4; battery.board_keepout_notch x [-5.55, 5.55], y [-10.2, -9.9] | measured on the placed land pattern: anchor (0.00, -12.90), body x -4.05 to 4.05, y -17.30 to -11.70 (rear face = mouth), signal pads y -11.70 to -10.40, cell edge -10.20, courtyard to -9.90; 0.00 mm2 of the body inside the YAML's LCD-tail zone (y -21.1 to -17.3, which starts at the mouth). Battery keep-out: the YAML box of the cell less a notch 11.10 x 0.30 mm = the YAML notch *(the courtyard of the land pattern (0.5 mm beyond the pad ends) reaches 0.30 mm into the YAML box of the cell: the placement keep-out has the notch the YAML records for it; body and pads are outside the cell. No departure since rev E)* | pass |
 | PCB l | (YAML pcb.component_edge_clearance) part bodies stay 0.2 mm inside the board edge | smallest distance from a part body to the board edge: 0.225 mm (U2), then 0.225 mm (U3) | pass |
 | pin tables | (task) the pin -> pad table of every library-backed part agrees with a second source | U7, U11, U8, U10, Q1, U6, U4 against the installed KiCad symbols (pad numbers, pin names, footprint); D1-D16 against KiCad's pad 1 = cathode; RN1-RN6 against element n = pads n and 9 - n: all agree *(U6 is compared with the MX25R3235F of the same family and package, U4 with the LSM6DSM (spec: pin-compatible); U1 is proven by check_pinmap.py; U2 / U3, U9, U12, PD1 and J1 have no second source: their tables are the PROVISIONAL ones)* | pass |
-| bare copper | (mechanical/cad/board_import.py, check D) every fitted bottom-side component lies inside the grain opening or the pad slot | marked 'not fitted' and therefore NOT tested by that check: FID4, FID5, FID6, FL1, FL2, FL3 - each one a board-only footprint with one netless pad, zero height, no pins; no other part without a BOM line carries the mark *(WORKAROUND: the three ball-foot lands (which the spec puts outside both openings) and the three bottom fiducials are bare copper; listed as fitted they fail that check with six rows. The mark changes no copper, BOM line, position row or assembly text (NETLIST_NOTES 5.2))* | **workaround** |
+| bare copper | (mechanical/cad/board_import.py, rev E) a copper-only footprint is one with zero height and no BOM line; it is tested by its own rules and a 'not fitted' mark does not exempt it; a zero-height component with a BOM line fails | 17 copper-only footprints (zero height, no BOM line): BT1, BT2, FID1, FID2, FID3, FID4, FID5, FID6, FL1, FL2, FL3, J2, TP1, TP2, TP3, TP4, TP5; none of them carries a 'not fitted' mark (none); FL1-FL3 and the three bottom fiducials are board-only footprints with one netless pad; no BOM part has zero height (none) | pass |
 | fiducials | (task) at least three global fiducials per side | FID1-FID3 top, FID4-FID6 bottom | pass |
 | E5 | Assembly (E5): lead-free (SAC305) reflow, RoHS-compliant parts; no conformal coating | fab note; no leaded part is named in the BOM | pass |
 | status | (task) every BOM part carries an evidence status | Part.fields['Status'] is RESEARCH or PROVISIONAL on all 104 BOM parts | pass |
@@ -446,17 +455,17 @@ the fuse and U12; the LM66100's soft start, if it has one, was not read (PROVISI
 | 2 | photodiode anode not named | to ground | 4.10 |
 | 3 | BOOT0 (PH3) pulled down with 10 kohm | PH3 is also CAM_R_PWDN | 3.4: 51 signals on 51 pads; this net has no pull-up and the pad is next to the right camera |
 | 4 | (not in the spec) | C6, C13, C14, C15, C17, C18, C28, C30, C31, C32, R31 added; R15 / R16 values chosen | 4.3, 4.6, 4.7, 4.10 |
-| 5 | fine class 0.10 / 0.10 for the camera escape | a second class "CamPower" (0.15 mm track, 0.10 mm clearance) for V2V8_CAM and the two DVDD nets | a supply ball needs the fine clearance to leave the BGA but not the thin track. Both classes are fine only inside the two fine areas round U2 and U3 |
+| 5 | fine class 0.10 / 0.10 for the camera escape (E35: on F.Cu, In2.Cu and B.Cu inside two areas 5 mm beyond each camera ball field) | a second class "CamPower" (0.15 mm track, 0.10 mm clearance) for V2V8_CAM and the two DVDD nets | a supply ball needs the fine clearance to leave the BGA but not the thin track. Both classes are fine only inside the two fine areas round U2 and U3. The fine class on three layers is NOT a departure any more (E35); CamPower still is (it is in no amendment) |
 | 6 | "Layer 2 solid ground" | In1.Cu ground, whole board; In2.Cu is a V2V8 plane that may also carry tracks | the spec is silent on layer 3; the layout step decides |
 | 7 | proposed pins of `gl_pins.h` | 20 changed, section 3.3 | allowed by the pin-map rule; the firmware header must be regenerated from `pinmap.json` |
 | 8 | LED pair as drawn by the mechanical model: 0.90 mm between the two LEDs | 1.00 mm | two KiCad 0402 LED courtyards need 0.95 mm |
 | 9 | "unmasked 1.6 mm copper land" under each ball foot | FL1-FL3: pads **without a net** | see below |
-| 10 | "1 uF in, 1 uF out"; "IN ... with 1 uF; OUT to the cell with 1 uF" | C22, C26 (VBUS_D), C23 (VDDUSB), C27 (charger output): **2.2 uF** nominal, same 0402 footprint | 4.7: a 1 uF 10 V 0402 keeps roughly half of its value at 5 V; with 2.2 uF about 1 uF is left where a regulator or the charger asks for it. PROVISIONAL, no bias curve read |
+| 10 | (rev D) "1 uF in, 1 uF out"; "IN ... with 1 uF; OUT to the cell with 1 uF". **CLOSED at rev E: the spec says 2.2 uF at these four places (E27); rule rows "rail VDDUSB" and "E1 b" quote the rev E text and are passes** | C22, C26 (VBUS_D), C23 (VDDUSB), C27 (charger output): **2.2 uF** nominal, same 0402 footprint | 4.7: a 1 uF 10 V 0402 keeps roughly half of its value at 5 V; with 2.2 uF about 1 uF is left where a regulator or the charger asks for it. PROVISIONAL, no bias curve read |
 | 11 | BQ25101YFP | order code BQ25101YFPR (reel; YFPT is the small reel) | suffix seen in the search results; PROVISIONAL |
 | 12 | "LCD connector pin order 1 SCLK ... 10 VSSA" | read as the order on the **tail**; tail pin n is on connector pad 11 - n (pad 1 = VSSA, pad 10 = SCLK) | section 6 and rule row "lcd c": with the U-fold and the mouth of J1 to the rear the evidence in the repository says the tail is mirrored against the land pattern. PROVISIONAL (release gate B16) |
 
-| 13 | YAML `top_side_parts` J1 (fixed): box centred on (0, -13.9), mouth at y = -16.8 | **E24**: anchor of the land pattern at (0, -12.90): mouth (rear face of the body) at y = -17.30, body to -11.70, signal pads end at -10.40 | 5.1; E24 overrides the YAML until its next revision letter |
-| 14 | battery-body placement keep-out = the YAML box of the cell | the YAML box less a notch 11.10 x 0.30 mm at its rear edge for J1's courtyard | 5.1: E24 puts the pad ends 0.20 mm from the cell and KiCad's courtyard reaches 0.50 mm beyond the pads |
+| 13 | (rev D) YAML `top_side_parts` J1: box centred on (0, -13.9), mouth at y = -16.8 | **E24**: anchor of the land pattern at (0, -12.90): mouth (rear face of the body) at y = -17.30, body to -11.70, signal pads end at -10.40 | **CLOSED at rev E**: the YAML has the body box centred on (0, -14.5), the anchor, the mouth and the pad ends (5.1) |
+| 14 | (rev D) battery-body placement keep-out = the YAML box of the cell | the YAML box less a notch 11.10 x 0.30 mm at its rear edge for J1's courtyard | **CLOSED at rev E**: the notch is the YAML key `battery.board_keepout_notch`; the keep-out is `battery.body` less exactly that (5.1) |
 | 15 | E25 / E26 name the parts and the wiring only | U12 (LM66100) ST pin open, pad 4 open; U11 (LP5907-3.3) EN directly on V2V8 | section 11; both pin tables and the EN pull-down current are PROVISIONAL |
 
 The first netlist had the VBUS-sense divider behind the series element; it is now on the pad net,
@@ -474,75 +483,68 @@ Nothing was relaxed, excluded or waived to get a clean report. The rule set is t
 toolchain's standard four-layer set with the minimum track and clearance set to the spec's
 0.100 mm (E7: 3.94 mil; the fabricator's written acceptance is a release gate and a fab note).
 
-### 5.1 J1: placed by amendment E24, which overrides the YAML
+### 5.1 J1: amendment E24, in the YAML since revision E (no departure any more)
 
-Rule rows "PCB k" and "PCB k2" (result **departure**) measure this on every run.
+Rule rows "PCB k" and "PCB k2" (result **pass**) measure this on every run.
 
-The netlist review found that the YAML's box for J1 (5.8 mm deep, mouth at y = -16.8, the
-cell at y = -10.2) leaves 6.60 mm for a land pattern that needs 6.90 mm from the rear face
-of its body to the ends of its signal pads. **E24 decides it**: J1 moves 0.5 mm toward the
-rear against the mechanical model. On the board (measured on the placed KiCad
+The netlist review found that the rev D YAML's box for J1 (5.8 mm deep, mouth at y = -16.8,
+the cell at y = -10.2) left 6.60 mm for a land pattern that needs 6.90 mm from the rear face
+of its body to the ends of its signal pads. **E24 decided it**: J1 moved 0.5 mm toward the
+rear. Revision E of the YAML carries it: `top_side_parts` J1 has the BODY box (x, y = body
+centre (0, -14.5), dx 8.1, dy 5.6), `anchor` (0, -12.9), `mouth_y` -17.3, `body_y`
+(-17.3, -11.7) and `pads_end_y` -10.4. On the board (measured on the placed KiCad
 `Hirose_FH12-10S-0.5SH` footprint):
 
-| | y (mm) |
-|---|---|
-| footprint anchor | -12.90 (the YAML point is -13.90) |
-| rear face of the body = mouth | -17.30 |
-| front face of the body | -11.70 |
-| signal pads | -11.70 to -10.40 |
-| cell edge | -10.20 (0.20 mm from the pad ends) |
-| courtyard of the land pattern | -17.80 to -9.90 |
+| | y (mm) | YAML key |
+|---|---|---|
+| footprint anchor | -12.90 | `anchor` |
+| rear face of the body = mouth | -17.30 | `mouth_y`, `body_y[0]` |
+| front face of the body | -11.70 | `body_y[1]` |
+| signal pads | -11.70 to -10.40 | `pads_end_y` |
+| cell edge | -10.20 (0.20 mm from the pad ends) | `battery.board_keepout_notch.pad_to_cell_gap` |
+| courtyard of the land pattern | -17.80 to -9.90 | `courtyard` |
 
-Consequences, all recorded as departures and none hidden:
-
-- `mechanical/cad/board_import.py` (check C) compares J1's ANCHOR with the YAML point
-  (0, -13.9) to 0.02 mm and therefore **reports J1 as 1.00 mm off** until the YAML is
-  corrected. The mechanical JSON carries the real body box (y -17.30 to -11.70).
+- The design file reads the mouth and the pad ends from the YAML and computes the anchor from
+  the land pattern (4.40 mm in front of the rear face); row "PCB k2" requires the computed
+  anchor to equal the YAML `anchor`, the measured body box to equal the YAML box within
+  0.005 mm, and the tail zone to start at the mouth with no part of J1's body in it.
+- `mechanical/cad/board_import.py` compares J1's body box and, separately, its anchor with the
+  YAML: it passes (it failed on this row at rev D, and the main build then exited 2; that
+  special exit status is gone).
 - KiCad's courtyard reaches 0.30 mm into the YAML box of the cell. The battery placement
   keep-out is the YAML box less a notch of exactly J1's courtyard width (11.10 mm) and that
-  depth (`J1_COURTYARD_NOTCH`); the rule row verifies that the notch is no larger, that J1's
-  body is outside the cell and that every J1 pad keeps 0.20 mm from it. Nothing else can sit
-  in the notch.
-- The YAML's LCD-tail zone (y -18.3 to -16.8, parts to 0.7 mm) is kept as it is; 0.5 mm of
-  J1's body now lies inside it (J1 is exempt). E24 says the fold zone is re-modelled from
-  y = -17.30 rearward; that is the mechanical side's work. Tail length and fold stay
-  PROVISIONAL (Sharp drawing, release gate B16).
+  depth; since revision E the notch is the YAML key `battery.board_keepout_notch` (x +-5.55,
+  y -10.2 to -9.9, "J1 courtyard only; no copper, solder or body of J1 inside the cell box")
+  and the rule row requires the keep-out to be `battery.body` less exactly that notch, J1's
+  body to be outside the cell and every J1 pad to keep 0.20 mm from it.
+- The YAML's LCD-tail zone is now y -21.1 to -17.3 (parts to 0.7 mm): it starts at the mouth.
+  No part stands in it. Tail length and fold stay PROVISIONAL (Sharp drawing, release gate
+  B16); the mechanical model has one fold of radius 0.99 mm behind the mouth, not proven on a
+  real tail.
 
-### 5.2 WORKAROUND: six bare-copper footprints carry the "not fitted" mark
+Seeded defects (all caught): J1 0.7 mm toward the cell; J1's anchor put on the YAML body
+centre; J1 back on its rev D position; J1 turned by 180 degrees.
 
-Rule row "bare copper" (result **workaround**).
+### 5.2 The "not fitted" mark on six bare-copper footprints: REMOVED at revision E
 
-`mechanical/cad/board_import.py` (check D) requires every fitted bottom-side component of
-the board's mechanical JSON to lie inside the grain opening or the pad slot. The toolchain's
-mechanical JSON lists copper-only footprints as components. The three ball-foot lands
-FL1-FL3, which the spec itself puts outside both openings, and the three bottom fiducials
-FID4-FID6 are bare copper of zero height under the adhesive sheet; listed as fitted they
-fail that check with six rows "outside the grain opening and the pad slot".
+Rule row "bare copper" (result **pass**; it was a **workaround** at rev D).
 
-In the design they carry the "not fitted" mark (`BARE_BOTTOM_COPPER_NOT_FITTED = True`),
-which that check skips on the bottom side without a warning. **Those six features are
-therefore not tested by the mechanical import at all**, and its summary line ("18
-bottom-side parts inside the grain opening or the pad slot") does not count them. This is a
-flag used against its plain meaning to get past another package's acceptance test; it is
-kept because the alternative is a check that can never pass on a board the spec asks for,
-and it is bounded:
+At rev D `mechanical/cad/board_import.py` (check D) required every fitted bottom-side
+component of the board's mechanical JSON to lie inside the grain opening or the pad slot, and
+the toolchain's mechanical JSON lists copper-only footprints as components. The three
+ball-foot lands FL1-FL3 and the three bottom fiducials FID4-FID6 therefore carried a "not
+fitted" mark (`BARE_BOTTOM_COPPER_NOT_FITTED`) that hid them from that check.
 
-- the rule row fails if any footprint other than these six carries the mark without being
-  a BOM part, or if one of the six is not a board-only footprint with one netless pad, zero
-  height and no pins (self-test: a test pad and an LED marked "not fitted" are both caught);
-- the mark changes no copper, no Gerber, no BOM line and no position row; the assembly
-  README of the toolchain lists as "DNP" only BOM parts, and lists every fiducial with its
-  coordinates whatever the mark (read in `gleda/outputs.py`). It does write a `DNP`
-  property onto these six footprints in the board file.
-
-Both ways were run on the nominal placement (2026-11-13, `python3 cad/board_import.py
-<file>` in `mechanical/`): with the mark exit 0, "95 top-side parts clear the tub by 0.25 mm
-or more (U2) ... 18 bottom-side parts inside the grain opening or the pad slot; 7 contact
-pads on the cradle pin axes"; without it exit 1, "FAILED (6)": FID4, FID5, FID6, FL1, FL2,
-FL3, each "outside the grain opening and the pad slot", and nothing else.
-
-To be removed when `board_import.py` ignores board-only footprints of zero height (or tests
-the lands against the foot zones). Set the flag to False to see the six rows.
+Since revision E that check recognises a copper-only footprint by what the file itself says
+(body height 0 and no BOM line) and tests it by its own rules: a ball-foot land must sit on a
+YAML foot zone within 0.05 mm with dia 1.6, one per foot; other bare bottom copper must lie
+outside the grain opening, the pad slot and the foot zones; the "not fitted" mark exempts
+nothing, and a zero-height component with a BOM line fails. The flag is gone from the design
+file; no footprint without a BOM line carries the mark. The rule row now requires exactly
+that (17 copper-only footprints, none marked, no BOM part of zero height), and the self-test
+seeds the old workaround on FL2, on FID5 and on test pad TP4: each is caught. On the routed
+board the mechanical import reports "14 copper-only footprints by their own rules (3
+ball-foot lands on their feet)" and passes.
 
 ## 6. PROVISIONAL items
 
@@ -592,15 +594,16 @@ Others, by part:
 | U4 | wiring of pins 2 and 3; SDO high impedance when not selected; state of INT1 / INT2 after power-on |
 | U6 | height; deep power-down current |
 | RN1-RN6 | stock, height, match of the KiCad convex 4 x 0402 land pattern |
-| J1 | top-contact FH12A on the FH12 land pattern (spec) and that it numbers its contacts like the FH12; its position (5.1); LCD supply range 2.7-3.3 V (2.8 V - 3 % = 2.72 V) |
+| J1 | top-contact FH12A on the FH12 land pattern (spec) and that it numbers its contacts like the FH12 (docs/SOURCING.md A15: check the land pattern and the 2.0 mm height against the Hirose FH12A drawing); the tail fold behind its mouth (5.1); LCD supply range 2.7-3.3 V (2.8 V - 3 % = 2.72 V) |
 | passives | every MPN of the 0402 resistors and capacitors is from memory; the capacitance left under DC bias (4.7) |
 | J2, BT1, BT2 | pad diameter 1.8 mm (YAML text), pad gap 0.7 mm (mechanical model) |
 | U6 | pin 7 is HOLD# or RESET# depending on the family member (tied high: inactive for both) |
 | placement | nominal; in it both NTCs are within 0.4 mm of the cell body, RT1 is 2.5 mm from the charger and U8 is 2.9 mm from the IMU |
 
-`netlist_out/gl1_main-bom-status.csv` carries the status of every BOM line (30 PROVISIONAL,
-7 RESEARCH). The toolchain's own BOM has no status column; the status is also in each part's
-`Status` field.
+`netlist_out/gl1_main-bom-status.csv` carries two status columns for every BOM line (section
+12): "Status" = the sourcing status of the part number per `docs/SOURCING.md` (37 VERIFIED),
+"Design evidence" = the level of the design data (31 PROVISIONAL, 6 RESEARCH). The toolchain's
+own BOM has no status column; the design evidence is also in each part's `Status` field.
 
 ## 7. Consequences for the firmware
 
@@ -667,12 +670,12 @@ and must not rely on CHG_STAT going high.
 - **Photodiode with the amplifier off.** In bright light the cathode node (PA1) is pulled below ground by the photodiode itself (to its open-circuit voltage, about 0.4 V) while OPAMP1 is off. The diode limits its own voltage, so the injection into PA1 should stay small; the pin's injection rating was not read. The sleep-current test must be made with the underside dark (4.10).
 - **BQ25100 fallback.** Fit R14, leave out R13, and CHG_STAT means nothing (4.2). On PA15 the JTDI pull-up (about 40 kohm, until firmware switches to SWD) then feeds the programming pin in reset and in the ROM bootloader.
 - **No spare MCU pin** (section 3.1).
-- **`docs/sourcing.csv` and `docs/SOURCING.md`** (revision 3, 2026-11-13) list the current charger, NTC and near-infrared LED. Still out of step with this netlist, for the sourcing owner: rows main-10 (D17, B0530WS-7-F) and main-35 (U11 as MCP1700T-3302E/TT) describe parts that are no longer on the board (U12 LM66100DCKR and U11 LP5907MFX-3.3/NOPB replaced them, E25 / E26); the labels main-11 to main-35 are one higher than the BOM item numbers; row cradle-02 still names MF-FSMF020X-2. Taken from the sourcing report into the design files after the layout review: the 1 uF and 2.2 uF order codes (actions A1, A2), the order codes of A17, the IMU's distributor and price (A13), the cradle fuse (A5) and the spring-pin tail and hole (A6). The status BOM (`out/assembly/gl1_main-bom-status.csv`) carries the sourcing risk and the approved alternates of every line, copied from `docs/sourcing.csv`.
+- **`docs/sourcing.csv` and `docs/SOURCING.md`** (revision 4, 2026-11-18; listings as seen on 2026-11-13) list the current charger, NTC and near-infrared LED. Brought into step with this netlist in the final audit of rev E (report revision 4, 2026-11-18): the numbered rows main-01 to main-37 and cradle-01 to cradle-07 are the BOM lines with the BOM's item numbers (U11 LP5907MFX-3.3/NOPB is main-34, U12 LM66100DCKR main-35, F1 0603L035YR cradle-02); D17, the MCP1700-3.3 and the old fuse are history rows. Taken from the sourcing report into the design files after the layout review: the 1 uF and 2.2 uF order codes (actions A1, A2), the order codes of A17, the IMU's distributor and price (A13), the cradle fuse (A5) and the spring-pin tail and hole (A6). The status BOM (`out/assembly/gl1_main-bom-status.csv`) carries the sourcing risk and the alternate candidates of every line (none approved), copied from the row of `docs/sourcing.csv` with the line's references.
 
 ### 8.3 Mechanical
 
-- **J1** (5.1): open; its position may move by up to 1.5 mm.
-- **Bare bottom copper and the mechanical import** (5.2): `board_import.py` should ignore board-only footprints of zero height, and compare J1 by its body, not by its anchor.
+- **J1** (5.1): closed at revision E (E24 is in the YAML; the tail fold is the mechanical model's, PROVISIONAL).
+- **Bare bottom copper and the mechanical import** (5.2): closed at revision E (`board_import.py` tests copper-only footprints by their own rules and compares J1 by body box and by anchor).
 - **The cell against soldered leads.** In the nominal placement the lead pads of U1 (pads 33 to 48) are 0.45 mm from the cell body and its courtyard 0.20 mm. The 13.4 mm courtyard sits between the cell (y -0.2) and the post-foot keep-outs (y 13.75): 0.55 mm of freedom in all, so 0.80 mm from pad copper to the cell is the most any placement can give. No tolerance on the cell's width or position is stated: the mechanical owner should give one.
 - **The cell's protection-board end.** The YAML has the protection board at the -x end of the 34 mm body; its length is provisional. An NTC beside that end reads the protection board, not the cell. Both NTCs are over the cell proper in the nominal placement (x = -6.6 and -9.4).
 - **LED pair pitch** 1.00 mm against the model's 0.90 mm (section 5, no. 8).
@@ -708,11 +711,11 @@ and must not rely on CHG_STAT going high.
 | four seeded defects passed every checker | pin tables of 30 library-backed parts compared with the installed KiCad symbols (row "pin tables"); R31's direction and value tested; the LCD chain tested; 17 more seeded defects, all caught. The reviewer's 32 text mutations of the design file were applied again to the file as it is now: all 32 are caught |
 | inputs without a level in reset and in the ROM | accepted and written down (3.7); no parts added |
 | VBUS_SENSE is not a measure of VDDUSB | firmware note; the divider is now on the pad net, removal is seen in 22 ms (4.3) |
-| J1 placed by its anchor, body 1.5 mm behind the model | cannot be met with this land pattern: open item with the numbers (5.1), rule row "PCB k2"; the "PCB k" row no longer claims it |
+| J1 placed by its anchor, body 1.5 mm behind the model | cannot be met with this land pattern: open item with the numbers (5.1), rule row "PCB k2"; the "PCB k" row no longer claims it. Closed by E24 and the rev E YAML |
 | firmware must change before it matches the map | notes 2 and 4 of section 7 and `pinmap.json`: the present charge stop does nothing; three EXTI lines move |
 | R31 (1 Mohm) does not hold PA3 high in light | R31 is 150 kohm (4.10); the sleep-current test needs a dark underside |
 | VBUS-sense divider on VBUS_D instead of VBUS | moved to the pad net as the rail table has it, 100 kohm : 100 kohm (4.3) |
-| six bare-copper footprints flagged "not fitted" | kept, bounded by a rule row and reported as a workaround (5.2) |
+| six bare-copper footprints flagged "not fitted" | kept, bounded by a rule row and reported as a workaround (5.2). Removed at rev E |
 | little margin at the cell, the charger and two post feet | RT1 moved 2.5 mm from the charger, four parts nudged to 0.2 mm from the post-foot squares; U1 against the cell is a constraint for the layout and the mechanical owner (8.3, 8.4) |
 | documentation slips | five results instead of pass / fail with a count line (section 2); "PCB k" corrected; the gen_pins sentence corrected (3.5); the YAML's component edge clearance is now a rule row ("PCB l") |
 
@@ -726,7 +729,7 @@ a firmware note.
 
 | | Before | Now | Rule row |
 |---|---|---|---|
-| E24 | J1 anchor on the YAML point (0, -13.9), open item | anchor (0, -12.90): mouth -17.30, pads to -10.40; departure from the YAML (5.1) | PCB k, PCB k2 |
+| E24 | J1 anchor on the YAML point (0, -13.9), open item | anchor (0, -12.90): mouth -17.30, pads to -10.40; a departure from the rev D YAML, none from the rev E YAML (5.1) | PCB k, PCB k2 |
 | E25 | D17 B0530WS-7-F, SOD-323, VBUS to VBUS_D | **U12** TI LM66100DCKR, SC-70-6: VIN = VBUS (pad side), VOUT = VBUS_D, CE = VBUS_D, GND, ST open, pad 4 open. The reference D17 is retired (D1 to D16 are the LEDs; an IC is not a "D") | rail VBUS a, b, c |
 | E26 | U11 MCP1700T-3302E/TT, SOT-23 | **U11** TI LP5907MFX-3.3/NOPB, SOT-23-5, pin table of U8; IN = VBUS_D, OUT = VDDUSB, **EN = V2V8**, pad 4 open | rail VDDUSB, pin tables |
 
@@ -759,3 +762,56 @@ now proves that every row of the header has the pin, pad and source of the pin m
 that the history ("was", "reason") is complete. `pinmap.json` has been exported again, so
 its SHA-256 no longer equals the one the header states: **the firmware side must run
 `make pins`** (no pin moves by it).
+
+## 12. Revision E (E-EVT1, 2026-11-18)
+
+The package moved from D-EVT1 to E-EVT1 with `design/master_params.yaml`. No part moved, no
+net changed, no MCU pin changed (`pinmap.json` is byte-identical: SHA-256 d33ff53f...72e4;
+its header line still reads "DESIGN_SPEC rev D with amendments E1 to E34" because the file's
+content had to stay as the firmware's generated header hashes it).
+
+| Amendment | What changed in this package |
+|---|---|
+| E24 (J1) | read from the YAML (`anchor`, `mouth_y`, `body_y`, `pads_end_y`, body box) instead of typed; rule row "PCB k2" is a pass, not a departure; the keep-out notch is `battery.board_keepout_notch`; the LCD-tail height limit is the new zone y -21.1 to -17.3; the build's exit status 2 is gone (5.1) |
+| E25, E26, E27, E28 | already in the netlist (section 11). U12 now carries the Digi-Key code 296-53541-1-ND (docs/SOURCING.md A7); U11 deliberately carries none (A8 asks for the live US page first) |
+| E35 (fine class) | the 0.100 / 0.100 mm class on F.Cu, In2.Cu and B.Cu inside two areas 5 mm beyond each camera ball field is as specified: `FINE_AREA_MARGIN`, track, clearance and the three layers are read from `pcb.net_classes.fine`; rule row "PCB c" tests them and requires one fab note that names E7 / E35, 0.100 mm and all three layers. The fab README and the quote request therefore name F.Cu, In2.Cu and B.Cu. Still a release gate (E7 as widened by E35): the fabricator's written acceptance. The CamPower class (0.15 / 0.10) remains a recorded departure |
+| E36 | cradle board 1.0 mm (`../gl1_cradle/CRADLE_NOTES.md`) |
+| workaround flag | `BARE_BOTTOM_COPPER_NOT_FITTED` removed (5.2) |
+
+**The routing.** The stored routing's fingerprint covers the whole design dictionary (revision
+string, fab notes, every part's status note), so it could not match after the revision stamp
+changed, although nothing the router reads had changed. The board was therefore routed again
+from nothing (the router is deterministic) and the result compared with the rev D routing:
+see `LAYOUT_LOG.md`, section "Revision E".
+
+**BOM status columns.** `<name>-bom-status.csv` now has "Status" (VERIFIED / PROVISIONAL: the
+sourcing status of the exact part number, copied from the row of `docs/sourcing.csv` with the
+same MPN; a part number without a row is PROVISIONAL), "Design evidence" (RESEARCH /
+PROVISIONAL, the level of the pin table, land pattern and values) and "Design evidence note",
+then the sourcing risk, the alternates named by the sourcing report (candidates, not approved) and the sourcing row (found by the line's references since the final audit). VERIFIED means "listed
+for sale, seen on that date"; it is neither a stock promise nor a statement about the land
+pattern. A line can be ordered only when both columns allow it.
+
+**`docs/SOURCING.md` section 12, design actions, as they stand in the design files.**
+
+| Action | State | Where / why |
+|---|---|---|
+| A1 1 uF: GRM155R61A105KE15D -> Samsung CL05A105KP5NNNC | applied | `CAPS["1u"]`, BOM item 3 (same 0402 footprint, value, voltage, dielectric) |
+| A2 2.2 uF: GRM155R61A225KE95D -> Murata GRM155R61A225KE01D, second source Samsung CL05A225KP5NSNC | applied | `CAPS["2u2"]`, BOM item 6; the second source is in the alternates column. That KE01D succeeds KE95D is the report's inference: PROVISIONAL |
+| A3 DC-bias curves of the 1 uF, 2.2 uF and 4.7 uF parts against what U7, U8, U11 and U9 need | needs an owner | no curve could be read here (no network); every effective value in 4.7 stays PROVISIONAL; a larger case size would be a footprint change |
+| A4 alternate CL05B104KO5NNNC for the 100 nF line on both BOMs | applied | alternates column of both status BOMs; the Murata status question is on the line's risk column |
+| A5 cradle fuse -> Littelfuse 0603L035YR, second source Bourns MF-FSMF035X-2 | applied | cradle `PTC`; trip 0.75 A against E6's "about 0.5 A" is a recorded departure for the spec owner; the 1206 fallback would be a footprint change (not made) |
+| A6 Mill-Max 0914: tail 0.635 mm, hole from the 0.737 mm minimum; tail length | applied / closed by E36 | hole 0.80 mm finished, pad 1.60 mm; board 1.0 mm so that the 1.34 mm tail comes through (PROVISIONAL until the drawing is read) |
+| A7 LM66100DCKR in place of D17, order code | applied | U12 (section 11), Digi-Key 296-53541-1-ND; pin table PROVISIONAL (data sheet not read) |
+| A8 LP5907MFX-3.3/NOPB in place of the MCP1700-3302 | applied; order code open | U11; only the reel code 296-38557-2-ND was seen, on regional pages: the BOM says "order by MPN" until the live US page is read |
+| A9 keep SFH 4053B, alternative Inolux IN-S42CTQIR | applied; data sheet open | BOM item 9 names the alternative; wavelength, package and polarity mark not read: the LED land pattern stays PROVISIONAL |
+| A10 OVM7692-RYAA single source | not a design-file change | the risk is on BOM item 27; life-cycle statement and quotes are purchasing work |
+| A11, A12 display and cell on a purchasing list above the board BOMs | partly applied; needs an owner | neither is a board part. The main assembly README now names both under "OFF-BOARD ITEMS"; the purchasing list itself has no file and no owner in this package. The display thickness (0.741 against 0.746 mm) is a YAML question |
+| A13 U4 from Newark 62AK1744 at 5.75 | applied | BOM item 28 |
+| A14 flash: tray or reel code | needs an owner | to be decided with the assembler; the BOM carries the tray code MX25R6435FZNIL0 and shows the reel code as alternate |
+| A15 J1: FH12A on the FH12 land pattern, height 2.0 mm | open (PROVISIONAL gate) | the MPN keeps the A and the (55); the Hirose drawing has not been read; a different land pattern would be a footprint change. The E24 fallback connector has not been sourced |
+| A16 STM32U585RIT6 price / lead; not the RIT6Q | not a design-file change | the BOM names STM32U585RIT6 |
+| A17 order codes and prices | applied | U9 296-39933-1-ND, U7 MCP1700T-2802E/TTCT-ND, RT1 / RT2 490-18149-1-ND, R23-R27 311-68.0LRCT-ND, 100 nF 490-3261-1-ND (main, and now the cradle's C1), cradle R1 / R2 311-5.10KLRCT-ND (now entered); Y1 0.99, U4 5.75; D17 is gone |
+| A18 alternates column for the passives (candidates; none is approved) | applied as a candidates column | the status BOM copies the alternates from `docs/sourcing.csv` by the references of each line, with their own VERIFIED / PROVISIONAL words; nothing is listed that the report does not list |
+| A19 to A35 (balls, screws, feet, vent, films, tapes, foam, glass, adhesives) | not applicable here | mechanical parts and consumables; A20 (cradle screw) was answered by the mechanical package (M2 x 4) |
+| 12.2 item 3 (`US_4L_FINE` of the toolchain is 0.09 / 0.09 mm) | not applicable to the boards | neither board uses that rule set: the main board's is `GL1_4L_0.10mm` (minimum 0.100 / 0.100 mm). The toolchain README still describes the 0.09 mm set as an option |

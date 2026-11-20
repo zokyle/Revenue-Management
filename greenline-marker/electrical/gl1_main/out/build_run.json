@@ -1,17 +1,17 @@
 {
  "routing_reused": true,
  "seconds": {
-  "board": 1.8,
-  "checks": 0.3,
-  "drc": 1.5,
-  "mechanical": 19.6,
-  "outputs": 5.4,
-  "pinmap": 0.6,
-  "quality": 5.2,
-  "route": 3.2,
-  "rules": 5.2,
-  "schematic": 2.5,
-  "total": 45.2
+  "board": 2.4,
+  "checks": 0.4,
+  "drc": 1.7,
+  "mechanical": 33.0,
+  "outputs": 6.2,
+  "pinmap": 0.8,
+  "quality": 6.2,
+  "route": 4.5,
+  "rules": 6.9,
+  "schematic": 3.0,
+  "total": 65.1
  },
  "stages_run": [
   "checks",

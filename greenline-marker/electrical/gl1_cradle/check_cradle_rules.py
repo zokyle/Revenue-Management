@@ -9,7 +9,8 @@ netlist of ``gl1_cradle_design.py``.
 bridged, the fuse of the wrong rating, the pin row mirrored, D+ and D-
 exchanged, a service pin fitted, a consumer pin not fitted, a part on the top
 side, a moved screw hole, the receptacle back on the library land pattern, a
-pin table that disagrees with the KiCad symbol) and requires each to fail a row.
+pin table that disagrees with the KiCad symbol, the board back at 1.6 mm, a pin
+tail that does not come through the board) and requires each to fail a row.
 
 A row is ``pass``, ``departure`` (the test passes, but the thing is done
 differently from the letter of the source; note starts with DEVIATION) or
@@ -33,6 +34,12 @@ from gleda.model import BOTTOM, TOP            # noqa: E402
 #: DESIGN_SPEC E6 as amended by E25: "The cradle fuse is chosen for no more than
 #: 1.5 ohm after a trip (hold current 0.2 to 0.5 A)"
 SPEC_HOLD_WINDOW_MA, SPEC_R1MAX_OHM = (200, 500), 1.5
+#: DESIGN_SPEC E36: "Cradle board thickness 1.0 mm instead of 1.6 mm"
+SPEC_E36_THICKNESS = 1.0
+
+
+def have_pins(P):
+    return all(("SP%d" % i) in P for i in range(1, 8))
 
 KICAD_SYMBOL_DIR = "/usr/share/kicad/symbols"
 #: second source for the pin -> pad tables typed into gl1_cradle_design.py:
@@ -125,11 +132,36 @@ def rules(design):
         return ref in P and sorted(pin_net.get((ref, p)) or "" for p in ("1", "2")) == sorted((a, b))
 
     b = geometry.outline_polygon(design.outline).bounds
-    row("board", "cradle.pcb: 30.0 x 22.0, thickness 1.6; 2 layers (task)",
-        "outline rectangle about the board centre = marker (0, %.1f); layers 2" % G.Y0,
+    stack_total = getattr(design.stackup, "thickness", None)
+    row("board", "cradle.pcb: %.1f x %.1f, thickness %.1f (E36: 1.0 mm instead of 1.6 mm); 2 layers (task)"
+        % (cr["pcb"]["dx"], cr["pcb"]["dy"], cr["pcb"]["thickness"]),
+        "outline rectangle about the board centre = marker (0, %.1f); layers 2; board thickness %.2f mm, "
+        "stack-up total %s mm" % (G.Y0, design.board_thickness,
+                                  "%.4f" % stack_total if stack_total is not None else "?"),
         abs(b[2] - b[0] - cr["pcb"]["dx"]) < 0.02 and abs(b[3] - b[1] - cr["pcb"]["dy"]) < 0.02
         and design.layers == 2 and abs(design.board_thickness - cr["pcb"]["thickness"]) < 1e-9
+        and abs(design.board_thickness - SPEC_E36_THICKNESS) < 1e-9
+        and stack_total is not None and abs(stack_total - SPEC_E36_THICKNESS) < 1e-6
         and abs(G.Y0 - 0.5 * (cr["pcb"]["y"][0] + cr["pcb"]["y"][1])) < 1e-9)
+    m = G.MILLMAX_0914
+    through = m["tail_length_estimate"] - design.board_thickness
+    note36 = [n for n in design.fab_notes if "E36" in n]
+    row("E36", "E36: cradle board 1.0 mm instead of 1.6 mm, so the Mill-Max 0914 tail (about 1.34 mm, "
+        "PROVISIONAL) comes through the board and can be soldered; the board top face, which sets the pin "
+        "height, does not move (YAML cradle.pins.tail_length %.2f, cradle.pcb.top_z %.3f)"
+        % (cr["pins"]["tail_length"], cr["pcb"]["top_z"]),
+        "tail %.2f mm (MILLMAX_0914, read from the YAML) in a %.1f mm board: %.2f mm through the underside "
+        "(%.1f mm asked for a fillet); the pins stand on the top side, height above the board %.2f mm and "
+        "working height %.2f mm unchanged; fab note states the thickness, the tail and the datum face"
+        % (m["tail_length_estimate"], design.board_thickness, through, m["tail_through_board_min"],
+           m["height_above_board"], m["working_height"]),
+        abs(m["tail_length_estimate"] - cr["pins"]["tail_length"]) < 1e-9
+        and through >= m["tail_through_board_min"] - 1e-9
+        and abs(G.BOARD_TOP_Z - (-4.855)) < 1e-9 and abs(cr["pcb"]["top_z"] - (-4.855)) < 1e-9
+        and abs(m["working_height"] - cr["pins"]["working_height"]) < 1e-9
+        and have_pins(P) and all(P["SP%d" % i].side == TOP for i in range(1, 8))
+        and len(note36) == 1 and ("%.1f mm" % SPEC_E36_THICKNESS) in note36[0] and "TOP face" in note36[0],
+        "tail length and diameters PROVISIONAL until the Mill-Max drawing is read")
     holes = sorted((round(h.x, 3), round(h.y + G.Y0, 3)) for h in design.outline.holes)
     row("screws", "four screw holes at cradle.pcb.screws %s" % cr["pcb"]["screws"],
         "NPTH holes MH1-MH4 dia %.1f (diameter PROVISIONAL)" % G.SCREW_HOLE_DIA,
@@ -178,14 +210,23 @@ def rules(design):
             same = fh.read() == M.local_text()
     except OSError:
         same = False
+    gnd_len = sorted(round(q.polygon.bounds[3] - q.polygon.bounds[1], 3)
+                     for q in copper_j1 if q.number in ("A1", "A12"))
+    vbus_len = sorted(round(q.polygon.bounds[3] - q.polygon.bounds[1], 3)
+                      for q in copper_j1 if q.number in ("A4", "A9"))
+    note_land = [n for n in design.fab_notes if "J1 land pattern" in n]
     row("USB-C land", "(KiCad DRC, rule set) 0.20 mm between a hole wall and foreign copper",
-        "J1 uses the project copy of KiCad's USB4105 land pattern: the four outer ground pads are 0.04 mm "
-        "shorter; smallest distance from a locating-peg hole to a pad of J1 %.3f mm (library footprint: "
+        "J1 uses the project copy of KiCad's USB4105 land pattern: the four outer ground pads (two lands, "
+        "A1 / B12 and A12 / B1) are 0.04 mm shorter - measured %s mm against %s mm of the unchanged lands; "
+        "smallest distance from a locating-peg hole to a pad of J1 %.3f mm (library footprint: "
         "0.194); one pad object per wide land instead of two coincident ones (%s); the stored file equals "
-        "the library file with exactly these changes" % (gap, ", ".join(
-            "%s on %s" % kv for kv in sorted(M.MERGED_LANDS.items()))),
+        "the library file with exactly these changes; the fab note states 1.11 mm"
+        % (" / ".join("%.2f" % v for v in gnd_len), " / ".join("%.2f" % v for v in vbus_len), gap,
+           ", ".join("%s on %s" % kv for kv in sorted(M.MERGED_LANDS.items()))),
         gap >= design.rules.hole_clearance + 0.01 and same and j1.footprint_name.endswith("_GL1")
-        and not any(q.number in M.MERGED_LANDS for q in copper_j1),
+        and not any(q.number in M.MERGED_LANDS for q in copper_j1)
+        and gnd_len == [1.11, 1.11] and vbus_len == [1.15, 1.15]
+        and len(note_land) == 1 and "1.11 mm" in note_land[0] and "1.07" not in note_land[0],
         "DEVIATION from the maker's land pattern, PROVISIONAL; no design rule is relaxed. The merged pad "
         "objects are a workaround for the toolchain's router, which cannot join coincident pads; the copper "
         "is unchanged")
@@ -271,6 +312,16 @@ def _fuse_rating(design):
     G.PTC["hold_mA"], G.PTC["trip_mA"] = 100, 300
 
 
+def _thick_board(design):
+    """Rev D: a 1.6 mm board (the stack-up follows the thickness)."""
+    design.board_thickness = 1.6
+    design.stackup = type(design.stackup).standard(design.layers, 1.6)
+
+
+def _short_tail(design):
+    G.MILLMAX_0914["tail_length_estimate"] = 1.1
+
+
 SEEDED = [
     ("R2 on CC1 as well (CC2 left open)", lambda d: _move(d, "R2.1", "CC1"), "CC"),
     ("fuse bridged: SP1 on VBUS_IN", lambda d: _move(d, "SP1.1", "VBUS_IN"), "fuse"),
@@ -291,6 +342,12 @@ SEEDED = [
      lambda d: d.part("U1").pins.update(GND=d.part("U1").pins["GND"].__class__("GND", ("5",), "power_in"),
                                         VBUS=d.part("U1").pins["VBUS"].__class__("VBUS", ("2",), "power_in")),
      "pin tables"),
+    ("board back at 1.6 mm (E36 not applied)", _thick_board, "board"),
+    ("pin tail 1.1 mm: 0.1 mm through the board, no fillet", _short_tail, "E36"),
+    ("the E36 fab note dropped", lambda d: setattr(d, "fab_notes", [n for n in d.fab_notes if "E36" not in n]),
+     "E36"),
+    ("fab note states the ground pads as 1.07 mm long (they are 1.11)",
+     lambda d: setattr(d, "fab_notes", [n.replace("1.11 mm", "1.07 mm") for n in d.fab_notes]), "USB-C land"),
     ("J1 back on the unchanged library land pattern",
      lambda d: setattr(d.part("J1"), "footprint",
                        "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal"), "USB-C land"),
@@ -300,6 +357,7 @@ SEEDED = [
 def selftest():
     lines, missed = [], 0
     saved = dict(G.PTC)
+    saved_pin = dict(G.MILLMAX_0914)
     for what, mutate, expect in SEEDED:
         design = G.gl1_cradle_design()
         try:
@@ -310,6 +368,8 @@ def selftest():
         finally:
             G.PTC.clear()
             G.PTC.update(saved)
+            G.MILLMAX_0914.clear()
+            G.MILLMAX_0914.update(saved_pin)
         hit = [b for b in bad if b.startswith(expect) or b.startswith("EXCEPTION")]
         lines.append("  %s  %s -> %s" % ("caught" if hit else "MISSED", what, ", ".join(bad) or "no row failed"))
         missed += 0 if hit else 1

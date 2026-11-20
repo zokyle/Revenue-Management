@@ -6,7 +6,8 @@
 - Smallest via-to-pad gap on the top side: 0.100 mm to a pad of its own net (TP2.1), 0.134 mm to a pad of another net (R23.2).
 - Smallest solder-mask web, bottom: 0.360 mm (D1.1 / D2.2); 0 touching openings of different nets.
 - Smallest solder-mask web, top: 0.150 mm (U4.10 / U4.11); 0 touching openings of different nets.
-- Copper to edge: routed copper 0.321 mm (track CAM_D4 B.Cu), pads 0.355 mm (pad R4.2).
+- Copper to edge (board outline and routed slots; rule in the note): routed copper 0.325 mm (track CAM_D3 F.Cu, to the routed slot / cut-out), pads 0.355 mm (pad R4.2, to the routed slot / cut-out).
+- Copper to hole (wall of a drilled non-plated hole, 1 on this board; a separate rule from the edge): routed copper 0.321 mm (track CAM_D4 B.Cu, to NPTH hole H1), pads 0.795 mm (pad RN6.7, to NPTH hole H1).
 - IMU: nearest via 0.35 mm (GND), nearest top-layer track of a foreign net -0.03 mm (CP1_MCU), nearest part 0.51 mm (R24); to U7 / U8 / U9 / U11: 12.3 / 23.7 / 26.2 / 12.8 mm; tracks under the body: B.Cu: SPI1_MOSI; F.Cu: CP1_MCU, GND, IMU_CS, IMU_INT1, IMU_INT2, SPI2_MISO, SPI2_MOSI, SPI2_SCK, V2V8; In2.Cu: CAM_PCLK, SPI2_MISO; copper in the F.Cu rule area: none.
 - Crystal: OSC32_IN 7.6 mm, 0 via(s), OSC32_OUT 4.8 mm, 0 via(s); nearest foreign track on the same layer 0.30 mm (CAM_EN, F.Cu).
 - Photodiode input PD_K: 33.6 mm, 1 via(s); nearest foreign track on the same layer 0.23 mm (GND, B.Cu); nearest camera-clock copper (MCO / CAM_XVCLK) to the amplifier nets 8.4 mm (B.Cu / F.Cu); feedback parts R28 / C33 0.60 mm / 1.53 mm from their MCU pads, 9.5 mm from the charger, 15.8 mm from R9.

@@ -8,7 +8,8 @@ these are the numbers a layout review asks for:
   the MCU pad, for the eleven camera outputs, and the spread against PCLK;
 * via count; the smallest gap between a via and a top-side pad (own net and
   foreign net); the smallest solder-mask web; the smallest copper-to-edge
-  distance; what comes how close to the IMU.
+  distance and, separately, the smallest copper-to-hole distance (drilled
+  non-plated holes); what comes how close to the IMU.
 
     from layout_quality import quality
     q = quality(design, tracks, vias)        # tracks / vias as read back from the board file
@@ -257,36 +258,63 @@ def quality(design, tracks, vias, *, cam_arrays=None, cam_map=None, bus=None):
     out["solder_mask_note"] = ("mask openings are drawn 1:1 on the pads (board expansion %.3f mm); an open "
                                "via on the top side counts as an opening of its pad size" % exp)
 
-    # ---- copper to edge ---------------------------------------------------------------------------------
+    # ---- copper to edge, and copper to holes: two different distances ---------------------------------
+    # "edge" = the routed contours of Edge.Cuts: the board outline and the routed (non-plated) slots
+    # and cut-outs.  "hole" = the wall of a DRILLED non-plated hole (outline holes and the NPTH pads
+    # of footprints).  The rule set has a rule for each (copper_to_edge, hole_clearance); a pad next
+    # to a locating-peg hole is NOT a distance to the board edge.
     outline = geometry.outline_polygon(design.outline)
-    edges = [outline.exterior] + list(outline.interiors)
+    edges = [("board outline", outline.exterior)] + [("routed slot / cut-out", r) for r in outline.interiors]
+    hole_walls = []
     for h in geometry.npth_holes(design):
         (x1, y1, x2, y2), w = h[0], h[1]
-        g = Point(x1, y1) if (x1, y1) == (x2, y2) else LineString([(x1, y1), (x2, y2)])
-        edges.append(g.buffer(w / 2.0, 32).exterior)
+        name = h[3] if len(h) > 3 else "hole"
+        name = (name[:-1] + " (locating peg)") if name.endswith(".") else name   # an unnumbered NPTH pad
+        if (x1, y1) == (x2, y2):
+            hole_walls.append(("NPTH hole %s" % name, Point(x1, y1).buffer(w / 2.0, 64).exterior))
+        else:                                    # a slot: routed, already in the outline's interiors
+            g = LineString([(x1, y1), (x2, y2)]).buffer(w / 2.0, 32).exterior
+            if not any(g.distance(r) < 1e-3 and r.distance(g) < 1e-3 for _n, r in edges[1:]):
+                edges.append(("routed slot %s" % name, g))
 
-    def edge_dist(g):
-        return min(g.distance(e) for e in edges)
+    def nearest(g, rings):
+        return min(((g.distance(r), n) for n, r in rings), default=(None, None))
 
-    best = None
-    for t in tracks:
-        d = edge_dist(LineString([(t.x1, t.y1), (t.x2, t.y2)])) - t.width / 2.0
-        rec = (round(d, 4), "track %s %s" % (t.net, t.layer))
-        best = rec if best is None or rec < best else best
-    for v in vias:
-        d = edge_dist(Point(v.x, v.y)) - v.diameter / 2.0
-        rec = (round(d, 4), "via %s" % v.net)
-        best = rec if best is None or rec < best else best
-    pad_best = None
-    for p in pads:
-        if p.kind == "npth":
-            continue
-        rec = (round(edge_dist(p.polygon), 4), "pad %s" % p.key)
-        pad_best = rec if pad_best is None or rec < pad_best else pad_best
-    out["copper_to_edge"] = {"routed_copper_mm": best[0] if best else None, "routed_item": best[1] if best else None,
-                             "pad_mm": pad_best[0], "pad": pad_best[1],
-                             "note": "edge = board outline, the locating slot and the NPTH hole wall; rule %.2f mm"
-                                     % design.rules.copper_to_edge}
+    def copper_items():
+        for t_ in tracks:
+            yield LineString([(t_.x1, t_.y1), (t_.x2, t_.y2)]), t_.width / 2.0, "track %s %s" % (t_.net, t_.layer)
+        for v in vias:
+            yield Point(v.x, v.y), v.diameter / 2.0, "via %s" % v.net
+
+    def smallest(rings, items):
+        best = None
+        for g, half, label in items:
+            d, ring = nearest(g, rings)
+            if d is None:
+                continue
+            rec = (round(d - half, 4), label, ring)
+            best = rec if best is None or rec < best else best
+        return best
+
+    pad_items = [(p.polygon, 0.0, "pad %s" % p.key) for p in pads if p.kind != "npth" and p.polygon is not None]
+    e_route, e_pad = smallest(edges, copper_items()), smallest(edges, pad_items)
+    h_route, h_pad = smallest(hole_walls, copper_items()), smallest(hole_walls, pad_items)
+
+    def rec(best):
+        return {"mm": None, "item": None, "to": None} if best is None else {
+            "mm": best[0], "item": best[1], "to": best[2]}
+
+    out["copper_to_edge"] = {
+        "routed_copper_mm": e_route[0] if e_route else None, "routed_item": e_route[1] if e_route else None,
+        "routed_to": e_route[2] if e_route else None,
+        "pad_mm": e_pad[0] if e_pad else None, "pad": e_pad[1] if e_pad else None,
+        "pad_to": e_pad[2] if e_pad else None,
+        "note": "edge = the routed contours: board outline, routed slots and cut-outs; rule %.2f mm. Drilled "
+                "non-plated holes are reported under copper_to_hole" % design.rules.copper_to_edge}
+    out["copper_to_hole"] = {
+        "routed": rec(h_route), "pad": rec(h_pad), "holes": len(hole_walls),
+        "note": "hole = wall of a drilled non-plated hole (outline holes, NPTH pads of footprints); rule "
+                "%.2f mm (hole_clearance)" % design.rules.hole_clearance}
 
     # ---- the IMU -----------------------------------------------------------------------------------------
     if "U4" in design.parts_by_ref:
@@ -441,8 +469,21 @@ def markdown(q):
                         w["touching_openings_of_different_nets"]))
     ce = q.get("copper_to_edge", {})
     if ce:
-        L.append("- Copper to edge: routed copper %.3f mm (%s), pads %.3f mm (%s)."
-                 % (ce["routed_copper_mm"], ce["routed_item"], ce["pad_mm"], ce["pad"]))
+        L.append("- Copper to edge (board outline and routed slots; rule in the note): routed copper %.3f mm "
+                 "(%s, to the %s), pads %.3f mm (%s, to the %s)."
+                 % (ce["routed_copper_mm"], ce["routed_item"], ce.get("routed_to"), ce["pad_mm"], ce["pad"],
+                    ce.get("pad_to")))
+    ch = q.get("copper_to_hole", {})
+    if ch:
+        if not ch.get("holes"):
+            L.append("- Copper to hole: the board has no drilled non-plated hole.")
+        else:
+            r_, p_ = ch["routed"], ch["pad"]
+            L.append("- Copper to hole (wall of a drilled non-plated hole, %d on this board; a separate rule "
+                     "from the edge): routed copper %s, pads %s."
+                     % (ch["holes"],
+                        "none" if r_["mm"] is None else "%.3f mm (%s, to %s)" % (r_["mm"], r_["item"], r_["to"]),
+                        "none" if p_["mm"] is None else "%.3f mm (%s, to %s)" % (p_["mm"], p_["item"], p_["to"])))
     imu = q.get("imu")
     if imu:
         L.append("- IMU: nearest via %.2f mm (%s), nearest top-layer track of a foreign net %.2f mm (%s), "

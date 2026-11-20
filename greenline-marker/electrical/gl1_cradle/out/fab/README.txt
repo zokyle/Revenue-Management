@@ -1,14 +1,14 @@
 GreenLine GL-1 cradle board - bare board fabrication data
 =========================================================
 
-Design:    gl1_cradle    revision D-EVT1    GreenLine
+Design:    gl1_cradle    revision E-EVT1    GreenLine
 Generated: by the gleda toolchain with KiCad 7 (kicad-cli) from the design script.
 DRC:       KiCad DRC 0 error(s), 0 unconnected, 1 warning(s) (silk_overlap 1)
 
 BOARD
 -----
 Copper layers:       2
-Finished thickness:  1.60 mm
+Finished thickness:  1.00 mm
 Surface finish:      ENIG
 Size:                30.00 x 22.00 mm (see gl1_cradle-Edge_Cuts.gbr)
 Outline:             routed; every closed contour on Edge.Cuts inside the outline is a routed cut-out / non-plated slot
@@ -22,18 +22,19 @@ FAB NOTES
 - The TOP face lies against a plastic ceiling: only J1 and the spring pins stand on it.
 - Spring pins SP1-SP7 are soldered square to the board in a jig (mechanical/README).
 - Lead-free assembly (SAC305), RoHS-compliant parts (DESIGN_SPEC E5).
-- SP1-SP7: FINISHED plated hole 0.80 mm +-0.05 (Mill-Max minimum mounting hole for the 0.635 mm tail of the 0914 pin: 0.737 mm; PROVISIONAL until the Mill-Max drawing is read). OPEN: the standard pin's tail (about 1.34 mm) is shorter than this 1.6 mm board - do not order before the pin variant / board thickness is decided (electrical/README.md).
-- J1 land pattern: the four outer ground pads are 1.07 mm long (0.04 mm shorter than KiCad's USB4105 pattern) to keep 0.20 mm from the peg holes: confirm against the GCT USB4105 drawing before ordering.
+- Finished board thickness 1.0 mm (DESIGN_SPEC E36; it was 1.6 mm): the tail of the Mill-Max 0914 pin (about 1.34 mm, PROVISIONAL until the Mill-Max drawing is read) comes about 0.34 mm through the board and is soldered on the bottom side. The TOP face is the datum of the pin height: thickness tolerance to the bottom side.
+- SP1-SP7: FINISHED plated hole 0.80 mm +-0.05 (Mill-Max minimum mounting hole for the 0.635 mm tail of the 0914 pin: 0.737 mm; PROVISIONAL until the Mill-Max drawing is read).
+- J1 land pattern: the four outer ground pads are 1.11 mm long (0.04 mm shorter than the 1.15 mm of KiCad's USB4105 pattern) to keep 0.20 mm from the peg holes: confirm against the GCT USB4105 drawing before ordering.
 
 STACK-UP (top to bottom)
 ------------------------
 layer            type       thickness  material
 F.Mask           mask       0.0100 mm  
 F.Cu             copper     0.0350 mm  
-dielectric 1     core       1.5100 mm  FR4 (er 4.50)
+dielectric 1     core       0.9100 mm  FR4 (er 4.50)
 B.Cu             copper     0.0350 mm  
 B.Mask           mask       0.0100 mm  
-total                       1.6000 mm
+total                       1.0000 mm
 
 BOARD-LEVEL MINIMUMS (the smallest features on this board)
 ----------------------------------------------------------

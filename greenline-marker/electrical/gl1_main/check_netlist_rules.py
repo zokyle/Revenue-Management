@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""DESIGN_SPEC section 4 (rev D with amendments E1 to E28), rule by rule,
+"""DESIGN_SPEC section 4 (rev E: amendments E1 to E28 and E35), rule by rule,
 against the GL-1 main-board netlist.
 
     /usr/bin/python3 -B electrical/gl1_main/check_netlist_rules.py [--markdown FILE] [--selftest]
@@ -307,15 +307,16 @@ def rules(design):
         and P["C7"].value == "1u" and P["C8"].value == "10n" and on("VDDA", "U1.VDDA")
         and on("GND", "U1.VSSA"))
     row("rail VDDUSB", "E26 (replaces the MCP1700T-3302E/TT of the rail table): TI LP5907MFX-3.3/NOPB, "
-        "enabled by the 2.8 V rail; fed from VBUS behind the series switch; MCU VDDUSB pin only; 1 uF in, "
-        "1 uF out",
+        "enabled by the 2.8 V rail; fed from VBUS_D (behind the series switch); MCU VDDUSB pin only; "
+        "2.2 uF in, 2.2 uF out (E27)",
         "U11 (LP5907MFX-3.3/NOPB, SOT-23-5): IN VBUS_D (C22 2u2), OUT VDDUSB (C23 2u2), EN on V2V8, pad 4 "
         "open; net VDDUSB = U1 pad 48, U11.OUT, C9, C23, TP5 (test pad, added)",
         mpn("U11") == "LP5907MFX-3.3/NOPB" and "SOT-23-5" in P["U11"].footprint_name
         and on("VBUS_D", "U11.IN") and on("V2V8", "U11.EN") and on("GND", "U11.GND")
         and only("VDDUSB", "U1.VDDUSB", "U11.OUT", "C9.1", "C23.1", "TP5.1")
         and "C22" in caps("VBUS_D", "2u2") and "C23" in caps("VDDUSB", "2u2"),
-        "DEVIATION: 2.2 uF nominal where the rail table says 1 uF (accepted by E27). With EN on V2V8 the "
+        "2.2 uF in and out is the letter of the rev E rail table (E27; it was a departure from rev D's "
+        "1 uF); the DC-bias curves behind E27 are PROVISIONAL. With EN on V2V8 the "
         "USB supply pin cannot rise before the main supply (E26). PROVISIONAL, from memory: the enable pin "
         "of the LP5907 has an internal pull-down of about 1 Mohm, which draws about 2.8 uA from the "
         "always-on rail - it counts against the 25 uA sleep limit of E14 (NETLIST_NOTES 11)")
@@ -541,13 +542,13 @@ def rules(design):
         and len(ys) == 3 and abs(xs[1] - xs[0] - 0.4) < 1e-9 and abs(ys[1] - ys[0] - 0.4) < 1e-9
         and {n: tuple(p.pads) for n, p in u9.pins.items()} == {n: (b,) for n, b in balls.items()}
         and sorted(balls) == ["CHG", "IN", "ISET", "OUT", "TS", "VSS"] and "PROVISIONAL" in fp.name)
-    row("E1 b", "IN from VBUS after the series element (E25: the ideal-diode switch) with 1 uF; OUT to the "
-        "cell with 1 uF",
+    row("E1 b", "IN from VBUS_D, behind the ideal-diode switch U12 (E25), with 2.2 uF; OUT to the cell with "
+        "2.2 uF (E27)",
         "U9.IN on VBUS_D with C26 2u2; U9.OUT on VBAT (BT1) with C27 2u2; U9.VSS to GND",
         on("VBUS_D", "U9.IN") and "C26" in caps("VBUS_D", "2u2") and on("VBAT", "U9.OUT", "BT1.1")
         and "C27" in caps("VBAT", "2u2") and on("GND", "U9.VSS"),
-        "DEVIATION: 2.2 uF nominal where the spec says 1 uF (accepted by E27; DC bias, PROVISIONAL). "
-        "Headroom of the charger input with the switch of E25: NETLIST_NOTES 4.1 / 11 (all numbers PROVISIONAL)")
+        "2.2 uF at IN and OUT is the letter of the rev E spec (E27; it was a departure from rev D's 1 uF; "
+        "the DC-bias curves are PROVISIONAL). Headroom of the charger input with the switch of E25: NETLIST_NOTES 4.1 / 11 (all numbers PROVISIONAL)")
     row("E1 c", "ISET resistor 6.81 kohm 1 % to ground (K = 135 A-ohm, so 19.8 mA)",
         "R11 6k81 from CHG_ISET (U9.ISET) to GND: 135 / 6810 = %.2f mA" % (135.0 / ohms("6k81") * 1e3),
         two("R11", "CHG_ISET", "GND", "6k81") and only("CHG_ISET", "U9.ISET", "R11.1")
@@ -684,16 +685,37 @@ def rules(design):
     fine_nets = sorted(n.name for n in design.nets.values() if n.netclass in ("Fine", "CamPower"))
     cam_only = all(any(ref in ("U2", "U3") for ref, _p in design.nets[n].nodes) for n in fine_nets)
     nc = design.netclasses
-    row("PCB c", "through vias only, 0.25 mm drill, default 0.15 mm tracks with 0.127 mm clearance, and "
-        "a fine net class of 0.10 mm track / 0.10 mm clearance used only to escape the camera BGAs; "
-        "E7: fabricator acceptance of 0.100 mm is a release gate",
+    ync = Y["pcb"]["net_classes"]
+    e35_note = [n for n in design.fab_notes if "E35" in n and "E7" in n]
+    fine_margins = []
+    for a in design.fine_areas:              # measured: area box against the pad field of its part
+        ab = geometry.fine_area_polygon(a).bounds
+        pb = geometry.part_pads_bbox(design, a.ref) if a.ref in P else (0.0, 0.0, 0.0, 0.0)
+        m = (pb[0] - ab[0], pb[1] - ab[1], ab[2] - pb[2], ab[3] - pb[3])
+        fine_margins.append(round(min(m), 4) if max(m) - min(m) < 1e-6 else None)
+    fine_margins.sort(key=lambda v: -1.0 if v is None else v)
+    row("PCB c", "through vias only, 0.25 mm drill, default 0.15 mm tracks with 0.127 mm clearance; E35: the "
+        "0.100 / 0.100 mm fine class may be used on F.Cu, In2.Cu and B.Cu inside two rule areas that extend "
+        "5 mm beyond each camera ball field, everywhere else 0.15 / 0.127 mm; E7 / E35: fabricator "
+        "acceptance of 0.100 mm on all three layers is a release gate, the quote request names them",
         "rules GL1_4L_0.10mm; classes Default 0.15 / 0.127, Fine 0.10 / 0.10 and CamPower 0.15 / 0.10 "
-        "(%d nets, each with a camera ball), fine areas round U2 and U3; fab note on E7" % len(fine_nets),
-        r.via_drill == 0.25 and not r.blind_buried_vias and nc["Default"].track_width == 0.15
-        and nc["Default"].clearance == 0.127 and nc["Fine"].track_width == 0.10
-        and nc["Fine"].clearance == 0.10 and r.min_track == 0.10 and r.min_clearance == 0.10
+        "(%d nets, each with a camera ball); two fine areas, pad field of U2 / U3 + %s mm (YAML "
+        "pcb.net_classes.fine: %s / %s on %s, %s mm); the fab note on E7 / E35 names F.Cu, In2.Cu and B.Cu"
+        % (len(fine_nets), "/".join("%g" % m for m in fine_margins if m is not None) or "?",
+           ync["fine"]["track"], ync["fine"]["clearance"], ", ".join(ync["fine"]["layers"]),
+           ync["fine"]["area_beyond_camera_ball_field"]),
+        r.via_drill == 0.25 == Y["pcb"]["via_drill"] and not r.blind_buried_vias
+        and nc["Default"].track_width == 0.15 == ync["default"]["track"]
+        and nc["Default"].clearance == 0.127 == ync["default"]["clearance"]
+        and nc["Fine"].track_width == 0.10 == ync["fine"]["track"]
+        and nc["Fine"].clearance == 0.10 == ync["fine"]["clearance"]
+        and r.min_track == 0.10 and r.min_clearance == 0.10
         and cam_only and len(design.fine_areas) == 2
-        and any("E7" in n for n in design.fab_notes),
+        and sorted(a.ref for a in design.fine_areas) == ["U2", "U3"]
+        and fine_margins == [5.0, 5.0] and ync["fine"]["area_beyond_camera_ball_field"] == 5.0
+        and list(ync["fine"]["layers"]) == ["F.Cu", "In2.Cu", "B.Cu"] == list(G.FINE_LAYERS)
+        and len(e35_note) == 1 and all(l in e35_note[0] for l in ("F.Cu", "In2.Cu", "B.Cu"))
+        and "0.100" in e35_note[0],
         "DEVIATION: CamPower (0.15 / 0.10) is a second class with the fine clearance for the camera "
         "supply balls, confined to the same areas")
     row("PCB d", "provisional 5 x 5 footprint, 0.5 mm pitch, 0.20 mm pads",
@@ -763,13 +785,23 @@ def rules(design):
            and abs(jb[3] - (-11.70)) < 0.005 and abs(G.J1_MOUTH_Y - (-17.30)) < 1e-9
            and abs(G.J1_SIGNAL_PAD_END_Y - (-10.40)) < 1e-9 and abs(cell_y0 - pad_y1 - 0.20) < 0.005
            and abs(P["J1"].x) < 1e-9 and P["J1"].rotation == G.J1_ROTATION)
+    # rev E: the YAML carries E24.  The placed land pattern against every J1 key of the YAML:
+    # body box (x, y, dx, dy), body_y, mouth_y, pads_end_y, anchor; and the YAML against itself
+    yj = next(p for p in Y["top_side_parts"] if p["ref"] == "J1")
+    j1_yaml = (max(abs(a - b) for a, b in zip(jb, G.J1_BOX)) < 0.005
+               and abs((jb[0] + jb[2]) / 2 - yj["x"]) < 0.005 and abs((jb[1] + jb[3]) / 2 - yj["y"]) < 0.005
+               and abs(jb[1] - yj["body_y"][0]) < 0.005 and abs(jb[3] - yj["body_y"][1]) < 0.005
+               and abs(jb[1] - yj["mouth_y"]) < 0.005 and abs(pad_y1 - yj["pads_end_y"]) < 0.005
+               and abs(P["J1"].x - yj["anchor"][0]) < 1e-6 and abs(P["J1"].y - yj["anchor"][1]) < 1e-6
+               and tuple(G.J1_YAML_ANCHOR) == tuple(G.J1_XY)
+               and abs(yj["y"] - yj["dy"] / 2 - yj["mouth_y"]) < 1e-9)
     row("PCB k", "The cameras, the LCD connector and the battery are fixed mechanical interfaces",
         "U2, U3: body boxes equal the YAML boxes; battery_body placement keep-out from the YAML; J1: at the "
-        "position E24 gives (row PCB k2)",
+        "position E24 and the rev E YAML give (row PCB k2)",
         (P["U2"].x, P["U2"].y) == G.CAM_L and (P["U3"].x, P["U3"].y) == G.CAM_R and cam_box
         and (P["J1"].x, P["J1"].y) == G.J1_XY and P["J1"].rotation == G.J1_ROTATION and "battery_body" in kos
-        and e24)
-    # ---- J1 by its BODY: spec E24 against the placed land pattern and against the (older) YAML ----
+        and e24 and j1_yaml)
+    # ---- J1 by its BODY: spec E24 and the rev E YAML against the placed land pattern -------------
     tz = Y["tub_keepouts"]["lcd_tail"]
     tail_zone = _box(-tz["half_w"], tz["y"][0], tz["half_w"], tz["y"][1])
     over = tail_zone.intersection(geometry.part_body_polygon(P["J1"])).area
@@ -778,28 +810,34 @@ def rules(design):
     ko_poly = geometry.keepout_polygon(bat_ko)
     notch = bat_box.difference(ko_poly)
     nb = notch.bounds if notch.area > 1e-9 else (0, 0, 0, 0)
+    yn = Y["battery"]["board_keepout_notch"]
+    yaml_notch = _box(yn["x"][0], yn["y"][0], yn["x"][1], yn["y"][1])
     notch_ok = (abs(notch.area - 2 * G.J1_COURTYARD_NOTCH["half_w"] * G.J1_COURTYARD_NOTCH["depth"]) < 1e-6
                 and ko_poly.difference(bat_box).area < 1e-9 and abs(nb[0] - jc[0]) < 0.005 and abs(nb[2] - jc[2]) < 0.005
                 and abs(nb[3] - jc[3]) < 0.005 and G.J1_COURTYARD_NOTCH["depth"] <= 0.30 + 1e-9
                 and bat_box.intersection(geometry.part_body_polygon(P["J1"])).area < 1e-9
-                and all(bat_box.distance(q.polygon) >= 0.195 for q in pads("J1")))
+                and all(bat_box.distance(q.polygon) >= 0.195 for q in pads("J1"))
+                # rev E: the keep-out is battery.body less EXACTLY battery.board_keepout_notch
+                and notch.symmetric_difference(yaml_notch).area < 1e-6 and yn["ref"] == "J1"
+                and abs(yn["y"][0] - cell_y0) < 1e-9
+                and abs(yn["pad_to_cell_gap"] - (cell_y0 - pad_y1)) < 0.005)
+    tail_ok = (abs(tz["y"][1] - G.J1_MOUTH_Y) < 1e-9 and over < 1e-9)
     row("PCB k2", "E24: J1 moves 0.5 mm toward the rear: mouth at y = -17.30, body to y = -11.70, signal pads "
-        "end at y = -10.40 (0.20 mm clear of the cell at y = -10.20). This OVERRIDES the YAML (top_side_parts "
-        "J1: box %.1f x %.1f centred on (%.1f, %.1f), mouth at y = %.1f), which is corrected at the next "
-        "revision letter" % (G.J1_BOX[2] - G.J1_BOX[0], G.J1_BOX[3] - G.J1_BOX[1], G.J1_YAML_XY[0],
-                             G.J1_YAML_XY[1], G.J1_BOX[1]),
-        "measured on the placed land pattern: anchor (%.2f, %.2f), body y %.2f to %.2f (rear face = mouth), "
-        "signal pads y %.2f to %.2f, cell edge %.2f, courtyard to %.2f; %.2f mm2 of the body inside the YAML's "
-        "LCD-tail zone (y %.1f to %.1f; J1 is exempt there). Battery keep-out: the YAML box of the cell less a "
-        "notch %.2f x %.2f mm for J1's courtyard"
-        % (P["J1"].x, P["J1"].y, jb[1], jb[3], pad_y0, pad_y1, cell_y0, jc[3], over, tz["y"][0], tz["y"][1],
-           nb[2] - nb[0], nb[3] - nb[1]),
-        e24 and notch_ok,
-        "DEVIATION: from the YAML, as E24 decides: the anchor is %.2f mm in front of the YAML point, so "
-        "mechanical/cad/board_import.py (check C, anchor against the YAML point) reports J1 until the YAML is "
-        "corrected. The courtyard of the land pattern (0.5 mm beyond the pad ends) reaches %.2f mm into the "
-        "YAML box of the cell: the placement keep-out has a notch of exactly that size; body and pads are "
-        "outside the cell (NETLIST_NOTES 5.1 / 11)" % (P["J1"].y - G.J1_YAML_XY[1], jc[3] - cell_y0))
+        "end at y = -10.40 (0.20 mm clear of the cell at y = -10.20); the tail-fold zone starts at the mouth. "
+        "Rev E YAML: top_side_parts J1 body box %.1f x %.1f centred on (%.1f, %.1f), anchor (%.1f, %.1f), "
+        "mouth_y %.1f, pads_end_y %.1f; battery.board_keepout_notch x %s, y %s"
+        % (G.J1_BOX[2] - G.J1_BOX[0], G.J1_BOX[3] - G.J1_BOX[1], G.J1_YAML_XY[0], G.J1_YAML_XY[1],
+           G.J1_YAML_ANCHOR[0], G.J1_YAML_ANCHOR[1], yj["mouth_y"], yj["pads_end_y"], yn["x"], yn["y"]),
+        "measured on the placed land pattern: anchor (%.2f, %.2f), body x %.2f to %.2f, y %.2f to %.2f (rear "
+        "face = mouth), signal pads y %.2f to %.2f, cell edge %.2f, courtyard to %.2f; %.2f mm2 of the body "
+        "inside the YAML's LCD-tail zone (y %.1f to %.1f, which starts at the mouth). Battery keep-out: the "
+        "YAML box of the cell less a notch %.2f x %.2f mm = the YAML notch"
+        % (P["J1"].x, P["J1"].y, jb[0], jb[2], jb[1], jb[3], pad_y0, pad_y1, cell_y0, jc[3], over,
+           tz["y"][0], tz["y"][1], nb[2] - nb[0], nb[3] - nb[1]),
+        e24 and j1_yaml and notch_ok and tail_ok,
+        "the courtyard of the land pattern (0.5 mm beyond the pad ends) reaches %.2f mm into the YAML box of "
+        "the cell: the placement keep-out has the notch the YAML records for it; body and pads are outside "
+        "the cell. No departure since rev E" % (jc[3] - cell_y0))
     board_poly = geometry.outline_polygon(design.outline)
     margins = sorted((board_poly.exterior.distance(geometry.part_body_polygon(p))
                       if board_poly.contains(geometry.part_body_polygon(p)) else -1.0, p.ref)
@@ -819,21 +857,22 @@ def rules(design):
         "pin-compatible); U1 is proven by check_pinmap.py; U2 / U3, U9, U12, PD1 and J1 have no second source: "
         "their tables are the PROVISIONAL ones")
     bare = sorted(p.ref for p in design.parts if p.dnp and not p.in_bom)
-    want_bare = sorted(G.BARE_BOTTOM_COPPER_REFS) if G.BARE_BOTTOM_COPPER_NOT_FITTED else []
-    bare_ok = bare == want_bare and all(
-        P[r].board_only and P[r].side == BOTTOM and not P[r].pins and (P[r].height_mm or 0.0) == 0.0
-        and len(P[r].footprint.pads) == 1 and P[r].footprint.pads[0].kind in ("conn", "smd")
-        for r in bare)
-    row("bare copper", "(mechanical/cad/board_import.py, check D) every fitted bottom-side component lies "
-        "inside the grain opening or the pad slot",
-        "marked 'not fitted' and therefore NOT tested by that check: %s - each one a board-only footprint "
-        "with one netless pad, zero height, no pins; no other part without a BOM line carries the mark"
-        % (", ".join(bare) or "nothing"),
-        bare_ok,
-        "WORKAROUND: the three ball-foot lands (which the spec puts outside both openings) and the three "
-        "bottom fiducials are bare copper; listed as fitted they fail that check with six rows. The mark "
-        "changes no copper, BOM line, position row or assembly text (NETLIST_NOTES 5.2)"
-        if bare else "")
+    copper_only = sorted(p.ref for p in design.parts if not p.in_bom and (p.height_mm or 0.0) == 0.0)
+    zero_bom = sorted(p.ref for p in design.parts if p.in_bom and (p.height_mm or 0.0) == 0.0)
+    bot_bare = [P[r] for r in G.BARE_BOTTOM_COPPER_REFS if r in P]
+    bare_ok = (not bare and not zero_bom and len(bot_bare) == len(G.BARE_BOTTOM_COPPER_REFS)
+               and all(q.board_only and q.side == BOTTOM and not q.pins and (q.height_mm or 0.0) == 0.0
+                       and not q.in_bom and len(q.footprint.pads) == 1
+                       and q.footprint.pads[0].kind in ("conn", "smd") for q in bot_bare)
+               and all(not p.in_bom or (p.height_mm or 0.0) > 0.0 for p in design.parts))
+    row("bare copper", "(mechanical/cad/board_import.py, rev E) a copper-only footprint is one with zero height "
+        "and no BOM line; it is tested by its own rules and a 'not fitted' mark does not exempt it; a "
+        "zero-height component with a BOM line fails",
+        "%d copper-only footprints (zero height, no BOM line): %s; none of them carries a 'not fitted' mark "
+        "(%s); FL1-FL3 and the three bottom fiducials are board-only footprints with one netless pad; no "
+        "BOM part has zero height (%s)"
+        % (len(copper_only), ", ".join(copper_only), ", ".join(bare) or "none", ", ".join(zero_bom) or "none"),
+        bare_ok)
     n_top = sum(1 for p in design.parts if "fiducial" in p.footprint_name.lower() and p.side == TOP)
     n_bot = sum(1 for p in design.parts if "fiducial" in p.footprint_name.lower() and p.side == BOTTOM)
     row("fiducials", "(task) at least three global fiducials per side", "FID1-FID3 top, FID4-FID6 bottom",
@@ -943,9 +982,16 @@ SEEDED = [
                                 "VSSA": d.part("J1").pins["SCLK"].pads[0]}), "lcd c"),
     ("VBUS sense divider back behind the series switch", lambda d: _move(d, "R15.1", "VBUS_D"), "rail VBUS"),
     ("VBUS_D capacitor C22 back at 1 uF", lambda d: setattr(d.part("C22"), "value", "1u"), "rail VDDUSB"),
+    ("VDDUSB capacitor C23 back at 1 uF (E27)", lambda d: setattr(d.part("C23"), "value", "1u"), "rail VDDUSB"),
+    ("charger input capacitor C26 back at 1 uF (E27)", lambda d: setattr(d.part("C26"), "value", "1u"), "E1 b"),
+    ("charger output capacitor C27 back at 1 uF (E27)", lambda d: setattr(d.part("C27"), "value", "1u"), "E1 b"),
     ("J1 moved 0.7 mm toward the cell", lambda d: d.part("J1").place(G.J1_XY[0], G.J1_XY[1] + 0.7, 0.0), "PCB k"),
-    ("J1 left on the YAML point (E24 not applied)",
+    ("J1 anchor put on the YAML BODY centre (anchor / centre confused)",
      lambda d: d.part("J1").place(G.J1_YAML_XY[0], G.J1_YAML_XY[1], 0.0), "PCB k"),
+    ("J1 back on its rev D position (anchor 0.5 mm forward: E24 not applied)",
+     lambda d: d.part("J1").place(G.J1_XY[0], G.J1_XY[1] + 0.5, 0.0), "PCB k"),
+    ("ball-foot land FL2 marked not fitted (the rev D workaround)", lambda d: _dnp(d, "FL2"), "bare copper"),
+    ("bottom fiducial FID5 marked not fitted (the rev D workaround)", lambda d: _dnp(d, "FID5"), "bare copper"),
     ("a real bottom-side part (D3) marked not fitted", lambda d: _dnp(d, "D3"), "E1 g"),
     ("test pad TP4 marked not fitted (would hide it from the mechanical check)", lambda d: _dnp(d, "TP4"), "bare copper"),
     ("C13 placed 0.1 mm from the board edge", lambda d: d.part("C13").place(20.80, 0.0, 90.0), "PCB l"),

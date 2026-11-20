@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Plan-view and z-stack sanity checks for design/master_params.yaml (run: python3 check_layout.py)."""
+"""Plan-view and z-stack sanity checks for design/master_params.yaml, rev E (run: python3 check_layout.py).
+Nothing was removed at rev E; the block "rev E additions" checks the keys that the amendments E17 to E36 added."""
 import math, sys, itertools, yaml, pathlib
 from shapely.geometry import Point, box, Polygon
 P = yaml.safe_load(open(pathlib.Path(__file__).with_name("master_params.yaml")))
@@ -158,5 +159,80 @@ if abs(cam["right"]["x"] - cam["left"]["x"] - cam["baseline"]) > 1e-6: errs.appe
 for side, ref in (("left", "U2"), ("right", "U3")):
     p_ = next(q for q in parts if q["ref"] == ref)
     if abs(p_["x"] - cam[side]["x"]) > 1e-6 or abs(p_["y"] - cam[side]["y"]) > 1e-6: errs.append(f"{ref} position differs from cameras.{side}")
+# --- rev E additions (amendments E17 to E24, E36) ------------------------------------------------
+j1 = next(q for q in parts if q["ref"] == "J1"); bb = P["battery"]["body"]; cell_y0 = bb["y"] - bb["dy"] / 2
+# E24: J1 as stated in words equals J1 as a box; the pads keep 0.20 mm from the cell; the tail zone starts at the mouth
+if abs(j1["mouth_y"] - (j1["y"] - j1["dy"] / 2)) > 1e-6 or abs(j1["body_y"][0] - j1["mouth_y"]) > 1e-6 or abs(j1["body_y"][1] - (j1["y"] + j1["dy"] / 2)) > 1e-6:
+    errs.append("J1: mouth_y / body_y do not agree with its box (y -+ dy / 2)")
+if abs(j1["mouth_y"] - (-17.30)) > 1e-6 or abs(j1["body_y"][1] - (-11.70)) > 1e-6 or abs(j1["pads_end_y"] - (-10.40)) > 1e-6:
+    errs.append("J1 is not where amendment E24 puts it (mouth -17.30, body to -11.70, pads to -10.40)")
+if abs((j1["pads_end_y"] - j1["mouth_y"]) - 6.90) > 1e-6: errs.append("J1: mouth to pad ends is not the 6.90 mm of the FH12 land pattern")
+gap = cell_y0 - j1["pads_end_y"]
+if gap < 0.20 - 1e-9: errs.append(f"J1 signal pads end only {gap:.2f} mm from the cell (0.20 required, E24)")
+notes.append(f"J1 pads to the cell: {gap:.2f} mm; mouth at y = {j1['mouth_y']}")
+if lt and (abs(lt["y"][1] - j1["mouth_y"]) > 1e-6 or lt["y"][0] >= lt["y"][1] or lt["y"][0] < -pcb["radius"] - 1e-9 or lt["half_w"] > j1["dx"] / 2):
+    errs.append("tub_keepouts.lcd_tail must run from the mouth of J1 rearward, not beyond the board edge, and not wider than J1")
+# the recorded notch of the board's battery keep-out is J1's courtyard and nothing more; body and pads stay outside the cell
+nt = P["battery"]["board_keepout_notch"]; cy = j1["courtyard"]
+if abs(nt["x"][0] - cy[0]) > 1e-6 or abs(nt["x"][1] - cy[2]) > 1e-6 or abs(nt["y"][0] - cell_y0) > 1e-6 or abs(nt["y"][1] - cy[3]) > 1e-6:
+    errs.append("battery.board_keepout_notch is not J1's courtyard inside the cell box")
+if abs(nt["pad_to_cell_gap"] - gap) > 1e-6: errs.append("battery.board_keepout_notch.pad_to_cell_gap differs from the geometry")
+for name, c in P["battery"]["pads"]["centres"].items():
+    sx, sy = P["battery"]["pads"]["size"]
+    if not padzone.buffer(1e-9).contains(box(c[0] - sx / 2, c[1] - sy / 2, c[0] + sx / 2, c[1] + sy / 2)): errs.append(f"battery pad {name} is outside battery.pads.zone")
+# E17: the fit numbers are those of the hole and spigot tolerances; guaranteed field below the required one; gate bars 1.0 inside it
+fr = cam["field_required_deg"]
+fit_nom = (lh["round"]["dia"] - lh["spigot_dia"]) / 2
+fit_max = (lh["round"]["dia"] + lh["dia_tol"][1] - (lh["spigot_dia"] + lh["spigot_dia_tol"][0])) / 2
+if abs(fit_nom - lh["fit_nominal"]) > 1e-9 or abs(fit_max - lh["fit_max"]) > 1e-9 or abs(lh["spigot_dia"] + lh["spigot_dia_tol"][0] - lh["spigot_dia_min"]) > 1e-9:
+    errs.append(f"pcb.locating_holes: fit_nominal / fit_max / spigot_dia_min do not follow from the diameters and tolerances ({fit_nom:.3f}, {fit_max:.3f})")
+ug = cam["up_guaranteed_case"]
+if abs(ug["locating_fit"] - lh["fit_max"]) > 1e-9: errs.append("cameras.up_guaranteed_case is not defined on pcb.locating_holes.fit_max")
+if not (fr["up_guaranteed"] <= ug["model_deg"] <= fr["up"]): errs.append("cameras: up_guaranteed must not exceed the model figure of its own case, nor that the required field")
+if abs(cam["gate2_bars_deg"][0] - (fr["up_guaranteed"] - 1.0)) > 1e-9 or abs(cam["gate2_bars_deg"][0] + cam["gate2_bars_deg"][1]) > 1e-9:
+    errs.append("cameras.gate2_bars_deg must be +-(up_guaranteed - 1.0)")
+# E20: the lower plate limits keep 0.02 mm of epoxy under a ball at its upper diameter limit. Chain as in the mechanical
+# package: thinnest plate + adhesive sheet 10 % thin - (largest ball - protrusion + 0.02 mm setting tolerance)
+ft = bp["feet"]
+for name, t_lo, psa_t in (("FR-4", bp["thickness_accepted"][0], bp["psa"]["thickness"]), ("PA12", alt["thickness_accepted"][0], alt["psa_thickness"])):
+    epoxy = t_lo + 0.9 * psa_t - (ft["ball_dia"] + ft["dia_tol"] - ft["protrusion"] + 0.02)
+    if epoxy < 0.02 - 1e-9: errs.append(f"{name} plate at its lower limit {t_lo} leaves {epoxy:.3f} mm of epoxy under an oversize ball (0.02 required, E20)")
+    notes.append(f"epoxy under an oversize ball, {name} plate at {t_lo}: {epoxy:.3f} mm")
+# E21: nominal ring = nominal plate + rule offset - nominal tape; tape inside its range; print leaves lapping stock on the tallest ring
+rg = baf["ring"]
+if abs(bp["thickness"] + rg["rule_offset"] - rg["nominal_tape"] - rg["height"]) > 1e-9: errs.append("baffle ring: height is not plate + rule_offset - nominal_tape")
+if not (rg["tape"][0] <= rg["nominal_tape"] <= rg["tape"][1]): errs.append("baffle ring: nominal tape outside the tape range")
+tallest = bp["thickness_accepted"][1] + rg["rule_offset"] - rg["tape"][0]
+if rg["print_height"] < tallest + 0.15 - 1e-9: errs.append(f"baffle ring: print height {rg['print_height']} leaves less than 0.15 to lap on the tallest ring ({tallest:.3f})")
+# E18 / E19: legend rules and retarder film against the features they refer to
+lg = bp["legend"]
+if min(lg["min_line"], lg["min_space"]) < 0.15 - 1e-9 or lg["min_text_height"] < 1.0 - 1e-9 or lg["thickness_max"] > 0.03 + 1e-9 or lg["seat_zones_clear_dia"] < 8.5 - 1e-9 or lg["edge_margin"] < 0.75 - 1e-9:
+    errs.append("base_plate.legend: a print rule is looser than amendment E18")
+rt = cg["retarder"]
+if not (lcd["aperture_dia"] < rt["dia"] < cg["bond_id"]): errs.append("retarder film must cover the aperture and stay inside the bore of the tape ring")
+if not (lcd["aperture_dia"] / 2 < rt["clocking_flat"]["y"] < rt["dia"] / 2) or abs(2 * math.sqrt((rt["dia"] / 2) ** 2 - rt["clocking_flat"]["y"] ** 2) - rt["clocking_flat"]["length"]) > 0.05:
+    errs.append("retarder clocking flat: not between aperture and film edge, or its length is not the chord at that y")
+if rt["thickness_max"] >= cg["bond_thickness"]: errs.append("retarder film does not fit in the tape gap")
+# E36: cradle board 1.0 mm, top face unchanged; the pin tail comes through
+cp = P["cradle"]["pcb"]; pins = P["cradle"]["pins"]
+if abs(cp["thickness"] - 1.0) > 1e-9 or abs(cp["top_z"] - (-4.855)) > 1e-9: errs.append("cradle.pcb: thickness 1.0 with top_z -4.855 (E36)")
+if pins["tail_length"] <= cp["thickness"]: errs.append("cradle spring-pin tail does not come through the cradle board")
+# E35: the fine class is finer than the default and names its three layers
+nc = pcb["net_classes"]
+if not (nc["fine"]["track"] < nc["default"]["track"] and nc["fine"]["clearance"] < nc["default"]["clearance"] and len(nc["fine"]["layers"]) == 3): errs.append("pcb.net_classes: fine class (E35)")
+# bottom-side board parts against the keys they must agree with: 16 LEDs in 8 pairs on the ring, photodiode at its place
+bparts = P["bottom_side_parts"]["board_parts"]
+leds = [q for q in bparts if q["ref"].startswith("D")]; pdb = [q for q in bparts if q["ref"] == "PD1"]
+if len(leds) != 2 * led["count_pairs"] or len(pdb) != 1: errs.append("bottom_side_parts.board_parts: 16 LEDs and one photodiode expected")
+for k in range(led["count_pairs"]):
+    az = math.radians(led["first_azimuth_deg"] + k * led["step_deg"])
+    px, py = led["x"] + led["radius"] * math.cos(az), led["y"] + led["radius"] * math.sin(az)
+    near = [q for q in leds if math.hypot(q["x"] - px, q["y"] - py) < 0.6]
+    if len(near) != 2 or abs(sum(q["x"] for q in near) / 2 - px) > 2e-3 or abs(sum(q["y"] for q in near) / 2 - py) > 2e-3: errs.append(f"LED pair {k + 1} is not centred on the ring at {led['first_azimuth_deg'] + k * led['step_deg']} deg")
+if any(abs(q["h"] - led["led_height"]) > 1e-9 for q in leds): errs.append("LED height differs from grain_led_ring.led_height")
+if pdb and any(abs(pdb[0][k_] - pd[k_]) > 1e-9 for k_ in ("x", "y", "dx", "dy", "h")): errs.append("board photodiode differs from bottom_side_parts.photodiode")
+for tp in P["top_side_test_points"]:
+    if not keep.contains(Point(tp["x"], tp["y"]).buffer(tp["dia"] / 2)): errs.append(f"{tp['ref']} outside the PCB keep-in")
+    if rect(bb).intersects(Point(tp["x"], tp["y"]).buffer(tp["dia"] / 2)): errs.append(f"{tp['ref']} lies under the cell (not reachable by a probe)")
 print("\n".join("NOTE  " + n for n in notes)); print("\n".join("ERROR " + e for e in errs) or "OK: no layout errors")
 sys.exit(1 if errs else 0)

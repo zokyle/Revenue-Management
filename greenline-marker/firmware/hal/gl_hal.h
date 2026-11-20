@@ -388,7 +388,7 @@ gl_clock_t gl_hal_clock_get(void);
 /* ======================================================================= */
 
 typedef enum {
-    GL_SPI_BUS_1 = 0, /**< LCD (write only) + NOR flash; SCK PA5/PB3, MOSI, MISO PB4 */
+    GL_SPI_BUS_1 = 0, /**< LCD (write only) + NOR flash; SCK PB3, MOSI PB5, MISO PB4 (pin map: gl_pins.h) */
     GL_SPI_BUS_2 = 1, /**< IMU, 4-wire */
     GL_SPI_BUS_COUNT
 } gl_spi_bus_t;

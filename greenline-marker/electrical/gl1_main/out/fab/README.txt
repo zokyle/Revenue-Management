@@ -1,7 +1,7 @@
 GreenLine GL-1 main board - bare board fabrication data
 =======================================================
 
-Design:    gl1_main    revision D-EVT1    GreenLine
+Design:    gl1_main    revision E-EVT1    GreenLine
 Generated: by the gleda toolchain with KiCad 7 (kicad-cli) from the design script.
 DRC:       KiCad DRC 0 error(s), 0 unconnected, 2 warning(s) (silk_over_copper 1, silk_overlap 1)
 
@@ -23,7 +23,7 @@ FAB NOTES
 - The bottom side is a wetted surface in use: no open via holes there, and no via at all inside the grain opening (dia 13 at 0, -4) or the pad slot (17.44 x 2.2 at y -17).
 - Under each ball foot (0, 15), (-16.5, -9.5), (16.5, -9.5): an UNMASKED dia 1.6 copper land on the bottom side inside a dia 2.5 zone without tracks and vias.
 - Layer 2 (In1.Cu) is a solid ground plane.
-- 0.100 mm track and gap (3.94 mil) inside the two fine areas round the cameras: the fabricator must accept it in writing (DESIGN_SPEC E7, release gate). The acceptance must cover ALL THREE routing layers - F.Cu, In2.Cu (layer 3) and B.Cu: fine-class tracks change layer inside the fine areas, so 0.100 mm track and 0.100 mm gap occur on the inner layer and on the bottom as well as on the top (lengths per layer under TRACKS AS ROUTED; DEPARTURE from the specification's 'used only to escape the camera BGAs', recorded in electrical/README.md).
+- 0.100 mm track and 0.100 mm gap (3.94 mil) on THREE layers - F.Cu, In2.Cu (layer 3) and B.Cu - inside the two fine areas, which extend 5 mm beyond each camera ball field (DESIGN_SPEC E35; about 13 % of the board). The fabricator must accept 0.100 / 0.100 mm on F.Cu, In2.Cu and B.Cu in writing before the order (DESIGN_SPEC E7 as widened by E35, release gate); the quote request must name all three layers. Fine-class tracks change layer inside the fine areas (lengths per layer under TRACKS AS ROUTED). Everywhere else: 0.15 mm track, 0.127 mm clearance.
 - Lead-free assembly (SAC305), RoHS-compliant parts, no conformal coating (DESIGN_SPEC E5).
 - Solder mask is drawn 1:1 on every land. U9 (6 balls on 0.4 mm, lands 0.23 mm) and U2 / U3 (25 balls on 0.5 mm, lands 0.20 mm): whatever mask compensation the fabricator applies must leave a mask web of at least 0.075 mm between the openings of these parts.
 - Vias: 0.50 mm pad, through only, tented on both sides and plugged from the bottom (see via protection). HOLE SIZE - QUESTION FOR THE FABRICATOR, to be answered with the E7 question: the specification says '0.25 mm drill'; the design data carries 0.25 mm as the hole size and the toolchain's README line calls it the finished hole. Intended: 0.25 mm DRILL (tool) on the 0.50 mm pad, finished hole about 0.20 mm. If the fabricator reads 0.25 mm as the FINISHED size it drills 0.30 to 0.35 mm, which leaves 0.075 to 0.10 mm of ring and less hole-to-copper distance than the 0.20 mm the design keeps: not accepted without review.

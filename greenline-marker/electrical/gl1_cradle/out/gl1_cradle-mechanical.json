@@ -102,7 +102,7 @@
   ],
   "outline_polygon_holes": [],
   "outline_tolerance": 0.01,
-  "thickness": 1.6
+  "thickness": 1.0
  },
  "components": [
   {
@@ -191,7 +191,7 @@
    "ref": "F1",
    "rot": 0.0,
    "side": "bottom",
-   "value": "PTC 0.3A",
+   "value": "PTC 0.35A",
    "x": -8.0,
    "y": -1.6,
    "z_max": 0.0,
@@ -240,8 +240,8 @@
    "value": "Fiducial",
    "x": -11.0,
    "y": 1.5,
-   "z_max": 1.6,
-   "z_min": 1.6
+   "z_max": 1.0,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -286,8 +286,8 @@
    "value": "Fiducial",
    "x": 11.5,
    "y": -2.0,
-   "z_max": 1.6,
-   "z_min": 1.6
+   "z_max": 1.0,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -332,8 +332,8 @@
    "value": "Fiducial",
    "x": 12.5,
    "y": 4.6,
-   "z_max": 1.6,
-   "z_min": 1.6
+   "z_max": 1.0,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -516,8 +516,8 @@
    "value": "USB-C",
    "x": 0.0,
    "y": -8.625,
-   "z_max": 4.86,
-   "z_min": 1.6
+   "z_max": 4.26,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -700,8 +700,8 @@
    "value": "0914 pin",
    "x": -7.62,
    "y": 6.2,
-   "z_max": 8.56,
-   "z_min": 1.6
+   "z_max": 7.96,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -746,8 +746,8 @@
    "value": "0914 pin",
    "x": -5.08,
    "y": 6.2,
-   "z_max": 8.56,
-   "z_min": 1.6
+   "z_max": 7.96,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -792,8 +792,8 @@
    "value": "0914 pin",
    "x": -2.54,
    "y": 6.2,
-   "z_max": 8.56,
-   "z_min": 1.6
+   "z_max": 7.96,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -838,8 +838,8 @@
    "value": "0914 pin",
    "x": 0.0,
    "y": 6.2,
-   "z_max": 8.56,
-   "z_min": 1.6
+   "z_max": 7.96,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -884,8 +884,8 @@
    "value": "0914 pin",
    "x": 2.54,
    "y": 6.2,
-   "z_max": 8.56,
-   "z_min": 1.6
+   "z_max": 7.96,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -930,8 +930,8 @@
    "value": "0914 pin",
    "x": 5.08,
    "y": 6.2,
-   "z_max": 8.56,
-   "z_min": 1.6
+   "z_max": 7.96,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -976,8 +976,8 @@
    "value": "0914 pin",
    "x": 7.62,
    "y": 6.2,
-   "z_max": 8.56,
-   "z_min": 1.6
+   "z_max": 7.96,
+   "z_min": 1.0
   },
   {
    "body": {
@@ -2237,6 +2237,6 @@
   "bottom": 1.45,
   "top": 6.96
  },
- "revision": "D-EVT1",
+ "revision": "E-EVT1",
  "units": "mm"
 }

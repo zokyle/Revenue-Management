@@ -1,6 +1,7 @@
-"""GreenLine GL-1 mechanical parameters (revision D, amended: decisions N1 to N10 and spec amendments E8 to E16).
+"""GreenLine GL-1 mechanical parameters (revision E: rev D with the decisions N1 to N10, the spec amendments E8 to E16 and,
+entered at revision letter E, E17 to E22 (the former proposals N11 to N19), E24 (J1 and the LCD tail) and E36 (cradle board).
 
-Loads design/master_params.yaml (the single source of truth for shared numbers, rev D as amended) and
+Loads design/master_params.yaml (the single source of truth for shared numbers, rev E) and
 derives every dependent dimension exactly once.  Mechanical-only choices (not shared with the
 PCB layout) live in MECH below; numbers that the YAML carries (cradle block, rim relief, field of view,
 potting limits, plate tolerances, window bond, tape-ring bore, baffle-ring numbers ...) are copied into
@@ -77,7 +78,6 @@ MECH = dict(
     potting_viscosity_Pa_s=(0.1, 2.0),   # mixed viscosity window for the clear potting (levels in minutes, lets bubbles rise; estimate)
     potting_dispense_tol=0.03,       # volume accuracy assumed for the positive-displacement dispenser (fraction)
     baffle_psa_tol=0.02,             # thickness tolerance of the black tape annulus under the baffle ring (the tape itself: YAML, 0.10 to 0.145)
-    baffle_tape_range_default=(0.10, 0.145),   # used only if the YAML text of base_plate.baffle.ring.adhesive cannot be read
     baffle_ring_lap_allowance=0.15,  # height added to the TALLEST finished ring for lapping (thickest plate, thinnest tape)
     plate_gauging_tol=0.01,          # accuracy of the plate thickness measurement that the ring height is matched to
     ring_sprue=dict(n=6, pitch=11.0, runner=2.0, gate_w=0.8, gate_len=1.0),   # print file of the baffle ring: a sprued set
@@ -90,16 +90,18 @@ MECH = dict(
     tol_printed=0.10, tol_pcb=0.08, tol_sheet_frac=0.10, tol_pa12_plate=0.10,
     tol_ball_set=0.02,               # ball protrusion as set on the gauge plate: 0.10 +-0.02
     ball_gap_min=0.02,               # least epoxy between the ball top and its copper land (a ball that touches holds the laminate open)
-    # E8: balls of 316 stainless "grade 100 or better" or silicon nitride.  Basic diameter tolerance of an ABMA grade 100 ball,
-    # +-0.0005 in (grade 25: +-0.0001 in), AS REMEMBERED from ABMA Std 10: PROVISIONAL until the supplier's certificate is read
-    ball_dia_tol=0.0127, ball_dia_tol_g25=0.0025,
+    # E8 / E20: balls of 316 stainless "grade 100 or better" or silicon nitride.  The diameter tolerance of a grade 100 ball is
+    # YAML base_plate.feet.dia_tol since rev E (PROVISIONAL there).  Grade 25 (+-0.0001 in, AS REMEMBERED) is kept for comparison only
+    ball_dia_tol_g25=0.0025,
     seal_dispense_margin=1.0,        # seal adhesive to dispense = volume of the joint at its upper limit x this, rounded UP to 5 mm3
     # handbook expansion coefficients for the thermal estimates (ppm/K) and the temperature range
     cte_pa12=110.0, cte_fr4=15.0, cte_glass=9.0, cte_lcd=4.0, t_assembly=23.0, t_range=(-10.0, 70.0),
     # reference solids
     flex_w=6.0, flex_t=0.15, flex_z_top_run=4.775,
     fpc_entry_h=1.0,                 # height of the J1 mouth above the PCB (PROVISIONAL: FH12 drawing)
-    flex_straight=0.35, foam_dx=26.6,
+    flex_straight=0.35,              # E24: straight run of the tail between the end of the fold and the mouth of J1 (insertion run)
+    flex_part_clr=0.2,               # clearance kept between the modelled tail and any part other than J1 (checks 12 and 17)
+    foam_dx=26.6,
     # optics (for the checks)
     pupil_below_cube_top=0.4, pupil_dia=0.38, n_prism=1.517, n_window=1.52,
     fov_down_sensor_deg=15.0,        # what the sensor could use; reported, not required (the required field is in the YAML)
@@ -110,17 +112,14 @@ MECH = dict(
     # ------------------------------------------------------------------ E9: quarter-wave retarder film under the cover glass (EVT trial, OPTIONAL part)
     retarder_t_default=0.10,         # film with its laminating adhesive (YAML cover_glass.retarder.type: "about 0.1 mm"; read from that text)
     retarder_t_tol=0.01,             # the film as bought may be this much thicker and still clear the roof ledge (it lies in the tape gap)
-    retarder_dia=23.4,               # covers the dia 22 aperture by 0.7 and stays 0.8 inside the bore of the tape ring: BOTH margins survive
-                                     # the centring chain at its worst case (film on glass, glass in recess, tape ring in recess)
-    retarder_flat_overlap=0.5,       # clocking flat of the die cut: a chord this far outside the aperture radius, toward the visor (+y)
-    retarder_place_tol=0.25,         # film on the glass, placed by hand in a lamination nest (centring of step 5)
+    # diameter (23.4), placement (0.25) and the thickness limit are YAML cover_glass.retarder since rev E (E19)
+    retarder_flat_overlap=0.5,       # clocking flat of the die cut: a chord this far outside the aperture radius, toward the visor (+y);
+                                     # asserted against YAML cover_glass.retarder.clocking_flat.y
     retarder_clock_tol_deg=3.0,      # clocking of the crystal in its recess: edge mark to the nose groove, +-0.7 mm on the dia 28 edge
     # ------------------------------------------------------------------ E10: legend on the outer face of the FR-4 base plate (placeholders)
-    legend_edge_margin=0.75,         # legend ink stays this far inside the routed outline (registration of a legend print, assumed)
-    legend_stroke=0.15, legend_frame_stroke=0.20, legend_min_text_h=1.0,   # fabricator rules for legend print (assumed: confirm)
-    legend_min_gap=0.15,             # least clear space between two separate pieces of legend ink (letters, frame and label): a narrower
-                                     # space fills in.  Assumed equal to the least line width: confirm with the quote
-    legend_ink_t_max=0.03,           # largest print thickness allowed on the drawing (GL1-011 sheet 2)
+    # E18: edge margin, least line, least space, least text height, largest ink thickness and registration are YAML
+    # base_plate.legend since rev E (print rules PROVISIONAL there: to be confirmed with the fabricator's quote)
+    legend_frame_stroke=0.20,
     legend_ink_t=0.02,               # thickness of a legend print over the mask (typical, assumed): why the calibration seat avoids it
     # ------------------------------------------------------------------ E11: level calibration on two seats (fixtures, drawing GL1-050)
     cal=dict(
@@ -155,16 +154,15 @@ MECH = dict(
         rim_station_deg=(-135.0, -45.0, 45.0, 135.0),   # azimuths from +x of the four rim stations (all on the arc, clear of the D corners)
         mask_od=24.0,                # low-tack potting mask (step 12): an annulus dia 15 to this, centred on the grain opening, so that the feet stay on bare mask
     ),
-    legend_registration=0.15,        # registration of a legend print to the outline (GL1-011): kept between ink and every fixture footprint
-    # ------------------------------------------------------------------ check 4: what uses up the margin of the guaranteed upper field (information rows)
-    pcb_hole_tol=0.05,               # diameter tolerance of a non-plated PCB hole (ordinary NPTH tolerance, ASSUMED: not in the YAML)
-    spigot_undersize=0.05,           # smallest spigot a no-go gauge would pass (dia 0.95): proposed in N18, no such gauge exists yet
-    up_guaranteed_proposed=14.0,     # proposal N18: the guaranteed upper field restated on the largest fit and the cold roof
+    # ------------------------------------------------------------------ check 4: the guaranteed upper field (E17) and what uses up its margin
+    # hole tolerance, spigot tolerance and the largest fit are YAML pcb.locating_holes since rev E (E17)
     pupil_dia_alt=0.40, pupil_below_alt=0.5,   # other plausible values of the two ASSUMED lens numbers
-    roof_cold_drop=0.02,             # the roof comes this much lower over the opening at -10 C (PA12 against the FR-4 board: README open issue 1)
+    roof_cold_drop=0.02,             # the roof comes this much lower over the opening at -10 C (PA12 against the FR-4 board: README open issue 1).
+                                     # Mechanical estimate; the YAML case (cameras.up_guaranteed_case) names the temperature, not the drop
+    up_guaranteed_model_tol=0.01,    # the closed form must reproduce cameras.up_guaranteed_case.model_deg within this (deg)
     # ------------------------------------------------------------------ E12: display rotation
-    lcd_free_rotation_limit_deg=1.25,   # DESIGN_SPEC E12 sizes the factory measurement on "up to about 1 degree": a pocket that lets the glass
-                                     # turn further than this fails check 14
+    lcd_free_rotation_limit_deg=1.25,   # DESIGN_SPEC E22 (YAML lcd.rotation_in_pocket_max_deg) sizes the factory measurement on "up to about
+                                     # 1.2 degrees": a pocket that lets the glass turn further than this fails check 14
     lcd_line_budget_deg=0.5,         # aim-line transfer budget of the spec (E12)
     lcd_pusher_pad_w=5.0, lcd_pusher_guide_tol=0.5,   # squaring pusher of assembly step 9: pad width on the centre line, lateral guidance
                                      # (the pad passes between the two posts E once the front edge of the glass has risen above their feet)
@@ -184,8 +182,13 @@ MECH = dict(
     # Mill-Max 0914 long-stroke pin (PROVISIONAL until the drawing is read; docs/research/bom-verification-opto.md)
     pin_free_len=8.3, pin_plunger_dia=1.07, pin_body_dia=1.83, pin_tail_dia=0.76,
     pin_body_margin=0.2,             # barrel top this far below the fully compressed plunger tip
-    pin_tail_below_pcb=0.7,
-    cradle_screw_pilot_dia=1.7, cradle_screw_pilot_depth=0.5,   # spot marks only: drill dia 1.6 x 3 after printing
+    pin_tail_solder_min=0.2,         # E36: least tail that must come through the cradle board to take a solder fillet (our rule)
+    cradle_screw_pilot_dia=1.7, cradle_screw_pilot_depth=0.5,   # spot marks only: drilled after printing (cradle_screw_drill)
+    # E36: four M2 thread-forming screws hold the 1.0 mm board against the pocket ceiling.  Screw length under the head, drill
+    # for the thread (dia, depth above the pocket ceiling) and the least skin that must stay above the drilled hole
+    cradle_screw_len=4.0, cradle_screw_drill=(1.6, 3.2), cradle_screw_tip_clear=0.2, cradle_screw_skin_min=0.4,
+    cradle_screw_hole_dia=2.2,       # clearance hole in the cradle board
+    cradle_screw_head_dia=4.0,       # pan head of an M2 screw (PROVISIONAL, generic): bottom-side parts stay out from under it (check 19)
     usb=(8.94, 7.35, 3.26),
     scallop_deg=(-42.0, 0.0), scallop_inset=2.0,   # finger scallops: sectors of the nest wall removed (angles from +x on the +x side, mirrored)
     lighten_x=(17.0, 26.5), lighten_y=(-22.0, 10.0), lighten_front=(13.0, -9.5, 20.0), lighten_ceiling_z=-4.1,
@@ -227,6 +230,7 @@ _hd, _pins = _cr["hold_down"], _cr["pins"]
 _fr = Y["cameras"]["field_required_deg"]
 _yb, _yw, _yc = Y["base_plate"], Y["visor_window"], Y["cover_glass"]
 _fz, _ring = _yb["grain_cavity"]["fill_surface_z"], _yb["baffle"]["ring"]
+_lg, _ret, _lhy = _yb["legend"], _yc["retarder"], Y["pcb"]["locating_holes"]
 
 
 def _numbers_in(text, pattern):
@@ -260,6 +264,13 @@ YAML_DRIVEN = dict(
     pin_max_working_h=round(_pins["working_height"] + _pins["compression"], 6),   # free height of a pin above the cradle PCB (6.96)
     pin_full_stroke=_pins["stroke"],
     cradle_float=_cr["float"],
+    # rev E: the former proposals N11 to N19 are YAML numbers (E17 to E22); the MECH copies are gone
+    ball_dia_tol=_yb["feet"]["dia_tol"],                      # E20: diameter tolerance taken for a grade 100 ball (PROVISIONAL in the YAML)
+    legend_edge_margin=_lg["edge_margin"], legend_stroke=_lg["min_line"], legend_min_gap=_lg["min_space"],   # E18: legend print rules
+    legend_min_text_h=_lg["min_text_height"], legend_ink_t_max=_lg["thickness_max"], legend_registration=_lg["registration"],
+    retarder_dia=_ret["dia"], retarder_place_tol=_ret["placement"],   # E19: trial film
+    pcb_hole_tol=_lhy["dia_tol"][1],                          # E17: locating hole and slot width dia 1.15 +0.05 / -0
+    spigot_undersize=-_lhy["spigot_dia_tol"][0],              # E17: spigot dia 1.0 +0 / -0.05 (no-go gauge dia 0.95)
 )
 MECH.update(YAML_DRIVEN)
 
@@ -299,6 +310,9 @@ SPIGOT_D, SPIGOT_H = _lh["spigot_dia"], _lh["spigot_height"]
 SPIGOT_Z0 = PCB_Z1 - SPIGOT_H                         # 1.20: spigot tip (the spigot hangs from the post foot into the PCB hole)
 SPIGOT_FIT = (LOC_ROUND[2] - SPIGOT_D) / 2            # 0.075 radial: a locating fit, not a drop-in fit
 SPIGOT_SPAN = abs(LOC_SLOT[0] - LOC_ROUND[0])         # 28.7: the cameras lie between the two spigots
+# E17: the fit is toleranced.  Largest radial fit = hole at its upper limit, spigot at its lower limit (0.125)
+SPIGOT_FIT_MAX = round(((LOC_ROUND[2] + _lh["dia_tol"][1]) - (SPIGOT_D + _lh["spigot_dia_tol"][0])) / 2, 6)
+SPIGOT_D_MIN = round(SPIGOT_D + _lh["spigot_dia_tol"][0], 6)   # 0.95: size of the no-go ring gauge
 
 LEDGE_RI, LEDGE_Z0, LEDGE_Z1 = Y["tub_ledge"]["r_inner"], Y["tub_ledge"]["z0"], Y["tub_ledge"]["z1"]
 
@@ -319,9 +333,12 @@ for _v in BASE_VARIANTS.values():
     assert abs(_v["thickness"] + _v["psa_t"] - PCB_Z0) < 1e-9, f"base plate + adhesive sheet must end at the PCB underside ({_v['key']})"
     # incoming limits of the plate thickness: YAML base_plate.thickness_accepted (N6).  What the lower limit must do - keep
     # ball_gap_min of epoxy between the ball top (set on the gauge plate, protrusion +-tol_ball_set) and its copper land with the
-    # sheet at its thinnest - is the least lower limit computed here; check 2 compares the YAML limit with it, also for an
-    # oversize ball (E8)
-    _v["accept_lo_needed"] = math.ceil((BALL_TOP_Z + MECH["tol_ball_set"] + MECH["ball_gap_min"] - (_v["psa_t"] - _v["psa_tol"])) * 100 - 1e-6) / 100
+    # sheet at its thinnest - is the least lower limit computed here.  E20: the ball is taken at the UPPER diameter limit of its
+    # grade (feet.dia_tol; set to its protrusion on the gauge plate, an oversize ball carries its diameter error at its top).
+    # accept_lo_needed_nominal_ball is the rev D figure (ball of exactly the nominal diameter), kept for the report
+    _need = BALL_TOP_Z + MECH["tol_ball_set"] + MECH["ball_gap_min"] - (_v["psa_t"] - _v["psa_tol"])
+    _v["accept_lo_needed_nominal_ball"] = math.ceil(_need * 100 - 1e-6) / 100
+    _v["accept_lo_needed"] = math.ceil((_need + MECH["ball_dia_tol"]) * 100 - 1e-6) / 100
 
 
 def _apply_base(key):
@@ -376,7 +393,9 @@ CG_TAPE_W = (CG_D - MECH["cover_tape_id"]) / 2        # 1.5 wide ring
 RETARDER = dict(_c.get("retarder") or {})
 _rt = _numbers_in(RETARDER.get("type", ""), r"about\s+([0-9.]+)\s*mm")
 RETARDER_T = _rt[0] if _rt else MECH["retarder_t_default"]      # 0.10: film + laminating adhesive
-RETARDER_D = MECH["retarder_dia"]
+RETARDER_D = MECH["retarder_dia"]                     # 23.4 (YAML, E19): covers the dia 22 aperture by 0.7 and stays 0.8 inside the bore of the tape
+                                                      # ring; both margins survive the centring chain at its worst case
+RETARDER_T_MAX = RETARDER["thickness_max"]            # 0.11: film with its laminating adhesive, as bought (YAML, E19)
 RETARDER_Z1 = CG_Z0                                   # bonded to the glass underside (6.48)
 RETARDER_Z0 = RETARDER_Z1 - RETARDER_T                # 6.38
 RETARDER_LEDGE_GAP = RETARDER_Z0 - RECESS_FLOOR_Z     # 0.03 between the film and the roof ledge, nominal
@@ -464,10 +483,17 @@ FOOT_ZONE_D, FOOT_ZONE_LAND_D = _ko["foot_zones"]["dia"], _ko["foot_zones"]["lan
 FOOT_ZONES = [tuple(c) for c in _ko["foot_zones"]["positions"]]
 FOOT_PART_MARGIN = _ko["foot_zones"]["part_margin"]   # N7: 0.3 between a soldered part and a ball-foot zone
 KO_LOC_FOOT = dict(_ko["post_feet"]["locating"]["foot"])   # N1: the feet of posts B as built (dx, dy, x_inner)
-KO_TAIL = dict(_ko["lcd_tail"])                       # N10: keep-out under the folded LCD flex tail (half_w, y, max_part_height; PROVISIONAL)
+KO_TAIL = dict(_ko["lcd_tail"])                       # N10 / E24: keep-out under the folded LCD flex tail (half_w, y, max_part_height; PROVISIONAL)
 
+# Rev E: the list is regenerated from the routed board: every fitted top-side body (x, y = BODY centre, dx, dy = body as
+# placed), passives included (class: passive); dnp: true = land only, part not fitted
 TOP_PARTS = Y["top_side_parts"]
+J1 = next(p for p in TOP_PARTS if p["ref"] == "J1")   # E24: LCD connector; x, y = body centre, `anchor` = footprint origin
+J1_BOX = (J1["x"] - J1["dx"] / 2, J1["y"] - J1["dy"] / 2, J1["x"] + J1["dx"] / 2, J1["y"] + J1["dy"] / 2)   # x0, y0, x1, y1 of the body
+J1_MOUTH_Y = J1_BOX[1]                                # -17.30: rear face of the body = mouth (the tail enters from behind)
+J1_TOP_Z = PCB_Z1 + J1["h"]                           # 3.80
 _bs = Y["bottom_side_parts"]
+BOTTOM_BOARD_PARTS = list(_bs.get("board_parts") or [])   # the fitted bottom-side parts as routed (D1 to D16, PD1)
 LED_RING = dict(_bs["grain_led_ring"]); PD = dict(_bs["photodiode"])
 VIA_KEEPOUTS = dict(_bs["via_keepouts"])
 
@@ -477,7 +503,9 @@ PIN_ROW_Y = _cr["pin_row_y"]
 PIN_WORK_H, PIN_FORCE_N = _pins["working_height"], _pins["force_working_N"]
 PIN_POSITIONS = _pins["positions"]
 PINS_CONSUMER = list(_pins["populated_consumer"])                # the four at x = -7.62 .. 0.0
-CPCB_SIZE = (_cr["pcb"]["dx"], _cr["pcb"]["dy"], _cr["pcb"]["thickness"])
+CPCB_SIZE = (_cr["pcb"]["dx"], _cr["pcb"]["dy"], _cr["pcb"]["thickness"])   # E36: 1.0 thick (was 1.6); the TOP face does not move
+PIN_TAIL_L = _pins["tail_length"]                                # E36: 1.34, PROVISIONAL estimate (free length less the height above the board)
+PIN_TAIL_THROUGH = round(PIN_TAIL_L - CPCB_SIZE[2], 6)           # 0.34: what comes through the board to be soldered
 
 # ----------------------------------------------------------------------------------------------
 # Derived mechanical dimensions
@@ -602,7 +630,7 @@ BAFFLE_RING_H = _ring["height"]                       # 0.82 nominal, for the no
 BAFFLE_RING_Z1 = BAFFLE_RING_Z0 + BAFFLE_RING_H       # 0.87: the adhesive annulus lies between ring and PCB
 BAFFLE_PSA_T = round(PCB_Z0 - BAFFLE_RING_Z1, 6)      # 0.13: die-cut black tape annulus between the ring and the PCB, as modelled
 M["baffle_psa_t"] = BAFFLE_PSA_T
-BAFFLE_TAPE_RANGE = _numbers_in(_ring["adhesive"], r"([0-9.]+)\s*to\s*([0-9.]+)") or M["baffle_tape_range_default"]   # E16: 0.10 to 0.145
+BAFFLE_TAPE_RANGE = tuple(_ring["tape"])              # E16 / E21: 0.10 to 0.145 (YAML key since rev E; the adhesive text is asserted to agree)
 BAFFLE_RING_RULE = round(BASE_VARIANTS[BASE_PRIMARY]["psa_t"] - GRAIN_FILL_Z, 6)   # 0.15: ring height = plate thickness + this - tape thickness
 BAFFLE_CREST_MAX_Z = M["baffle_crest_max_z"]          # 0.15
 
@@ -617,7 +645,7 @@ def baffle_ring_height(plate_t=None, tape_t=None):
 
 
 BAFFLE_RING_H_RANGE = (baffle_ring_height(BASE_VARIANTS[BASE_PRIMARY]["accept"][0], max(BAFFLE_TAPE_RANGE)) - M["baffle_ring_tol"][1],
-                       baffle_ring_height(BASE_VARIANTS[BASE_PRIMARY]["accept"][1], min(BAFFLE_TAPE_RANGE)) + M["baffle_ring_tol"][0])   # 0.735 .. 0.95
+                       baffle_ring_height(BASE_VARIANTS[BASE_PRIMARY]["accept"][1], min(BAFFLE_TAPE_RANGE)) + M["baffle_ring_tol"][0])   # 0.755 .. 0.95
 BAFFLE_RING_PRINT_H = round(BAFFLE_RING_H_RANGE[1] + M["baffle_ring_lap_allowance"], 6)   # 1.10 as printed: the tallest ring still has the lapping allowance
 
 
@@ -694,10 +722,17 @@ def seal_dispense_volume(v_nominal, joint_area, key=None):
 VENT_PAD_Z = ROOF_Z - M["vent_pad_h"]                 # 6.5
 VENT_Z0 = VENT_PAD_Z - M["vent_t"]
 
-# LCD flex tail (representative): one U-fold from the glass rear edge down into the J1 mouth
+# LCD flex tail (representative, PROVISIONAL): one U-fold from the glass rear edge down into the J1 mouth.
+# E24: the mouth of J1 is at y = -17.30, 0.50 BEHIND the rear edge of the glass (-16.80).  The tail leaves the glass, runs back
+# over the rear 0.5 mm of the connector body, folds wholly behind the mouth and comes forward into it over flex_straight
 FLEX_ZT = M["flex_z_top_run"]
 FLEX_ZB = PCB_Z1 + M["fpc_entry_h"]                   # 2.8
 FLEX_BEND_R = (FLEX_ZT - FLEX_ZB) / 2                 # 0.99 centre-line radius of the fold
+FLEX_FOLD_Y = J1_MOUTH_Y - M["flex_straight"]         # -17.65: where the fold starts and ends (centre of the U)
+FLEX_REAR_Y = FLEX_FOLD_Y - FLEX_BEND_R - M["flex_t"] / 2   # -18.71: rearmost point of the folded tail
+FLEX_TOP_RUN = LCD_Y0 - FLEX_FOLD_Y                   # 0.85: upper run from the glass edge to the fold
+FLEX_FREE_LEN = FLEX_TOP_RUN + math.pi * FLEX_BEND_R + M["flex_straight"]   # 4.30: free tail from the glass edge to the mouth, closed
+FLEX_OVER_J1 = (FLEX_ZT - M["flex_t"] / 2) - J1_TOP_Z   # 0.90: underside of the upper run above the connector body
 
 # optics (paraxial unfolding, for reference; the ray trace is in checks)
 PUPIL_Z = CAM_Z1 - M["pupil_below_cube_top"]
@@ -737,6 +772,10 @@ CPCB_Z0 = CPCB_Z1 - CPCB_SIZE[2]
 CPCB_HX = _cr["pcb"]["x"][1]                          # 15.0
 CPCB_Y0, CPCB_Y1 = _cr["pcb"]["y"]                    # -34.2 .. -12.2
 CPCB_SCREWS = sorted({(abs(x), y) for x, y in _cr["pcb"]["screws"]})   # [(12.5, -31.5), (12.5, -14.5)], each at +-x
+PIN_TAIL_Z0 = CPCB_Z1 - PIN_TAIL_L                    # -6.195: tip of a pin tail (0.34 below the board underside at -5.855)
+# E36: screws from below through the board into the pocket ceiling (not modelled as solids)
+SCREW_ENGAGE = M["cradle_screw_len"] - CPCB_SIZE[2]   # 3.0: thread in the printed body (1.5 x the screw diameter)
+SCREW_DRILL_TOP_Z = CPCB_Z1 + M["cradle_screw_drill"][1]   # -1.655: bottom of the drilled hole
 PIN_TIP_FREE_Z = CPCB_Z1 + M["pin_max_working_h"]     # 2.105: free plunger tip above the marker base plane
 PIN_BODY_Z1 = CPCB_Z1 + M["pin_max_working_h"] - M["pin_full_stroke"] - M["pin_body_margin"]   # -0.385 barrel top (PROVISIONAL)
 PIN_COMPRESSION = M["pin_max_working_h"] - PIN_WORK_H     # 1.14 of the stroke used with the marker on its feet
@@ -1015,8 +1054,16 @@ _chk(GRAIN_FILL_Z <= GRAIN_FILL_TARGET_Z <= GRAIN_FILL_Z_MAX, "N4: fill target o
 _chk(abs(_ring["crest_z"][0]) < 1e-9 and _ring["crest_z"][0] <= BAFFLE_RING_Z0 <= BAFFLE_CREST_MAX_Z, "N4: nominal ring crest outside base_plate.baffle.ring.crest_z")
 _chk(min(BAFFLE_TAPE_RANGE) - 1e-9 <= BAFFLE_PSA_T <= max(BAFFLE_TAPE_RANGE) + 1e-9,
      f"N4 / E16: the YAML ring height {BAFFLE_RING_H} needs a {BAFFLE_PSA_T} mm tape, outside the tape range {BAFFLE_TAPE_RANGE} of the YAML")
-_rm = _numbers_in(_ring["matched_to"], r"\+\s*([0-9.]+)")
-_chk(_rm is None or abs(_rm[0] - baffle_ring_height(0.0)) < 1e-9, f"N4: ring height rule 'plate + {baffle_ring_height(0.0):.3f}' differs from the YAML text ({_ring['matched_to']})")
+# ---- E21 (was N15): ring height = measured plate thickness + rule_offset - tape thickness; every number is a YAML key and is asserted
+_chk(abs(_ring["rule_offset"] - BAFFLE_RING_RULE) < 1e-9, f"E21: ring rule offset {BAFFLE_RING_RULE} (sheet thickness - never_below) differs from YAML baffle.ring.rule_offset {_ring['rule_offset']}")
+_rm = _numbers_in(_ring["matched_to"], r"plate thickness\s*\+\s*([0-9.]+)\s*-\s*tape thickness")
+_chk(_rm is not None and abs(_rm[0] - BAFFLE_RING_RULE) < 1e-9, f"E21: ring height rule 'plate + {BAFFLE_RING_RULE} - tape' differs from the YAML text ({_ring['matched_to']})")
+_chk(abs(baffle_ring_height() - BAFFLE_RING_H) < 1e-9, f"E21: the rule gives {baffle_ring_height():.3f} for the nominal plate and tape, YAML ring.height says {BAFFLE_RING_H}")
+_chk(abs(_ring["nominal_tape"] - BAFFLE_PSA_T) < 1e-9, f"E21: the modelled tape {BAFFLE_PSA_T} differs from YAML baffle.ring.nominal_tape {_ring['nominal_tape']}")
+_rt_txt = _numbers_in(_ring["adhesive"], r"([0-9.]+)\s*to\s*([0-9.]+)")
+_chk(len(BAFFLE_TAPE_RANGE) == 2 and BAFFLE_TAPE_RANGE[0] < BAFFLE_TAPE_RANGE[1] and (_rt_txt is None or all(abs(a - b) < 1e-9 for a, b in zip(_rt_txt, BAFFLE_TAPE_RANGE))),
+     f"E21: baffle.ring.tape {BAFFLE_TAPE_RANGE} differs from the range in the adhesive text {_rt_txt}")
+_chk(abs(_ring["print_height"] - BAFFLE_RING_PRINT_H) < 1e-9, f"E21: print height of the ring {BAFFLE_RING_PRINT_H} (tallest finished ring + lapping allowance) differs from YAML ring.print_height {_ring['print_height']}")
 _chk(abs(_c["bond_id"] - M["cover_tape_id"]) < 1e-9 and _c["bond_id"] < CG_D, "N5: cover_glass.bond_id")
 _chk(abs(_b["mask_relief_dia"] - (BALL_HOLE_D + M["fr4_mask_relief"])) < 1e-9 and M["fr4_mask_relief"] > 0, "N6: base_plate.mask_relief_dia is not larger than the drilled hole")
 _chk(KO_TAIL["y"][0] < KO_TAIL["y"][1] and KO_TAIL["max_part_height"] < PCB_FREE_H, "N10: tub_keepouts.lcd_tail")
@@ -1031,7 +1078,39 @@ _chk(WIN_FRAME_BELOW_FACE > 0, "the sill fillet of the window adhesive would sta
 _chk(min(HOOD_SEAL_WINDOW) > 0 and HOOD_SEAL_Y1 <= HOOD_FLAT_Y1 + 1e-9, "the hood gasket bead does not fit on the flat underside of the rear wall")
 _chk(all(_v_["accept"][0] <= _v_["thickness"] <= _v_["accept"][1] for _v_ in BASE_VARIANTS.values()), "nominal plate thickness outside its incoming limits")
 _chk(all(_v_["accept"][0] >= _v_["accept_lo_needed"] - 1e-9 for _v_ in BASE_VARIANTS.values()),
-     "N6: thickness_accepted lower limit does not keep ball_gap_min of epoxy under a nominal ball")
+     "N6 / E20: thickness_accepted lower limit does not keep ball_gap_min of epoxy under a ball at the upper diameter limit of its grade")
+# ---- rev E: E17 to E22 (the former proposals N11 to N19), E24, E36
+_chk(abs(SPIGOT_FIT - _lh["fit_nominal"]) < 1e-9 and abs(SPIGOT_FIT_MAX - _lh["fit_max"]) < 1e-9 and abs(SPIGOT_D_MIN - _lh["spigot_dia_min"]) < 1e-9,
+     f"E17: spigot fits {SPIGOT_FIT} / {SPIGOT_FIT_MAX} and no-go size {SPIGOT_D_MIN} differ from YAML pcb.locating_holes (fit_nominal, fit_max, spigot_dia_min)")
+_chk(abs(_lh["dia_tol"][0]) < 1e-9 and abs(_lh["spigot_dia_tol"][1]) < 1e-9, "E17: the model takes the hole as +tol / -0 and the spigot as +0 / -tol")
+FOV_GUAR_CASE = dict(_cam["up_guaranteed_case"])      # E17: optics_high, locating_fit, roof_temperature_C, model_deg
+_chk(abs(FOV_GUAR_CASE["optics_high"] - M["print_tol"]) < 1e-9 and abs(FOV_GUAR_CASE["locating_fit"] - SPIGOT_FIT_MAX) < 1e-9
+     and abs(FOV_GUAR_CASE["roof_temperature_C"] - M["t_range"][0]) < 1e-9,
+     f"E17: cameras.up_guaranteed_case {FOV_GUAR_CASE} is not the case check 4 traces (optics {M['print_tol']} high, fit {SPIGOT_FIT_MAX}, roof at {M['t_range'][0]} C)")
+GATE2_DEG = round(FOV_UP_GUAR - M["gate2_margin_deg"], 6)   # 13.0: bars of test gate 2 at + and - this
+_chk(sorted(_cam["gate2_bars_deg"]) == [-GATE2_DEG, GATE2_DEG], f"E17: gate 2 bars {_cam['gate2_bars_deg']} are not +-(up_guaranteed - {M['gate2_margin_deg']})")
+_chk(abs(_lg["seat_zones_clear_dia"] - CAL_LEGEND_ZONE_D) < 1e-9, f"E18: legend-free zone dia {CAL_LEGEND_ZONE_D} (seat pad + 2 x (location + registration)) differs from YAML legend.seat_zones_clear_dia")
+_chk(abs(CAL["legend_zone_margin"] - M["legend_registration"]) < 1e-9, "E18: the registration in the seat-zone build-up differs from YAML legend.registration")
+_chk(M["legend_min_gap"] >= M["legend_stroke"] - 1e-9 and M["legend_ink_t"] <= M["legend_ink_t_max"], "E18: legend rules (space >= line, typical ink <= maximum)")
+_chk(abs(RETARDER["clocking_flat"]["y"] - RETARDER_FLAT_Y) < 1e-9 and abs(RETARDER["clocking_flat"]["length"] - RETARDER_FLAT_LEN) < 0.02,
+     f"E19: clocking flat of the film: model y {RETARDER_FLAT_Y}, length {RETARDER_FLAT_LEN:.3f}; YAML {RETARDER['clocking_flat']}")
+_chk(abs(RETARDER_T + M["retarder_t_tol"] - RETARDER_T_MAX) < 1e-9, f"E19: film {RETARDER_T} + {M['retarder_t_tol']} differs from YAML cover_glass.retarder.thickness_max {RETARDER_T_MAX}")
+_chk(RETARDER_LEDGE_GAP_MIN > 0, "E19: a film of thickness_max would sit on the roof ledge with the tape at its thinnest")
+LCD_ROT_YAML = _l["rotation_in_pocket_max_deg"]       # E22: 1.2 ("about"; computed 1.19 on the tub solid, check 14)
+_chk(LCD_ROT_YAML <= M["lcd_free_rotation_limit_deg"], "E22: lcd.rotation_in_pocket_max_deg is above the limit check 14 applies")
+_chk(BAT_FIX_T < BAT_SWELL, "E22: the cell fixing adhesive must come out of the swelling allowance")
+# E24: J1 as routed.  x, y of the YAML entry = BODY centre; the mouth is the rear face of the body and the tail zone starts there
+_chk(abs(J1_MOUTH_Y - J1["mouth_y"]) < 1e-9 and abs(J1["body_y"][0] - J1_BOX[1]) < 1e-9 and abs(J1["body_y"][1] - J1_BOX[3]) < 1e-9,
+     f"E24: J1 body box y {J1_BOX[1]} to {J1_BOX[3]} (from x, y, dx, dy) differs from its mouth_y / body_y keys")
+_chk(abs(KO_TAIL["y"][1] - J1_MOUTH_Y) < 1e-9 and abs(KO_TAIL["y"][0] + PCB_R) < 1e-9, "E24: tub_keepouts.lcd_tail does not run from the mouth of J1 to the rear edge of the board")
+_chk(abs((BAT["y"] - BAT["dy"] / 2) - J1["pads_end_y"] - _bt["board_keepout_notch"]["pad_to_cell_gap"]) < 1e-9 and J1["pads_end_y"] < BAT["y"] - BAT["dy"] / 2,
+     "E24: the signal pads of J1 do not end pad_to_cell_gap behind the cell")
+_chk(FLEX_FOLD_Y < LCD_Y0 and FLEX_REAR_Y > KO_TAIL["y"][0] and FLEX_OVER_J1 >= M["flex_part_clr"], "E24: the modelled tail fold does not lie behind the mouth of J1 and inside the tail zone")
+BAT_NOTCH = dict(_bt["board_keepout_notch"])          # E24: the routed board's battery keep-out is the body less J1's courtyard strip
+# E36: cradle board 1.0 mm; the top face (pin height) does not move; the pin tail comes through
+_chk(abs(M["pin_free_len"] - M["pin_max_working_h"] - PIN_TAIL_L) < 1e-6, f"E36: pin free length {M['pin_free_len']} - height above the board {M['pin_max_working_h']} differs from YAML pins.tail_length {PIN_TAIL_L}")
+_chk(PIN_TAIL_THROUGH >= M["pin_tail_solder_min"] - 1e-9, f"E36: the pin tail comes only {PIN_TAIL_THROUGH} through the {CPCB_SIZE[2]} mm cradle board")
+_chk(abs(SCREW_ENGAGE + M["cradle_screw_tip_clear"] - M["cradle_screw_drill"][1]) < 1e-9, "E36: drilled depth is not screw engagement + tip clearance")
 
 if __name__ == "__main__":
     print(write_resolved())

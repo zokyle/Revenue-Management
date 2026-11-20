@@ -30,22 +30,25 @@
   },
   "exports": {
    "bom_lines": 7,
-   "bom_lines_by_status": {
+   "bom_lines_by_design_evidence": {
     "PROVISIONAL": 6,
     "RESEARCH": 1
+   },
+   "bom_lines_by_status": {
+    "VERIFIED": 7
    },
    "passed": true
   },
   "rules": {
-   "as_specified": 13,
+   "as_specified": 14,
    "departures": [
     "USB-C land"
    ],
    "failed": [],
    "open_not_met": [],
    "passed": true,
-   "rows": 14,
-   "selftest_defects": 14,
+   "rows": 15,
+   "selftest_defects": 18,
    "selftest_missed": 0,
    "workarounds": []
   },

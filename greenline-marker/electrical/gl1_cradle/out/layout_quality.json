@@ -7,11 +7,27 @@
  },
  "camera_nets": {},
  "copper_to_edge": {
-  "note": "edge = board outline, the locating slot and the NPTH hole wall; rule 0.30 mm",
-  "pad": "pad J1.A1",
-  "pad_mm": 0.2358,
-  "routed_copper_mm": 0.3482,
-  "routed_item": "track GND F.Cu"
+  "note": "edge = the routed contours: board outline, routed slots and cut-outs; rule 0.30 mm. Drilled non-plated holes are reported under copper_to_hole",
+  "pad": "pad J1.S1",
+  "pad_mm": 0.4051,
+  "pad_to": "board outline",
+  "routed_copper_mm": 1.1,
+  "routed_item": "track GND B.Cu",
+  "routed_to": "board outline"
+ },
+ "copper_to_hole": {
+  "holes": 6,
+  "note": "hole = wall of a drilled non-plated hole (outline holes, NPTH pads of footprints); rule 0.20 mm (hole_clearance)",
+  "pad": {
+   "item": "pad J1.A1",
+   "mm": 0.2358,
+   "to": "NPTH hole J1 (locating peg)"
+  },
+  "routed": {
+   "item": "track GND F.Cu",
+   "mm": 0.3482,
+   "to": "NPTH hole J1 (locating peg)"
+  }
  },
  "router_warnings": [],
  "sensitive_nets": {

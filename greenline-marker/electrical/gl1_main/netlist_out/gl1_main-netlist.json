@@ -26,7 +26,7 @@
   },
   "Fine": {
    "clearance": 0.1,
-   "description": "camera-side nets only (ball to series array / pull-up): the escape of the 0.5 mm-pitch camera BGAs",
+   "description": "camera-side nets only (ball to series array / pull-up), inside the two fine areas round the 0.5 mm-pitch camera BGAs, on F.Cu, In2.Cu and B.Cu (DESIGN_SPEC E35)",
    "min_track_width": null,
    "name": "Fine",
    "track_width": 0.1,
@@ -3546,7 +3546,7 @@
    "value": "Fiducial"
   },
   "FID4": {
-   "dnp": true,
+   "dnp": false,
    "footprint": "gleda:Fiducial_1mm_Mask2mm",
    "group": "board",
    "in_bom": false,
@@ -3555,7 +3555,7 @@
    "value": "Fiducial"
   },
   "FID5": {
-   "dnp": true,
+   "dnp": false,
    "footprint": "gleda:Fiducial_1mm_Mask2mm",
    "group": "board",
    "in_bom": false,
@@ -3564,7 +3564,7 @@
    "value": "Fiducial"
   },
   "FID6": {
-   "dnp": true,
+   "dnp": false,
    "footprint": "gleda:Fiducial_1mm_Mask2mm",
    "group": "board",
    "in_bom": false,
@@ -3573,7 +3573,7 @@
    "value": "Fiducial"
   },
   "FL1": {
-   "dnp": true,
+   "dnp": false,
    "footprint": "gleda:BallFootLand_D1.6mm",
    "group": "board",
    "in_bom": false,
@@ -3582,7 +3582,7 @@
    "value": "Ball-foot land"
   },
   "FL2": {
-   "dnp": true,
+   "dnp": false,
    "footprint": "gleda:BallFootLand_D1.6mm",
    "group": "board",
    "in_bom": false,
@@ -3591,7 +3591,7 @@
    "value": "Ball-foot land"
   },
   "FL3": {
-   "dnp": true,
+   "dnp": false,
    "footprint": "gleda:BallFootLand_D1.6mm",
    "group": "board",
    "in_bom": false,

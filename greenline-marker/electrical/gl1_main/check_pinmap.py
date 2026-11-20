@@ -349,9 +349,11 @@ def read_spec_dcmi(path=SPEC_MD):
     m = re.search(r"must be (PB\d+) \(pad (\d+), AF(\d+)\)", text)
     if m:
         out["SPI1_MISO"] = (m.group(1), int(m.group(2)), int(m.group(3)))
-    m = re.search(r"LPTIM1_CH1 on (PB\d+) \(pad (\d+)\)", text)
+    # rev E spec: "LPTIM1_CH1 on PB2 (pad 28, AF1)" - the alternate function is stated now and is
+    # compared like the others (rev D wrote "(pad 28)" without it; that form is still read)
+    m = re.search(r"LPTIM1_CH1 on (PB\d+) \(pad (\d+)(?:, AF(\d+))?\)", text)
     if m:
-        out["EXTCOMIN"] = (m.group(1), int(m.group(2)), None)
+        out["EXTCOMIN"] = (m.group(1), int(m.group(2)), int(m.group(3)) if m.group(3) else None)
     for name, pat in (("USB_DM", r"(PA\d+) = D- \(pad (\d+)\)"), ("USB_DP", r"(PA\d+) = D\+ \(pad (\d+)\)")):
         m = re.search(pat, text)
         if m:
@@ -985,9 +987,10 @@ def by_sig_by_pin(by_sig, pin):
 #: firmware note to match one of its own rules, and this package may not edit it.  The firmware
 #: owner promotes them (a rule each) when they are taken up.
 OPEN_ITEMS_FOR_FIRMWARE = [
-    "IMU axes: U4 is NOT at rotation 0 on the board - see 'imu_mounting'. firmware/core/"
-    "gl_provisional.h (GL_PROV_IMU_MARKER_*) still has the identity placeholder; with it the two "
-    "in-plane tilt axes are exchanged and one is inverted.",
+    "IMU axes: U4 is NOT at rotation 0 on the board - see 'imu_mounting'. Done in firmware phase 3: "
+    "the identity placeholder of firmware/core/gl_provisional.h is gone and the axis map is generated "
+    "from 'imu_mounting' into gl_pins.h (GL_PINS_IMU_MARKER_*). Kept as an item because the axis map "
+    "itself remains PROVISIONAL (ST's axis drawing was not read).",
     "Ship mode (Shutdown), PROVISIONAL - RM0456 not read: PB5 (SPI1_MOSI, UCPD1_DBCC1) and PB14 "
     "(SPI2_MISO, UCPD1_DBCC2) have no board pull and float while the pads are high-impedance. If the "
     "dead-battery switch acts in Shutdown and UCPD_DBDIS is not retained, a floating-high PB5 puts "
@@ -1050,7 +1053,7 @@ def export(path, pindata, design, rep, changed, partial):
             for ref, colour, _x, _y, _rot, az, a, c in G.led_positions()]
     data = {
         "design": design.name, "mcu": "STM32U585RIT6", "package": "LQFP-64",
-        "spec": "DESIGN_SPEC rev D with amendments E1 to E34 (in the netlist: E1 to E4 and E24 to E28)",
+        "spec": "DESIGN_SPEC rev E (EVT1) with amendments E1 to E36 (in the netlist and on the board: E1 to E4, E24 to E28 and E35)",
         "u1_rotation_assumed_deg": G.U1_ROTATION,
         "status": "LAYOUT STAGE - the board is routed with exactly these pins and passed KiCad's DRC; "
                   "nothing has been built. The pin assignments are final for this board revision; a "

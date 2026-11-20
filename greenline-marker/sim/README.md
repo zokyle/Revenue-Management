@@ -50,7 +50,10 @@ the tests that run the whole Monte-Carlo pipeline are skipped without numba.
 ## What the device measures, and what it does not
 
 Hardware revision C (preset `GL1`): f = 657 px, stereo baseline 20.0 mm, lens
-5.6 mm above the base plane. From there the device has: the puck's tilt (the
+5.6 mm above the base plane. (The design is at revision E now,
+`../design/master_params.yaml` rev E-EVT1; the step from rev D to rev E changed
+none of these numbers, and the simulation has not been re-run for it: see the
+top of `results/REPORT.md`.) From there the device has: the puck's tilt (the
 local slope, corrupted by how the puck seats on the grass); the flagstick's
 bearing, stereo range, the elevation of its lowest visible point and, beyond
 about 6.7 m, of its top; the turf horizon (the silhouette of the grass at each

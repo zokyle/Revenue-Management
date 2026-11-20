@@ -293,7 +293,7 @@
      "type": "passive"
     }
    },
-   "value": "PTC 0.3A"
+   "value": "PTC 0.35A"
   },
   "FID1": {
    "dnp": false,

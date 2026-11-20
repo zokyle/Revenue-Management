@@ -19,10 +19,12 @@ recorded in ``out/build_summary.json``:
                     audited again from the copper alone; ``--reroute`` routes from nothing
  6. ``drc``         tracks into the board, zone fill, KiCad DRC with the full rule set;
                     nothing is excluded, waived or downgraded                 -> 0 errors, 0 unconnected
- 7. ``outputs``     Gerber, drill, position, BOM (and a BOM with the evidence status of
-                    every line), netlist / mechanical JSON, STEP, renders, fab README
-                    - written by the toolchain, which refuses a board that is not clean
-                    and verifies the plotted data against the model
+ 7. ``outputs``     Gerber, drill, position, BOM (and a BOM with the sourcing status and the
+                    design evidence of every line), netlist / mechanical JSON, STEP, renders,
+                    fab README - written by the toolchain, which refuses a board that is not
+                    clean and verifies the plotted data against the model; ``outputs.json`` is
+                    then completed (status BOM, final assembly zip) and every entry compared
+                    with the file on disk
  8. ``schematic``   sheets, PDF, PNG and the netlist round trip through kicad-cli
  9. ``mechanical``  ``mechanical/cad/board_import.py`` on ``out/gl1_main-mechanical.json``
 10. ``quality``     figures measured on the copper (``layout_quality.py``), review renders
@@ -30,11 +32,6 @@ recorded in ``out/build_summary.json``:
 Exit status:
   0  every stage passed and: 0 check errors, 100 % routed with a clean audit, KiCad DRC
      0 errors and 0 unconnected, outputs verified, round trip equal, mechanical import passed
-  2  the same, EXCEPT that ``mechanical/cad/board_import.py`` exits 1 on exactly one row, the
-     position of J1, which spec amendment E24 moved and ``design/master_params.yaml`` does not
-     have yet.  The stage is reported as FAIL (recorded departure E24).  It cannot turn into a
-     pass inside this package: the YAML and the checker's reference point (anchor against body
-     centre) both have to change (see electrical/README.md)
   1  anything else failed.  A stage that cannot run is a failure.
 Fabrication data is never written for an incomplete board.
 """
@@ -284,20 +281,30 @@ def stage_outputs(design, out, ctx):
         return False, info
     # the toolchain's BOM has no status column: the same grouped BOM again, with the evidence
     # status of every line (Part.fields["Status"] / ["StatusNote"])
-    lines, counts = netlist_stage.write_bom_with_status(
-        design, os.path.join(out, "assembly", design.name + "-bom-status.csv"))
-    say("  BOM with status column: %d lines (%s)" % (lines, ", ".join(
-        "%d %s" % (v, k) for k, v in sorted(counts.items()))))
-    outputs.write_zip(os.path.join(out, "assembly"), os.path.join(out, design.name + "-assembly.zip"))
-    info["bom_status"] = {"lines": lines, "by_status": counts}
+    status_bom = os.path.join(out, "assembly", design.name + "-bom-status.csv")
+    lines, counts, src_counts = netlist_stage.write_bom_with_status(design, status_bom)
+    say("  BOM with status columns: %d lines (%s)" % (lines, netlist_stage.status_text(counts, src_counts)))
+    assembly_readme = netlist_stage.extend_assembly_readme(out, design.name, off_board=G.OFF_BOARD_ITEMS)
+    assembly_zip = os.path.join(out, design.name + "-assembly.zip")
+    outputs.write_zip(os.path.join(out, "assembly"), assembly_zip)
+    info["bom_status"] = {"lines": lines, "by_status": src_counts, "by_design_evidence": counts}
+    # outputs.json was written before the two lines above: enter the status BOM, the extended assembly README and the FINAL
+    # assembly zip, then compare every entry of the manifest with the file on disk
+    stale = netlist_stage.refresh_manifest(out, [status_bom, assembly_readme, assembly_zip])
+    info["manifest_problems"] = stale
+    info["files"] = len(json.load(open(os.path.join(out, "outputs.json"), encoding="utf-8"))["files"])
+    for line in stale:
+        say("  PROBLEM outputs.json: %s" % line)
+    say("  outputs.json: %d files, %s" % (info["files"], "every entry equals the file on disk"
+                                         if not stale else "%d entries DIFFER" % len(stale)))
     fab = os.path.join(out, "fab", "README.txt")
     text = open(fab, encoding="utf-8").read()
-    need = ("plugged", "tented", "ENIG")
+    need = ("plugged", "tented", "ENIG", "F.Cu, In2.Cu and B.Cu", "0.100")
     missing = [w for w in need if w.lower() not in text.lower()]
     if missing:
         say("  PROBLEM fab README does not mention: %s" % ", ".join(missing))
     info["fab_readme_mentions"] = {w: w.lower() in text.lower() for w in need}
-    return ok and not missing and counts.get("MISSING", 0) == 0, info
+    return ok and not missing and not stale and netlist_stage.bom_status_ok(counts, src_counts), info
 
 
 def stage_schematic(design, out, ctx):
@@ -331,27 +338,18 @@ def stage_mechanical(design, out, ctx):
         fh.write(proc.stdout)
         fh.write("exit status %d\n" % proc.returncode)
     result = next((l for l in lines if l.startswith(("PASS", "FAIL"))), "")
-    # Spec amendment E24 moves J1 0.5 mm to the rear and OVERRIDES the YAML point.  board_import.py
-    # (check C) compares the footprint ANCHOR of J1 (0, -12.9) with the YAML point (0, -13.9), which
-    # is the centre of the YAML's body box; the body centre on the board is (0, -14.5).  The check
-    # therefore FAILS, and this stage reports FAIL.  When the failure is exactly that one row, with
-    # the anchor where E24 puts it, it is flagged as the recorded departure (exit status 2 of the
-    # build instead of 1); any other failure, a second failure or a different J1 position is an
-    # ordinary failure.  It will NOT pass by correcting the YAML point alone: the YAML needs the
-    # body centre (0, -14.5) with dy 5.6 AND check C must compare body centres (or the YAML must
-    # carry the anchor) - both outside this package.
-    e24 = "LCD connector J1: x, y: board (%s, %s), YAML (%s, %s)" % (
-        float(G.J1_XY[0]), float(G.J1_XY[1]), float(G.J1_YAML_XY[0]), float(G.J1_YAML_XY[1]))
-    only_e24 = (proc.returncode == 1 and result.startswith("FAIL FAILED (1):")
-                and result.split(":", 1)[1].strip() == e24)
-    if only_e24:
-        say("  FAIL - RECORDED DEPARTURE (spec E24 overrides the YAML point of J1): the import check exits 1 "
-            "on J1's position and on nothing else. Needed outside this package: YAML J1 = body centre "
-            "(0, -14.5), dy 5.6, and check C comparing body centres")
-    return proc.returncode == 0 and not missing, {
+    # Rev E: J1 is in the YAML where E24 puts it and board_import.py compares body box and anchor
+    # separately, so there is no recorded departure left: the stage passes only on exit status 0.
+    # Its table G (warnings only) says whether the board file is stamped with the YAML's revision
+    # and states the YAML's height limits; a warning there means the board was built on another
+    # YAML than the one the check read, which this build treats as a failure of the stage.
+    warnings = [l.strip() for l in lines if l.strip().startswith("warning:")]
+    stale = [w for w in warnings if "stamped" in w or "stated in the board file" in w]
+    for w in stale:
+        say("  PROBLEM (board file against the YAML): %s" % w[:300])
+    return proc.returncode == 0 and not missing and not stale, {
         "exit_status": proc.returncode, "keepouts_missing": missing, "result": result,
-        "only_failure_is_j1_e24": only_e24,
-        "warnings": [l.strip() for l in lines if l.strip().startswith("warning:")]}
+        "warnings": warnings, "stale_against_yaml": stale}
 
 
 def crystal_guard_fill(pcb):
@@ -449,7 +447,7 @@ def criteria(stages):
     out["schematic netlist round trip matches"] = None if trip is None else bool(trip.get("ok"))
     v = get("mechanical", "exit_status")
     out["mechanical import check passes"] = None if v is None else (
-        v == 0 and not get("mechanical", "keepouts_missing"))
+        v == 0 and not get("mechanical", "keepouts_missing") and not get("mechanical", "stale_against_yaml"))
     return out
 
 
@@ -478,18 +476,21 @@ def stage_line(name, info):
             info["errors"], info["unconnected"], sum(w.values()),
             " (%s)" % ", ".join("%s %d" % kv for kv in sorted(w.items())) if w else "")
     if name == "outputs":
-        return "%d files, %d problems against the model, BOM %d lines (%s), %d position rows" % (
-            info["files"], len(info["problems"]), info["bom"]["lines"],
-            ", ".join("%d %s" % (v, k) for k, v in sorted(info["bom_status"]["by_status"].items())),
-            info["position_rows"])
+        return ("%d files in outputs.json (%d manifest problems), %d problems against the model, BOM %d lines "
+                "(%s), %d position rows" % (
+                    info["files"], len(info.get("manifest_problems", [])), len(info["problems"]),
+                    info["bom"]["lines"],
+                    netlist_stage.status_text(info["bom_status"]["by_design_evidence"],
+                                              info["bom_status"]["by_status"]),
+                    info["position_rows"]))
     if name == "schematic":
         t = info["round_trip"]
         return "%d sheets, PDF %d pages, round trip %s (%d nets, %d pads, %d components)" % (
             len(info["sheets"]) + 1, info["pdf_pages"], "matches" if t["ok"] else "MISMATCH",
             t["nets_compared"], t["pads_compared"], t["components_compared"])
     if name == "mechanical":
-        return "exit %d%s: %s" % (info["exit_status"], " (RECORDED DEPARTURE E24, J1 only)" if info.get(
-            "only_failure_is_j1_e24") else "", info["result"][:150])
+        return "exit %d, %d warning(s): %s" % (info["exit_status"], len(info.get("warnings", [])),
+                                               info["result"][:150])
     if name == "quality":
         return "layout_quality.json / .md, %d review pictures" % len(info["review_pictures"])
     return ""
@@ -574,15 +575,6 @@ def main(argv=None):
                        ("departure from the letter of the spec", rinfo.get("departures", []))):
         if ids:
             say("%s: %s" % (label, ", ".join(ids)))
-    failed_stages = [n for n, i in summary["stages"].items() if not i["passed"]]
-    failed_crit = [k for k, v in crit.items() if v is False]
-    only_mech_e24 = (complete and failed_stages == ["mechanical"]
-                     and bool(summary["stages"]["mechanical"].get("only_failure_is_j1_e24"))
-                     and failed_crit == ["mechanical import check passes"])
-    if only_mech_e24:
-        say("GL-1 MAIN BOARD BUILD: every stage passed EXCEPT mechanical - board_import.py exits 1 on the "
-            "recorded departure E24 (J1 only). Exit status 2. (%.0f s)" % run["seconds"]["total"])
-        return 2
     if passed and complete:
         say("GL-1 MAIN BOARD BUILD PASSED (%.0f s)%s" % (
             run["seconds"]["total"],

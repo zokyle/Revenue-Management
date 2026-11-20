@@ -111,7 +111,7 @@ def _catalog():
         c[f"ball_epoxy_{i + 1}"] = base[f"ball_epoxy_{i + 1}"]
     c["vent"] = (PT.vent, (0.95, 0.95, 0.95, 1), "Gore VE80205 ePTFE vent (PROVISIONAL)", 0.9, "puck", "purchased", "adhesive vent")
     c["cradle"] = (PT.cradle, (0.30, 0.32, 0.36, 1), "MJF PA12 (the latch is sized for PA12)", 1.01, "cradle", "printed", "GL1-020 cradle body with lip and latch")
-    c["cradle_pcb"] = (PT.cradle_pcb, (0.05, 0.35, 0.50, 1), "FR-4 1.6", 1.85, "cradle", "purchased", "cradle PCB 30 x 22")
+    c["cradle_pcb"] = (PT.cradle_pcb, (0.05, 0.35, 0.50, 1), f"FR-4 {P.CPCB_SIZE[2]:.1f} (E36)", 1.85, "cradle", "purchased", "cradle PCB 30 x 22")
     c["usb_receptacle"] = (PT.usb_receptacle, (0.80, 0.80, 0.82, 1), "GCT USB4105 (PROVISIONAL envelope)", 2.0, "cradle", "purchased", "USB-C receptacle")
     steel = "hardened, stabilised tool steel, seat faces lapped (fixture, drawing GL1-050)"
     c["cal_seat_plate"] = (PT.cal_seat_plate, (0.62, 0.64, 0.68, 1), steel, 7.8, "fixture", "fixture", "GL1-050 item 1: base-face seat plate (three seat pads with ball pockets per nest)")

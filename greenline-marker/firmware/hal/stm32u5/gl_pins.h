@@ -3,8 +3,8 @@
  * pin map and run `make pins`.
  *
  *   source   electrical/gl1_main/pinmap.json
- *   sha256   d33ff53f50f03bd3f67acb52451f26e7305b8ed6c1e1344bd8811ec5dd3972e4
- *   design   gl1_main, STM32U585RIT6 (LQFP-64), DESIGN_SPEC rev D with amendments E1 to E34 (in the netlist: E1 to E4 and E24 to E28)
+ *   sha256   30505550677ba2dca446e0d2cf8f66e4ea720316e02fde1aa317bb97d4d0371f
+ *   design   gl1_main, STM32U585RIT6 (LQFP-64), DESIGN_SPEC rev E (EVT1) with amendments E1 to E36 (in the netlist and on the board: E1 to E4, E24 to E28 and E35)
  *   status   LAYOUT STAGE - the board is routed with exactly these pins and passed
  *            KiCad's DRC; nothing has been built. The pin assignments are final
  *            for this board revision; a change now means a new routing run
@@ -25,7 +25,7 @@
 #ifndef GL_PINS_H
 #define GL_PINS_H
 
-#define GL_PINS_SOURCE_SHA256 "d33ff53f50f03bd3f67acb52451f26e7305b8ed6c1e1344bd8811ec5dd3972e4"
+#define GL_PINS_SOURCE_SHA256 "30505550677ba2dca446e0d2cf8f66e4ea720316e02fde1aa317bb97d4d0371f"
 
 /* Function kind (the pin map's "mode"): what GL_PIN_MODE_ALTERNATE means. */
 #define GL_PINFN_GPIO   0 /* OUT_PP: no alternate function, a push-pull output */
@@ -306,10 +306,11 @@
  * OPEN ITEMS FOR FIRMWARE of the pin map, and what the firmware does about
  * each.  An item that tools/gen_pins.py does not know stops the generation.
  *
- *  1. IMU axes: U4 is NOT at rotation 0 on the board - see 'imu_mounting'.
- *     firmware/core/gl_provisional.h (GL_PROV_IMU_MARKER_*) still has the identity
- *     placeholder; with it the two in-plane tilt axes are exchanged and one is
- *     inverted.
+ *  1. IMU axes: U4 is NOT at rotation 0 on the board - see 'imu_mounting'. Done in
+ *     firmware phase 3: the identity placeholder of firmware/core/gl_provisional.h
+ *     is gone and the axis map is generated from 'imu_mounting' into gl_pins.h
+ *     (GL_PINS_IMU_MARKER_*). Kept as an item because the axis map itself remains
+ *     PROVISIONAL (ST's axis drawing was not read).
  *     -> GL_PINS_IMU_MARKER_* above, generated from the pin map's imu_mounting and
  *        used by drivers/lsm6dsv16x.c gl_imu_mount_defaults(); tests/test_pins.c
  *        (PROVISIONAL in the pin map itself: ST's axis drawing was not read)

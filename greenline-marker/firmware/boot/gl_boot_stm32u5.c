@@ -46,6 +46,35 @@
 
 #include "stm32u5xx.h"
 
+/* The stub reads ONE board signal, VBUS_SENSE, and wakes on it.  It names the
+ * port, the pin and the wake-up line in register macros (GPIOC, ..._MODE13,
+ * WUSEL2), which cannot be built from the generated pin table at run time
+ * without code the stub does not otherwise need.  So the generated header
+ * (hal/stm32u5/gl_pins.h, macros only, from the netlist's pin map) is read
+ * here and the build FAILS if the pin map moves VBUS_SENSE: after `make
+ * pins` this file then has to follow by hand (vbus_() and wait_vbus_()). */
+#include "../hal/stm32u5/gl_pins.h"
+#define BOOT_PORT_A_ 0
+#define BOOT_PORT_B_ 1
+#define BOOT_PORT_C_ 2
+#define BOOT_PORT_D_ 3
+#define BOOT_PORT_E_ 4
+#define BOOT_PORT_F_ 5
+#define BOOT_PORT_G_ 6
+#define BOOT_PORT_H_ 7
+#define BOOT_PIN_ROW_(sig, port, pin, pad, fn, af, pull, brd, exti, rail, sleep, src) \
+    BOOT_##sig##_PORT_ = BOOT_PORT_##port##_, BOOT_##sig##_PIN_ = (pin), BOOT_##sig##_BRD_ = (brd),
+enum { GL_PINS_TABLE(BOOT_PIN_ROW_) BOOT_PIN_ROWS_END_ };
+#undef BOOT_PIN_ROW_
+/* C99 has no _Static_assert: an array type of size -1 stops the compiler. */
+#define BOOT_REQUIRE_(name, cond) typedef char boot_require_##name##_[(cond) ? 1 : -1]
+/* pin map: VBUS_SENSE must be PC13 - else change vbus_() and wait_vbus_() below */
+BOOT_REQUIRE_(vbus_sense_is_pc13, (int)BOOT_GL_PIN_VBUS_SENSE_PORT_ == BOOT_PORT_C_ && (int)BOOT_GL_PIN_VBUS_SENSE_PIN_ == 13);
+/* pin map: VBUS_SENSE must be held by the divider - vbus_() sets no pull */
+BOOT_REQUIRE_(vbus_sense_has_the_divider, (int)BOOT_GL_PIN_VBUS_SENSE_BRD_ == GL_PINBRD_DIVIDER);
+/* pin map: VBUS_SENSE must be wake-up pin 2 - else change wait_vbus_() below */
+BOOT_REQUIRE_(vbus_sense_is_wkup2, GL_PINS_WKUP_VBUS_SENSE == 2);
+
 extern uint32_t gl_boot_stack_top_; /* from the linker script */
 
 void Reset_Handler(void);
@@ -63,7 +92,9 @@ static void backup_access_(void)
     (void)RCC->APB3ENR;
 }
 
-/* VBUS_SENSE: PC13, the divider on the VBUS pad (pin map; GL_PIN_VBUS_SENSE). */
+/* VBUS_SENSE: PC13, the divider on the VBUS pad (pin map; GL_PIN_VBUS_SENSE).
+ * The static assertions at the top of this file tie port, pin, board circuit
+ * and wake-up line to the generated gl_pins.h. */
 static bool vbus_(void)
 {
     RCC->AHB2ENR1 |= RCC_AHB2ENR1_GPIOCEN;

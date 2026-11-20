@@ -495,11 +495,27 @@
  },
  "camera_skew_note": "lengths along the copper, ball to array pad plus array pad to MCU pad (the resistor body is the same for every line); 7 ps/mm assumed.  At a 12 MHz pixel clock the period is 83.3 ns: a spread of 40 mm is 0.28 ns, 0.3 % of the period, and small against the RC of the 220 ohm series element with the bus capacitance (220 ohm x about 15 pF = 3.3 ns, the same for every line)",
  "copper_to_edge": {
-  "note": "edge = board outline, the locating slot and the NPTH hole wall; rule 0.30 mm",
+  "note": "edge = the routed contours: board outline, routed slots and cut-outs; rule 0.30 mm. Drilled non-plated holes are reported under copper_to_hole",
   "pad": "pad R4.2",
   "pad_mm": 0.3547,
-  "routed_copper_mm": 0.3209,
-  "routed_item": "track CAM_D4 B.Cu"
+  "pad_to": "routed slot / cut-out",
+  "routed_copper_mm": 0.325,
+  "routed_item": "track CAM_D3 F.Cu",
+  "routed_to": "routed slot / cut-out"
+ },
+ "copper_to_hole": {
+  "holes": 1,
+  "note": "hole = wall of a drilled non-plated hole (outline holes, NPTH pads of footprints); rule 0.20 mm (hole_clearance)",
+  "pad": {
+   "item": "pad RN6.7",
+   "mm": 0.795,
+   "to": "NPTH hole H1"
+  },
+  "routed": {
+   "item": "track CAM_D4 B.Cu",
+   "mm": 0.3209,
+   "to": "NPTH hole H1"
+  }
  },
  "crystal_guard": {
   "area_mm2": 7.21,

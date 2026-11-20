@@ -77,74 +77,79 @@
  },
  "files": [
   {
-   "bytes": 1639,
+   "bytes": 2992,
    "path": "assembly/README.txt",
-   "sha256": "05b60c07e60f33dc8a404350c57df57068228b85e6a447447ea8751b46234ecf"
+   "sha256": "8332c61f534a5fbf1084fe2df90db5095a1b8e120219741d81f946eb5bdddc69"
   },
   {
-   "bytes": 1319,
+   "bytes": 4450,
+   "path": "assembly/gl1_cradle-bom-status.csv",
+   "sha256": "39ca2dbac204b41e52800dfd169c04868826aabb5e2734784ba302a1c8fb5eba"
+  },
+  {
+   "bytes": 1250,
    "path": "assembly/gl1_cradle-bom.csv",
-   "sha256": "cd2ee4a9b1ca8b1e49a07bb07eb7c744238167eb8c8f08dea0ad922656ead6f2"
+   "sha256": "5cd4f66955af6652ee1847ee99462ee4b3f3d5bc5f59880ffcb130116892b5d6"
   },
   {
-   "bytes": 1005,
+   "bytes": 1006,
    "path": "assembly/gl1_cradle-pos.csv",
-   "sha256": "eb674d413a5ff3042695577ae379698eeb6b3516dc6f1bba29c999577637686d"
+   "sha256": "7d85f5c4d16eec3294ab1c53701cbe344304ff2b4530d46d529cc1674c42f2e6"
   },
   {
-   "bytes": 4788,
+   "bytes": 4957,
    "path": "fab/README.txt",
-   "sha256": "903d30654977af2439a04e302f931ce5992967d4b3a539a8b406e9090704d5bf"
+   "sha256": "bbce6f72b7bf8e5fb768656811d52c7556abdab1d431ad09c54ade6479c0727b"
   },
   {
    "bytes": 8221,
    "path": "fab/gl1_cradle-B_Cu.gbr",
-   "sha256": "83aab60dee540edff513e5498bfd8cdf3c85fe6716fa1e1f74b9a186c4143990"
+   "sha256": "8791f486e5ca3ba8354cc3769be32ed912623db1f7e493d4fc06a1cda0b771a6"
   },
   {
    "bytes": 2836,
    "path": "fab/gl1_cradle-B_Mask.gbr",
-   "sha256": "25e5262ff777ae0c549d2d208abd6b48f9d33a499af1b16d8c102acd06923c8c"
+   "sha256": "06a441d8c345de1db2d56865a74590cd2c17b36ce0699374357268d045e3d3bf"
   },
   {
    "bytes": 1785,
    "path": "fab/gl1_cradle-B_Paste.gbr",
-   "sha256": "5adf49a833e2e2d4d344011125051496a0eeb4fcb9ea92fdb05c3d55749a1b09"
+   "sha256": "88551c3daa51338687b933ca82d1f85c62426a7ff0273b974be2880950431f6d"
   },
   {
-   "bytes": 24974,
+   "bytes": 24622,
    "path": "fab/gl1_cradle-B_Silkscreen.gbr",
-   "sha256": "05cf647921be7346f64c60a34675c3593df53172731686f09e48156eb31b1dd6"
+   "sha256": "27218e07ccc6376013f1c3ec0d275c1c4dbd1246c5bcd33a261383e889359b82"
   },
   {
    "bytes": 635,
    "path": "fab/gl1_cradle-Edge_Cuts.gbr",
-   "sha256": "1becd6c374eb77881324242cfdf0473a542d4cf950f17a1eba5bda2de0827c8e"
+   "sha256": "65653d323806444f13c5349ada9e9d497d4f204692fe861d2943604880f1877d"
   },
   {
    "bytes": 5736,
    "path": "fab/gl1_cradle-F_Cu.gbr",
-   "sha256": "14fc9189e10a6745e14321a9f31f6c89c76cc682aa81a51a5f9ad48e551ad707"
+   "sha256": "82438237ef31bcbd6708405e18e4dc9773a763355e2b73fcd5cdb4721b15574a"
   },
   {
    "bytes": 2502,
    "path": "fab/gl1_cradle-F_Mask.gbr",
-   "sha256": "0d99b0f3ae08fa66d6233045360e9d362847bd83938495713b39bfa17fed4bef"
+   "sha256": "f9c9b3942154f5611af3f913c3a8149c8a006c5fcbf4dda0c7211f30169a565f"
   },
   {
    "bytes": 1752,
    "path": "fab/gl1_cradle-F_Paste.gbr",
-   "sha256": "4b9c462ce4ab4c8fe7bda7f0e4524b919e8b05591327083df3da1ed7f749e24f"
+   "sha256": "2510e1b4280d037f368061c049e97e72c1757329983afc69663729eae5d02780"
   },
   {
-   "bytes": 19883,
+   "bytes": 19523,
    "path": "fab/gl1_cradle-F_Silkscreen.gbr",
-   "sha256": "eee19418c3a61b3e7a0e01c1557852c4368690b9290d26091f36e8e65508c83e"
+   "sha256": "ea97f1c6753b83e4651b377d7d9a671d0b59147c069769e9024f6feb52a5c174"
   },
   {
    "bytes": 39357,
    "path": "fab/gl1_cradle-NPTH-drl_map.gbr",
-   "sha256": "f49e708391217d7817fb8a3e760afe3d7f9269b0ebfd230527dd32bd32715f09"
+   "sha256": "4f4a39659c46d44e8460e980263b34622bcaffa956f85623500f172acbbb7971"
   },
   {
    "bytes": 416,
@@ -154,7 +159,7 @@
   {
    "bytes": 48280,
    "path": "fab/gl1_cradle-PTH-drl_map.gbr",
-   "sha256": "aee1e32488cfdf6a06d6b7bb460a2856375ad79c18e9b15b1d7a595db160c176"
+   "sha256": "f5a041776d7368fa29d351c557d555965b442a8eb2b13ac31c0a7de030da8d10"
   },
   {
    "bytes": 686,
@@ -164,58 +169,63 @@
   {
    "bytes": 2622,
    "path": "fab/gl1_cradle-job.gbrjob",
-   "sha256": "dc1f4f4f4f956dcb8c96d58ef16c11ca5071bd7cb1a73a9a1c2eb0b63b52a442"
+   "sha256": "96c577dc4318fc62b895e2752bb55fe64e56b4d4dba09f7d4efd0ebf8a3d3c6e"
   },
   {
-   "bytes": 2284,
+   "bytes": 4944,
    "path": "gl1_cradle-assembly.zip",
-   "sha256": "55d669ff891187e17e15775b21e0659f2a5fcd7c5f680a8fabb2b28228a9efe6"
+   "sha256": "042292ef4b6fef5ca47f434640cd25f5309b8fdc1a29f6076a5e3454348755d2"
   },
   {
-   "bytes": 394892,
+   "bytes": 394533,
    "path": "gl1_cradle-board.step",
-   "sha256": "ac4ecd4ae1722cfb83cc100c5fd9581845fa6125f8bbb8d8b19324046fc15f0b"
+   "sha256": "d12d3682d0922d3257ce028c17215858c687cc0d37c841f7d51db1dc57778596"
   },
   {
-   "bytes": 34299,
+   "bytes": 34225,
    "path": "gl1_cradle-fab.zip",
-   "sha256": "bea317ddc9b7cb66bab51ef5eebc79df9c55765ebb7ca1253e6554e780dec804"
+   "sha256": "cb912d542e127026c6b2521a9dae3da4fc0bf83b146a121ff80dbf422ddd46e0"
   },
   {
-   "bytes": 26914,
+   "bytes": 26915,
    "path": "gl1_cradle-mechanical.json",
-   "sha256": "2243d83c07a563ae9ac7c99a4f8e05414d2608d6bee6286489c72a50196fc86d"
+   "sha256": "f05d9e2f80f458a7652972ca645712bfc3a1d7500043d412eea87c923673b12f"
   },
   {
-   "bytes": 10892,
+   "bytes": 10893,
    "path": "gl1_cradle-netlist.json",
-   "sha256": "a6be5135ce2fff6d418fec035b0112d0e8389750330674bbd06674b76ebeea71"
+   "sha256": "2a265b1b8ac3ba6ab0d6b37a05af8bfc2d93093c9b5b0ba468a0bc8e5c19648d"
   },
   {
-   "bytes": 33322,
+   "bytes": 33122,
    "path": "renders/gl1_cradle-bottom.png",
-   "sha256": "d86a7beb940cec4684b0bf33dcb2d41bac9c3fa6fbf67651eef7cf44951c5d5a"
+   "sha256": "d67ff157c9dd2e85d6a919fb275a03eacff9a06cf98a165142cd0226ae9f2ea2"
   },
   {
-   "bytes": 71228,
+   "bytes": 70844,
    "path": "renders/gl1_cradle-bottom.svg",
-   "sha256": "61815581dc9c23a1bc379f73b1d08063376d8735bcbd61df8f8fa3e92948b6c9"
+   "sha256": "25664f2eeb1d109fa047432c02b62c781b6859ad935fea1df6de79b6fc905ad0"
   },
   {
-   "bytes": 31349,
+   "bytes": 31175,
    "path": "renders/gl1_cradle-top.png",
-   "sha256": "87161b406ef69f850247d0f47e1d360d733be74ab1c861d7a815135d9042602d"
+   "sha256": "6d5188244c0b6f23084bb0ee3d7b3631262578a1b4ccaa38415c56cd87ee8abb"
   },
   {
-   "bytes": 59278,
+   "bytes": 58894,
    "path": "renders/gl1_cradle-top.svg",
-   "sha256": "87451f696b3e59cbe9442342ab4b143b782f965faa7437c4563b725944cbd512"
+   "sha256": "f6821017e566f56263052468b3894a246fe4ac0fd5503751efdb805f86d8ab0b"
   },
   {
    "bytes": 708,
    "path": "renders/renders.json",
    "sha256": "ab5f26ea35a448eb5b08a9a8abfd83e3d05129b05f1120de53441ee30ef0ac3d"
   }
+ ],
+ "files_added_after_the_toolchain": [
+  "assembly/README.txt",
+  "assembly/gl1_cradle-bom-status.csv",
+  "gl1_cradle-assembly.zip"
  ],
  "ok": true,
  "position_rows": 10,

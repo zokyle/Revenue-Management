@@ -40,7 +40,7 @@ NAMES = {            # label text per part
     "lcd_glass": "Memory LCD LS013B7DH03", "lcd_flex": "LCD flex tail (representative)", "lcd_adhesive": "LCD adhesive frame (0.15 mm)",
     "cover_glass": "Cover glass dia 28 x 1.0", "cover_tape": "Transfer-tape ring 0.13 (dia 28 / 25)", "battery": "LiPo cell GM201030-PCB",
     "foam_pad": "Foam pad (0.3 mm)", "vent": "ePTFE vent (Gore VE80205)", "cradle": "Cradle body (printed)",
-    "cradle_pcb": "Cradle PCB 30 x 22 x 1.6", "usb_receptacle": "USB-C receptacle (USB4105)",
+    "cradle_pcb": f"Cradle PCB 30 x 22 x {P.CPCB_SIZE[2]:g}", "usb_receptacle": "USB-C receptacle (USB4105)",
 }
 
 
@@ -299,7 +299,7 @@ def render_all(parts=None, verbose=True):
                   dict(text="LCD glass 0.75 + frame 0.15", anchor=[0, -15.0, 0.5 * (P.LCD_Z0 + P.LCD_Z1)], side="L"),
                   dict(text="Foam pad 0.3", anchor=[0, -9.6, P.FOAM_Z0 + 0.15], side="L"),
                   dict(text="Battery 2.0 + swell gap", anchor=[0, -8.6, 2.8], side="L"),
-                  dict(text="FPC connector J1", anchor=[0, -14.0, 2.9], side="L"),
+                  dict(text="FPC connector J1", anchor=[0, P.J1["y"], P.J1_TOP_Z - 0.9], side="L"),
                   dict(text="PCB 0.80 on sheet 0.20", anchor=[0, -20.3, 1.4], side="L"),
                   dict(text="Seal adhesive", anchor=[0, -P.LAND_RI - 0.2, 1.05], side="L"),
                   dict(text="FR-4 base plate 0.80", anchor=[0, -19.3, 0.40], side="L"),

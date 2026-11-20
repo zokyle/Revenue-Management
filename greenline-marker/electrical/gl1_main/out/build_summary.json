@@ -35,14 +35,14 @@
   "100 % of the connections routed, audit clean": true,
   "KiCad DRC: 0 errors, 0 unconnected, nothing excluded": true,
   "design checks: 0 errors": true,
-  "mechanical import check passes": false,
+  "mechanical import check passes": true,
   "outputs verified against the model": true,
   "pin map check clean": true,
   "schematic netlist round trip matches": true,
   "spec rules: no row failed, self-test caught every seeded defect": true
  },
  "design": "gl1_main",
- "passed": false,
+ "passed": true,
  "stages": {
   "board": {
    "passed": true,
@@ -87,14 +87,12 @@
    }
   },
   "mechanical": {
-   "exit_status": 1,
+   "exit_status": 0,
    "keepouts_missing": [],
-   "only_failure_is_j1_e24": true,
-   "passed": false,
-   "result": "FAIL FAILED (1): LCD connector J1: x, y: board (0.0, -12.9), YAML (0.0, -13.9)",
-   "warnings": [
-    "warning: keep-out battery_body of the board file: battery body: DIFFERS from the YAML"
-   ]
+   "passed": true,
+   "result": "PASS board gl1_main agrees with the YAML outline, hole and slot; 86 top-side parts clear the tub by 0.25 mm or more (U2) and respect post feet, hood zones, free height and foot zones; J1 body box and anchor on the YAML (mouth y -17.3); 18 bottom-side parts inside the grain opening or the pad slot; 14 copper-only footprints by their own rules (3 ball-foot lands on their feet); 7 contact pads on the cradle pin axes",
+   "stale_against_yaml": [],
+   "warnings": []
   },
   "outputs": {
    "anchor_offsets": [
@@ -217,9 +215,12 @@
     ]
    },
    "bom_status": {
-    "by_status": {
+    "by_design_evidence": {
      "PROVISIONAL": 31,
      "RESEARCH": 6
+    },
+    "by_status": {
+     "VERIFIED": 37
     },
     "lines": 37
    },
@@ -319,13 +320,16 @@
     ]
    },
    "fab_readme_mentions": {
+    "0.100": true,
     "ENIG": true,
+    "F.Cu, In2.Cu and B.Cu": true,
     "plugged": true,
     "tented": true
    },
    "fab_zip": "gl1_main-fab.zip",
-   "fab_zip_bytes": 141840,
-   "files": 34,
+   "fab_zip_bytes": 141839,
+   "files": 35,
+   "manifest_problems": [],
    "passed": true,
    "position_rows": 103,
    "problems": []
@@ -839,11 +843,27 @@
     },
     "camera_skew_note": "lengths along the copper, ball to array pad plus array pad to MCU pad (the resistor body is the same for every line); 7 ps/mm assumed.  At a 12 MHz pixel clock the period is 83.3 ns: a spread of 40 mm is 0.28 ns, 0.3 % of the period, and small against the RC of the 220 ohm series element with the bus capacitance (220 ohm x about 15 pF = 3.3 ns, the same for every line)",
     "copper_to_edge": {
-     "note": "edge = board outline, the locating slot and the NPTH hole wall; rule 0.30 mm",
+     "note": "edge = the routed contours: board outline, routed slots and cut-outs; rule 0.30 mm. Drilled non-plated holes are reported under copper_to_hole",
      "pad": "pad R4.2",
      "pad_mm": 0.3547,
-     "routed_copper_mm": 0.3209,
-     "routed_item": "track CAM_D4 B.Cu"
+     "pad_to": "routed slot / cut-out",
+     "routed_copper_mm": 0.325,
+     "routed_item": "track CAM_D3 F.Cu",
+     "routed_to": "routed slot / cut-out"
+    },
+    "copper_to_hole": {
+     "holes": 1,
+     "note": "hole = wall of a drilled non-plated hole (outline holes, NPTH pads of footprints); rule 0.20 mm (hole_clearance)",
+     "pad": {
+      "item": "pad RN6.7",
+      "mm": 0.795,
+      "to": "NPTH hole H1"
+     },
+     "routed": {
+      "item": "track CAM_D4 B.Cu",
+      "mm": 0.3209,
+      "to": "NPTH hole H1"
+     }
     },
     "crystal_guard": {
      "area_mm2": 7.21,
@@ -1293,25 +1313,20 @@
    "vias": 278
   },
   "rules": {
-   "as_specified": 58,
+   "as_specified": 62,
    "departures": [
-    "rail VDDUSB",
     "cam 2d",
     "grain c",
     "grain d",
-    "E1 b",
-    "PCB c",
-    "PCB k2"
+    "PCB c"
    ],
    "failed": [],
    "open_not_met": [],
    "passed": true,
    "rows": 66,
-   "selftest_defects": 43,
+   "selftest_defects": 49,
    "selftest_missed": 0,
-   "workarounds": [
-    "bare copper"
-   ]
+   "workarounds": []
   },
   "schematic": {
    "passed": true,

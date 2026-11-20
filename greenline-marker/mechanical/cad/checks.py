@@ -247,11 +247,12 @@ def _base_rows(parts, S, T):
     add("Ball top to its copper land: plate at its lower incoming limit, sheet at its thinnest, ball set high", gap_min, M["ball_gap_min"], method="arithmetic on the incoming limits",
         note=f"plate accepted from {v['accept'][0]:.2f} to {v['accept'][1]:.2f} mm (YAML thickness_accepted; nominal {P.BASE_T}), sheet {P.PSA_T} +-{v['psa_tol']}, ball protrusion {P.BALL_PROT} +-{M['tol_ball_set']}, "
              f"ball diameter exactly {P.BALL_D}: a thinner plate would let the ball hold the laminate open. The plate thickness also sets the rim relief and the depth of the grain opening, not the seal joint")
-    add(f"Same with a ball at the upper diameter limit of grade 100 (E8: dia +{M['ball_dia_tol']}, ABMA figure as remembered)", gap_min - M["ball_dia_tol"], M["ball_gap_min"], dev="D33",
-        method="arithmetic on the incoming limits",
-        note=f"a ball set to its protrusion on the gauge plate carries its whole diameter error at its top. Incoming rule that restores the {M['ball_gap_min']} mm: measure the ball lot; "
-             f"lower plate limit = {v['accept'][0]:.2f} + (lot diameter - {P.BALL_D}), i.e. {v['accept'][0] + M['ball_dia_tol']:.3f} at the grade limit. A grade 25 ball (+{M['ball_dia_tol_g25']}) leaves "
-             f"{gap_min - M['ball_dia_tol_g25']:.3f} mm; radial clearance of the largest grade 100 ball in its hole {(P.BALL_HOLE_D - P.BALL_D - M['ball_dia_tol']) / 2:.3f} mm")
+    add(f"Same with a ball at the upper diameter limit of grade 100 (E20: dia +{M['ball_dia_tol']}, YAML feet.dia_tol, PROVISIONAL: as remembered from the ball standard)", gap_min - M["ball_dia_tol"],
+        M["ball_gap_min"], method="arithmetic on the incoming limits",
+        note=f"a ball set to its protrusion on the gauge plate carries its whole diameter error at its top. E20 raised the lower plate limit to {v['accept'][0]:.2f} (least limit that keeps "
+             f"{M['ball_gap_min']} mm under such a ball: {v['accept_lo_needed']:.2f}; under a ball of exactly {P.BALL_D}: {v['accept_lo_needed_nominal_ball']:.2f}, the rev D limit, which left "
+             f"{v['accept_lo_needed_nominal_ball'] + (P.PSA_T - v['psa_tol']) - (P.BALL_TOP_Z + M['tol_ball_set']) - M['ball_dia_tol']:.3f} mm). This row is REQUIRED since rev E (it was recorded deviation D33). "
+             f"Radial clearance of the largest grade 100 ball in its hole {(P.BALL_HOLE_D - P.BALL_D - M['ball_dia_tol']) / 2:.3f} mm")
     add("Potting epoxy of a ball to the PCB underside (sheet hole backfilled)", min_distance(S["ball_epoxy_1"], S["main_pcb"]), 0.0, nominal=0.0,
         note=f"stage 1 dome at most {M['epoxy_dome_max']} mm over the plate; stage 2 fills the {P.PSA_FOOT_HOLE_D} mm sheet hole, so the ball bears on its "
              f"dia {P.FOOT_LAND_D} copper land through {P.PCB_Z0 - P.BALL_TOP_Z:.2f} mm of epoxy in compression")
@@ -473,7 +474,10 @@ def check_clearances(parts):
     others = [n for n, i in parts.items() if i.group == "puck" and n not in ("tub", "vent")]
     dv, nv = min((min_distance(S["vent"], S[n]), n) for n in others)
     add(f"Vent disc to nearest part ({nv})", dv, clr)
-    add("LCD flex (representative shape) to tub", min_distance(S["lcd_flex"], tub), 0.0, note="PROVISIONAL tail geometry")
+    add("LCD flex (representative shape) to tub", min_distance(S["lcd_flex"], tub), clr, note=f"PROVISIONAL tail geometry (E24: fold behind the J1 mouth at y {P.J1_MOUTH_Y}, rearmost point y {P.FLEX_REAR_Y:.2f}); "
+                                                                                                    "rev E: the fit clearance is now REQUIRED here (rev D required only no contact)")
+    add("LCD flex, upper run, to the top of connector J1 (it passes back over the rear of the body, E24)", P.FLEX_OVER_J1, M["flex_part_clr"], nominal=P.FLEX_OVER_J1, method="params (FLEX_OVER_J1); measured on the solids in check 12",
+        note=f"tail underside z {P.FLEX_ZT - M['flex_t'] / 2:.3f}, J1 top z {P.J1_TOP_Z}")
     add("LCD flex (representative shape) to connector J1 / PCB parts", min_distance(S["lcd_flex"], S["main_pcb"]), 0.0, nominal=0.0,
         note=f"PROVISIONAL tail geometry: one U-fold of radius {P.FLEX_BEND_R:.2f} mm, modelled up to the J1 mouth face (entry {M['fpc_entry_h']} mm above the PCB)")
     # --- cradle (nest, lip, latch, one pin slot)
@@ -568,7 +572,8 @@ def check_clearances(parts):
         trow.append(dict(pair=label, length_mm=R3(length), cte_ppm_per_K=(a1, a2), temperature_span_K=dT, relative_movement_mm=R3(d),
                          shear_of_the_layer_pct=(round(100 * d / layer) if layer else "-"), layer=(f"{lname} {layer}" if layer else lname)))
     notes = ["required minimum = 0.25 mm drop-in rule unless the row is a specified stack value (adhesive lines, prism-to-roof 0.19, sub-flush values)",
-             f"passives are not in master_params.yaml, so only the {len(P.TOP_PARTS)} listed top-side parts are checked here; the real board is checked by check 17",
+             f"rev E: master_params.yaml carries every fitted top-side body of the routed board ({len(P.TOP_PARTS)} entries, {sum(1 for q in P.TOP_PARTS if q.get('class') == 'passive')} of them passives, "
+             f"{sum(1 for q in P.TOP_PARTS if q.get('dnp'))} not fitted); all are checked here, and the board file itself is checked by check 17",
              "the optional retarder film (E9) is checked by its own rows; it is not part of the assembly of checks 1, 8, 13 and 14",
              "sections are true boolean sections of the solids; curved edges are sampled to 0.0002 mm",
              f"comparisons carry a numerical tolerance of {NUM_TOL} mm",
@@ -580,9 +585,11 @@ def check_clearances(parts):
              f"clear potting: the modelled solid is the fill to z {P.GRAIN_FILL_Z}, the level that must never be passed; the fill target is the middle of the accepted window; "
              f"mixed viscosity {M['potting_viscosity_Pa_s'][0]} to {M['potting_viscosity_Pa_s'][1]} Pa.s (estimate), vacuum degassing"]
     worst = min((r for r in rows if r["margin_mm"] is not None), key=lambda r: r["margin_mm"])
+    _v0 = P.BASE_VARIANTS[P.BASE_PRIMARY]
     return res(2, "clearances", not fails,
-               (f"{len(rows)} key gaps and {len(prow)} PCB parts evaluated; {len(warns)} rows below their minimum are recorded deviations (the two spigot fits, D19; the epoxy under an oversize "
-                f"grade 100 ball, D33); retarder film after its centring chain: {P.retarder_chain()['bore'][1]:.2f} to the tape bore, {P.retarder_chain()['aperture'][1]:.2f} beyond the aperture (worst case); "
+               (f"{len(rows)} key gaps and {len(prow)} PCB parts evaluated; {len(warns)} rows below their minimum are recorded deviations (the two spigot fits, D19); epoxy under an oversize grade 100 ball at the "
+                f"lower plate limit {_v0['accept'][0] + (_v0['psa_t'] - _v0['psa_tol']) - (P.BALL_TOP_Z + M['tol_ball_set']) - M['ball_dia_tol']:.3f} mm ({M['ball_gap_min']} required, E20); LCD tail fold behind the J1 mouth: {min_distance(S['lcd_flex'], tub):.2f} to the tub, "
+                f"{P.FLEX_OVER_J1:.2f} over J1 (E24); retarder film after its centring chain: {P.retarder_chain()['bore'][1]:.2f} to the tape bore, {P.retarder_chain()['aperture'][1]:.2f} beyond the aperture (worst case); "
                 f"smallest margin {worst['margin_mm']} mm ({worst['item']})" if not fails else f"FAILED: {fails}"),
                [dict(title="Key clearances", rows=rows), dict(title="PCB top-side parts (envelope boxes from the YAML)", rows=prow),
                 dict(title="Tolerance chains: seal joint, rim relief, ball to land (both base-plate variants)", rows=srow),
@@ -648,7 +655,7 @@ def check_fov(parts):
              f"rev D window {P.WIN_W} x {P.WIN_H} x {P.WIN_T}: it covers the opening with lands of {P.WIN_LANDS[0]:.2f} (sides), {P.WIN_LANDS[1]:.2f} (sill) and "
              f"{P.WIN_LANDS[2]:.2f} mm (top), and the adhesive round it lies outside every frustum (rows window_bond)",
              f"required field (YAML cameras.field_required_deg): +-{P.FOV_H} deg horizontal, +{P.FOV_UP} / -{P.FOV_DOWN} deg vertical; the upper edge is accepted "
-             f"with {P.FOV_UP_GUAR} deg guaranteed at the tolerance limit (check 4)",
+             f"with {P.FOV_UP_GUAR} deg guaranteed at the tolerance limit (check 4, E17)",
              f"the lower field is required only to -{M['fov_down_deg']} deg (flagstick base near the horizon); the sill stays at z {P.OPEN_Z0} and the "
              f"full pupil is in fact clear to -{down_full:.1f} deg (the sensor could use -{M['fov_down_sensor_deg']} deg)"]
     return res(3, "field of view", not fails,
@@ -701,6 +708,9 @@ def check_fold(parts):
     pl = P.spigot_play()
     dx, dy, yaw_deg = pl["side"], pl["fore_aft"], pl["yaw_deg"]
     tp = M["print_tol"]
+    cold = M["roof_cold_drop"]                               # the roof lower over the opening at the cold end: the same as the optics higher by it
+    fit_max = P.SPIGOT_FIT_MAX                               # E17: hole at its upper limit and spigot at the no-go size (YAML pcb.locating_holes.fit_max)
+    dy_max = P.spigot_play(fit_max)["fore_aft"]
     cases = [("nominal", (0, 0, 0)),
              (f"spigot play sideways: optics {dx:.3f} in x", (dx, 0, 0)),
              (f"spigot play plus {tp} print tolerance: {dx + tp:.3f} sideways", (dx + tp, 0, 0)),
@@ -709,7 +719,9 @@ def check_fold(parts):
              (f"fore-aft play plus {tp} print tolerance: optics {dy + tp:.3f} away from the visor", (0, -dy - tp, 0)),
              (f"optics {tp} low (print tolerance on the sill)", (0, 0, -tp)),
              (f"optics {tp} high (print tolerance on the roof), no play", (0, 0, tp)),
-             (f"GUARANTEED CASE (YAML up_guaranteed, N3): optics {tp} high AND the spigot play {dy:.3f} away from the visor", (0, -dy, tp))]
+             (f"optics {tp} high AND the NOMINAL spigot play {dy:.3f} away from the visor, 20 C (the rev D definition, N3: information)", (0, -dy, tp)),
+             (f"GUARANTEED CASE (YAML up_guaranteed, E17): optics {tp} high, the LOOSEST locating fit ({P.SPIGOT_FIT_MAX}: play {dy_max:.3f}) away from the visor AND the roof "
+              f"{cold} lower ({M['t_range'][0]:g} C)", (0, -dy_max, tp + cold))]
     srows = []
     up_limit = up_play = None
     up_side = {}                                             # upper field of the full pupil in the guaranteed case, per camera
@@ -733,59 +745,63 @@ def check_fold(parts):
                           upper_field_full_pupil_deg_camera_R=round(lim["up"], 2), upper_field_full_pupil_deg_camera_L=round(up_l, 2),
                           upper_field_full_pupil_deg=round(up_both, 2), upper_field_margin_to_required_deg=round(up_both - P.FOV_UP, 2),
                           worst_field_point_transmission_pct=round(100 * worst, 1)))
-    # Decision N3 (YAML cameras.field_required_deg.up_guaranteed): the guaranteed upper field is DEFINED as the worst case with the
-    # optics print_tol high AND the fore-aft play of the spigot fit against it.  The comparison is strict (no recorded shortfall)
-    # and is made on the SMALLER of the two cameras
-    cf_play = O.upper_field_closed_form(tp, dy)
+    # E17 (YAML cameras.field_required_deg.up_guaranteed, cameras.up_guaranteed_case; replaces the definition of N3): the guaranteed
+    # upper field is DEFINED as the worst case with the optics print_tol high, the fore-aft play of the LOOSEST spigot fit
+    # (pcb.locating_holes.fit_max) against it AND the roof at the cold end of the temperature range.  The comparison is strict
+    # (no recorded shortfall) and is made on the SMALLER of the two cameras, by ray trace on the tub solid
+    cf_play = O.upper_field_closed_form(tp + cold, dy_max)
     guar_margin = float("-inf") if up_play is None else up_play - P.FOV_UP_GUAR
     for side_, v_ in sorted(up_side.items()):
         if not v_ - P.FOV_UP_GUAR >= 0.0:
-            fails.append(f"upper field of camera {side_} in the guaranteed case (optics {tp} high and {dy:.3f} of spigot play against it) is {v_:.2f} deg, BELOW the {P.FOV_UP_GUAR} deg the YAML guarantees")
+            fails.append(f"upper field of camera {side_} in the guaranteed case (optics {tp} high, {dy_max:.3f} of spigot play against it, roof {cold} lower) is {v_:.2f} deg, BELOW the {P.FOV_UP_GUAR} deg the YAML guarantees")
     if not up_side:
         fails.append("the guaranteed case was not traced")
-    # What uses up the margin of the guaranteed case (closed form; information).  The YAML defines the case with the NOMINAL spigot fit
-    # and the model assumes the lens pupil: each row below changes ONE of these and shows what is left
+    # the YAML records the model figure of the defined case (cameras.up_guaranteed_case.model_deg): the closed form must reproduce it
+    if not abs(cf_play - P.FOV_GUAR_CASE["model_deg"]) <= M["up_guaranteed_model_tol"]:
+        fails.append(f"guaranteed case: the closed form gives {cf_play:.3f} deg, YAML cameras.up_guaranteed_case.model_deg says {P.FOV_GUAR_CASE['model_deg']}")
+    # What uses up the margin of the guaranteed case (closed form; information).  The first row is the case the YAML defines; the
+    # next four show what each mechanical item of the definition costs; the last two change one of the ASSUMED lens numbers
     fit_hi = P.SPIGOT_FIT + M["pcb_hole_tol"] / 2
     dy_hi = P.spigot_play(fit_hi)["fore_aft"]
-    fit_max = P.SPIGOT_FIT + M["pcb_hole_tol"] / 2 + M["spigot_undersize"] / 2      # hole at its upper limit and spigot at the no-go size proposed in N18
-    dy_max = P.spigot_play(fit_max)["fore_aft"]
-    per_mm_z = (O.upper_field_closed_form(tp, dy) - O.upper_field_closed_form(tp + 0.01, dy)) / 0.01
-    per_mm_y = (O.upper_field_closed_form(tp, dy) - O.upper_field_closed_form(tp, dy + 0.01)) / 0.01
+    per_mm_z = (O.upper_field_closed_form(tp + cold, dy_max) - O.upper_field_closed_form(tp + cold + 0.01, dy_max)) / 0.01
+    per_mm_y = (O.upper_field_closed_form(tp + cold, dy_max) - O.upper_field_closed_form(tp + cold, dy_max + 0.01)) / 0.01
     mrow, m_worst = [], []
-    for what, kw, basis in (
-            (f"the case the YAML defines: fit {P.SPIGOT_FIT:.3f} (hole dia {P.LOC_ROUND[2]}, spigot dia {P.SPIGOT_D}), pupil dia {M['pupil_dia']}, {M['pupil_below_cube_top']} below the cube top", dict(dy_away=dy), "N3"),
-            (f"PCB hole at its upper limit, dia {P.LOC_ROUND[2] + M['pcb_hole_tol']:.2f} (ordinary NPTH tolerance +{M['pcb_hole_tol']}, assumed): fit {fit_hi:.3f}; a spigot {M['pcb_hole_tol']} undersize does the same",
-             dict(dy_away=dy_hi), "the hole tolerance is not in the YAML"),
-            (f"pupil dia {M['pupil_dia_alt']} instead of the assumed {M['pupil_dia']}", dict(dy_away=dy, pupil_dia=M["pupil_dia_alt"]), "lens data not published"),
-            (f"pupil {M['pupil_below_alt']} instead of {M['pupil_below_cube_top']} below the cube top", dict(dy_away=dy, pupil_below=M["pupil_below_alt"]), "lens data not published"),
-            (f"roof {M['roof_cold_drop']} lower over the opening (-10 C; not part of the YAML case)", dict(dy_away=dy, dz_extra=M["roof_cold_drop"]), "thermal estimate of the README"),
-            (f"hole at its upper limit AND the roof {M['roof_cold_drop']} lower", dict(dy_away=dy_hi, dz_extra=M["roof_cold_drop"]), "both mechanical items together"),
-            (f"largest fit {fit_max:.3f}: hole dia {P.LOC_ROUND[2] + M['pcb_hole_tol']:.2f} and a spigot of dia {P.SPIGOT_D - M['spigot_undersize']:.2f} (no spigot gauge for the LOWER size exists yet)",
-             dict(dy_away=dy_max), "proposal N18: a no-go gauge for the spigots"),
-            (f"largest fit {fit_max:.3f} AND the roof {M['roof_cold_drop']} lower (-10 C): the case proposal N18 would define the guarantee on", dict(dy_away=dy_max, dz_extra=M["roof_cold_drop"]),
-             f"proposal N18: up_guaranteed {M['up_guaranteed_proposed']}")):
+    for key, what, kw, basis in (
+            ("defined", f"the case the YAML defines (E17): largest fit {fit_max:.3f} (hole dia {P.LOC_ROUND[2] + M['pcb_hole_tol']:.2f}, spigot dia {P.SPIGOT_D_MIN:.2f}), roof {cold} lower ({M['t_range'][0]:g} C), "
+                        f"pupil dia {M['pupil_dia']}, {M['pupil_below_cube_top']} below the cube top", dict(dy_away=dy_max, dz_extra=cold), "E17"),
+            ("nominal_fit", f"nominal fit {P.SPIGOT_FIT:.3f} (hole dia {P.LOC_ROUND[2]}, spigot dia {P.SPIGOT_D}), 20 C: the rev D definition (N3), on which 14.5 deg was stated", dict(dy_away=dy), "mechanical: easier than the defined case"),
+            ("hole_hi", f"PCB hole at its upper limit alone, dia {P.LOC_ROUND[2] + M['pcb_hole_tol']:.2f} (YAML dia_tol +{M['pcb_hole_tol']}): fit {fit_hi:.3f}, 20 C; a spigot {M['spigot_undersize']} undersize does the same",
+             dict(dy_away=dy_hi), "mechanical: easier than the defined case"),
+            ("fit_max_warm", f"largest fit {fit_max:.3f}, 20 C", dict(dy_away=dy_max), "mechanical: easier than the defined case"),
+            ("cold_nominal_fit", f"nominal fit {P.SPIGOT_FIT:.3f} with the roof {cold} lower ({M['t_range'][0]:g} C)", dict(dy_away=dy, dz_extra=cold), "mechanical: easier than the defined case"),
+            ("pupil_dia", f"the defined case with a pupil of dia {M['pupil_dia_alt']} instead of the assumed {M['pupil_dia']}", dict(dy_away=dy_max, dz_extra=cold, pupil_dia=M["pupil_dia_alt"]),
+             "lens data not published (release gate)"),
+            ("pupil_below", f"the defined case with the pupil {M['pupil_below_alt']} instead of {M['pupil_below_cube_top']} below the cube top", dict(dy_away=dy_max, dz_extra=cold, pupil_below=M["pupil_below_alt"]),
+             "lens data not published (release gate)")):
         dz_ = tp + kw.pop("dz_extra", 0.0)
         a_ = O.upper_field_closed_form(dz_, **kw)
-        mrow.append(dict(what=what, upper_field_deg_closed_form=round(a_, 3), margin_to_the_guaranteed_deg=round(a_ - P.FOV_UP_GUAR, 3), basis=basis,
-                         status=("the comparison of this check (ray trace: %.2f / %.2f deg, camera L / R)" % (up_side.get("L", float("nan")), up_side.get("R", float("nan"))) if basis == "N3" else
-                                 (("information: inside" if a_ >= P.FOV_UP_GUAR else "information: BELOW the guaranteed figure") +
-                                  (f"; {a_ - M['up_guaranteed_proposed']:+.3f} against the proposed {M['up_guaranteed_proposed']}" if "N18" in basis else "")))))
-        if basis != "N3":
+        mrow.append(dict(key=key, what=what, upper_field_deg_closed_form=round(a_, 3), margin_to_the_guaranteed_deg=round(a_ - P.FOV_UP_GUAR, 3), basis=basis,
+                         status=("the comparison of this check (ray trace: %.2f / %.2f deg, camera L / R); YAML model_deg %s" % (up_side.get("L", float("nan")), up_side.get("R", float("nan")), P.FOV_GUAR_CASE["model_deg"])
+                                 if key == "defined" else ("information: inside" if a_ >= P.FOV_UP_GUAR else "information: BELOW the guaranteed figure"))))
+        if key != "defined":
             m_worst.append((a_, what))
-    mrow.append(dict(what="what the margin of the defined case is worth", upper_field_deg_closed_form=round(cf_play, 3), margin_to_the_guaranteed_deg=round(cf_play - P.FOV_UP_GUAR, 3),
+    mby = {q["key"]: q for q in mrow}
+    mrow.append(dict(key="worth", what="what the margin of the defined case is worth", upper_field_deg_closed_form=round(cf_play, 3), margin_to_the_guaranteed_deg=round(cf_play - P.FOV_UP_GUAR, 3),
                      basis=f"{per_mm_z:.1f} deg per mm of roof or optics height, {per_mm_y:.2f} deg per mm of fore-aft play",
                      status=f"= {(cf_play - P.FOV_UP_GUAR) / per_mm_z:.4f} mm of height = {(cf_play - P.FOV_UP_GUAR) / per_mm_y:.3f} mm of extra fore-aft play"))
     below = [w for a_, w in m_worst if a_ < P.FOV_UP_GUAR]
     if below:
-        warns.append(f"the {guar_margin:+.2f} deg margin of the guaranteed case holds for the NOMINAL spigot fit and the ASSUMED pupil only. Closed form (required {P.FOV_UP_GUAR}): PCB hole dia +{M['pcb_hole_tol']} -> "
-                     f"{mrow[1]['upper_field_deg_closed_form']:.3f} deg; pupil dia {M['pupil_dia_alt']} -> {mrow[2]['upper_field_deg_closed_form']:.3f}; pupil {M['pupil_below_alt']} below the cube top -> "
-                     f"{mrow[3]['upper_field_deg_closed_form']:.3f}; roof {M['roof_cold_drop']} lower (-10 C) -> {mrow[4]['upper_field_deg_closed_form']:.3f}: {len(below)} of {len(m_worst)} rows are below the guaranteed "
-                     "figure. The YAML defines the guarantee on the nominal fit, so this is not a failure of the check: proposal N18 (PROPOSED_PARAM_CHANGES.md part C)")
+        warns.append(f"the {guar_margin:+.2f} deg margin of the guaranteed case (E17: loosest fit, cold roof) holds for the ASSUMED pupil only. Closed form (required {P.FOV_UP_GUAR}): pupil dia {M['pupil_dia_alt']} -> "
+                     f"{mby['pupil_dia']['upper_field_deg_closed_form']:.3f} deg; pupil {M['pupil_below_alt']} below the cube top -> {mby['pupil_below']['upper_field_deg_closed_form']:.3f} deg: "
+                     f"{len(below)} of {len(m_worst)} information rows are below the guaranteed figure. The lens pupil data is a release gate (OmniVision); the mechanical items of the definition "
+                     "(fit, hole tolerance, cold roof) are now inside it")
     # test gate 2 of the assembly sequence (wet adhesive): a target bar inside the guaranteed field must be fully clear on every
     # in-tolerance unit; a bar at +17 deg (the former gate) is not
     g2 = P.FOV_UP_GUAR - M["gate2_margin_deg"]
     grow = []
-    for ulabel, sh in (("nominal unit", (0, 0, 0)), ("guaranteed case (optics high, play against it)", (0, -dy, tp))):
+    if not abs(g2 - P.GATE2_DEG) < 1e-9:
+        fails.append(f"test gate 2: bars at +-{g2} deg differ from YAML cameras.gate2_bars_deg")
+    for ulabel, sh in (("nominal unit", (0, 0, 0)), ("guaranteed case (optics high, loosest fit against it, cold roof)", (0, -dy_max, tp + cold))):
         for ang, what in ((g2, f"gate 2 target: guaranteed {P.FOV_UP_GUAR} - {M['gate2_margin_deg']} margin"), (-g2, "gate 2 reference bar (mirrored)"), (P.FOV_UP_GUAR, "guaranteed upper field"),
                           (17.0, "former gate 2 target (+17 deg)"), (P.FOV_UP, "required nominal field edge")):
             trs = {sd_: O.bundle(sd_, 0.0, math.tan(math.radians(ang)), rc, shift=sh, n_rim=48, n_rings=8)["total_fraction"] for sd_ in ("L", "R")}
@@ -797,7 +813,11 @@ def check_fold(parts):
                 if ulabel.startswith("guaranteed") and abs(abs(ang) - g2) < 1e-9 and t_ < 1.0 - 1e-9:
                     fails.append(f"test gate 2: a bar at {ang:+.1f} deg is only {100 * t_:.1f} % clear in camera {sd_} on a unit at the tolerance limit")
     prow_ = [dict(quantity="radial fit of each spigot (dia %.2f in dia %.2f / in the %.2f x %.2f slot)" % (P.SPIGOT_D, P.LOC_ROUND[2], P.LOC_SLOT[2], P.LOC_SLOT[3]),
-                  value=round(pl["fit"], 3), unit="mm", basis="YAML pcb.locating_holes"),
+                  value=round(pl["fit"], 3), unit="mm", basis="YAML pcb.locating_holes (fit_nominal)"),
+             dict(quantity="loosest radial fit (E17): hole and slot width dia %.2f +%.2f, spigot dia %.2f -%.2f (no-go ring gauge dia %.2f beside the dia 1.10 go gauge)"
+                           % (P.LOC_ROUND[2], M["pcb_hole_tol"], P.SPIGOT_D, M["spigot_undersize"], P.SPIGOT_D_MIN),
+                  value=round(fit_max, 3), unit="mm", basis=f"YAML pcb.locating_holes (dia_tol, spigot_dia_tol, fit_max): +-{dy_max:.3f} fore-aft, +-{P.spigot_play(fit_max)['side']:.3f} sideways, "
+                                                            f"+-{P.spigot_play(fit_max)['yaw_deg']:.2f} deg yaw at a camera"),
              dict(quantity="spigot spacing", value=P.SPIGOT_SPAN, unit="mm", basis=f"posts B at x = +-{abs(P.LOC_ROUND[0])}, y = {P.LOC_ROUND[1]}; cameras at x = +-{P.CAM_X}, y = {P.CAM_XY['R'][1]}"),
              dict(quantity="yaw of the PCB when the two spigots use their fit in opposite directions", value=round(yaw_deg, 3), unit="deg", basis="2 x fit / spacing (a stereo-calibration item)"),
              dict(quantity="fore-aft play at a camera", value=round(dy, 3), unit="mm", basis="the cameras lie between the spigots: never more than the fit itself"),
@@ -807,8 +827,11 @@ def check_fold(parts):
                   unit="deg", basis=f"required {P.FOV_UP} nominal (YAML)"),
              dict(quantity="upper field at the tolerance limit, closed form (rim ray of the pupil through the top edge of the opening)", value=round(O.upper_field_closed_form(tp), 3),
                   unit="deg", basis="a tan(t) + (prism leg) tan(t') = margin, sin(t) = n sin(t'); cross-check of the ray trace"),
-             dict(quantity="GUARANTEED CASE: upper field with the optics high AND the fore-aft play (spigot fit) against it, the smaller of the two cameras", value=srows[8]["upper_field_full_pupil_deg"], unit="deg",
-                  basis=f"YAML up_guaranteed = {P.FOV_UP_GUAR} is defined on this case (N3): camera L {up_side.get('L', float('nan')):.2f}, camera R {up_side.get('R', float('nan')):.2f}; margin {guar_margin:+.2f} deg; "
+             dict(quantity="rev D definition (information): optics high AND the NOMINAL fore-aft play against it, 20 C", value=srows[8]["upper_field_full_pupil_deg"], unit="deg",
+                  basis="N3; the 14.5 deg of rev D was stated on this case"),
+             dict(quantity="GUARANTEED CASE (E17): upper field with the optics high, the fore-aft play of the LOOSEST fit against it AND the roof at the cold end, the smaller of the two cameras",
+                  value=srows[9]["upper_field_full_pupil_deg"], unit="deg",
+                  basis=f"YAML up_guaranteed = {P.FOV_UP_GUAR} is defined on this case (E17): camera L {up_side.get('L', float('nan')):.2f}, camera R {up_side.get('R', float('nan')):.2f}; margin {guar_margin:+.2f} deg; "
                         f"closed form {cf_play:.3f} deg"),
              dict(quantity="roof lower by 0.01 mm over the opening: loss of upper field (sensitivity)", value=round((srows[0]["upper_field_full_pupil_deg"] - srows[7]["upper_field_full_pupil_deg"]) / (tp / 0.01), 3),
                   unit="deg per 0.01 mm", basis=f"the margin of {guar_margin:.2f} deg is {guar_margin / max(1e-9, (srows[0]['upper_field_full_pupil_deg'] - srows[7]['upper_field_full_pupil_deg']) / tp):.3f} mm of roof or optics height")]
@@ -817,7 +840,7 @@ def check_fold(parts):
     m_open_min = min(r["margin_visor_opening_mm"] for r in rows)
     if m_edge[2] < 0.2:
         warns.append(f"the upper field edge (+{M['fov_up_deg']} deg) clears the top of the opening (the roof underside, z {P.OPEN_Z1}) by only {m_edge[2]:.3f} mm: "
-                     f"optics {tp} mm high clip the upper field to {up_limit:.2f} deg, {up_play:.2f} deg with the spigot play against it (accepted: {P.FOV_UP_GUAR} deg guaranteed, YAML N3)")
+                     f"optics {tp} mm high clip the upper field to {up_limit:.2f} deg, {up_play:.2f} deg with the play of the loosest spigot fit against it and the roof cold (accepted: {P.FOV_UP_GUAR} deg guaranteed, YAML E17)")
     if m_edge[0] < 0.2 or m_edge[1] < 0.2:
         warns.append(f"bundle margin to the opening sides {m_edge[0]:.3f} mm / sill {m_edge[1]:.3f} mm is below the 0.2 mm print tolerance")
     notes = [f"entrance pupil ASSUMED: dia {M['pupil_dia']} mm, {M['pupil_below_cube_top']} mm below the cube top (z = {P.PUPIL_Z:.2f}); prism n = {O.N_GLASS}, "
@@ -834,10 +857,12 @@ def check_fold(parts):
              f"smallest margin of the full pupil bundle to the opening over the required field: sides {m_edge[0]:.3f}, sill {m_edge[1]:.3f}, top {m_edge[2]:.3f} mm",
              f"required field (YAML): +-{P.FOV_H} deg horizontal, +{P.FOV_UP} / -{P.FOV_DOWN} deg vertical; upper field guaranteed at the tolerance limit: {P.FOV_UP_GUAR} deg",
              f"limit angles: bisection to {M['fov_angle_tol']} deg; the pupil samples include the four extreme rim points, so the full-pupil limits are those of the whole "
-             f"{M['pupil_dia']} mm disc. The comparison with the guaranteed {P.FOV_UP_GUAR} deg is strict and is made on the case the YAML defines (optics {tp} high and the spigot play "
-             f"against it), for each camera: L {up_side.get('L', float('nan')):.2f}, R {up_side.get('R', float('nan')):.2f} deg, closed form {cf_play:.3f} deg",
-             f"the margin of {guar_margin:+.2f} deg belongs to the case as the YAML defines it (nominal fit {P.SPIGOT_FIT:.3f}) and to the assumed pupil; the table 'What uses up the margin' shows the "
-             f"figure with the hole at its upper limit, with other pupil numbers and with the roof {M['roof_cold_drop']} mm lower at -10 C",
+             f"{M['pupil_dia']} mm disc. The comparison with the guaranteed {P.FOV_UP_GUAR} deg is strict and is made on the case the YAML defines (E17: optics {tp} high, the play of the "
+             f"loosest fit {fit_max:.3f} against it, roof {cold} mm lower at {M['t_range'][0]:g} C), for each camera: L {up_side.get('L', float('nan')):.2f}, R {up_side.get('R', float('nan')):.2f} deg, "
+             f"closed form {cf_play:.3f} deg (YAML model_deg {P.FOV_GUAR_CASE['model_deg']})",
+             f"the margin of {guar_margin:+.2f} deg belongs to the case as the YAML defines it and to the ASSUMED pupil; the table 'What uses up the margin' shows the figure at the nominal fit, with the "
+             f"hole at its upper limit alone, warm and cold, and with other pupil numbers. The roof drop of {cold} mm at {M['t_range'][0]:g} C is this package's thermal estimate (README open issue 1): "
+             "the YAML names the temperature, not the drop",
              f"test gate 2 (assembly step 16): target bar at +{g2:.1f} deg = guaranteed {P.FOV_UP_GUAR} - {M['gate2_margin_deg']} deg (placement of target and unit in the join fixture), reference bar at "
              f"-{g2:.1f} deg; both are fully clear on every in-tolerance unit, so the upper bar may not be darker than the lower one (threshold to be set on first units). A bar at +17 deg is "
              "vignetted on in-tolerance units and cannot be a pass / fail limit"]
@@ -845,8 +870,8 @@ def check_fold(parts):
                (f"chief rays of all nine field points pass the prism and the visor opening on both cameras; pupil transmission at the worst "
                 f"nominal field point {worst_nom:.1f} % (prism exit face); bundle margin to the opening: sides {m_edge[0]:.3f}, sill {m_edge[1]:.3f}, "
                 f"top {m_edge[2]:.3f} mm; upper field {srows[0]['upper_field_full_pupil_deg']:.2f} deg nominal, {up_limit:.2f} deg with the optics {tp} high, "
-                f"{up_play:.2f} deg in the guaranteed case (optics high and spigot play against it; camera L {up_side.get('L', float('nan')):.2f}, camera R {up_side.get('R', float('nan')):.2f}): "
-                f"YAML guarantees {P.FOV_UP_GUAR}, margin {guar_margin:+.2f} deg at the nominal fit ({mrow[1]['margin_to_the_guaranteed_deg']:+.3f} with the PCB hole {M['pcb_hole_tol']} oversize); "
+                f"{up_play:.2f} deg in the guaranteed case (optics high, loosest spigot fit against it, roof cold; camera L {up_side.get('L', float('nan')):.2f}, camera R {up_side.get('R', float('nan')):.2f}): "
+                f"YAML guarantees {P.FOV_UP_GUAR} on that case (E17), margin {guar_margin:+.2f} deg (closed form {cf_play:.3f}; {mby['nominal_fit']['upper_field_deg_closed_form']:.3f} at the nominal fit and 20 C); "
                 f"gate 2 target +{g2:.1f} deg fully clear on a unit at the limit"
                 if not fails else "FAILED: " + "; ".join(fails)),
                [dict(title="Chief rays and pupil-bundle margins (nominal geometry)", rows=rows),
@@ -1362,6 +1387,34 @@ def check_cradle(parts):
     z_root = 2.0 - t if t else float("nan")
     meas("latch root (well floor) z", z_root, zr)
     meas("skin between the well floor and the PCB pocket", z_root - cpcb_top, zr - P.CPCB_Z1, note=">= 0.8 mm wall")
+    # ---- E36: cradle board 1.0 mm (was 1.6).  The top face, which sets the pin height, must not have moved; the pin tail must
+    #      come through the board; the screws are restated for the thinner board
+    def atleast(name, value, minimum, note=""):
+        ok = value is not None and value == value and value >= minimum - NUM_TOL
+        if not ok:
+            fails.append(f"{name}: {value} < {minimum}")
+        grow.append(dict(quantity=name, measured_mm=R3(value), parameter_mm=f">= {minimum}", status="ok" if ok else "FAIL", note=note))
+    cb = A.bbox_of(parts["cradle_pcb"])
+    meas("E36: cradle PCB top face z (it sets the pin height and does NOT move with the board thickness)", cb[5], P.Y["cradle"]["pcb"]["top_z"], 1e-6,
+         note=f"pad face {P.PAD_Z0} - working height {P.PIN_WORK_H}; rev D: the same {P.Y['cradle']['pcb']['top_z']}")
+    meas("E36: cradle PCB thickness (solid)", cb[5] - cb[2], P.Y["cradle"]["pcb"]["thickness"], 1e-6, note=f"underside at z {cb[2]:.3f} (rev D, 1.6 mm board: -6.455)")
+    t_ceiling = rc.first_hit((0.0, 0.5 * (P.CPCB_Y0 + P.CPCB_Y1) + 4.0, cb[5] - 0.5), (0, 0, 1))
+    meas("E36: pocket ceiling of the cradle body (the board is screwed against it) z", (cb[5] - 0.5 + t_ceiling) if t_ceiling else float("nan"), P.CPCB_Z1, 1e-3, note="ray from below, inside the PCB pocket")
+    tail_tips = [A.bbox_of(parts[f"spring_pin_{i + 1}"])[2] for i in range(len(P.PAD_XS))]
+    meas("E36: spring-pin tail tip z (all seven)", max(tail_tips), P.PIN_TAIL_Z0, 1e-6, note=f"tail {P.PIN_TAIL_L} long below the board top (YAML cradle.pins.tail_length, PROVISIONAL estimate)")
+    atleast("E36: pin tail through the underside of the board (solder fillet)", cb[2] - max(tail_tips), M["pin_tail_solder_min"],
+            note=f"{P.PIN_TAIL_L} - {P.CPCB_SIZE[2]} = {P.PIN_TAIL_THROUGH}; with the 1.6 mm board of rev D the tail ended {1.6 - P.PIN_TAIL_L:.2f} INSIDE the hole")
+    skins = []
+    for sx_, sy_ in P.CPCB_SCREWS:
+        for sg in (1, -1):
+            z_s = P.CPCB_Z1 + M["cradle_screw_pilot_depth"] + 0.02
+            t_s = rc.first_hit((sg * sx_, sy_, z_s), (0, 0, 1))
+            skins.append(((z_s + t_s) - P.SCREW_DRILL_TOP_Z if t_s else float("nan"), (sg * sx_, sy_)))
+    sk_min, sk_at = min(skins)
+    atleast(f"E36: printed material left above the drilled screw hole (dia {M['cradle_screw_drill'][0]} x {M['cradle_screw_drill'][1]} deep), smallest of four", sk_min, M["cradle_screw_skin_min"],
+            note=f"at {sk_at}; M2 x {M['cradle_screw_len']:g} thread-forming screw through the {P.CPCB_SIZE[2]} mm board: {P.SCREW_ENGAGE:.1f} mm of thread in the body, "
+                 f"{M['cradle_screw_tip_clear']} under the tip (rev D listed M2 x 5 in a 3 mm hole through a 1.6 mm board: 3.4 mm of thread, more than the hole)")
+    atleast("E36: screw thread engagement in the body, in screw diameters", P.SCREW_ENGAGE / 2.0, 1.5, note="thread-forming screw in PA12; our rule 1.5 x d (to be proven by the pull test of the cradle)")
     up = lambda y: (lambda t_: (P.T + 0.001 + t_) if t_ is not None else float("nan"))(rc.first_hit((0, y, P.T + 0.001), (0, 0, 1), 1e-9, 6.0))
     y1, y2 = P.HOOK_Y - 0.03, P.LATCH_Y_FACE + 0.85
     z1, z2 = up(y1), up(y2)
@@ -1692,7 +1745,8 @@ def check_mass(parts):
     notes = ["densities are typical handbook values, not measured (PROVISIONAL): PA12 MJF 1.01, glass 2.5, N-BK7 and borosilicate 2.51, FR-4 1.85, stainless 7.9, "
              "epoxy 1.15, LiPo cell 2.1, camera module 2.5, adhesive tapes 1.0, PU foam 0.32; purchased parts are envelope solids, so their mass is an estimate",
              f"base plate: {P.BASE['label']}, {P.BASE_T} mm; the two battery-lead solids are envelopes up to the joint height (their real mass is far smaller)",
-             "solder, passives, conformal coat and cured adhesive fillets are not included (expect about +0.5 to 1 g on the marker)",
+             "rev E: the PCB solid carries every fitted top-side body of the routed part list (passives included) as a box at board density (1.85): an estimate. Solder, conformal coat and cured adhesive "
+             "fillets are not included (expect a few tenths of a gram on the marker)",
              f"marker centre of gravity is {margin:.1f} mm inside the triangle of the three ball feet (static tip-over angle about {tip:.0f} deg)"]
     return res(8, "mass and centre of gravity", inside,
                f"marker {tot[0]['mass_g']} g, CoG ({tot[0]['cog_x']}, {tot[0]['cog_y']}, {tot[0]['cog_z']}) mm; cradle assembly {tot[1]['mass_g']} g; "
@@ -2021,21 +2075,35 @@ def check_keepouts(parts):
                          lowest_tub_above_pcb_mm=round(hmin, 3), allowed=f">= {P.KO_HOOD_MAX_H} (part height)", status="ok" if okk else "FAIL"))
     # (b2) N10: the keep-out under the folded LCD flex tail.  The contract is with the layout (parts up to max_part_height inside
     #      the zone); here the modelled tail is proven to lie inside the zone and to clear the tallest part the zone allows
+    #      E24: the mouth of J1 (y -17.30) is behind the rear edge of the glass (-16.80).  Behind the mouth the tail must lie inside
+    #      the zone; in FRONT of the mouth (its upper run from the glass edge) it must lie over the body of J1 and nowhere else,
+    #      and clear the top of the connector: then no part other than J1 can stand under the tail outside the zone
     kt = P.KO_TAIL
     fb = A.bbox_of(parts["lcd_flex"])
-    j1 = next(q for q in P.TOP_PARTS if q["ref"] == "J1")
-    mouth = j1["y"] - j1["dy"] / 2
+    mouth = P.J1_MOUTH_Y
+    jx0, jy0, jx1, jy1 = P.J1_BOX
+    sec_t = G.section_polys(S["lcd_flex"], "x", 0.0)          # the tail in the plane x = 0 (y, z)
     m_x = kt["half_w"] - max(abs(fb[0]), abs(fb[3]))
-    m_y0, m_y1 = fb[1] - kt["y"][0], kt["y"][1] - fb[4]
-    low = G.section_polys(S["lcd_flex"], "x", 0.0).intersection(sbox(kt["y"][0] - 1, 0.0, mouth + 1e-6, 0.5 * (P.FLEX_ZB + P.FLEX_ZT)))   # lower run of the fold
+    m_y0 = fb[1] - kt["y"][0]                                 # rearmost point of the fold to the rear end of the zone
+    low = sec_t.intersection(sbox(kt["y"][0] - 1, 0.0, mouth + 1e-6, 0.5 * (P.FLEX_ZB + P.FLEX_ZT)))   # lower run of the fold
     z_under = low.bounds[1] - zt if not low.is_empty else float("nan")
-    need = 0.2                                                # the clearance check 17 keeps between a part and the tail
-    okk = m_x >= -1e-9 and m_y0 >= -1e-9 and m_y1 >= -1e-9 and z_under - kt["max_part_height"] >= need - NUM_TOL and abs(kt["y"][1] - mouth) < 1e-6
+    front = sec_t.intersection(sbox(mouth + 1e-6, 0.0, 50.0, 50.0))   # what lies in front of the mouth: the upper run from the glass edge
+    m_j1x = min(fb[0] - jx0, jx1 - fb[3])                     # the tail inside the width of the connector body
+    m_j1y = jy1 - fb[4]                                       # and its front end (the glass edge) behind the front face of the body
+    z_over_j1 = (front.bounds[1] - P.J1_TOP_Z) if not front.is_empty else float("inf")
+    need = M["flex_part_clr"]                                 # the clearance check 17 keeps between a part and the tail
+    okk = (m_x >= -1e-9 and m_y0 >= -1e-9 and z_under - kt["max_part_height"] >= need - NUM_TOL and abs(kt["y"][1] - mouth) < 1e-6
+           and m_j1x >= -1e-9 and m_j1y >= -1e-9 and z_over_j1 >= need - NUM_TOL)
     if not okk:
-        fails.append(f"LCD tail keep-out: tail outside the zone (x margin {m_x:.3f}, y margins {m_y0:.3f} / {m_y1:.3f}) or only {z_under - kt['max_part_height']:.3f} mm above a part of the allowed height")
-    krow.append(dict(keep_out="LCD flex tail (N10, PROVISIONAL)", yaml_centre=(0.0, round(0.5 * (kt["y"][0] + kt["y"][1]), 3)), yaml_size_mm=f"{2 * kt['half_w']} x {kt['y'][1] - kt['y'][0]:.1f}",
-                     tub_area_inside_mm2="-", tub_area_outside_mm2=f"modelled tail inside the zone by {m_x:.3f} in x, {m_y0:.3f} at the rear; the zone ends at the mouth of J1 (y {mouth})",
-                     lowest_tub_above_pcb_mm=round(z_under, 3), allowed=f"parts to {kt['max_part_height']} (tail underside {z_under:.3f} above the PCB: {z_under - kt['max_part_height']:.3f} over such a part, {need} needed)",
+        fails.append(f"LCD tail keep-out: tail outside the zone (x margin {m_x:.3f}, rear margin {m_y0:.3f}), or only {z_under - kt['max_part_height']:.3f} mm above a part of the allowed height, "
+                     f"or in front of the mouth not over the body of J1 (x {m_j1x:.3f}, y {m_j1y:.3f}) or only {z_over_j1:.3f} mm above it")
+    d_tub_t = min_distance(S["lcd_flex"], S["tub"])
+    krow.append(dict(keep_out="LCD flex tail (N10 / E24, PROVISIONAL)", yaml_centre=(0.0, round(0.5 * (kt["y"][0] + kt["y"][1]), 3)), yaml_size_mm=f"{2 * kt['half_w']} x {kt['y'][1] - kt['y'][0]:.1f}",
+                     tub_area_inside_mm2="-", tub_area_outside_mm2=f"modelled fold (y {fb[1]:.3f} to the mouth) inside the zone by {m_x:.3f} in x, {m_y0:.3f} at the rear; the zone starts at the mouth of J1 (y {mouth}); "
+                                                                  f"in front of the mouth the upper run (to the glass edge, y {fb[4]:.2f}) lies over the body of J1 (inside it by {m_j1x:.2f} in x, {m_j1y:.2f} in y), "
+                                                                  f"{z_over_j1:.3f} above its top (z {P.J1_TOP_Z}); tail to the tub solid {d_tub_t:.3f}",
+                     lowest_tub_above_pcb_mm=round(z_under, 3), allowed=f"parts to {kt['max_part_height']} (tail underside {z_under:.3f} above the PCB: {z_under - kt['max_part_height']:.3f} over such a part, {need} needed; "
+                                                                        f"{z_over_j1:.3f} over J1, {need} needed)",
                      status="ok" if okk else "FAIL"))
     # (c) height map of the tub above the PCB top (rays +z from the board top on a grid), by region
     hrow = []
@@ -2063,12 +2131,17 @@ def check_keepouts(parts):
              f"height map: {len(hts)} rays on a {KO_GRID} mm grid over the board top (locating holes excluded); the corner fill between hood and side wall starts "
              f"at y = {P.HOOD_FILL_Y0:.2f}, where the PCB outline has left the hood zone",
              "the seating ledge (r >= 21.35) lies outside the PCB (r 21.1) and is checked as a clearance in check 2",
-             f"LCD tail zone (YAML tub_keepouts.lcd_tail, N10): x +-{kt['half_w']}, y {kt['y'][0]} to {kt['y'][1]}, parts to {kt['max_part_height']} mm; it is a contract for the layout, not a tub "
-             "feature: the row shows that the representative tail of the model (one U-fold behind the mouth of J1) lies inside it. PROVISIONAL until the Sharp tail drawing is in hand (gate B16)"]
+             f"LCD tail zone (YAML tub_keepouts.lcd_tail, N10 / E24): x +-{kt['half_w']}, y {kt['y'][0]} to {kt['y'][1]} (from the mouth of J1 to the rear edge of the board), parts to {kt['max_part_height']} mm; "
+             "it is a contract for the layout, not a tub feature: the row shows that the representative tail of the model (one U-fold behind the mouth of J1) lies inside it. PROVISIONAL until the "
+             "Sharp tail drawing is in hand (gate B16)",
+             f"E24: the mouth of J1 is at y {mouth}, {P.LCD_Y0 - mouth:.2f} mm BEHIND the rear edge of the glass (y {P.LCD_Y0:.2f}). The modelled tail runs {P.FLEX_TOP_RUN:.2f} mm back from the glass edge at z "
+             f"{P.FLEX_ZT} (over the rear {P.LCD_Y0 - mouth:.2f} mm of the connector body, {P.FLEX_OVER_J1:.2f} above it), folds once on a centre-line radius of {P.FLEX_BEND_R:.2f} mm and comes forward "
+             f"{M['flex_straight']} mm into the mouth: rearmost point y {P.FLEX_REAR_Y:.2f}, free length from the glass edge {P.FLEX_FREE_LEN:.2f} mm (rev D: 3.80). The fold uses {mouth - P.FLEX_REAR_Y:.2f} mm "
+             f"of the {kt['y'][1] - kt['y'][0]:.1f} mm zone: the zone could be shortened to about y {P.FLEX_REAR_Y - 0.5:.1f}, which is left to the Sharp drawing"]
     okall = not fails
     return res(12, "tub keep-out contract (YAML tub_keepouts)", okall,
                (f"no tub material in the layout space below z {zf:.2f} ({v:.6f} mm3 common); eight post feet inside their squares ({P.KO_POST_SIZE} mm, posts B {P.KO_LOC_SIZE} mm, built "
-                f"{P.LOC_FOOT[0]:.1f} x {P.LOC_FOOT[1]:.1f}); LCD tail inside its zone, {z_under - kt['max_part_height']:.3f} mm over a {kt['max_part_height']} mm part; hood skirts "
+                f"{P.LOC_FOOT[0]:.1f} x {P.LOC_FOOT[1]:.1f}); LCD tail fold behind the J1 mouth (y {mouth}) inside its zone, {z_under - kt['max_part_height']:.3f} mm over a {kt['max_part_height']} mm part, {z_over_j1:.2f} over J1; hood skirts "
                 f"{min(r['lowest_tub_above_pcb_mm'] for r in krow if r['keep_out'].startswith('camera')):.2f} mm above the PCB inside the +-{P.KO_HOOD_HW} zones "
                 f"(parts to {P.KO_HOOD_MAX_H}); lowest tub feature elsewhere {low_out:.2f} mm above the PCB" if okall else "FAILED: " + "; ".join(fails)),
                [dict(title="Boolean proof", rows=brow), dict(title="Keep-outs of the YAML against the tub solid", rows=krow),
@@ -2540,8 +2613,7 @@ def check_assembly_paths(parts):
         ok = v < lim
         if not ok:
             fails.append(f"hinged close, unit open by {th} deg: {v:.4f} mm3 of interference")
-        j1 = next(q for q in P.TOP_PARTS if q["ref"] == "J1")
-        my, mz = j1["y"] - j1["dy"] / 2, P.FLEX_ZB
+        my, mz = P.J1_MOUTH_Y, P.FLEX_ZB
         t = math.radians(th)
         qy = hy + (my - hy) * math.cos(t) + (mz - hz) * math.sin(t); qz = hz - (my - hy) * math.sin(t) + (mz - hz) * math.cos(t)
         hrow.append(dict(unit_open_by_deg=th, front_edge_of_the_base_below_the_rim_mm=R3((P.BASE_FLAT - hy) * math.sin(t) - P.RIM_Z), interference_mm3=round(v, 5),
@@ -2591,7 +2663,9 @@ def check_assembly_paths(parts):
                          solid_check=f"glass + frame turned {max(0.0, th - 0.02):.2f} deg at that position: {v_in:.5f} mm3 common with the tub; turned {th + 0.05:.2f} deg: {v_out:.4f} mm3",
                          status="ok" if (th <= M["lcd_free_rotation_limit_deg"] and v_in < lim) else "FAIL"))
     if not rmax <= M["lcd_free_rotation_limit_deg"]:
-        fails.append(f"display rotation: the LCD glass can turn {rmax:.2f} deg in its pocket, more than the {M['lcd_free_rotation_limit_deg']} deg the stored correction (E12) is sized for")
+        fails.append(f"display rotation: the LCD glass can turn {rmax:.2f} deg in its pocket, more than the {M['lcd_free_rotation_limit_deg']} deg the stored correction (E12, E22: YAML lcd.rotation_in_pocket_max_deg {P.LCD_ROT_YAML}) is sized for")
+    if not abs(rmax - P.LCD_ROT_YAML) <= 0.05:
+        fails.append(f"display rotation: the model gives {rmax:.2f} deg, YAML lcd.rotation_in_pocket_max_deg says about {P.LCD_ROT_YAML} (E22; agreement required within 0.05 deg)")
     ribs = rot["ribs"]
     rib_ok = len(ribs) == 2 and ribs[0][1] < 0 < ribs[1][0] and abs(ribs[0][2] - ribs[1][2]) < 1e-6
     push_e = M["lcd_pusher_pad_w"] / 2 + M["lcd_pusher_guide_tol"]
@@ -2656,7 +2730,7 @@ def check_assembly_paths(parts):
              f"(f) display rotation: obstacles = union of the tub sections at z {', '.join(f'{z:.2f}' for z in rot['levels'])} (the height of the glass and its frame) near the glass; for a rotation "
              "angle the set of free positions of the glass centre is the translation window less the Minkowski sum of the obstacles with the mirrored glass; the largest angle with a free position "
              f"is found by bisection to 0.002 deg and confirmed by a boolean on the solids. The check fails above {M['lcd_free_rotation_limit_deg']} deg (the specification sizes the stored "
-             "correction on 'up to about 1 degree'). The squaring aid is a pusher on the centre of the front edge of the tilted glass: pushed between the two rear ribs the glass beds on both"]
+             f"correction on 'up to about {P.LCD_ROT_YAML} degrees', E22, YAML lcd.rotation_in_pocket_max_deg; the model must agree with that figure within 0.05 deg). The squaring aid is a pusher on the centre of the front edge of the tilted glass: pushed between the two rear ribs the glass beds on both"]
     return res(14, "assembly paths (LCD tilt-in, PCB / base join)", not fails,
                (f"LCD glass tilts in at {tau} deg with {gap_ledge:.2f} mm to the ledge ({len(seq)} poses, no interference); the PCB / base unit descends with "
                 f"+-{o} mm lateral error ({len(jrow)} heights) and closes about the fixture hinge ({len(hrow)} angles) without interference; PCB slot {slot_len:.2f} long on the solid: "
@@ -2898,18 +2972,18 @@ def check_fr4_plate(parts, legend_blocks=None):
         outer = SPoly(pg.exterior)
         d_edge = pg.exterior.distance(ink) if outer.contains(ink) else -1.0
         lrow.append(dict(legend_ink_to="routed outline (ink inside the face)", distance_mm=R3(d_edge), required_mm=M["legend_edge_margin"], margin_mm=R3(d_edge - M["legend_edge_margin"]),
-                         basis="mechanical-only: registration of a legend print", status="ok" if d_edge >= M["legend_edge_margin"] - NUM_TOL else "FAIL"))
+                         basis="YAML base_plate.legend.edge_margin (E18)", status="ok" if d_edge >= M["legend_edge_margin"] - NUM_TOL else "FAIL"))
         for i_, z_ in enumerate(L.seat_zones()):
             d_ = ink.distance(z_)
             lrow.append(dict(legend_ink_to=f"calibration seat zone dia {P.CAL_LEGEND_ZONE_D:.1f} round ball foot {i_ + 1}", distance_mm=R3(d_), required_mm=0.0, margin_mm=R3(d_),
-                             basis="mechanical-only: the seat pads of plate GL1-050 bear on bare mask (D34)", status="ok" if d_ >= -1e-9 and not ink.intersects(z_) else "FAIL"))
+                             basis="YAML base_plate.legend.seat_zones_clear_dia (E18): the seat pads of plate GL1-050 bear on bare mask", status="ok" if d_ >= -1e-9 and not ink.intersects(z_) else "FAIL"))
         # fixtures that take the outer face as their reference bear on bare mask: gauge-plate bosses (step 2), seat pads of GL1-050
         # (step 19), feet of the bridge gauge (steps 11, 12, 14, 15), each grown by the play of its location
         reg = M["legend_registration"]
         for nm, shp in L.fixture_footprints().items():
             d_ = ink.distance(shp)
             lrow.append(dict(legend_ink_to="fixture footprint: " + nm, distance_mm=R3(d_), required_mm=reg, margin_mm=R3(d_ - reg),
-                             basis="mechanical-only: fixtures bear on bare mask; registration of the legend print (D34)", status="ok" if d_ >= reg - NUM_TOL and not ink.intersects(shp) else "FAIL"))
+                             basis="YAML base_plate.legend.fixture_rule and registration (E18): fixtures bear on bare mask", status="ok" if d_ >= reg - NUM_TOL and not ink.intersects(shp) else "FAIL"))
         ser_ = next((b_ for b_ in blks if b_["name"] == "serial"), None)
         if ser_ is not None:
             box_ = sbox(-ser_["rect"][2], ser_["rect"][1], -ser_["rect"][0], ser_["rect"][3])      # the inside of the serial box in the model frame (mirrored here)
@@ -2932,7 +3006,7 @@ def check_fr4_plate(parts, legend_blocks=None):
              f"blocks {names}; model text {texts.get('model')!r}; missing {missing or 'none'}", "all five kinds present; placeholders only where the text is not frozen", ok_c,
              (f"serial-number box {ser['rect'][2] - ser['rect'][0]:.1f} x {ser['rect'][3] - ser['rect'][1]:.1f} mm inside its frame" if ser else "") + "; the wording of the statements is not frozen (docs/COMPLIANCE.md rows 5 and 33)")
         rule("legend print rules: smallest text height / smallest line width", f"{h_min} / {w_min}", f">= {M['legend_min_text_h']} / >= {M['legend_stroke']}",
-             h_min >= M["legend_min_text_h"] - 1e-9 and w_min >= M["legend_stroke"] - 1e-9, "fabricator rules for legend print, assumed: to be confirmed with the quote")
+             h_min >= M["legend_min_text_h"] - 1e-9 and w_min >= M["legend_stroke"] - 1e-9, "YAML base_plate.legend min_text_height / min_line (E18; print_rules_basis provisional: to be confirmed with the quote)")
         free = outer.buffer(-M["legend_edge_margin"])
         for nm, shp in feats:
             free = free.difference(shp.buffer(clear))
@@ -3078,6 +3152,14 @@ def check_board_import(parts, path=None, data=None):
     import board_import as B
     r = B.check_board(parts, path=path, data=data)
     return res(17, "board import (electrical/gl1_main)", r["passed"], r["summary"], r["tables"], r["notes"], r["warnings"])
+
+
+def check_cradle_board_import(parts, path=None, data=None):
+    """The cradle board file against the YAML cradle block and the cradle model (cad/board_import.py, check_cradle_board):
+    thickness, outline, screw holes, spring-pin row, USB-C receptacle.  Skipped, and passed, while the file does not exist."""
+    import board_import as B
+    r = B.check_cradle_board(parts, path=path, data=data)
+    return res(19, "cradle board import (electrical/gl1_cradle)", r["passed"], r["summary"], r["tables"], r["notes"], r["warnings"])
 
 
 # ==============================================================================================
@@ -3249,7 +3331,7 @@ def check_cal_plates(parts):
     # legend ink against the seat pads (nest A = the marker frame)
     padsA = G.section_polys(seat, "z", P.CAL_SEAT_Z - 1e-3, 2e-4).intersection(sbox(-P.BASE_R, -P.BASE_R, P.BASE_R, P.BASE_FLAT))
     add("Legend ink of the outer face to the nearest seat pad", ink.distance(padsA), c["locate_tol"] + c["legend_zone_margin"], method="legend blocks against the pad sections",
-        note=f"a legend print stands about {M['legend_ink_t']} mm proud of the mask: the pads must bear on bare mask wherever the marker sits inside its location allowance (D34)")
+        note=f"a legend print stands about {M['legend_ink_t']} mm proud of the mask: the pads must bear on bare mask wherever the marker sits inside its location allowance (E18)")
     cg = _cog(_mass_table(parts), "puck")
     tri = SPoly(P.BALL_XY)
     add("Marker centre of gravity inside the triangle of the three seat pads / balls", tri.exterior.distance(Point(cg[0], cg[1])) if tri.contains(Point(cg[0], cg[1])) else -1.0, 2.0,
@@ -3287,14 +3369,14 @@ def check_cal_plates(parts):
     notes = ["fixtures, not product parts: drawing GL1-050; solids exported as cal_seat_plate.step and cal_plain_plate.step (the plain plate in its own frame, top face z = 0)",
              "ball gauge plate: solid exported as gauge_plate.step, drawn in the detail of GL1-011 sheet 1. The outer face of the base plate carries the legend (E10), so this plate bears on three "
              f"bosses inside the legend-free zones, not on its whole face: a print of {M['legend_ink_t']} to {M['legend_ink_t_max']} mm under a flat plate would add itself to the ball protrusion "
-             f"({P.BALL_PROT} +-{M['tol_ball_set']}) and take the same amount from the epoxy between ball and land (D34)",
+             f"({P.BALL_PROT} +-{M['tol_ball_set']}) and take the same amount from the epoxy between ball and land (E18)",
              "bridge gauge: not a solid of this model; its footprint (three annular feet round the balls), its rim stations and the potting mask are checked as geometry against the legend and the tub. "
              "No depth gauge rests on printed legend: one that bridged the grain opening on the legend (1.2 mm from the opening) would read the ring crest and the potting level up to "
              f"{M['legend_ink_t_max']} mm deep against a never-below limit of {P.GRAIN_FILL_Z}",
              f"plate frame = marker frame of nest A (the marker as modelled); nest B = nest A turned 180 deg about ({P.CAL_CENTRE[0]}, {P.CAL_CENTRE[1]}), the middle of the fence. "
              f"Fence faces at y = {P.CAL_FENCE_Y0} and {P.CAL_FENCE_Y1}; side stops at ({P.CAL_PIN_XY[0]}, {P.CAL_PIN_XY[1]}) and its image",
              "base-face seat: E11 asks that the base face seats (the turf seat). The pads touch the FR-4 face in a ring round each foot, so the stored difference between the two seats is "
-             "the difference between the plane of the face at the feet and the plane of the balls; a bowed laminate floats on turf on its mean plane, which three pads do not measure (D34)",
+             "the difference between the plane of the face at the feet and the plane of the balls; a bowed laminate floats on turf on its mean plane, which three pads do not measure (E18)",
              "the six-face calibration needs pad contact in six orientations: that fixture is NOT designed (README, fixtures)"]
     return res(18, name, not fails,
                (f"base-face seat plate: the base plate rests on three pads per nest (contact {min(min(a_) for a_ in areas.values()):.1f} to {max(max(a_) for a_ in areas.values()):.1f} mm2 each), "
@@ -3310,7 +3392,7 @@ def check_cal_plates(parts):
 
 CHECKS = [check_interference, check_clearances, check_fov, check_fold, check_walls, check_trapped, check_cradle, check_mass,
           check_quoting, check_posts, check_layout_script, check_keepouts, check_seal, check_assembly_paths,
-          check_fr4_plate, check_alt_base, check_board_import, check_cal_plates]
+          check_fr4_plate, check_alt_base, check_board_import, check_cal_plates, check_cradle_board_import]
 
 
 # ==============================================================================================
@@ -3358,7 +3440,7 @@ def write_report(results, elapsed=None):
             md += [f"### {t['title']}", ""] + _md_table(t["rows"])
     md += ["## Deviations from the specification", "",
            "Status: accepted = accepted by the system owner (rev C or rev D); recorded = differs from the specification for the stated reason; open = needs a "
-           "decision. Items marked YAML are detailed in PROPOSED_PARAM_CHANGES.md, part C (master_params.yaml is not edited by this package).", ""]
+           "decision. Rev E: D31, D33, D34 and D35 are closed by the amendments E17 to E20 (PROPOSED_PARAM_CHANGES.md, part C); no standing deviation asks for a YAML change.", ""]
     for d in DEV_OPEN:
         md += [f"- **{d['id']} {d['part']}** [{d['status']}]{' (YAML)' if d['yaml_change'] else ''}: required: {d['requirement']}. "
                f"Implemented: {d['implemented']}. Reason: {d['reason']}."]

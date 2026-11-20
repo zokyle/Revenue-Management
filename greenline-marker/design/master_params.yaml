@@ -3,10 +3,16 @@
 # +x = right, +y = forward (toward the ball / hole), +z = up, as seen from above.
 # Status of every dimension is given in `basis`: datasheet | search-verified | provisional (must be
 # checked against the manufacturer drawing before release) | design (our choice).
-rev: D-EVT1          # rev D: decisions on the rev C design review (mechanical/PROPOSED_PARAM_CHANGES.md parts B and C; DESIGN_SPEC section 5)
-# Amended in place after the rev D mechanical review (items N1 to N10 of mechanical/PROPOSED_PARAM_CHANGES.md part B;
-# each is marked "N<n>" below) and by the spec amendments E1 to E16 (DESIGN_SPEC.md, table at the top). The next revision
-# letter is taken when the board layout is folded back in.
+rev: E-EVT1          # rev E: the routed boards folded back in, and the amendments E17 to E28, E35 and E36 of DESIGN_SPEC.md entered
+# History: rev D = decisions on the rev C design review, amended in place by N1 to N10 of the rev D mechanical review
+# (mechanical/PROPOSED_PARAM_CHANGES.md part B; marked "N<n>" below) and by the spec amendments E1 to E16.
+# Rev E enters: E17 (guaranteed upper field 14.0 deg on the loosest locating fit), E18 (legend print rules), E19 (retarder
+# film), E20 (plate thickness accepted, ball tolerance), E21 (baffle-ring rule), E22 (display rotation, cell adhesive),
+# E23 (requirements, PROPOSED), E24 (J1 and the LCD-tail keep-out), E25 / E26 (U12, U11: in the part list), E35 (fine
+# class on three layers), E36 (cradle board 1.0 mm). top_side_parts and bottom_side_parts.board_parts are regenerated
+# from the routed board (electrical/gl1_main/out/gl1_main-mechanical.json). Items marked "E<n>" below; the proposals
+# N11 to N19 of mechanical/PROPOSED_PARAM_CHANGES.md part C are the same changes as E17 to E22.
+# Nothing here has been built or measured.
 envelope:
   outer_radius: 23.0          # dia 46.0, design
   thickness: 7.6              # design: every printed wall >= 0.8 mm (MJF PA12 bureau minimums 0.76-1.0 mm)
@@ -23,13 +29,22 @@ base_plate:
   thickness: 0.80             # z 0..0.80; with the 0.20 mm adhesive sheet the PCB bottom stays at z = 1.00
   # N6: fabrication tolerances (drawing GL1-011). Plates are sorted on thickness at incoming inspection: the lower limit
   # keeps 0.02 mm of epoxy between each ball and its PCB land. The plate thickness is NOT in the seal-joint chain.
+  # E20 (N11): lower limit 0.78 (was 0.76), so that the 0.02 mm of epoxy also holds under a ball at the upper diameter
+  # limit of grade 100 (feet.dia_tol): at 0.76 such a ball left 0.007 mm.
   tolerances: {outline: 0.10, holes: 0.05, thickness_over_mask: 0.10}
-  thickness_accepted: [0.76, 0.90]
+  thickness_accepted: [0.78, 0.90]
   mask_relief_dia: 1.25       # solder mask pulled back round each ball-foot hole, both faces
-  legend: {side: outer, process: "white legend print on the black mask, or laser mark", clear_of_features: 1.0, content: "maker, model, Practice device, required statements (docs/COMPLIANCE.md), serial-number box"}   # E10
+  # E10: legend on the outer face. E18 (N12, N19) print rules: line and space 0.15 or more, text height 1.0 or more, ink
+  # 0.03 or less; no ink within dia 8.5 of a ball foot (seat zone = seat pad 7.0 + 2 x (0.6 location + 0.15 registration))
+  # or within 0.75 of the routed outline. Each of the two statement blocks holds 88 characters at these rules; text that
+  # does not fit goes in the user guide and on the packaging. The print rules are to be confirmed with the fabricator's
+  # quote. A laser-marked legend needs none of the seat-zone rules.
+  legend: {side: outer, process: "white legend print on the black mask, or laser mark", clear_of_features: 1.0, content: "maker, model, Practice device, required statements (docs/COMPLIANCE.md), serial-number box",
+           min_line: 0.15, min_space: 0.15, min_text_height: 1.0, thickness_max: 0.03, seat_zones_clear_dia: 8.5, edge_margin: 0.75, registration: 0.15, statement_block_chars: 88, print_rules_basis: provisional,
+           fixture_rule: "every fixture or gauge that takes the outer face as its reference bears on bare mask inside the seat zones: gauge plate on three bosses, seat plate on three pads next to the feet, bridge depth gauge"}
   psa: {mpn: "3M 93020LE (300LSE) double-coated tape, die cut", thickness: 0.20, basis: provisional}   # z 0.80..1.00; seals the pad slot and the grain opening
   # ALTERNATIVE for an all-printed build and for the EVT comparison: same outline and features in MJF PA12.
-  alternative: {material: "HP MJF PA12, dyed black, NOT vapor smoothed, free-state flatness 0.3 max", thickness: 0.87, psa_thickness: 0.13, psa_mpn: "3M 9472LE (300LSE) adhesive transfer tape", foot_hole_dia: 1.15, baffle: integral, thickness_accepted: [0.83, 0.92]}
+  alternative: {material: "HP MJF PA12, dyed black, NOT vapor smoothed, free-state flatness 0.3 max", thickness: 0.87, psa_thickness: 0.13, psa_mpn: "3M 9472LE (300LSE) adhesive transfer tape", foot_hole_dia: 1.15, baffle: integral, thickness_accepted: [0.84, 0.92]}   # E20: lower limit 0.84 (was 0.83)
   radius: 21.75               # drops into the tub from below (0.25 radial clearance)
   flat_y: 18.25               # base plate runs UNDER the visor wall on the flat front (wall sits on the base there)
   seal_land: {r_inner: 21.35, r_outer: 21.75, flat_y_inner: 17.6}   # dispensed adhesive bead (not tape: the land is only 0.4 mm wide); the 0.25 mm radial gap to the wall is filled too
@@ -40,23 +55,42 @@ base_plate:
   grain_cavity: {x: 0.0, y: -4.0, dia: 13.0, fill: "clear optical epoxy", fill_surface_z: {never_below: 0.05, target: 0.10, max: 0.20, below_ring_crest: [0.0, 0.10]}, fill_volume_nominal_mm3: 93.4, fill_basis: provisional}
   # the seven pad positions share ONE slot (2.2 mm holes on 2.54 pitch would leave 0.34 mm webs)
   pad_holes: {form: slot, dia: 2.2, slot_length: 17.44, y: -17.0, xs: [-7.62, -5.08, -2.54, 0.0, 2.54, 5.08, 7.62]}
-  # ball feet: THROUGH holes; the balls are set on a gauge plate with 0.10 mm pockets and potted from the inside with a
+  # ball feet: THROUGH holes; the balls are set on a gauge plate with 0.10 mm pockets (E18: the plate bears on three
+  # bosses on bare mask, not on its whole face) and potted from the inside with a
   # dual-cure or two-part epoxy (the joint is shadowed, a UV-only adhesive stays liquid) before the adhesive sheet goes
   # on; the sheet hole is back-filled, so each ball bears on a copper land on the PCB underside through 0.10 mm of epoxy.
-  feet: {ball_dia: 1.0, material: "316 stainless grade 100 or better, or silicon nitride; not 440C (E8)", protrusion: 0.10, hole_dia: 1.10, psa_hole_dia: 2.0, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]], epoxy_dome_max: 0.08, backfill: true, pcb_keepout_dia: 2.5, pcb_land_dia: 1.6}
+  # E20: dia_tol is the diameter tolerance taken for a grade 100 ball (+-0.0127 mm, AS REMEMBERED from the ball standard:
+  # PROVISIONAL, to be confirmed against the standard or the supplier's certificate).
+  feet: {ball_dia: 1.0, dia_tol: 0.0127, dia_tol_basis: provisional, material: "316 stainless grade 100 or better, or silicon nitride; not 440C (E8)", protrusion: 0.10, hole_dia: 1.10, psa_hole_dia: 2.0, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]], epoxy_dome_max: 0.08, backfill: true, pcb_keepout_dia: 2.5, pcb_land_dia: 1.6}
   # light baffle round the photodiode. FR-4 plate: a separate printed black PA12 ring (no spokes) bonded to the PCB on a
   # die-cut adhesive annulus, its top flush with the potting. PA12 plate: integral with the plate on three spokes.
   baffle: {inner_dia: 6.6, wall: 0.8, outer_dia: 8.2, spokes_deg: [90, 225, 315], spoke_width: 0.8,
-           ring: {height: 0.82, height_tol: [-0.03, 0.0], matched_to: "measured plate thickness + 0.02", adhesive: "opaque black double-coated tape, 0.10 to 0.145 as available (E16)", crest_z: [0.0, 0.15]}}   # N4: separate ring of the FR-4 build
+           # N4: separate ring of the FR-4 build. E21 (N15): finished height = measured plate thickness + 0.15 - thickness
+           # of the tape actually used (0.82 for the 0.80 plate on a 0.13 tape; 0.85 on 0.10; 0.805 on 0.145; 0.755 to 0.95 over
+           # the accepted plates). The earlier rule "plate + 0.02" held for a 0.13 tape only. Rings are printed 1.10 high and lapped.
+           ring: {height: 0.82, height_tol: [-0.03, 0.0], matched_to: "measured plate thickness + 0.15 - tape thickness", rule_offset: 0.15, tape: [0.10, 0.145], nominal_tape: 0.13, print_height: 1.10,
+                  adhesive: "opaque black double-coated tape, 0.10 to 0.145 as available (E16)", crest_z: [0.0, 0.15]}}
 pcb:
   thickness: 0.8              # 4-layer FR-4, ENIG; z 1.0 .. 1.8
   z_bottom: 1.0
   radius: 21.1                # 0.25 mm to the tub ledge (r 21.35)
   flat_y: 17.3
+  # E35: net classes of the routed board. The fine class may be used on the three named layers inside two rule areas that
+  # extend 5 mm beyond each camera ball field (about 13 % of the board; 218 mm of fine track on 28 nets on the routed
+  # board); everywhere else the default class stands. 0.100 mm is 3.94 mil: the fabricator's written acceptance on all
+  # three layers is a release gate (E7).
+  net_classes:
+    default: {track: 0.15, clearance: 0.127}
+    fine: {track: 0.10, clearance: 0.10, layers: [F.Cu, In2.Cu, B.Cu], area_beyond_camera_ball_field: 5.0, basis: "E35; fabricator acceptance is a release gate (E7)"}
+  via_drill: 0.25
   # two non-plated holes that take printed spigots on tub posts B: they locate the PCB (and so the cameras) to the tub.
   # The cameras lie between the spigots (28.7 mm apart), so 0.075 mm of fit is 0.075 mm and 0.3 degrees at a camera.
-  # Round hole on the flash side, slot on the IMU side. Go gauge dia 1.10 on the spigots at first article.
-  locating_holes: {round: {x: 14.35, y: 10.8, dia: 1.15}, slot: {x: -14.35, y: 10.8, dia: 1.15, length_x: 2.2}, spigot_dia: 1.0, spigot_height: 0.6}
+  # Round hole at +x, slot at -x. Go gauge dia 1.10 on the spigots at first article.
+  # E17 (N18): the fit is toleranced. Hole and slot width dia 1.15 +0.05 / -0, spigot dia 1.0 +0 / -0.05, so the nominal
+  # fit is +-0.075 (0.15 on diameter) and the loosest fit +-0.125 (0.25 on diameter); spigots are checked with a no-go
+  # gauge at dia 0.95 beside the dia 1.10 go gauge. cameras.field_required_deg.up_guaranteed is defined on fit_max.
+  locating_holes: {round: {x: 14.35, y: 10.8, dia: 1.15}, slot: {x: -14.35, y: 10.8, dia: 1.15, length_x: 2.2}, spigot_dia: 1.0, spigot_height: 0.6,
+                   dia_tol: [0.0, 0.05], spigot_dia_tol: [-0.05, 0.0], spigot_dia_min: 0.95, fit_nominal: 0.075, fit_max: 0.125}
   component_edge_clearance: 0.2
   max_top_height_under_lcd: 2.55   # battery+swell or parts must stay below z = 4.35
 tub_ledge: {r_inner: 21.35, z0: 1.2, z1: 2.2}    # inward step of the tub wall that seats on the seal
@@ -67,18 +101,35 @@ lcd:
   aperture_dia: 22.0
   fpc_exit_edge: rear        # driver ledge / FPC at the -y edge of the glass; tail geometry PROVISIONAL
   psa_thickness: 0.15
+  # E22 (N16): the glass can turn up to about 1.2 degrees in its pocket (computed 1.19 on the tub solid; E12 said "about
+  # 1 degree"). It is squared against the two rear ribs at assembly; the factory measures what is left and stores it.
+  rotation_in_pocket_max_deg: 1.2
 # EVT: flat mineral watch crystal (NOT step-proof). Production: chemically strengthened glass or sapphire specified by
 # strength (ring-on-ring 600 MPa or more), 1.0 mm, printed black border.
 cover_glass: {dia: 28.0, thickness: 1.0, recess_dia: 28.5, recess_depth: 1.25, bond: "3M 9472LE transfer tape ring 0.13 mm, OD 28.0 / ID 25.0", bond_thickness: 0.13, bond_id: 25.0, sub_flush: 0.12,
-              retarder: {type: "quarter-wave film, about 0.1 mm, on the glass underside, axis 45 deg to the LCD polariser", status: "EVT trial (E9)", basis: provisional}}
+              # E19 (N13): the trial film is dia 23.4 with a clocking flat (a chord 4.3 long at y = 11.5, toward the visor) that
+              # carries its axis; 0.11 or less with its laminating adhesive; placed on the glass within 0.25.
+              retarder: {type: "quarter-wave film, about 0.1 mm, on the glass underside, axis 45 deg to the LCD polariser", status: "EVT trial (E9)", basis: provisional,
+                         dia: 23.4, clocking_flat: {y: 11.5, length: 4.3}, thickness_max: 0.11, placement: 0.25}}
 battery:
   mpn: GM201030-PCB           # PowerStream, 2 x 10 x 30 mm cell + PCM (search-verified listing; PCM length provisional)
   body: {x: 0.0, y: -5.2, dx: 34.0, dy: 10.0, z0: 1.8, z1: 3.8}
   swell_allowance: 0.4
   foam_above: 0.3
-  fixing_adhesive_max: 0.05   # cell is tacked to the PCB; maximum delivered thickness and end-of-life swelling are release-gate data
+  fixing_adhesive_max: 0.06   # E22 (N17): was 0.05, no tape of 0.05 was found (the transfer tapes named are about 0.058). The cell is tacked to the PCB; maximum delivered thickness and end-of-life swelling are release-gate data
+  # E24: the signal pads of J1 end at y = -10.40, 0.20 from the cell edge at y = -10.20 (body.y - body.dy / 2).
+  # DECISION on the 0.3 mm notch that the routed board has in its battery_body placement keep-out: `body` above stays
+  # the full rectangle and does NOT take the notch. Reason, from the geometry: the notch (x -5.55 to 5.55, y -10.20 to
+  # -9.90) is J1's COURTYARD, the drafting margin of 0.50 mm that KiCad's land pattern draws beyond the pad ends
+  # (-10.40 + 0.50 = -9.90); nothing of J1 is inside it (pads and solder end at -10.40, the housing at -11.70, both
+  # outside the cell box), while the cell itself does occupy that strip. `body` is the solid the tub, the foam, the
+  # swelling check and the board import use, so cutting it would misstate the cell. The notch is a property of the
+  # layout tool's placement rule (it tests courtyards) and is recorded here so that the board import can require
+  # "body less exactly this notch" instead of warning.
+  board_keepout_notch: {ref: J1, x: [-5.55, 5.55], y: [-10.2, -9.9], reason: "J1 courtyard only; no copper, solder or body of J1 inside the cell box", pad_to_cell_gap: 0.20}
   # solder pads for the two cell leads: in the strip between the protection-board end of the cell (x = -17) and the board edge
-  pads: {zone: {x: [-19.3, -17.5], y: [-7.0, -1.5]}, size: [1.5, 2.4], joint_max_height: 2.4, basis: design}
+  pads: {zone: {x: [-19.3, -17.5], y: [-7.0, -1.5]}, size: [1.5, 2.4], joint_max_height: 2.4, basis: design,
+         centres: {BAT+: [-18.4, -2.7], BAT-: [-18.4, -5.8]}}   # centres as routed (board refs BT1 = BAT+, BT2 = BAT-; the YAML part BT1 below is the cell)
 cameras:
   mpn: OVM7692-RYAA           # 2.95 x 3.47 x 2.76 mm cube (search-verified product-brief dims); ball map PROVISIONAL
   body_dx: 3.47
@@ -92,10 +143,17 @@ cameras:
   f_px: 657
   fov_deg: {h: 51.9, v: 40.1}     # landscape: 640 px along x
   # field the enclosure must leave clear (half angles). The upper edge has only 0.054 mm of margin to the roof.
-  # N3: up_guaranteed is the worst case with the optics 0.2 mm high AND the 0.075 mm spigot play against it (model:
-  # 14.97 deg without the play, 14.61 with it; nominal 18.56). Accepted: it only delays stick-top visibility from
-  # 6.6 m to about 8.1 m on a worst-case unit.
-  field_required_deg: {h: 26.0, up: 17.6, up_guaranteed: 14.5, down: 8.0}
+  # E17 (N18, replaces the definition of N3): up_guaranteed is the worst case with the optics 0.2 mm high, the LOOSEST
+  # locating fit (pcb.locating_holes.fit_max = 0.125) against it and the roof at -10 C. Model: 14.03 deg there; 14.61 at
+  # the nominal 0.075 fit and 20 C, 14.97 without any play, 18.56 nominal. The old figure of 14.5 held at the nominal fit
+  # only (the +0.05 hole tolerance alone gave 14.496). Accepted: it delays stick-top visibility from 6.6 m to about 8.4 m
+  # on a worst-case unit (8.1 m before). The pupil position and diameter behind these figures are still assumed
+  # (OmniVision lens data: release gate).
+  field_required_deg: {h: 26.0, up: 17.6, up_guaranteed: 14.0, down: 8.0}
+  up_guaranteed_case: {optics_high: 0.2, locating_fit: 0.125, roof_temperature_C: -10, model_deg: 14.03}
+  # E17: test gate 2 (manufacturing station J3, validation O1): target bar at +13.0 deg and reference bar at -13.0 deg
+  # (guaranteed 14.0 less 1.0 for the placement of target and unit); +-13.5 before.
+  gate2_bars_deg: [13.0, -13.0]
 prisms:
   mpn: "Edmund Optics 32-526"     # 2.0 mm legs, N-BK7, aluminised hypotenuse (search-verified)
   leg: 2.0
@@ -141,7 +199,17 @@ tub_keepouts:
   foot_zones: {dia: 2.5, land_dia: 1.6, positions: [[0.0, 15.0], [-16.5, -9.5], [16.5, -9.5]], part_margin: 0.3}   # N7: free parts keep 0.3 mm from a zone at layout
   # N10: the LCD flex tail folds down behind the mouth of J1 (underside about 0.93 mm above the PCB). PROVISIONAL until
   # the Sharp tail drawing is in hand (release gate B16). J1 itself is exempt.
-  lcd_tail: {half_w: 3.25, y: [-18.3, -16.8], max_part_height: 0.7, basis: provisional}
+  # E24: re-derived from the new mouth. y[1] = the mouth of J1 = -17.30 (was -16.80). y[0] = -21.1 = the rear edge of
+  # the board (pcb.radius), was -18.3 = mouth - 1.5. Derivation: the fold now has to lie wholly behind y = -17.30 and its
+  # length is not known; in plan the tub does not limit it before the board ends (tub ledge r 21.35 and inner wall r 22.0:
+  # y = -21.10 and -21.76 at x = +-3.25, against the board edge at y = -20.85 there and -21.10 at x = 0), and below the
+  # free height the tub has only its post feet over the board, the nearest at |x| >= 5.7. So the whole strip of board
+  # behind the mouth is kept low. Nothing on the routed board is in it (check_layout.py). NOT verified here: the room
+  # for the fold ABOVE the free height (roof, LCD pocket, rear ribs). The mechanical model must re-model the fold behind
+  # y = -17.30 (the rev D fold started 0.35 behind the glass edge at y = -16.80, i.e. in FRONT of the new mouth) and
+  # may then shorten this zone to what the fold needs.
+  # Fallback if the fold does not fit (E24): a 1.0 mm high back-flip connector about 3.5 mm deep.
+  lcd_tail: {half_w: 3.25, y: [-21.1, -17.3], max_part_height: 0.7, basis: provisional}
 # Charging / data dock. The puck seats at 0 degrees only and is held down against the spring pins.
 cradle:
   body: {dx: 60.0, dy: 60.0, dz: 14.0, y: [-36.0, 24.0], overall_height: 22.63}    # not centred on the marker
@@ -149,34 +217,163 @@ cradle:
   seat_z: -0.10               # front strip and two pads under the ball feet; the rest of the nest floor is a drained basin
   pad_plane_z: 0.965          # copper face of the contact pads (PCB underside is z 1.00)
   pin_row_y: -17.0
-  pins: {mpn_series: "Mill-Max 0914 long-stroke spring pin", positions: 7, populated_consumer: [VBUS, D-, D+, GND], populated_factory: 7, working_height: 5.82, compression: 1.14, stroke: 2.29, force_working_N: 0.59, basis: provisional}
+  pins: {mpn_series: "Mill-Max 0914 long-stroke spring pin", positions: 7, populated_consumer: [VBUS, D-, D+, GND], populated_factory: 7, working_height: 5.82, compression: 1.14, stroke: 2.29, force_working_N: 0.59, tail_length: 1.34, basis: provisional}   # E36: tail_length is an estimate
   float: 0.25                 # with pins fitted the marker is pushed up against lip and hook; the pins then stand 6.07 high
   hold_down:
     summary: "fixed front lip between the camera windows (|x| <= 6) plus a rear cantilever latch with a thumb tab; retention at least 3x the total pin force"
     lip: {half_w: 6.0, overlap: 1.2, t: 1.6, clearance: 0.25}
     latch: {w: 24.0, t_root: 1.05, t_neck: 0.85, t_hook: 1.30, free_length: 11.65, hook_overlap: 1.10, rake_deg: 14.0, clearance: 0.25, stop_travel: 1.9, tab_stop_travel: 2.0}
-  pcb: {dx: 30.0, dy: 22.0, thickness: 1.6, x: [-15.0, 15.0], y: [-34.2, -12.2], top_z: -4.855, screws: [[-12.5, -31.5], [12.5, -31.5], [-12.5, -14.5], [12.5, -14.5]], usb_mouth_y: -35.5, connector: "GCT USB4105 USB-C receptacle, rear exit", max_part_height_note: "nothing on the top side may reach the pocket ceiling; see mechanical/README"}
+  # E36: board 1.0 mm (was 1.6) so that the spring-pin tail (about 1.34 mm, PROVISIONAL: 8.3 overall less 6.96 above the
+  # board, two search extracts, not the Mill-Max drawing) comes through by about 0.34 and can be soldered. top_z, which
+  # sets the pin height, does NOT move; the underside moves up from z -6.455 to z -5.855.
+  pcb: {dx: 30.0, dy: 22.0, thickness: 1.0, x: [-15.0, 15.0], y: [-34.2, -12.2], top_z: -4.855, screws: [[-12.5, -31.5], [12.5, -31.5], [-12.5, -14.5], [12.5, -14.5]], usb_mouth_y: -35.5, connector: "GCT USB4105 USB-C receptacle, rear exit", max_part_height_note: "nothing on the top side may reach the pocket ceiling; see mechanical/README"}
   print: {build_direction: x, tumbling: false}
-# Major top-side parts: name, x, y, dx, dy, height (z above PCB top = 1.8); footprint courtyard sizes.
-# fixed: true = position is a mechanical interface. Others are NOMINAL: the board layout may move them inside the
-# tub_keepouts contract and this list is then regenerated from the board.
+# Top-side parts, REGENERATED at rev E from the routed board (electrical/gl1_main/out/gl1_main-mechanical.json; scratch
+# script, see the hand-over): every fitted top-side part body, 87 entries + the cell.
+# x, y = centre of the part BODY; dx, dy = the body as placed (axis-aligned box of the body corners; leads, pads and
+# courtyard are NOT included; `courtyard` gives the footprint courtyard box x0, y0, x1, y1 for the larger parts);
+# h = body height above the PCB top (z 1.8). `anchor` = footprint origin on the board where it is not the body centre
+# (J1: the mechanical JSON gives the anchor as its x, y). fixed: true = position is a mechanical interface. The others
+# were placed by the layout inside the tub_keepouts contract; this list follows the board, not the reverse.
+# `class: passive` = two-terminal parts and resistor arrays (a consumer that wants only the larger parts filters on it).
+# dnp: true = land on the board, part not fitted (R14 is the BQ25100 fallback position).
+# J1 (E24): mouth (rear face of the body) at y = -17.30, body to y = -11.70, signal pads end at y = -10.40 (0.20 from
+# the cell at y = -10.20); the FH12 land pattern needs 6.90 from mouth to pad ends and has its anchor 4.40 in front of
+# the mouth. U11 is the 5-pin LP5907MFX-3.3 (E26); U12 is the LM66100DCKR ideal-diode switch (E25; it replaces the
+# Schottky D17 of rev D).
 top_side_parts:
-  - {ref: U1,  name: "STM32U585RIT6 LQFP-64",       x: 0.0,   y: 7.2,   dx: 12.2, dy: 12.2, h: 1.6}
-  - {ref: U2,  name: "OVM7692 camera L",            x: -10.0, y: 15.6,  dx: 3.47, dy: 2.95, h: 2.76, fixed: true}
-  - {ref: U3,  name: "OVM7692 camera R",            x: 10.0,  y: 15.6,  dx: 3.47, dy: 2.95, h: 2.76, fixed: true}
-  - {ref: U4,  name: "LSM6DSV16X IMU LGA-14",       x: -11.0, y: 6.0,   dx: 3.0,  dy: 2.5,  h: 0.86}
-  - {ref: U6,  name: "MX25R6435F flash WSON-8 6x5", x: 11.5,  y: 6.4,   dx: 6.4,  dy: 5.4,  h: 0.8}
-  - {ref: U8,  name: "LP5907-2.8 LDO SOT-23-5",     x: -11.0, y: 11.6,  dx: 3.0,  dy: 3.0,  h: 1.45}   # moved off the front ball foot
-  - {ref: BT1, name: "LiPo GM201030-PCB",           x: 0.0,   y: -5.2,  dx: 34.0, dy: 10.0, h: 2.4, fixed: true}
-  - {ref: J1,  name: "LCD FPC conn FH12A-10S-0.5SH top-contact", x: 0.0, y: -13.9, dx: 8.4, dy: 5.8, h: 2.0, fixed: true}   # mouth faces the rear (-y)
-  - {ref: U7,  name: "MCP1700-2.8 LDO SOT-23",      x: 10.5,  y: -13.5, dx: 3.0,  dy: 3.0,  h: 1.2}
-  - {ref: U11, name: "MCP1700-3.3 LDO SOT-23 (VDDUSB)", x: 14.0, y: -12.2, dx: 3.0,  dy: 3.0,  h: 1.2}
-  - {ref: U9,  name: "BQ25101YFP charger DSBGA-6 (E1)", x: -10.5, y: -13.5, dx: 1.6,  dy: 0.9,  h: 0.5}
-  - {ref: U10, name: "USBLC6-2SC6 ESD SOT-23-6",    x: -13.9, y: -12.2, dx: 3.0,  dy: 3.0,  h: 1.45}   # N7: 0.3 mm inboard, clear of ball foot 2
-  - {ref: Y1,  name: "32.768 kHz xtal 3215",        x: 8.6,   y: 12.2,  dx: 3.4,  dy: 1.7,  h: 0.9}
+  - {ref: U1, name: "STM32U585RIT6 LQFP-64 (body; leads to 12.0 square)", x: 0.0, y: 6.7, dx: 10.0, dy: 10.0, h: 1.6, mpn: "STM32U585RIT6", courtyard: [-6.7, 0.0, 6.7, 13.4]}
+  - {ref: U2, name: "OVM7692 camera L", x: -10.0, y: 15.6, dx: 3.47, dy: 2.95, h: 2.76, fixed: true, mpn: "OVM7692-RYAA", courtyard: [-11.94, 13.92, -8.06, 17.28]}
+  - {ref: U3, name: "OVM7692 camera R", x: 10.0, y: 15.6, dx: 3.47, dy: 2.95, h: 2.76, fixed: true, mpn: "OVM7692-RYAA", courtyard: [8.06, 13.92, 11.94, 17.28]}
+  - {ref: U4, name: "LSM6DSV16X IMU LGA-14", x: 9.5, y: 3.0, dx: 2.5, dy: 3.0, h: 0.86, mpn: "LSM6DSV16XTR", courtyard: [8.0, 1.25, 11.0, 4.75]}
+  - {ref: U6, name: "MX25R6435F flash WSON-8 6x5", x: 15.6, y: 5.9, dx: 6.0, dy: 5.0, h: 0.8, mpn: "MX25R6435FZNIL0", courtyard: [12.3, 3.15, 18.9, 8.65]}
+  - {ref: U8, name: "LP5907MFX-2.8 LDO SOT-23-5 (V2V8_CAM)", x: -16.9, y: 5.98, dx: 2.9, dy: 1.6, h: 1.45, mpn: "LP5907MFX-2.8/NOPB", courtyard: [-18.6, 3.93, -15.2, 8.03]}
+  - {ref: BT1, name: "LiPo GM201030-PCB (the cell; not a board part: battery.body with the swelling allowance)", x: 0.0, y: -5.2, dx: 34.0, dy: 10.0, h: 2.4, fixed: true}
+  - {ref: J1, name: "LCD FPC conn FH12A-10S-0.5SH top-contact (E24)", x: 0.0, y: -14.5, dx: 8.1, dy: 5.6, h: 2.0, fixed: true, anchor: [0.0, -12.9], mouth_y: -17.3, body_y: [-17.3, -11.7], pads_end_y: -10.4, mpn: "FH12A-10S-0.5SH(55)", courtyard: [-5.55, -17.8, 5.55, -9.9]}
+  - {ref: U7, name: "MCP1700-2.8 LDO SOT-23", x: 8.42, y: -12.3, dx: 1.3, dy: 2.9, h: 1.2, mpn: "MCP1700T-2802E/TT", courtyard: [6.5, -14.0, 10.34, -10.6]}
+  - {ref: U11, name: "LP5907MFX-3.3 LDO SOT-23-5 (VDDUSB, E26)", x: 13.33, y: -12.6, dx: 1.6, dy: 2.9, h: 1.45, mpn: "LP5907MFX-3.3/NOPB", courtyard: [11.28, -14.3, 15.38, -10.9]}
+  - {ref: U12, name: "LM66100DCKR ideal diode SC-70-6 (E25)", x: -7.25, y: -12.85, dx: 1.35, dy: 2.2, h: 1.1, mpn: "LM66100DCKR", courtyard: [-8.85, -14.25, -5.65, -11.45]}
+  - {ref: U9, name: "BQ25101YFP charger DSBGA-6 (E1)", x: -18.4, y: 1.0, dx: 0.9, dy: 1.6, h: 0.5, mpn: "BQ25101YFPR", courtyard: [-19.05, 0.0, -17.75, 2.0]}
+  - {ref: U10, name: "USBLC6-2SC6 ESD SOT-23-6", x: -7.65, y: -16.05, dx: 1.6, dy: 2.9, h: 1.45, mpn: "USBLC6-2SC6", courtyard: [-9.7, -17.75, -5.6, -14.35]}
+  - {ref: Q1, name: "BSS138 N-MOSFET SOT-23 (CHG_INHIBIT)", x: -13.2, y: -12.4, dx: 1.3, dy: 2.9, h: 1.2, mpn: "BSS138LT1G", courtyard: [-15.12, -14.1, -11.28, -10.7]}
+  - {ref: Y1, name: "32.768 kHz xtal 3215", x: -9.95, y: 8.3, dx: 3.2, dy: 1.5, h: 0.9, mpn: "ABS07-120-32.768KHZ-T", courtyard: [-11.95, 7.15, -7.95, 9.45]}
+  - {ref: C1, name: "100n cap 0402", x: -6.98, y: 0.72, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C2, name: "100n cap 0402", x: 6.2, y: 1.95, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C3, name: "100n cap 0402", x: -5.9, y: 13.2, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C4, name: "100n cap 0402", x: -6.3, y: 11.8, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C5, name: "4u7 cap 0402", x: -14.5, y: 0.45, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C6, name: "4u7 cap 0402", x: 5.1, y: 0.72, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C7, name: "1u cap 0402", x: -7.25, y: 4.4, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C8, name: "10n cap 0402", x: -8.2, y: 4.4, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C9, name: "100n cap 0402", x: 7.25, y: 10.0, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C10, name: "100n cap 0402", x: -10.1, y: 4.4, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C11, name: "6p8 cap 0402", x: -11.2, y: 6.24, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C12, name: "6p8 cap 0402", x: -8.7, y: 6.24, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C13, name: "100n cap 0402", x: 17.2, y: 9.3, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C14, name: "100n cap 0402", x: -6.6, y: 14.7, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C15, name: "100n cap 0402", x: -6.4, y: 16.3, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C16, name: "1u cap 0402", x: -12.625, y: 12.75, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C17, name: "100n cap 0402", x: 16.2, y: 11.4, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C18, name: "100n cap 0402", x: 7.1, y: 16.6, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C19, name: "1u cap 0402", x: 7.1, y: 12.75, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C20, name: "1u cap 0402", x: 10.81, y: -12.3, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C21, name: "1u cap 0402", x: 6.02, y: -13.45, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C22, name: "2u2 cap 0402", x: 13.0, y: -15.0, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C23, name: "2u2 cap 0402", x: 15.85, y: -12.1, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C24, name: "1u cap 0402", x: -19.3, y: 4.9, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C25, name: "1u cap 0402", x: -14.4, y: 7.35, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C26, name: "2u2 cap 0402", x: -19.6, y: 0.0, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C27, name: "2u2 cap 0402", x: -18.0, y: -0.5, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C28, name: "100n cap 0402", x: -8.45, y: -10.72, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C29, name: "100n cap 0402", x: -8.86, y: 0.72, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C30, name: "100n cap 0402", x: 11.95, y: 1.7, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C31, name: "100n cap 0402", x: 11.95, y: 2.65, dx: 1.0, dy: 0.5, h: 0.55, class: passive}
+  - {ref: C32, name: "1u cap 0402", x: 6.02, y: -11.5, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C33, name: "10p cap 0402", x: -8.2, y: 2.55, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: C34, name: "100n cap 0402", x: -9.15, y: 2.55, dx: 0.5, dy: 1.0, h: 0.55, class: passive}
+  - {ref: R1, name: "10R res 0402", x: -9.15, y: 4.4, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R2, name: "10k res 0402", x: -2.45, y: 14.45, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R3, name: "100k res 0402", x: 12.4, y: 9.15, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R4, name: "1k res 0402", x: -12.65, y: 9.75, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R5, name: "1k res 0402", x: 6.05, y: 14.4, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R6, name: "2k2 res 0402", x: -13.4, y: 7.89, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R7, name: "2k2 res 0402", x: -15.0, y: 3.35, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R8, name: "2k2 res 0402", x: -13.4, y: 6.01, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R9, name: "33R res 0402", x: 8.95, y: 7.0, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R10, name: "100k res 0402", x: -14.4, y: 5.45, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R11, name: "6k81 res 0402", x: -19.6, y: 2.0, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R12, name: "100k res 0402", x: -13.2, y: -14.8, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R13, name: "100k res 0402", x: -18.0, y: 2.5, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R14, name: "6k04 res 0402", x: -18.0, y: 3.45, dx: 1.05, dy: 0.54, h: 0.4, class: passive, dnp: true}
+  - {ref: R15, name: "100k res 0402", x: -6.55, y: -10.72, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R16, name: "100k res 0402", x: -9.5, y: -12.5, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R17, name: "1M res 0402", x: -12.9, y: 4.6, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R18, name: "1M res 0402", x: -12.9, y: 3.65, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R19, name: "10k res 0402", x: -12.9, y: 2.7, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R20, name: "100k res 0402", x: 6.98, y: 0.72, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R21, name: "100k res 0402", x: 9.65, y: -14.6, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R22, name: "100k res 0402", x: 10.9, y: -15.55, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R23, name: "68R res 0402", x: 8.95, y: 7.95, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R24, name: "68R res 0402", x: 8.86, y: 0.72, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R25, name: "68R res 0402", x: 2.55, y: 16.2, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R26, name: "68R res 0402", x: -2.55, y: 16.2, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: R27, name: "68R res 0402", x: 2.45, y: 14.45, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R28, name: "470k res 0402", x: -7.25, y: 2.55, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R29, name: "100k res 0402", x: -10.1, y: 2.55, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R30, name: "100k res 0402", x: -11.05, y: 2.55, dx: 0.54, dy: 1.05, h: 0.4, class: passive}
+  - {ref: R31, name: "150k res 0402", x: -5.1, y: 0.72, dx: 1.05, dy: 0.54, h: 0.4, class: passive}
+  - {ref: RN1, name: "4x220R res 4x0402 array", x: -8.4, y: 11.62, dx: 2.0, dy: 1.0, h: 0.45, class: passive}
+  - {ref: RN2, name: "4x220R res 4x0402 array", x: -10.9, y: 11.6, dx: 2.0, dy: 1.0, h: 0.45, class: passive}
+  - {ref: RN3, name: "4x220R res 4x0402 array", x: -14.35, y: 12.92, dx: 2.0, dy: 1.0, h: 0.45, class: passive}
+  - {ref: RN4, name: "4x220R res 4x0402 array", x: 8.85, y: 11.95, dx: 2.0, dy: 1.0, h: 0.45, class: passive}
+  - {ref: RN5, name: "4x220R res 4x0402 array", x: 11.35, y: 11.95, dx: 2.0, dy: 1.0, h: 0.45, class: passive}
+  - {ref: RN6, name: "4x220R res 4x0402 array", x: 14.2, y: 12.92, dx: 2.0, dy: 1.0, h: 0.45, class: passive}
+  - {ref: RT1, name: "NTC 10k 0402", x: -12.62, y: 0.4, dx: 1.05, dy: 0.54, h: 0.55, class: passive}
+  - {ref: RT2, name: "NTC 10k 0402", x: -10.74, y: 0.4, dx: 1.05, dy: 0.54, h: 0.55, class: passive}
+# Top-side features without height, as routed. Test points (E4): 1.0 mm bare round pads. TP5 (VDDUSB) is a fifth pad on
+# the routed board beyond the four of E4: carried here because it is on the board; its adoption in the spec is open.
+top_side_test_points:
+  - {ref: TP1, net: VBAT, x: -17.0, y: 0.62, dia: 1.0}
+  - {ref: TP2, net: V2V8, x: 8.0, y: -15.25, dia: 1.0}
+  - {ref: TP3, net: V2V8_CAM, x: -14.6, y: 9.0, dia: 1.0}
+  - {ref: TP4, net: GND, x: 18.4, y: 0.6, dia: 1.0}
+  - {ref: TP5, net: VDDUSB, x: 18.6, y: -2.2, dia: 1.0}
+top_side_fiducials: [[-16.8, 9.3], [18.9, -4.5], [8.6, -17.2]]   # FID1 to FID3, 1.0 mm copper in a 2.0 mm mask opening
 bottom_side_parts:
   grain_led_ring: {x: 0.0, y: -4.0, radius: 5.2, count_pairs: 8, first_azimuth_deg: 22.5, step_deg: 45.0, led_height: 0.45}   # azimuth CCW from +x seen from above
   photodiode: {x: 0.0, y: -4.0, dx: 4.8, dy: 2.5, h: 0.48}
   pads: "7 gold pads dia 1.8 at base_plate.pad_holes (VBUS, D-, D+, GND, SWDIO, SWCLK, NRST); ENIG at EVT, selective hard gold for production"
+  # E-rev: the fitted bottom-side parts as routed (x, y = body centre = footprint anchor; rot = degrees counter-clockwise
+  # seen from the top; dx, dy = body length and width BEFORE rotation; h = body height below the board). The 16 LEDs lie
+  # on grain_led_ring (pair centres on radius 5.2, the two LEDs of a pair 0.5 either side of the pair azimuth, i.e. on
+  # radius 5.224); the photodiode and the pad row are those above. Checked against the keys above when this was generated.
+  board_parts:
+    - {ref: D1, name: "LED red VLMS1500-GS08", x: 4.9955, y: -2.472, rot: -157.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D2, name: "LED NIR SFH 4053B", x: 4.6128, y: -1.5481, rot: 22.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D3, name: "LED red VLMS1500-GS08", x: 2.4519, y: 0.6128, rot: -112.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D4, name: "LED NIR SFH 4053B", x: 1.528, y: 0.9955, rot: 67.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D5, name: "LED red VLMS1500-GS08", x: -1.528, y: 0.9955, rot: -67.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D6, name: "LED NIR SFH 4053B", x: -2.4519, y: 0.6128, rot: 112.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D7, name: "LED red VLMS1500-GS08", x: -4.6128, y: -1.5481, rot: -22.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D8, name: "LED NIR SFH 4053B", x: -4.9955, y: -2.472, rot: 157.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D9, name: "LED red VLMS1500-GS08", x: -4.9955, y: -5.528, rot: 22.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D10, name: "LED NIR SFH 4053B", x: -4.6128, y: -6.4519, rot: -157.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D11, name: "LED red VLMS1500-GS08", x: -2.4519, y: -8.6128, rot: 67.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D12, name: "LED NIR SFH 4053B", x: -1.528, y: -8.9955, rot: -112.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D13, name: "LED red VLMS1500-GS08", x: 1.528, y: -8.9955, rot: 112.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D14, name: "LED NIR SFH 4053B", x: 2.4519, y: -8.6128, rot: -67.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D15, name: "LED red VLMS1500-GS08", x: 4.6128, y: -6.4519, rot: 157.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: D16, name: "LED NIR SFH 4053B", x: 4.9955, y: -5.528, rot: -22.5, dx: 1.0, dy: 0.5, h: 0.45}
+    - {ref: PD1, name: "VEMD8080", x: 0.0, y: -4.0, rot: 0.0, dx: 4.8, dy: 2.5, h: 0.48}
+  fiducials: [[-13.5, -3.0], [14.0, -7.0], [-17.0, 7.5]]   # FID4 to FID6
   # wetted areas: no via inside the grain opening or the pad slot (do not rely on plugging)
   via_keepouts: {grain_opening: {x: 0.0, y: -4.0, dia: 13.0}, pad_slot: {y: -17.0, length: 17.44, width: 2.2}}
+# E23: battery-life and drop requirements (DESIGN_SPEC section 6). ALL PROPOSED until measured on EVT units; none is a
+# measured figure. Test numbers are those of docs/VALIDATION_PLAN.md. No CAD or layout number depends on this block.
+requirements:
+  status: proposed
+  reads_per_charge: {test: F6, min_at_20C_new_cell: 150, min_at_0C_or_after_300_cycles: 100, to: "low-battery symbol", model_to_empty: 600}
+  standby_days: {test: F7, min_at_20C: 45, to: "low-battery symbol", model_days_to_empty: 76, model_sleep_current_uA: 23.7}   # firmware supply model of the rev E board, at the cell, underside dark (make test); the phase-2 model gave 87 days at 20.6
+  ship_mode: {cell_current_max_uA: 5, months_min: 3, from_charge_percent: 30, cell_voltage_min: 3.0, modelled: false}
+  drop: {test: K3, height_m: 1.0, surface: paving, attitudes: ["glass down", "base down", "visor flat", "rear edge", "left", "right"], level_zero_shift_max_mrad: 0.5, recorded_not_required_m: 1.5}
+  step_on: "not a requirement at EVT (the crystal is not step-proof); a requirement for production"

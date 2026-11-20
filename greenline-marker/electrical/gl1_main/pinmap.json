@@ -2,7 +2,7 @@
  "design": "gl1_main",
  "mcu": "STM32U585RIT6",
  "package": "LQFP-64",
- "spec": "DESIGN_SPEC rev D with amendments E1 to E34 (in the netlist: E1 to E4 and E24 to E28)",
+ "spec": "DESIGN_SPEC rev E (EVT1) with amendments E1 to E36 (in the netlist and on the board: E1 to E4, E24 to E28 and E35)",
  "u1_rotation_assumed_deg": 0.0,
  "status": "LAYOUT STAGE - the board is routed with exactly these pins and passed KiCad's DRC; nothing has been built. The pin assignments are final for this board revision; a change now means a new routing run",
  "reason_texts": "the geometric remarks in the 'reason' of each row ('camera-facing edge', 'next to the flash' ...) were written for U1 at 270 degrees; on the board U1 is at 0 degrees. The assignments and their electrical reasons stand; ignore the geometry",
@@ -35,7 +35,7 @@
   "status": "PROVISIONAL: holds only if ST's axis drawing of the LSM6DSV16X matches KiCad's LGA-14 land pattern at rotation 0 (X along the long side toward pins 5-7 ... not read); marker frame: +x right, +y forward (toward the hole), +z up, seen from above"
  },
  "open_items_for_firmware": [
-  "IMU axes: U4 is NOT at rotation 0 on the board - see 'imu_mounting'. firmware/core/gl_provisional.h (GL_PROV_IMU_MARKER_*) still has the identity placeholder; with it the two in-plane tilt axes are exchanged and one is inverted.",
+  "IMU axes: U4 is NOT at rotation 0 on the board - see 'imu_mounting'. Done in firmware phase 3: the identity placeholder of firmware/core/gl_provisional.h is gone and the axis map is generated from 'imu_mounting' into gl_pins.h (GL_PINS_IMU_MARKER_*). Kept as an item because the axis map itself remains PROVISIONAL (ST's axis drawing was not read).",
   "Ship mode (Shutdown), PROVISIONAL - RM0456 not read: PB5 (SPI1_MOSI, UCPD1_DBCC1) and PB14 (SPI2_MISO, UCPD1_DBCC2) have no board pull and float while the pads are high-impedance. If the dead-battery switch acts in Shutdown and UCPD_DBDIS is not retained, a floating-high PB5 puts 5.1 kohm on PA15 against R13 (100 kohm to V2V8): 2.8 V / 105 kohm = 27 uA, more than five times the 5 uA ship-mode limit (E13 / E23). Read RM0456 on PWR_UCPDR in Shutdown; if the risk is real, apply the PWR pull-downs (PWR_PDCRB bits 5 and 14 with APC) before entering Shutdown, or ask for 100 kohm pull-downs on SPI1_MOSI and SPI2_MISO on the next board. Board test: measure the ship-mode current at the cell-lead pads BT1 / BT2.",
   "First programming of a blank board is by SWD only (pads 5 to 7 through the factory fixture): BOOT0 is tied low through R2 and has no pad (E34). That a blank STM32U5 does not enter its ROM loader by itself is PROVISIONAL (memory).",
   "SWDIO, SWCLK and NRST go from the underside pads straight to the MCU with no clamp and no series resistor (the specification names only VBUS, D+ and D- for the clamp): a known EVT limitation; include the three service pads in the ESD test plan."
