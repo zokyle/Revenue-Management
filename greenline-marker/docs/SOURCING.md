@@ -313,7 +313,7 @@ section 14.
 | Measure | Result |
 |---|---|
 | Lines in the list (BOM lines of the two boards, other purchased parts, material classes and outside services) | **86** |
-| Lines for which a US source was seen listing the exact item (VERIFIED) | **64 of 86 (74 %)** |
+| Lines marked VERIFIED: a US source was seen listing the exact item, or, for 9 service lines, advertising that kind of work (see section 1.1) | **64 of 86 (74 %)** |
 | Of those, lines seen on 2026-11-13 | 51 |
 | Of those, catalogue items carried from 2026-11-11 without a new check | 4: Fold prism; Cover glass, EVT; Adhesive sheet material, circuit board to base plate; Transfer tape, cover-glass ring |
 | Of those, outside services carried from 2026-11-11 without a new check (for a service, VERIFIED means only that a US company was seen advertising that kind of work) | 9 |

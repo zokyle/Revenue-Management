@@ -446,6 +446,6 @@ revision 2 was changed. Design facts were re-read from the files named in each r
 | Rows 32, 33 | Noted that no amendment changes the reading | E29 to E33 |
 | Section 4 | Split into closed on paper (4.1), still open (4.2) and new at revision E (4.3) | - |
 | Section 5 | Two EVT entries replaced by what is left of them | E10, E13 |
-| References | `MANUFACTURING_PLAN.md` "gap 26" is now its section 7.4; `VALIDATION_PLAN.md` section 7 "item 9" is cited as section 7 | Those two plans are being re-issued for rev E; check their numbering when they are final |
+| References | `MANUFACTURING_PLAN.md` "gap 26" is now its section 7.4; `VALIDATION_PLAN.md` section 7 "item 9" is cited as section 7 | Both plans are now at plan revision 3 (rev E) |
 | Section 1, row 5, 4.1 item 1, 4.3 item 8, section 5 (edited later on 2026-11-20, after an independent check of the documents) | The legend capacity is marked as contradicted between the mechanical notes (88 characters for the two blocks together) and the specification's wording (88 each); the chart of section 5 names charger tests J1 to J6 and J10, as row 14 does | `docs/RELEASE_GATES.md` G-045 |
 
