@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 380" width="860" height="380" role="img" aria-labelledby="t d">
+<title id="t">GL-1 power model against the proposed requirements of E23</title>
+<desc id="d">Four pairs of bars. Reads per charge: requirement at least 150, model 594 to empty. Standby: requirement at least 45 days, model 76 days to empty. Ship-mode current: requirement at most 5 microamps, model 12.9, not met. Ship mode from 30 percent charge: requirement at least 3 months, model 42 days, not met.</desc>
+<rect width="860" height="380" fill="#ffffff"/>
+<text x="16.0" y="26.0" font-size="16" fill="#1f2328" text-anchor="start" font-weight="bold" font-family="Helvetica, Arial, sans-serif">The model against the E23 requirements (both PROPOSED, nothing measured)</text>
+<text x="16.0" y="46.0" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal" font-family="Helvetica, Arial, sans-serif">Source: design/master_params.yaml requirements; firmware/build/readme/test.log</text>
+<text x="16.0" y="82.0" font-size="14" fill="#1f2328" text-anchor="start" font-weight="bold" font-family="Helvetica, Arial, sans-serif">Reads per charge</text>
+<text x="118.0" y="114.0" font-size="12" fill="#59636e" text-anchor="end" font-weight="normal" font-family="Helvetica, Arial, sans-serif">Requirement</text>
+<path d="M126.0,98 H160.9 a4,4 0 0 1 4,4 V114 a4,4 0 0 1 -4,4 H126.0 Z" fill="#8c959f"/>
+<text x="172.9" y="114.0" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal" font-family="Helvetica, Arial, sans-serif">at least 150</text>
+<text x="118.0" y="148.0" font-size="12" fill="#59636e" text-anchor="end" font-weight="normal" font-family="Helvetica, Arial, sans-serif">Model</text>
+<path d="M126.0,132 H276.0 a4,4 0 0 1 4,4 V148 a4,4 0 0 1 -4,4 H126.0 Z" fill="#2f6fb0"/>
+<text x="288.0" y="148.0" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal" font-family="Helvetica, Arial, sans-serif">594 to empty</text>
+<text x="16.0" y="192.0" font-size="13" fill="#1f2328" text-anchor="start" font-weight="bold" font-family="Helvetica, Arial, sans-serif">✓ Meets (symbol point not modelled)</text>
+<text x="446.0" y="82.0" font-size="14" fill="#1f2328" text-anchor="start" font-weight="bold" font-family="Helvetica, Arial, sans-serif">Standby, days</text>
+<text x="548.0" y="114.0" font-size="12" fill="#59636e" text-anchor="end" font-weight="normal" font-family="Helvetica, Arial, sans-serif">Requirement</text>
+<path d="M556.0,98 H643.2 a4,4 0 0 1 4,4 V114 a4,4 0 0 1 -4,4 H556.0 Z" fill="#8c959f"/>
+<text x="655.2" y="114.0" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal" font-family="Helvetica, Arial, sans-serif">at least 45</text>
+<text x="548.0" y="148.0" font-size="12" fill="#59636e" text-anchor="end" font-weight="normal" font-family="Helvetica, Arial, sans-serif">Model</text>
+<path d="M556.0,132 H706.0 a4,4 0 0 1 4,4 V148 a4,4 0 0 1 -4,4 H556.0 Z" fill="#2f6fb0"/>
+<text x="718.0" y="148.0" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal" font-family="Helvetica, Arial, sans-serif">76 to empty</text>
+<text x="446.0" y="192.0" font-size="13" fill="#1f2328" text-anchor="start" font-weight="bold" font-family="Helvetica, Arial, sans-serif">✓ Meets (margin unknown)</text>
+<text x="16.0" y="232.0" font-size="14" fill="#1f2328" text-anchor="start" font-weight="bold" font-family="Helvetica, Arial, sans-serif">Ship-mode current, µA</text>
+<text x="118.0" y="264.0" font-size="12" fill="#59636e" text-anchor="end" font-weight="normal" font-family="Helvetica, Arial, sans-serif">Requirement</text>
+<path d="M126.0,248 H181.6 a4,4 0 0 1 4,4 V264 a4,4 0 0 1 -4,4 H126.0 Z" fill="#8c959f"/>
+<text x="193.6" y="264.0" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal" font-family="Helvetica, Arial, sans-serif">at most 5</text>
+<text x="118.0" y="298.0" font-size="12" fill="#59636e" text-anchor="end" font-weight="normal" font-family="Helvetica, Arial, sans-serif">Model</text>
+<path d="M126.0,282 H276.0 a4,4 0 0 1 4,4 V298 a4,4 0 0 1 -4,4 H126.0 Z" fill="#2f6fb0"/>
+<text x="288.0" y="298.0" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal" font-family="Helvetica, Arial, sans-serif">12.9</text>
+<text x="16.0" y="342.0" font-size="13" fill="#1f2328" text-anchor="start" font-weight="bold" font-family="Helvetica, Arial, sans-serif">✗ NOT MET</text>
+<text x="446.0" y="232.0" font-size="14" fill="#1f2328" text-anchor="start" font-weight="bold" font-family="Helvetica, Arial, sans-serif">Ship mode from 30 %, days</text>
+<text x="548.0" y="264.0" font-size="12" fill="#59636e" text-anchor="end" font-weight="normal" font-family="Helvetica, Arial, sans-serif">Requirement</text>
+<path d="M556.0,248 H706.0 a4,4 0 0 1 4,4 V264 a4,4 0 0 1 -4,4 H556.0 Z" fill="#8c959f"/>
+<text x="718.0" y="264.0" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal" font-family="Helvetica, Arial, sans-serif">at least 3 months (90)</text>
+<text x="548.0" y="298.0" font-size="12" fill="#59636e" text-anchor="end" font-weight="normal" font-family="Helvetica, Arial, sans-serif">Model</text>
+<path d="M556.0,282 H623.9 a4,4 0 0 1 4,4 V298 a4,4 0 0 1 -4,4 H556.0 Z" fill="#2f6fb0"/>
+<text x="635.9" y="298.0" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal" font-family="Helvetica, Arial, sans-serif">42</text>
+<text x="446.0" y="342.0" font-size="13" fill="#1f2328" text-anchor="start" font-weight="bold" font-family="Helvetica, Arial, sans-serif">✗ NOT MET</text>
+</svg>

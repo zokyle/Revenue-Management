@@ -4,7 +4,8 @@ Design revision: E-EVT1 (amendments E1 to E36; E29 to E34 change the firmware an
 purchased part). Report revision 4, 2026-11-18: revision 3 of 2026-11-13 (with the corrections of an independent review
 made the same day, section 15.2) brought into step with the revision E parts lists of the two boards (section 15.3).
 **Revision 4 made no new search and opened no page: every listing, stock figure and price is still the snapshot of
-2026-11-13 or 2026-11-11, as each line says.** Companion file: `sourcing.csv` (the same lines, machine-readable).
+2026-11-13 or 2026-11-11, as each line says.** Edited on 2026-11-20 without a change of status, count or price
+(section 15.4). The order in which things may be bought is set by `docs/RELEASE_GATES.md`, not by this report. Companion file: `sourcing.csv` (the same lines, machine-readable).
 Revision 2 was dated 2026-11-11; section 15.1 lists what changed since.
 
 > **Nothing in this project has been built or tested, and nothing has been ordered.** This is a buying study done on paper.
@@ -26,13 +27,15 @@ explains every other term and the limits of the evidence.
 | Measure | Result |
 |---|---|
 | Lines in the list: the two boards' parts lists, other purchased parts, material classes, outside services | **86** |
-| VERIFIED: a US source was seen listing the exact item | **64 of 86 (74 %)** |
+| VERIFIED | **64 of 86 (74 %)**: 55 of the 72 purchased lines were seen listed by a US distributor or seller, and for 9 of the 14 custom parts and outside services a US company was seen advertising that kind of work (section 1.4). No quote has been requested |
 | How fresh: seen on 2026-11-13 / catalogue items carried from 2026-11-11 / outside services carried from 2026-11-11 | 51 / 4 / 9 |
 | How firm: a stock figure was seen / listed with no stock figure / outside services, where stock does not apply | 42 / 13 / 9 |
 | Of the 42 with a stock figure, lines seen only on an aggregator's copy or a category page, not on a product page | 3 |
 | PROVISIONAL: everything else | **22**: 9 adhesive classes with no product chosen, 13 others (no board line: since revision E the two capacitor numbers that could not be bought are replaced) |
 | Budget, one marker plus one cradle | about **USD 896** at 10 units and **USD 145** at 1000; 62 % and 70 % of it rest on assumptions |
-| Budget, the whole first-build programme (section 10.5) | about **USD 17,000** |
+| Budget, the first-build (EVT) programme, parts and outside services (section 10.5) | about **USD 17,000**; about 36 % of it rests on a price seen, the rest is assumed |
+| The same with fixtures and gauges (USD 8,000 to 15,000, assumed): outlay before test equipment and labour (section 10.5) | about **USD 25,000 to 32,000** |
+| Not in any figure of this report | The test equipment and lab time of `VALIDATION_PLAN.md`, the formal FCC test, labour, freight, tariffs and tax. Every figure is a size built from listings and assumptions, not a quote |
 
 In one sentence: **a US seller was seen listing every line of the two boards' revision E parts lists (the two capacitor
 numbers, the fuse, the spring-pin holes and the two amendment parts that revision 3 flagged are corrected in the design);
@@ -44,13 +47,24 @@ about a part's pin table or land pattern: those stay PROVISIONAL in the design f
 
 1. **Camera cube OVM7692-RYAA**, two per marker. One maker and one authorised US distributor, whose pages showed 1,814 and
    2,497 in stock: about what 1000 markers need, or less. Nothing else fits in its place. Get a written life-cycle statement
-   and a quote; buy the cubes for the first two builds now (A10).
+   and a quote. This report's advice is to buy the cubes for the first two builds early (A10).
 2. **Sharp LS013B7DH03 display.** One maker, a 28-week lead time, and shelf stock that is not established: undated copies of
-   DigiKey's page ran from 0 to 32,134. Order it before any other part (A11).
+   DigiKey's page ran from 0 to 32,134. This report's advice is to order it before any other part
+   (A11).
 3. **Battery cell with protection board.** One US seller, with no stock figure and no lead time; three searches found no
    second one. Ask the seller now for a dated quote, stock and the data sheet (A12).
 
 Section 9 gives the facts behind each risk.
+
+**The advice to buy early is subject to the gate list.** `docs/RELEASE_GATES.md` places every
+purchased part after its groups A and B, and `docs/MANUFACTURING_PLAN.md` section 2 says that no
+order may be placed until the gates that apply to it are closed. The camera's ball map and the
+display's tail geometry are still PROVISIONAL in the design. Whether the display and the camera
+cubes are bought at risk before those gates close is an owner decision that has not been taken
+(gate G-105 of that file). The cell is not part of any early purchase: it has no data sheet
+(G-039), and the compliance checklist asks for its transport test summary before any cell is
+ordered in quantity (G-040; `docs/COMPLIANCE.md` row 9). Asking the seller for a quote and the
+data sheet costs nothing and can be done now.
 
 ### 1.3 Decisions needed
 
@@ -60,7 +74,9 @@ A1 to A35 are the design actions of section 12.1, where the detail is.
    alternate as a candidate (A4). Still open: the loss of capacitance under voltage (A3) and the approval of any alternate
    (A18).
 2. **Cradle.** Done at revision E: the fuse is changed and the seven spring-pin holes are corrected (A5, A6). Still open:
-   the fuse trips at 0.75 A where amendment E6 says about 0.5 A, and the pin's tail length is an estimate.
+   the fuse trips at 0.75 A where amendment E6 says about 0.5 A; the pin's tail length is an estimate; and the
+   mechanical model still draws the pin with a 0.76 mm tail in a 0.90 mm hole where the board has 0.635 mm in 0.80 mm,
+   with no check that compares the two (A6; `docs/RELEASE_GATES.md` G-014).
 3. **Amendments E25 and E26.** Done at revision E: both parts are in the netlist and on the BOM (U12, U11). Still open: the
    stock figures for the E26 part conflict and its order code is not entered (A7, A8).
 4. **Infrared LED.** One US distributor showed stock, and its life-cycle reports conflict (A9).
@@ -79,6 +95,99 @@ A1 to A35 are the design actions of section 12.1, where the detail is.
 
 Further down: the count in full (2.1), the cost roll-up (10), what could not be verified (11), a buying order (12.4), and
 what changed since revision 2 and in the review (15).
+
+### 1.4 What US-sourceable means here
+
+"US-sourceable" in this report means one thing: **a seller in the United States was seen listing the item** in a
+web-search result (for a service: a US company was seen advertising that kind of work). It is a
+statement about the shop, not about the factory. A US supermarket sells bananas, and that does not make them US-grown. In
+the same way, a part that a US distributor ships from a US warehouse can be made anywhere. This report therefore supports
+the sentence "every board part is listed by a distributor that sells in the US" as far as search extracts go (for some
+lines the listing was seen only on that distributor's pages for other countries: see the second bullet below), and it
+does not support "made in USA" for any part (`docs/COMPLIANCE.md` row 29 says what may and may not be claimed).
+
+The figures below are counted from `sourcing.csv` (columns `group`, `status`, `us_source`, `stock_or_lead`, `origin`,
+`risk`). The first block repeats the counts of the script in section 14; the rest was counted from the columns named, on
+2026-11-20, with no new search. Nothing was ordered and no supplier was asked anything.
+
+```
+The 86 lines                                   [##############################]  86
+  things bought from a catalogue or a seller   [#########################.....]  72
+    ... a US seller was seen listing the item  [###################...........]  55
+    ... and a stock figure was seen            [###############...............]  42
+  custom parts and outside services            [#####.........................]  14
+    ... quotes requested so far                [..............................]   0
+```
+
+**1. How many lines a US distributor or seller lists.**
+
+| Kind of line | Lines | A US source was seen listing it | A stock figure was seen | Not yet buyable as it stands |
+|---|---|---|---|---|
+| Electronic parts of the two boards, the display and the cell | 46 | 46 | 39 | 0 |
+| Mechanical parts, tapes, film and foam | 17 | 9 | 3 | 8 |
+| Adhesives, by class | 9 | 0 | 0 | 9: no product is chosen in any class |
+| **All purchased lines** | **72** | **55** | **42** | **17** |
+| Custom parts and outside services | 14 | 9 (a US company was seen advertising that kind of work) | does not apply | 14: none has been quoted |
+
+- Of the 46 electronic lines, 45 name one or more US electronics distributors (DigiKey, Mouser, Arrow, Newark, Future
+  Electronics, Avnet). The 46th, the cell, is sold directly by one US seller.
+- "A stock figure was seen" is weaker than "on a US shelf today". Many figures come from the same distributor's pages for
+  other countries or from an aggregator's copy, and all are undated (section 2). The same holds for some of the listings
+  themselves: for 17 of the 55 listed lines the `us_source` cell of `sourcing.csv` says that one or more of the listings
+  was seen on a regional page, on an aggregator's copy or on a category page (counted on 2026-11-20 by a text search of
+  that column for the words "regional", "aggregator", "Findchips", "category pages", "French" and "Norwegian"). For one
+  line, main-34 (U11, LP5907MFX-3.3/NOPB), the cell reads "regional pages only: the US page was in no result". Reading
+  the live US page for each line is part of gate G-057 of `docs/RELEASE_GATES.md`. For 13 listed lines no stock figure was
+  seen at all; section 2.1 names them.
+- The 8 mechanical and tape lines that cannot be bought as they stand: the production prism, the production cover glass
+  and the visor windows (custom, by quote), the vent (no US listing found), the cradle screw (no part number), the black
+  baffle tape and the adhesive for the trial film (no product chosen), and the foam pad (converters only, by quote).
+
+**2. Parts with a single source.** A single source is a town with one bridge (section 2).
+
+| Part | What is single | Recorded in |
+|---|---|---|
+| Camera cube OVM7692-RYAA | One maker and one authorised US distributor; nothing else fits in its place | section 9.1, A10 |
+| Display Sharp LS013B7DH03 | One maker, no drop-in second source, 28-week lead time | section 9.2, A11 |
+| Cell GM201030-PCB with protection board | One US seller; the cell maker is not named | section 9.3, A12 |
+| Vent Gore VE80205 | One maker; no stocked US seller found | section 5, A22 |
+| Spring pin Mill-Max 0914 | One maker | section 4, A6 |
+| Near-infrared LED SFH 4053B | One US distributor seen with stock; a second maker's part is named as a candidate | section 3, A9 |
+| Microcontroller STM32U585RIT6 | One maker; only one distributor showed stock | section 3, A16 |
+| Tilt sensor, charger chip, USB-C socket | One maker each, several distributors | sections 3 and 4 |
+| Foam pad PORON 4790-92-30012-04P | One item in one density; no second 0.3 mm grade found | section 6, A26 |
+| Fold prism, Edmund Optics 32-526 | Bought from its maker; the volume source is not quoted | section 5 |
+| Every passive part of the two boards | Each BOM line names one maker. Alternates are named as candidates; none is approved | A18 |
+
+**3. Parts made outside the US and bought through a US seller.** The report does not know where most parts are made.
+The country of manufacture is recorded for 3 of the 86 lines, and none of the three is the US. For the other 83 the
+`origin` cell reads "not found".
+
+| Line | Country recorded | How firm | US seller |
+|---|---|---|---|
+| Cell | China | Reported in `docs/research/power.md`, unverified | PowerStream (Utah), direct |
+| Quarter-wave film for the sunglasses trial | Germany | From the seller's data sheet | Edmund Optics (New Jersey) |
+| Vent | Germany | From a distributor listing seen for revision 2 | none found; two US channels are named, by enquiry |
+
+No line is known to be made in the US. Until a maker's or seller's origin statement is on file for a part, treat it as
+imported. Collecting those statements is an open gate (section 11, item 22).
+
+**4. Custom parts that need a quote from a US vendor.** None has been requested. Where company names appear in section
+8 they are companies seen advertising that kind of work; none was asked whether it will take this job.
+
+| Custom part or service | Lines | State |
+|---|---|---|
+| Bare main board; board assembly; printing of the tub, the baffle rings and the cradle body; die cutting of the adhesive parts; glass cutting; laser-cut fixture parts; the emissions test | 9 | A US company was seen advertising the work; to be quoted |
+| FR-4 base plate; printed PA12 base plate (alternative build); cradle board; machined gauges; hard gold on the contact pads | 5 | PROVISIONAL: no capability statement seen for this exact job; to be asked with the drawing |
+| Production prism; production cover glass; visor windows | 3 (counted among the purchased lines above) | PROVISIONAL: custom, quote only |
+
+The main-board quote carries one condition from the design: the fabricator must accept 0.100 mm track and 0.100 mm gap in
+writing on the three layers that use it, one of them an inner layer (amendments E7 and E35 in `design/DESIGN_SPEC.md`).
+Section 8 records a report, not re-checked, that one fabricator's standard tier is 0.005 in on inner layers, so this
+condition can move the board to a dearer tier.
+
+In short: the electronics can be ordered from US distributors as far as listings show; three parts with one maker or one
+seller set the schedule; the origin of almost every part is unknown; and every custom part still needs its first quote.
 
 ---
 
@@ -153,7 +262,7 @@ section 15.2 lists what it changed.
 **How to read the Status column in this revision.**
 
 - VERIFIED means *listed*, not *in stock*. Where a purchased part was listed with no stock figure at all, its stock cell
-  begins "stock not seen". That is so for 13 of the 53 VERIFIED purchased-part lines; section 2.1 names them. For the 9
+  begins "stock not seen". That is so for 13 of the 55 VERIFIED purchased-part lines; section 2.1 names them. For the 9
   VERIFIED outside services a stock figure does not apply.
 - For an outside service (section 8), VERIFIED means only that a US company was seen advertising that kind of work, on
   2026-11-11. No company was asked whether it will take this job.
@@ -1019,7 +1128,9 @@ prisms and the balls); the rest is assumed. Treat it as a size, not a quote.
 These are for the design owners. Nothing under `design/`, `mechanical/`, `firmware/` or `electrical/` was edited by this
 study. **Section 12.0 gives the state of each action at design revision E-EVT1**; the table of section 12.1 is kept as it
 was written on 2026-11-13 (only its BOM line numbers follow the revision E parts list), so its "what is wrong" cells
-describe revision D. Section 12.1 lists the 35 actions that came out of this revision: every part whose number was wrong, obsolete,
+describe revision D. Two cells are the exception: A6 and A20 were rewritten on 2026-11-20 to state the revision E position
+(0.80 mm holes, a 1.0 mm cradle board, M2 x 4 screws), because the old wording named dimensions that are no longer in the
+design; each keeps one sentence on what was found at revision D. Section 12.1 lists the 35 actions that came out of this revision: every part whose number was wrong, obsolete,
 mismatched or single-sourced, with the proposed fix. Section 12.2 carries the rev 2 items that are still open, 12.3 lists
 the rev 2 items that the amendments have closed, and 12.4 suggests an order in which to buy.
 
@@ -1051,7 +1162,7 @@ carry the change; it does not mean a board was built or a data sheet was read.
 | A25 | closed by amendment E22: `battery.fixing_adhesive_max` is 0.06 |
 | A19, A21 to A24, A26 to A35 | not re-read for revision 4: as written in 12.1 |
 
-### 12.1 Actions from revision 3 (2026-11-13)
+### 12.1 Actions from revision 3 (2026-11-13; cells A6 and A20 restated for revision E on 2026-11-20)
 
 | # | File and place | What is wrong | Proposed fix |
 |---|---|---|---|
@@ -1060,7 +1171,7 @@ carry the change; it does not mean a board was built or a data sheet was read.
 | A3 | Main board: every 1 uF, 2.2 uF and 4.7 uF 0402 capacitor (C5; C7 C21 C25 C32; C20 C24; C22 C23 C26 C27) | A small high-value ceramic capacitor keeps only part of its capacitance at its working voltage. From memory, not seen today: about 0.6 uF of the 1 uF parts is left on the cell rail at 4.2 V (C20, C24) and about 0.8 uF at 2.8 V; about 0.9 to 1 uF of the 2.2 uF parts at 5 V (C22, C26) and about half at 4.2 V (C27); about 2.3 to 3 uF of the 4.7 uF part at 2.8 V (C5). | Because the 1 uF and 2.2 uF part numbers change anyway (A1, A2), read the DC-bias curves of the replacement parts (Murata SimSurfing or Samsung's equivalent) and check them against the minimum effective capacitance that the regulators U7, U8 and U11 and the charger U9 need. Where a position is short, go up one value or one case size. |
 | A4 | Main board BOM line 1 and cradle BOM line 1 (100 nF 16 V X7R 0402, 17 placements) | Murata GRM155R71C104KA88D has a conflicting life-cycle flag: 'not recommended for new designs' at Octopart, IBS and LCSC; 'Active' at Arrow and Future. Murata's own page was not seen. Stock is deep. | Add Samsung CL05B104KO5NNNC (same value, voltage, dielectric and size) as an approved alternate on both BOMs, and confirm the Murata part's status on Murata's site before a production buy. Read the live DigiKey page for the Samsung part before naming a distributor: two snapshots of the same order code disagreed today (out of stock against 3,534,602). |
 | A5 | Cradle BOM line 2 (F1); PTC table in electrical/gl1_cradle/gl1_cradle_design.py; wording of amendment E6 | The netlist's fuse, Bourns MF-FSMF020X-2 (0603, 9 V, hold 0.2 A, trip 0.5 A), has a resistance after a trip of 3.5 ohm maximum. Amendment E25 allows 1.5 ohm at most. No 0603 part with a 0.2 A hold current that was seen meets 1.5 ohm. | Change F1 to Littelfuse 0603L035YR (same 0603 pads; 6 V; hold 0.35 A; trip 0.75 A; 1 ohm maximum after a trip; Active; DigiKey US page 17,643 in stock). Second source on the same pads: Bourns MF-FSMF035X-2 (1.4 ohm maximum, so only 0.1 ohm inside the limit; Master Electronics 24,430 in stock, minimum order 1,000). Update the PTC table and change E6's 'trip about 0.5 A' to 0.75 A. The designers must accept two things: on a source limited to exactly 0.5 A a hard short is ended by the source's own limiter, not by the fuse; and a 6 V rating has no margin over a 5.5 V bus. If margin is wanted, the fallback is Bourns MF-NSMF050-2 (1206, 13.2 V, hold 0.5 A, trip 1 A, 0.7 ohm maximum), which needs a 1206 footprint. |
-| A6 | Cradle BOM lines 5 and 7 (SP1 to SP7); MILLMAX_0914 in electrical/gl1_cradle/gl1_cradle_design.py; the seven 0.90 mm drills of the cradle fabrication set; mechanical/README.md part list item 20 | The footprint is wrong for Mill-Max 0914-0-15-20-77-14-11-0. Its solder tail is 0.025 in (0.635 mm) and Mill-Max's minimum mounting hole is 0.029 in (0.737 mm); the netlist assumes a 0.76 mm tail in a 0.90 mm hole. The tail also looks shorter than the board: 8.3 mm overall less 6.96 mm above the board is about 1.34 mm against a 1.6 mm board (a subtraction of two extracts, not a reading). It is a single-maker part. | Set tail_dia to 0.635 mm, size the hole from Mill-Max's 0.737 mm minimum and the pad to suit, and regenerate the drill file before the cradle board is ordered. Read the Mill-Max drawing for tail length, barrel diameter and plunger diameter (www.mill-max.com or assets.rs-online.com has to be allowed in the session's network settings, or the PDF supplied). If the short tail is confirmed, choose one: accept a solder joint inside the plated hole, use a thinner board, or change to the long-tail 0914-1-15-20-77-14-11-0 (11.35 mm overall; a DigiKey listing exists; nothing else read) and check the room under the board. |
+| A6 | Cradle BOM lines 5 and 7 (SP1 to SP7); MILLMAX_0914 in electrical/gl1_cradle/gl1_cradle_design.py; the seven spring-pin holes of the cradle fabrication set; mechanical/README.md part list item 20 and `pin_tail_dia` in mechanical/cad/params.py | **State at revision E (cell rewritten on 2026-11-20).** The cradle board is corrected for Mill-Max 0914-0-15-20-77-14-11-0: a 0.635 mm (0.025 in) solder tail in a finished plated hole of 0.80 mm +-0.05 (Mill-Max's minimum mounting hole is 0.029 in, 0.737 mm), on a board that is 1.0 mm thick since amendment E36. Three things are still wrong or unknown. (1) The mechanical model still draws a 0.76 mm tail in a 0.90 mm hole; `master_params.yaml` has no key for the two diameters, so no check compares the mechanical model with the board. (2) The tail length, about 1.34 mm, is a subtraction of two search extracts (8.3 mm overall less 6.96 mm above the board), not a reading: PROVISIONAL. On it rests the claim that the tail comes about 0.34 mm through the 1.0 mm board and can be soldered there. (3) The Mill-Max drawing has not been read, and the pin is a single-maker part. *As found on 2026-11-13, at revision D:* the netlist assumed a 0.76 mm tail in 0.90 mm drills on a 1.6 mm board, which a 1.34 mm tail does not pass through. | Read the Mill-Max drawing for the tail length and the tail, barrel and plunger diameters (www.mill-max.com or assets.rs-online.com has to be allowed in the session's network settings, or the PDF supplied). Then bring the mechanical model to the board's figures (0.635 mm tail, 0.80 mm finished hole), or put both diameters in `master_params.yaml` with a check that compares the two packages. Keep the 0.80 mm finished hole in the cradle fabrication set; do not go back to 0.90 mm drills. If the drawing shows a tail shorter than 1.2 mm, no solder fillet forms under a 1.0 mm board (`electrical/README.md`): change to the long-tail 0914-1-15-20-77-14-11-0 (11.35 mm overall; a DigiKey listing exists; nothing else read) and check the room under the board. |
 | A7 | Amendment E25 against the main board netlist (D17 of revision D, its BOM line 10; since revision E: U12, main BOM line 35) | E25 replaces the Schottky diode D17 (B0530WS-7-F) with the ideal-diode switch TI LM66100DCKR, but the netlist and BOM still carry the diode. The new part is no longer a sourcing question: DigiKey lists it (296-53541-1-ND, SC-70-6) with 53,573 in stock on its US page, at 0.29 USD for one on a DigiKey page priced in USD, and it is Active at TI, DigiKey and Arrow. | Work E25 into the netlist and the BOM: read the TI data sheet for the wiring (E25 marks it PROVISIONAL), replace the SOD-323 footprint with the SC-70-6 one, and enter the order code. Read the live DigiKey page before ordering (regional pages ran from 13,653 to 66,618, and one Canada punch-out page showed 0). Do not buy B0530WS-7-F for production: its DigiKey stock picture conflicts (403, out of stock, 35,014 and 108,417 on four extracts) and its lead time was 40 weeks on 2026-11-11. |
 | A8 | Amendment E26 against the main board netlist (U11; main BOM line 34, line 35 in revision D) | E26 replaces U11 (MCP1700T-3302E/TT) with TI LP5907MFX-3.3/NOPB, but the netlist and BOM still carry the Microchip part. The new part is listed at DigiKey (product entries 3906441 and 5034443; reel 296-38557-2-ND), but only regional pages were seen and their stock figures conflict: 4,013 (UK), 11,506 (Switzerland), 44,232 (Denmark), 108,067 (Germany); out of stock on the Australia, Canada and Austria pages. The US page, the part status and a price that is not an aggregator's copy were not seen. | When the netlist is updated, read the live DigiKey US page (or Mouser's) before ordering, confirm stock and part status there, and enter the order code of the packaging wanted. No footprint risk is expected from sourcing: it is the 3.3 V member of the family already used for U8. |
 | A9 | Main board BOM line 9 (D2 D4 D6 D8 D10 D12 D14 D16, near-infrared LED) | ams OSRAM SFH 4053B was seen in stock in the US at Mouser only (720-SFH4053B; 7,096 in stock; seen on category pages, not on a product page). Its life-cycle evidence conflicts (maker's page: full production; RS: 'being discontinued by the manufacturer'). Its peak wavelength is 850 nm in some extracts and 860 nm in others, and no extract states the 0402 package for the B part. | Keep SFH 4053B as the fitted part and Inolux IN-S42CTQIR as the approved alternative (two parts, two distributors; the Inolux part is dimmer, 5.5 against 9 mW/sr). Read the SFH 4053B data sheet for wavelength, package size, pad layout and polarity mark before the footprint is released. Ask ams OSRAM or Mouser in writing whether the B part is being discontinued. |
@@ -1074,7 +1185,7 @@ carry the change; it does not mean a board was built or a data sheet was read.
 | A17 | electrical/gl1_main/netlist_out/gl1_main-bom-status.csv and electrical/gl1_cradle/netlist_out/gl1_cradle-bom-status.csv (generated files: correct the source tables) | Several Distributor PN cells still read 'SKU not seen' or 'order by MPN', and several unit prices are below today's listings. The display and the cell are on no parts list. | Enter the order codes seen today: U9 BQ25101YFPR = DigiKey 296-39933-1-ND; U7 MCP1700T-2802E/TT = MCP1700T-2802E/TTCT-ND; RT1 RT2 NCU15XH103F60RC = 490-18149-1-ND; R23 to R27 RC0402FR-0768RL = 311-68.0LRCT-ND; C1 and the other 100 nF = 490-3261-1-ND; cradle R1 R2 RC0402FR-075K1L = 311-5.10KLRCT-ND. Update the unit prices: crystal Y1 from 0.68 to 0.99; IMU U4 from 4.42 to 5.75; Schottky D17 from 0.30 to 0.34. Add the display and the cell to a purchasing list above the board BOM (A11, A12). Three distributor pages carried US tariff notices: refresh every price from a live page before the cost roll-up is reused. |
 | A18 | Main board BOM lines 1 to 7 and 13 to 25, cradle BOM lines 1 and 4 (all passives: each names one maker only) | Every passive line is single-sourced in the BOM. | Add an approved-alternates column. Confirmed today: CL05B104KO5NNNC (100 nF), CL05A475MQ5NRNC (4.7 uF), CL05B103KB5NNNC (10 nF), CC0402CRNPO9BN6R8 or C0402C689C5GACTU (6.8 pF), CL05C100JB5NNNC (10 pF), ERJ-2RKF1002X (10 kohm), ERJ-2RKF1003X (100 kohm), YC124-JR-07220RL (resistor array: compare land pattern and height with the Panasonic part first), NTCG103JF103FT1 (thermistor: compare the resistance-temperature table at the charger's and the firmware's thresholds first). Still PROVISIONAL, to be confirmed one by one before they are listed: ERJ-2RKF10R0X, ERJ-2RKF1001X, ERJ-2RKF2201X, ERJ-2RKF33R0X, ERJ-2RKF6811X, ERJ-2RKF1004X, ERJ-2RKF68R0X, ERJ-2RKF4703X, ERJ-2RKF1503X, ERJ-2RKF6041X, and ERJ-2RKF5101X for the cradle. Do not list CL05C6R8CB5NNNC (not found on seven US distributor sites), Bourns CAY10-221J4LF (not confirmed) or 'Bourns CAT16' (a larger array, from memory). |
 | A19 | mechanical/README.md part list item 10 (ball feet); amendments E8 and E20; cost roll-up | No current US listing with a grade, a price or stock was found for a 1.0 mm ball in 316 stainless, grade 100, the first material E8 names (the nearest find: Thermo Scientific catalogue number 042018, 1 mm type 316 spheres on a US catalogue page, with no grade or price seen). The rev 2 part, McMaster 1598K16, is 440C, which E8 forbids. The only priced US source found is silicon nitride, grade 5: Boca Bearings '1MM-C SI3N4 BALL GRADE 5 (1 PC)' at 2.37 each, which is 7.11 USD per marker against the 0.30 USD assumed before. | Choose one: make silicon nitride grade 5 the baseline (and check that the potting epoxy bonds to it), or send a request for quote for 1.0 mm 316 grade 100 to Salem Specialty Ball, Hartford Technologies and Thomson Precision Ball (Goodfellow's US site also lists a grade 100 AISI 316 group). In E20 keep +/-0.0127 mm for grade 100 and mark it confirmed (Thomson, Hartford Technologies, US Ball); put the tolerance itself on the purchase order, not only the grade name. Confirm the order code on Boca's page; an aggregator spells it '1MM-C SI3N4 GR.5 BALLS-EA'. |
-| A20 | mechanical/README.md part list item 24 (cradle board screws) and post-processing item 7 (pilot holes) | An M2 x 5 screw does not fit the cradle as drawn: 5 mm of screw less the 1.6 mm board leaves 3.4 mm of thread, and the pilot holes are dia 1.6 x 3 deep, so the screw bottoms 0.4 mm before its head seats. The candidate part, McMaster-Carr 96817A207 (5 mm long, head dia 3.35 mm, Torx Plus IP6, pack of 25), has not been confirmed as M2 on McMaster's own page: one extract shows an 'M2.5' heading. | Mechanical owner to choose: drill the pilots 4 mm deep or more if the cradle wall allows it, or specify M2 x 4. Then read the size, length and price on mcmaster.com (96817A209 is the 6 mm length; the length of 96817A204 was not seen). |
+| A20 | mechanical/README.md part list item 24 (cradle board screws), its deviation D36 and post-processing item 7 (pilot holes) | **State at revision E (cell rewritten on 2026-11-20).** The mechanical model calls for four M2 x 4 thread-forming screws for plastic (amendment E36): 4 mm of screw less the 1.0 mm cradle board leaves 3.0 mm of thread in pilot holes drilled dia 1.6 x 3.2 deep. What is missing is a part to buy: no part number, thread size or price of a 4 mm screw has been seen, and no search was made for one. McMaster-Carr 96817A204 may be the 4 mm length of the family seen; its length was not read. The 5 mm part of revision 3, 96817A207 (head dia 3.35 mm, Torx Plus IP6, pack of 25), is no longer a candidate, and it was never confirmed as M2 on McMaster's own page: one extract shows an 'M2.5' heading. Post-processing item 7 of mechanical/README.md still gives the pilot holes as 'dia 1.6 x 3', against 3.2 in item 24, in D36 and in the assembly text. *As found on 2026-11-13, at revision D:* an M2 x 5 screw through the 1.6 mm board left 3.4 mm of thread for pilot holes 3 mm deep, so the screw bottomed 0.4 mm before its head seated. | Read on mcmaster.com the part number, thread size, length, head diameter (the keep-out under the board is dia 4.0 mm) and price of the 4 mm screw (96817A207 is the 5 mm and 96817A209 the 6 mm length; the length of 96817A204 was not seen). Enter the number in part list item 24 and in `sourcing.csv`; the screw line stays PROVISIONAL until then. Make post-processing item 7 say dia 1.6 x 3.2. Do not order an M2 x 5 screw: it would ask for 4.0 mm of thread in a 3.2 mm hole. |
 | A21 | mechanical/README.md part list item 23 (cradle feet, 'dia 8 x 3') | No self-adhesive bumper of dia 8 x 3 mm was found. The 3M Bumpon SJ5302 is 7.92 mm across and 2.16 mm high: it fits the dia 8.4 x 1.0 pocket but stands 1.16 mm proud where a 3 mm bumper would stand 2.0 mm. | Adopt SJ5302 and correct item 23 and any cradle height that counts a 3 mm foot. Before ordering, find out what the US-page code SJ5302-R25 denotes (5,472 in stock at 0.111 each from 144). If 3 mm is really wanted, read the full catalogue number of the 5/16 in x 7/64 in bumper on McMaster's adhesive-back bumper table. |
 | A22 | design/master_params.yaml vent (Gore VE80205); the 50 kPa water-entry requirement in docs/research/enclosure-manufacturing.md | No US listing of VE80205 with a price or stock was found on either search day (2026-11-11 and 2026-11-13), and its water-entry pressure has not been seen anywhere. The alternative looked at, a Porex disc, does not meet 50 kPa in its PMV10 grade (175 mbar minimum, 270 typical), and Porex's stock adhesive discs seen start at 7.0 x 3.0 mm, not 5.0 x 2.0 mm. | Ask Sealing Devices Inc. (Lancaster, New York) and H-O Products for the price, minimum quantity, lead time and water-entry pressure of VE80205. Decide which number governs: 50 kPa, or IP67 (about 10 kPa). If 50 kPa governs, only Porex PMV27 (1,050 mbar typical) clears it with margin, at roughly one thirtieth of the Gore part's air flow (the checker's arithmetic); ask Interstate Specialty Products whether a 5.0 x 2.0 mm disc is a stock item or a custom cut, and in which grade. |
 | A23 | Amendments E9 and E19 (quarter-wave film under the cover glass); parts list | The film found, Edmund Optics WP140HE (33.50 USD per 100 x 100 mm sheet), has no adhesive, and its thickness is given two ways: 0.060 +/-0.003 mm on the product page, 0.053 +/-0.003 mm on a data sheet. E19 allows 0.11 mm 'with its adhesive', and no adhesive has been chosen or sourced. | Plan on 0.063 mm worst case for the film, which leaves 0.047 mm: select an optically clear adhesive of the 0.025 mm class (a 0.05 mm one would make 0.113 mm and break E19), add it to the parts list and find a US source. Measure a sheet on receipt. Read the Edmund stock number on the page (44288 may be a page number). Carry the fast-axis mark (a black stripe on the protective film, which is removed before use) to the clocking flat on the die-cut drawing. |
@@ -1098,7 +1209,7 @@ Checked against the design files on 2026-11-13 only where the row says so; other
 | Rev 2 # | File and place | Finding | State |
 |---|---|---|---|
 | 3 | `design/DESIGN_SPEC.md` section 4 "PCB" against `electrical/tools/README.md` | The specification says the fine class is 0.10 mm track and gap; the tool's `US_4L_FINE` rule set says 0.09 / 0.09 mm (still so on 2026-11-13). At 0.09 mm every US fabricator checked needs its advanced tier. Amendment E7 now makes the fabricator's written acceptance of 0.100 mm a release gate. | open |
-| 4 | `design/DESIGN_SPEC.md` section 7 and the note on status words at its top | The specification says the full list of release gates is kept in `docs/RELEASE_GATES.md`. That file still does not exist (2026-11-13). | closed at revision E (2026-11-18): the specification no longer points to that file; its section 7 is the list |
+| 4 | `design/DESIGN_SPEC.md` section 7 and the note on status words at its top | The specification says the full list of release gates is kept in `docs/RELEASE_GATES.md`. That file still does not exist (2026-11-13). | closed at revision E (2026-11-18): the specification no longer points to that file; its section 7 is the list. **Open again on 2026-11-20:** `docs/RELEASE_GATES.md` was written that day, and the specification's section 7 still says that no such file exists. The sentence to correct is that file's gate G-073 |
 | 6 | `design/master_params.yaml` `lcd.glass`; `mechanical/README.md` part list item 3 | A Sharp change notice for this display family was reported in rev 2 (not confirmed for this part). With today's 0.741 mm against the design's 0.746 mm, re-confirm the thickness and the bonded surface on current-production panels. | open; see A11 |
 | 7, 8, 9, 11 | cover glass, visor windows, vent, foam | Now design actions A28, A29, A22 and A26. | carried into 12.1 |
 | 13 | `mechanical/README.md` assembly step 12 | Clear-potting cure temperature: now design action A30. | carried into 12.1 |
@@ -1120,8 +1231,15 @@ Checked against the design files on 2026-11-13 only where the row says so; other
 
 ### 12.4 Suggested buying order
 
+This order was written from the supply side alone. It is subject to `docs/RELEASE_GATES.md`: steps 1, 2 and 4 cost
+nothing and can start now; steps 3, 5 and 6 are purchases, and each waits for the gates of that file that apply to it.
+Step 3 is the owner decision G-105 (buy the display and the camera cubes at risk, yes or no). The cells of step 3 wait
+for the cell data sheet and the transport test summary in any case (G-039, G-040).
+
 1. Correct the part numbers that cannot or must not be bought as they stand, before anything is ordered: the two capacitor
    numbers (one obsolete, one being discontinued; A1, A2), the cradle fuse (A5) and the spring-pin footprint (A6).
+   At revision E the design files carry all four changes (section 12.0). What is left of this step is to read the
+   Mill-Max drawing and to bring the mechanical model's pin tail and hole to the board's (A6).
 2. Send the requests that cost nothing, all on the same day: OmniVision or DigiKey (camera life-cycle and quote), Sharp or
    DigiKey (display status), PowerStream (cell), Sealing Devices and H-O Products (vent), Salem, Hartford and Thomson
    (stainless balls), Abrisa and Valley Design (cover glass and visor windows), Stockwell or JBC (foam), and Mill-Max (the
@@ -1664,3 +1782,29 @@ No search was made and no page was opened. Every listing, stock figure and price
    the screw line stays PROVISIONAL.
 6. **Section 12.0 is new:** the state of each design action at revision E. Items 4 and 15 of section 12.2 are closed.
 7. Not re-read for revision 4: sections 5 to 9 (except the two cradle rows), 10.5, 12.2 to 12.4 and 13.
+
+### 15.4 Edits of 2026-11-20 (no search, no change to `sourcing.csv`)
+
+1. **Section 1.4 is new:** "What US-sourceable means here". It states, from the columns of `sourcing.csv`, how many lines a
+   US source lists, which parts have a single source, for which lines a country of manufacture is recorded (3 of 86, none
+   of them the US) and which custom parts still need a quote. It adds no supplier, price or stock figure.
+2. **Cells A6 and A20 of section 12.1 are rewritten** to state the revision E position: 0.80 mm finished holes for a
+   0.635 mm tail, a 1.0 mm cradle board, M2 x 4 screws in pilot holes dia 1.6 x 3.2. Each keeps one sentence on what was
+   found at revision D. Step 1 of section 12.4 says that the design files carry its four changes. The rows of
+   `sourcing.csv` for the pin, the screw and the cradle board already said this and are unchanged.
+3. **One count corrected in section 2:** 13 of the 55 VERIFIED purchased-part lines were listed with no stock figure (the
+   text still said "of the 53", the revision 3 figure; 42 + 13 = 55, as section 2.1 and the script give).
+4. The script of section 14 was run again on the unchanged csv: 86 lines, 64 VERIFIED, 22 PROVISIONAL; 132 rows, 96 and 36;
+   USD 896.12 at 10 units and USD 144.52 at 1000.
+5. **Later on 2026-11-20, after an independent check of the documents** (again no search and no change to the csv; the
+   script of section 14 was run once more with the same output):
+   - Section 1.1 now states what the 64 VERIFIED lines consist of (55 purchased lines listed, 9 kinds of work
+     advertised) and quotes both totals of section 10.5 with what they leave out. The earlier scoreboard gave only the
+     USD 17,000 line as the budget of the whole programme.
+   - Sections 1.2 and 12.4 say that the advice to buy the display, the camera cubes and the cells early is subject to
+     `docs/RELEASE_GATES.md` (gates G-105, G-039, G-040).
+   - Section 1.3 item 2 names the mismatch of the spring-pin diameters with the mechanical model.
+   - Section 1.4 says "listing" where it said "offering", softens the sentence on ordering every board part from a US
+     distributor, and states for how many listed lines the listing was seen on a regional page or an aggregator's copy
+     (17 of 55; main-34 on regional pages only).
+   - Section 12.2 item 4 is open again: `docs/RELEASE_GATES.md` exists.
