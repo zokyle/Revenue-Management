@@ -114,7 +114,7 @@ bought in the US today, from whom, and at what risk?*
 | Quote | No price is published. The supplier prices the job after seeing the drawing. |
 | Coupon test | A trial bond on small sample pieces of the real materials, made before an adhesive is chosen. |
 | EVT, DVT | Engineering validation test: the first small build, about 10 units. Design validation test: the second, larger build that follows it. |
-| Amendment E1 to E34 | The numbered changes at the top of `design/DESIGN_SPEC.md`. E29 to E34 name no purchased part. |
+| Amendment E1 to E36 | The numbered changes at the top of `design/DESIGN_SPEC.md`. E29 to E34 name no purchased part; E35 is a board layout rule and E36 makes the cradle board 1.0 mm (M2 x 4 screws). |
 
 **Technical terms that appear in the tables**
 

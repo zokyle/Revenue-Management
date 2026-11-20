@@ -221,7 +221,7 @@ F  firmware/hal/stm32u5/gl_pins.h (generated from pinmap.json) against this pin 
   ok    BOOT0         PH3   SPEC: no earlier pin recorded
         rows of PINMAP that gl_pins.h does not list as signals (service pins): BOOT0, OSC32_IN, OSC32_OUT, SWCLK, SWDIO
   ok    every CHANGED / PROPOSED row has a row in gl_pins.h
-        gl_pins.h states it was generated from a pinmap.json with SHA-256 d33ff53f50f03bd3f67acb52451f26e7305b8ed6c1e1344bd8811ec5dd3972e4; after every export of pinmap.json the firmware side runs `make pins` (the build log compares the two)
+        gl_pins.h states it was generated from a pinmap.json with SHA-256 30505550677ba2dca446e0d2cf8f66e4ea720316e02fde1aa317bb97d4d0371f; after every export of pinmap.json the firmware side runs `make pins` (the build log compares the two)
   ok    GL_PINS_BOOTLOADER_TABLE of gl_pins.h (23 rows) equals the bootloader table here for every pin that carries a signal (both from memory of AN2606)
 
 G  pins the ROM bootloader drives or listens on
